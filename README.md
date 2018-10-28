@@ -2,6 +2,7 @@
 Play mp3 files via I2S with external hardware.
 HELIX-mp3 decoder is included.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
+For stereo You must have two MAX98357A.
 Other HW (UDA1334A ...) may work but not tested.
 
 ```` c++
