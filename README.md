@@ -1,5 +1,5 @@
 # ESP32-audioI2S
-Play mp3 files via I2S with external hardware.
+Play mp3 files from SD card via I2S with external hardware.
 HELIX-mp3 decoder is included.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
 For stereo You must have two MAX98357A.
