@@ -46,8 +46,7 @@ void audio_eof_mp3(const char *info){  //end of file
     Serial.println(info);
 }
 
-
-```` c++
+````
 Breadboard
 ![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
 Wirering
