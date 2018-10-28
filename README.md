@@ -51,5 +51,5 @@ Breadboard
 ![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
 Wirering
 ![Wirering](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/ESP32_I2S.JPG)
-Impuls diagram
+Impulse diagram
 ![Impulse diagram](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Impulsdiagramm.jpg)
