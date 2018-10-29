@@ -109,6 +109,11 @@ bool Audio::connecttoSD(String sdfile){
 }
 /******************************************************************************************************/
 void Audio::readID3Metadata(){
+    char frameid[5];
+    int framesize=0;
+    bool compressed;
+    char value[256];
+    String tag="";
     if (m_f_exthdr) {
         if(audio_info) audio_info("ID3 extended header");
         int ehsz = (mp3file.read() << 24) | (mp3file.read() << 16)
@@ -122,9 +127,6 @@ void Audio::readID3Metadata(){
         if(audio_info) audio_info("ID3 normal frames");
 
     do {
-        unsigned char frameid[4];
-        int framesize;
-        bool compressed;
         frameid[0] = mp3file.read();
         frameid[1] = mp3file.read();
         frameid[2] = mp3file.read();
@@ -135,8 +137,7 @@ void Audio::readID3Metadata(){
             frameid[3] = mp3file.read();
             m_id3Size--;
         }
-        if (frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0
-                && frameid[3] == 0) {
+        if (frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0 && frameid[3] == 0) {
             // We're in padding
             while (m_id3Size != 0) {
                 mp3file.read();
@@ -144,13 +145,11 @@ void Audio::readID3Metadata(){
             }
         } else {
             if (m_rev == 2) {
-                framesize = (mp3file.read() << 16) | (mp3file.read() << 8)
-                        | (mp3file.read());
+                framesize = (mp3file.read() << 16) | (mp3file.read() << 8) | (mp3file.read());
                 m_id3Size -= 3;
                 compressed = false;
             } else {
-                framesize = (mp3file.read() << 24) | (mp3file.read() << 16)
-                        | (mp3file.read() << 8) | (mp3file.read());
+                framesize = (mp3file.read() << 24) | (mp3file.read() << 16) | (mp3file.read() << 8) | (mp3file.read());
                 m_id3Size -= 4;
                 mp3file.read(); // skip 1st flag
                 m_id3Size--;
@@ -158,53 +157,71 @@ void Audio::readID3Metadata(){
                 m_id3Size--;
             }
             if (compressed) {
-                int decompsize = (mp3file.read() << 24) | (mp3file.read() << 16)
-                        | (mp3file.read() << 8) | (mp3file.read());
+                int decompsize = (mp3file.read() << 24) | (mp3file.read() << 16) | (mp3file.read() << 8) | (mp3file.read());
                 m_id3Size -= 4;
                 (void) decompsize;
-
-                for (int j = 0; j < framesize; j++)
-                    mp3file.read();
-                m_id3Size--;
-            }
-
-            // Read the value and send to callback
-            char value[64];
-            uint16_t i;
-
-            bool isUnicode;
-            isUnicode = (mp3file.read() == 1) ? true : false;
-            std::ignore = isUnicode; // not used, suppress warning
-            m_id3Size--;
-            for (i = 0; i < framesize - 1; i++) {
-                if (i < sizeof(value) - 1) {
-                    value[i] = mp3file.read();
-                    m_id3Size--;
-                } else {
+                for (int j = 0; j < framesize; j++){
                     mp3file.read();
                     m_id3Size--;
                 }
             }
-            value[i < sizeof(value) - 1 ? i : sizeof(value) - 1] = 0; // Terminate the string...
-            if ((frameid[0] == 'T' && frameid[1] == 'A' && frameid[2] == 'L' && frameid[3] == 'B')
-                    || (frameid[0] == 'T' && frameid[1] == 'A' && frameid[2] == 'L' && m_rev == 2)) {
-                sprintf(chbuf, "Album: %s", value);
-                if(audio_id3data) audio_id3data(chbuf);
-            } else if ((frameid[0] == 'T' && frameid[1] == 'I' && frameid[2] == 'T' && frameid[3] == '2')
-                    || (frameid[0] == 'T' && frameid[1] == 'T' && frameid[2] == '2' && m_rev == 2)) {
-                sprintf(chbuf, "Title: %s", value);
-                if(audio_id3data) audio_id3data(chbuf);
-            } else if ((frameid[0] == 'T' && frameid[1] == 'P' && frameid[2] == 'E' && frameid[3] == '1')
-                    || (frameid[0] == 'T' && frameid[1] == 'P' && frameid[2] == '1' && m_rev == 2)) {
-                sprintf(chbuf, "Performer: %s", value);
-                if(audio_id3data) audio_id3data(chbuf);
-            } else if ((frameid[0] == 'T' && frameid[1] == 'Y' && frameid[2] == 'E' && frameid[3] == 'R')
-                    || (frameid[0] == 'T' && frameid[1] == 'Y' && frameid[2] == 'E' && m_rev == 2)) {
-                sprintf(chbuf, "Year: %s", value);
-                if(audio_id3data) audio_id3data(chbuf);
+            // Read the value and send to callback
+            uint16_t i=0;
+            bool isUnicode;
+            if(framesize>0){
+                isUnicode = (mp3file.read() == 1) ? true : false;
+                std::ignore = isUnicode; // not used, suppress warning
+                m_id3Size--;
+                for (i = 0; i < framesize - 1; i++) {
+                    if (i < sizeof(value) - 1) {
+                        value[i] = mp3file.read();
+                        m_id3Size--;
+                    } else {
+                        mp3file.read();
+                        m_id3Size--;
+                    }
+                }
             }
+            frameid[4]=0; // terminate the string
+            tag=frameid;
+            chbuf[0]=0;
+            value[i < sizeof(value) - 1 ? i : sizeof(value) - 1] = 0; // terminate the string
+            if(tag=="COMM") sprintf(chbuf, "Comment: %s", value);
+            if(tag=="OWNE") sprintf(chbuf, "Ownership: %s", value);
+            if(tag=="PRIV") sprintf(chbuf, "Private: %s", value);
+            if(tag=="SYLT") sprintf(chbuf, "SynLyrics: %s", value);
+            if(tag=="TALB") sprintf(chbuf, "Album: %s", value);
+            if(tag=="TBPM") sprintf(chbuf, "BeatsPerMinute: %s", value);
+            if(tag=="TCMP") sprintf(chbuf, "Compilation: %s", value);
+            if(tag=="TCOM") sprintf(chbuf, "Composer: %s", value);
+            if(tag=="TCOP") sprintf(chbuf, "Copyright: %s", value);
+            if(tag=="TDAT") sprintf(chbuf, "Date: %s", value);
+            if(tag=="TEXT") sprintf(chbuf, "Lyricist: %s", value);
+            if(tag=="TIME") sprintf(chbuf, "Time: %s", value);
+            if(tag=="TIT1") sprintf(chbuf, "Grouping: %s", value);
+            if(tag=="TIT2") sprintf(chbuf, "Title: %s", value);
+            if(tag=="TIT3") sprintf(chbuf, "Subtitle: %s", value);
+            if(tag=="TLAN") sprintf(chbuf, "Language: %s", value);
+            if(tag=="TLEN") sprintf(chbuf, "Length: %s", value);
+            if(tag=="TMED") sprintf(chbuf, "Media: %s", value);
+            if(tag=="TOAL") sprintf(chbuf, "OriginalAlbum: %s", value);
+            if(tag=="TOPE") sprintf(chbuf, "OriginalArtist: %s", value);
+            if(tag=="TORY") sprintf(chbuf, "OriginalReleaseYear: %s", value);
+            if(tag=="TPE1") sprintf(chbuf, "Artist: %s", value);
+            if(tag=="TPE2") sprintf(chbuf, "Band: %s", value);
+            if(tag=="TPE3") sprintf(chbuf, "Conductor: %s", value);
+            if(tag=="TPE4") sprintf(chbuf, "InterpretedBy: %s", value);
+            if(tag=="TPOS") sprintf(chbuf, "PartOfSet: %s", value);
+            if(tag=="TPUB") sprintf(chbuf, "Publisher: %s", value);
+            if(tag=="TRCK") sprintf(chbuf, "Track: %s", value);
+            if(tag=="TRDA") sprintf(chbuf, "RecordingDates: %s", value);
+            if(tag=="TXXX") sprintf(chbuf, "UserDefinedText: %s", value);
+            if(tag=="TYER") sprintf(chbuf, "Year: %s", value);
+            if(tag=="USER") sprintf(chbuf, "TermsOfUse: %s", value);
+            if(tag=="USLT") sprintf(chbuf, "Lyrics: %s", value);
+            if(tag=="XDOR") sprintf(chbuf, "OriginalReleaseTime: %s", value);
+            if(chbuf[0]!=0) if(audio_id3data) audio_id3data(chbuf);
         }
-        // log_i("m_id3Size=%i\n", m_id3Size);
     } while (m_id3Size > 0);
 }
 /******************************************************************************************************/
@@ -371,12 +388,7 @@ uint8_t Audio::getVolume(){
 /******************************************************************************************************/
 int16_t Audio::Gain(int16_t s) {
     int32_t v;
-    if(s>0){
-       v= (s * m_vol)>>6;
-    }
-    else{
-       v= (s * m_vol)>>6;
-    }
+    v= (s * m_vol)>>6;
     return (int16_t)(v&0xffff);
 }
 /******************************************************************************************************/
