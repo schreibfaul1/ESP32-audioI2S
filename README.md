@@ -50,7 +50,7 @@ void audio_eof_mp3(const char *info){  //end of file
 ````
 Breadboard
 ![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
-Wirering
-![Wirering](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/ESP32_I2S.JPG)
+Wiring
+![Wiring](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/ESP32_I2S.JPG)
 Impulse diagram
 ![Impulse diagram](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Impulsdiagramm.jpg)
