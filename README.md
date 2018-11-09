@@ -2,8 +2,8 @@
 Play mp3 files from SD card via I2S with external hardware.
 HELIX-mp3 decoder is included.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
-For stereo You must have two MAX98357A. Also works UDA1334A (Adafruit I2S Stereo Decoder Breakout Board).
-Other HW (PCM5102 ...) may work but not tested.
+For stereo You must have two MAX98357A. Also works UDA1334A (Adafruit I2S Stereo Decoder Breakout Board) and PCM1502A.
+Other HW may work but not tested.
 
 ```` c++
 #include "Arduino.h"
