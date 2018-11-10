@@ -2,6 +2,7 @@
  * libhelix_mp3.cpp
  *
  *  Created on: 26.10.2018
+ *  Updated on: 04.11.2018
  */
 #include "mp3_decoder.h"
 
@@ -794,7 +795,7 @@ static void MP3ClearBadFrame(MP3DecInfo *mp3DecInfo, short *outbuf) {
  * Notes:       switching useSize on and off between frames in the same stream
  *                is not supported (bit reservoir is not maintained if useSize on)
  **************************************************************************************/
-int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft, short *outbuf, int useSize){
+int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize){
     int offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int prevBitOffset, sfBlockBits, huffBlockBits;
     unsigned char *mainPtr;
@@ -803,17 +804,17 @@ int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft, sh
         return ERR_MP3_NULL_POINTER;
 
     /* unpack frame header */
-    fhBytes = UnpackFrameHeader(mp3DecInfo, *inbuf);
+    fhBytes = UnpackFrameHeader(mp3DecInfo, inbuf);
     if (fhBytes < 0)
         return ERR_MP3_INVALID_FRAMEHEADER; /* don't clear outbuf since we don't know size (failed to parse header) */
-    *inbuf += fhBytes;
+    inbuf += fhBytes;
     /* unpack side info */
-    siBytes = UnpackSideInfo(mp3DecInfo, *inbuf);
+    siBytes = UnpackSideInfo(mp3DecInfo, inbuf);
     if (siBytes < 0) {
         MP3ClearBadFrame(mp3DecInfo, outbuf);
         return ERR_MP3_INVALID_SIDEINFO;
     }
-    *inbuf += siBytes;
+    inbuf += siBytes;
     *bytesLeft -= (fhBytes + siBytes);
 
     /* if free mode, need to calculate bitrate and nSlots manually, based on frame size */
@@ -821,8 +822,7 @@ int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft, sh
         if (!mp3DecInfo->freeBitrateFlag) {
             /* first time through, need to scan for next sync word and figure out frame size */
             mp3DecInfo->freeBitrateFlag = 1;
-            mp3DecInfo->freeBitrateSlots = MP3FindFreeSync(*inbuf,
-                    *inbuf - fhBytes - siBytes, *bytesLeft);
+            mp3DecInfo->freeBitrateSlots = MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
             if (mp3DecInfo->freeBitrateSlots < 0) {
                 MP3ClearBadFrame(mp3DecInfo, outbuf);
                 return ERR_MP3_FREE_BITRATE_SYNC;
@@ -851,8 +851,8 @@ int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft, sh
 
         /* can operate in-place on reformatted frames */
         mp3DecInfo->mainDataBytes = mp3DecInfo->nSlots;
-        mainPtr = *inbuf;
-        *inbuf += mp3DecInfo->nSlots;
+        mainPtr = inbuf;
+        inbuf += mp3DecInfo->nSlots;
         *bytesLeft -= (mp3DecInfo->nSlots);
     } else {
         /* out of data - assume last or truncated frame */
@@ -867,20 +867,20 @@ int MP3Decode(HMP3Decoder hMP3Decoder, unsigned char **inbuf, int *bytesLeft, sh
                     mp3DecInfo->mainBuf + mp3DecInfo->mainDataBytes
                             - mp3DecInfo->mainDataBegin,
                     mp3DecInfo->mainDataBegin);
-            memcpy(mp3DecInfo->mainBuf + mp3DecInfo->mainDataBegin, *inbuf,
+            memcpy(mp3DecInfo->mainBuf + mp3DecInfo->mainDataBegin, inbuf,
                     mp3DecInfo->nSlots);
 
             mp3DecInfo->mainDataBytes = mp3DecInfo->mainDataBegin
                     + mp3DecInfo->nSlots;
-            *inbuf += mp3DecInfo->nSlots;
+            inbuf += mp3DecInfo->nSlots;
             *bytesLeft -= (mp3DecInfo->nSlots);
             mainPtr = mp3DecInfo->mainBuf;
         } else {
             /* not enough data in bit reservoir from previous frames (perhaps starting in middle of file) */
-            memcpy(mp3DecInfo->mainBuf + mp3DecInfo->mainDataBytes, *inbuf,
+            memcpy(mp3DecInfo->mainBuf + mp3DecInfo->mainDataBytes, inbuf,
                     mp3DecInfo->nSlots);
             mp3DecInfo->mainDataBytes += mp3DecInfo->nSlots;
-            *inbuf += mp3DecInfo->nSlots;
+            inbuf += mp3DecInfo->nSlots;
             *bytesLeft -= (mp3DecInfo->nSlots);
             MP3ClearBadFrame(mp3DecInfo, outbuf);
             return ERR_MP3_MAINDATA_UNDERFLOW;
