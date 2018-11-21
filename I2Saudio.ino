@@ -1,6 +1,6 @@
 #include "Arduino.h"
 #include "WiFi.h"
-#include "audioI2S/Audio.h"
+#include "src/audioI2S/Audio.h"
 #include "SD.h"
 #include "FS.h"
 
