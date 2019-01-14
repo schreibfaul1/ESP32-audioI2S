@@ -29,9 +29,9 @@ void setup() {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(21); // 0...21
 
-    //audio.connecttoSD("/pno-cs.mp3");
+    //audio.connecttoSD("/320k_test.mp3");
     //audio.connecttohost("www.wdr.de/wdrlive/media/einslive.m3u");
-    audio.connecttohost("hellwegradiowest.radiovonhier.de/high/stream.mp3");
+    audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
     //audio.connecttohost("fischkopp.stream.laut.fm/fischkopp");
     //audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
 }
