@@ -1,8 +1,8 @@
 /*
  * Audio.h
  *
- *  Created on: 26.10.2018
- *  Updated on: 04.11.2018
+ *  Created on: Oct 26,2018
+ *  Updated on: Dec 16,2018
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -14,7 +14,6 @@
 #include "SD.h"
 #include "FS.h"
 #include "WiFiClientSecure.h"
-#include "mp3_decoder/mp3_decoder.h"
 #include "driver/i2s.h"
 
 extern __attribute__((weak)) void audio_info(const char*);
@@ -39,6 +38,7 @@ extern __attribute__((weak)) void audio_eof_speech(const char*);
 
 //
 
+
 class Audio  {
 
 public:
@@ -55,13 +55,13 @@ public:
     void stopSong();
     void setVolume(uint8_t vol);
     uint8_t getVolume();
-    uint16_t ringused();
-    uint16_t ringfree();
+    inline uint8_t getDatamode(){return m_datamode;}
+    inline void setDatamode(uint8_t dm){m_datamode=dm;}
+    inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
+
 private:
     int  sendBytes(uint8_t *data, size_t len);
     void readID3Metadata();
-    void construct_OutBuf(int buffSizeSamples);
-    void destruct_OutBuf();
     bool setSampleRate(int hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
@@ -78,10 +78,6 @@ private:
     long long int XL (long long int a, const char* b);
     String urlencode(String str);
 
-    inline uint8_t getDatamode(){return m_datamode;}
-    inline void setDatamode(uint8_t dm){m_datamode=dm;}
-    inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
-
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
@@ -93,29 +89,23 @@ private:
     File              mp3file;
     WiFiClient        client;
     WiFiClientSecure  clientsecure;
-
-    uint8_t  m_ringbuf[0x5000]; // 20480d           // ringbuffer for mp3 stream
-    const uint16_t m_ringbfsize=sizeof(m_ringbuf);  // ringbuffer size
-    uint16_t m_rbwindex=1600;                       // ringbuffer writeindex
-    uint16_t m_rbrindex=1600;                       // ringbuffer readindex
-    uint16_t m_ringfree=0;                          // ringbuffer free space
-    uint16_t m_ringused=0;                          // ringbuffer used space
-
     char            chbuf[256];
     char            path[256];
     int             m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
     int             m_lastChannels;
-    int             m_buffSize;                     // size outputBuffer
     int             m_nextSync=0;
     int             m_bytesLeft=0;
-    int             m_writePtr;                     // ptr outputBuffer
-    int             m_readPtr;                      // ptr outputBuffer
+    int             m_writePtr=0;                   // ptr sampleBuffer
+    int             m_readPtr=0;                    // ptr sampleBuffer
     int             m_bitrate=0;
     int             m_readbytes=0;                  // bytes read
     int             m_metacount=0;                  // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
-    uint8_t         inBuff[1600];                   // size inputBuffer
+    uint8_t         m_inBuff[1600];                 // inputBuffer
+    uint16_t        m_inBuffwindex=0;               // write index
+    uint16_t        m_inbuffrindex=0;               // read index
+    const uint16_t  m_inBuffsize=sizeof(m_inBuff);  // size of inputBuffer
     uint8_t         m_rev=0;                        // revision
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock
@@ -156,7 +146,7 @@ private:
     boolean         m_f_webstream = false ;         // Play from URL
     boolean         m_f_ssl=false;
     boolean         m_f_running=false;
-    boolean         m_f_stream_ready=false;         // Set after connecttohost and first streamdata are available
+    boolean         m_f_firststream_ready=false;         // Set after connecttohost and first streamdata are available
     boolean         m_f_ctseen=false;               // First line of header seen or not
     boolean         m_f_chunked = false ;           // Station provides chunked transfer
     boolean         m_f_filled;                     // outputBuffer

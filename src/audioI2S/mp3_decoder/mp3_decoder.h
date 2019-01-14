@@ -1,8 +1,16 @@
 // based om helix mp3 decoder
 #pragma once
-#pragma GCC optimize ("O3")
+//#pragma GCC optimize ("O3")
 
 #include "Arduino.h"
+
+class HMP3Decoder{
+public:
+    HMP3Decoder() {m_sMode=Stereo; m_MPEGVersion=MPEG1;}
+    ~HMP3Decoder(){;}
+
+private:
+
 
 const unsigned short huffTable[4242] PROGMEM = {
     /* huffTable01[9] */
@@ -641,28 +649,28 @@ const uint32_t m_dcttab[48] PROGMEM = { // faster in ROM
     -m_COS2_1, -m_COS2_2,  m_COS3_1,   /* 31, 31, 30 */
 };
 
-const uint8_t  m_SYNCWORDH              =0xff;
-const uint8_t  m_SYNCWORDL              =0xf0;
-const uint8_t  m_DQ_FRACBITS_OUT        =25;    // number of fraction bits in output of dequant
-const uint8_t  m_CSHIFT                 =12;    // coefficients have 12 leading sign bits for early-terminating mulitplies
-const uint8_t  m_HUFF_PAIRTABS          =32;
-const uint8_t  m_SIBYTES_MPEG1_MONO     =17;
-const uint8_t  m_SIBYTES_MPEG1_STEREO   =32;
-const uint8_t  m_SIBYTES_MPEG2_MONO     =9;
-const uint8_t  m_SIBYTES_MPEG2_STEREO   =17;
-const uint8_t  m_IMDCT_SCALE            =2;     // additional scaling (by sqrt(2)) for fast IMDCT36
-const uint8_t  m_BLOCK_SIZE             =18;
-const uint8_t  m_NBANDS                 =32;
-const uint8_t  m_MAX_REORDER_SAMPS      =(192-126)*3;      // largest critical band for short blocks (see sfBandTable)
-const uint16_t m_VBUF_LENGTH            =17*2* m_NBANDS;    // for double-sized vbuf FIFO
-const uint8_t  m_MAX_SCFBD              =4;     // max scalefactor bands per channel
-const uint8_t  m_NGRANS_MPEG1           =2;
-const uint8_t  m_NGRANS_MPEG2           =1;
-const uint16_t m_MAINBUF_SIZE           =1940;
-const uint8_t  m_MAX_NGRAN              =2;     // max granules
-const uint8_t  m_MAX_NCHAN              =2;     // max channels
-const uint16_t m_MAX_NSAMP              =576;   // max samples per channel, per granule
-const uint32_t m_SQRTHALF               =0x5a82799a;  // sqrt(0.5) in Q31 format
+       const uint8_t  m_SYNCWORDH              =0xff;
+       const uint8_t  m_SYNCWORDL              =0xf0;
+       const uint8_t  m_DQ_FRACBITS_OUT        =25;    // number of fraction bits in output of dequant
+       const uint8_t  m_CSHIFT                 =12;    // coefficients have 12 leading sign bits for early-terminating mulitplies
+static const uint8_t  m_HUFF_PAIRTABS          =32;
+       const uint8_t  m_SIBYTES_MPEG1_MONO     =17;
+       const uint8_t  m_SIBYTES_MPEG1_STEREO   =32;
+       const uint8_t  m_SIBYTES_MPEG2_MONO     =9;
+       const uint8_t  m_SIBYTES_MPEG2_STEREO   =17;
+       const uint8_t  m_IMDCT_SCALE            =2;     // additional scaling (by sqrt(2)) for fast IMDCT36
+static const uint8_t  m_BLOCK_SIZE             =18;
+static const uint8_t  m_NBANDS                 =32;
+static const uint8_t  m_MAX_REORDER_SAMPS      =(192-126)*3;      // largest critical band for short blocks (see sfBandTable)
+static const uint16_t m_VBUF_LENGTH            =17*2* m_NBANDS;    // for double-sized vbuf FIFO
+static const uint8_t  m_MAX_SCFBD              =4;     // max scalefactor bands per channel
+       const uint8_t  m_NGRANS_MPEG1           =2;
+       const uint8_t  m_NGRANS_MPEG2           =1;
+static const uint16_t m_MAINBUF_SIZE           =1940;
+static const uint8_t  m_MAX_NGRAN              =2;     // max granules
+static const uint8_t  m_MAX_NCHAN              =2;     // max channels
+static const uint16_t m_MAX_NSAMP              =576;   // max samples per channel, per granule
+       const uint32_t m_SQRTHALF               =0x5a82799a;  // sqrt(0.5) in Q31 format
 
 enum {
     ERR_MP3_NONE =                  0,
@@ -847,21 +855,21 @@ typedef struct MP3DecInfo {
 } MP3DecInfo_t;
 
 
-__attribute__((unused))static MP3FrameInfo_t m_MP3FrameInfo;
-__attribute__((unused))static SFBandTable_t m_SFBandTable;
-__attribute__((unused))static StereoMode_t m_sMode;  /* mono/stereo mode */
-__attribute__((unused))static MPEGVersion_t m_MPEGVersion;  /* version ID */
-__attribute__((unused))static FrameHeader_t m_FrameHeader;
-__attribute__((unused))static SideInfoSub_t m_SideInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
-__attribute__((unused))static SideInfo_t m_SideInfo;
-__attribute__((unused))static CriticalBandInfo_t m_CriticalBandInfo[m_MAX_NCHAN];  /* filled in dequantizer, used in joint stereo reconstruction */
-__attribute__((unused))static DequantInfo_t m_DequantInfo;
-__attribute__((unused))static HuffmanInfo_t m_HuffmanInfo;
-__attribute__((unused))static IMDCTInfo_t m_IMDCTInfo;
-__attribute__((unused))static ScaleFactorInfoSub_t m_ScaleFactorInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
-__attribute__((unused))static ScaleFactorJS_t m_ScaleFactorJS;
-__attribute__((unused))static SubbandInfo_t m_SubbandInfo;
-__attribute__((unused))static MP3DecInfo_t m_MP3DecInfo;
+MP3FrameInfo_t m_MP3FrameInfo;
+SFBandTable_t m_SFBandTable;
+StereoMode_t m_sMode;  /* mono/stereo mode */
+MPEGVersion_t m_MPEGVersion;  /* version ID */
+FrameHeader_t m_FrameHeader;
+SideInfoSub_t m_SideInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
+SideInfo_t m_SideInfo;
+CriticalBandInfo_t m_CriticalBandInfo[m_MAX_NCHAN];  /* filled in dequantizer, used in joint stereo reconstruction */
+DequantInfo_t m_DequantInfo;
+HuffmanInfo_t m_HuffmanInfo;
+IMDCTInfo_t m_IMDCTInfo;
+ScaleFactorInfoSub_t m_ScaleFactorInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
+ScaleFactorJS_t m_ScaleFactorJS;
+SubbandInfo_t m_SubbandInfo;
+MP3DecInfo_t m_MP3DecInfo;
 
 /* format = Q31
  * #define M_PI 3.14159265358979323846
@@ -915,7 +923,7 @@ const char NRTab[6][3][4] = {
 
 
 /* optional pre-emphasis for high-frequency scale factor bands */
-static const char preTab[22] = { 0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0 };
+const char preTab[22] = { 0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,2,2,3,3,3,2,0 };
 
 /* pow(2,-i/4) for i=0..3, Q31 format */
 const int pow14[4] PROGMEM = {
@@ -931,8 +939,8 @@ const int pow14[4] PROGMEM = {
  * Relative error < 1E-7
  * Coefs are scaled by 4, 2, 1, 0.5, 0.25
  */
-static const unsigned int poly43lo[5] PROGMEM = { 0x29a0bda9, 0xb02e4828, 0x5957aa1b, 0x236c498d, 0xff581859 };
-static const unsigned int poly43hi[5] PROGMEM = { 0x10852163, 0xd333f6a4, 0x46e9408b, 0x27c2cef0, 0xfef577b4 };
+const unsigned int poly43lo[5] PROGMEM = { 0x29a0bda9, 0xb02e4828, 0x5957aa1b, 0x236c498d, 0xff581859 };
+const unsigned int poly43hi[5] PROGMEM = { 0x10852163, 0xd333f6a4, 0x46e9408b, 0x27c2cef0, 0xfef577b4 };
 
 /* pow(2, i*4/3) as exp and frac */
 const int pow2exp[8] PROGMEM = { 14, 13, 11, 10, 9, 7, 6, 5 };
@@ -1116,7 +1124,7 @@ const uint32_t csa[8][2] PROGMEM = {
  * polyCoef[256, 257, ... 263] are for special case of sample 16 (out of 0)
  *   see PolyphaseStereo() and PolyphaseMono()
  */
-
+public:
 // prototypes
 void EraseBuffers(void);
 int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize);
@@ -1128,6 +1136,7 @@ int MP3GetChannels();
 int MP3GetBitsPerSample();
 int MP3GetBitrate();
 int MP3GetOutputSamps();
+private:
 //internally used
 void PolyphaseMono(short *pcm, int *vbuf, const uint32_t *coefBase);
 void PolyphaseStereo(short *pcm, int *vbuf, const uint32_t *coefBase);
@@ -1171,5 +1180,5 @@ inline uint64_t MADD64(uint64_t sum64, int x, int y) {sum64 += (uint64_t) x * (u
 inline int CLZ(int x){int numZeros; if (!x) return(sizeof(int) * 8);  numZeros = 0; while (!(x & 0x80000000)){numZeros++;  x <<= 1;} return numZeros;}
 inline uint64_t xSAR64(uint64_t x, int n){return x >> n;}
 inline int FASTABS(int x){ int sign; sign=x>>(sizeof(int)*8-1); x^=sign; x-=sign; return x;}
-
+};
 
