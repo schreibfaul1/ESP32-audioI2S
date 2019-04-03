@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 15,2019
+ *  Updated on: Apr 03,2019
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -1287,8 +1287,42 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     static int lastret=0, count=0;
     if(!m_f_playing){
 
+        if ((data[0] == 'I') && (data[1] == 'D') && (data[2] == '3')){
+            // it is not a usual radio stream, it is a podcast
+            log_i("Podcast found!");
+            m_id3Size  = data[6]; m_id3Size = m_id3Size << 7;
+            m_id3Size |= data[7]; m_id3Size = m_id3Size << 7;
+            m_id3Size |= data[8]; m_id3Size = m_id3Size << 7;
+            m_id3Size |= data[9];
 
-//        mad_stream_buffer(stream, data, len);
+            m_rev = data[3];
+            switch (m_rev) {
+            case 2:
+                m_f_unsync = (data[5] & 0x80);
+                m_f_exthdr = false;
+                break;
+            case 3:
+            case 4:
+                m_f_unsync = (data[5] & 0x80); // bit7
+                m_f_exthdr = (data[5] & 0x40); // bit6 extended header
+                break;
+            };
+            sprintf(chbuf, "ID3 version=%i", m_rev);
+            if(audio_info) audio_info(chbuf);
+            sprintf(chbuf,"ID3 framesSize=%i", m_id3Size);
+            if(audio_info) audio_info(chbuf);
+        }
+        // skip ID3
+        if(m_id3Size>1000){
+            m_id3Size-=1000;
+            return 1000;
+        }
+        if(m_id3Size>0){
+            int tmp=m_id3Size;
+            m_id3Size=0;
+            return tmp;
+        }
+
         if(m_f_mp3) m_nextSync = mp3decoder.MP3FindSyncWord(data, len);
         if(m_nextSync==-1) {
             if(audio_info) audio_info("syncword not found");
