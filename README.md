@@ -42,6 +42,7 @@ void setup() {
     audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
     //audio.connecttohost("fischkopp.stream.laut.fm/fischkopp");
     //audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
+    //audio.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
 }
 
 void loop()
