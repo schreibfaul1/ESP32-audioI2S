@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 03,2019
+ *  Updated on: Apr 04,2019
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -71,7 +71,7 @@ bool Audio::connecttohost(String host){
     if(audio_info) audio_info(chbuf);
 
     // initializationsequence
-
+    m_f_podcast=false;
     m_f_ctseen=false;                                       // Contents type not seen yet
     m_f_mp3=false;                                          // Set if stream is mp3
     m_f_aac=false;                                          // Set if stream is aac
@@ -181,6 +181,7 @@ bool Audio::connecttoSD(String sdfile){
     m_f_webstream=false;
     m_f_stream=false;
     m_f_mp3=true;
+    m_f_podcast=false;
     memset(m_outBuff, 0, sizeof(m_outBuff));               //Clear OutputBuffer
     if(!sdfile.startsWith("/")) sdfile="/"+sdfile;
     while(sdfile[i] != 0){                                  //convert UTF8 to ASCII
@@ -428,7 +429,7 @@ void Audio::readID3Metadata(){
     char frameid[5];
     int framesize=0;
     bool compressed;
-    char value[256];
+    char value[256+65]; // tag (max65) + value (max 256)
     bool bitorder=false;
     uint8_t uni_h=0;
     uint8_t uni_l=0;
@@ -796,8 +797,15 @@ void Audio::loop() {
             }
         }
         if(m_f_firststream_ready==true){
-            if(m_av==0){            // empty buffer, broken stream or bad bitrate?
+            if(m_av==0){                // empty buffer, broken stream or bad bitrate?
                 i++;
+                if(m_f_podcast==true && i>3000){  // or end of podcast
+                    m_f_podcast=false;
+                    m_f_webstream=false;
+                    if(audio_info) audio_info("end of stream");
+                    if(audio_eof_mp3) audio_eof_mp3("Podcast");
+                    return;
+                }
                 if(i>200000){       // wait several seconds
                     i=0;
                     if(audio_info) audio_info("Stream lost -> try new connection");
@@ -1284,11 +1292,12 @@ bool Audio::chkhdrline(const char* str){
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t *data, size_t len) {
     if(m_validSamples>0) {playChunk(); return 0;} //outputbuffer full or not ready, try again?
-    static int lastret=0, count=0;
+    static int lastret=0, count=0, ehsz=0;
     if(!m_f_playing){
 
         if ((data[0] == 'I') && (data[1] == 'D') && (data[2] == '3')){
             // it is not a usual radio stream, it is a podcast
+            m_f_podcast=true;
             log_i("Podcast found!");
             m_id3Size  = data[6]; m_id3Size = m_id3Size << 7;
             m_id3Size |= data[7]; m_id3Size = m_id3Size << 7;
@@ -1311,8 +1320,23 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             if(audio_info) audio_info(chbuf);
             sprintf(chbuf,"ID3 framesSize=%i", m_id3Size);
             if(audio_info) audio_info(chbuf);
+            if (m_f_exthdr) {
+                if(audio_info) audio_info("ID3 extended header");
+                ehsz = (data[10] << 24) | (data[11] << 16)
+                        | (data[12] << 8) | (data[13]);
+                m_id3Size-=4;
+                return 14;
+            }
+            else{
+                if(audio_info) audio_info("ID3 normal frames");
+                return 10;
+            }
         }
-        // skip ID3
+        if(ehsz>1024){ehsz-=1024; m_id3Size-=1024; return 1024;}   // Throw exthdr away
+        if(ehsz>   0){int tmp=ehsz; m_id3Size-=ehsz;  ehsz=0; return tmp;}
+        // TODO analyze ID3tags, not skip them
+
+        // skip ID3tags
         if(m_id3Size>1000){
             m_id3Size-=1000;
             return 1000;

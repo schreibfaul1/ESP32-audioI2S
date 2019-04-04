@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 03,2019
+ *  Updated on: Apr 04,2019
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -141,6 +141,7 @@ private:
     String          m_icystreamtitle ;              // Streamtitle from metadata
     boolean         m_ctseen=false;                 // First line of header seen or not
     boolean         m_f_unsync = false;
+    boolean         m_f_podcast=false;              // set if found ID3Header in stream
     boolean         m_f_exthdr = false;             // ID3 extended header
     boolean         m_f_localfile = false ;         // Play from local mp3-file
     boolean         m_f_webstream = false ;         // Play from URL
