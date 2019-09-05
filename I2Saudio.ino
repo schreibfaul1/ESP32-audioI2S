@@ -1,3 +1,18 @@
+//**********************************************************************************************************
+//*    audioI2S-- I2S audiodecoder for ESP32,                                                              *
+//**********************************************************************************************************
+//
+// first release on 11/2018
+// Version 2  , Aug.05/2019
+//
+//
+// THE SOFTWARE IS PROVIDED "AS IS" FOR PRIVATE USE ONLY, IT IS NOT FOR COMMERCIAL USE IN WHOLE OR PART OR CONCEPT.
+// FOR PERSONAL USE IT IS SUPPLIED WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+// WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR
+// OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
+//
+
 #include "Arduino.h"
 #include "WiFiMulti.h"
 #include "Audio.h"
@@ -16,9 +31,9 @@
 
 Audio audio;
 WiFiMulti wifiMulti;
+String ssid =     "xxxxx";
+String password = "xxxxx";
 
-String ssid =     "xxxxxx";
-String password = "xxxxxx";
 
 void setup() {
     pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
@@ -32,20 +47,27 @@ void setup() {
     if(WiFi.status() != WL_CONNECTED){
         WiFi.disconnect(true);
         wifiMulti.run();
-      }
+    }
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(12); // 0...21
 
-    //audio.connecttoSD("/320k_test.mp3");
-    //audio.connecttohost("www.wdr.de/wdrlive/media/einslive.m3u");
-    //audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
-    //audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
-    //audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
+//    audio.connecttoSD("/320k_test.mp3");
+//    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
+//    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
+//    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
+      audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
+//    audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
 }
 
 void loop()
 {
     audio.loop();
+    if(Serial.available()){ // put streamURL in serial monitor
+        audio.stopSong();
+        String r=Serial.readString();
+        if(r.length()>5) audio.connecttohost(r);
+        log_i("free heap=%i", ESP.getFreeHeap());
+    }
 }
 
 // optional
@@ -82,6 +104,7 @@ void audio_lasthost(const char *info){  //stream URL played
 void audio_eof_speech(const char *info){
     Serial.print("eof_speech  ");Serial.println(info);
 }
+
 
 
 
