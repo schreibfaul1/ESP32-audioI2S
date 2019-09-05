@@ -1,0 +1,33 @@
+#######################################
+# Syntax Coloring Map For Ultrasound
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Audio	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+InitDecoders    KEYWORD2
+connecttoSD KEYWORD2
+connecttohost	KEYWORD2
+connecttospeech	KEYWORD2
+loop	KEYWORD2
+getFileSize	KEYWORD2
+getFilePos	KEYWORD2
+setFilePos	KEYWORD2
+setPinout	KEYWORD2
+stopSong	KEYWORD2
+setVolume	KEYWORD2
+getVolume	KEYWORD2
+getDatamode	KEYWORD2
+streamavail	KEYWORD2
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
