@@ -1,6 +1,6 @@
 # ESP32-audioI2S
 Play mp3 files from SD card via I2S with external hardware.
-HELIX-mp3 decoder is included.
+HELIX-mp3 and -aac decoder is included.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
 For stereo are two MAX98357A necessary. AudioI2S works with UDA1334A (Adafruit I2S Stereo Decoder Breakout Board) and PCM1502A.
 Other HW may work but not tested. Plays also icy-streams (mp3 only) and GoogleTTS. Can compiled with Arduino IDE.
@@ -23,10 +23,11 @@ Other HW may work but not tested. Plays also icy-streams (mp3 only) and GoogleTT
 
 Audio audio;
 
-String ssid =     "Wolles-FRITZBOX";
+String ssid =     "*******";
 String password = "*******";
 
 void setup() {
+    pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     Serial.begin(115200);
     SD.begin(SD_CS);
@@ -37,12 +38,13 @@ void setup() {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(21); // 0...21
 
-    //audio.connecttoSD("/320k_test.mp3");
-    //audio.connecttohost("www.wdr.de/wdrlive/media/einslive.m3u");
-    audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
-    //audio.connecttohost("fischkopp.stream.laut.fm/fischkopp");
-    //audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
-    //audio.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
+//    audio.connecttoSD("/320k_test.mp3");
+//    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
+//    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
+//    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
+      audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
+//    audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
+//    audio.connecttohost("http://media.ndr.de/download/podcasts/podcast4161/AU-20190404-0844-1700.mp3"); // podcast
 }
 
 void loop()
