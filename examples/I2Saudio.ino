@@ -1,6 +1,7 @@
 #include "Arduino.h"
-#include "WiFi.h"
+#include "WiFiMulti.h"
 #include "Audio.h"
+#include "SPI.h"
 #include "SD.h"
 #include "FS.h"
 
@@ -14,25 +15,31 @@
 #define I2S_LRC       26
 
 Audio audio;
+WiFiMulti wifiMulti;
 
-String ssid =     "Wolles-FRITZBOX";
-String password = "*******";
+String ssid =     "xxxxxx";
+String password = "xxxxxx";
 
 void setup() {
+    pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
+    SPI.setFrequency(1000000);
     Serial.begin(115200);
     SD.begin(SD_CS);
-    WiFi.disconnect();
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), password.c_str());
-    while (WiFi.status() != WL_CONNECTED) delay(1500);
+    wifiMulti.addAP(ssid.c_str(), password.c_str());
+    wifiMulti.run();
+    if(WiFi.status() != WL_CONNECTED){
+        WiFi.disconnect(true);
+        wifiMulti.run();
+      }
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-    audio.setVolume(21); // 0...21
+    audio.setVolume(12); // 0...21
 
     //audio.connecttoSD("/320k_test.mp3");
     //audio.connecttohost("www.wdr.de/wdrlive/media/einslive.m3u");
-    audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
-    //audio.connecttohost("fischkopp.stream.laut.fm/fischkopp");
+    //audio.connecttohost("dg-ais-eco-http-fra-eco-cdn.cast.addradio.de/hellwegradio/west/mp3/high");
+    //audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
     //audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
 }
 
@@ -75,7 +82,6 @@ void audio_lasthost(const char *info){  //stream URL played
 void audio_eof_speech(const char *info){
     Serial.print("eof_speech  ");Serial.println(info);
 }
-
 
 
 
