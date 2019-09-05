@@ -2,20 +2,20 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 04,2019
+ *  Updated on: Sep 05,2019
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
+ *  and plays also aac-streams
  *  no DAC, no DeltSigma
  *
  *  etrernal HW on I2S nessesary, e.g.MAX98357A
+ *
  */
 
 #include "Audio.h"
 #include "mp3_decoder/mp3_decoder.h"
-
-HMP3Decoder mp3decoder; // Helix MP3 decoder
-
+#include "aac_decoder/aac_decoder.h"
 
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio() {
@@ -28,10 +28,10 @@ Audio::Audio() {
          .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
          .communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
          .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1, // high interrupt priority
-         .dma_buf_count = 4,   // 8,
-         .dma_buf_len = 1024,  //64,   //Interrupt level 1
+         .dma_buf_count = 4, // 8,
+         .dma_buf_len = 1024, // 64,   //Interrupt level 1
          .use_apll=APLL_DISABLE,
-         .tx_desc_auto_clear=true,  // new in V1.0.1
+         .tx_desc_auto_clear= true,  // new in V1.0.1
          .fixed_mclk=-1
     };
     i2s_driver_install((i2s_port_t)m_i2s_num, &i2s_config, 0, NULL);
@@ -40,7 +40,9 @@ Audio::Audio() {
     m_LRC=25;                        // Left/Right Clock
     m_DOUT=27;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT);
+
 }
+
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num){
     return i2s_start((i2s_port_t) i2s_num);
@@ -56,8 +58,8 @@ Audio::~Audio() {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host){
 
-    int inx;                                              // Position of ":" in hostname
-    int port=80;                                          // Port number for host
+    int16_t inx;                                              // Position of ":" in hostname
+    int16_t port=80;                                          // Port number for host
     String extension="/";                                 // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
     String hostwoext;                                     // Host without extension and portnumber
     String headerdata="";
@@ -71,7 +73,7 @@ bool Audio::connecttohost(String host){
     if(audio_info) audio_info(chbuf);
 
     // initializationsequence
-    m_f_podcast=false;
+
     m_f_ctseen=false;                                       // Contents type not seen yet
     m_f_mp3=false;                                          // Set if stream is mp3
     m_f_aac=false;                                          // Set if stream is aac
@@ -93,7 +95,7 @@ bool Audio::connecttohost(String host){
     m_inBuffwindex=0;
     m_inbuffrindex=0;
     setDatamode(AUDIO_HEADER);                              // Handle header
-//    for(int i=0; i< sizeof(m_outBuff)/sizeof(m_outBuff[0]); i++) m_outBuff[i]=0;//Clear OutputBuffer
+//    for(int32_t i=0; i< sizeof(m_outBuff)/sizeof(m_outBuff[0]); i++) m_outBuff[i]=0;//Clear OutputBuffer
 
     if(host.startsWith("http://")) {host=host.substring(7); m_f_ssl=false; ;}
     if(host.startsWith("https://")){host=host.substring(8); m_f_ssl=true; port=443;}
@@ -181,7 +183,6 @@ bool Audio::connecttoSD(String sdfile){
     m_f_webstream=false;
     m_f_stream=false;
     m_f_mp3=true;
-    m_f_podcast=false;
     memset(m_outBuff, 0, sizeof(m_outBuff));               //Clear OutputBuffer
     if(!sdfile.startsWith("/")) sdfile="/"+sdfile;
     while(sdfile[i] != 0){                                  //convert UTF8 to ASCII
@@ -291,10 +292,10 @@ bool Audio::connecttospeech(String speech, String lang){
     log_i("tkkFunc_%s", tkkFunc.c_str());
 
     // create token
-    int periodPos = tkkFunc.indexOf('.');
+    int16_t periodPos = tkkFunc.indexOf('.');
     String key1 = tkkFunc.substring(0,periodPos);
     String key2 = tkkFunc.substring(periodPos + 1);
-    long long int a, b;
+    int64_t a, b;
     a = b = strtoll(key1.c_str(), NULL, 10);
 
     int f;
@@ -429,7 +430,7 @@ void Audio::readID3Metadata(){
     char frameid[5];
     int framesize=0;
     bool compressed;
-    char value[256+65]; // tag (max65) + value (max 256)
+    char value[256];
     bool bitorder=false;
     uint8_t uni_h=0;
     uint8_t uni_l=0;
@@ -797,15 +798,8 @@ void Audio::loop() {
             }
         }
         if(m_f_firststream_ready==true){
-            if(m_av==0){                // empty buffer, broken stream or bad bitrate?
+            if(m_av==0){            // empty buffer, broken stream or bad bitrate?
                 i++;
-                if(m_f_podcast==true && i>3000){  // or end of podcast
-                    m_f_podcast=false;
-                    m_f_webstream=false;
-                    if(audio_info) audio_info("end of stream");
-                    if(audio_eof_mp3) audio_eof_mp3("Podcast");
-                    return;
-                }
                 if(i>200000){       // wait several seconds
                     i=0;
                     if(audio_info) audio_info("Stream lost -> try new connection");
@@ -868,12 +862,12 @@ void Audio::handlebyte(uint8_t b){
                         else if(ct.indexOf("aac")>=0){
                             m_f_aac=true;
                             if(audio_info) audio_info("format is aac");
-                            stopSong();
+//                            stopSong(); // if no aac decoder available
                         }
                         else if(ct.indexOf("mp4")>=0){
                             m_f_aac=true;
                             if(audio_info) audio_info("format is aac");
-                            stopSong();
+//                            stopSong(); // if no aac decoder available
                         }
                         else if(ct.indexOf("ogg")>=0){
                             m_f_running=false;
@@ -1292,62 +1286,10 @@ bool Audio::chkhdrline(const char* str){
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t *data, size_t len) {
     if(m_validSamples>0) {playChunk(); return 0;} //outputbuffer full or not ready, try again?
-    static int lastret=0, count=0, ehsz=0;
+    static int lastret=0, count=0;
     if(!m_f_playing){
-
-        if ((data[0] == 'I') && (data[1] == 'D') && (data[2] == '3')){
-            // it is not a usual radio stream, it is a podcast
-            m_f_podcast=true;
-            log_i("Podcast found!");
-            m_id3Size  = data[6]; m_id3Size = m_id3Size << 7;
-            m_id3Size |= data[7]; m_id3Size = m_id3Size << 7;
-            m_id3Size |= data[8]; m_id3Size = m_id3Size << 7;
-            m_id3Size |= data[9];
-
-            m_rev = data[3];
-            switch (m_rev) {
-            case 2:
-                m_f_unsync = (data[5] & 0x80);
-                m_f_exthdr = false;
-                break;
-            case 3:
-            case 4:
-                m_f_unsync = (data[5] & 0x80); // bit7
-                m_f_exthdr = (data[5] & 0x40); // bit6 extended header
-                break;
-            };
-            sprintf(chbuf, "ID3 version=%i", m_rev);
-            if(audio_info) audio_info(chbuf);
-            sprintf(chbuf,"ID3 framesSize=%i", m_id3Size);
-            if(audio_info) audio_info(chbuf);
-            if (m_f_exthdr) {
-                if(audio_info) audio_info("ID3 extended header");
-                ehsz = (data[10] << 24) | (data[11] << 16)
-                        | (data[12] << 8) | (data[13]);
-                m_id3Size-=4;
-                return 14;
-            }
-            else{
-                if(audio_info) audio_info("ID3 normal frames");
-                return 10;
-            }
-        }
-        if(ehsz>1024){ehsz-=1024; m_id3Size-=1024; return 1024;}   // Throw exthdr away
-        if(ehsz>   0){int tmp=ehsz; m_id3Size-=ehsz;  ehsz=0; return tmp;}
-        // TODO analyze ID3tags, not skip them
-
-        // skip ID3tags
-        if(m_id3Size>1000){
-            m_id3Size-=1000;
-            return 1000;
-        }
-        if(m_id3Size>0){
-            int tmp=m_id3Size;
-            m_id3Size=0;
-            return tmp;
-        }
-
-        if(m_f_mp3) m_nextSync = mp3decoder.MP3FindSyncWord(data, len);
+        if(m_f_mp3) m_nextSync = MP3FindSyncWord(data, len);
+        if(m_f_aac) m_nextSync = AACFindSyncWord(data, len);
         if(m_nextSync==-1) {
             if(audio_info) audio_info("syncword not found");
             return -1;
@@ -1365,9 +1307,12 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         m_bitrate=0;
         m_f_playing=true;
     }
+
     m_bytesLeft=len;
     int ret=0;
-    if(m_f_mp3) ret = mp3decoder.MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
+    if(m_f_mp3) ret = MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
+//    if(m_f_aac) ret = AACDecode(aacdecoder, data, &m_bytesLeft, m_outBuff);
+    if(m_f_aac) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
     if(ret==0) lastret=0;
     int bytesDecoded=len-m_bytesLeft;
     if(bytesDecoded==0){ // unlikely framesize
@@ -1383,47 +1328,82 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
                  sprintf(chbuf, "MP3 decode error %d", ret);
                  if(audio_info) audio_info(chbuf);
             }
+            if(m_f_aac){
+                 sprintf(chbuf, "AAC decode error %d", ret);
+                 if(audio_info) audio_info(chbuf);
+            }
         }
         if(lastret==ret) count++;
-        if(count>10){ count=0; lastret=0; } // more than 100 errors
+        if(count>10){ count=0; lastret=0;} // more than 10 errors
         if(ret!=lastret){
             lastret=ret; count=0;
         }
         return bytesDecoded;
     }
-    else{
+    else{  // ret==0
         if(m_f_mp3){
-            if ((int) mp3decoder.MP3GetSampRate() != (int) m_lastRate) {
-                m_lastRate = mp3decoder.MP3GetSampRate();
-                setSampleRate(mp3decoder.MP3GetSampRate());
-                sprintf(chbuf,"SampleRate=%i",mp3decoder.MP3GetSampRate());
+            if (MP3GetChannels() != m_lastChannels) {
+                setChannels(MP3GetChannels());
+                m_lastChannels = MP3GetChannels() ;
+                sprintf(chbuf,"Channels=%i", MP3GetChannels() );
                 if(audio_info) audio_info(chbuf);
             }
-            if((int) mp3decoder.MP3GetSampRate() ==0){ // error can't be
+            if (MP3GetSampRate() != (int) m_lastRate) {
+                m_lastRate = MP3GetSampRate();
+                setSampleRate(MP3GetSampRate());
+                sprintf(chbuf,"SampleRate=%i",MP3GetSampRate());
+                if(audio_info) audio_info(chbuf);
+            }
+            if((int) MP3GetSampRate() ==0){ // error can't be
                 if(audio_info) audio_info("SampleRate=0, try new frame");
                 m_f_playing=false;
                 return 1;
             }
-            if (mp3decoder.MP3GetChannels() != m_lastChannels) {
-                setChannels(mp3decoder.MP3GetChannels());
-                m_lastChannels = mp3decoder.MP3GetChannels();
-                sprintf(chbuf,"Channels=%i", mp3decoder.MP3GetChannels());
+            if (MP3GetBitsPerSample() != (int)m_bps){
+                m_bps=MP3GetBitsPerSample();
+                sprintf(chbuf,"BitsPerSample=%i", MP3GetBitsPerSample());
                 if(audio_info) audio_info(chbuf);
             }
-            if (mp3decoder.MP3GetBitsPerSample() != (int)m_bps){
-                m_bps=mp3decoder.MP3GetBitsPerSample();
-                sprintf(chbuf,"BitsPerSample=%i", mp3decoder.MP3GetBitsPerSample());
-                if(audio_info) audio_info(chbuf);
-            }
-            if (mp3decoder.MP3GetBitrate() != m_bitrate){
-                if(m_bitrate==0){
-                    sprintf(chbuf,"Bitrate=%i", mp3decoder.MP3GetBitrate()); // show only the first rate
+            if (MP3GetBitrate()!= m_bitrate){
+                if(m_bitrate==0){ // no bitrate received from icy stream
+                    sprintf(chbuf,"Bitrate=%i", MP3GetBitrate()); // show only the first rate
                     if(audio_info) audio_info(chbuf);
                 }
-                m_bitrate=mp3decoder.MP3GetBitrate();
+                m_bitrate=MP3GetBitrate();
             }
             m_curSample = 0;
-            m_validSamples = mp3decoder.MP3GetOutputSamps() / m_lastChannels;
+            m_validSamples = MP3GetOutputSamps() / m_lastChannels;
+        }
+        if(m_f_aac){
+            if (AACGetChannels() != m_lastChannels) {
+                setChannels(AACGetChannels());
+                m_lastChannels = AACGetChannels();
+                sprintf(chbuf,"AAC Channels=%i",AACGetChannels());
+                if(audio_info) audio_info(chbuf);
+            }
+            if (AACGetSampRate() != m_lastRate) {
+                setSampleRate(AACGetSampRate());
+                m_lastRate = AACGetSampRate();
+                sprintf(chbuf,"AAC SampleRate=%i",AACGetSampRate()*2);
+                if(audio_info) audio_info(chbuf);
+            }
+            if(AACGetSampRate() == 0){ // error can't be
+                if(audio_info) audio_info("AAC SampleRate=0, try new frame");
+                m_f_playing=false;
+                return 1;
+            }
+            if (AACGetBitsPerSample() != m_bps){
+                m_bps=AACGetBitsPerSample();
+                sprintf(chbuf,"AAC BitsPerSample=%i", AACGetBitsPerSample());
+                if(audio_info) audio_info(chbuf);
+            }
+            if (AACGetBitrate() != m_bitrate){
+                    sprintf(chbuf,"AAC Bitrate=%i", AACGetBitrate()); // show only the first rate
+                    if(audio_info) audio_info(chbuf);
+                m_bitrate=AACGetBitrate();
+            }
+            m_curSample = 0;
+            m_validSamples = AACGetOutputSamps() / m_lastChannels;
         }
     }
     playChunk();
@@ -1501,9 +1481,9 @@ void Audio::setVolume(uint8_t vol){ // vol 22 steps, 0...21
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getVolume(){
     for(uint8_t i = 0; i < 22; i++){
-        if(volumetable[i] == m_vol) return i;
+      if(volumetable[i] == m_vol) return i;
     }
-    m_vol=12;
+    m_vol=12; // if m_vol not found in table
     return m_vol;
 }
 //---------------------------------------------------------------------------------------------------------------------

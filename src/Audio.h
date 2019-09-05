@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 04,2019
+ *  Updated on: Sep 05,2019
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -116,8 +116,8 @@ private:
     uint8_t         m_i2s_num= I2S_NUM_0;           // I2S_NUM_0 or I2S_NUM_1
     int16_t         m_buffValid;
     int16_t         m_lastFrameEnd;
-    int16_t         m_outBuff[1152 * 2];          // Interleaved L/R
-    int16_t         m_validSamples;
+    int16_t         m_outBuff[2048*2]; //[1152 * 2];          // Interleaved L/R
+    int16_t         m_validSamples = 0;
     int16_t         m_curSample;
     int16_t         m_lastSample[2];
     int16_t*        m_leftSample;
@@ -141,7 +141,6 @@ private:
     String          m_icystreamtitle ;              // Streamtitle from metadata
     boolean         m_ctseen=false;                 // First line of header seen or not
     boolean         m_f_unsync = false;
-    boolean         m_f_podcast=false;              // set if found ID3Header in stream
     boolean         m_f_exthdr = false;             // ID3 extended header
     boolean         m_f_localfile = false ;         // Play from local mp3-file
     boolean         m_f_webstream = false ;         // Play from URL
