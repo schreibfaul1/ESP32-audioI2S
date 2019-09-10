@@ -50,6 +50,12 @@ public:
     void loop();
     uint32_t getFileSize();
     uint32_t getFilePos();
+    /**
+     * @brief Get the audio file duration in seconds
+     * 
+     * @return uint32_t file duration in seconds, 0 if no file active
+     */
+    uint32_t getAudioFileDuration();
     bool setFilePos(uint32_t pos);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT);
     void stopSong();
@@ -160,6 +166,7 @@ private:
     boolean         m_f_playing = false;            // valid mp3 stream recognized
     unsigned int    m_lastRate;
     size_t          m_bytesWritten=0;               // set in i2s_write() but not used
+    uint32_t        m_audioFileDuration=0;
 };
 
 #endif /* AUDIO_H_ */
