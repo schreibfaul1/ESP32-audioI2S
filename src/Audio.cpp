@@ -178,6 +178,7 @@ bool Audio::connecttoSD(String sdfile){
     m_f_playing=false;
     m_inBuffwindex=0;
     m_inbuffrindex=0;
+    m_audioFileDuration = 0;
     clientsecure.stop(); clientsecure.flush();              // release memory if allocated
     m_f_localfile=true;
     m_f_webstream=false;
@@ -434,15 +435,16 @@ void Audio::readID3Metadata(){
     bool bitorder=false;
     uint8_t uni_h=0;
     uint8_t uni_l=0;
+    int id3Size = m_id3Size;
     String tag="";
     if (m_f_exthdr) {
         if(audio_info) audio_info("ID3 extended header");
         int ehsz = (mp3file.read() << 24) | (mp3file.read() << 16)
                 | (mp3file.read() << 8) | (mp3file.read());
-        m_id3Size -= 4;
+        id3Size -= 4;
         for (int j = 0; j < ehsz - 4; j++) {
             mp3file.read();
-            m_id3Size--;
+            id3Size--;
         } // Throw it away
     } else
         if(audio_info) audio_info("ID3 normal frames");
@@ -451,37 +453,37 @@ void Audio::readID3Metadata(){
         frameid[0] = mp3file.read();
         frameid[1] = mp3file.read();
         frameid[2] = mp3file.read();
-        m_id3Size -= 3;
+        id3Size -= 3;
         if   (m_rev == 2) frameid[3] = 0;
-        else {frameid[3] = mp3file.read(); m_id3Size--;}
+        else {frameid[3] = mp3file.read(); id3Size--;}
         frameid[4]=0; // terminate the string
         tag=frameid;
         if(frameid[0]==0 && frameid[1]==0 && frameid[2]==0 && frameid[3]==0){
             // We're in padding
-            while (m_id3Size != 0){mp3file.read(); m_id3Size--;}
+            while (id3Size != 0){mp3file.read(); id3Size--;}
         }
         else{
             if(m_rev==2){
                 framesize = (mp3file.read() << 16) | (mp3file.read() << 8) | (mp3file.read());
-                m_id3Size -= 3;
+                id3Size -= 3;
                 compressed = false;
             }
             else{
                 framesize = (mp3file.read() << 24) | (mp3file.read() << 16) | (mp3file.read() << 8) | (mp3file.read());
-                m_id3Size -= 4;
+                id3Size -= 4;
                 mp3file.read(); // skip 1st flag
-                m_id3Size--;
+                id3Size--;
                 compressed = mp3file.read() & 0x80;
-                m_id3Size--;
+                id3Size--;
             }
             if(compressed){
                 log_i("iscompressed");
                 int decompsize=(mp3file.read()<<24) | (mp3file.read()<<16) | (mp3file.read()<<8) | (mp3file.read());
-                m_id3Size -= 4;
+                id3Size -= 4;
                 (void) decompsize;
                 for (int j = 0; j < framesize; j++){
                     mp3file.read();
-                    m_id3Size--;
+                    id3Size--;
                 }
             }
             // Read the value
@@ -489,22 +491,22 @@ void Audio::readID3Metadata(){
             bool isUnicode;
             if(framesize>0){
                 isUnicode = (mp3file.read() == 1) ? true : false;
-                m_id3Size--;
+                id3Size--;
                 if(framesize<256){
-                    mp3file.readBytes(value, framesize-1); m_id3Size-=framesize-1;
+                    mp3file.readBytes(value, framesize-1); id3Size-=framesize-1;
                     i=framesize-1; value[framesize-1]=0;
                 }
                 else{
                     if(tag=="APIC"){ // a image embedded in file, skip it
                         //log_i("it's a image");
-                        setFilePos(getFilePos()+framesize-1); m_id3Size-=framesize-1;
+                        setFilePos(getFilePos()+framesize-1); id3Size-=framesize-1;
                     }
                     else{
                         // store the first 255 bytes in buffer and cut the remains
-                        mp3file.readBytes(value, 255); m_id3Size-=255;
+                        mp3file.readBytes(value, 255); id3Size-=255;
                         value[255]=0; i=255;
                         // big block, skip it
-                        setFilePos(getFilePos()+framesize-1-255); m_id3Size-=framesize-1;
+                        setFilePos(getFilePos()+framesize-1-255); id3Size-=framesize-1;
                     }
                 }
                 if(isUnicode){  // convert unicode to utf-8 U+0020...U+07FF
@@ -630,7 +632,7 @@ void Audio::readID3Metadata(){
             if(tag=="XDOR") sprintf(chbuf, "OriginalReleaseTime: %s", value);
             if(chbuf[0]!=0) if(audio_id3data) audio_id3data(chbuf);
         }
-    } while (m_id3Size > 0);
+    } while (id3Size > 0);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::stopSong(){
@@ -1436,6 +1438,21 @@ uint32_t Audio::getFileSize(){
 uint32_t Audio::getFilePos(){
     if (!mp3file) return 0;
     return mp3file.position();
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::getAudioFileDuration(){
+    if (!mp3file) return 0;
+
+    if ( 0 == m_audioFileDuration ) // calculate only once per file
+    {
+        uint32_t fileSize = getFileSize();
+        uint32_t bitRate = MP3GetBitrate();
+        if(0 < bitRate)
+        {
+            m_audioFileDuration = 8 * (fileSize - m_id3Size) / bitRate;
+        }
+    }
+    return m_audioFileDuration;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos){
