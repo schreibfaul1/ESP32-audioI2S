@@ -1318,7 +1318,10 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     if(bytesDecoded==0){ // unlikely framesize
         if(audio_info) audio_info("mp3 framesize is 0, start decoding again");
         m_f_playing=false; // seek for new syncword
-        return -1;  // send error
+        
+        // we're here because there was a wrong sync word
+        // so skip two sync bytes and seek for next
+        return 2; 
     }
     if(ret){ // Error, skip the frame...
         m_f_playing=false; // seek for new syncword
