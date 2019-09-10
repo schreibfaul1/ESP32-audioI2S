@@ -53,7 +53,7 @@ public:
     /**
      * @brief Get the audio file duration in seconds
      * 
-     * @return uint32_t fileduration in seconds, 0 if no file active
+     * @return uint32_t file duration in seconds, 0 if no file active
      */
     uint32_t getAudioFileDuration();
     bool setFilePos(uint32_t pos);
