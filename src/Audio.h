@@ -122,7 +122,6 @@ private:
     int             m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
     int             m_lastChannels;
-    int             m_nextSync=0;
     int             m_bytesLeft=0;
     int             m_writePtr=0;                   // ptr sampleBuffer
     int             m_readPtr=0;                    // ptr sampleBuffer

@@ -1300,17 +1300,18 @@ bool Audio::chkhdrline(const char* str){
 int Audio::sendBytes(uint8_t *data, size_t len) {
     if(m_validSamples>0) {playChunk(); return 0;} //outputbuffer full or not ready, try again?
     static int lastret=0, count=0;
+    int32_t nextSync{0};
     if(!m_f_playing){
-        if(m_f_mp3) m_nextSync = MP3FindSyncWord(data, len);
-        if(m_f_aac) m_nextSync = AACFindSyncWord(data, len);
-        if(m_nextSync==-1) {
+        if(m_f_mp3) nextSync = MP3FindSyncWord(data, len);
+        if(m_f_aac) nextSync = AACFindSyncWord(data, len);
+        if(nextSync==-1) {
             if(audio_info) audio_info("syncword not found");
             return -1;
         }
-        if(m_nextSync > 0){
-            sprintf(chbuf, "syncword found at pos %i", m_nextSync);
+        if(nextSync > 0){
+            sprintf(chbuf, "syncword found at pos %i", nextSync);
             if(audio_info) audio_info(chbuf);
-            return m_nextSync;
+            return nextSync;
         }
         if(audio_info) audio_info("syncword found at pos 0");
         count=0;
