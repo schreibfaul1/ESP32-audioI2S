@@ -88,6 +88,8 @@ public:
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
 
 private:
+    void processLocalFile();
+    void processWebStream();
     int  sendBytes(uint8_t *data, size_t len);
     void readID3Metadata();
     bool setSampleRate(int hz);
@@ -154,7 +156,6 @@ private:
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0;
-    uint32_t        m_av=0;                         // available in stream or SD (uin16_t is to small by playing from SD)
     uint32_t        m_count=0;                      // Bytecounter between metadata
     String          m_mp3title="";                  // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
