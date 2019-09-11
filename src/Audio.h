@@ -88,6 +88,8 @@ public:
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
 
 private:
+    void processLocalFile();
+    void processWebStream();
     int  sendBytes(uint8_t *data, size_t len);
     void readID3Metadata();
     bool setSampleRate(int hz);
@@ -122,7 +124,6 @@ private:
     int             m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
     int             m_lastChannels;
-    int             m_nextSync=0;
     int             m_bytesLeft=0;
     int             m_writePtr=0;                   // ptr sampleBuffer
     int             m_readPtr=0;                    // ptr sampleBuffer
@@ -155,7 +156,6 @@ private:
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0;
-    uint32_t        m_av=0;                         // available in stream or SD (uin16_t is to small by playing from SD)
     uint32_t        m_count=0;                      // Bytecounter between metadata
     String          m_mp3title="";                  // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
@@ -167,25 +167,25 @@ private:
     String          m_plsURL;
     String          m_plsStationName;
     String          m_icystreamtitle ;              // Streamtitle from metadata
-    boolean         m_ctseen=false;                 // First line of header seen or not
-    boolean         m_f_unsync = false;
-    boolean         m_f_exthdr = false;             // ID3 extended header
-    boolean         m_f_localfile = false ;         // Play from local mp3-file
-    boolean         m_f_webstream = false ;         // Play from URL
-    boolean         m_f_ssl=false;
-    boolean         m_f_running=false;
-    boolean         m_f_firststream_ready=false;         // Set after connecttohost and first streamdata are available
-    boolean         m_f_ctseen=false;               // First line of header seen or not
-    boolean         m_f_chunked = false ;           // Station provides chunked transfer
-    boolean         m_f_filled;                     // outputBuffer
-    boolean         m_f_swm=false;
-    boolean         m_f_firstmetabyte=false;        // True if first metabyte (counter)
-    boolean         m_f_plsFile=false;              // Set if URL is known
-    boolean         m_f_plsTitle=false;             // Set if StationName is known
-    boolean         m_f_stream=false;               // Set false if stream is lost
-    boolean         m_f_mp3=false;                  // indicates mp3
-    boolean         m_f_aac=false;                  // indicates aac
-    boolean         m_f_playing = false;            // valid mp3 stream recognized
+    bool            m_f_unsync = false;
+    bool            m_f_exthdr = false;             // ID3 extended header
+    bool            m_f_localfile = false ;         // Play from local mp3-file
+    bool            m_f_webstream = false ;         // Play from URL
+    bool            m_f_ssl=false;
+    bool            m_f_running=false;
+    bool            m_f_firststream_ready=false;         // Set after connecttohost and first streamdata are available
+    bool            m_f_ctseen=false;               // First line of header seen or not
+    bool            m_f_chunked = false ;           // Station provides chunked transfer
+    bool            m_f_filled;                     // outputBuffer
+    bool            m_f_swm=false;
+    bool            m_f_firstmetabyte=false;        // True if first metabyte (counter)
+    bool            m_f_plsFile=false;              // Set if URL is known
+    bool            m_f_plsTitle=false;             // Set if StationName is known
+    bool            m_ctseen=false;                 // First line of header seen or not
+    bool            m_f_stream=false;               // Set false if stream is lost
+    bool            m_f_mp3=false;                  // indicates mp3
+    bool            m_f_aac=false;                  // indicates aac
+    bool            m_f_playing = false;            // valid mp3 stream recognized
     unsigned int    m_lastRate;
     size_t          m_bytesWritten=0;               // set in i2s_write() but not used
     uint32_t        m_audioFileDuration=0;

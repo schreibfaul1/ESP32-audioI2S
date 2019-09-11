@@ -679,164 +679,263 @@ bool Audio::playChunk(){
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::loop() {
-    uint16_t bcw=0;                                         // bytes can write
-    int16_t  res=0;                                         // number of bytes getting from client
-    static uint32_t i=0;                                    // Count loops if clientbuffer is empty
-    static uint32_t chunksize=0;                            // Chunkcount read from stream
-    if(!m_f_running) return;                                // Nothing to do here!
+void Audio::loop() 
+{
     // - localfile - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_localfile){
-        bcw=m_inBuffsize-m_inBuffwindex;
-        res=mp3file.read(m_inBuff + m_inBuffwindex, bcw);
-        if(res<0){;} // nothing to do
-        if(res>0){
-            m_inBuffwindex+=res;
-        }
-        if(m_inBuffwindex==m_inBuffsize){
-            if(m_f_stream==false){
-                m_f_stream=true;
-                if(audio_info) audio_info("stream ready");
-            }
-            m_inbuffrindex=sendBytes(m_inBuff, m_inBuffsize);
-            memmove(m_inBuff, m_inBuff + m_inbuffrindex , m_inBuffsize-m_inbuffrindex);
-            //log_i("%i bytes moved", m_inBuffsize-m_rbrindex);
-            m_inBuffwindex-=m_inbuffrindex;
-        }
-        if(res==0){// eof
-            memmove(m_inBuff, m_inBuff + m_inbuffrindex , m_inBuffsize-m_inbuffrindex);
-            mp3file.close();
-            m_f_stream=false;
-            m_f_localfile=false;
-            sprintf(chbuf,"End of mp3file %s", m_mp3title.c_str());
-            if(audio_info) audio_info(chbuf);
-            if(audio_eof_mp3) audio_eof_mp3(m_mp3title.c_str());
-        }
+    if(m_f_localfile)
+    {
+        processLocalFile();
     }
     // - webstream - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_webstream){                                      // Playing file from URL?
-        static uint16_t inBuffSize=m_inBuffsize;
-        static int bytesdecoded=0;
-        if(m_f_ssl==false) m_av=client.available();         // Available from stream
-        if(m_f_ssl==true)  m_av=clientsecure.available();   // Available from stream
+    if(m_f_webstream)
+    {                                      // Playing file from URL?
+        processWebStream();
+    }
+}
 
-        if((m_f_firststream_ready==false)&&(m_av>0)){            // first streamdata recognised
-            m_f_firststream_ready=true;
-            m_f_stream=false;
-            inBuffSize=m_inBuffsize;
+
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::processLocalFile()
+{
+    if ( mp3file && m_f_running && m_f_localfile )
+    {
+        uint16_t bytesCanBeWritten = 0;
+        int16_t  bytesAddedToBuffer = 0;
+
+        bytesCanBeWritten = m_inBuffsize-m_inBuffwindex;
+        bytesAddedToBuffer = mp3file.read(m_inBuff + m_inBuffwindex, bytesCanBeWritten);
+        if(bytesAddedToBuffer > bytesCanBeWritten)
+        {
+            stopSong();
         }
-        if(((m_datamode==AUDIO_DATA)||(m_datamode==AUDIO_SWM))&&((m_count>0))){
-            bcw=inBuffSize-m_inBuffwindex;
-            uint x;
-            if(m_count>=bcw) x=bcw; else x=m_count;
-            if((m_f_chunked)&&(x>m_chunkcount)) x=m_chunkcount;
-            if(m_f_ssl==false) res=client.read(m_inBuff + m_inBuffwindex, x);
-            if(m_f_ssl==true)  res=clientsecure.read(m_inBuff + m_inBuffwindex, x);
-            if(res<0){;} // nothing to do
-            if(res>0){
-                m_count-=res;
-                if(m_f_chunked) m_chunkcount-=res;
-                m_inBuffwindex+=res;
+        else
+        {
+            if( bytesAddedToBuffer > 0 )
+            {
+                m_inBuffwindex += bytesAddedToBuffer;
             }
-            if(m_inBuffwindex==inBuffSize){
-                if(m_f_stream==false){
-                    m_f_stream=true;
+            if ( m_inBuffwindex == m_inBuffsize )
+            {
+                if ( false == m_f_stream )
+                {
+                    m_f_stream = true;
                     if(audio_info) audio_info("stream ready");
                 }
-                bytesdecoded=sendBytes(m_inBuff, inBuffSize);
-                if(bytesdecoded<0){ // no syncword found or decode error, try next chunk
-                    m_inbuffrindex=200; // try next chunk
+                m_inbuffrindex = sendBytes(m_inBuff, m_inBuffsize);
+                memmove(m_inBuff, m_inBuff + m_inbuffrindex , m_inBuffsize-m_inbuffrindex);
+                m_inBuffwindex -= m_inbuffrindex;
+            }
+            else// eof
+            {
+                memmove(m_inBuff, m_inBuff + m_inbuffrindex , m_inBuffsize-m_inbuffrindex);
+                mp3file.close();
+                m_f_stream=false;
+                m_f_localfile=false;
+                sprintf(chbuf,"End of mp3file %s", m_mp3title.c_str());
+                if(audio_info) audio_info(chbuf);
+                if(audio_eof_mp3) audio_eof_mp3(m_mp3title.c_str());
+            }
+        }
+    }
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::processWebStream()
+{
+    if(m_f_running && m_f_webstream)
+    {
+        uint16_t bytesCanBeWritten = 0;
+        int16_t  bytesAddedToBuffer = 0;
+        static uint32_t chunksize = 0;                       // Chunkcount read from stream
+        static uint16_t inBuffSize = m_inBuffsize;
+        int32_t availableBytes = 0; // available bytes in stream 
+        static int bytesdecoded = 0;
+
+        if (m_f_ssl==false) availableBytes = client.available();         // Available from stream
+        if (m_f_ssl==true)  availableBytes = clientsecure.available();   // Available from stream
+
+        if ( ( m_f_firststream_ready == false ) && ( availableBytes > 0 ) )
+        { // first streamdata recognised
+            m_f_firststream_ready = true;
+            m_f_stream = false;
+            inBuffSize = m_inBuffsize;
+        }
+
+        if ((   ( m_datamode == AUDIO_DATA ) || ( m_datamode == AUDIO_SWM ) )
+            && ( m_count > 0 )
+        )
+        {
+            bytesCanBeWritten = inBuffSize - m_inBuffwindex;
+            uint x = min( m_count , uint32_t(bytesCanBeWritten) );
+
+            if ( ( m_f_chunked ) && ( x > m_chunkcount ) )
+            {
+                x = m_chunkcount;
+            }
+
+            if ( m_f_ssl == false )
+            { 
+                bytesAddedToBuffer = client.read(m_inBuff + m_inBuffwindex, x);
+            }
+
+            if ( m_f_ssl == true )
+            {
+                bytesAddedToBuffer=clientsecure.read(m_inBuff + m_inBuffwindex, x);
+            }
+
+            if ( bytesAddedToBuffer > 0 )
+            {
+                m_count -= bytesAddedToBuffer;
+                if ( m_f_chunked )
+                { 
+                    m_chunkcount-=bytesAddedToBuffer;
+                }
+                m_inBuffwindex += bytesAddedToBuffer;
+            }
+
+            if ( m_inBuffwindex == inBuffSize )
+            {
+                if ( m_f_stream == false )
+                {
+                    m_f_stream = true;
+                    if(audio_info) audio_info("stream ready");
+                }
+                bytesdecoded = sendBytes(m_inBuff, inBuffSize);
+                if ( bytesdecoded < 0 ) // no syncword found or decode error, try next chunk
+                {
+                    m_inbuffrindex = 200; // try next chunk
                     memmove(m_inBuff, m_inBuff + m_inbuffrindex , inBuffSize-m_inbuffrindex);
-                    m_inBuffwindex-=m_inbuffrindex;
-                    inBuffSize=m_inBuffsize;
+                    m_inBuffwindex -= m_inbuffrindex;
+                    inBuffSize = m_inBuffsize;
                     return;
                 }
-                else{
-                    m_inbuffrindex=bytesdecoded;
+                else
+                {
+                    m_inbuffrindex = bytesdecoded;
                     memmove(m_inBuff, m_inBuff + m_inbuffrindex , inBuffSize-m_inbuffrindex);
-                    m_inBuffwindex-=m_inbuffrindex;
-//                    log_i("bytesdecoded %i moved %i", bytesdecoded,inBuffSize-m_inbuffrindex );
-//                    if(m_inBuffwindex>m_inbuffrindex) inBuffSize=m_inBuffwindex+1;
-//                    else inBuffSize=m_inbuffrindex+1;
+                    m_inBuffwindex -= m_inbuffrindex;
                 }
             }
-            if(res==0){
-                if(m_f_stream==true){
-                    m_f_stream=false;
+            if ( bytesAddedToBuffer == 0 )
+            {
+                if ( m_f_stream )
+                {
+                    m_f_stream = false;
                     i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
                     if(audio_info) audio_info("stream lost");
                 }
             }
-            if(m_count==0){
-                if(m_datamode==AUDIO_SWM){
-                    m_count=16000; //mms has no metadata
+
+            if ( m_count == 0 )
+            {
+                if ( m_datamode == AUDIO_SWM )
+                {
+                    m_count = 16000; //mms has no metadata
                 }
-                else{
-                    m_datamode=AUDIO_METADATA;
-                    m_f_firstmetabyte=true;
+                else
+                {
+                    m_datamode = AUDIO_METADATA;
+                    m_f_firstmetabyte = true;
                 }
             }
         }
-        else { //!=DATA
-            if (m_datamode == AUDIO_PLAYLISTDATA) {
-                if (m_t0 + 49 < millis()) {
+        else //!=DATA
+        {
+            if ( m_datamode == AUDIO_PLAYLISTDATA ) 
+            {
+                if ( m_t0 + 49 < millis()) 
+                {
                     handlebyte('\n');                       // send LF
                 }
             }
-            int16_t x=0;;
-            if(m_f_chunked&&(m_datamode!=AUDIO_HEADER)){
-                if(m_chunkcount>0){
-                    if(m_f_ssl==false) x = (client.read());
-                    if(m_f_ssl==true) x = (clientsecure.read());
-                    if (x >= 0){
+            int16_t x = 0;
+            if ( m_f_chunked && ( m_datamode != AUDIO_HEADER ) )
+            {
+                if ( m_chunkcount > 0 )
+                {
+                    if ( m_f_ssl == false )
+                        x = client.read();
+                    else
+                        x = clientsecure.read();
+
+                    if (x >= 0)
+                    {
                         handlebyte(x);
                         m_chunkcount--;
                     }
                 }
             }
-            else{
-                if(m_f_ssl==false) x = (client.read());
-                if(m_f_ssl==true) x = (clientsecure.read());
-                if (x >= 0){
+            else
+            {
+                if ( m_f_ssl == false ) 
+                    x = client.read();
+                else    
+                    x = clientsecure.read();
+
+                if (x >= 0)
+                {
                     handlebyte(x);
                 }
             }
-            if (m_datamode == AUDIO_DATA) {
+            if ( m_datamode == AUDIO_DATA )
+            {
                 m_count = m_metaint;
-                if (m_metaint == 0)
+                if ( m_metaint == 0 )
+                {
                     m_datamode = AUDIO_SWM; // stream without metadata, can be mms
+                }
             }
-            if (m_datamode == AUDIO_SWM) {
+            if ( m_datamode == AUDIO_SWM )
+            {
                 m_count =16000;
             }
         }
-        if(m_f_firststream_ready==true){
-            if(m_av==0){            // empty buffer, broken stream or bad bitrate?
-                i++;
-                if(i>200000){       // wait several seconds
-                    i=0;
+
+        if ( m_f_firststream_ready == true )
+        {
+            static uint32_t loopCnt = 0;      // Count loops if clientbuffer is empty
+            if ( availableBytes == 0 )
+            {   // empty buffer, broken stream or bad bitrate?
+                loopCnt++;
+                if( loopCnt > 200000 )
+                {  // wait several seconds
+                    loopCnt = 0;
                     if(audio_info) audio_info("Stream lost -> try new connection");
                     connecttohost(m_lastHost); // try a new connection
                 }
             }
-            else i=0;
+            else
+            {
+                loopCnt = 0;
+            }
         }
-        if(m_f_chunked==false){return;}
-        else{
-            if(m_datamode==AUDIO_HEADER) return;
-            if((m_chunkcount) == 0){             // Expecting a new chunkcount?
-                int b = (client.read());
-                if(b<1) return;
-                if(b=='\r'){}
-                else if(b=='\n'){
-                    m_chunkcount=chunksize;
-                    chunksize=0;
+
+        if ( m_f_chunked )
+        {
+            if ( m_datamode == AUDIO_HEADER )
+                return;
+
+            if ( m_chunkcount == 0)
+            {             // Expecting a new chunkcount?
+                int b = client.read();
+                if ( b < 1 )
+                    return;
+
+                if( b == '\r' )
+                {}
+                else if ( b == '\n' )
+                {
+                    m_chunkcount = chunksize;
+                    chunksize = 0;
                 }
-                else{
+                else
+                {
                     // We have received a hexadecimal character.  Decode it and add to the result.
-                    b=toupper(b) - '0';                         // Be sure we have uppercase
-                    if(b > 9) b = b - 7;                        // Translate A..F to 10..15
-                    chunksize=(chunksize << 4) + b;
+                    b = toupper(b) - '0';                         // Be sure we have uppercase
+
+                    if ( b > 9)
+                         b = b - 7;                        // Translate A..F to 10..15
+
+                    chunksize = (chunksize << 4) + b;
                 }
             }
         }
@@ -1300,17 +1399,18 @@ bool Audio::chkhdrline(const char* str){
 int Audio::sendBytes(uint8_t *data, size_t len) {
     if(m_validSamples>0) {playChunk(); return 0;} //outputbuffer full or not ready, try again?
     static int lastret=0, count=0;
+    int32_t nextSync{0};
     if(!m_f_playing){
-        if(m_f_mp3) m_nextSync = MP3FindSyncWord(data, len);
-        if(m_f_aac) m_nextSync = AACFindSyncWord(data, len);
-        if(m_nextSync==-1) {
+        if(m_f_mp3) nextSync = MP3FindSyncWord(data, len);
+        if(m_f_aac) nextSync = AACFindSyncWord(data, len);
+        if(nextSync==-1) {
             if(audio_info) audio_info("syncword not found");
             return -1;
         }
-        if(m_nextSync > 0){
-            sprintf(chbuf, "syncword found at pos %i", m_nextSync);
+        if(nextSync > 0){
+            sprintf(chbuf, "syncword found at pos %i", nextSync);
             if(audio_info) audio_info(chbuf);
-            return m_nextSync;
+            return nextSync;
         }
         if(audio_info) audio_info("syncword found at pos 0");
         count=0;
