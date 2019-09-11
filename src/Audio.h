@@ -74,6 +74,13 @@ public:
     bool audioFileSeek(const int8_t speed);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT);
     void stopSong();
+    /**
+     * @brief pauseResume pauses current playback 
+     * 
+     * @return true if audio file or stream is active, false otherwise
+     */
+    bool pauseResume();
+
     void setVolume(uint8_t vol);
     uint8_t getVolume();
     inline uint8_t getDatamode(){return m_datamode;}
