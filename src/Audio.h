@@ -57,6 +57,15 @@ public:
      */
     uint32_t getAudioFileDuration();
     bool setFilePos(uint32_t pos);
+    /**
+     * @brief audioFileSeek seeks the file in both directions
+     * 
+     * @param[in] speed
+     *      speed > 0 : fast-forward
+     *      speed < 0 : fast-rewind
+     * @return true if audio file active and speed is valid, otherwise false
+     */
+    bool audioFileSeek(const int8_t speed);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT);
     void stopSong();
     void setVolume(uint8_t vol);
