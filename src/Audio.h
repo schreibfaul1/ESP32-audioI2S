@@ -56,6 +56,12 @@ public:
      * @return uint32_t file duration in seconds, 0 if no file active
      */
     uint32_t getAudioFileDuration();
+    /**
+     * @brief Get the current plying time in seconds
+     * 
+     * @return uint32_t current second of audio file, 0 if no file active
+     */
+    uint32_t getAudioCurrentTime();
     bool setFilePos(uint32_t pos);
     /**
      * @brief audioFileSeek seeks the file in both directions
