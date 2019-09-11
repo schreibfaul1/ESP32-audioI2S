@@ -1476,6 +1476,31 @@ bool Audio::setFilePos(uint32_t pos){
     return mp3file.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
+bool Audio::audioFileSeek(const int8_t speed)
+{
+    bool retVal = false;
+    if ( mp3file &&  speed )
+    {
+        retVal = true; //    
+        int32_t steps = 20 * speed;
+
+        if ( ( steps < 0 ) && m_f_running ) 
+        {
+            // fast-rewind faster than fast-forward because we still playing
+            steps = steps * 2;
+        }
+
+        uint32_t newPos = mp3file.position() + steps * MP3GetBitsPerSample();
+        newPos = ( newPos < m_id3Size) ? m_id3Size : newPos;
+        newPos = ( newPos >= mp3file.size() ) ? mp3file.size() - 1 : newPos;
+        if ( mp3file.position() != newPos )
+        {
+            retVal = mp3file.seek(newPos);
+        }
+    }
+    return retVal;
+}
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(int freq) {
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, freq);
     return true;
