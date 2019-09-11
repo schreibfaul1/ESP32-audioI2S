@@ -644,6 +644,17 @@ void Audio::stopSong(){
     memset(m_outBuff, 0, sizeof(m_outBuff));               //Clear OutputBuffer
 }
 //---------------------------------------------------------------------------------------------------------------------
+bool Audio::pauseResume()
+{
+    bool retVal = false;
+    if(m_f_localfile || m_f_webstream)
+    {
+        m_f_running = !m_f_running;
+        retVal = true;
+    }
+    return retVal;
+}
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::playChunk(){
     // If we've got data, try and pump it out...
     if(m_channels==1){
