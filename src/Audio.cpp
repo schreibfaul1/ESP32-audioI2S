@@ -1455,6 +1455,22 @@ uint32_t Audio::getAudioFileDuration(){
     return m_audioFileDuration;
 }
 //---------------------------------------------------------------------------------------------------------------------
+    // return curent time in seconds
+uint32_t Audio::getAudioCurrentTime(){
+    uint32_t curTime = 0;
+    if ( mp3file)
+    {
+        uint32_t fileDuration = getAudioFileDuration();
+        float factor = ( mp3file.position() - m_id3Size ) / ( mp3file.size() - m_id3Size + 1.0f );
+        if(0.0 < factor)
+        {
+            curTime = fileDuration * factor;
+        }
+    }
+    return curTime;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos){
     if (!mp3file) return false;
     return mp3file.seek(pos);
