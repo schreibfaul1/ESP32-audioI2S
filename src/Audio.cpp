@@ -183,6 +183,7 @@ bool Audio::connecttoSD(String sdfile){
     m_f_webstream=false;
     m_f_stream=false;
     m_f_mp3=true;
+    m_f_aac=false;
     memset(m_outBuff, 0, sizeof(m_outBuff));                //Clear OutputBuffer
     if(!sdfile.startsWith("/")) sdfile="/"+sdfile;
     while(sdfile[i] != 0){                                  //convert UTF8 to ASCII
@@ -751,7 +752,6 @@ void Audio::processWebStream()
 
         if (m_f_ssl==false) availableBytes = client.available();         // Available from stream
         if (m_f_ssl==true)  availableBytes = clientsecure.available();   // Available from stream
-
         if ( ( m_f_firststream_ready == false ) && ( availableBytes > 0 ) )
         { // first streamdata recognized
             m_f_firststream_ready = true;
