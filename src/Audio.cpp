@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sep 30,2019
+ *  Updated on: Jan 10,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -99,7 +99,8 @@ bool Audio::connecttohost(String host){
 
     if(host.startsWith("http://")) {host=host.substring(7); m_f_ssl=false; ;}
     if(host.startsWith("https://")){host=host.substring(8); m_f_ssl=true; port=443;}
-    clientsecure.stop(); clientsecure.flush(); // release memory
+    client.stop(); client.flush(); // release memory
+    clientsecure.stop(); clientsecure.flush();
 
     // Is it a playlist?
     if(host.endsWith(".m3u")|| host.endsWith(".pls")|| host.endsWith("asx")){
