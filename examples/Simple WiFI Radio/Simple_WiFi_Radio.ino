@@ -154,9 +154,6 @@ void setup() {
 //**************************************************************************************************
 void loop()
 {
-    if(Serial.available()>0){
-        audio.setVolume(Serial.readString().toInt());
-    }
     audio.loop();
     tp.loop();
 }
