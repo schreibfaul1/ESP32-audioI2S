@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 10,2020
+ *  Updated on: Mar 02,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -1440,13 +1440,50 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         m_f_playing=false; // seek for new syncword
         if(count==0){
             i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
+            String e = "";
             if(m_f_mp3){
-                 sprintf(chbuf, "MP3 decode error %d", ret);
-                 if(audio_info) audio_info(chbuf);
+                switch(ret){
+                    case ERR_MP3_NONE:                 e="NONE";                  break;
+                    case ERR_MP3_INDATA_UNDERFLOW:     e="INDATA_UNDERFLOW";      break;
+                    case ERR_MP3_MAINDATA_UNDERFLOW:   e="MAINDATA_UNDERFLOW";    break;
+                    case ERR_MP3_FREE_BITRATE_SYNC:    e="FREE_BITRATE_SYNC";     break;
+                    case ERR_MP3_OUT_OF_MEMORY:        e="OUT_OF_MEMORY";         break;
+                    case ERR_MP3_NULL_POINTER:         e="NULL_POINTER";          break;
+                    case ERR_MP3_INVALID_FRAMEHEADER:  e="INVALID_FRAMEHEADER";   break;
+                    case ERR_MP3_INVALID_SIDEINFO:     e="INVALID_SIDEINFO";      break;
+                    case ERR_MP3_INVALID_SCALEFACT:    e="INVALID_SCALEFACT";     break;
+                    case ERR_MP3_INVALID_HUFFCODES:    e="INVALID_HUFFCODES";     break;
+                    case ERR_MP3_INVALID_DEQUANTIZE:   e="INVALID_DEQUANTIZE";    break;
+                    case ERR_MP3_INVALID_IMDCT:        e="INVALID_IMDCT";         break;
+                    case ERR_MP3_INVALID_SUBBAND:      e="INVALID_SUBBAND";       break;
+                    default: e="ERR_UNKNOWN";
+                }
+                sprintf(chbuf, "MP3 decode error %d : %s", ret, e.c_str());
+                if(audio_info) audio_info(chbuf);
             }
             if(m_f_aac){
-                 sprintf(chbuf, "AAC decode error %d", ret);
-                 if(audio_info) audio_info(chbuf);
+                switch(ret){
+                    case ERR_AAC_NONE:                  e="NONE";                 break;
+                    case ERR_AAC_INDATA_UNDERFLOW:      e="INDATA_UNDERFLOW";     break;
+                    case ERR_AAC_NULL_POINTER:          e="NULL_POINTER";         break;
+                    case ERR_AAC_INVALID_ADTS_HEADER:   e="INVALID_ADTS_HEADER";  break;
+                    case ERR_AAC_INVALID_ADIF_HEADER:   e="INVALID_ADIF_HEADER";  break;
+                    case ERR_AAC_INVALID_FRAME:         e="INVALID_FRAME";        break;
+                    case ERR_AAC_MPEG4_UNSUPPORTED:     e="MPEG4_UNSUPPORTED";    break;
+                    case ERR_AAC_CHANNEL_MAP:           e="CHANNEL_MAP";          break;
+                    case ERR_AAC_SYNTAX_ELEMENT:        e="SYNTAX_ELEMENT";       break;
+                    case ERR_AAC_DEQUANT:               e="DEQUANT";              break;
+                    case ERR_AAC_STEREO_PROCESS:        e="STEREO_PROCESS";       break;
+                    case ERR_AAC_PNS:                   e="PNS";                  break;
+                    case ERR_AAC_SHORT_BLOCK_DEINT:     e="SHORT_BLOCK_DEINT";    break;
+                    case ERR_AAC_TNS:                   e="TNS";                  break;
+                    case ERR_AAC_IMDCT:                 e="IMDCT";                break;
+                    case ERR_AAC_NCHANS_TOO_HIGH:       e="NCHANS_TOO_HIGH";      break;
+                    case ERR_AAC_RAWBLOCK_PARAMS:       e="RAWBLOCK_PARAMS";      break;
+                    default: e="ERR_UNKNOWN";
+                }
+                sprintf(chbuf, "AAC decode error %d : %s", ret, e.c_str());
+                if(audio_info) audio_info(chbuf);
             }
         }
         if(lastret==ret) count++;
