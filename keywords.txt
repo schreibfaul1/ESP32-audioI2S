@@ -41,7 +41,7 @@ setPinout	KEYWORD2
 setVolume	KEYWORD2
 stopSong	KEYWORD2
 streamavail	KEYWORD2
-isRunning KEYWORD2
+isRunning	KEYWORD2
 
 
 
