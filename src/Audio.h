@@ -86,6 +86,7 @@ public:
     inline uint8_t getDatamode(){return m_datamode;}
     inline void setDatamode(uint8_t dm){m_datamode=dm;}
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
+    bool isRunning() {return m_f_running;}
 
 private:
     void processLocalFile();
