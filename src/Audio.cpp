@@ -1562,7 +1562,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     return bytesDecoded;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, uint8_t DIN){
+bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN){
     m_BCLK=BCLK;            // Bit Clock
     m_LRC=LRC;              // Left/Right Clock
     m_DOUT=DOUT;            // Data Out
