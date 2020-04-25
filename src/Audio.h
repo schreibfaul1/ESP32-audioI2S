@@ -72,7 +72,7 @@ public:
      * @return true if audio file active and speed is valid, otherwise false
      */
     bool audioFileSeek(const int8_t speed);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, uint8_t DIN=I2S_PIN_NO_CHANGE);
     void stopSong();
     /**
      * @brief pauseResume pauses current playback 
@@ -140,6 +140,7 @@ private:
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock
     uint8_t         m_DOUT=0;                       // Data Out
+    uint8_t         m_DIN=0;                        // Data In
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bps;                          // bitsPerSample
     uint8_t         m_channels;

@@ -39,7 +39,7 @@ Audio::Audio() {
     m_BCLK=26;                       // Bit Clock
     m_LRC=25;                        // Left/Right Clock
     m_DOUT=27;                       // Data Out
-    setPinout(m_BCLK, m_LRC, m_DOUT);
+    setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
 
 }
 
@@ -1562,16 +1562,17 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     return bytesDecoded;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT){
+bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, uint8_t DIN){
     m_BCLK=BCLK;            // Bit Clock
     m_LRC=LRC;              // Left/Right Clock
     m_DOUT=DOUT;            // Data Out
+    m_DIN=DIN;              // Data In
 
     i2s_pin_config_t pins = {
       .bck_io_num = m_BCLK,
       .ws_io_num =  m_LRC,              //  wclk,
       .data_out_num = m_DOUT,
-      .data_in_num = I2S_PIN_NO_CHANGE
+      .data_in_num = m_DIN
     };
     i2s_set_pin((i2s_port_t)m_i2s_num, &pins);
     return true;
