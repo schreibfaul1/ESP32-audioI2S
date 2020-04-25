@@ -1,7 +1,7 @@
 
 // M5Stack Node support
 // thanks to Cellie - issue #35     25.Apr.2020 
-// M5Stck boards also need a MCLK signal on GPIO0.
+// M5Stack boards also need a MCLK signal on GPIO0.
 
 // M5Stack Node pins https://github.com/m5stack/Bases-Node
 
