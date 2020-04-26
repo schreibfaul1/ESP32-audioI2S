@@ -652,6 +652,10 @@ bool Audio::pauseResume()
     {
         m_f_running = !m_f_running;
         retVal = true;
+        if(!m_f_running) {
+            i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
+            memset(m_outBuff, 0, sizeof(m_outBuff));               //Clear OutputBuffer
+        }
     }
     return retVal;
 }
