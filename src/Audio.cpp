@@ -500,6 +500,7 @@ void Audio::readID3Metadata(){
                 else{
                     if(tag=="APIC"){ // a image embedded in file, skip it
                         //log_i("it's a image");
+                        isUnicode = false;
                         setFilePos(getFilePos()+framesize-1); id3Size-=framesize-1;
                     }
                     else{
