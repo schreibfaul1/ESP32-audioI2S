@@ -1,5 +1,3 @@
-// partition scheme must be "Huge App 3MB no OTA"
-
 #include <Arduino.h>
 #include <Preferences.h>
 #include <SPI.h>
@@ -23,14 +21,15 @@ TFT tft;
 TP tp(TP_CS, TP_IRQ);
 Audio audio;
 
-String ssid =     "*****";
-String password = "*****";
+String ssid =     "Wolles-FRITZBOX";
+String password = "40441061073895958449";
 
 String stations[] ={
         "0n-80s.radionetz.de:8000/0n-70s.mp3",
         "mediaserv30.live-streams.nl:8000/stream",
         "www.surfmusic.de/m3u/100-5-das-hitradio,4529.m3u",
         "stream.1a-webradio.de/deutsch/mp3-128/vtuner-1a",
+        "mp3.ffh.de/radioffh/hqlivestream.aac", //  128k aac
         "www.antenne.de/webradio/antenne.m3u",
         "listen.rusongs.ru/ru-mp3-128",
         "edge.audio.3qsdn.com/senderkw-mp3",
@@ -48,7 +47,7 @@ int8_t  cur_btn      =-1;   //current button (, -1 means idle)
 enum action{VOLUME_UP=0, VOLUME_DOWN=1, STATION_UP=2, STATION_DOWN=3};
 enum staus {RELEASED=0, PRESSED=1};
 
-struct btns{
+struct _btns{
     uint16_t x; //PosX
     uint16_t y; //PosY
     uint16_t w; //Width
@@ -56,6 +55,7 @@ struct btns{
     uint8_t  a; //Action
     uint8_t  s; //Status
 };
+typedef _btns btns;
 
 btns btn[4];
 
@@ -108,7 +108,7 @@ void write_streamTitle(String sTitle){
     tft.fillRect(0, 100, 480, 150, TFT_BLACK);
     tft.setFont(Times_New_Roman43x35);
     tft.setTextColor(TFT_LIGHTBLUE);
-    tft.setCursor(20, 120);
+    tft.setCursor(20, 100);
     tft.print(sTitle);
 }
 //**************************************************************************************************
@@ -138,8 +138,8 @@ void setup() {
     }
     log_i("Connect to %s", WiFi.SSID().c_str());
     tft.begin(TFT_CS, TFT_DC, SPI_MOSI, SPI_MISO, SPI_SCK);
-    tft.setRotation(1);
-    tp.setRotation(1);
+    tft.setRotation(3);
+    tp.setRotation(3);
     tft.setFont(Times_New_Roman43x35);
     tft.fillScreen(TFT_BLACK);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
@@ -158,7 +158,7 @@ void loop()
     tp.loop();
 }
 //**************************************************************************************************
-//                                           E  V E N T S                                          *
+//                                           E V E N T S                                           *
 //**************************************************************************************************
 void audio_info(const char *info){
     Serial.print("audio_info: "); Serial.println(info);
@@ -185,7 +185,6 @@ void tp_pressed(uint16_t x, uint16_t y){
 }
 void tp_released(){
     if(cur_btn !=-1){
-        log_i("Button %i released", cur_btn);
         btn[cur_btn].s=RELEASED;
         draw_button(btn[cur_btn]);
         switch(btn[cur_btn].a){
