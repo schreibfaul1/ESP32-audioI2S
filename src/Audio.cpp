@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 02,2020
+ *  Updated on: May 05,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -824,9 +824,10 @@ void Audio::processWebStream()
             {
                 if ( m_f_stream )
                 {
-                    m_f_stream = false;
-                    i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-                    if(audio_info) audio_info("stream lost");
+//              seems no longer necessary, stream recognition over loopcounter loopCnt
+//                    m_f_stream = false;
+//                    i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
+//                    if(audio_info) audio_info("stream lost");
                 }
             }
 
