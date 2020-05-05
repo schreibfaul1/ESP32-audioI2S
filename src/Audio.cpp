@@ -921,7 +921,15 @@ void Audio::processWebStream()
 
             if ( m_chunkcount == 0)
             {             // Expecting a new chunkcount?
-                int b = client.read();
+                int b;
+                if (m_f_ssl == false)
+                {
+                    b = client.read ();
+                }
+                if (m_f_ssl == true)
+                {
+                     b = clientsecure.read ();
+                }
                 if ( b < 1 )
                     return;
 
