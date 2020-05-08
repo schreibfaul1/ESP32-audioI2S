@@ -164,6 +164,10 @@ bool Audio::connecttohost(String host){
 }
 //-----------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoSD(String sdfile){
+    return connecttoFS(SD, sdfile);
+}
+//-----------------------------------------------------------------------------------------------------------------------------------
+bool Audio::connecttoFS(fs::FS &fs, String file){
     const uint8_t ascii[60]={
           //196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215,   ISO
             142, 143, 146, 128, 000, 144, 000, 000, 000, 000, 000, 000, 000, 165, 000, 000, 000, 000, 153, 000, //ASCII
@@ -186,19 +190,19 @@ bool Audio::connecttoSD(String sdfile){
     m_f_mp3=true;
     m_f_aac=false;
     memset(m_outBuff, 0, sizeof(m_outBuff));                //Clear OutputBuffer
-    if(!sdfile.startsWith("/")) sdfile="/"+sdfile;
-    while(sdfile[i] != 0){                                  //convert UTF8 to ASCII
-        path[i]=sdfile[i];
+    if(!file.startsWith("/")) file="/"+file;
+    while(file[i] != 0){                                  //convert UTF8 to ASCII
+        path[i]=file[i];
         if(path[i] > 195){
             s=ascii[path[i]-196];
             if(s!=0) path[i]=s;                             // found a related ASCII sign
         } i++;
     }
     path[i]=0;
-    m_mp3title=sdfile.substring(sdfile.lastIndexOf('/') + 1, sdfile.length());
+    m_mp3title=file.substring(file.lastIndexOf('/') + 1, file.length());
     sprintf(chbuf, "Reading file: %s", m_mp3title.c_str());
     if(audio_info) audio_info(chbuf);
-    fs::FS &fs=SD;
+//    fs::FS &fs=SD;
     mp3file=fs.open(path);
     if(!mp3file){
         if(audio_info) audio_info("Failed to open file for reading");

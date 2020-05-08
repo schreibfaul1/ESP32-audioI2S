@@ -44,6 +44,7 @@ class Audio  {
 public:
     Audio();
     ~Audio();
+    bool connecttoFS(fs::FS &fs, String file);
     bool connecttoSD(String sdfile);
     bool connecttohost(String host);
     bool connecttospeech(String speech, String lang);
