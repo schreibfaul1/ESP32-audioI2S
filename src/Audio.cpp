@@ -900,7 +900,7 @@ void Audio::processWebStream()
             }
         }
 
-        if ( m_f_firststream_ready == true )
+        if ( m_f_firststream_ready == true)
         {
             static uint32_t loopCnt = 0;      // Count loops if clientbuffer is empty
             if ( availableBytes == 0 )
@@ -909,8 +909,21 @@ void Audio::processWebStream()
                 if( loopCnt > 200000 )
                 {  // wait several seconds
                     loopCnt = 0;
-                    if(audio_info) audio_info("Stream lost -> try new connection");
-                    connecttohost(m_lastHost); // try a new connection
+                    if (m_datamode != AUDIO_SWM)
+                    {
+                        // Radiostream
+                        if(audio_info) audio_info("Stream lost -> try new connection");
+                        connecttohost(m_lastHost); // try a new connection
+                    }
+                    else
+                    {
+                        // Stream without metadata, can be a podcast or data from fileserver
+                        if (audio_info) {
+                            sprintf(chbuf, "Stream has ended: %s", m_lastHost.c_str());
+                            audio_info(chbuf);
+                        }
+                        stopSong();
+                    }
                 }
             }
             else
