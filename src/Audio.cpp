@@ -905,7 +905,7 @@ void Audio::processWebStream()
             if ( availableBytes == 0 )
             {
                 stopSong();
-                if (audio_info) audio_info("Stream end");
+                if (audio_info) audio_info("Stream end: %s", m_lastHost);
             }
         }
 
