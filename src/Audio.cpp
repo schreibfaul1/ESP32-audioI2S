@@ -905,8 +905,7 @@ void Audio::processWebStream()
             if ( availableBytes == 0 )
             {
                 stopSong();
-                sprintf(chbuf, "Stream end");
-                if(audio_info) audio_info(chbuf);
+                if(audio_info) audio_info("Stream end");
             }
         }
 
