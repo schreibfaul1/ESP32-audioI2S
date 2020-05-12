@@ -905,8 +905,10 @@ void Audio::processWebStream()
             if ( availableBytes == 0 )
             {
                 stopSong();
-                sprintf(chbuf,"Stream lost: %s", m_lastHost);
-                if (audio_info) audio_info(chbuf);
+                if (audio_info) {
+                    sprintf(chbuf,"Stream lost: %s", m_lastHost.c_str());
+                    audio_info(chbuf);
+                }
             }
         }
 
