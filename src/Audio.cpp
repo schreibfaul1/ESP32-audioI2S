@@ -906,24 +906,22 @@ void Audio::processWebStream()
             if ( availableBytes == 0 )
             {   // empty buffer, broken stream or bad bitrate?
                 loopCnt++;
-                if( loopCnt > 200000 )
+                if( loopCnt > 200000  && m_datamode != AUDIO_SWM)
                 {  // wait several seconds
                     loopCnt = 0;
-                    if (m_datamode != AUDIO_SWM)
-                    {
-                        // Radiostream
-                        if(audio_info) audio_info("Stream lost -> try new connection");
-                        connecttohost(m_lastHost); // try a new connection
+                     // Radiostream
+                     if(audio_info) audio_info("Stream lost -> try new connection");
+                     connecttohost(m_lastHost); // try a new connection
+                }
+                if( loopCnt > 20000  && m_datamode == AUDIO_SWM)
+                {
+                    // Stream without metadata, can be a podcast or data from fileserver
+                    loopCnt = 0;
+                    if (audio_info) {
+                        sprintf(chbuf, "Stream has ended: %s", m_lastHost.c_str());
+                        audio_info(chbuf);
                     }
-                    else
-                    {
-                        // Stream without metadata, can be a podcast or data from fileserver
-                        if (audio_info) {
-                            sprintf(chbuf, "Stream has ended: %s", m_lastHost.c_str());
-                            audio_info(chbuf);
-                        }
-                        stopSong();
-                    }
+                    stopSong();
                 }
             }
             else
