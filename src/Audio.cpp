@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 12,2020
+ *  Updated on: May 15,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -58,8 +58,13 @@ Audio::~Audio() {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host){
 
-    int16_t inx;                                              // Position of ":" in hostname
-    int16_t port=80;                                          // Port number for host
+    if(host.length()==0){
+        if(audio_info) audio_info("Hostaddress is empty");
+        return false;
+    }
+
+    int16_t inx;                                          // Position of ":" in hostname
+    int16_t port=80;                                      // Port number for host
     String extension="/";                                 // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
     String hostwoext;                                     // Host without extension and portnumber
     String headerdata="";
@@ -79,6 +84,7 @@ bool Audio::connecttohost(String host){
     m_f_aac=false;                                          // Set if stream is aac
     m_f_firststream_ready=false;
     m_f_firstmetabyte=false;
+    m_f_webfile = false;                                    // Assume radiostream
     m_f_chunked=false;                                      // Assume not chunked
     m_f_ssl=false;
     m_f_swm=true;                                           // Assume no metaint
@@ -94,6 +100,7 @@ bool Audio::connecttohost(String host){
     m_st_remember="";                                       // Delete the last streamtitle
     m_inBuffwindex=0;
     m_inbuffrindex=0;
+    m_contentlength=0;                                      // If Content-Length is known, count it
     setDatamode(AUDIO_HEADER);                              // Handle header
 //    for(int32_t i=0; i< sizeof(m_outBuff)/sizeof(m_outBuff[0]); i++) m_outBuff[i]=0;//Clear OutputBuffer
 
@@ -714,6 +721,7 @@ void Audio::processLocalFile()
 
         bytesCanBeWritten = m_inBuffsize-m_inBuffwindex;
         bytesAddedToBuffer = mp3file.read(m_inBuff + m_inBuffwindex, bytesCanBeWritten);
+
         if(bytesAddedToBuffer > bytesCanBeWritten)
         {
             stopSong();
@@ -755,10 +763,11 @@ void Audio::processWebStream()
     {
         uint16_t bytesCanBeWritten = 0;
         int16_t  bytesAddedToBuffer = 0;
-        static uint32_t chunksize = 0;                       // Chunkcount read from stream
+        static uint32_t chunksize = 0;      // Chunkcount read from stream
         static uint16_t inBuffSize = m_inBuffsize;
-        int32_t availableBytes = 0; // available bytes in stream 
+        int32_t availableBytes = 0;         // Available bytes in stream
         static int bytesdecoded = 0;
+        static uint32_t  ctlength=0;
 
         if (m_f_ssl==false) availableBytes = client.available();         // Available from stream
         if (m_f_ssl==true)  availableBytes = clientsecure.available();   // Available from stream
@@ -767,6 +776,7 @@ void Audio::processWebStream()
             m_f_firststream_ready = true;
             m_f_stream = false;
             inBuffSize = m_inBuffsize;
+            ctlength=0;
         }
 
         if ((   ( m_datamode == AUDIO_DATA ) || ( m_datamode == AUDIO_SWM ) )
@@ -793,6 +803,9 @@ void Audio::processWebStream()
 
             if ( bytesAddedToBuffer > 0 )
             {
+                if(m_f_webfile){
+                    ctlength+=bytesAddedToBuffer;  // Pull request #42
+                }
                 m_count -= bytesAddedToBuffer;
                 if ( m_f_chunked )
                 { 
@@ -809,7 +822,7 @@ void Audio::processWebStream()
                     if(audio_info) audio_info("stream ready");
                 }
                 bytesdecoded = sendBytes(m_inBuff, inBuffSize);
-                if ( bytesdecoded < 0 ) // no syncword found or decode error, try next chunk
+                if ( bytesdecoded < 0 )   // no syncword found or decode error, try next chunk
                 {
                     m_inbuffrindex = 200; // try next chunk
                     memmove(m_inBuff, m_inBuff + m_inbuffrindex , inBuffSize-m_inbuffrindex);
@@ -906,22 +919,20 @@ void Audio::processWebStream()
             if ( availableBytes == 0 )
             {   // empty buffer, broken stream or bad bitrate?
                 loopCnt++;
-                if( loopCnt > 200000  && m_datamode != AUDIO_SWM)
+                if( loopCnt > 200000)
                 {  // wait several seconds
                     loopCnt = 0;
-                     // Radiostream
-                     if(audio_info) audio_info("Stream lost -> try new connection");
-                     connecttohost(m_lastHost); // try a new connection
+                    if(audio_info) audio_info("Stream lost -> try new connection");
+                    connecttohost(m_lastHost); // try a new connection
                 }
-                if( loopCnt > 20000  && m_datamode == AUDIO_SWM)
+                if(m_f_webfile) // stream from fileserver with known content-length
                 {
-                    // Stream without metadata, can be a podcast or data from fileserver
-                    loopCnt = 0;
-                    if (audio_info) {
-                        sprintf(chbuf, "Stream has ended: %s", m_lastHost.c_str());
-                        audio_info(chbuf);
+                    if(ctlength==m_contentlength){
+                        sprintf(chbuf,"End of webstream: %s", m_lastHost.c_str());
+                        if(audio_info) audio_info(chbuf);
+                        if(audio_eof_stream) audio_eof_stream(m_lastHost.c_str());
+                        m_f_running = false;
                     }
-                    stopSong();
                 }
             }
             else
@@ -1057,6 +1068,13 @@ void Audio::handlebyte(uint8_t b){
                     if(m_icyname!=""){
                         if(audio_showstation) audio_showstation(m_icyname.c_str());
                     }
+                }
+                else if(lcml.startsWith("content-length:")){
+                    //log_i("%s",lcml.c_str());
+                    m_contentlength= m_metaline.substring(15).toInt();
+                    m_f_webfile=true; // Stream comes from a fileserver
+                    sprintf(chbuf, "Contnent-Length: %i", m_contentlength);
+                    if(audio_info) audio_info(chbuf);
                 }
                 else if(lcml.startsWith("transfer-encoding:")){ // Station provides chunked transfer
                     if(m_metaline.endsWith("chunked")){
@@ -1558,6 +1576,11 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
                 if(m_bitrate==0){ // no bitrate received from icy stream
                     sprintf(chbuf,"Bitrate=%i", MP3GetBitrate()); // show only the first rate
                     if(audio_info) audio_info(chbuf);
+                    if(m_contentlength >0 && MP3GetBitrate()>0){
+                        uint16_t duration=m_contentlength*8/MP3GetBitrate();
+                        sprintf(chbuf,"Duration=%is", duration);
+                        if(audio_info) audio_info(chbuf);
+                    }
                 }
                 m_bitrate=MP3GetBitrate();
             }

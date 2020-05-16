@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sep 05,2019
+ *  Updated on: May 15,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -27,6 +27,7 @@ extern __attribute__((weak)) void audio_commercial(const char*);
 extern __attribute__((weak)) void audio_icyurl(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
+extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 
 #define AUDIO_HEADER          2    //const for datamode
 #define AUDIO_DATA            4
@@ -160,6 +161,7 @@ private:
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0;
     uint32_t        m_count=0;                      // Bytecounter between metadata
+    uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     String          m_mp3title="";                  // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost="";                  // Store the last URL to a webstream
@@ -176,7 +178,7 @@ private:
     bool            m_f_webstream = false ;         // Play from URL
     bool            m_f_ssl=false;
     bool            m_f_running=false;
-    bool            m_f_firststream_ready=false;         // Set after connecttohost and first streamdata are available
+    bool            m_f_firststream_ready=false;    // Set after connecttohost and first streamdata are available
     bool            m_f_ctseen=false;               // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_filled;                     // outputBuffer
@@ -189,6 +191,7 @@ private:
     bool            m_f_mp3=false;                  // indicates mp3
     bool            m_f_aac=false;                  // indicates aac
     bool            m_f_playing = false;            // valid mp3 stream recognized
+    bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
     unsigned int    m_lastRate;
     size_t          m_bytesWritten=0;               // set in i2s_write() but not used
     uint32_t        m_audioFileDuration=0;
