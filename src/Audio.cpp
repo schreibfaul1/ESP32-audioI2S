@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 15,2020
+ *  Updated on: May 18,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -767,7 +767,6 @@ void Audio::processWebStream()
         static uint16_t inBuffSize = m_inBuffsize;
         int32_t availableBytes = 0;         // Available bytes in stream
         static int bytesdecoded = 0;
-        static uint32_t  ctlength=0;
 
         if (m_f_ssl==false) availableBytes = client.available();         // Available from stream
         if (m_f_ssl==true)  availableBytes = clientsecure.available();   // Available from stream
@@ -776,7 +775,7 @@ void Audio::processWebStream()
             m_f_firststream_ready = true;
             m_f_stream = false;
             inBuffSize = m_inBuffsize;
-            ctlength=0;
+            m_bytectr=0;
         }
 
         if ((   ( m_datamode == AUDIO_DATA ) || ( m_datamode == AUDIO_SWM ) )
@@ -804,7 +803,7 @@ void Audio::processWebStream()
             if ( bytesAddedToBuffer > 0 )
             {
                 if(m_f_webfile){
-                    ctlength+=bytesAddedToBuffer;  // Pull request #42
+                    m_bytectr+=bytesAddedToBuffer;  // Pull request #42
                 }
                 m_count -= bytesAddedToBuffer;
                 if ( m_f_chunked )
@@ -927,7 +926,7 @@ void Audio::processWebStream()
                 }
                 if(m_f_webfile) // stream from fileserver with known content-length
                 {
-                    if(ctlength==m_contentlength){
+                    if(m_bytectr==m_contentlength){
                         sprintf(chbuf,"End of webstream: %s", m_lastHost.c_str());
                         if(audio_info) audio_info(chbuf);
                         if(audio_eof_stream) audio_eof_stream(m_lastHost.c_str());
@@ -1649,30 +1648,43 @@ uint32_t Audio::getFilePos(){
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration(){
-    if (!mp3file) return 0;
+    if(m_f_localfile){
+        if (!mp3file) return 0;
 
-    if ( 0 == m_audioFileDuration ) // calculate only once per file
-    {
-        uint32_t fileSize = getFileSize();
-        uint32_t bitRate = MP3GetBitrate();
-        if(0 < bitRate)
+        if ( 0 == m_audioFileDuration ) // calculate only once per file
         {
-            m_audioFileDuration = 8 * (fileSize - m_id3Size) / bitRate;
+            uint32_t fileSize = getFileSize();
+            uint32_t bitRate = MP3GetBitrate();
+            if(0 < bitRate)
+            {
+                m_audioFileDuration = 8 * (fileSize - m_id3Size) / bitRate;
+            }
+        }
+        return m_audioFileDuration;
+    }
+    if(m_f_webfile){
+        if(m_contentlength >0 && MP3GetBitrate()>0){
+            return (m_contentlength * 8 / MP3GetBitrate());
         }
     }
-    return m_audioFileDuration;
+    return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
     // return current time in seconds
 uint32_t Audio::getAudioCurrentTime(){
     uint32_t curTime = 0;
-    if ( mp3file)
+    if ( mp3file && m_f_localfile)
     {
         uint32_t fileDuration = getAudioFileDuration();
         float factor = ( mp3file.position() - m_id3Size ) / ( mp3file.size() - m_id3Size + 1.0f );
         if(0.0 < factor)
         {
             curTime = fileDuration * factor;
+        }
+    }
+    if(m_f_webfile){
+        if(m_contentlength >0 && MP3GetBitrate()>0){
+            curTime = m_bytectr *8 / MP3GetBitrate();
         }
     }
     return curTime;

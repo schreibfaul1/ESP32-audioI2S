@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 15,2020
+ *  Updated on: May 18,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -162,6 +162,7 @@ private:
     uint32_t        m_t0;
     uint32_t        m_count=0;                      // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
+    uint32_t        m_bytectr = 0;                  // count received data
     String          m_mp3title="";                  // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost="";                  // Store the last URL to a webstream
