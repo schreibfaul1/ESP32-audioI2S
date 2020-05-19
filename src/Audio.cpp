@@ -926,7 +926,7 @@ void Audio::processWebStream()
                 }
                 if(m_f_webfile) // stream from fileserver with known content-length
                 {
-                    if((uint32_t)m_bytectr == (uint32_t)m_contentlength){
+                    if((uint32_t)m_bytectr >= (uint32_t)m_contentlength -10){
                         sprintf(chbuf,"End of webstream: %s", m_lastHost.c_str());
                         if(audio_info) audio_info(chbuf);
                         if(audio_eof_stream) audio_eof_stream(m_lastHost.c_str());
