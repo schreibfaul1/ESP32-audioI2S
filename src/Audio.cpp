@@ -64,7 +64,7 @@ bool Audio::connecttohost(String host){
     }
 
     int16_t inx;                                          // Position of ":" in hostname
-    int16_t port=80;                                      // Port number for host
+    uint16_t port=80;                                     // Port number for host
     String extension="/";                                 // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
     String hostwoext;                                     // Host without extension and portnumber
     String headerdata="";
