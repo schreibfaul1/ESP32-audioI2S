@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 19,2020
+ *  Updated on: Jun 01,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S
@@ -95,12 +95,14 @@ bool Audio::connecttohost(String host){
     m_LFcount=0;                                            // For detection end of header
     m_bitrate=0;                                            // Bitrate still unknown
     m_totalcount=0;                                         // Reset totalcount
+    m_bytesNotDecoded=0;                                    // counts all not decodable bytes
     m_metaline="";                                          // No metadata yet
     m_icyname="";                                           // No StationName yet
     m_st_remember="";                                       // Delete the last streamtitle
     m_inBuffwindex=0;
     m_inbuffrindex=0;
     m_contentlength=0;                                      // If Content-Length is known, count it
+    m_audioCurrentTime=0;                                   // Reset playtimer
     setDatamode(AUDIO_HEADER);                              // Handle header
 //    for(int32_t i=0; i< sizeof(m_outBuff)/sizeof(m_outBuff[0]); i++) m_outBuff[i]=0;//Clear OutputBuffer
 
@@ -190,6 +192,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
     m_inBuffwindex=0;
     m_inbuffrindex=0;
     m_audioFileDuration = 0;
+    m_audioCurrentTime = 0;
     clientsecure.stop(); clientsecure.flush();              // release memory if allocated
     m_f_localfile=true;
     m_f_webstream=false;
@@ -824,6 +827,7 @@ void Audio::processWebStream()
                 if ( bytesdecoded < 0 )   // no syncword found or decode error, try next chunk
                 {
                     m_inbuffrindex = 200; // try next chunk
+                    m_bytesNotDecoded += 200;
                     memmove(m_inBuff, m_inBuff + m_inbuffrindex , inBuffSize-m_inbuffrindex);
                     m_inBuffwindex -= m_inbuffrindex;
                     inBuffSize = m_inBuffsize;
@@ -1618,6 +1622,9 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             m_validSamples = AACGetOutputSamps() / m_lastChannels;
         }
     }
+    if(m_bitrate>0){
+        m_audioCurrentTime += (float) bytesDecoded*8/m_bitrate;
+    }
     return bytesDecoded;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1664,7 +1671,7 @@ uint32_t Audio::getAudioFileDuration(){
     }
     if(m_f_webfile){
         if(m_contentlength >0 && MP3GetBitrate()>0){
-            return (m_contentlength * 8 / MP3GetBitrate());
+            return ((m_contentlength-m_bytesNotDecoded) * 8 / MP3GetBitrate());
         }
     }
     return 0;
@@ -1672,22 +1679,7 @@ uint32_t Audio::getAudioFileDuration(){
 //---------------------------------------------------------------------------------------------------------------------
     // return current time in seconds
 uint32_t Audio::getAudioCurrentTime(){
-    uint32_t curTime = 0;
-    if ( mp3file && m_f_localfile)
-    {
-        uint32_t fileDuration = getAudioFileDuration();
-        float factor = ( mp3file.position() - m_id3Size ) / ( mp3file.size() - m_id3Size + 1.0f );
-        if(0.0 < factor)
-        {
-            curTime = fileDuration * factor;
-        }
-    }
-    if(m_f_webfile){
-        if(m_contentlength >0 && MP3GetBitrate()>0){
-            curTime = m_bytectr *8 / MP3GetBitrate();
-        }
-    }
-    return curTime;
+    return (uint32_t) m_audioCurrentTime;
 }
 
 //---------------------------------------------------------------------------------------------------------------------
