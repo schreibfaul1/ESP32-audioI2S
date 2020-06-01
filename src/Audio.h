@@ -130,7 +130,8 @@ private:
     int             m_bytesLeft=0;
     int             m_writePtr=0;                   // ptr sampleBuffer
     int             m_readPtr=0;                    // ptr sampleBuffer
-    int             m_bitrate=0;
+    int             m_bitrate=0;                    // current bitrate given fom decoder
+    uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
     int             m_metacount=0;                  // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist

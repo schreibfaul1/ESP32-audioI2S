@@ -103,6 +103,7 @@ bool Audio::connecttohost(String host){
     m_inbuffrindex=0;
     m_contentlength=0;                                      // If Content-Length is known, count it
     m_audioCurrentTime=0;                                   // Reset playtimer
+    m_avr_bitrate=0;                                        // the same as m_bitrate if CBR, median if VBR
     setDatamode(AUDIO_HEADER);                              // Handle header
 //    for(int32_t i=0; i< sizeof(m_outBuff)/sizeof(m_outBuff[0]); i++) m_outBuff[i]=0;//Clear OutputBuffer
 
@@ -193,6 +194,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
     m_inbuffrindex=0;
     m_audioFileDuration = 0;
     m_audioCurrentTime = 0;
+    m_avr_bitrate=0;                                        // the same as m_bitrate if CBR, median if VBR
     clientsecure.stop(); clientsecure.flush();              // release memory if allocated
     m_f_localfile=true;
     m_f_webstream=false;
@@ -1622,7 +1624,37 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             m_validSamples = AACGetOutputSamps() / m_lastChannels;
         }
     }
+    static uint16_t bitrate_counter=0;
+    static int      old_bitrate = 0;
+    static uint32_t sum_bitrate = 0;
+    static boolean  f_firstFrame = true;
+    static boolean  f_CBR = true;
+
+
     if(m_bitrate>0){
+        if(m_avr_bitrate==0){
+            bitrate_counter = 0;
+            old_bitrate = 0;
+            sum_bitrate = 0;
+            f_firstFrame = true;
+            f_CBR = true;
+        }
+        if(old_bitrate != m_bitrate){
+            if(!f_firstFrame && bitrate_counter == 0){
+                if(audio_info) audio_info("VBR recognized, audioFileDuration is estimated");
+                f_CBR = false;
+            }
+        }
+        old_bitrate = m_bitrate;
+        if(bitrate_counter < 100 && !f_CBR){
+            bitrate_counter++;
+            sum_bitrate += m_bitrate;
+            m_avr_bitrate = sum_bitrate /  bitrate_counter;
+        }
+        if(f_firstFrame){
+            m_avr_bitrate = m_bitrate; // if CBR set m_avr_bitrate only once
+        }
+        f_firstFrame = false;
         m_audioCurrentTime += (float) bytesDecoded*8/m_bitrate;
     }
     return bytesDecoded;
@@ -1661,7 +1693,7 @@ uint32_t Audio::getAudioFileDuration(){
         if ( 0 == m_audioFileDuration ) // calculate only once per file
         {
             uint32_t fileSize = getFileSize();
-            uint32_t bitRate = MP3GetBitrate();
+            uint32_t bitRate = m_avr_bitrate; //MP3GetBitrate();
             if(0 < bitRate)
             {
                 m_audioFileDuration = 8 * (fileSize - m_id3Size) / bitRate;
@@ -1670,8 +1702,8 @@ uint32_t Audio::getAudioFileDuration(){
         return m_audioFileDuration;
     }
     if(m_f_webfile){
-        if(m_contentlength >0 && MP3GetBitrate()>0){
-            return ((m_contentlength-m_bytesNotDecoded) * 8 / MP3GetBitrate());
+        if(m_contentlength >0 &&  m_avr_bitrate > 0){
+            return ((m_contentlength-m_bytesNotDecoded) * 8 / m_avr_bitrate);
         }
     }
     return 0;
