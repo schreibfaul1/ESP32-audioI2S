@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jun 01,2020
+ *  Updated on: Jun 14,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -119,7 +119,7 @@ private:
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
                                      20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
 
-    File              mp3file;
+    File              audiofile;
     WiFiClient        client;
     WiFiClientSecure  clientsecure;
     char            chbuf[256];
