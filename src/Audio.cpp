@@ -531,7 +531,7 @@ void Audio::readID3Metadata(){
                         setFilePos(getFilePos()+framesize-1-255); id3Size-=framesize-1;
                     }
                 }
-                if(isUnicode){  // convert unicode to utf-8 U+0020...U+07FF
+                if(isUnicode && framesize > 1){  // convert unicode to utf-8 U+0020...U+07FF
                     j=0; m=0;
                     while(m<i-1){
                         if((value[m]==0xFE)&&(value[m+1]==0xFF)){bitorder=true; j=m+2;}// MSB/LSB
