@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 05.09.2019
+ *  Updated on: 27.06.2020
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -45,12 +45,12 @@ const uint32_t X0_COEF_2           = 0xc0000000;    /* Q29: -2.0 */
 const uint32_t X0_OFF_2            = 0x60000000;    /* Q29:  3.0 */
 const uint32_t Q26_3               = 0x0c000000;    /* Q26:  3.0 */
 
-PSInfoBase_t m_PSInfoBase;
-AACDecInfo_t m_AACDecInfo;
+PSInfoBase_t *m_PSInfoBase;
+AACDecInfo_t *m_AACDecInfo;
 AACFrameInfo_t m_AACFrameInfo;
 ADTSHeader_t            m_fhADTS;
 ADIFHeader_t            m_fhADIF;
-ProgConfigElement_t     m_pce[16];
+ProgConfigElement_t     *m_pce[16];
 PulseInfo_t             m_pulseInfo[2]; // [MAX_NCHANS_ELEM]
 aac_BitStreamInfo_t     m_aac_BitStreamInfo;
 
@@ -1181,9 +1181,73 @@ static const uint32_t invQuant4[16] PROGMEM = {
 static const int8_t sgnMask[3] = {0x02,  0x04,  0x08};
 static const int8_t negMask[3] = {~0x03, ~0x07, ~0x0f};
 
+/***********************************************************************************************************************
+ * Function:    AACDecoder_AllocateBuffers
+ *
+ * Description: allocate all the memory needed for the MP3 decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      false if mot enough memory, otherwise true
+ *
+ **********************************************************************************************************************/
+bool AACDecoder_AllocateBuffers(void){
+    if(!m_AACDecInfo)      {m_AACDecInfo   = (AACDecInfo_t*)           malloc(sizeof(AACDecInfo_t));}
+    if(!m_PSInfoBase)      {m_PSInfoBase   = (PSInfoBase_t*)           malloc(sizeof(PSInfoBase_t));}
+    if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
 
+    if(!m_AACDecInfo || !m_PSInfoBase) {
+            log_e("not enough memory to allocate aacdecoder buffers");
+            return false;
+    }
+    // Clear Buffer
+    memset( m_AACDecInfo,        0, sizeof(AACDecInfo_t));              //Clear AACDecInfo
+    memset( m_PSInfoBase,        0, sizeof(PSInfoBase_t));              //Clear PSInfoBase
+    memset(&m_AACFrameInfo,      0, sizeof(AACFrameInfo_t));            //Clear AACFrameInfo
+    memset(&m_fhADTS,            0, sizeof(ADTSHeader_t));              //Clear fhADTS
+    memset(&m_fhADIF,            0, sizeof(ADIFHeader_t));              //Clear fhADIS
+    memset( m_pce[0],            0, sizeof(ProgConfigElement_t) * 16);  //Clear ProgConfigElement
+    memset(&m_pulseInfo[0],      0, sizeof(PulseInfo_t) *2);            //Clear PulseInfo
+    memset(&m_aac_BitStreamInfo, 0, sizeof(aac_BitStreamInfo_t));       //Clear aac_BitStreamInfo
 
-/**************************************************************************************
+    m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currInstTag = -1;
+    for(int ch = 0; ch < MAX_NCHANS_ELEM; ch++)
+        m_AACDecInfo->sbDeinterleaveReqd[ch] = 0;
+    m_AACDecInfo->adtsBlocksLeft = 0;
+    m_AACDecInfo->tnsUsed = 0;
+    m_AACDecInfo->pnsUsed = 0;
+
+    return true;
+}
+
+/***********************************************************************************************************************
+ * Function:    AACDecoder_FreeBuffers
+ *
+ * Description: allocate all the memory needed for the AAC decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+
+ **********************************************************************************************************************/
+void AACDecoder_FreeBuffers(void){
+
+//    uint32_t i = ESP.getFreeHeap();
+
+    if(m_AACDecInfo)                         {free(m_AACDecInfo);    m_AACDecInfo=NULL;}
+    if(m_PSInfoBase)                         {free(m_PSInfoBase);    m_PSInfoBase=NULL;}
+    if(m_pce[0])     {for(int i=0; i<16; i++) free(m_pce[i]);        m_pce[0]=NULL;}
+
+//    log_i("AACDecoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
+}
+
+/***********************************************************************************************************************
  * Function:    AACFindSyncWord
  *
  * Description: locate the next byte-alinged sync word in the raw AAC stream
@@ -1195,7 +1259,7 @@ static const int8_t negMask[3] = {~0x03, ~0x07, ~0x0f};
  *
  * Return:      offset to first sync word (bytes from start of buf)
  *              -1 if sync not found after searching nBytes
- **************************************************************************************/
+ **********************************************************************************************************************/
 int AACFindSyncWord(uint8_t *buf, int nBytes)
 {
     int i;
@@ -1209,7 +1273,7 @@ int AACFindSyncWord(uint8_t *buf, int nBytes)
     return -1;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    AACGetLastFrameInfo
  *
  * Description: get info about last AAC frame decoded (number of samples decoded, 
@@ -1223,26 +1287,27 @@ int AACFindSyncWord(uint8_t *buf, int nBytes)
  * Return:      none
  *
  * Notes:       call this right after calling AACDecode()
- **************************************************************************************/
+ **********************************************************************************************************************/
 void AACGetLastFrameInfo(AACFrameInfo_t *aacFrameInfo)
 {
-//        aacFrameInfo->bitRate =       m_AACDecInfo.bitRate;
-//        aacFrameInfo->nChans =        m_AACDecInfo.nChans;
-//        m_AACFrameInfo.nChans =       m_AACDecInfo.nChans;
-//        aacFrameInfo->sampRateCore =  m_AACDecInfo.sampRate;
-//        aacFrameInfo->sampRateOut =   m_AACDecInfo.sampRate * (m_AACDecInfo.sbrEnabled ? 2 : 1);
+        aacFrameInfo->bitRate =       m_AACDecInfo->bitRate;
+        aacFrameInfo->nChans =        m_AACDecInfo->nChans;
+        m_AACFrameInfo.nChans =       m_AACDecInfo->nChans;
+        aacFrameInfo->sampRateCore =  m_AACDecInfo->sampRate;
+        aacFrameInfo->sampRateOut =   m_AACDecInfo->sampRate * (m_AACDecInfo->sbrEnabled ? 2 : 1);
         aacFrameInfo->bitsPerSample = 16;
-        aacFrameInfo->outputSamps =   m_AACDecInfo.nChans * AAC_MAX_NSAMPS * (m_AACDecInfo.sbrEnabled ? 2 : 1);
-        aacFrameInfo->profile =       m_AACDecInfo.profile;
-        aacFrameInfo->tnsUsed =       m_AACDecInfo.tnsUsed;
-        aacFrameInfo->pnsUsed =       m_AACDecInfo.pnsUsed;
+        aacFrameInfo->outputSamps =   m_AACDecInfo->nChans * AAC_MAX_NSAMPS * (m_AACDecInfo->sbrEnabled ? 2 : 1);
+        aacFrameInfo->profile =       m_AACDecInfo->profile;
+        aacFrameInfo->tnsUsed =       m_AACDecInfo->tnsUsed;
+        aacFrameInfo->pnsUsed =       m_AACDecInfo->pnsUsed;
 }
-int AACGetSampRate(){return m_AACDecInfo.sampRate;}
-int AACGetChannels(){return m_AACDecInfo.nChans;}
+int AACGetSampRate(){return m_AACDecInfo->sampRate;}
+int AACGetChannels(){return m_AACDecInfo->nChans;}
 int AACGetBitsPerSample(){return 16;}
-int AACGetBitrate() {return m_AACDecInfo.bitRate;}
-int AACGetOutputSamps(){return m_AACDecInfo.nChans * AAC_MAX_NSAMPS;}
-/**************************************************************************************
+int AACGetBitrate() {return m_AACDecInfo->bitRate;}
+int AACGetOutputSamps(){return m_AACDecInfo->nChans * AAC_MAX_NSAMPS;}
+
+/***********************************************************************************************************************
  * Function:    AACDecode
  *
  * Description: decode AAC frame
@@ -1261,7 +1326,7 @@ int AACGetOutputSamps(){return m_AACDecInfo.nChans * AAC_MAX_NSAMPS;}
  * Notes:       inbuf pointer and bytesLeft are not updated until whole frame is
  *                successfully decoded, so if ERR_AAC_INDATA_UNDERFLOW is returned
  *                just call AACDecode again with more data in inbuf
- **************************************************************************************/
+ **********************************************************************************************************************/
 int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
 {
     int err, offset, bitOffset, bitsAvail;
@@ -1274,25 +1339,25 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
     bitsAvail = (*bytesLeft) << 3;
 
     /* first time through figure out what the file format is */
-    if (m_AACDecInfo.format == AAC_FF_Unknown) {
+    if (m_AACDecInfo->format == AAC_FF_Unknown) {
         if (bitsAvail < 32)
             return ERR_AAC_INDATA_UNDERFLOW;
 
         if ((inptr)[0] == 'A' && (inptr)[1] == 'D' && (inptr)[2] == 'I' && (inptr)[3] == 'F') {
             /* unpack ADIF header */
-            m_AACDecInfo.format = AAC_FF_ADIF;
+            m_AACDecInfo->format = AAC_FF_ADIF;
             err = UnpackADIFHeader(&inptr, &bitOffset, &bitsAvail);
             if (err)
                 return err;
         } else {
             /* assume ADTS by default */
-            m_AACDecInfo.format = AAC_FF_ADTS;
+            m_AACDecInfo->format = AAC_FF_ADTS;
         }
     }
     /* if ADTS, search for start of next frame */
-    if (m_AACDecInfo.format == AAC_FF_ADTS) {
+    if (m_AACDecInfo->format == AAC_FF_ADTS) {
         /* can have 1-4 raw data blocks per ADTS frame (header only present for first one) */
-        if (m_AACDecInfo.adtsBlocksLeft == 0) {
+        if (m_AACDecInfo->adtsBlocksLeft == 0) {
             offset = AACFindSyncWord(inptr, bitsAvail >> 3);
             if (offset < 0)
                 return ERR_AAC_INDATA_UNDERFLOW;
@@ -1303,15 +1368,15 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
             if (err)
                 return err;
 
-            if (m_AACDecInfo.nChans == -1) {
+            if (m_AACDecInfo->nChans == -1) {
                 /* figure out implicit channel mapping if necessary */
                 err = GetADTSChannelMapping(inptr, bitOffset, bitsAvail);
                 if (err)
                     return err;
             }
         }
-        m_AACDecInfo.adtsBlocksLeft--;
-    } else if (m_AACDecInfo.format == AAC_FF_RAW) {
+        m_AACDecInfo->adtsBlocksLeft--;
+    } else if (m_AACDecInfo->format == AAC_FF_RAW) {
         err = PrepareRawBlock();
         if (err)
             return err;
@@ -1320,12 +1385,12 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
 
 
     /* check for valid number of channels */
-    if (m_AACDecInfo.nChans > AAC_MAX_NCHANS || m_AACDecInfo.nChans <= 0)
+    if (m_AACDecInfo->nChans > AAC_MAX_NCHANS || m_AACDecInfo->nChans <= 0)
         return ERR_AAC_NCHANS_TOO_HIGH;
 
     /* will be set later if active in this frame */
-    m_AACDecInfo.tnsUsed = 0;
-    m_AACDecInfo.pnsUsed = 0;
+    m_AACDecInfo->tnsUsed = 0;
+    m_AACDecInfo->pnsUsed = 0;
 
     bitOffset = 0;
     baseChan = 0;
@@ -1336,7 +1401,7 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
         if (err)
             return err;
 
-        elementChans = elementNumChans[m_AACDecInfo.currBlockID];
+        elementChans = elementNumChans[m_AACDecInfo->currBlockID];
         if (baseChan + elementChans > AAC_MAX_NCHANS)
             return ERR_AAC_NCHANS_TOO_HIGH;
 
@@ -1352,11 +1417,10 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
         }
 
         /* mid-side and intensity stereo */
-        if (m_AACDecInfo.currBlockID == AAC_ID_CPE) {
+        if (m_AACDecInfo->currBlockID == AAC_ID_CPE) {
             if (StereoProcess())
                 return ERR_AAC_STEREO_PROCESS;
         }
-
 
         /* PNS, TNS, inverse transform */
         for (ch = 0; ch < elementChans; ch++) {
@@ -1364,24 +1428,22 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
             if (PNS(ch))
                 return ERR_AAC_PNS;
 
-            if (m_AACDecInfo.sbDeinterleaveReqd[ch]) {
+            if (m_AACDecInfo->sbDeinterleaveReqd[ch]) {
                 /* deinterleave short blocks, if required */
                 if (DeinterleaveShortBlocks(ch))
                     return ERR_AAC_SHORT_BLOCK_DEINT;
-                m_AACDecInfo.sbDeinterleaveReqd[ch] = 0;
+                m_AACDecInfo->sbDeinterleaveReqd[ch] = 0;
             }
-
 
             if (TNSFilter(ch))
                 return ERR_AAC_TNS;
-
 
             if (IMDCT(ch, baseChan + ch, outbuf))
                 return ERR_AAC_IMDCT;
         }
 
     baseChan += elementChans;
-    } while (m_AACDecInfo.currBlockID != AAC_ID_END);
+    } while (m_AACDecInfo->currBlockID != AAC_ID_END);
 
     /* byte align after each raw_data_block */
     if (bitOffset) {
@@ -1393,14 +1455,14 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
     }
 
     /* update pointers */
-    m_AACDecInfo.frameCount++;
+    m_AACDecInfo->frameCount++;
     *bytesLeft -= (inptr - inbuf);
     inbuf = inptr;
 
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeLPCCoefs
  *
  * Description: decode LPC coefficients for TNS
@@ -1422,7 +1484,7 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
  *                guard bits
  *              to ensure no intermediate overflow in all-pole filter, set
  *                FBITS_LPC_COEFS such that number of guard bits >= log2(max order)
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b)
 {
     int i, m, t;
@@ -1442,7 +1504,7 @@ void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    FilterRegion
  *
  * Description: apply LPC filter to one region of coefficients
@@ -1461,7 +1523,7 @@ void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b)
  * Notes:       assumes no guard bits in input transform coefficients
  *              gains 0 int bits
  *              history buffer does not need to be preserved between regions
- **************************************************************************************/
+ **********************************************************************************************************************/
 int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist)
 {
     int i, j, y, hi32, inc, gbMask;
@@ -1502,7 +1564,7 @@ int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist
     return gbMask;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    TNSFilter
  *
  * Description: apply temporal noise shaping, if enabled
@@ -1513,7 +1575,7 @@ int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist
  *              updated minimum guard bit count for this channel
  *
  * Return:      0 if successful, -1 if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int TNSFilter(int ch)
 {
     int win, winLen, nWindows, nSFB, filt, bottom, top, order, maxOrder, dir;
@@ -1526,8 +1588,8 @@ int TNSFilter(int ch)
     ICSInfo_t *icsInfo;
     TNSInfo_t *ti;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
-    ti = &m_PSInfoBase.tnsInfo[ch];
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
+    ti = &m_PSInfoBase->tnsInfo[ch];
 
     if (!ti->tnsDataPresent)
         return 0;
@@ -1535,19 +1597,19 @@ int TNSFilter(int ch)
     if (icsInfo->winSequence == 2) {
         nWindows = NWINDOWS_SHORT;
         winLen = NSAMPS_SHORT;
-        nSFB = sfBandTotalShort[m_PSInfoBase.sampRateIdx];
-        maxOrder = tnsMaxOrderShort[m_AACDecInfo.profile];
-        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase.sampRateIdx];
-        tnsMaxBandTab = tnsMaxBandsShort + tnsMaxBandsShortOffset[m_AACDecInfo.profile];
-        tnsMaxBand = tnsMaxBandTab[m_PSInfoBase.sampRateIdx];
+        nSFB = sfBandTotalShort[m_PSInfoBase->sampRateIdx];
+        maxOrder = tnsMaxOrderShort[m_AACDecInfo->profile];
+        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase->sampRateIdx];
+        tnsMaxBandTab = tnsMaxBandsShort + tnsMaxBandsShortOffset[m_AACDecInfo->profile];
+        tnsMaxBand = tnsMaxBandTab[m_PSInfoBase->sampRateIdx];
     } else {
         nWindows = NWINDOWS_LONG;
         winLen = NSAMPS_LONG;
-        nSFB = sfBandTotalLong[m_PSInfoBase.sampRateIdx];
-        maxOrder = tnsMaxOrderLong[m_AACDecInfo.profile];
-        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase.sampRateIdx];
-        tnsMaxBandTab = tnsMaxBandsLong + tnsMaxBandsLongOffset[m_AACDecInfo.profile];
-        tnsMaxBand = tnsMaxBandTab[m_PSInfoBase.sampRateIdx];
+        nSFB = sfBandTotalLong[m_PSInfoBase->sampRateIdx];
+        maxOrder = tnsMaxOrderLong[m_AACDecInfo->profile];
+        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase->sampRateIdx];
+        tnsMaxBandTab = tnsMaxBandsLong + tnsMaxBandsLongOffset[m_AACDecInfo->profile];
+        tnsMaxBand = tnsMaxBandTab[m_PSInfoBase->sampRateIdx];
     }
 
     if (tnsMaxBand > icsInfo->maxSFB)
@@ -1560,7 +1622,7 @@ int TNSFilter(int ch)
     filtCoef =   ti->coef;
 
     gbMask = 0;
-    audioCoef =  m_PSInfoBase.coef[ch];
+    audioCoef =  m_PSInfoBase->coef[ch];
     for (win = 0; win < nWindows; win++) {
         bottom = nSFB;
         numFilt = ti->numFilt[win];
@@ -1580,8 +1642,9 @@ int TNSFilter(int ch)
                     if (dir)
                         start = end - 1;
 
-                    DecodeLPCCoefs(order, filtRes[win], filtCoef, m_PSInfoBase.tnsLPCBuf, m_PSInfoBase.tnsWorkBuf);
-                    gbMask |= FilterRegion(size, dir, order, audioCoef + start, m_PSInfoBase.tnsLPCBuf, m_PSInfoBase.tnsWorkBuf);
+                    DecodeLPCCoefs(order, filtRes[win], filtCoef, m_PSInfoBase->tnsLPCBuf, m_PSInfoBase->tnsWorkBuf);
+                    gbMask |= FilterRegion(size, dir, order, audioCoef + start, m_PSInfoBase->tnsLPCBuf,
+                                                                                           m_PSInfoBase->tnsWorkBuf);
                 }
                 filtCoef += order;
             }
@@ -1591,13 +1654,13 @@ int TNSFilter(int ch)
 
     /* update guard bit count if necessary */
     size = CLZ(gbMask) - 1;
-    if (m_PSInfoBase.gbCurrent[ch] > size)
-        m_PSInfoBase.gbCurrent[ch] = size;
+    if (m_PSInfoBase->gbCurrent[ch] > size)
+        m_PSInfoBase->gbCurrent[ch] = size;
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeSingleChannelElement
  *
  * Description: decode one SCE
@@ -1609,16 +1672,16 @@ int TNSFilter(int ch)
  * Return:      0 if successful, -1 if error
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeSingleChannelElement()
 {
     /* read instance tag */
-    m_AACDecInfo.currInstTag = GetBits(NUM_INST_TAG_BITS);
+    m_AACDecInfo->currInstTag = GetBits(NUM_INST_TAG_BITS);
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeChannelPairElement
  *
  * Description: decode one CPE
@@ -1633,7 +1696,7 @@ int DecodeSingleChannelElement()
  * Return:      0 if successful, -1 if error
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeChannelPairElement()
 {
     int sfb, gp, maskOffset;
@@ -1641,25 +1704,25 @@ int DecodeChannelPairElement()
     ICSInfo_t *icsInfo;
 
 
-    icsInfo = m_PSInfoBase.icsInfo;
+    icsInfo = m_PSInfoBase->icsInfo;
 
     /* read instance tag */
-    m_AACDecInfo.currInstTag = GetBits(NUM_INST_TAG_BITS);
+    m_AACDecInfo->currInstTag = GetBits(NUM_INST_TAG_BITS);
 
     /* read common window flag and mid-side info (if present)
-     * store msMask bits in m_PSInfoBase.msMaskBits[] as follows:
+     * store msMask bits in m_PSInfoBase->msMaskBits[] as follows:
      *  long blocks -  pack bits for each SFB in range [0, maxSFB) starting with lsb of msMaskBits[0]
      *  short blocks - pack bits for each SFB in range [0, maxSFB), for each group [0, 7]
      * msMaskPresent = 0 means no M/S coding
-     *               = 1 means m_PSInfoBase.msMaskBits contains 1 bit per SFB to toggle M/S coding
-     *               = 2 means all SFB's are M/S coded (so m_PSInfoBase.msMaskBits is not needed)
+     *               = 1 means m_PSInfoBase->msMaskBits contains 1 bit per SFB to toggle M/S coding
+     *               = 2 means all SFB's are M/S coded (so m_PSInfoBase->msMaskBits is not needed)
      */
-    m_PSInfoBase.commonWin = GetBits(1);
-    if (m_PSInfoBase.commonWin) {
-        DecodeICSInfo(icsInfo, m_PSInfoBase.sampRateIdx);
-        m_PSInfoBase.msMaskPresent = GetBits(2);
-        if (m_PSInfoBase.msMaskPresent == 1) {
-            maskPtr = m_PSInfoBase.msMaskBits;
+    m_PSInfoBase->commonWin = GetBits(1);
+    if (m_PSInfoBase->commonWin) {
+        DecodeICSInfo(icsInfo, m_PSInfoBase->sampRateIdx);
+        m_PSInfoBase->msMaskPresent = GetBits(2);
+        if (m_PSInfoBase->msMaskPresent == 1) {
+            maskPtr = m_PSInfoBase->msMaskBits;
             *maskPtr = 0;
             maskOffset = 0;
             for (gp = 0; gp < icsInfo->numWinGroup; gp++) {
@@ -1679,7 +1742,7 @@ int DecodeChannelPairElement()
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeLFEChannelElement
  *
  * Description: decode one LFE
@@ -1691,16 +1754,16 @@ int DecodeChannelPairElement()
  * Return:      0 if successful, -1 if error
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeLFEChannelElement()
 {
     /* read instance tag */
-    m_AACDecInfo.currInstTag = GetBits( NUM_INST_TAG_BITS);
+    m_AACDecInfo->currInstTag = GetBits( NUM_INST_TAG_BITS);
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeDataStreamElement
  *
  * Description: decode one DSE
@@ -1711,13 +1774,13 @@ int DecodeLFEChannelElement()
  *              filled in data stream buffer
  *
  * Return:      0 if successful, -1 if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeDataStreamElement()
 {
     uint32_t byteAlign, dataCount;
     uint8_t *dataBuf;
 
-    m_AACDecInfo.currInstTag = GetBits( NUM_INST_TAG_BITS);
+    m_AACDecInfo->currInstTag = GetBits( NUM_INST_TAG_BITS);
     byteAlign = GetBits(1);
     dataCount = GetBits(8);
     if (dataCount == 255)
@@ -1726,15 +1789,15 @@ int DecodeDataStreamElement()
     if (byteAlign)
         ByteAlignBitstream();
 
-    m_PSInfoBase.dataCount = dataCount;
-    dataBuf = m_PSInfoBase.dataBuf;
+    m_PSInfoBase->dataCount = dataCount;
+    dataBuf = m_PSInfoBase->dataBuf;
     while (dataCount--)
         *dataBuf++ = GetBits(8);
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeProgramConfigElement
  *
  * Description: decode one PCE
@@ -1748,59 +1811,59 @@ int DecodeDataStreamElement()
  *
  * Notes:       #define KEEP_PCE_COMMENTS to save the comment field of the PCE
  *                (otherwise we just skip it in the bitstream, to save memory)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeProgramConfigElement(uint8_t idx)
 {
     int i;
 
-    m_pce[idx].elemInstTag =   GetBits(4);
-    m_pce[idx].profile =       GetBits(2);
-    m_pce[idx].sampRateIdx =   GetBits(4);
-    m_pce[idx].numFCE =        GetBits(4);
-    m_pce[idx].numSCE =        GetBits(4);
-    m_pce[idx].numBCE =        GetBits(4);
-    m_pce[idx].numLCE =        GetBits(2);
-    m_pce[idx].numADE =        GetBits(3);
-    m_pce[idx].numCCE =        GetBits(4);
+    m_pce[idx]->elemInstTag =   GetBits(4);
+    m_pce[idx]->profile =       GetBits(2);
+    m_pce[idx]->sampRateIdx =   GetBits(4);
+    m_pce[idx]->numFCE =        GetBits(4);
+    m_pce[idx]->numSCE =        GetBits(4);
+    m_pce[idx]->numBCE =        GetBits(4);
+    m_pce[idx]->numLCE =        GetBits(2);
+    m_pce[idx]->numADE =        GetBits(3);
+    m_pce[idx]->numCCE =        GetBits(4);
 
-    m_pce[idx].monoMixdown = GetBits(1) << 4;    /* present flag */
-    if (m_pce[idx].monoMixdown)
-        m_pce[idx].monoMixdown |= GetBits(4);    /* element number */
+    m_pce[idx]->monoMixdown = GetBits(1) << 4;    /* present flag */
+    if (m_pce[idx]->monoMixdown)
+        m_pce[idx]->monoMixdown |= GetBits(4);    /* element number */
 
-    m_pce[idx].stereoMixdown = GetBits(1) << 4;    /* present flag */
-    if (m_pce[idx].stereoMixdown)
-        m_pce[idx].stereoMixdown  |= GetBits(4);    /* element number */
+    m_pce[idx]->stereoMixdown = GetBits(1) << 4;    /* present flag */
+    if (m_pce[idx]->stereoMixdown)
+        m_pce[idx]->stereoMixdown  |= GetBits(4);    /* element number */
 
-    m_pce[idx].matrixMixdown = GetBits(1) << 4;    /* present flag */
-    if (m_pce[idx].matrixMixdown) {
-        m_pce[idx].matrixMixdown  |= GetBits(2) << 1;    /* index */
-        m_pce[idx].matrixMixdown  |= GetBits(1);            /* pseudo-surround enable */
+    m_pce[idx]->matrixMixdown = GetBits(1) << 4;    /* present flag */
+    if (m_pce[idx]->matrixMixdown) {
+        m_pce[idx]->matrixMixdown  |= GetBits(2) << 1;    /* index */
+        m_pce[idx]->matrixMixdown  |= GetBits(1);            /* pseudo-surround enable */
     }
 
-    for (i = 0; i < m_pce[idx].numFCE; i++) {
-        m_pce[idx].fce[i]  = GetBits(1) << 4;    /* is_cpe flag */
-        m_pce[idx].fce[i] |= GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numFCE; i++) {
+        m_pce[idx]->fce[i]  = GetBits(1) << 4;    /* is_cpe flag */
+        m_pce[idx]->fce[i] |= GetBits(4);            /* tag select */
     }
 
-    for (i = 0; i < m_pce[idx].numSCE; i++) {
-        m_pce[idx].sce[i]  = GetBits(1) << 4;    /* is_cpe flag */
-        m_pce[idx].sce[i] |= GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numSCE; i++) {
+        m_pce[idx]->sce[i]  = GetBits(1) << 4;    /* is_cpe flag */
+        m_pce[idx]->sce[i] |= GetBits(4);            /* tag select */
     }
 
-    for (i = 0; i < m_pce[idx].numBCE; i++) {
-        m_pce[idx].bce[i]  = GetBits(1) << 4;    /* is_cpe flag */
-        m_pce[idx].bce[i] |= GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numBCE; i++) {
+        m_pce[idx]->bce[i]  = GetBits(1) << 4;    /* is_cpe flag */
+        m_pce[idx]->bce[i] |= GetBits(4);            /* tag select */
     }
 
-    for (i = 0; i < m_pce[idx].numLCE; i++)
-        m_pce[idx].lce[i] = GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numLCE; i++)
+        m_pce[idx]->lce[i] = GetBits(4);            /* tag select */
 
-    for (i = 0; i < m_pce[idx].numADE; i++)
-        m_pce[idx].ade[i] = GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numADE; i++)
+        m_pce[idx]->ade[i] = GetBits(4);            /* tag select */
 
-    for (i = 0; i < m_pce[idx].numCCE; i++) {
-        m_pce[idx].cce[i]  = GetBits(1) << 4;    /* independent/dependent flag */
-        m_pce[idx].cce[i] |= GetBits(4);            /* tag select */
+    for (i = 0; i < m_pce[idx]->numCCE; i++) {
+        m_pce[idx]->cce[i]  = GetBits(1) << 4;    /* independent/dependent flag */
+        m_pce[idx]->cce[i] |= GetBits(4);            /* tag select */
     }
 
     ByteAlignBitstream();
@@ -1812,7 +1875,7 @@ int DecodeProgramConfigElement(uint8_t idx)
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeFillElement
  *
  * Description: decode one fill element
@@ -1824,7 +1887,7 @@ int DecodeProgramConfigElement(uint8_t idx)
  *              unpacked extension payload
  *
  * Return:      0 if successful, -1 if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeFillElement()
 {
     uint16_t fillCount;
@@ -1839,16 +1902,16 @@ int DecodeFillElement()
     while (fillCount--)
         *fillBuf++ = GetBits(8);
 
-    m_AACDecInfo.currInstTag = -1;    /* fill elements don't have instance tag */
-    m_AACDecInfo.fillExtType = 0;
+    m_AACDecInfo->currInstTag = -1;    /* fill elements don't have instance tag */
+    m_AACDecInfo->fillExtType = 0;
 
-//    m_AACDecInfo.fillBuf = m_PSInfoBase.fillBuf;
-//    m_AACDecInfo.fillCount = m_PSInfoBase.fillCount;
+//    m_AACDecInfo->fillBuf = m_PSInfoBase->fillBuf;
+//    m_AACDecInfo->fillCount = m_PSInfoBase->fillCount;
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeNextElement
  *
  * Description: decode next syntactic element in AAC frame
@@ -1865,7 +1928,7 @@ int DecodeFillElement()
  *              updated number of available bits
  *
  * Return:      0 if successful, error code (< 0) if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
 {
     int err, bitsUsed;
@@ -1874,14 +1937,14 @@ int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
     SetBitstreamPointer((*bitsAvail + 7) >> 3, *buf);
     GetBits(*bitOffset);
 
-    m_AACDecInfo.prevBlockID = m_AACDecInfo.currBlockID;
-    m_AACDecInfo.currBlockID = GetBits(NUM_SYN_ID_BITS);
+    m_AACDecInfo->prevBlockID = m_AACDecInfo->currBlockID;
+    m_AACDecInfo->currBlockID = GetBits(NUM_SYN_ID_BITS);
 
     /* set defaults (could be overwritten by DecodeXXXElement(), depending on currBlockID) */
-    m_PSInfoBase.commonWin = 0;
+    m_PSInfoBase->commonWin = 0;
 
     err = 0;
-    switch (m_AACDecInfo.currBlockID) {
+    switch (m_AACDecInfo->currBlockID) {
     case AAC_ID_SCE:
         err = DecodeSingleChannelElement();
         break;
@@ -1920,7 +1983,7 @@ int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PreMultiply
  *
  * Description: pre-twiddle stage of DCT4
@@ -1936,7 +1999,7 @@ int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
  *              i.e. gains 2-7= -5 int bits (short) or 2-10 = -8 int bits (long)
  *              normalization by -1/N is rolled into tables here (see trigtabs.c)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PreMultiply(int tabidx, int *zbuf1)
 {
     int i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
@@ -1982,7 +2045,7 @@ void PreMultiply(int tabidx, int *zbuf1)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PostMultiply
  *
  * Description: post-twiddle stage of DCT4
@@ -1996,7 +2059,7 @@ void PreMultiply(int tabidx, int *zbuf1)
  *
  * Notes:       minimum 1 GB in, 2 GB out - gains 2 int bits
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PostMultiply(int tabidx, int *fft1)
 {
     int i, nmdct, ar1, ai1, ar2, ai2, skipFactor;
@@ -2043,7 +2106,7 @@ void PostMultiply(int tabidx, int *fft1)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PreMultiplyRescale
  *
  * Description: pre-twiddle stage of DCT4, with rescaling for extra guard bits
@@ -2057,7 +2120,7 @@ void PostMultiply(int tabidx, int *fft1)
  * Return:      none
  *
  * Notes:       see notes on PreMultiply(), above
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PreMultiplyRescale(int tabidx, int *zbuf1, int es)
 {
     int i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
@@ -2100,7 +2163,7 @@ void PreMultiplyRescale(int tabidx, int *zbuf1, int es)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PostMultiplyRescale
  *
  * Description: post-twiddle stage of DCT4, with rescaling for extra guard bits
@@ -2115,7 +2178,7 @@ void PreMultiplyRescale(int tabidx, int *zbuf1, int es)
  *
  * Notes:       clips output to [-2^30, 2^30 - 1], guaranteeing at least 1 guard bit
  *              see notes on PostMultiply(), above
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PostMultiplyRescale(int tabidx, int *fft1, int es)
 {
     int i, nmdct, ar1, ai1, ar2, ai2, skipFactor, z;
@@ -2167,7 +2230,7 @@ void PostMultiplyRescale(int tabidx, int *fft1, int es)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DCT4
  *
  * Description: type-IV DCT
@@ -2189,7 +2252,7 @@ void PostMultiplyRescale(int tabidx, int *fft1, int es)
  *              int bits gained per stage (PreMul + FFT + PostMul)
  *                 short blocks = (-5 + 4 + 2) = 1 total
  *                 long blocks =  (-8 + 7 + 2) = 1 total
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DCT4(int tabidx, int *coef, int gb)
 {
     int es;
@@ -2207,7 +2270,7 @@ void DCT4(int tabidx, int *coef, int gb)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    BitReverse
  *
  * Description: Ken's fast in-place bit reverse, using super-small table
@@ -2218,7 +2281,7 @@ void DCT4(int tabidx, int *coef, int gb)
  * Outputs:     bit-reversed samples in same buffer
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void BitReverse(int *inout, int tabidx)
 {
     int *part0, *part1;
@@ -2253,7 +2316,7 @@ void BitReverse(int *inout, int tabidx)
 
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R4FirstPass
  *
  * Description: radix-4 trivial pass for decimation-in-time FFT
@@ -2267,7 +2330,7 @@ void BitReverse(int *inout, int tabidx)
  *
  * Notes:       assumes 2 guard bits, gains no integer bits,
  *                guard bits out = guard bits in - 2
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R4FirstPass(int *x, int bg)
 {
     int ar, ai, br, bi, cr, ci, dr, di;
@@ -2297,7 +2360,7 @@ void R4FirstPass(int *x, int bg)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R8FirstPass
  *
  * Description: radix-8 trivial pass for decimation-in-time FFT
@@ -2313,7 +2376,7 @@ void R4FirstPass(int *x, int bg)
  *              guard bits out = guard bits in - 3 (if inputs are full scale)
  *                or guard bits in - 2 (if inputs bounded to +/- sqrt(2)/2)
  *              see scaling comments in code
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R8FirstPass(int *x, int bg)
 {
     int ar, ai, br, bi, cr, ci, dr, di;
@@ -2400,7 +2463,7 @@ void R8FirstPass(int *x, int bg)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R4Core
  *
  * Description: radix-4 pass for decimation-in-time FFT
@@ -2418,7 +2481,7 @@ void R8FirstPass(int *x, int bg)
  *              min 1 GB in
  *              gbOut = gbIn - 1 (short block) or gbIn - 2 (long block)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R4Core(int *x, int bg, int gp, int *wtab)
 {
     int ar, ai, br, bi, cr, ci, dr, di, tr, ti;
@@ -2516,7 +2579,7 @@ void R4Core(int *x, int bg, int gp, int *wtab)
 }
 
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R4FFT
  *
  * Description: Ken's very fast in-place radix-4 decimation-in-time FFT
@@ -2532,7 +2595,7 @@ void R4Core(int *x, int bg, int gp, int *wtab)
  *              gbOut = gbIn - 4 (assuming input is from PreMultiply)
  *              gains log2(nfft) - 2 int bits total
  *                so gain 7 int bits (LONG), 4 int bits (SHORT)
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R4FFT(int tabidx, int *x)
 {
     int order = nfftlog2Tab[tabidx];
@@ -2552,7 +2615,7 @@ void R4FFT(int tabidx, int *x)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackZeros
  *
  * Description: fill a section of coefficients with zeros
@@ -2565,7 +2628,7 @@ void R4FFT(int tabidx, int *x)
  *
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
- **************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackZeros(int nVals, int *coef)
 {
     while (nVals > 0) {
@@ -2577,7 +2640,7 @@ void UnpackZeros(int nVals, int *coef)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackQuads
  *
  * Description: decode a section of 4-way vector Huffman coded coefficients
@@ -2591,7 +2654,7 @@ void UnpackZeros(int nVals, int *coef)
  *
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
- **************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackQuads(int cb, int nVals, int *coef)
 {
     int w, x, y, z, maxBits, nCodeBits, nSignBits, val;
@@ -2623,7 +2686,7 @@ void UnpackQuads(int cb, int nVals, int *coef)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackPairsNoEsc
  *
  * Description: decode a section of 2-way vector Huffman coded coefficients,
@@ -2638,7 +2701,7 @@ void UnpackQuads(int cb, int nVals, int *coef)
  *
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
- **************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackPairsNoEsc(int cb, int nVals, int *coef)
 {
     int y, z, maxBits, nCodeBits, nSignBits, val;
@@ -2665,7 +2728,7 @@ void UnpackPairsNoEsc(int cb, int nVals, int *coef)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackPairsEsc
  *
  * Description: decode a section of 2-way vector Huffman coded coefficients,
@@ -2680,7 +2743,7 @@ void UnpackPairsNoEsc(int cb, int nVals, int *coef)
  *
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
- **************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackPairsEsc(int cb, int nVals, int *coef)
 {
     int y, z, maxBits, nCodeBits, nSignBits, n, val;
@@ -2722,7 +2785,7 @@ void UnpackPairsEsc(int cb, int nVals, int *coef)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeSpectrumLong
  *
  * Description: decode transform coefficients for frame with one long block
@@ -2736,7 +2799,7 @@ void UnpackPairsEsc(int cb, int nVals, int *coef)
  * Notes:       adds in pulse data if present
  *              fills coefficient buffer with zeros in any region not coded with
  *                codebook in range [1, 11] (including sfb's above sfbMax)
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeSpectrumLong(int ch)
 {
     int i, sfb, cb, nVals, offset;
@@ -2745,12 +2808,12 @@ void DecodeSpectrumLong(int ch)
     int *coef;
     ICSInfo_t *icsInfo;
 
-    coef = m_PSInfoBase.coef[ch];
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    coef = m_PSInfoBase->coef[ch];
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
     /* decode long block */
-    sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase.sampRateIdx];
-    sfbCodeBook = m_PSInfoBase.sfbCodeBook[ch];
+    sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase->sampRateIdx];
+    sfbCodeBook = m_PSInfoBase->sfbCodeBook[ch];
     for (sfb = 0; sfb < icsInfo->maxSFB; sfb++) {
         cb = *sfbCodeBook++;
         nVals = sfbTab[sfb+1] - sfbTab[sfb];
@@ -2775,7 +2838,7 @@ void DecodeSpectrumLong(int ch)
 
     /* add pulse data, if present */
     if (m_pulseInfo[ch].pulseDataPresent) {
-        coef = m_PSInfoBase.coef[ch];
+        coef = m_PSInfoBase->coef[ch];
         offset = sfbTab[m_pulseInfo[ch].startSFB];
         for (i = 0; i < m_pulseInfo[ch].numPulse; i++) {
             offset += m_pulseInfo[ch].offset[i];
@@ -2788,7 +2851,7 @@ void DecodeSpectrumLong(int ch)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeSpectrumShort
  *
  * Description: decode transform coefficients for frame with eight short blocks
@@ -2802,7 +2865,7 @@ void DecodeSpectrumLong(int ch)
  * Notes:       fills coefficient buffer with zeros in any region not coded with
  *                codebook in range [1, 11] (including sfb's above sfbMax)
  *              deinterleaves window groups into 8 windows
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeSpectrumShort(int ch)
 {
     int gp, cb, nVals=0, win, offset, sfb;
@@ -2811,12 +2874,12 @@ void DecodeSpectrumShort(int ch)
     int *coef;
     ICSInfo_t *icsInfo;
 
-    coef = m_PSInfoBase.coef[ch];
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    coef = m_PSInfoBase->coef[ch];
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
     /* decode short blocks, deinterleaving in-place */
-    sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase.sampRateIdx];
-    sfbCodeBook = m_PSInfoBase.sfbCodeBook[ch];
+    sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase->sampRateIdx];
+    sfbCodeBook = m_PSInfoBase->sfbCodeBook[ch];
     for (gp = 0; gp < icsInfo->numWinGroup; gp++) {
         for (sfb = 0; sfb < icsInfo->maxSFB; sfb++) {
             nVals = sfbTab[sfb+1] - sfbTab[sfb];
@@ -2848,10 +2911,10 @@ void DecodeSpectrumShort(int ch)
         coef += (icsInfo->winGroupLen[gp] - 1)*NSAMPS_SHORT;
     }
 
-    ASSERT(coef == m_PSInfoBase.coef[ch] + NSAMPS_LONG);
+    ASSERT(coef == m_PSInfoBase->coef[ch] + NSAMPS_LONG);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecWindowOverlap
  *
  * Description: apply synthesis window, do overlap-add, clip to 16-bit PCM,
@@ -2870,7 +2933,7 @@ void DecodeSpectrumShort(int ch)
  * Notes:       this processes one channel at a time, but skips every other sample in
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
 {
     int in, w0, w1, f0, f1;
@@ -2935,7 +2998,7 @@ void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTyp
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecWindowOverlapLongStart
  *
  * Description: apply synthesis window, do overlap-add, clip to 16-bit PCM,
@@ -2954,7 +3017,7 @@ void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTyp
  * Notes:       this processes one channel at a time, but skips every other sample in
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
 {
     int i,  in, w0, w1, f0, f1;
@@ -3019,7 +3082,7 @@ void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, i
     } while (over0 < over1);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecWindowOverlapLongStop
  *
  * Description: apply synthesis window, do overlap-add, clip to 16-bit PCM,
@@ -3038,7 +3101,7 @@ void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, i
  * Notes:       this processes one channel at a time, but skips every other sample in
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
 {
     int i, in, w0, w1, f0, f1;
@@ -3103,7 +3166,7 @@ void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, in
     } while (over0 < over1);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecWindowOverlapShort
  *
  * Description: apply synthesis window, do overlap-add, clip to 16-bit PCM,
@@ -3122,7 +3185,7 @@ void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, in
  * Notes:       this processes one channel at a time, but skips every other sample in
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
 {
     int i, in, w0, w1, f0, f1;
@@ -3284,7 +3347,7 @@ void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int w
     } while (i);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IMDCT
  *
  * Description: inverse transform and convert to 16-bit PCM
@@ -3306,47 +3369,51 @@ void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int w
  *                unclipped 32-bit PCM in the SBR input buffer. In this case we make
  *                a separate pass over the 32-bit PCM to produce 16-bit PCM output.
  *                This inflicts a slight performance hit when decoding non-SBR files.
- **************************************************************************************/
+ **********************************************************************************************************************/
 int IMDCT(int ch, int chOut, short *outbuf)
 {
     int i;
     ICSInfo_t *icsInfo;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
     outbuf += chOut;
 
     /* optimized type-IV DCT (operates inplace) */
     if (icsInfo->winSequence == 2) {
         /* 8 short blocks */
         for (i = 0; i < 8; i++)
-            DCT4(0, m_PSInfoBase.coef[ch] + i*128, m_PSInfoBase.gbCurrent[ch]);
+            DCT4(0, m_PSInfoBase->coef[ch] + i*128, m_PSInfoBase->gbCurrent[ch]);
     } else {
         /* 1 long block */
-        DCT4(1, m_PSInfoBase.coef[ch], m_PSInfoBase.gbCurrent[ch]);
+        DCT4(1, m_PSInfoBase->coef[ch], m_PSInfoBase->gbCurrent[ch]);
     }
 
 
     /* window, overlap-add, round to PCM - optimized for each window sequence */
     if (icsInfo->winSequence == 0)
-        DecWindowOverlap(m_PSInfoBase.coef[ch], m_PSInfoBase.overlap[chOut], outbuf, m_AACDecInfo.nChans, icsInfo->winShape, m_PSInfoBase.prevWinShape[chOut]);
+        DecWindowOverlap(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+                                                                  icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 1)
-        DecWindowOverlapLongStart(m_PSInfoBase.coef[ch], m_PSInfoBase.overlap[chOut], outbuf, m_AACDecInfo.nChans, icsInfo->winShape, m_PSInfoBase.prevWinShape[chOut]);
+        DecWindowOverlapLongStart(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+                                                                  icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 2)
-        DecWindowOverlapShort(m_PSInfoBase.coef[ch], m_PSInfoBase.overlap[chOut], outbuf, m_AACDecInfo.nChans, icsInfo->winShape, m_PSInfoBase.prevWinShape[chOut]);
+        DecWindowOverlapShort(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+                                                                  icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
     else if (icsInfo->winSequence == 3)
-        DecWindowOverlapLongStop(m_PSInfoBase.coef[ch], m_PSInfoBase.overlap[chOut], outbuf, m_AACDecInfo.nChans, icsInfo->winShape, m_PSInfoBase.prevWinShape[chOut]);
+        DecWindowOverlapLongStop(m_PSInfoBase->coef[ch], m_PSInfoBase->overlap[chOut], outbuf, m_AACDecInfo->nChans,
+                                                                  icsInfo->winShape, m_PSInfoBase->prevWinShape[chOut]);
 
-//    m_AACDecInfo.rawSampleBuf[ch] = 0;
-//    m_AACDecInfo.rawSampleBytes = 0;
+//    m_AACDecInfo->rawSampleBuf[ch] = 0;
+//    m_AACDecInfo->rawSampleBytes = 0;
 //    aacDecInfo->rawSampleFBits = 0;
 
 
-    m_PSInfoBase.prevWinShape[chOut] = icsInfo->winShape;
+    m_PSInfoBase->prevWinShape[chOut] = icsInfo->winShape;
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeICSInfo
  *
  * Description: decode individual channel stream info
@@ -3356,7 +3423,7 @@ int IMDCT(int ch, int chOut, short *outbuf)
  * Outputs:     updated icsInfo struct
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx)
 {
     int sfb, g, mask;
@@ -3396,7 +3463,7 @@ void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeSectionData
  *
  * Description: decode section data (scale factor band groupings and
@@ -3411,7 +3478,7 @@ void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx)
  * Return:      none
  *
  * Notes:       sectCB, sectEnd, sfbCodeBook, ordered by window groups for short blocks
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbCodeBook)
 {
     int g, cb, sfb;
@@ -3438,7 +3505,7 @@ void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbC
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeOneScaleFactor
  *
  * Description: decode one scalefactor using scalefactor Huffman codebook
@@ -3448,7 +3515,7 @@ void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbC
  * Outputs:     none
  *
  * Return:      one decoded scalefactor, including index_offset of -60
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeOneScaleFactor()
 {
     int nBits, val;
@@ -3461,7 +3528,7 @@ int DecodeOneScaleFactor()
     return val;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeScaleFactors
  *
  * Description: decode scalefactors, PNS energy, and intensity stereo weights
@@ -3480,7 +3547,7 @@ int DecodeOneScaleFactor()
  *                energy instead of regular scalefactor
  *              for section with codebook 14 or 15, scaleFactors buffer has intensity
  *                stereo weight instead of regular scalefactor
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
                                uint8_t *sfbCodeBook, short *scaleFactors)
 {
@@ -3522,7 +3589,7 @@ void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodePulseInfo
  *
  * Description: decode pulse information
@@ -3532,7 +3599,7 @@ void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
  * Outputs:     updated PulseInfo_t struct
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodePulseInfo(uint8_t ch)
 {
     int i;
@@ -3545,7 +3612,7 @@ void DecodePulseInfo(uint8_t ch)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeTNSInfo
  *
  * Description: decode TNS filter information
@@ -3556,7 +3623,7 @@ void DecodePulseInfo(uint8_t ch)
  *              buffer of decoded (signed) TNS filter coefficients
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef)
 {
     int i, w, f, coefBits, compress;
@@ -3629,7 +3696,7 @@ static const uint8_t gainBits[4][3] = {
     {2, 4, 5},  /* stop */
 };
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeGainControlInfo
  *
  * Description: decode gain control information (SSR profile only)
@@ -3639,7 +3706,7 @@ static const uint8_t gainBits[4][3] = {
  * Outputs:     updated GainControlInfo_t struct
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi)
 {
     int bd, wd, ad;
@@ -3661,7 +3728,7 @@ void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi)
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeICS
  *
  * Description: decode individual channel stream
@@ -3672,7 +3739,7 @@ void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi)
  *                and gain control data
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void DecodeICS(int ch)
 {
     int globalGain;
@@ -3680,32 +3747,33 @@ void DecodeICS(int ch)
     TNSInfo_t *ti;
     GainControlInfo_t *gi;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
     globalGain = GetBits(8);
-    if (!m_PSInfoBase.commonWin)
-        DecodeICSInfo(icsInfo, m_PSInfoBase.sampRateIdx);
+    if (!m_PSInfoBase->commonWin)
+        DecodeICSInfo(icsInfo, m_PSInfoBase->sampRateIdx);
 
-    DecodeSectionData(icsInfo->winSequence, icsInfo->numWinGroup, icsInfo->maxSFB, m_PSInfoBase.sfbCodeBook[ch]);
+    DecodeSectionData(icsInfo->winSequence, icsInfo->numWinGroup, icsInfo->maxSFB, m_PSInfoBase->sfbCodeBook[ch]);
 
-    DecodeScaleFactors(icsInfo->numWinGroup, icsInfo->maxSFB, globalGain, m_PSInfoBase.sfbCodeBook[ch], m_PSInfoBase.scaleFactors[ch]);
+    DecodeScaleFactors(icsInfo->numWinGroup, icsInfo->maxSFB, globalGain, m_PSInfoBase->sfbCodeBook[ch],
+                                                                                        m_PSInfoBase->scaleFactors[ch]);
 
     m_pulseInfo[ch].pulseDataPresent = GetBits(1);
     if (m_pulseInfo[ch].pulseDataPresent)
         DecodePulseInfo(ch);
 
-    ti = &m_PSInfoBase.tnsInfo[ch];
+    ti = &m_PSInfoBase->tnsInfo[ch];
     ti->tnsDataPresent = GetBits(1);
     if (ti->tnsDataPresent)
         DecodeTNSInfo(icsInfo->winSequence, ti, ti->coef);
 
-    gi = &m_PSInfoBase.gainControlInfo[ch];
+    gi = &m_PSInfoBase->gainControlInfo[ch];
     gi->gainControlDataPresent = GetBits(1);
     if (gi->gainControlDataPresent)
         DecodeGainControlInfo(icsInfo->winSequence, gi);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeNoiselessData
  *
  * Description: decode noiseless data (side info and transform coefficients)
@@ -3720,13 +3788,13 @@ void DecodeICS(int ch)
  *                TNS data, gain control data, and spectral data
  *
  * Return:      0 if successful, error code (< 0) if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch)
 {
     int bitsUsed;
     ICSInfo_t *icsInfo;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
     SetBitstreamPointer((*bitsAvail+7) >> 3, *buf);
     GetBits(*bitOffset);
@@ -3743,12 +3811,12 @@ int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch)
     *bitOffset = ((bitsUsed + *bitOffset) & 0x07);
     *bitsAvail -= bitsUsed;
 
-    m_AACDecInfo.sbDeinterleaveReqd[ch] = 0;
-    m_AACDecInfo.tnsUsed |= m_PSInfoBase.tnsInfo[ch].tnsDataPresent;    /* set flag if TNS used for any channel */
+    m_AACDecInfo->sbDeinterleaveReqd[ch] = 0;
+    m_AACDecInfo->tnsUsed |= m_PSInfoBase->tnsInfo[ch].tnsDataPresent;    /* set flag if TNS used for any channel */
 
     return ERR_AAC_NONE;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeHuffmanScalar
  *
  * Description: decode one Huffman symbol from bitstream
@@ -3766,7 +3834,7 @@ int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch)
  *                  (startCW[nBits] + count[nBits]) << 1
  *                if there are no codes at nBits, then we just keep << 1 each time
  *                  (since count[nBits] = 0)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val)
 {
     uint32_t count, start, shift, t;
@@ -3792,7 +3860,7 @@ int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabIn
     return (countPtr - huffTabInfo->count);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    UnpackADTSHeader
 *
 * Description: parse the ADTS frame header and initialize decoder state
@@ -3807,7 +3875,7 @@ int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabIn
 *
 * Return:      0 if successful, error code (< 0) if error
 *              verify that fixed fields don't change between frames
-**************************************************************************************/
+***********************************************************************************************************************/
 int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 {
     int bitsUsed;
@@ -3853,22 +3921,22 @@ int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 
 
     /* update codec info */
-    m_PSInfoBase.sampRateIdx = m_fhADTS.sampRateIdx;
-    if (!m_PSInfoBase.useImpChanMap)
-        m_PSInfoBase.nChans = channelMapTab[m_fhADTS.channelConfig];
+    m_PSInfoBase->sampRateIdx = m_fhADTS.sampRateIdx;
+    if (!m_PSInfoBase->useImpChanMap)
+        m_PSInfoBase->nChans = channelMapTab[m_fhADTS.channelConfig];
 
     /* syntactic element fields will be read from bitstream for each element */
-    m_AACDecInfo.prevBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currInstTag = -1;
+    m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currInstTag = -1;
 
     /* fill in user-accessible data */
-    m_AACDecInfo.bitRate = 0;
-    m_AACDecInfo.nChans = m_PSInfoBase.nChans;
-    m_AACDecInfo.sampRate = sampRateTab[m_PSInfoBase.sampRateIdx];
-    m_AACDecInfo.profile = m_fhADTS.profile;
-    m_AACDecInfo.sbrEnabled = 0;
-    m_AACDecInfo.adtsBlocksLeft = m_fhADTS.numRawDataBlocks;
+    m_AACDecInfo->bitRate = 0;
+    m_AACDecInfo->nChans = m_PSInfoBase->nChans;
+    m_AACDecInfo->sampRate = sampRateTab[m_PSInfoBase->sampRateIdx];
+    m_AACDecInfo->profile = m_fhADTS.profile;
+    m_AACDecInfo->sbrEnabled = 0;
+    m_AACDecInfo->adtsBlocksLeft = m_fhADTS.numRawDataBlocks;
 
     /* update bitstream reader */
     bitsUsed = CalcBitsUsed(*buf, *bitOffset);
@@ -3881,7 +3949,7 @@ int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    GetADTSChannelMapping
 *
 * Description: determine the number of channels from implicit mapping rules
@@ -3896,7 +3964,7 @@ int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 *
 * Notes:       calculates total number of channels using rules in 14496-3, 4.5.1.2.1
 *              does not attempt to deduce speaker geometry
-**************************************************************************************/
+***********************************************************************************************************************/
 int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
 {
     int ch, nChans, elementChans, err;
@@ -3908,7 +3976,7 @@ int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
         if (err)
             return err;
 
-        elementChans = elementNumChans[m_AACDecInfo.currBlockID];
+        elementChans = elementNumChans[m_AACDecInfo->currBlockID];
         nChans += elementChans;
 
         for (ch = 0; ch < elementChans; ch++) {
@@ -3916,20 +3984,20 @@ int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
             if (err)
                 return err;
         }
-    } while (m_AACDecInfo.currBlockID != AAC_ID_END);
+    } while (m_AACDecInfo->currBlockID != AAC_ID_END);
 
     if (nChans <= 0)
         return ERR_AAC_CHANNEL_MAP;
 
     /* update number of channels in codec state and user-accessible info structs */
-    m_PSInfoBase.nChans = nChans;
-    m_AACDecInfo.nChans = m_PSInfoBase.nChans;
-    m_PSInfoBase.useImpChanMap = 1;
+    m_PSInfoBase->nChans = nChans;
+    m_AACDecInfo->nChans = m_PSInfoBase->nChans;
+    m_PSInfoBase->useImpChanMap = 1;
 
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    GetNumChannelsADIF
 *
 * Description: get number of channels from program config elements in an ADIF file
@@ -3941,7 +4009,7 @@ int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
 *
 * Return:      total number of channels in file
 *              -1 if error (invalid number of PCE's or unsupported mode)
-**************************************************************************************/
+***********************************************************************************************************************/
 int GetNumChannelsADIF(int nPCE)
 {
     int i, j, nChans;
@@ -3952,26 +4020,26 @@ int GetNumChannelsADIF(int nPCE)
     nChans = 0;
     for (i = 0; i < nPCE; i++) {
         /* for now: only support LC, no channel coupling */
-        if (m_pce[i].profile != AAC_PROFILE_LC || m_pce[i].numCCE > 0)
+        if (m_pce[i]->profile != AAC_PROFILE_LC || m_pce[i]->numCCE > 0)
             return -1;
 
         /* add up number of channels in all channel elements (assume all single-channel) */
-       nChans += m_pce[i].numFCE;
-       nChans += m_pce[i].numSCE;
-       nChans += m_pce[i].numBCE;
-       nChans += m_pce[i].numLCE;
+       nChans += m_pce[i]->numFCE;
+       nChans += m_pce[i]->numSCE;
+       nChans += m_pce[i]->numBCE;
+       nChans += m_pce[i]->numLCE;
 
         /* add one more for every element which is a channel pair */
-       for (j = 0; j < m_pce[i].numFCE; j++) {
-           if ((m_pce[i].fce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
+       for (j = 0; j < m_pce[i]->numFCE; j++) {
+           if ((m_pce[i]->fce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
                nChans++;
        }
-       for (j = 0; j < m_pce[i].numSCE; j++) {
-           if ((m_pce[i].sce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
+       for (j = 0; j < m_pce[i]->numSCE; j++) {
+           if ((m_pce[i]->sce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
                nChans++;
        }
-       for (j = 0; j < m_pce[i].numBCE; j++) {
-           if ((m_pce[i].bce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
+       for (j = 0; j < m_pce[i]->numBCE; j++) {
+           if ((m_pce[i]->bce[j] & 0x10) >> 4)  /* bit 4 = SCE/CPE flag */
                nChans++;
        }
 
@@ -3980,7 +4048,7 @@ int GetNumChannelsADIF(int nPCE)
     return nChans;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    GetSampleRateIdxADIF
 *
 * Description: get sampling rate index from program config elements in an ADIF file
@@ -3992,7 +4060,7 @@ int GetNumChannelsADIF(int nPCE)
 *
 * Return:      sample rate of file
 *              -1 if error (invalid number of PCE's or sample rate mismatch)
-**************************************************************************************/
+***********************************************************************************************************************/
 int GetSampleRateIdxADIF(int nPCE)
 {
     int i, idx;
@@ -4001,16 +4069,16 @@ int GetSampleRateIdxADIF(int nPCE)
         return -1;
 
     /* make sure all PCE's have the same sample rate */
-    idx = m_pce[0].sampRateIdx;
+    idx = m_pce[0]->sampRateIdx;
     for (i = 1; i < nPCE; i++) {
-        if (m_pce[i].sampRateIdx != idx)
+        if (m_pce[i]->sampRateIdx != idx)
             return -1;
     }
 
     return idx;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    UnpackADIFHeader
 *
 * Description: parse the ADIF file header and initialize decoder state
@@ -4026,7 +4094,7 @@ int GetSampleRateIdxADIF(int nPCE)
 *              updated number of available bits
 *
 * Return:      0 if successful, error code (< 0) if error
-**************************************************************************************/
+***********************************************************************************************************************/
 int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 {
     uint8_t i;
@@ -4062,24 +4130,24 @@ int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
     ByteAlignBitstream();
 
     /* update codec info */
-    m_PSInfoBase.nChans = GetNumChannelsADIF(m_fhADIF.numPCE);
-    m_PSInfoBase.sampRateIdx = GetSampleRateIdxADIF(m_fhADIF.numPCE);
+    m_PSInfoBase->nChans = GetNumChannelsADIF(m_fhADIF.numPCE);
+    m_PSInfoBase->sampRateIdx = GetSampleRateIdxADIF(m_fhADIF.numPCE);
 
     /* check validity of header */
-    if (m_PSInfoBase.nChans < 0 || m_PSInfoBase.sampRateIdx < 0 || m_PSInfoBase.sampRateIdx >= NUM_SAMPLE_RATES)
+    if (m_PSInfoBase->nChans < 0 || m_PSInfoBase->sampRateIdx < 0 || m_PSInfoBase->sampRateIdx >= NUM_SAMPLE_RATES)
         return ERR_AAC_INVALID_ADIF_HEADER;
 
     /* syntactic element fields will be read from bitstream for each element */
-    m_AACDecInfo.prevBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currInstTag = -1;
+    m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currInstTag = -1;
 
     /* fill in user-accessible data */
-    m_AACDecInfo.bitRate = 0;
-    m_AACDecInfo.nChans = m_PSInfoBase.nChans;
-    m_AACDecInfo.sampRate = sampRateTab[m_PSInfoBase.sampRateIdx];
-    m_AACDecInfo.profile = m_pce[0].profile;
-    m_AACDecInfo.sbrEnabled = 0;
+    m_AACDecInfo->bitRate = 0;
+    m_AACDecInfo->nChans = m_PSInfoBase->nChans;
+    m_AACDecInfo->sampRate = sampRateTab[m_PSInfoBase->sampRateIdx];
+    m_AACDecInfo->profile = m_pce[0]->profile;
+    m_AACDecInfo->sbrEnabled = 0;
 
     /* update bitstream reader */
     bitsUsed = CalcBitsUsed(*buf, *bitOffset);
@@ -4092,7 +4160,7 @@ int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    SetRawBlockParams
 *
 * Description: set internal state variables for decoding a stream of raw data blocks
@@ -4107,38 +4175,39 @@ int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 *
 * Return:      0 if successful, error code (< 0) if error
 *
-* Notes:       if copyLast == 1, then m_PSInfoBase.nChans, m_PSInfoBase.sampRateIdx, and
+* Notes:       if copyLast == 1, then m_PSInfoBase->nChans, m_PSInfoBase->sampRateIdx, and
 *                aacDecInfo->profile are not changed (it's assumed that we already
 *                set them, such as by a previous call to UnpackADTSHeader())
 *              if copyLast == 0, then the parameters we passed in are used instead
-**************************************************************************************/
+***********************************************************************************************************************/
 int SetRawBlockParams(int copyLast, int nChans, int sampRate, int profile)
 {
     int idx;
 
     if (!copyLast) {
-        m_AACDecInfo.profile = profile;
-        m_PSInfoBase.nChans = nChans;
+        m_AACDecInfo->profile = profile;
+        m_PSInfoBase->nChans = nChans;
         for (idx = 0; idx < NUM_SAMPLE_RATES; idx++) {
             if (sampRate == sampRateTab[idx]) {
-                m_PSInfoBase.sampRateIdx = idx;
+                m_PSInfoBase->sampRateIdx = idx;
                 break;
             }
         }
         if (idx == NUM_SAMPLE_RATES)
             return ERR_AAC_INVALID_FRAME;
     }
-    m_AACDecInfo.nChans = m_PSInfoBase.nChans;
-    m_AACDecInfo.sampRate = sampRateTab[m_PSInfoBase.sampRateIdx];
+    m_AACDecInfo->nChans = m_PSInfoBase->nChans;
+    m_AACDecInfo->sampRate = sampRateTab[m_PSInfoBase->sampRateIdx];
 
     /* check validity of header */
-    if (m_PSInfoBase.sampRateIdx >= NUM_SAMPLE_RATES || m_PSInfoBase.sampRateIdx < 0 || m_AACDecInfo.profile != AAC_PROFILE_LC)
+    if (m_PSInfoBase->sampRateIdx >= NUM_SAMPLE_RATES || m_PSInfoBase->sampRateIdx < 0 ||
+        m_AACDecInfo->profile != AAC_PROFILE_LC)
         return ERR_AAC_RAWBLOCK_PARAMS;
 
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
 * Function:    PrepareRawBlock
 *
 * Description: reset per-block state variables for raw blocks (no ADTS/ADIF headers)
@@ -4148,22 +4217,22 @@ int SetRawBlockParams(int copyLast, int nChans, int sampRate, int profile)
 * Outputs:     updated state variables in aacDecInfo
 *
 * Return:      0 if successful, error code (< 0) if error
-**************************************************************************************/
+***********************************************************************************************************************/
 int PrepareRawBlock()
 {
     /* syntactic element fields will be read from bitstream for each element */
-    m_AACDecInfo.prevBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currBlockID = AAC_ID_INVALID;
-    m_AACDecInfo.currInstTag = -1;
+    m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currBlockID = AAC_ID_INVALID;
+    m_AACDecInfo->currInstTag = -1;
 
     /* fill in user-accessible data */
-    m_AACDecInfo.bitRate = 0;
-    m_AACDecInfo.sbrEnabled = 0;
+    m_AACDecInfo->bitRate = 0;
+    m_AACDecInfo->sbrEnabled = 0;
 
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DequantBlock
  *
  * Description: dequantize one block of transform coefficients (in-place)
@@ -4180,7 +4249,7 @@ int PrepareRawBlock()
  *                * pow(2, FBITS_OUT_DQ_OFF)
  *              clips outputs to Q(FBITS_OUT_DQ_OFF)
  *              output has no minimum number of guard bits
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DequantBlock(int *inbuf, int nSamps, int scale)
 {
     int iSamp, scalef, scalei, x, y, gbMask, shift, tab4[4];
@@ -4314,7 +4383,7 @@ int DequantBlock(int *inbuf, int nSamps, int scale)
     return gbMask;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    AACDequantize
  *
  * Description: dequantize all transform coefficients for one channel
@@ -4326,7 +4395,7 @@ int DequantBlock(int *inbuf, int nSamps, int scale)
  *              minimum guard bit count for dequantized coefficients
  *
  * Return:      0 if successful, error code (< 0) if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int AACDequantize(int ch)
 {
     int gp, cb, sfb, win, width, nSamps, gbMask;
@@ -4336,21 +4405,21 @@ int AACDequantize(int ch)
     short *scaleFactors;
     ICSInfo_t *icsInfo;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
     if (icsInfo->winSequence == 2) {
-        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_SHORT;
     } else {
-        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_LONG;
     }
-    coef = m_PSInfoBase.coef[ch];
-    sfbCodeBook = m_PSInfoBase.sfbCodeBook[ch];
-    scaleFactors = m_PSInfoBase.scaleFactors[ch];
+    coef = m_PSInfoBase->coef[ch];
+    sfbCodeBook = m_PSInfoBase->sfbCodeBook[ch];
+    scaleFactors = m_PSInfoBase->scaleFactors[ch];
 
-    m_PSInfoBase.intensityUsed[ch] = 0;
-    m_PSInfoBase.pnsUsed[ch] = 0;
+    m_PSInfoBase->intensityUsed[ch] = 0;
+    m_PSInfoBase->pnsUsed[ch] = 0;
     gbMask = 0;
     for (gp = 0; gp < icsInfo->numWinGroup; gp++) {
         for (win = 0; win < icsInfo->winGroupLen[gp]; win++) {
@@ -4363,9 +4432,9 @@ int AACDequantize(int ch)
                 if (cb >= 0 && cb <= 11)
                     gbMask |= DequantBlock(coef, width, scaleFactors[sfb]);
                 else if (cb == 13)
-                    m_PSInfoBase.pnsUsed[ch] = 1;
+                    m_PSInfoBase->pnsUsed[ch] = 1;
                 else if (cb == 14 || cb == 15)
-                    m_PSInfoBase.intensityUsed[ch] = 1;    /* should only happen if ch == 1 */
+                    m_PSInfoBase->intensityUsed[ch] = 1;    /* should only happen if ch == 1 */
                 coef += width;
             }
             coef += (nSamps - sfbTab[icsInfo->maxSFB]);
@@ -4373,15 +4442,15 @@ int AACDequantize(int ch)
         sfbCodeBook += icsInfo->maxSFB;
         scaleFactors += icsInfo->maxSFB;
     }
-    m_AACDecInfo.pnsUsed |= m_PSInfoBase.pnsUsed[ch];    /* set flag if PNS used for any channel */
+    m_AACDecInfo->pnsUsed |= m_PSInfoBase->pnsUsed[ch];    /* set flag if PNS used for any channel */
 
     /* calculate number of guard bits in dequantized data */
-    m_PSInfoBase.gbCurrent[ch] = CLZ(gbMask) - 1;
+    m_PSInfoBase->gbCurrent[ch] = CLZ(gbMask) - 1;
 
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DeinterleaveShortBlocks
  *
  * Description: deinterleave transform coefficients in short blocks for one channel
@@ -4393,7 +4462,7 @@ int AACDequantize(int ch)
  * Return:      0 if successful, error code (< 0) if error
  *
  * Notes:       only necessary if deinterleaving not part of Huffman decoding
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DeinterleaveShortBlocks(int ch)
 {
 //    (void)aacDecInfo;
@@ -4402,7 +4471,7 @@ int DeinterleaveShortBlocks(int ch)
     return ERR_AAC_NONE;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    Get32BitVal
  *
  * Description: generate 32-bit unsigned random number
@@ -4414,7 +4483,7 @@ int DeinterleaveShortBlocks(int ch)
  * Return:      32-bit number, uniformly distributed between [0, 2^32)
  *
  * Notes:       uses simple linear congruential generator
- **************************************************************************************/
+ **********************************************************************************************************************/
 uint32_t Get32BitVal(uint32_t *last)
 {
     uint32_t r = *last;
@@ -4428,10 +4497,7 @@ uint32_t Get32BitVal(uint32_t *last)
     return r;
 }
 
-
-
-
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    InvRootR
  *
  * Description: use Newton's method to solve for x = 1/sqrt(r)
@@ -4453,7 +4519,7 @@ uint32_t Get32BitVal(uint32_t *last)
  *
  *              NUM_ITER_INVSQRT = 3, maxDiff = 1.3747e-02
  *              NUM_ITER_INVSQRT = 4, maxDiff = 3.9832e-04
- **************************************************************************************/
+ **********************************************************************************************************************/
 int InvRootR(int r)
 {
     int i, xn, t;
@@ -4479,7 +4545,7 @@ int InvRootR(int r)
     return xn;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    ScaleNoiseVector
  *
  * Description: apply scaling to vector of noise coefficients for one scalefactor band
@@ -4491,7 +4557,7 @@ int InvRootR(int r)
  * Outputs:     nVals coefficients in Q(FBITS_OUT_DQ_OFF)
  *
  * Return:      guard bit mask (OR of abs value of all noise coefs)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int ScaleNoiseVector(int *coef, int nVals, int sf)
 {
 
@@ -4567,7 +4633,7 @@ static const int pow14[4] PROGMEM = {
     return gbMask;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    GenerateNoiseVector
  *
  * Description: create vector of noise coefficients for one scalefactor band
@@ -4579,7 +4645,7 @@ static const int pow14[4] PROGMEM = {
  *              updated seed for number generator
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void GenerateNoiseVector(int *coef, int *last, int nVals)
 {
     int i;
@@ -4588,7 +4654,7 @@ void GenerateNoiseVector(int *coef, int *last, int nVals)
         coef[i] = ((int32_t)Get32BitVal((uint32_t *)last)) >> 16;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    CopyNoiseVector
  *
  * Description: copy vector of noise coefficients for one scalefactor band from L to R
@@ -4599,7 +4665,7 @@ void GenerateNoiseVector(int *coef, int *last, int nVals)
  * Outputs:     buffer of right coefficients
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void CopyNoiseVector(int *coefL, int *coefR, int nVals)
 {
     int i;
@@ -4608,7 +4674,7 @@ void CopyNoiseVector(int *coefL, int *coefR, int nVals)
         coefR[i] = coefL[i];
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PNS
  *
  * Description: apply perceptual noise substitution, if enabled (MPEG-4 only)
@@ -4619,7 +4685,7 @@ void CopyNoiseVector(int *coefL, int *coefR, int nVals)
  *              updated minimum guard bit count for this channel
  *
  * Return:      0 if successful, -1 if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int PNS(int ch)
 {
     int gp, sfb, win, width, nSamps, gb, gbMask;
@@ -4632,27 +4698,27 @@ int PNS(int ch)
     uint8_t *msMaskPtr;
     ICSInfo_t *icsInfo;
 
-    icsInfo = (ch == 1 && m_PSInfoBase.commonWin == 1) ? &(m_PSInfoBase.icsInfo[0]) : &(m_PSInfoBase.icsInfo[ch]);
+    icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
 
-    if (!m_PSInfoBase.pnsUsed[ch])
+    if (!m_PSInfoBase->pnsUsed[ch])
         return 0;
 
     if (icsInfo->winSequence == 2) {
-        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_SHORT;
     } else {
-        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_LONG;
     }
-    coef = m_PSInfoBase.coef[ch];
-    sfbCodeBook = m_PSInfoBase.sfbCodeBook[ch];
-    scaleFactors = m_PSInfoBase.scaleFactors[ch];
-    checkCorr = (m_AACDecInfo.currBlockID == AAC_ID_CPE && m_PSInfoBase.commonWin == 1 ? 1 : 0);
+    coef = m_PSInfoBase->coef[ch];
+    sfbCodeBook = m_PSInfoBase->sfbCodeBook[ch];
+    scaleFactors = m_PSInfoBase->scaleFactors[ch];
+    checkCorr = (m_AACDecInfo->currBlockID == AAC_ID_CPE && m_PSInfoBase->commonWin == 1 ? 1 : 0);
 
     gbMask = 0;
     for (gp = 0; gp < icsInfo->numWinGroup; gp++) {
         for (win = 0; win < icsInfo->winGroupLen[gp]; win++) {
-            msMaskPtr = m_PSInfoBase.msMaskBits + ((gp*icsInfo->maxSFB) >> 3);
+            msMaskPtr = m_PSInfoBase->msMaskBits + ((gp*icsInfo->maxSFB) >> 3);
             msMaskOffset = ((gp*icsInfo->maxSFB) & 0x07);
             msMask = (*msMaskPtr++) >> msMaskOffset;
 
@@ -4664,20 +4730,20 @@ int PNS(int ch)
                          * if ch 1 has PNS enabled for this SFB but it's uncorrelated (i.e. ms_used == 0),
                          *    the copied values will be overwritten when we process ch 1
                          */
-                        GenerateNoiseVector(coef, &m_PSInfoBase.pnsLastVal, width);
-                        if (checkCorr && m_PSInfoBase.sfbCodeBook[1][gp*icsInfo->maxSFB + sfb] == 13)
-                            CopyNoiseVector(coef, m_PSInfoBase.coef[1] + (coef - m_PSInfoBase.coef[0]), width);
+                        GenerateNoiseVector(coef, &m_PSInfoBase->pnsLastVal, width);
+                        if (checkCorr && m_PSInfoBase->sfbCodeBook[1][gp*icsInfo->maxSFB + sfb] == 13)
+                            CopyNoiseVector(coef, m_PSInfoBase->coef[1] + (coef - m_PSInfoBase->coef[0]), width);
                     } else {
                         /* generate new vector if no correlation between channels */
                         genNew = 1;
-                        if (checkCorr && m_PSInfoBase.sfbCodeBook[0][gp*icsInfo->maxSFB + sfb] == 13) {
-                            if ( (m_PSInfoBase.msMaskPresent == 1 && (msMask & 0x01)) || m_PSInfoBase.msMaskPresent == 2 )
+                        if (checkCorr && m_PSInfoBase->sfbCodeBook[0][gp*icsInfo->maxSFB + sfb] == 13) {
+                            if((m_PSInfoBase->msMaskPresent==1 && (msMask & 0x01)) || m_PSInfoBase->msMaskPresent == 2 )
                                 genNew = 0;
                         }
                         if (genNew)
-                            GenerateNoiseVector(coef, &m_PSInfoBase.pnsLastVal, width);
+                            GenerateNoiseVector(coef, &m_PSInfoBase->pnsLastVal, width);
                     }
-                    gbMask |= ScaleNoiseVector(coef, width, m_PSInfoBase.scaleFactors[ch][gp*icsInfo->maxSFB + sfb]);
+                    gbMask |= ScaleNoiseVector(coef, width, m_PSInfoBase->scaleFactors[ch][gp*icsInfo->maxSFB + sfb]);
                 }
                 coef += width;
 
@@ -4696,13 +4762,13 @@ int PNS(int ch)
 
     /* update guard bit count if necessary */
     gb = CLZ(gbMask) - 1;
-    if (m_PSInfoBase.gbCurrent[ch] > gb)
-        m_PSInfoBase.gbCurrent[ch] = gb;
+    if (m_PSInfoBase->gbCurrent[ch] > gb)
+        m_PSInfoBase->gbCurrent[ch] = gb;
 
     return 0;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    GetSampRateIdx
  *
  * Description: get index of given sample rate
@@ -4713,7 +4779,7 @@ int PNS(int ch)
  *
  * Return:      index of sample rate (table 1.15 in 14496-3:2001(E))
  *              -1 if sample rate not found in table
- **************************************************************************************/
+ **********************************************************************************************************************/
 int GetSampRateIdx(int sampRate)
 {
     int idx;
@@ -4726,7 +4792,7 @@ int GetSampRateIdx(int sampRate)
     return -1;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    StereoProcessGroup
  *
  * Description: apply mid-side and intensity stereo to group of transform coefficients
@@ -4747,7 +4813,7 @@ int GetSampRateIdx(int sampRate)
  *
  * Notes:       assume no guard bits in input
  *              gains 0 int bits
- **************************************************************************************/
+ **********************************************************************************************************************/
 void StereoProcessGroup(int *coefL, int *coefR, const uint16_t *sfbTab,
                               int msMaskPres, uint8_t *msMaskPtr, int msMaskOffset, int maxSFB,
                               uint8_t *cbRight, short *sfRight, int *gbCurrent)
@@ -4851,7 +4917,7 @@ static const uint32_t pow14[2][4] PROGMEM = {
     return;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    StereoProcess
  *
  * Description: apply mid-side and intensity stereo, if enabled
@@ -4862,7 +4928,7 @@ static const uint32_t pow14[2][4] PROGMEM = {
  *              updated minimum guard bit count for both channels
  *
  * Return:      0 if successful, -1 if error
- **************************************************************************************/
+ **********************************************************************************************************************/
 int StereoProcess()
 {
     ICSInfo_t *icsInfo;
@@ -4873,32 +4939,32 @@ int StereoProcess()
 
 
     /* mid-side and intensity stereo require common_window == 1 (see MPEG4 spec, Correction 2, 2004) */
-    if (m_PSInfoBase.commonWin != 1 || m_AACDecInfo.currBlockID != AAC_ID_CPE)
+    if (m_PSInfoBase->commonWin != 1 || m_AACDecInfo->currBlockID != AAC_ID_CPE)
         return 0;
 
     /* nothing to do */
-    if (!m_PSInfoBase.msMaskPresent && !m_PSInfoBase.intensityUsed[1])
+    if (!m_PSInfoBase->msMaskPresent && !m_PSInfoBase->intensityUsed[1])
         return 0;
 
-    icsInfo = &(m_PSInfoBase.icsInfo[0]);
+    icsInfo = &(m_PSInfoBase->icsInfo[0]);
     if (icsInfo->winSequence == 2) {
-        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabShort + sfBandTabShortOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_SHORT;
     } else {
-        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase.sampRateIdx];
+        sfbTab = sfBandTabLong + sfBandTabLongOffset[m_PSInfoBase->sampRateIdx];
         nSamps = NSAMPS_LONG;
     }
-    coefL = m_PSInfoBase.coef[0];
-    coefR = m_PSInfoBase.coef[1];
+    coefL = m_PSInfoBase->coef[0];
+    coefR = m_PSInfoBase->coef[1];
 
     /* do fused mid-side/intensity processing for each block (one long or eight short) */
     msMaskOffset = 0;
-    msMaskPtr = m_PSInfoBase.msMaskBits;
+    msMaskPtr = m_PSInfoBase->msMaskBits;
     for (gp = 0; gp < icsInfo->numWinGroup; gp++) {
         for (win = 0; win < icsInfo->winGroupLen[gp]; win++) {
-            StereoProcessGroup(coefL, coefR, sfbTab, m_PSInfoBase.msMaskPresent,
-                msMaskPtr, msMaskOffset, icsInfo->maxSFB, m_PSInfoBase.sfbCodeBook[1] + gp*icsInfo->maxSFB,
-                m_PSInfoBase.scaleFactors[1] + gp*icsInfo->maxSFB, m_PSInfoBase.gbCurrent);
+            StereoProcessGroup(coefL, coefR, sfbTab, m_PSInfoBase->msMaskPresent,
+                msMaskPtr, msMaskOffset, icsInfo->maxSFB, m_PSInfoBase->sfbCodeBook[1] + gp*icsInfo->maxSFB,
+                m_PSInfoBase->scaleFactors[1] + gp*icsInfo->maxSFB, m_PSInfoBase->gbCurrent);
             coefL += nSamps;
             coefR += nSamps;
         }
@@ -4907,16 +4973,13 @@ int StereoProcess()
         msMaskOffset = (msMaskOffset + icsInfo->maxSFB) & 0x07;
     }
 
-    ASSERT(coefL == m_PSInfoBase.coef[0] + 1024);
-    ASSERT(coefR == m_PSInfoBase.coef[1] + 1024);
+    ASSERT(coefL == m_PSInfoBase->coef[0] + 1024);
+    ASSERT(coefR == m_PSInfoBase->coef[1] + 1024);
 
     return 0;
 }
 
-
-
-
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    RatioPowInv
  *
  * Description: use Taylor (MacLaurin) series expansion to calculate (a/b) ^ (1/c)
@@ -4926,7 +4989,7 @@ int StereoProcess()
  * Outputs:     none
  *
  * Return:      y = Q24, range ~= [0.015625, 64]
- **************************************************************************************/
+ **********************************************************************************************************************/
 int RatioPowInv(int a, int b, int c)
 {
     int lna, lnb, i, p, t, y;
@@ -4952,7 +5015,7 @@ int RatioPowInv(int a, int b, int c)
     return y;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    SqrtFix
  *
  * Description: use binary search to calculate sqrt(q)
@@ -4967,7 +5030,7 @@ int RatioPowInv(int a, int b, int c)
  * Notes:       absolute precision varies depending on fBitsIn
  *              normalizes input to range [0x200000000, 0x7fffffff] and takes
  *                floor(sqrt(input)), and sets fBitsOut appropriately
- **************************************************************************************/
+ **********************************************************************************************************************/
 int SqrtFix(int q, int fBitsIn, int *fBitsOut)
 {
     int z, lo, hi, mid;
@@ -5007,7 +5070,7 @@ int SqrtFix(int q, int fBitsIn, int *fBitsOut)
     return lo;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    InvRNormalized
  *
  * Description: use Newton's method to solve for x = 1/r
@@ -5032,7 +5095,7 @@ int SqrtFix(int q, int fBitsIn, int *fBitsOut)
  *              NUM_ITER_IRN = 3, maxDiff = 3.9063e-03 (precision of about 8 bits)
  *              NUM_ITER_IRN = 4, maxDiff = 1.5288e-05 (precision of about 16 bits)
  *              NUM_ITER_IRN = 5, maxDiff = 3.0034e-08 (precision of about 24 bits)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int InvRNormalized(int r)
 {
     int i, xn, t;
@@ -5055,7 +5118,7 @@ int InvRNormalized(int r)
 
 
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    BitReverse32
  *
  * Description: Ken's fast in-place bit reverse
@@ -5065,7 +5128,7 @@ int InvRNormalized(int r)
  * Outputs:     bit-reversed samples in same buffer
  *
  * Return:      none
-**************************************************************************************/
+***********************************************************************************************************************/
 void BitReverse32(int *inout)
 {
     int t;
@@ -5107,7 +5170,7 @@ void BitReverse32(int *inout)
 
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R8FirstPass32
  *
  * Description: radix-8 trivial pass for decimation-in-time FFT (log2(N) = 5)
@@ -5124,7 +5187,7 @@ void BitReverse32(int *inout)
  *              see scaling comments in fft.c for base AAC
  *              should compile with no stack spills on ARM (verify compiled output)
  *              current instruction count (per pass): 16 LDR, 16 STR, 4 SMULL, 61 ALU
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R8FirstPass32(int *r0)
 {
     int r1, r2, r3, r4, r5, r6, r7;
@@ -5257,7 +5320,7 @@ void R8FirstPass32(int *r0)
     } while (r1 != 0);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    R4Core32
  *
  * Description: radix-4 pass for 32-point decimation-in-time FFT
@@ -5274,7 +5337,7 @@ void R8FirstPass32(int *r0)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  *              should compile with no stack spills on ARM (verify compiled output)
  *              current instruction count (per pass): 16 LDR, 16 STR, 4 SMULL, 61 ALU
- **************************************************************************************/
+ **********************************************************************************************************************/
 void R4Core32(int *r0)
 {
     int r2, r3, r4, r5, r6, r7;
@@ -5351,7 +5414,7 @@ void R4Core32(int *r0)
     } while (r10 != 0);
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    FFT32C
  *
  * Description: Ken's very fast in-place radix-4 decimation-in-time FFT
@@ -5366,7 +5429,7 @@ void R4Core32(int *r0)
  *              guard bits out = guard bits in - 2
  *              (guard bit analysis includes assumptions about steps immediately
  *               before and after, i.e. PreMul and PostMul for DCT)
- **************************************************************************************/
+ **********************************************************************************************************************/
 void FFT32C(int *x)
 {
     /* decimation in time */
@@ -5377,7 +5440,7 @@ void FFT32C(int *x)
     R4Core32(x);        /* gain 2 int bits, lose 0 GB (making assumptions about input) */
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    CVKernel1
  *
  * Description: kernel of covariance matrix calculation for p01, p11, p12, p22
@@ -5392,7 +5455,7 @@ void FFT32C(int *x)
  *
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrcov.s when building for ARM!
- **************************************************************************************/
+ **********************************************************************************************************************/
 void CVKernel1(int *XBuf, int *accBuf)
 {
     U64 p01re, p01im, p12re, p12im, p11re, p22re;
@@ -5451,7 +5514,7 @@ void CVKernel1(int *XBuf, int *accBuf)
     accBuf[10] = p22re.r.lo32;    accBuf[11] = p22re.r.hi32;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    CVKernel2
  *
  * Description: kernel of covariance matrix calculation for p02
@@ -5465,7 +5528,7 @@ void CVKernel1(int *XBuf, int *accBuf)
  *
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrcov.s when building for ARM!
- **************************************************************************************/
+ **********************************************************************************************************************/
 void CVKernel2(int *XBuf, int *accBuf)
 {
     U64 p02re, p02im;
@@ -5503,7 +5566,7 @@ void CVKernel2(int *XBuf, int *accBuf)
     accBuf[3] = p02im.r.hi32;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    SetBitstreamPointer
  *
  * Description: initialize bitstream reader
@@ -5514,7 +5577,7 @@ void CVKernel2(int *XBuf, int *accBuf)
  * Outputs:     initialized bitstream info struct
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void SetBitstreamPointer(int nBytes, uint8_t *buf)
 {
     /* init bitstream */
@@ -5524,7 +5587,7 @@ void SetBitstreamPointer(int nBytes, uint8_t *buf)
 	m_aac_BitStreamInfo.nBytes = nBytes;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    RefillBitstreamCache
  *
  * Description: read new data from bitstream buffer into 32-bit cache
@@ -5538,7 +5601,7 @@ void SetBitstreamPointer(int nBytes, uint8_t *buf)
  * Notes:       only call when iCache is completely drained (resets bitOffset to 0)
  *              always loads 4 new bytes except when bsi->nBytes < 4 (end of buffer)
  *              stores data as big-endian in cache, regardless of machine endian-ness
- **************************************************************************************/
+ **********************************************************************************************************************/
 //Optimized for REV16, REV32 (FB)
 inline void RefillBitstreamCache()
 {
@@ -5564,7 +5627,7 @@ inline void RefillBitstreamCache()
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    GetBits
  *
  * Description: get bits from bitstream, advance bitstream pointer
@@ -5579,16 +5642,16 @@ inline void RefillBitstreamCache()
  * Notes:       nBits must be in range [0, 31], nBits outside this range masked by 0x1f
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
- **************************************************************************************/
+ **********************************************************************************************************************/
 uint32_t GetBits(int nBits)
 {
     uint32_t data, lowBits;
 
-    nBits &= 0x1f;                            /* nBits mod 32 to avoid unpredictable results like >> by negative amount */
+    nBits &= 0x1f;                          /* nBits mod 32 to avoid unpredictable results like >> by negative amount */
     data = m_aac_BitStreamInfo.iCache >> (31 - nBits);        /* unsigned >> so zero-extend */
-    data >>= 1;                                /* do as >> 31, >> 1 so that nBits = 0 works okay (returns 0) */
+    data >>= 1;                                         /* do as >> 31, >> 1 so that nBits = 0 works okay (returns 0) */
     m_aac_BitStreamInfo.iCache <<= nBits;                    /* left-justify cache */
-    m_aac_BitStreamInfo.cachedBits -= nBits;                /* how many bits have we drawn from the cache so far */
+    m_aac_BitStreamInfo.cachedBits -= nBits;                 /* how many bits have we drawn from the cache so far */
 
     /* if we cross an int boundary, refill the cache */
     if (m_aac_BitStreamInfo.cachedBits < 0) {
@@ -5603,7 +5666,7 @@ uint32_t GetBits(int nBits)
     return data;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    GetBitsNoAdvance
  *
  * Description: get bits from bitstream, do not advance bitstream pointer
@@ -5618,16 +5681,16 @@ uint32_t GetBits(int nBits)
  * Notes:       nBits must be in range [0, 31], nBits outside this range masked by 0x1f
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
- **************************************************************************************/
+ **********************************************************************************************************************/
 uint32_t GetBitsNoAdvance(int nBits)
 {
     uint8_t *buf;
     uint32_t data, iCache;
     int32_t lowBits;
 
-    nBits &= 0x1f;                            /* nBits mod 32 to avoid unpredictable results like >> by negative amount */
+    nBits &= 0x1f;                          /* nBits mod 32 to avoid unpredictable results like >> by negative amount */
     data = m_aac_BitStreamInfo.iCache >> (31 - nBits);        /* unsigned >> so zero-extend */
-    data >>= 1;                                /* do as >> 31, >> 1 so that nBits = 0 works okay (returns 0) */
+    data >>= 1;                                         /* do as >> 31, >> 1 so that nBits = 0 works okay (returns 0) */
     lowBits = nBits - m_aac_BitStreamInfo.cachedBits;        /* how many bits do we have left to read */
 
     /* if we cross an int boundary, read next bytes in buffer */
@@ -5647,7 +5710,7 @@ uint32_t GetBitsNoAdvance(int nBits)
     return data;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    AdvanceBitstream
  *
  * Description: move bitstream pointer ahead
@@ -5659,7 +5722,7 @@ uint32_t GetBitsNoAdvance(int nBits)
  * Return:      none
  *
  * Notes:       generally used following GetBitsNoAdvance(bsi, maxBits)
- **************************************************************************************/
+ **********************************************************************************************************************/
 void AdvanceBitstream(int nBits)
 {
     nBits &= 0x1f;
@@ -5671,7 +5734,7 @@ void AdvanceBitstream(int nBits)
     m_aac_BitStreamInfo.cachedBits -= nBits;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    CalcBitsUsed
  *
  * Description: calculate how many bits have been read from bitstream
@@ -5682,7 +5745,7 @@ void AdvanceBitstream(int nBits)
  * Outputs:     none
  *
  * Return:      number of bits read from bitstream, as offset from startBuf:startOffset
- **************************************************************************************/
+ **********************************************************************************************************************/
 int CalcBitsUsed(uint8_t *startBuf, int startOffset)
 {
     int bitsUsed;
@@ -5694,7 +5757,7 @@ int CalcBitsUsed(uint8_t *startBuf, int startOffset)
     return bitsUsed;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    ByteAlignBitstream
  *
  * Description: bump bitstream pointer to start of next byte
@@ -5706,7 +5769,7 @@ int CalcBitsUsed(uint8_t *startBuf, int startOffset)
  * Return:      none
  *
  * Notes:       if bitstream is already byte-aligned, do nothing
- **************************************************************************************/
+ **********************************************************************************************************************/
 void ByteAlignBitstream()
 {
     int offset;

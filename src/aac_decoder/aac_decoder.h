@@ -2,8 +2,6 @@
 #pragma once
 #pragma GCC optimize ("O3")
 
-#pragma GCC optimize ("O3")
-
 #include "Arduino.h"
 
 #define ASSERT(x) /* do nothing */
@@ -116,7 +114,7 @@ typedef struct _PulseInfo_t {
     uint8_t numPulse;
     uint8_t startSFB;
     uint8_t offset[4]; // [MAX_PULSES]
-    uint8_t amp[4]; // [MAX_PULSES]
+    uint8_t amp[4];    // [MAX_PULSES]
 } PulseInfo_t;
 
 typedef struct _TNSInfo_t {
@@ -132,7 +130,7 @@ typedef struct _TNSInfo_t {
 typedef struct _GainControlInfo_t {
     uint8_t gainControlDataPresent;
     uint8_t maxBand;
-    uint8_t adjNum[3][8]; // [MAX_GAIN_BANDS][MAX_GAIN_WIN]
+    uint8_t adjNum[3][8];      // [MAX_GAIN_BANDS][MAX_GAIN_WIN]
     uint8_t alevCode[3][8][7]; // [MAX_GAIN_BANDS][MAX_GAIN_WIN][MAX_GAIN_ADJUST]
     uint8_t alocCode[3][8][7]; // [MAX_GAIN_BANDS][MAX_GAIN_WIN][MAX_GAIN_ADJUST]
 } GainControlInfo_t;
@@ -148,7 +146,7 @@ typedef struct _ICSInfo_t {
     uint8_t predictorResetGroupNum;
     uint8_t predictionUsed[41]; // [MAX_PRED_SFB]
     uint8_t numWinGroup;
-    uint8_t winGroupLen[8]; // [MAX_WIN_GROUPS]
+    uint8_t winGroupLen[8];     // [MAX_WIN_GROUPS]
 } ICSInfo_t;
 
 typedef struct _ADTSHeader_t {
@@ -165,11 +163,11 @@ typedef struct _ADTSHeader_t {
     /* variable */
     uint8_t copyBit;                        /* 1 bit of the 72-bit copyright ID (transmitted as 1 bit per frame) */
     uint8_t copyStart;                      /* 1 = this bit starts the 72-bit ID, 0 = it does not */
-    int           frameLength;                    /* length of frame */
-    int           bufferFull;                     /* number of 32-bit words left in enc buffer, 0x7FF = VBR */
+    int     frameLength;                    /* length of frame */
+    int     bufferFull;                     /* number of 32-bit words left in enc buffer, 0x7FF = VBR */
     uint8_t numRawDataBlocks;               /* number of raw data blocks in frame */
     /* CRC */
-    int           crcCheckWord;                   /* 16-bit CRC check word (present if protectBit == 0) */
+    int     crcCheckWord;                   /* 16-bit CRC check word (present if protectBit == 0) */
 } ADTSHeader_t;
 
 typedef struct _ADIFHeader_t {
@@ -177,57 +175,57 @@ typedef struct _ADIFHeader_t {
     uint8_t origCopy;                       /* 0 = copy, 1 = original */
     uint8_t home;                           /* ignore */
     uint8_t bsType;                         /* bitstream type: 0 = CBR, 1 = VBR */
-    int           bitRate;                        /* bitRate: CBR = bits/sec, VBR = peak bits/frame, 0 = unknown */
+    int     bitRate;                        /* bitRate: CBR = bits/sec, VBR = peak bits/frame, 0 = unknown */
     uint8_t numPCE;                         /* number of program config elements (max = 16) */
-    int           bufferFull;                     /* bits left in bit reservoir */
-    uint8_t copyID[9];       /* [ADIF_COPYID_SIZE] optional 72-bit copyright ID */
+    int     bufferFull;                     /* bits left in bit reservoir */
+    uint8_t copyID[9];                      /* [ADIF_COPYID_SIZE] optional 72-bit copyright ID */
 } ADIFHeader_t;
 
 /* sizeof(ProgConfigElement_t) = 82 bytes (if KEEP_PCE_COMMENTS not defined) */
 typedef struct _ProgConfigElement_t {
-    uint8_t elemInstTag;                    /* element instance tag */
-    uint8_t profile;                        /* 0 = main, 1 = LC, 2 = SSR, 3 = reserved */
-    uint8_t sampRateIdx;                    /* sample rate index range = [0, 11] */
-    uint8_t numFCE;                         /* number of front channel elements (max = 15) */
-    uint8_t numSCE;                         /* number of side channel elements (max = 15) */
-    uint8_t numBCE;                         /* number of back channel elements (max = 15) */
-    uint8_t numLCE;                         /* number of LFE channel elements (max = 3) */
-    uint8_t numADE;                         /* number of associated data elements (max = 7) */
-    uint8_t numCCE;                         /* number of valid channel coupling elements (max = 15) */
-    uint8_t monoMixdown;                    /* mono mixdown: bit 4 = present flag, bits 3-0 = element number */
-    uint8_t stereoMixdown;                  /* stereo mixdown: bit 4 = present flag, bits 3-0 = element number */
-    uint8_t matrixMixdown;                  /* matrix mixdown: bit 4 = present flag, bit 3 = unused,bits 2-1 = index, bit 0 = pseudo-surround enable */
-    uint8_t fce[15];               /* [MAX_NUM_FCE] front element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
-    uint8_t sce[15];               /* [MAX_NUM_SCE] side element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
-    uint8_t bce[15];               /* [MAX_NUM_BCE] back element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
-    uint8_t lce[3];               /* [MAX_NUM_LCE] instance tag for LFE elements */
-    uint8_t ade[7];               /* [MAX_NUM_ADE] instance tag for ADE elements */
-    uint8_t cce[15];               /* [MAX_NUM_BCE] channel coupling elements: bit 4 = switching flag, bits 3-0 = inst tag */
+    uint8_t elemInstTag;   /* element instance tag */
+    uint8_t profile;       /* 0 = main, 1 = LC, 2 = SSR, 3 = reserved */
+    uint8_t sampRateIdx;   /* sample rate index range = [0, 11] */
+    uint8_t numFCE;        /* number of front channel elements (max = 15) */
+    uint8_t numSCE;        /* number of side channel elements (max = 15) */
+    uint8_t numBCE;        /* number of back channel elements (max = 15) */
+    uint8_t numLCE;        /* number of LFE channel elements (max = 3) */
+    uint8_t numADE;        /* number of associated data elements (max = 7) */
+    uint8_t numCCE;        /* number of valid channel coupling elements (max = 15) */
+    uint8_t monoMixdown;   /* mono mixdown: bit 4 = present flag, bits 3-0 = element number */
+    uint8_t stereoMixdown; /* stereo mixdown: bit 4 = present flag, bits 3-0 = element number */
+    uint8_t matrixMixdown; /* bit 4 = present flag, bit 3 = unused,bits 2-1 = index, bit 0 = pseudo-surround enable */
+    uint8_t fce[15];       /* [MAX_NUM_FCE] front element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
+    uint8_t sce[15];       /* [MAX_NUM_SCE] side element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
+    uint8_t bce[15];       /* [MAX_NUM_BCE] back element channel pair: bit 4 = SCE/CPE flag, bits 3-0 = inst tag */
+    uint8_t lce[3];        /* [MAX_NUM_LCE] instance tag for LFE elements */
+    uint8_t ade[7];        /* [MAX_NUM_ADE] instance tag for ADE elements */
+    uint8_t cce[15];       /* [MAX_NUM_BCE] channel coupling elements: bit 4 = switching flag, bits 3-0 = inst tag */
 } ProgConfigElement_t;
 
 /* state info struct for baseline (MPEG-4 LC) decoding */
 typedef struct _PSInfoBase_t {
     int                   dataCount;
-    uint8_t         dataBuf[510]; // [DATA_BUF_SIZE]
+    uint8_t               dataBuf[510]; // [DATA_BUF_SIZE]
     /* state information which is the same throughout whole frame */
     int                   nChans;
     int                   useImpChanMap;
     int                   sampRateIdx;
     /* state information which can be overwritten by subsequent elements within frame */
-    ICSInfo_t               icsInfo[2]; // [MAX_NCHANS_ELEM]
+    ICSInfo_t             icsInfo[2]; // [MAX_NCHANS_ELEM]
     int                   commonWin;
     short                 scaleFactors[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
-    uint8_t         sfbCodeBook[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
+    uint8_t               sfbCodeBook[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
     int                   msMaskPresent;
-    uint8_t         msMaskBits[(15 * 8 + 7) >> 3]; // [MAX_MS_MASK_BYTES]
+    uint8_t               msMaskBits[(15 * 8 + 7) >> 3]; // [MAX_MS_MASK_BYTES]
     int                   pnsUsed[2]; // [MAX_NCHANS_ELEM]
     int                   pnsLastVal;
     int                   intensityUsed[2]; // [MAX_NCHANS_ELEM]
-//    PulseInfo_t             pulseInfo[2]; // [MAX_NCHANS_ELEM]
-    TNSInfo_t               tnsInfo[2]; // [MAX_NCHANS_ELEM]
+//    PulseInfo_t           pulseInfo[2]; // [MAX_NCHANS_ELEM]
+    TNSInfo_t             tnsInfo[2]; // [MAX_NCHANS_ELEM]
     int                   tnsLPCBuf[20]; // [MAX_TNS_ORDER]
     int                   tnsWorkBuf[20]; //[MAX_TNS_ORDER]
-    GainControlInfo_t       gainControlInfo[2]; // [MAX_NCHANS_ELEM]
+    GainControlInfo_t     gainControlInfo[2]; // [MAX_NCHANS_ELEM]
     int                   gbCurrent[2];  // [MAX_NCHANS_ELEM]
     int                   coef[2][1024]; // [MAX_NCHANS_ELEM][AAC_MAX_NSAMPS]
     /* state information which must be saved for each element and used in next frame */
@@ -235,7 +233,8 @@ typedef struct _PSInfoBase_t {
     int                   prevWinShape[2]; // [AAC_MAX_NCHANS]
 } PSInfoBase_t;
 
-
+bool AACDecoder_AllocateBuffers(void);
+void AACDecoder_FreeBuffers(void);
 int AACFindSyncWord(uint8_t *buf, int nBytes);
 void AACGetLastFrameInfo(AACFrameInfo_t *aacFrameInfo);
 int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
@@ -304,7 +303,7 @@ void CopyNoiseVector(int *coefL, int *coefR, int nVals);
 int PNS(int ch);
 int GetSampRateIdx(int sampRate);
 void StereoProcessGroup(int *coefL, int *coefR, const uint16_t *sfbTab, int msMaskPres, uint8_t *msMaskPtr,
-        int msMaskOffset, int maxSFB, uint8_t *cbRight, short *sfRight, int *gbCurrent);
+int msMaskOffset, int maxSFB, uint8_t *cbRight, short *sfRight, int *gbCurrent);
 int StereoProcess();
 int RatioPowInv(int a, int b, int c);
 int SqrtFix(int q, int fBitsIn, int *fBitsOut);
