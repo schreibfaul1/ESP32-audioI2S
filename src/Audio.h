@@ -100,6 +100,7 @@ private:
     bool setChannels(int channels);
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
+    void playI2Sremains();
     int16_t Gain(int16_t s);
     bool fill_InputBuf();
     void showstreamtitle(const char *ml, bool full);
@@ -119,9 +120,9 @@ private:
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
                                      20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
 
-    File              audiofile;
-    WiFiClient        client;
-    WiFiClientSecure  clientsecure;
+    File              audiofile;    // @suppress("Abstract class cannot be instantiated")
+    WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
+    WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     char            chbuf[256];
     char            path[256];
     int             m_id3Size=0;                    // length id3 tag
@@ -137,7 +138,7 @@ private:
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
     uint8_t         m_inBuff[1600];                 // inputBuffer
     uint16_t        m_inBuffwindex=0;               // write index
-    uint16_t        m_inbuffrindex=0;               // read index
+    uint16_t        m_inBuffrindex=0;               // read index
     const uint16_t  m_inBuffsize=sizeof(m_inBuff);  // size of inputBuffer
     uint8_t         m_rev=0;                        // revision
     uint8_t         m_BCLK=0;                       // Bit Clock
