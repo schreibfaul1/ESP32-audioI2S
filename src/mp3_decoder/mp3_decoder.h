@@ -456,18 +456,20 @@ const uint32_t csa[8][2] PROGMEM = {
  */
 
 // prototypes
-void EraseBuffers(void);
-int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize);
+bool MP3Decoder_AllocateBuffers(void);
+void MP3Decoder_FreeBuffers();
+int  MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize);
 void MP3GetLastFrameInfo();
-int MP3GetNextFrameInfo(unsigned char *buf);
-int MP3FindSyncWord(unsigned char *buf, int nBytes);
-int MP3GetSampRate();
-int MP3GetChannels();
-int MP3GetBitsPerSample();
-int MP3GetBitrate();
-int MP3GetOutputSamps();
+int  MP3GetNextFrameInfo(unsigned char *buf);
+int  MP3FindSyncWord(unsigned char *buf, int nBytes);
+int  MP3GetSampRate();
+int  MP3GetChannels();
+int  MP3GetBitsPerSample();
+int  MP3GetBitrate();
+int  MP3GetOutputSamps();
 
 //internally used
+void MP3Decoder_ClearBuffer(void);
 void PolyphaseMono(short *pcm, int *vbuf, const uint32_t *coefBase);
 void PolyphaseStereo(short *pcm, int *vbuf, const uint32_t *coefBase);
 void SetBitstreamPointer(BitStreamInfo_t *bsi, int nBytes, unsigned char *buf);

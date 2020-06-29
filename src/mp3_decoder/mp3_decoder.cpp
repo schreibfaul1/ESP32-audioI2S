@@ -3,39 +3,39 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 04.11.2018
+ *  Updated on: 27.06.2020
  */
 #include "mp3_decoder.h"
 
 const uint8_t  m_SYNCWORDH              =0xff;
 const uint8_t  m_SYNCWORDL              =0xf0;
-const uint8_t  m_DQ_FRACBITS_OUT        =25;    // number of fraction bits in output of dequant
-const uint8_t  m_CSHIFT                 =12;    // coefficients have 12 leading sign bits for early-terminating mulitplies
+const uint8_t  m_DQ_FRACBITS_OUT        =25;  // number of fraction bits in output of dequant
+const uint8_t  m_CSHIFT                 =12;  // coefficients have 12 leading sign bits for early-terminating mulitplies
 const uint8_t  m_SIBYTES_MPEG1_MONO     =17;
 const uint8_t  m_SIBYTES_MPEG1_STEREO   =32;
 const uint8_t  m_SIBYTES_MPEG2_MONO     =9;
 const uint8_t  m_SIBYTES_MPEG2_STEREO   =17;
-const uint8_t  m_IMDCT_SCALE            =2;     // additional scaling (by sqrt(2)) for fast IMDCT36
+const uint8_t  m_IMDCT_SCALE            =2;   // additional scaling (by sqrt(2)) for fast IMDCT36
 const uint8_t  m_NGRANS_MPEG1           =2;
 const uint8_t  m_NGRANS_MPEG2           =1;
 const uint32_t m_SQRTHALF               =0x5a82799a;  // sqrt(0.5) in Q31 format
 
 
-MP3FrameInfo_t m_MP3FrameInfo;
+MP3FrameInfo_t *m_MP3FrameInfo;
 SFBandTable_t m_SFBandTable;
 StereoMode_t m_sMode;  /* mono/stereo mode */
 MPEGVersion_t m_MPEGVersion;  /* version ID */
-FrameHeader_t m_FrameHeader;
+FrameHeader_t *m_FrameHeader;
 SideInfoSub_t m_SideInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
-SideInfo_t m_SideInfo;
+SideInfo_t *m_SideInfo;
 CriticalBandInfo_t m_CriticalBandInfo[m_MAX_NCHAN];  /* filled in dequantizer, used in joint stereo reconstruction */
-DequantInfo_t m_DequantInfo;
-HuffmanInfo_t m_HuffmanInfo;
-IMDCTInfo_t m_IMDCTInfo;
+DequantInfo_t *m_DequantInfo;
+HuffmanInfo_t *m_HuffmanInfo;
+IMDCTInfo_t *m_IMDCTInfo;
 ScaleFactorInfoSub_t m_ScaleFactorInfoSub[m_MAX_NGRAN][m_MAX_NCHAN];
-ScaleFactorJS_t m_ScaleFactorJS;
-SubbandInfo_t m_SubbandInfo;
-MP3DecInfo_t m_MP3DecInfo;
+ScaleFactorJS_t *m_ScaleFactorJS;
+SubbandInfo_t *m_SubbandInfo;
+MP3DecInfo_t *m_MP3DecInfo;
 
 const unsigned short huffTable[4242] PROGMEM = {
     /* huffTable01[9] */
@@ -619,8 +619,6 @@ const int ISFMpeg2[2][2][16] PROGMEM = {
         0x05a82799, 0x03ffffff, 0x02d413cc, 0x01ffffff, 0x016a09e6, 0x00ffffff, 0x00b504f3, 0x007fffff }   }
 };
 
-
-
 const uint32_t m_COS0_0 = 0x4013c251;  /* Q31 */
 const uint32_t m_COS0_1 = 0x40b345bd;  /* Q31 */
 const uint32_t m_COS0_2 = 0x41fa2d6d;  /* Q31 */
@@ -674,13 +672,9 @@ const uint32_t m_dcttab[48] PROGMEM = { // faster in ROM
     -m_COS2_1, -m_COS2_2,  m_COS3_1,   /* 31, 31, 30 */
 };
 
-
-
-
-
-/************************************************************************************************************************************
+/***********************************************************************************************************************
  * B I T S T R E A M
- ***********************************************************************************************************************************/
+ **********************************************************************************************************************/
 
 void SetBitstreamPointer(BitStreamInfo_t *bsi, int nBytes, unsigned char *buf) {
     /* init bitstream */
@@ -689,7 +683,7 @@ void SetBitstreamPointer(BitStreamInfo_t *bsi, int nBytes, unsigned char *buf) {
     bsi->cachedBits = 0; /* i.e. zero bits in cache */
     bsi->nBytes = nBytes;
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 void RefillBitstreamCache(BitStreamInfo_t *bsi) {
     int nBytes = bsi->nBytes;
     /* optimize for common case, independent of machine endian-ness */
@@ -711,7 +705,7 @@ void RefillBitstreamCache(BitStreamInfo_t *bsi) {
         bsi->nBytes = 0;
     }
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 unsigned int GetBits(BitStreamInfo_t *bsi, int nBits) {
     unsigned int data, lowBits;
 
@@ -729,7 +723,7 @@ unsigned int GetBits(BitStreamInfo_t *bsi, int nBits) {
     }
     return data;
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 int CalcBitsUsed(BitStreamInfo_t *bsi, unsigned char *startBuf, int startOffset){
     int bitsUsed;
     bitsUsed = (bsi->bytePtr - startBuf) * 8;
@@ -737,11 +731,11 @@ int CalcBitsUsed(BitStreamInfo_t *bsi, unsigned char *startBuf, int startOffset)
     bitsUsed -= startOffset;
     return bitsUsed;
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 int CheckPadBit(){
-    return (m_FrameHeader.paddingBit ? 1 : 0);
+    return (m_FrameHeader->paddingBit ? 1 : 0);
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 int UnpackFrameHeader(unsigned char *buf){
     int verIdx;
     /* validate pointers and sync word */
@@ -749,51 +743,52 @@ int UnpackFrameHeader(unsigned char *buf){
     /* read header fields - use bitmasks instead of GetBits() for speed, since format never varies */
     verIdx = (buf[1] >> 3) & 0x03;
     m_MPEGVersion = (MPEGVersion_t) (verIdx == 0 ? MPEG25 : ((verIdx & 0x01) ? MPEG1 : MPEG2));
-    m_FrameHeader.layer = 4 - ((buf[1] >> 1) & 0x03); /* easy mapping of index to layer number, 4 = error */
-    m_FrameHeader.crc = 1 - ((buf[1] >> 0) & 0x01);
-    m_FrameHeader.brIdx = (buf[2] >> 4) & 0x0f;
-    m_FrameHeader.srIdx = (buf[2] >> 2) & 0x03;
-    m_FrameHeader.paddingBit = (buf[2] >> 1) & 0x01;
-    m_FrameHeader.privateBit = (buf[2] >> 0) & 0x01;
+    m_FrameHeader->layer = 4 - ((buf[1] >> 1) & 0x03); /* easy mapping of index to layer number, 4 = error */
+    m_FrameHeader->crc = 1 - ((buf[1] >> 0) & 0x01);
+    m_FrameHeader->brIdx = (buf[2] >> 4) & 0x0f;
+    m_FrameHeader->srIdx = (buf[2] >> 2) & 0x03;
+    m_FrameHeader->paddingBit = (buf[2] >> 1) & 0x01;
+    m_FrameHeader->privateBit = (buf[2] >> 0) & 0x01;
     m_sMode = (StereoMode_t) ((buf[3] >> 6) & 0x03); /* maps to correct enum (see definition) */
-    m_FrameHeader.modeExt = (buf[3] >> 4) & 0x03;
-    m_FrameHeader.copyFlag = (buf[3] >> 3) & 0x01;
-    m_FrameHeader.origFlag = (buf[3] >> 2) & 0x01;
-    m_FrameHeader.emphasis = (buf[3] >> 0) & 0x03;
+    m_FrameHeader->modeExt = (buf[3] >> 4) & 0x03;
+    m_FrameHeader->copyFlag = (buf[3] >> 3) & 0x01;
+    m_FrameHeader->origFlag = (buf[3] >> 2) & 0x01;
+    m_FrameHeader->emphasis = (buf[3] >> 0) & 0x03;
     /* check parameters to avoid indexing tables with bad values */
-    if (m_FrameHeader.srIdx == 3 || m_FrameHeader.layer == 4 || m_FrameHeader.brIdx == 15) return -1;
-    m_SFBandTable = sfBandTable[m_MPEGVersion][m_FrameHeader.srIdx]; /* for readability (we reference sfBandTable many times in decoder) */
+    if (m_FrameHeader->srIdx == 3 || m_FrameHeader->layer == 4 || m_FrameHeader->brIdx == 15) return -1;
+    /* for readability (we reference sfBandTable many times in decoder) */
+    m_SFBandTable = sfBandTable[m_MPEGVersion][m_FrameHeader->srIdx];
     if (m_sMode != Joint) /* just to be safe (dequant, stproc check fh->modeExt) */
-        m_FrameHeader.modeExt = 0;
+        m_FrameHeader->modeExt = 0;
     /* init user-accessible data */
-    m_MP3DecInfo.nChans = (m_sMode == Mono ? 1 : 2);
-    m_MP3DecInfo.samprate = samplerateTab[m_MPEGVersion][m_FrameHeader.srIdx];
-    m_MP3DecInfo.nGrans = (m_MPEGVersion == MPEG1 ? m_NGRANS_MPEG1 : m_NGRANS_MPEG2);
-    m_MP3DecInfo.nGranSamps = ((int) samplesPerFrameTab[m_MPEGVersion][m_FrameHeader.layer - 1])/m_MP3DecInfo.nGrans;
-    m_MP3DecInfo.layer = m_FrameHeader.layer;
+    m_MP3DecInfo->nChans = (m_sMode == Mono ? 1 : 2);
+    m_MP3DecInfo->samprate = samplerateTab[m_MPEGVersion][m_FrameHeader->srIdx];
+    m_MP3DecInfo->nGrans = (m_MPEGVersion == MPEG1 ? m_NGRANS_MPEG1 : m_NGRANS_MPEG2);
+    m_MP3DecInfo->nGranSamps = ((int) samplesPerFrameTab[m_MPEGVersion][m_FrameHeader->layer - 1])/m_MP3DecInfo->nGrans;
+    m_MP3DecInfo->layer = m_FrameHeader->layer;
 
     /* get bitrate and nSlots from table, unless brIdx == 0 (free mode) in which case caller must figure it out himself
      * question - do we want to overwrite mp3DecInfo->bitrate with 0 each time if it's free mode, and
      *  copy the pre-calculated actual free bitrate into it in mp3dec.c (according to the spec,
      *  this shouldn't be necessary, since it should be either all frames free or none free)
      */
-    if (m_FrameHeader.brIdx) {
-        m_MP3DecInfo.bitrate=((int) bitrateTab[m_MPEGVersion][m_FrameHeader.layer - 1][m_FrameHeader.brIdx]) * 1000;
+    if (m_FrameHeader->brIdx) {
+        m_MP3DecInfo->bitrate=((int) bitrateTab[m_MPEGVersion][m_FrameHeader->layer - 1][m_FrameHeader->brIdx]) * 1000;
         /* nSlots = total frame bytes (from table) - sideInfo bytes - header - CRC (if present) + pad (if present) */
-        m_MP3DecInfo.nSlots= (int) slotTab[m_MPEGVersion][m_FrameHeader.srIdx][m_FrameHeader.brIdx]
+        m_MP3DecInfo->nSlots= (int) slotTab[m_MPEGVersion][m_FrameHeader->srIdx][m_FrameHeader->brIdx]
                 - (int) sideBytesTab[m_MPEGVersion][(m_sMode == Mono ? 0 : 1)] - 4
-                - (m_FrameHeader.crc ? 2 : 0) + (m_FrameHeader.paddingBit ? 1 : 0);
+                - (m_FrameHeader->crc ? 2 : 0) + (m_FrameHeader->paddingBit ? 1 : 0);
     }
     /* load crc word, if enabled, and return length of frame header (in bytes) */
-    if (m_FrameHeader.crc) {
-        m_FrameHeader.CRCWord = ((int) buf[4] << 8 | (int) buf[5] << 0);
+    if (m_FrameHeader->crc) {
+        m_FrameHeader->CRCWord = ((int) buf[4] << 8 | (int) buf[5] << 0);
         return 6;
     } else {
-        m_FrameHeader.CRCWord = 0;
+        m_FrameHeader->CRCWord = 0;
         return 4;
     }
 }
-//-----------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 int UnpackSideInfo( unsigned char *buf) {
     int gr, ch, bd, nBytes;
     BitStreamInfo_t bitStreamInfo, *bsi;
@@ -805,19 +800,19 @@ int UnpackSideInfo( unsigned char *buf) {
         /* MPEG 1 */
         nBytes=(m_sMode == Mono ? m_SIBYTES_MPEG1_MONO : m_SIBYTES_MPEG1_STEREO);
         SetBitstreamPointer(bsi, nBytes, buf);
-        m_SideInfo.mainDataBegin = GetBits(bsi, 9);
-        m_SideInfo.privateBits= GetBits(bsi, (m_sMode == Mono ? 5 : 3));
-        for (ch = 0; ch < m_MP3DecInfo.nChans; ch++)
-            for (bd = 0; bd < m_MAX_SCFBD; bd++) m_SideInfo.scfsi[ch][bd] = GetBits(bsi, 1);
+        m_SideInfo->mainDataBegin = GetBits(bsi, 9);
+        m_SideInfo->privateBits= GetBits(bsi, (m_sMode == Mono ? 5 : 3));
+        for (ch = 0; ch < m_MP3DecInfo->nChans; ch++)
+            for (bd = 0; bd < m_MAX_SCFBD; bd++) m_SideInfo->scfsi[ch][bd] = GetBits(bsi, 1);
     } else {
         /* MPEG 2, MPEG 2.5 */
         nBytes=(m_sMode == Mono ? m_SIBYTES_MPEG2_MONO : m_SIBYTES_MPEG2_STEREO);
         SetBitstreamPointer(bsi, nBytes, buf);
-        m_SideInfo.mainDataBegin = GetBits(bsi, 8);
-        m_SideInfo.privateBits = GetBits(bsi, (m_sMode == Mono ? 1 : 2));
+        m_SideInfo->mainDataBegin = GetBits(bsi, 8);
+        m_SideInfo->privateBits = GetBits(bsi, (m_sMode == Mono ? 1 : 2));
     }
-    for (gr = 0; gr < m_MP3DecInfo.nGrans; gr++) {
-        for (ch = 0; ch < m_MP3DecInfo.nChans; ch++) {
+    for (gr = 0; gr < m_MP3DecInfo->nGrans; gr++) {
+        for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             sis = &m_SideInfoSub[gr][ch]; /* side info subblock for this granule, channel */
             sis->part23Length = GetBits(bsi, 12);
             sis->nBigvals = GetBits(bsi, 9);
@@ -862,11 +857,11 @@ int UnpackSideInfo( unsigned char *buf) {
             sis->count1TableSelect = GetBits(bsi, 1);
         }
     }
-    m_MP3DecInfo.mainDataBegin = m_SideInfo.mainDataBegin; /* needed by main decode loop */
+    m_MP3DecInfo->mainDataBegin = m_SideInfo->mainDataBegin; /* needed by main decode loop */
     assert(nBytes == CalcBitsUsed(bsi, buf, 0) >> 3);
     return nBytes;
 }
-/************************************************************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackSFMPEG1
  *
  * Description: unpack MPEG 1 scalefactors from bitstream
@@ -888,7 +883,7 @@ int UnpackSideInfo( unsigned char *buf) {
  *                so that we index through consectutive memory locations when unpacking
  *                (make sure dequantizer follows same convention)
  *              Illegal Intensity Position = 7 (always) for MPEG1 scale factors
- ***********************************************************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackSFMPEG1(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
                    ScaleFactorInfoSub_t *sfis, int *scfsi, int gr, ScaleFactorInfoSub_t *sfisGr0){
     int sfb;
@@ -952,7 +947,7 @@ void UnpackSFMPEG1(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
         sfis->l[22] = 0;
     }
 }
-/************************************************************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackSFMPEG2
  *
  * Description: unpack MPEG 2 scalefactors from bitstream
@@ -971,7 +966,7 @@ void UnpackSFMPEG1(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
  * Return:      none
  *
  * Notes:       Illegal Intensity Position = (2^slen) - 1 for MPEG2 scale factors
- ***********************************************************************************************************************************/
+ **********************************************************************************************************************/
 void UnpackSFMPEG2(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
                    ScaleFactorInfoSub_t *sfis, int gr, int ch, int modeExt, ScaleFactorJS_t *sfjs){
 
@@ -1108,7 +1103,7 @@ void UnpackSFMPEG2(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
 
     }
 }
-/***************************************************************************************************
+/***********************************************************************************************************************
  * Function:    UnpackScaleFactors
  *
  * Description: parse the fields of the MP3 scale factor data section
@@ -1123,7 +1118,7 @@ void UnpackSFMPEG2(BitStreamInfo_t *bsi, SideInfoSub_t *sis,
  *              updated bitOffset
  *
  * Return:      length (in bytes) of scale factor data, -1 if null input pointers
- **************************************************************************************/
+ **********************************************************************************************************************/
 int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int gr, int ch){
     int bitsUsed;
     unsigned char *startBuf;
@@ -1138,12 +1133,12 @@ int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int g
 
     if (m_MPEGVersion == MPEG1)
         UnpackSFMPEG1(bsi, &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch],
-                      m_SideInfo.scfsi[ch], gr, &m_ScaleFactorInfoSub[0][ch]);
+                      m_SideInfo->scfsi[ch], gr, &m_ScaleFactorInfoSub[0][ch]);
     else
         UnpackSFMPEG2(bsi, &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch],
-                      gr, ch, m_FrameHeader.modeExt, &m_ScaleFactorJS);
+                      gr, ch, m_FrameHeader->modeExt, m_ScaleFactorJS);
 
-    m_MP3DecInfo.part23Length[gr][ch] = m_SideInfoSub[gr][ch].part23Length;
+    m_MP3DecInfo->part23Length[gr][ch] = m_SideInfoSub[gr][ch].part23Length;
 
     bitsUsed = CalcBitsUsed(bsi, buf, *bitOffset);
     buf += (bitsUsed + *bitOffset) >> 3;
@@ -1151,11 +1146,11 @@ int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int g
 
     return (buf - startBuf);
 }
-/****************************************************************************
+/***********************************************************************************************************************
  * M P 3 D E C
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3FindSyncWord
  *
  * Description: locate the next byte-alinged sync word in the raw mp3 stream
@@ -1167,7 +1162,7 @@ int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int g
  *
  * Return:      offset to first sync word (bytes from start of buf)
  *              -1 if sync not found after searching nBytes
- **************************************************************************************/
+ **********************************************************************************************************************/
 int MP3FindSyncWord(unsigned char *buf, int nBytes) {
     int i;
 
@@ -1180,7 +1175,7 @@ int MP3FindSyncWord(unsigned char *buf, int nBytes) {
 
     return -1;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3FindFreeSync
  *
  * Description: figure out number of bytes between adjacent sync words in "free" mode
@@ -1203,7 +1198,7 @@ int MP3FindSyncWord(unsigned char *buf, int nBytes) {
  *              since free mode requires CBR (see spec) we generally only call
  *                this function once (first frame) then store the result (nSlots)
  *                and just use it from then on
- **************************************************************************************/
+ **********************************************************************************************************************/
 int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4], int nBytes){
     int offset = 0;
     unsigned char *bufPtr = buf;
@@ -1220,7 +1215,8 @@ int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4], int nBytes){
             return -1;
         } else if ((bufPtr[0] == firstFH[0]) && (bufPtr[1] == firstFH[1])
                 && ((bufPtr[2] & 0xfc) == (firstFH[2] & 0xfc))) {
-            /* want to return number of bytes per frame, NOT counting the padding byte, so subtract one if padFlag == 1 */
+            /* want to return number of bytes per frame,
+             * NOT counting the padding byte, so subtract one if padFlag == 1 */
             if ((firstFH[2] >> 1) & 0x01)
                 bufPtr--;
             return bufPtr - buf;
@@ -1231,7 +1227,7 @@ int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4], int nBytes){
 
     return -1;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3GetLastFrameInfo
  *
  * Description: get info about last MP3 frame decoded (number of sampled decoded,
@@ -1244,34 +1240,34 @@ int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4], int nBytes){
  * Return:      none
  *
  * Notes:       call this right after calling MP3Decode
- **************************************************************************************/
+ **********************************************************************************************************************/
 void MP3GetLastFrameInfo() {
-    if (m_MP3DecInfo.layer != 3){
-        m_MP3FrameInfo.bitrate=0;
-        m_MP3FrameInfo.nChans=0;
-        m_MP3FrameInfo.samprate=0;
-        m_MP3FrameInfo.bitsPerSample=0;
-        m_MP3FrameInfo.outputSamps=0;
-        m_MP3FrameInfo.layer=0;
-        m_MP3FrameInfo.version=0;
+    if (m_MP3DecInfo->layer != 3){
+        m_MP3FrameInfo->bitrate=0;
+        m_MP3FrameInfo->nChans=0;
+        m_MP3FrameInfo->samprate=0;
+        m_MP3FrameInfo->bitsPerSample=0;
+        m_MP3FrameInfo->outputSamps=0;
+        m_MP3FrameInfo->layer=0;
+        m_MP3FrameInfo->version=0;
     }
     else{
-        m_MP3FrameInfo.bitrate=m_MP3DecInfo.bitrate;
-        m_MP3FrameInfo.nChans=m_MP3DecInfo.nChans;
-        m_MP3FrameInfo.samprate=m_MP3DecInfo.samprate;
-        m_MP3FrameInfo.bitsPerSample=16;
-        m_MP3FrameInfo.outputSamps=m_MP3DecInfo.nChans
-                * (int) samplesPerFrameTab[m_MPEGVersion][m_MP3DecInfo.layer-1];
-        m_MP3FrameInfo.layer=m_MP3DecInfo.layer;
-        m_MP3FrameInfo.version=m_MPEGVersion;
+        m_MP3FrameInfo->bitrate=m_MP3DecInfo->bitrate;
+        m_MP3FrameInfo->nChans=m_MP3DecInfo->nChans;
+        m_MP3FrameInfo->samprate=m_MP3DecInfo->samprate;
+        m_MP3FrameInfo->bitsPerSample=16;
+        m_MP3FrameInfo->outputSamps=m_MP3DecInfo->nChans
+                * (int) samplesPerFrameTab[m_MPEGVersion][m_MP3DecInfo->layer-1];
+        m_MP3FrameInfo->layer=m_MP3DecInfo->layer;
+        m_MP3FrameInfo->version=m_MPEGVersion;
     }
 }
-int MP3GetSampRate(){return m_MP3FrameInfo.samprate;}
-int MP3GetChannels(){return m_MP3FrameInfo.nChans;}
-int MP3GetBitsPerSample(){return m_MP3FrameInfo.bitsPerSample;}
-int MP3GetBitrate(){return m_MP3FrameInfo.bitrate;}
-int MP3GetOutputSamps(){return m_MP3FrameInfo.outputSamps;}
-/**************************************************************************************
+int MP3GetSampRate(){return m_MP3FrameInfo->samprate;}
+int MP3GetChannels(){return m_MP3FrameInfo->nChans;}
+int MP3GetBitsPerSample(){return m_MP3FrameInfo->bitsPerSample;}
+int MP3GetBitrate(){return m_MP3FrameInfo->bitrate;}
+int MP3GetOutputSamps(){return m_MP3FrameInfo->outputSamps;}
+/***********************************************************************************************************************
  * Function:    MP3GetNextFrameInfo
  *
  * Description: parse MP3 frame header
@@ -1282,17 +1278,17 @@ int MP3GetOutputSamps(){return m_MP3FrameInfo.outputSamps;}
  * Outputs:     filled-in MP3FrameInfo struct
  *
  * Return:      error code, defined in mp3dec.h (0 means no error, < 0 means error)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int MP3GetNextFrameInfo(unsigned char *buf) {
 
-    if (UnpackFrameHeader( buf) == -1 || m_MP3DecInfo.layer != 3)
+    if (UnpackFrameHeader( buf) == -1 || m_MP3DecInfo->layer != 3)
         return ERR_MP3_INVALID_FRAMEHEADER;
 
     MP3GetLastFrameInfo();
 
     return ERR_MP3_NONE;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3ClearBadFrame
  *
  * Description: zero out pcm buffer if error decoding MP3 frame
@@ -1303,13 +1299,13 @@ int MP3GetNextFrameInfo(unsigned char *buf) {
  * Outputs:     zeroed out pcm buffer
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void MP3ClearBadFrame( short *outbuf) {
     int i;
-    for (i = 0; i < m_MP3DecInfo.nGrans * m_MP3DecInfo.nGranSamps * m_MP3DecInfo.nChans; i++)
+    for (i = 0; i < m_MP3DecInfo->nGrans * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans; i++)
         outbuf[i] = 0;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3Decode
  *
  * Description: decode one frame of MP3 data
@@ -1327,7 +1323,7 @@ void MP3ClearBadFrame( short *outbuf) {
  *
  * Notes:       switching useSize on and off between frames in the same stream
  *                is not supported (bit reservoir is not maintained if useSize on)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize){
     int offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int prevBitOffset, sfBlockBits, huffBlockBits;
@@ -1348,20 +1344,20 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
     *bytesLeft -= (fhBytes + siBytes);
 
     /* if free mode, need to calculate bitrate and nSlots manually, based on frame size */
-    if (m_MP3DecInfo.bitrate == 0 || m_MP3DecInfo.freeBitrateFlag) {
-        if(!m_MP3DecInfo.freeBitrateFlag){
+    if (m_MP3DecInfo->bitrate == 0 || m_MP3DecInfo->freeBitrateFlag) {
+        if(!m_MP3DecInfo->freeBitrateFlag){
             /* first time through, need to scan for next sync word and figure out frame size */
-            m_MP3DecInfo.freeBitrateFlag=1;
-            m_MP3DecInfo.freeBitrateSlots=MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
-            if(m_MP3DecInfo.freeBitrateSlots < 0){
+            m_MP3DecInfo->freeBitrateFlag=1;
+            m_MP3DecInfo->freeBitrateSlots=MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
+            if(m_MP3DecInfo->freeBitrateSlots < 0){
                 MP3ClearBadFrame(outbuf);
                 return ERR_MP3_FREE_BITRATE_SYNC;
             }
-            freeFrameBytes=m_MP3DecInfo.freeBitrateSlots + fhBytes + siBytes;
-            m_MP3DecInfo.bitrate=(freeFrameBytes * m_MP3DecInfo.samprate * 8)
-                    / (m_MP3DecInfo.nGrans * m_MP3DecInfo.nGranSamps);
+            freeFrameBytes=m_MP3DecInfo->freeBitrateSlots + fhBytes + siBytes;
+            m_MP3DecInfo->bitrate=(freeFrameBytes * m_MP3DecInfo->samprate * 8)
+                    / (m_MP3DecInfo->nGrans * m_MP3DecInfo->nGranSamps);
         }
-        m_MP3DecInfo.nSlots = m_MP3DecInfo.freeBitrateSlots + CheckPadBit(); /* add pad byte, if required */
+        m_MP3DecInfo->nSlots = m_MP3DecInfo->freeBitrateSlots + CheckPadBit(); /* add pad byte, if required */
     }
 
     /* useSize != 0 means we're getting reformatted (RTP) packets (see RFC 3119)
@@ -1371,59 +1367,59 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
      *      frame is (in bytesLeft)
      */
     if (useSize) {
-        m_MP3DecInfo.nSlots = *bytesLeft;
-        if (m_MP3DecInfo.mainDataBegin != 0 || m_MP3DecInfo.nSlots <= 0) {
+        m_MP3DecInfo->nSlots = *bytesLeft;
+        if (m_MP3DecInfo->mainDataBegin != 0 || m_MP3DecInfo->nSlots <= 0) {
             /* error - non self-contained frame, or missing frame (size <= 0), could do loss concealment here */
             MP3ClearBadFrame(outbuf);
             return ERR_MP3_INVALID_FRAMEHEADER;
         }
 
         /* can operate in-place on reformatted frames */
-        m_MP3DecInfo.mainDataBytes = m_MP3DecInfo.nSlots;
+        m_MP3DecInfo->mainDataBytes = m_MP3DecInfo->nSlots;
         mainPtr = inbuf;
-        inbuf += m_MP3DecInfo.nSlots;
-        *bytesLeft -= (m_MP3DecInfo.nSlots);
+        inbuf += m_MP3DecInfo->nSlots;
+        *bytesLeft -= (m_MP3DecInfo->nSlots);
     } else {
         /* out of data - assume last or truncated frame */
-        if (m_MP3DecInfo.nSlots > *bytesLeft) {
+        if (m_MP3DecInfo->nSlots > *bytesLeft) {
             MP3ClearBadFrame(outbuf);
             return ERR_MP3_INDATA_UNDERFLOW;
         }
         /* fill main data buffer with enough new data for this frame */
-        if (m_MP3DecInfo.mainDataBytes >= m_MP3DecInfo.mainDataBegin) {
+        if (m_MP3DecInfo->mainDataBytes >= m_MP3DecInfo->mainDataBegin) {
             /* adequate "old" main data available (i.e. bit reservoir) */
-            memmove(m_MP3DecInfo.mainBuf,
-                    m_MP3DecInfo.mainBuf + m_MP3DecInfo.mainDataBytes - m_MP3DecInfo.mainDataBegin,
-                    m_MP3DecInfo.mainDataBegin);
-            memcpy (m_MP3DecInfo.mainBuf + m_MP3DecInfo.mainDataBegin, inbuf,
-                    m_MP3DecInfo.nSlots);
+            memmove(m_MP3DecInfo->mainBuf,
+                    m_MP3DecInfo->mainBuf + m_MP3DecInfo->mainDataBytes - m_MP3DecInfo->mainDataBegin,
+                    m_MP3DecInfo->mainDataBegin);
+            memcpy (m_MP3DecInfo->mainBuf + m_MP3DecInfo->mainDataBegin, inbuf,
+                    m_MP3DecInfo->nSlots);
 
-            m_MP3DecInfo.mainDataBytes = m_MP3DecInfo.mainDataBegin + m_MP3DecInfo.nSlots;
-            inbuf += m_MP3DecInfo.nSlots;
-            *bytesLeft -= (m_MP3DecInfo.nSlots);
-            mainPtr = m_MP3DecInfo.mainBuf;
+            m_MP3DecInfo->mainDataBytes = m_MP3DecInfo->mainDataBegin + m_MP3DecInfo->nSlots;
+            inbuf += m_MP3DecInfo->nSlots;
+            *bytesLeft -= (m_MP3DecInfo->nSlots);
+            mainPtr = m_MP3DecInfo->mainBuf;
         } else {
             /* not enough data in bit reservoir from previous frames (perhaps starting in middle of file) */
-            memcpy(m_MP3DecInfo.mainBuf + m_MP3DecInfo.mainDataBytes, inbuf, m_MP3DecInfo.nSlots);
-            m_MP3DecInfo.mainDataBytes += m_MP3DecInfo.nSlots;
-            inbuf += m_MP3DecInfo.nSlots;
-            *bytesLeft -= (m_MP3DecInfo.nSlots);
+            memcpy(m_MP3DecInfo->mainBuf + m_MP3DecInfo->mainDataBytes, inbuf, m_MP3DecInfo->nSlots);
+            m_MP3DecInfo->mainDataBytes += m_MP3DecInfo->nSlots;
+            inbuf += m_MP3DecInfo->nSlots;
+            *bytesLeft -= (m_MP3DecInfo->nSlots);
             MP3ClearBadFrame( outbuf);
             return ERR_MP3_MAINDATA_UNDERFLOW;
         }
     }
     bitOffset = 0;
-    mainBits = m_MP3DecInfo.mainDataBytes * 8;
+    mainBits = m_MP3DecInfo->mainDataBytes * 8;
 
     /* decode one complete frame */
-    for (gr = 0; gr < m_MP3DecInfo.nGrans; gr++) {
-        for (ch = 0; ch < m_MP3DecInfo.nChans; ch++) {
+    for (gr = 0; gr < m_MP3DecInfo->nGrans; gr++) {
+        for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             /* unpack scale factors and compute size of scale factor block */
             prevBitOffset = bitOffset;
             offset = UnpackScaleFactors( mainPtr, &bitOffset,
                     mainBits, gr, ch);
             sfBlockBits = 8 * offset - prevBitOffset + bitOffset;
-            huffBlockBits = m_MP3DecInfo.part23Length[gr][ch] - sfBlockBits;
+            huffBlockBits = m_MP3DecInfo->part23Length[gr][ch] - sfBlockBits;
             mainPtr += offset;
             mainBits -= sfBlockBits;
 
@@ -1448,7 +1444,7 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
         }
 
         /* alias reduction, inverse MDCT, overlap-add, frequency inversion */
-        for (ch = 0; ch < m_MP3DecInfo.nChans; ch++) {
+        for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             if (IMDCT( gr, ch) < 0) {
                 MP3ClearBadFrame(outbuf);
                 return ERR_MP3_INVALID_IMDCT;
@@ -1456,7 +1452,7 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
         }
         /* subband transform - if stereo, interleaves pcm LRLRLR */
         if (Subband(
-                outbuf + gr * m_MP3DecInfo.nGranSamps * m_MP3DecInfo.nChans)
+                outbuf + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans)
                 < 0) {
             MP3ClearBadFrame(outbuf);
             return ERR_MP3_INVALID_SUBBAND;
@@ -1466,12 +1462,41 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
     return ERR_MP3_NONE;
 }
 
-/****************************************************************************
- * A L L O C A T E B U F F E R S
- ****************************************************************************/
+/***********************************************************************************************************************
+ * Function:    MP3Decoder_ClearBuffer
+ *
+ * Description: clear all the memory needed for the MP3 decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+ *
+ * Notes:       if one or more mallocs fail, function frees any buffers already
+ *                allocated before returning
+ **********************************************************************************************************************/
+void MP3Decoder_ClearBuffer(void) {
 
-/**************************************************************************************
- * Function:    EraseBuffers
+    /* important to do this - DSP primitives assume a bunch of state variables are 0 on first use */
+    memset( m_MP3DecInfo,         0, sizeof(MP3DecInfo_t));                                    //Clear MP3DecInfo
+    memset(&m_ScaleFactorInfoSub, 0, sizeof(ScaleFactorInfoSub_t)*(m_MAX_NGRAN *m_MAX_NCHAN)); //Clear ScaleFactorInfo
+    memset( m_SideInfo,           0, sizeof(SideInfo_t));                                      //Clear SideInfo
+    memset( m_FrameHeader,        0, sizeof(FrameHeader_t));                                   //Clear FrameHeader
+    memset( m_HuffmanInfo,        0, sizeof(HuffmanInfo_t));                                   //Clear HuffmanInfo
+    memset( m_DequantInfo,        0, sizeof(DequantInfo_t));                                   //Clear DequantInfo
+    memset( m_IMDCTInfo,          0, sizeof(IMDCTInfo_t));                                     //Clear IMDCTInfo
+    memset( m_SubbandInfo,        0, sizeof(SubbandInfo_t));                                   //Clear SubbandInfo
+    memset(&m_CriticalBandInfo,   0, sizeof(CriticalBandInfo_t)*m_MAX_NCHAN);                  //Clear CriticalBandInfo
+    memset( m_ScaleFactorJS,      0, sizeof(ScaleFactorJS_t));                                 //Clear ScaleFactorJS
+    memset(&m_SideInfoSub,        0, sizeof(SideInfoSub_t)*(m_MAX_NGRAN *m_MAX_NCHAN));        //Clear SideInfoSub
+    memset(&m_SFBandTable,        0, sizeof(SFBandTable_t));                                   //Clear SFBandTable
+    memset( m_MP3FrameInfo,       0, sizeof(MP3FrameInfo_t));                                  //Clear MP3FrameInfo
+
+    return;
+}
+/***********************************************************************************************************************
+ * Function:    MP3Decoder_AllocateBuffers
  *
  * Description: allocate all the memory needed for the MP3 decoder
  *
@@ -1480,36 +1505,64 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
  * Outputs:     none
  *
  * Return:      pointer to MP3DecInfo structure (initialized with pointers to all
- *                the internal buffers needed for decoding, all other members of
- *                MP3DecInfo structure set to 0)
- *
- * Notes:       if one or more mallocs fail, function frees any buffers already
- *                allocated before returning
- **************************************************************************************/
-void EraseBuffers(void) {
+ *                the internal buffers needed for decoding)
+ **********************************************************************************************************************/
+bool MP3Decoder_AllocateBuffers(void)
+{
 
-    /* important to do this - DSP primitives assume a bunch of state variables are 0 on first use */
-    memset(&m_MP3DecInfo,               0, sizeof(MP3DecInfo_t));         //Clear MP3DecInfo
-    memset(&m_ScaleFactorInfoSub[0][0], 0, sizeof(ScaleFactorInfoSub_t)); //Clear ScaleFactorInfo
-    memset(&m_SideInfo,                 0, sizeof(SideInfo_t));           //Clear SideInfo
-    memset(&m_FrameHeader,              0, sizeof(FrameHeader_t));        //Clear FrameHeader
-    memset(&m_HuffmanInfo,              0, sizeof(HuffmanInfo_t));        //Clear HuffmanInfo
-    memset(&m_DequantInfo,              0, sizeof(DequantInfo_t));        //Clear DequantInfo
-    memset(&m_IMDCTInfo,                0, sizeof(IMDCTInfo_t));          //Clear IMDCTInfo
-    memset(&m_SubbandInfo,              0, sizeof(SubbandInfo_t));        //Clear SubbandInfo
-    memset(&m_CriticalBandInfo[0],      0, sizeof(CriticalBandInfo_t));   //Clear CriticalBandInfo
-    memset(&m_ScaleFactorJS,            0, sizeof(ScaleFactorJS_t));      //Clear ScaleFactorJS
-    memset(&m_SideInfoSub[0][0],        0, sizeof(SideInfoSub_t));        //Clear ScaleFactorJS
-    memset(&m_SFBandTable,              0, sizeof(SFBandTable_t));        //Clear ScaleFactorJS
-    memset(&m_MP3FrameInfo,             0, sizeof(MP3FrameInfo_t));       //Clear ScaleFactorJS
+    if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)      malloc(sizeof(MP3DecInfo_t)   );}
+    if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)     malloc(sizeof(FrameHeader_t)  );}
+    if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)        malloc(sizeof(SideInfo_t)     );}
+    if(!m_ScaleFactorJS)    {m_ScaleFactorJS = (ScaleFactorJS_t*)   malloc(sizeof(ScaleFactorJS_t));}
+    if(!m_HuffmanInfo)      {m_HuffmanInfo   = (HuffmanInfo_t*)     malloc(sizeof(HuffmanInfo_t)  );}
+    if(!m_DequantInfo)      {m_DequantInfo   = (DequantInfo_t*)     malloc(sizeof(DequantInfo_t)  );}
+    if(!m_IMDCTInfo)        {m_IMDCTInfo     = (IMDCTInfo_t*)       malloc(sizeof(IMDCTInfo_t)    );}
+    if(!m_SubbandInfo)      {m_SubbandInfo   = (SubbandInfo_t*)     malloc(sizeof(SubbandInfo_t)  );}
+    if(!m_MP3FrameInfo)     {m_MP3FrameInfo  = (MP3FrameInfo_t*)    malloc(sizeof(MP3FrameInfo_t) );}
 
-    return;
+
+    if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
+       !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
+        log_e("not enough memory to allocate mp3decoder buffers");
+    }
+    MP3Decoder_ClearBuffer();
+    return true;
 }
-/****************************************************************************
- * H U F F M A N N
- ****************************************************************************/
+/***********************************************************************************************************************
+ * Function:    MP3Decoder_FreeBuffers
+ *
+ * Description: frees all the memory used by the MP3 decoder
+ *
+ * Inputs:      pointer to initialized MP3DecInfo structure
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+ *
+ * Notes:       safe to call even if some buffers were not allocated
+ **********************************************************************************************************************/
+void MP3Decoder_FreeBuffers()
+{
+//    uint32_t i = ESP.getFreeHeap();
 
-/**************************************************************************************
+    if(m_MP3DecInfo)        {free(m_MP3DecInfo);      m_MP3DecInfo=NULL;}
+    if(m_FrameHeader)       {free(m_FrameHeader);     m_FrameHeader=NULL;}
+    if(m_SideInfo)          {free(m_SideInfo);        m_SideInfo=NULL;}
+    if(m_ScaleFactorJS )    {free(m_ScaleFactorJS);   m_ScaleFactorJS=NULL;}
+    if(m_HuffmanInfo)       {free(m_HuffmanInfo);     m_HuffmanInfo=NULL;}
+    if(m_DequantInfo)       {free(m_DequantInfo);     m_DequantInfo=0;}
+    if(m_IMDCTInfo)         {free(m_IMDCTInfo);       m_IMDCTInfo=0;}
+    if(m_SubbandInfo)       {free(m_SubbandInfo);     m_SubbandInfo=0;}
+    if(m_MP3FrameInfo)      {free(m_MP3FrameInfo);    m_MP3FrameInfo=0;}
+
+//    log_i("MP3Decoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
+}
+
+/***********************************************************************************************************************
+ * H U F F M A N N
+ **********************************************************************************************************************/
+
+/***********************************************************************************************************************
  * Function:    DecodeHuffmanPairs
  *
  * Description: decode 2-way vector Huffman codes in the "bigValues" region of spectrum
@@ -1528,7 +1581,7 @@ void EraseBuffers(void) {
  * Notes:       assumes that nVals is an even number
  *              si_huff.bit tests every Huffman codeword in every table (though not
  *                necessarily all linBits outputs for x,y > 15)
- **************************************************************************************/
+ **********************************************************************************************************************/
 // no improvement with section=data
 int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx, int bitsLeft, unsigned char *buf, int bitOffset){
     int i, x, y;
@@ -1748,7 +1801,7 @@ int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx, int bitsLeft, unsigned ch
     return -1;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeHuffmanQuads
  *
  * Description: decode 4-way vector Huffman codes in the "count1" region of spectrum
@@ -1766,7 +1819,7 @@ int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx, int bitsLeft, unsigned ch
  *                of the quad word after which all samples are 0)
  *
  * Notes:        si_huff.bit tests every vwxy output in both quad tables
- **************************************************************************************/
+ **********************************************************************************************************************/
 // no improvement with section=data
 int DecodeHuffmanQuads(int *vwxy, int nVals, int tabIdx, int bitsLeft, unsigned char *buf, int bitOffset){
     int i, v, w, x, y;
@@ -1857,7 +1910,7 @@ int DecodeHuffmanQuads(int *vwxy, int nVals, int tabIdx, int bitsLeft, unsigned 
     return i;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DecodeHuffman
  *
  * Description: decode one granule, one channel worth of Huffman codes
@@ -1878,7 +1931,7 @@ int DecodeHuffmanQuads(int *vwxy, int nVals, int tabIdx, int bitsLeft, unsigned 
  *                byte located at buf + offset)
  *              -1 if null input pointers, huffBlockBits < 0, or decoder runs
  *                out of bits prematurely (invalid bitstream)
- **************************************************************************************/
+ **********************************************************************************************************************/
 // .data about 1ms faster per frame
 int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr, int ch){
 
@@ -1888,7 +1941,7 @@ int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr,
 
     SideInfoSub_t *sis;
     sis = &m_SideInfoSub[gr][ch];
-    //hi = (HuffmanInfo_t*) (m_MP3DecInfo.HuffmanInfoPS);
+    //hi = (HuffmanInfo_t*) (m_MP3DecInfo->HuffmanInfoPS);
 
     if (huffBlockBits < 0)
         return -1;
@@ -1919,12 +1972,12 @@ int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr,
     rEnd[0] = 0;
 
     /* rounds up to first all-zero pair (we don't check last pair for (x,y) == (non-zero, zero)) */
-    m_HuffmanInfo.nonZeroBound[ch] = rEnd[3];
+    m_HuffmanInfo->nonZeroBound[ch] = rEnd[3];
 
     /* decode Huffman pairs (rEnd[i] are always even numbers) */
     bitsLeft = huffBlockBits;
     for (i = 0; i < 3; i++) {
-        bitsUsed = DecodeHuffmanPairs(m_HuffmanInfo.huffDecBuf[ch] + rEnd[i],
+        bitsUsed = DecodeHuffmanPairs(m_HuffmanInfo->huffDecBuf[ch] + rEnd[i],
                 rEnd[i + 1] - rEnd[i], sis->tableSelect[i], bitsLeft, buf,
                 *bitOffset);
         if (bitsUsed < 0 || bitsUsed > bitsLeft) /* error - overran end of bitstream */
@@ -1937,13 +1990,13 @@ int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr,
     }
 
     /* decode Huffman quads (if any) */
-    m_HuffmanInfo.nonZeroBound[ch] += DecodeHuffmanQuads(m_HuffmanInfo.huffDecBuf[ch] + rEnd[3],
+    m_HuffmanInfo->nonZeroBound[ch] += DecodeHuffmanQuads(m_HuffmanInfo->huffDecBuf[ch] + rEnd[3],
             m_MAX_NSAMP - rEnd[3], sis->count1TableSelect, bitsLeft, buf,
             *bitOffset);
 
-    assert(m_HuffmanInfo.nonZeroBound[ch] <= m_MAX_NSAMP);
-    for (i = m_HuffmanInfo.nonZeroBound[ch]; i < m_MAX_NSAMP; i++)
-        m_HuffmanInfo.huffDecBuf[ch][i] = 0;
+    assert(m_HuffmanInfo->nonZeroBound[ch] <= m_MAX_NSAMP);
+    for (i = m_HuffmanInfo->nonZeroBound[ch]; i < m_MAX_NSAMP; i++)
+        m_HuffmanInfo->huffDecBuf[ch][i] = 0;
 
     /* If bits used for 576 samples < huffBlockBits, then the extras are considered
      *  to be stuffing bits (throw away, but need to return correct bitstream position)
@@ -1954,11 +2007,11 @@ int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr,
     return (buf - startBuf);
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * D E Q U A N T
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MP3Dequantize
  *
  * Description: dequantize coefficients, decode stereo, reorder short blocks
@@ -1980,7 +2033,7 @@ int DecodeHuffman(unsigned char *buf, int *bitOffset, int huffBlockBits, int gr,
  *                round to PCM (>> by 15 less than we otherwise would have).
  *              Equivalently, we can think of the dequantized coefficients as
  *                Q(DQ_FRACBITS_OUT - 15) with no implicit bias.
- **************************************************************************************/
+ **********************************************************************************************************************/
 int MP3Dequantize(int gr){
     int i, ch, nSamps, mOut[2];
     CriticalBandInfo_t *cbi;
@@ -1988,9 +2041,9 @@ int MP3Dequantize(int gr){
     mOut[0] = mOut[1] = 0;
 
     /* dequantize all the samples in each channel */
-    for (ch = 0; ch < m_MP3DecInfo.nChans; ch++) {
-        m_HuffmanInfo.gb[ch] = DequantChannel(m_HuffmanInfo.huffDecBuf[ch], m_DequantInfo.workBuf, &m_HuffmanInfo.nonZeroBound[ch],
-            &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch], &cbi[ch]);
+    for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
+        m_HuffmanInfo->gb[ch] = DequantChannel(m_HuffmanInfo->huffDecBuf[ch], m_DequantInfo->workBuf,
+                &m_HuffmanInfo->nonZeroBound[ch], &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch], &cbi[ch]);
     }
 
     /* joint stereo processing assumes one guard bit in input samples
@@ -1998,20 +2051,20 @@ int MP3Dequantize(int gr){
      *   just make a pass over the data and clip to [-2^30+1, 2^30-1]
      * in practice this may never happen
      */
-    if (m_FrameHeader.modeExt && (m_HuffmanInfo.gb[0] < 1 || m_HuffmanInfo.gb[1] < 1)) {
-        for (i = 0; i < m_HuffmanInfo.nonZeroBound[0]; i++) {
-            if (m_HuffmanInfo.huffDecBuf[0][i] < -0x3fffffff)  m_HuffmanInfo.huffDecBuf[0][i] = -0x3fffffff;
-            if (m_HuffmanInfo.huffDecBuf[0][i] >  0x3fffffff)  m_HuffmanInfo.huffDecBuf[0][i] =  0x3fffffff;
+    if (m_FrameHeader->modeExt && (m_HuffmanInfo->gb[0] < 1 || m_HuffmanInfo->gb[1] < 1)) {
+        for (i = 0; i < m_HuffmanInfo->nonZeroBound[0]; i++) {
+            if (m_HuffmanInfo->huffDecBuf[0][i] < -0x3fffffff)  m_HuffmanInfo->huffDecBuf[0][i] = -0x3fffffff;
+            if (m_HuffmanInfo->huffDecBuf[0][i] >  0x3fffffff)  m_HuffmanInfo->huffDecBuf[0][i] =  0x3fffffff;
         }
-        for (i = 0; i < m_HuffmanInfo.nonZeroBound[1]; i++) {
-            if (m_HuffmanInfo.huffDecBuf[1][i] < -0x3fffffff)  m_HuffmanInfo.huffDecBuf[1][i] = -0x3fffffff;
-            if (m_HuffmanInfo.huffDecBuf[1][i] >  0x3fffffff)  m_HuffmanInfo.huffDecBuf[1][i] =  0x3fffffff;
+        for (i = 0; i < m_HuffmanInfo->nonZeroBound[1]; i++) {
+            if (m_HuffmanInfo->huffDecBuf[1][i] < -0x3fffffff)  m_HuffmanInfo->huffDecBuf[1][i] = -0x3fffffff;
+            if (m_HuffmanInfo->huffDecBuf[1][i] >  0x3fffffff)  m_HuffmanInfo->huffDecBuf[1][i] =  0x3fffffff;
         }
     }
 
     /* do mid-side stereo processing, if enabled */
-    if (m_FrameHeader.modeExt >> 1) {
-        if (m_FrameHeader.modeExt & 0x01) {
+    if (m_FrameHeader->modeExt >> 1) {
+        if (m_FrameHeader->modeExt & 0x01) {
             /* intensity stereo enabled - run mid-side up to start of right zero region */
             if (cbi[1].cbType == 0)
                 nSamps = m_SFBandTable.l[cbi[1].cbEndL + 1];
@@ -2019,41 +2072,43 @@ int MP3Dequantize(int gr){
                 nSamps = 3 * m_SFBandTable.s[cbi[1].cbEndSMax + 1];
         } else {
             /* intensity stereo disabled - run mid-side on whole spectrum */
-            nSamps = (m_HuffmanInfo.nonZeroBound[0] > m_HuffmanInfo.nonZeroBound[1] ? m_HuffmanInfo.nonZeroBound[0] : m_HuffmanInfo.nonZeroBound[1]);
+            nSamps = (m_HuffmanInfo->nonZeroBound[0] > m_HuffmanInfo->nonZeroBound[1] ?
+                                                       m_HuffmanInfo->nonZeroBound[0] : m_HuffmanInfo->nonZeroBound[1]);
         }
-        MidSideProc(m_HuffmanInfo.huffDecBuf, nSamps, mOut);
+        MidSideProc(m_HuffmanInfo->huffDecBuf, nSamps, mOut);
     }
 
     /* do intensity stereo processing, if enabled */
-    if (m_FrameHeader.modeExt & 0x01) {
-        nSamps = m_HuffmanInfo.nonZeroBound[0];
+    if (m_FrameHeader->modeExt & 0x01) {
+        nSamps = m_HuffmanInfo->nonZeroBound[0];
         if (m_MPEGVersion == MPEG1) {
-            IntensityProcMPEG1(m_HuffmanInfo.huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0],
-                    m_FrameHeader.modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock, mOut);
+            IntensityProcMPEG1(m_HuffmanInfo->huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0],
+                    m_FrameHeader->modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock, mOut);
         } else {
-            IntensityProcMPEG2(m_HuffmanInfo.huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0], &m_ScaleFactorJS,
-                    m_FrameHeader.modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock, mOut);
+            IntensityProcMPEG2(m_HuffmanInfo->huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0],
+                    m_ScaleFactorJS, m_FrameHeader->modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock, mOut);
         }
     }
 
     /* adjust guard bit count and nonZeroBound if we did any stereo processing */
-    if (m_FrameHeader.modeExt) {
-        m_HuffmanInfo.gb[0] = CLZ(mOut[0]) - 1;
-        m_HuffmanInfo.gb[1] = CLZ(mOut[1]) - 1;
-        nSamps = (m_HuffmanInfo.nonZeroBound[0] > m_HuffmanInfo.nonZeroBound[1] ? m_HuffmanInfo.nonZeroBound[0] : m_HuffmanInfo.nonZeroBound[1]);
-        m_HuffmanInfo.nonZeroBound[0] = nSamps;
-        m_HuffmanInfo.nonZeroBound[1] = nSamps;
+    if (m_FrameHeader->modeExt) {
+        m_HuffmanInfo->gb[0] = CLZ(mOut[0]) - 1;
+        m_HuffmanInfo->gb[1] = CLZ(mOut[1]) - 1;
+        nSamps = (m_HuffmanInfo->nonZeroBound[0] > m_HuffmanInfo->nonZeroBound[1] ?
+                                                       m_HuffmanInfo->nonZeroBound[0] : m_HuffmanInfo->nonZeroBound[1]);
+        m_HuffmanInfo->nonZeroBound[0] = nSamps;
+        m_HuffmanInfo->nonZeroBound[1] = nSamps;
     }
 
     /* output format Q(DQ_FRACBITS_OUT) */
     return 0;
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * D Q C H A N
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DequantBlock
  *
  * Description: Ken's highly-optimized, low memory dequantizer performing the operation
@@ -2066,7 +2121,7 @@ int MP3Dequantize(int gr){
  * Outputs:     dequantized samples in Q25 format
  *
  * Return:      bitwise-OR of the unsigned outputs (for guard bit calculations)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int DequantBlock(int *inbuf, int *outbuf, int num, int scale){
     int tab4[4];
     int scalef, scalei, shift;
@@ -2150,7 +2205,7 @@ int DequantBlock(int *inbuf, int *outbuf, int num, int scale){
     return mask;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    DequantChannel
  *
  * Description: dequantize one granule, one channel worth of decoded Huffman codewords
@@ -2169,8 +2224,10 @@ int DequantBlock(int *inbuf, int *outbuf, int num, int scale){
  * Return:      minimum number of guard bits in dequantized sampleBuf
  *
  * Notes:       dequantized samples in Q(DQ_FRACBITS_OUT) format
- **************************************************************************************/
-int DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound,  SideInfoSub_t *sis, ScaleFactorInfoSub_t *sfis, CriticalBandInfo_t *cbi){
+ **********************************************************************************************************************/
+int DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound,  SideInfoSub_t *sis, ScaleFactorInfoSub_t *sfis,
+                                                                                              CriticalBandInfo_t *cbi)
+{
     int i, j, w, cb;
     int /* cbStartL, */ cbEndL, cbStartS, cbEndS;
     int nSamps, nonZero, sfactMultiplier, gbMask;
@@ -2212,7 +2269,7 @@ int DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound,  SideInfoSub
      *   dividing every sample by sqrt(2) = multiplying by 2^-.5)
      */
     globalGain = sis->globalGain;
-    if (m_FrameHeader.modeExt >> 1)
+    if (m_FrameHeader->modeExt >> 1)
          globalGain -= 2;
     globalGain += m_IMDCT_SCALE;      /* scale everything by sqrt(2), for fast IMDCT36 */
 
@@ -2301,11 +2358,11 @@ int DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound,  SideInfoSub
     return CLZ(gbMask) - 1;
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * S T P R O C
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    MidSideProc
  *
  * Description: sum-difference stereo reconstruction
@@ -2321,7 +2378,7 @@ int DequantChannel(int *sampleBuf, int *workBuf, int *nonZeroBound,  SideInfoSub
  * Return:      none
  *
  * Notes:       assume at least 1 GB in input
- **************************************************************************************/
+ **********************************************************************************************************************/
 void MidSideProc(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps, int mOut[2]){
     int i, xr, xl, mOutL, mOutR;
 
@@ -2341,7 +2398,7 @@ void MidSideProc(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps, int mOut[2]){
     mOut[1] |= mOutR;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IntensityProcMPEG1
  *
  * Description: intensity stereo processing for MPEG1
@@ -2360,9 +2417,10 @@ void MidSideProc(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps, int mOut[2]){
  *
  * Notes:       assume at least 1 GB in input
  *
- **************************************************************************************/
-void IntensityProcMPEG1(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,  ScaleFactorInfoSub_t *sfis, CriticalBandInfo_t *cbi,
-        int midSideFlag, int mixFlag, int mOut[2]) {
+ **********************************************************************************************************************/
+void IntensityProcMPEG1(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,  ScaleFactorInfoSub_t *sfis,
+                                                    CriticalBandInfo_t *cbi, int midSideFlag, int mixFlag, int mOut[2])
+{
     int i = 0, j = 0, n = 0, cb = 0, w = 0;
     int sampsLeft, isf, mOutL, mOutR, xl, xr;
     int fl, fr, fls[3], frs[3];
@@ -2453,7 +2511,7 @@ void IntensityProcMPEG1(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,  ScaleFacto
     return;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IntensityProcMPEG2
  *
  * Description: intensity stereo processing for MPEG2
@@ -2473,7 +2531,7 @@ void IntensityProcMPEG1(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,  ScaleFacto
  *
  * Notes:       assume at least 1 GB in input
  *
- **************************************************************************************/
+ **********************************************************************************************************************/
 void IntensityProcMPEG2(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,
          ScaleFactorInfoSub_t *sfis, CriticalBandInfo_t *cbi,
         ScaleFactorJS_t *sfjs, int midSideFlag, int mixFlag, int mOut[2]) {
@@ -2568,11 +2626,11 @@ void IntensityProcMPEG2(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,
     return;
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * I M D C T
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    AntiAlias
  *
  * Description: smooth transition across DCT block boundaries (every 18 coefficients)
@@ -2595,7 +2653,7 @@ void IntensityProcMPEG2(int x[m_MAX_NCHAN][m_MAX_NSAMP], int nSamps,
  *              assume at least 1 guard bit in x[] to avoid overflow
  *                (should be guaranteed from dequant, and max gain from stproc * max
  *                 gain from AntiAlias < 2.0)
- **************************************************************************************/
+ **********************************************************************************************************************/
 // a little bit faster in RAM (< 1 ms per block)
 /* __attribute__ ((section (".data"))) */
 void AntiAlias(int *x, int nBfly){
@@ -2680,7 +2738,7 @@ void AntiAlias(int *x, int nBfly){
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    WinPrevious
  *
  * Description: apply specified window to second half of previous IMDCT (overlap part)
@@ -2695,7 +2753,7 @@ void AntiAlias(int *x, int nBfly){
  * Notes:       produces 9 output samples from 18 input samples via symmetry
  *              all blocks gain at least 1 guard bit via window (long blocks get extra
  *                sign bit, short blocks can have one addition but max gain < 1.0)
- **************************************************************************************/
+ **********************************************************************************************************************/
 
 void WinPrevious(int *xPrev, int *xPrevWin, int btPrev){
     int i, x, *xp, *xpwLo, *xpwHi, wLo, wHi;
@@ -2742,7 +2800,7 @@ void WinPrevious(int *xPrev, int *xPrevWin, int btPrev){
     }
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    FreqInvertRescale
  *
  * Description: do frequency inversion (odd samples of odd blocks) and rescale
@@ -2757,7 +2815,7 @@ void WinPrevious(int *xPrev, int *xPrevWin, int btPrev){
  *              rescaled (as necessary) previous samples
  *
  * Return:      updated mOut (from new outputs y)
- **************************************************************************************/
+ **********************************************************************************************************************/
 
 int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es){
     int i, d, mOut;
@@ -2938,7 +2996,7 @@ void idct9(int *x) {
 }
 
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IMDCT36
  *
  * Description: 36-point modified DCT, with windowing and overlap-add (50% overlap)
@@ -2966,7 +3024,7 @@ void idct9(int *x) {
  *                long IMDCT + windowing + overlap-add in MP3
  *
  * Return:      mOut (OR of abs(y) for all y calculated here)
- **************************************************************************************/
+ **********************************************************************************************************************/
 // barely faster in RAM
 
 int IMDCT36(int *xCurr, int *xPrev, int *y, int btCurr, int btPrev, int blockIdx, int gb){
@@ -3129,7 +3187,7 @@ void imdct12(int *x, int *out) {
     *out = x0 - x1;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IMDCT12x3
  *
  * Description: three 12-point modified DCT's for short blocks, with windowing,
@@ -3147,7 +3205,7 @@ void imdct12(int *x, int *out) {
  *                only save 9 xPrev samples, using symmetry (see WinPrevious())
  *
  * Return:      mOut (OR of abs(y) for all y calculated here)
- **************************************************************************************/
+ **********************************************************************************************************************/
 // barely faster in RAM
 int IMDCT12x3(int *xCurr, int *xPrev, int *y, int btPrev, int blockIdx, int gb){
     int i, es, mOut, yLo, xBuf[18], xPrevWin[18]; /* need temp buffer for reordering short blocks */
@@ -3215,7 +3273,7 @@ int IMDCT12x3(int *xCurr, int *xPrev, int *y, int btPrev, int blockIdx, int gb){
     return mOut;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    HybridTransform
  *
  * Description: IMDCT's, windowing, and overlap-add on long/short/mixed blocks
@@ -3236,7 +3294,7 @@ int IMDCT12x3(int *xCurr, int *xPrev, int *y, int btPrev, int blockIdx, int gb){
  *
  * Return:      number of non-zero IMDCT blocks calculated in this call
  *                (including overlap-add)
- **************************************************************************************/
+ **********************************************************************************************************************/
 int HybridTransform(int *xCurr, int *xPrev, int y[m_BLOCK_SIZE][m_NBANDS], SideInfoSub_t *sis, BlockCount_t *bc){
     int xPrevWin[18], currWinIdx, prevWinIdx;
     int i, j, nBlocksOut, nonZero, mOut;
@@ -3320,7 +3378,7 @@ int HybridTransform(int *xCurr, int *xPrev, int y[m_BLOCK_SIZE][m_NBANDS], SideI
     return nBlocksOut;
 }
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    IMDCT
  *
  * Description: do alias reduction, inverse MDCT, overlap-add, and frequency inversion
@@ -3335,7 +3393,7 @@ int HybridTransform(int *xCurr, int *xPrev, int y[m_BLOCK_SIZE][m_NBANDS], SideI
  *              updated hi->nonZeroBound index for this channel
  *
  * Return:      0 on success,  -1 if null input pointers
- **************************************************************************************/
+ **********************************************************************************************************************/
 // a bit faster in RAM
 /*__attribute__ ((section (".data")))*/
 int IMDCT( int gr, int ch) {
@@ -3351,7 +3409,7 @@ int IMDCT( int gr, int ch) {
     blockCutoff = m_SFBandTable.l[(m_MPEGVersion == MPEG1 ? 8 : 6)] / 18; /* same as 3* num short sfb's in spec */
     if (m_SideInfoSub[gr][ch].blockType != 2) {
         /* all long transforms */
-        int x=(m_HuffmanInfo.nonZeroBound[ch] + 7) / 18 + 1;
+        int x=(m_HuffmanInfo->nonZeroBound[ch] + 7) / 18 + 1;
         bc.nBlocksLong=(x<32 ? x : 32);
         //bc.nBlocksLong = MIN((hi->nonZeroBound[ch] + 7) / 18 + 1, 32);
         nBfly = bc.nBlocksLong - 1;
@@ -3365,38 +3423,39 @@ int IMDCT( int gr, int ch) {
         nBfly = 0;
     }
 
-    AntiAlias(m_HuffmanInfo.huffDecBuf[ch], nBfly);
-    int x=m_HuffmanInfo.nonZeroBound[ch];
+    AntiAlias(m_HuffmanInfo->huffDecBuf[ch], nBfly);
+    int x=m_HuffmanInfo->nonZeroBound[ch];
     int y=nBfly * 18 + 8;
-    m_HuffmanInfo.nonZeroBound[ch]=(x>y ? x: y);
+    m_HuffmanInfo->nonZeroBound[ch]=(x>y ? x: y);
 
-    assert(m_HuffmanInfo.nonZeroBound[ch] <= m_MAX_NSAMP);
+    assert(m_HuffmanInfo->nonZeroBound[ch] <= m_MAX_NSAMP);
 
     /* for readability, use a struct instead of passing a million parameters to HybridTransform() */
-    bc.nBlocksTotal = (m_HuffmanInfo.nonZeroBound[ch] + 17) / 18;
-    bc.nBlocksPrev = m_IMDCTInfo.numPrevIMDCT[ch];
-    bc.prevType = m_IMDCTInfo.prevType[ch];
-    bc.prevWinSwitch = m_IMDCTInfo.prevWinSwitch[ch];
-    bc.currWinSwitch = (m_SideInfoSub[gr][ch].mixedBlock ? blockCutoff : 0); /* where WINDOW switches (not nec. transform) */
-    bc.gbIn = m_HuffmanInfo.gb[ch];
+    bc.nBlocksTotal = (m_HuffmanInfo->nonZeroBound[ch] + 17) / 18;
+    bc.nBlocksPrev = m_IMDCTInfo->numPrevIMDCT[ch];
+    bc.prevType = m_IMDCTInfo->prevType[ch];
+    bc.prevWinSwitch = m_IMDCTInfo->prevWinSwitch[ch];
+    /* where WINDOW switches (not nec. transform) */
+    bc.currWinSwitch = (m_SideInfoSub[gr][ch].mixedBlock ? blockCutoff : 0);
+    bc.gbIn = m_HuffmanInfo->gb[ch];
 
-    m_IMDCTInfo.numPrevIMDCT[ch] = HybridTransform(m_HuffmanInfo.huffDecBuf[ch], m_IMDCTInfo.overBuf[ch],
-            m_IMDCTInfo.outBuf[ch], &m_SideInfoSub[gr][ch], &bc);
-    m_IMDCTInfo.prevType[ch] = m_SideInfoSub[gr][ch].blockType;
-    m_IMDCTInfo.prevWinSwitch[ch] = bc.currWinSwitch; /* 0 means not a mixed block (either all short or all long) */
-    m_IMDCTInfo.gb[ch] = bc.gbOut;
+    m_IMDCTInfo->numPrevIMDCT[ch] = HybridTransform(m_HuffmanInfo->huffDecBuf[ch], m_IMDCTInfo->overBuf[ch],
+            m_IMDCTInfo->outBuf[ch], &m_SideInfoSub[gr][ch], &bc);
+    m_IMDCTInfo->prevType[ch] = m_SideInfoSub[gr][ch].blockType;
+    m_IMDCTInfo->prevWinSwitch[ch] = bc.currWinSwitch; /* 0 means not a mixed block (either all short or all long) */
+    m_IMDCTInfo->gb[ch] = bc.gbOut;
 
-    assert(m_IMDCTInfo.numPrevIMDCT[ch] <= m_NBANDS);
+    assert(m_IMDCTInfo->numPrevIMDCT[ch] <= m_NBANDS);
 
     /* output has gained 2 int bits */
     return 0;
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * S U B B A N D
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    Subband
  *
  * Description: do subband transform on all the blocks in one granule, all channels
@@ -3407,31 +3466,31 @@ int IMDCT( int gr, int ch) {
  * Outputs:     decoded PCM data, interleaved LRLRLR... if stereo
  *
  * Return:      0 on success,  -1 if null input pointers
- **************************************************************************************/
+ **********************************************************************************************************************/
 int Subband( short *pcmBuf) {
     int b;
-    if (m_MP3DecInfo.nChans == 2) {
+    if (m_MP3DecInfo->nChans == 2) {
         /* stereo */
         for (b = 0; b < m_BLOCK_SIZE; b++) {
-            FDCT32(m_IMDCTInfo.outBuf[0][b], m_SubbandInfo.vbuf + 0 * 32, m_SubbandInfo.vindex,
-                    (b & 0x01), m_IMDCTInfo.gb[0]);
-            FDCT32(m_IMDCTInfo.outBuf[1][b], m_SubbandInfo.vbuf + 1 * 32, m_SubbandInfo.vindex,
-                    (b & 0x01), m_IMDCTInfo.gb[1]);
+            FDCT32(m_IMDCTInfo->outBuf[0][b], m_SubbandInfo->vbuf + 0 * 32, m_SubbandInfo->vindex,
+                    (b & 0x01), m_IMDCTInfo->gb[0]);
+            FDCT32(m_IMDCTInfo->outBuf[1][b], m_SubbandInfo->vbuf + 1 * 32, m_SubbandInfo->vindex,
+                    (b & 0x01), m_IMDCTInfo->gb[1]);
             PolyphaseStereo(pcmBuf,
-                    m_SubbandInfo.vbuf + m_SubbandInfo.vindex + m_VBUF_LENGTH * (b & 0x01),
+                    m_SubbandInfo->vbuf + m_SubbandInfo->vindex + m_VBUF_LENGTH * (b & 0x01),
                     polyCoef);
-            m_SubbandInfo.vindex = (m_SubbandInfo.vindex - (b & 0x01)) & 7;
+            m_SubbandInfo->vindex = (m_SubbandInfo->vindex - (b & 0x01)) & 7;
             pcmBuf += (2 * m_NBANDS);
         }
     } else {
         /* mono */
         for (b = 0; b < m_BLOCK_SIZE; b++) {
-            FDCT32(m_IMDCTInfo.outBuf[0][b], m_SubbandInfo.vbuf + 0 * 32, m_SubbandInfo.vindex,
-                    (b & 0x01), m_IMDCTInfo.gb[0]);
+            FDCT32(m_IMDCTInfo->outBuf[0][b], m_SubbandInfo->vbuf + 0 * 32, m_SubbandInfo->vindex,
+                    (b & 0x01), m_IMDCTInfo->gb[0]);
             PolyphaseMono(pcmBuf,
-                    m_SubbandInfo.vbuf + m_SubbandInfo.vindex + m_VBUF_LENGTH * (b & 0x01),
+                    m_SubbandInfo->vbuf + m_SubbandInfo->vindex + m_VBUF_LENGTH * (b & 0x01),
                     polyCoef);
-            m_SubbandInfo.vindex = (m_SubbandInfo.vindex - (b & 0x01)) & 7;
+            m_SubbandInfo->vindex = (m_SubbandInfo->vindex - (b & 0x01)) & 7;
             pcmBuf += m_NBANDS;
         }
     }
@@ -3439,11 +3498,11 @@ int Subband( short *pcmBuf) {
     return 0;
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * D C T 3 2
- ****************************************************************************/
+ **********************************************************************************************************************/
 
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    FDCT32
  *
  * Description: Ken's highly-optimized 32-point DCT (radix-4 + radix-8)
@@ -3466,7 +3525,7 @@ int Subband( short *pcmBuf) {
  *                differently, depending on magnitude)
  *              guard bit analysis verified by exhaustive testing of all 2^32
  *                combinations of max pos/max neg values in x[]
- **************************************************************************************/
+ **********************************************************************************************************************/
 // about 1ms faster in RAM
 void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
     int i, s, tmp, es;
@@ -3618,9 +3677,9 @@ void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
     }
 }
 
-/****************************************************************************
+/***********************************************************************************************************************
  * P O L Y P H A S E
- ****************************************************************************/
+ **********************************************************************************************************************/
 
 short ClipToShort(int x, int fracBits){
     int sign;
@@ -3635,7 +3694,7 @@ short ClipToShort(int x, int fracBits){
 
     return (short)x;
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PolyphaseMono
  *
  * Description: filter one subband and produce 32 output PCM samples for one channel
@@ -3650,7 +3709,7 @@ short ClipToShort(int x, int fracBits){
  * Outputs:     32 samples of one channel of decoded PCM data, (i.e. Q16.0)
  *
  * Return:      none
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PolyphaseMono(short *pcm, int *vbuf, const uint32_t *coefBase){
     int i;
     const uint32_t *coef;
@@ -3698,7 +3757,7 @@ void PolyphaseMono(short *pcm, int *vbuf, const uint32_t *coefBase){
         pcm++;
     }
 }
-/**************************************************************************************
+/***********************************************************************************************************************
  * Function:    PolyphaseStereo
  *
  * Description: filter one subband and produce 32 output PCM samples for each channel
@@ -3715,7 +3774,7 @@ void PolyphaseMono(short *pcm, int *vbuf, const uint32_t *coefBase){
  * Return:      none
  *
  * Notes:       interleaves PCM samples LRLRLR...
- **************************************************************************************/
+ **********************************************************************************************************************/
 void PolyphaseStereo(short *pcm, int *vbuf, const uint32_t *coefBase){
     int i;
     const uint32_t *coef;
