@@ -166,7 +166,6 @@ bool Audio::connecttohost(String host){
             return true;
         }
     }
-    log_i("freeHeap after %i", ESP.getFreeHeap());
     sprintf(chbuf, "Request %s failed!", host.c_str());
     if(audio_info) audio_info(chbuf);
     if(audio_showstation) audio_showstation("");
