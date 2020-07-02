@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jun 14,2020
+ *  Updated on: Jul 02,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -52,6 +52,10 @@ public:
     void loop();
     uint32_t getFileSize();
     uint32_t getFilePos();
+    uint32_t getSampleRate();
+    uint8_t  getBitsPerSample();
+    uint8_t  getChannels();
+
     /**
      * @brief Get the audio file duration in seconds
      * 
@@ -91,11 +95,12 @@ public:
     bool isRunning() {return m_f_running;}
 
 private:
+    void reset(); // free buffers and set defaults
     void processLocalFile();
     void processWebStream();
     int  sendBytes(uint8_t *data, size_t len);
     void readID3Metadata();
-    bool setSampleRate(int hz);
+    bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
     bool playChunk();
@@ -115,10 +120,13 @@ private:
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
+    enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_FLAC = 5};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
                                      20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
+
+
 
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
@@ -127,14 +135,14 @@ private:
     char            path[256];
     int             m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
-    int             m_lastChannels;
+    uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;
     int             m_writePtr=0;                   // ptr sampleBuffer
     int             m_readPtr=0;                    // ptr sampleBuffer
-    int             m_bitrate=0;                    // current bitrate given fom decoder
+    uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
-    int             m_metacount=0;                  // Number of bytes in metadata
+    int             m_metalen=0;                    // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
     uint8_t         m_inBuff[1600];                 // inputBuffer
     uint16_t        m_inBuffwindex=0;               // write index
@@ -146,12 +154,12 @@ private:
     uint8_t         m_DOUT=0;                       // Data Out
     int8_t          m_DIN=0;                        // Data In, can be negative if unused (I2S_PIN_NO_CHANGE is -1)
     uint8_t         m_vol=64;                       // volume
-    uint8_t         m_bps;                          // bitsPerSample
-    uint8_t         m_channels;
+    uint8_t         m_bitsPerSample=16;             // bitsPerSample
+    uint8_t         m_channels=2;
     uint8_t         m_i2s_num= I2S_NUM_0;           // I2S_NUM_0 or I2S_NUM_1
     int16_t         m_buffValid;
     int16_t         m_lastFrameEnd;
-    int16_t         m_outBuff[2048*2]; //[1152 * 2];          // Interleaved L/R
+    int16_t         m_outBuff[2048*2];              //[1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
     int16_t         m_lastSample[2];
@@ -162,11 +170,11 @@ private:
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0;
-    uint32_t        m_count=0;                      // Bytecounter between metadata
+    uint32_t        m_metaCount=0;                      // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytectr = 0;                  // count received data
     uint32_t        m_bytesNotDecoded=0;            // pictures or something else that comes with the stream
-    String          m_mp3title="";                  // the name of the file
+    String          m_audioName="";                  // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost="";                  // Store the last URL to a webstream
     String          m_metaline ;                    // Readable line in metadata
@@ -192,12 +200,10 @@ private:
     bool            m_f_plsTitle=false;             // Set if StationName is known
     bool            m_ctseen=false;                 // First line of header seen or not
     bool            m_f_stream=false;               // Set false if stream is lost
-    bool            m_f_mp3=false;                  // indicates mp3
-    bool            m_f_aac=false;                  // indicates aac
+    uint8_t         m_codec = CODEC_NONE;           //
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
-    unsigned int    m_lastRate;
-    size_t          m_bytesWritten=0;               // set in i2s_write() but not used
+    size_t          m_i2s_bytesWritten=0;               // set in i2s_write() but not used
     uint32_t        m_audioFileDuration=0;
     float           m_audioCurrentTime=0;
 };
