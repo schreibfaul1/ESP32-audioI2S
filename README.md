@@ -8,7 +8,7 @@ Other HW may work but not tested. Plays also icy-streams and GoogleTTS. Can be c
 ```` c++
 #include "Arduino.h"
 #include "WiFi.h"
-#include "src/audioI2S/Audio.h"
+#include "Audio.h"
 #include "SD.h"
 #include "FS.h"
 
