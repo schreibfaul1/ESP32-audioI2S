@@ -162,7 +162,7 @@ private:
     int16_t         m_outBuff[2048*2];              //[1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
-    int16_t         m_lastSample[2];
+    int16_t         m_Sample[2];
     int16_t*        m_leftSample;
     int16_t*        m_rightSample;
     uint16_t        m_datamode=0;                   // Statemaschine

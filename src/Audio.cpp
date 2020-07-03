@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 02,2020
+ *  Updated on: Jul 03,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -87,6 +87,7 @@ void Audio::reset(){
     m_chunkcount=0;                                         // for chunked streams
     m_codec = CODEC_NONE;
     m_contentlength=0;                                      // If Content-Length is known, count it
+    m_curSample=0;
     m_icyname="";                                           // No StationName yet
     m_inBuffrindex=0;                                       // Readpointer for inputbuffer
     m_inBuffwindex=0;                                       // Writepointer for inputbuffer
@@ -285,8 +286,8 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         }
 
         while(true){ // skip wave chunks, seek for fmt element
-            audiofile.readBytes(chbuf, 4); /* read wav-format */ chbuf[5] = 0;
-            if ((chbuf[0] == 'f') || (chbuf[1] == 'm') || (chbuf[2] == 't')){
+            audiofile.readBytes(chbuf, 4); /* read wav-format */
+            if ((chbuf[0] == 'f') && (chbuf[1] == 'm') && (chbuf[2] == 't')){
                 //if(audio_info) audio_info("format tag found");
                 break;
             }
@@ -296,6 +297,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         cs = (uint32_t) (chbuf[0] + (chbuf[1] <<8));
         if(cs>40) return false; //something is wrong
         uint8_t bts=cs-16; // bytes to skip if fmt chunk is >16
+        //log_i("cs=%i, bts=%i", cs, bts);
         audiofile.readBytes(chbuf, 16);
         uint16_t fc  = (uint16_t)(chbuf[0]  + (chbuf[1] <<8));  // Format code
         uint16_t nic = (uint16_t)(chbuf[2]  + (chbuf[3] <<8));  // Number of interleaved channels
@@ -304,12 +306,12 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         uint16_t dbs = (uint16_t)(chbuf[12] + (chbuf[13] <<8));  // Data block size
         uint16_t bps = (uint16_t)(chbuf[14] + (chbuf[15] <<8));  // Bits per sample
         if(audio_info){
-            sprintf(chbuf, "Format code: %u", fc);      audio_info(chbuf);
-            sprintf(chbuf, "Channels: %u", nic);        audio_info(chbuf);
-            sprintf(chbuf, "Sampling rate: %u", sr);    audio_info(chbuf);
-            sprintf(chbuf, "Data rate: %u", dr);        audio_info(chbuf);
-            sprintf(chbuf, "Data block size: %u", dbs); audio_info(chbuf);
-            sprintf(chbuf, "Bits per sample: %u", bps); audio_info(chbuf);
+            sprintf(chbuf, "FormatCode=%u", fc);      audio_info(chbuf);
+            sprintf(chbuf, "Channel=%u", nic);        audio_info(chbuf);
+            sprintf(chbuf, "SampleRate=%u", sr);    audio_info(chbuf);
+            sprintf(chbuf, "DataRate=%u", dr);        audio_info(chbuf);
+            sprintf(chbuf, "DataBlockSize=%u", dbs); audio_info(chbuf);
+            sprintf(chbuf, "BitsPerSample=%u", bps); audio_info(chbuf);
         }
 
         if(fc != 1){
@@ -321,27 +323,30 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
             if(audio_info) audio_info("number of channels must be 1 or 2");
             return false;
         }
-        setChannels(nic);
-        setSampleRate(sr);
 
         if(bps != 8 && bps !=16){
             if(audio_info) audio_info("bits per sample must be 8 or 16");
             return false;
         }
-        setBitsPerSample(bps*2);
+        setBitsPerSample(bps);
+        setChannels(nic);
+        setSampleRate(sr);
         m_bitRate = nic * sr * bps;
+        if(audio_info) sprintf(chbuf, "BitRate=%u", m_bitRate); audio_info(chbuf);
 
         audiofile.readBytes(chbuf, bts); // skip to data
-
+        uint32_t s = getFilePos();
         //here can be extra info, seek for data;
         while(true){
-           audiofile.readBytes(chbuf, 4); /* read header signature */ chbuf[5] = 0;
-           if ((chbuf[0] != 'd') || (chbuf[1] != 'a') || (chbuf[2] != 't') || (chbuf[3] != 'a')) break;
+            setFilePos(s);
+            audiofile.readBytes(chbuf, 4); /* read header signature */
+            if ((chbuf[0] == 'd') && (chbuf[1] == 'a') && (chbuf[2] == 't') && (chbuf[3] == 'a')) break;
+            s++;
         }
 
         audiofile.readBytes(chbuf, 4); // read chunkSize (datalen)
-        cs = (uint32_t)(chbuf[0] + (chbuf[1] <<8) + (chbuf[2] <<16) + (chbuf[3] <<24) - 44);
-        sprintf(chbuf, "DataLength = %u", cs);
+        cs = chbuf[0] + (chbuf[1] <<8) + (chbuf[2] <<16) + (chbuf[3] <<24) - 44;
+        sprintf(chbuf, "DataLength=%u", cs);
         if(audio_info) audio_info(chbuf);
         m_f_running=true;
         return true;
@@ -771,7 +776,8 @@ void Audio::playI2Sremains(){
     if(m_bitRate==0)
     if(m_sampleRate==0) setSampleRate(96000);
     if(m_channels==0) setChannels(2);
-    memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
+    if(getBitsPerSample()>8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
+    else                     memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
     for(int i=0; i<5; i++){                      //play remains and then flush dmaBuff
         m_validSamples = 2048;
         while(m_validSamples) {
@@ -796,27 +802,60 @@ bool Audio::pauseResume()
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playChunk(){
-    // If we've got data, try and pump it out...
-    if(m_channels==1){
-        while (m_validSamples) {
-            m_lastSample[LEFTCHANNEL]  = m_outBuff[m_curSample];
-            m_lastSample[RIGHTCHANNEL] = m_outBuff[m_curSample];
-            if (!playSample(m_lastSample)) {return false;} // Can't send
-            m_validSamples--;
-            m_curSample++;
+    // If we've got data, try and pump it out..
+    if(getBitsPerSample()==8){
+        if(m_channels==1){
+            while(m_validSamples){
+                uint8_t x = m_outBuff[m_curSample] & 0x00FF;
+                uint8_t y = (m_outBuff[m_curSample] & 0xFF00)>>8;
+                m_Sample[LEFTCHANNEL]  = x;
+                m_Sample[RIGHTCHANNEL] = x;
+                while(1){if(playSample(m_Sample)) break;} // Can't send?
+                m_Sample[LEFTCHANNEL]  = y;
+                m_Sample[RIGHTCHANNEL] = y;
+                while(1){if(playSample(m_Sample)) break;} // Can't send?
+                m_validSamples--;
+                m_curSample++;
+            }
         }
-    }
-    if(m_channels==2){
-        while (m_validSamples) {
-            m_lastSample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
-            m_lastSample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
-            if (!playSample(m_lastSample)) {return false;} // Can't send
-            m_validSamples--;
-            m_curSample++;
+        if(m_channels==2){
+            while(m_validSamples){
+                uint8_t x = m_outBuff[m_curSample] & 0x00FF;
+                uint8_t y = (m_outBuff[m_curSample] & 0xFF00)>>8;
+                m_Sample[LEFTCHANNEL]  = x;
+                m_Sample[RIGHTCHANNEL] = y;
+                while(1){if(playSample(m_Sample)) break;} // Can't send?
+                m_validSamples--;
+                m_curSample++;
+            }
         }
+       m_curSample=0;
+       return true;
     }
-    m_curSample=0;
-    return true;
+    if(getBitsPerSample()==16){
+        if(m_channels==1){
+            while (m_validSamples) {
+                m_Sample[LEFTCHANNEL]  = m_outBuff[m_curSample];
+                m_Sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
+                if (!playSample(m_Sample)) {return false;} // Can't send
+                m_validSamples--;
+                m_curSample++;
+            }
+        }
+        if(m_channels==2){
+            while (m_validSamples) {
+                m_Sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
+                m_Sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+                if (!playSample(m_Sample)) {return false;} // Can't send
+                m_validSamples--;
+                m_curSample++;
+            }
+        }
+        m_curSample=0;
+        return true;
+    }
+    log_e("BitsPer Sample must be 8 or 16!");
+    return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::loop() 
@@ -841,43 +880,36 @@ void Audio::processLocalFile()
         int16_t  bytesAddedToBuffer = 0;
 
         bytesCanBeWritten = m_inBuffsize-m_inBuffwindex;
-        bytesAddedToBuffer = audiofile.read(m_inBuff + m_inBuffwindex, bytesCanBeWritten);
+        bytesAddedToBuffer = audiofile.read(&m_inBuff[0] + m_inBuffwindex, bytesCanBeWritten);
 
-        if( bytesAddedToBuffer > 0 )
-        {
-            m_inBuffwindex += bytesAddedToBuffer;
-        }
-        if ( m_inBuffwindex == m_inBuffsize )
-        {
-            if ( false == m_f_stream )
-            {
+        if(bytesAddedToBuffer) m_inBuffwindex += bytesAddedToBuffer;
+
+        if(m_inBuffwindex == m_inBuffsize){
+            if(!m_f_stream){
                 m_f_stream = true;
-                playI2Sremains(); // create a short silence
                 if(audio_info) audio_info("stream ready");
+                playI2Sremains();
             }
             m_inBuffrindex = sendBytes(m_inBuff, m_inBuffsize);
             memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
             m_inBuffwindex -= m_inBuffrindex;
             return;
         }
-        else// eof
-        {
-            sendBytes(m_inBuff, m_inBuffwindex);         // write last chunk
-            memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
-            for(int i=0; i<5; i++){
-                m_validSamples = 2048;
-                while(m_validSamples) {
-                    playChunk();
+        else{
+            if(!bytesAddedToBuffer){  // eof
+                if(m_inBuffwindex>0){
+                    sendBytes(m_inBuff, m_inBuffwindex);         // write last chunk
+                    memset(m_outBuff, 0, sizeof(m_outBuff));
                 }
+                playI2Sremains();
+                stopSong();
+                m_f_stream=false;
+                m_f_localfile=false;
+                MP3Decoder_FreeBuffers();
+                sprintf(chbuf,"End of file %s", m_audioName.c_str());
+                if(audio_info) audio_info(chbuf);
+                if(audio_eof_mp3) audio_eof_mp3(m_audioName.c_str());
             }
-            playI2Sremains();
-            stopSong();
-            m_f_stream=false;
-            m_f_localfile=false;
-            MP3Decoder_FreeBuffers();
-            sprintf(chbuf,"End of file %s", m_audioName.c_str());
-            if(audio_info) audio_info(chbuf);
-            if(audio_eof_mp3) audio_eof_mp3(m_audioName.c_str());
         }
     }
 }
@@ -1582,7 +1614,8 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     int bytesDecoded = 0;
     if(m_codec == CODEC_WAV){ //copy len data in outbuff and set validsamples and bytesdecoded=len
         memmove(m_outBuff, data , len);
-        m_validSamples = len / (getBitsPerSample()/8 * getChannels());
+        if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
+        if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
         m_bytesLeft = 0;
     }
     if(m_codec == CODEC_MP3) ret = MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
@@ -1590,7 +1623,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     if(ret==0) lastRet=0;
     bytesDecoded=len-m_bytesLeft;
     if(bytesDecoded==0){ // unlikely framesize
-        if(audio_info) audio_info("mp3 or aac framesize is 0, start decoding again");
+        if(audio_info) audio_info("framesize is 0, start decoding again");
         m_f_playing=false; // seek for new syncword
         
         // we're here because there was a wrong sync word
@@ -1680,8 +1713,11 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
                 if(audio_info) audio_info(chbuf);
             }
             if(MP3GetBitrate()!= lastBitRate){
-                sprintf(chbuf,"Bitrate=%i", MP3GetBitrate());
-                if(audio_info) audio_info(chbuf);
+                if(lastBitRate == 0){
+                    sprintf(chbuf,"BitRate=%i", MP3GetBitrate());
+                    if(audio_info) audio_info(chbuf);
+                }
+
                 if(m_contentlength >0 && MP3GetBitrate()>0){
                     uint16_t duration=m_contentlength*8/MP3GetBitrate();
                     sprintf(chbuf,"Duration=%is", duration);
@@ -1876,10 +1912,9 @@ uint8_t Audio::getChannels(){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playSample(int16_t sample[2]) {
-    if (m_bitsPerSample == 8) {
-      // Upsample from unsigned 8 bits to signed 16 bits
-      sample[LEFTCHANNEL]  = (((int16_t)(sample[LEFTCHANNEL]&0xff)) - 128) << 8;
-      sample[RIGHTCHANNEL] = (((int16_t)(sample[RIGHTCHANNEL]&0xff)) - 128) << 8;
+    if (getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
+      sample[LEFTCHANNEL]  = (int16_t)(((sample[LEFTCHANNEL] &0xff)-128) << 8);
+      sample[RIGHTCHANNEL] = (int16_t)(((sample[RIGHTCHANNEL]&0xff)-128) << 8);
     }
     uint32_t s32;
     s32 = ((Gain(sample[RIGHTCHANNEL]))<<16) | (Gain(sample[LEFTCHANNEL]) & 0xffff); // volume
