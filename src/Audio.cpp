@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 03,2020
+ *  Updated on: Jul 15,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -30,7 +30,7 @@ Audio::Audio() {
          .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1, // high interrupt priority
          .dma_buf_count = 8,  // max buffers
          .dma_buf_len = 1024, // max value
-         .use_apll=APLL_DISABLE,
+         .use_apll = APLL_DISABLE,
          .tx_desc_auto_clear= true,  // new in V1.0.1
          .fixed_mclk=-1
     };
@@ -263,6 +263,8 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         m_f_running=true;
         return true;
     } // end MP3 section
+
+
 
     if(afn.endsWith(".wav")) { // WAVE section
         m_codec = CODEC_WAV;
@@ -773,7 +775,6 @@ void Audio::stopSong(){
 void Audio::playI2Sremains(){
     // there is no  function to see if dma_buff is empty. So fill the dma completely.
     // As soon as all remains played this function returned. Or you can take this to create a short silence.
-    if(m_bitRate==0)
     if(m_sampleRate==0) setSampleRate(96000);
     if(m_channels==0) setChannels(2);
     if(getBitsPerSample()>8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
@@ -806,8 +807,8 @@ bool Audio::playChunk(){
     if(getBitsPerSample()==8){
         if(m_channels==1){
             while(m_validSamples){
-                uint8_t x = m_outBuff[m_curSample] & 0x00FF;
-                uint8_t y = (m_outBuff[m_curSample] & 0xFF00)>>8;
+                uint8_t x =  m_outBuff[m_curSample] & 0x00FF;
+                uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 m_Sample[LEFTCHANNEL]  = x;
                 m_Sample[RIGHTCHANNEL] = x;
                 while(1){if(playSample(m_Sample)) break;} // Can't send?
@@ -1913,8 +1914,8 @@ uint8_t Audio::getChannels(){
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playSample(int16_t sample[2]) {
     if (getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
-      sample[LEFTCHANNEL]  = (int16_t)(((sample[LEFTCHANNEL] &0xff)-128) << 8);
-      sample[RIGHTCHANNEL] = (int16_t)(((sample[RIGHTCHANNEL]&0xff)-128) << 8);
+      sample[LEFTCHANNEL]  = ((sample[LEFTCHANNEL]  & 0xff) -128) << 8;
+      sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
     uint32_t s32;
     s32 = ((Gain(sample[RIGHTCHANNEL]))<<16) | (Gain(sample[LEFTCHANNEL]) & 0xffff); // volume
