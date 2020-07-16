@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 02,2020
+ *  Updated on: Jul 15,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -99,6 +99,8 @@ private:
     void processLocalFile();
     void processWebStream();
     int  sendBytes(uint8_t *data, size_t len);
+    void compute_audioCurrentTime(int bd);
+    void printDecodeError(int r);
     void readID3Metadata();
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);

@@ -1635,51 +1635,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         m_f_playing=false; // seek for new syncword
         if(count==0){
             i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-            String e = "";
-            if(m_codec == CODEC_MP3){
-                switch(ret){
-                    case ERR_MP3_NONE:                 e="NONE";                  break;
-                    case ERR_MP3_INDATA_UNDERFLOW:     e="INDATA_UNDERFLOW";      break;
-                    case ERR_MP3_MAINDATA_UNDERFLOW:   e="MAINDATA_UNDERFLOW";    break;
-                    case ERR_MP3_FREE_BITRATE_SYNC:    e="FREE_BITRATE_SYNC";     break;
-                    case ERR_MP3_OUT_OF_MEMORY:        e="OUT_OF_MEMORY";         break;
-                    case ERR_MP3_NULL_POINTER:         e="NULL_POINTER";          break;
-                    case ERR_MP3_INVALID_FRAMEHEADER:  e="INVALID_FRAMEHEADER";   break;
-                    case ERR_MP3_INVALID_SIDEINFO:     e="INVALID_SIDEINFO";      break;
-                    case ERR_MP3_INVALID_SCALEFACT:    e="INVALID_SCALEFACT";     break;
-                    case ERR_MP3_INVALID_HUFFCODES:    e="INVALID_HUFFCODES";     break;
-                    case ERR_MP3_INVALID_DEQUANTIZE:   e="INVALID_DEQUANTIZE";    break;
-                    case ERR_MP3_INVALID_IMDCT:        e="INVALID_IMDCT";         break;
-                    case ERR_MP3_INVALID_SUBBAND:      e="INVALID_SUBBAND";       break;
-                    default: e="ERR_UNKNOWN";
-                }
-                sprintf(chbuf, "MP3 decode error %d : %s", ret, e.c_str());
-                if(audio_info) audio_info(chbuf);
-            }
-            if(m_codec == CODEC_AAC){
-                switch(ret){
-                    case ERR_AAC_NONE:                  e="NONE";                 break;
-                    case ERR_AAC_INDATA_UNDERFLOW:      e="INDATA_UNDERFLOW";     break;
-                    case ERR_AAC_NULL_POINTER:          e="NULL_POINTER";         break;
-                    case ERR_AAC_INVALID_ADTS_HEADER:   e="INVALID_ADTS_HEADER";  break;
-                    case ERR_AAC_INVALID_ADIF_HEADER:   e="INVALID_ADIF_HEADER";  break;
-                    case ERR_AAC_INVALID_FRAME:         e="INVALID_FRAME";        break;
-                    case ERR_AAC_MPEG4_UNSUPPORTED:     e="MPEG4_UNSUPPORTED";    break;
-                    case ERR_AAC_CHANNEL_MAP:           e="CHANNEL_MAP";          break;
-                    case ERR_AAC_SYNTAX_ELEMENT:        e="SYNTAX_ELEMENT";       break;
-                    case ERR_AAC_DEQUANT:               e="DEQUANT";              break;
-                    case ERR_AAC_STEREO_PROCESS:        e="STEREO_PROCESS";       break;
-                    case ERR_AAC_PNS:                   e="PNS";                  break;
-                    case ERR_AAC_SHORT_BLOCK_DEINT:     e="SHORT_BLOCK_DEINT";    break;
-                    case ERR_AAC_TNS:                   e="TNS";                  break;
-                    case ERR_AAC_IMDCT:                 e="IMDCT";                break;
-                    case ERR_AAC_NCHANS_TOO_HIGH:       e="NCHANS_TOO_HIGH";      break;
-                    case ERR_AAC_RAWBLOCK_PARAMS:       e="RAWBLOCK_PARAMS";      break;
-                    default: e="ERR_UNKNOWN";
-                }
-                sprintf(chbuf, "AAC decode error %d : %s", ret, e.c_str());
-                if(audio_info) audio_info(chbuf);
-            }
+            printDecodeError(ret);
         }
         if(lastRet==ret) count++;
         if(count>10){ count=0; lastRet=0;} // more than 10 errors
@@ -1769,11 +1725,19 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             m_validSamples = AACGetOutputSamps() / lastChannels;
         }
     }
+    compute_audioCurrentTime(bytesDecoded);
+    while(m_validSamples) {
+        playChunk();
+    }
+    return bytesDecoded;
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::compute_audioCurrentTime(int bd){
     static uint16_t bitrate_counter=0;
     static int      old_bitrate = 0;
     static uint32_t sum_bitrate = 0;
     static boolean  f_firstFrame = true;
-    static boolean  f_CBR = true;
+    static boolean  f_CBR = true; // constant bitrate
 
     if(m_bitRate>0){
         if(m_avr_bitrate==0){
@@ -1790,7 +1754,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             }
         }
         old_bitrate = m_bitRate;
-        if(bitrate_counter < 100 && !f_CBR){
+        if(bitrate_counter < 100 && !f_CBR){ // average of the first 100 values
             bitrate_counter++;
             sum_bitrate += m_bitRate;
             m_avr_bitrate = sum_bitrate /  bitrate_counter;
@@ -1799,12 +1763,56 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             m_avr_bitrate = m_bitRate; // if CBR set m_avr_bitrate only once
         }
         f_firstFrame = false;
-        m_audioCurrentTime += (float) bytesDecoded*8/m_bitRate;
+        m_audioCurrentTime += (float) bd * 8 / m_bitRate;
     }
-    while(m_validSamples) {
-        playChunk();
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::printDecodeError(int r){
+    String e = "";
+    if(m_codec == CODEC_MP3){
+        switch(r){
+            case ERR_MP3_NONE:                 e="NONE";                  break;
+            case ERR_MP3_INDATA_UNDERFLOW:     e="INDATA_UNDERFLOW";      break;
+            case ERR_MP3_MAINDATA_UNDERFLOW:   e="MAINDATA_UNDERFLOW";    break;
+            case ERR_MP3_FREE_BITRATE_SYNC:    e="FREE_BITRATE_SYNC";     break;
+            case ERR_MP3_OUT_OF_MEMORY:        e="OUT_OF_MEMORY";         break;
+            case ERR_MP3_NULL_POINTER:         e="NULL_POINTER";          break;
+            case ERR_MP3_INVALID_FRAMEHEADER:  e="INVALID_FRAMEHEADER";   break;
+            case ERR_MP3_INVALID_SIDEINFO:     e="INVALID_SIDEINFO";      break;
+            case ERR_MP3_INVALID_SCALEFACT:    e="INVALID_SCALEFACT";     break;
+            case ERR_MP3_INVALID_HUFFCODES:    e="INVALID_HUFFCODES";     break;
+            case ERR_MP3_INVALID_DEQUANTIZE:   e="INVALID_DEQUANTIZE";    break;
+            case ERR_MP3_INVALID_IMDCT:        e="INVALID_IMDCT";         break;
+            case ERR_MP3_INVALID_SUBBAND:      e="INVALID_SUBBAND";       break;
+            default: e="ERR_UNKNOWN";
+        }
+        sprintf(chbuf, "MP3 decode error %d : %s", r, e.c_str());
+        if(audio_info) audio_info(chbuf);
     }
-    return bytesDecoded;
+    if(m_codec == CODEC_AAC){
+        switch(r){
+            case ERR_AAC_NONE:                  e="NONE";                 break;
+            case ERR_AAC_INDATA_UNDERFLOW:      e="INDATA_UNDERFLOW";     break;
+            case ERR_AAC_NULL_POINTER:          e="NULL_POINTER";         break;
+            case ERR_AAC_INVALID_ADTS_HEADER:   e="INVALID_ADTS_HEADER";  break;
+            case ERR_AAC_INVALID_ADIF_HEADER:   e="INVALID_ADIF_HEADER";  break;
+            case ERR_AAC_INVALID_FRAME:         e="INVALID_FRAME";        break;
+            case ERR_AAC_MPEG4_UNSUPPORTED:     e="MPEG4_UNSUPPORTED";    break;
+            case ERR_AAC_CHANNEL_MAP:           e="CHANNEL_MAP";          break;
+            case ERR_AAC_SYNTAX_ELEMENT:        e="SYNTAX_ELEMENT";       break;
+            case ERR_AAC_DEQUANT:               e="DEQUANT";              break;
+            case ERR_AAC_STEREO_PROCESS:        e="STEREO_PROCESS";       break;
+            case ERR_AAC_PNS:                   e="PNS";                  break;
+            case ERR_AAC_SHORT_BLOCK_DEINT:     e="SHORT_BLOCK_DEINT";    break;
+            case ERR_AAC_TNS:                   e="TNS";                  break;
+            case ERR_AAC_IMDCT:                 e="IMDCT";                break;
+            case ERR_AAC_NCHANS_TOO_HIGH:       e="NCHANS_TOO_HIGH";      break;
+            case ERR_AAC_RAWBLOCK_PARAMS:       e="RAWBLOCK_PARAMS";      break;
+            default: e="ERR_UNKNOWN";
+        }
+        sprintf(chbuf, "AAC decode error %d : %s", r, e.c_str());
+        if(audio_info) audio_info(chbuf);
+    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN){
