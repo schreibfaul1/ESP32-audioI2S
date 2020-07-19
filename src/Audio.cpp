@@ -478,7 +478,7 @@ bool Audio::connecttospeech(String speech, String lang){
                 m_inBuffwindex+=res;
                 free-=res;
             }
-            if(free==0){
+            while(m_inBuffwindex>=1600){
                 x=sendBytes(m_inBuff, m_inBuffsize);
                 m_inBuffwindex-=x;
                 memmove(m_inBuff, m_inBuff + x , m_inBuffsize-x);
@@ -885,23 +885,23 @@ void Audio::processLocalFile()
 
         if(bytesAddedToBuffer) m_inBuffwindex += bytesAddedToBuffer;
 
-        if(m_inBuffwindex == m_inBuffsize){
+        if(m_inBuffwindex - m_inBuffrindex >= 1600){
             if(!m_f_stream){
                 m_f_stream = true;
                 if(audio_info) audio_info("stream ready");
                 playI2Sremains();
             }
-            m_inBuffrindex = sendBytes(m_inBuff, m_inBuffsize);
-            memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
-            m_inBuffwindex -= m_inBuffrindex;
+            m_inBuffrindex += sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);
+            if(m_inBuffsize - m_inBuffrindex < 1600 ){
+                memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
+                m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
+                m_inBuffrindex = 0;
+            }
             return;
         }
         else{
             if(!bytesAddedToBuffer){  // eof
-                if(m_inBuffwindex>0){
-                    sendBytes(m_inBuff, m_inBuffwindex);         // write last chunk
-                    memset(m_outBuff, 0, sizeof(m_outBuff));
-                }
+                sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex); // write last chunk
                 playI2Sremains();
                 stopSong();
                 m_f_stream=false;
@@ -920,7 +920,6 @@ void Audio::processWebStream() {
         uint16_t bytesCanBeWritten = 0;
         int16_t bytesAddedToBuffer = 0;
         static uint32_t chunksize = 0;      // Chunkcount read from stream
-        static uint16_t inBuffSize = m_inBuffsize;
         int32_t availableBytes = 0;         // Available bytes in stream
         static int bytesdecoded = 0;
 
@@ -931,12 +930,11 @@ void Audio::processWebStream() {
         if ((m_f_firststream_ready == false) && (availableBytes > 0)) { // first streamdata recognized
             m_f_firststream_ready = true;
             m_f_stream = false;
-            inBuffSize = m_inBuffsize;
             m_bytectr = 0;
         }
 
         if (((m_datamode == AUDIO_DATA) || (m_datamode == AUDIO_SWM)) && (m_metaCount > 0)) {
-            bytesCanBeWritten = inBuffSize - m_inBuffwindex;
+            bytesCanBeWritten = m_inBuffsize - m_inBuffwindex;
             uint x = min(m_metaCount, uint32_t(bytesCanBeWritten));
 
             if ((m_f_chunked) && (x > m_chunkcount)) {
@@ -962,26 +960,28 @@ void Audio::processWebStream() {
                 m_inBuffwindex += bytesAddedToBuffer;
             }
 
-            if (m_inBuffwindex == inBuffSize) {
+            if (m_inBuffwindex - m_inBuffrindex >= 1600) {
                 if (m_f_stream == false) {
                     m_f_stream = true;
                     playI2Sremains();
-                    if (audio_info)
-                        audio_info("stream ready");
+                    if (audio_info) audio_info("stream ready");
                 }
-                bytesdecoded = sendBytes(m_inBuff, inBuffSize);
-                if (bytesdecoded < 0)   // no syncword found or decode error, try next chunk
-                        {
+                bytesdecoded = sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);
+                if (bytesdecoded < 0) {  // no syncword found or decode error, try next chunk
                     m_inBuffrindex = 200; // try next chunk
                     m_bytesNotDecoded += 200;
-                    memmove(m_inBuff, m_inBuff + m_inBuffrindex, inBuffSize - m_inBuffrindex);
-                    m_inBuffwindex -= m_inBuffrindex;
-                    inBuffSize = m_inBuffsize;
+                    memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
+                    m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
+                    m_inBuffrindex = 0;
                     return;
-                } else {
-                    m_inBuffrindex = bytesdecoded;
-                    memmove(m_inBuff, m_inBuff + m_inBuffrindex, inBuffSize - m_inBuffrindex);
-                    m_inBuffwindex -= m_inBuffrindex;
+                }
+                else {
+                    m_inBuffrindex += bytesdecoded;
+                    if(m_inBuffsize - m_inBuffrindex < 1600 ){
+                        memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
+                        m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
+                        m_inBuffrindex = 0;
+                    }
                 }
             }
             if (bytesAddedToBuffer == 0) {

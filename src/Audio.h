@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 15,2020
+ *  Updated on: Jul 19,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -146,7 +146,7 @@ private:
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
-    uint8_t         m_inBuff[1600];                 // inputBuffer
+    uint8_t         m_inBuff[1600 * 4];             // InputBuffer, min 1600 bytes
     uint16_t        m_inBuffwindex=0;               // write index
     uint16_t        m_inBuffrindex=0;               // read index
     const uint16_t  m_inBuffsize=sizeof(m_inBuff);  // size of inputBuffer
