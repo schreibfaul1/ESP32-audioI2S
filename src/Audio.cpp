@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 15,2020
+ *  Updated on: Jul 21,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -21,20 +21,19 @@
 Audio::Audio() {
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
-    i2s_config_t i2s_config = {
-         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-         .sample_rate = 16000,
-         .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
-         .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-         .communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB),
-         .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1, // high interrupt priority
-         .dma_buf_count = 8,  // max buffers
-         .dma_buf_len = 1024, // max value
-         .use_apll = APLL_DISABLE,
-         .tx_desc_auto_clear= true,  // new in V1.0.1
-         .fixed_mclk=-1
-    };
-    i2s_driver_install((i2s_port_t)m_i2s_num, &i2s_config, 0, NULL);
+    m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
+    m_i2s_config.sample_rate          = 16000;
+    m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
+    m_i2s_config.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+    m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // high interrupt priority
+    m_i2s_config.dma_buf_count        = 8;      // max buffers
+    m_i2s_config.dma_buf_len          = 1024;   // max value
+    m_i2s_config.use_apll             = APLL_ENABLE;
+    m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
+    m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
+
+    i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 
     m_BCLK=26;                       // Bit Clock
     m_LRC=25;                        // Left/Right Clock
@@ -469,7 +468,7 @@ bool Audio::connecttospeech(String speech, String lang){
     if(audio_info) audio_info(chbuf);
     uint16_t res;
     uint16_t x=0;
-    playI2Sremains();
+    while(!playI2Sremains()){;}
     while(clientsecure.available()==0){;}
     while(clientsecure.available() > 0) {
             free=m_inBuffsize-m_inBuffwindex;// free space
@@ -492,7 +491,7 @@ bool Audio::connecttospeech(String speech, String lang){
             playChunk();
         }
     }
-    playI2Sremains();
+    while(!playI2Sremains()){;}
     MP3Decoder_FreeBuffers();
     stopSong();
     clientsecure.stop();  clientsecure.flush();
@@ -772,19 +771,26 @@ void Audio::stopSong(){
     i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::playI2Sremains(){
+bool Audio::playI2Sremains(){ // returns true if all dma_buffs flushed
+    static uint8_t dma_buf_count = 0;
     // there is no  function to see if dma_buff is empty. So fill the dma completely.
     // As soon as all remains played this function returned. Or you can take this to create a short silence.
     if(m_sampleRate==0) setSampleRate(96000);
     if(m_channels==0) setChannels(2);
     if(getBitsPerSample()>8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
     else                     memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
-    for(int i=0; i<5; i++){                      //play remains and then flush dmaBuff
-        m_validSamples = 2048;
-        while(m_validSamples) {
-            playChunk();
-        }
+
+    //play remains and then flush dmaBuff
+    m_validSamples = m_i2s_config.dma_buf_len;
+    while(m_validSamples) {
+        playChunk();
     }
+    if(dma_buf_count < m_i2s_config.dma_buf_count){
+        dma_buf_count++;
+        return false;
+    }
+    dma_buf_count = 0;
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume()
@@ -875,6 +881,7 @@ void Audio::loop()
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile()
 {
+    static boolean lastChunk = false;
     if ( audiofile && m_f_running && m_f_localfile )
     {
         uint16_t bytesCanBeWritten = 0;
@@ -887,9 +894,9 @@ void Audio::processLocalFile()
 
         if(m_inBuffwindex - m_inBuffrindex >= 1600){
             if(!m_f_stream){
+                if(!playI2Sremains()) return; // release the thread, continue on the next pass
                 m_f_stream = true;
                 if(audio_info) audio_info("stream ready");
-                playI2Sremains();
             }
             m_inBuffrindex += sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);
             if(m_inBuffsize - m_inBuffrindex < 1600 ){
@@ -897,12 +904,17 @@ void Audio::processLocalFile()
                 m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
                 m_inBuffrindex = 0;
             }
+            lastChunk = false;
             return;
         }
         else{
             if(!bytesAddedToBuffer){  // eof
-                sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex); // write last chunk
-                playI2Sremains();
+                sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex); // write last chunk(s)
+                if(lastChunk == false){
+                    lastChunk = true;
+                    return; // release the thread, continue on the next pass
+                }
+                if(!playI2Sremains()) return;
                 stopSong();
                 m_f_stream=false;
                 m_f_localfile=false;
@@ -962,8 +974,8 @@ void Audio::processWebStream() {
 
             if (m_inBuffwindex - m_inBuffrindex >= 1600) {
                 if (m_f_stream == false) {
+                    if(!playI2Sremains()) return;
                     m_f_stream = true;
-                    playI2Sremains();
                     if (audio_info) audio_info("stream ready");
                 }
                 bytesdecoded = sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);

@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 19,2020
+ *  Updated on: Jul 21,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -107,7 +107,7 @@ private:
     bool setChannels(int channels);
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
-    void playI2Sremains();
+    bool playI2Sremains();
     int16_t Gain(int16_t s);
     bool fill_InputBuf();
     void showstreamtitle(const char *ml, bool full);
@@ -133,6 +133,7 @@ private:
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
+    i2s_config_t      m_i2s_config; // stores values for I2S driver
     char            chbuf[256];
     char            path[256];
     int             m_id3Size=0;                    // length id3 tag
