@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 21,2020
+ *  Updated on: Aug 03,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -885,20 +885,22 @@ void Audio::processLocalFile()
     if ( audiofile && m_f_running && m_f_localfile )
     {
         uint16_t bytesCanBeWritten = 0;
+        uint16_t bytesCanBeRead = 0;
         int16_t  bytesAddedToBuffer = 0;
 
         bytesCanBeWritten = m_inBuffsize-m_inBuffwindex;
         bytesAddedToBuffer = audiofile.read(&m_inBuff[0] + m_inBuffwindex, bytesCanBeWritten);
 
-        if(bytesAddedToBuffer) m_inBuffwindex += bytesAddedToBuffer;
+        if(bytesAddedToBuffer > 0) m_inBuffwindex += bytesAddedToBuffer;
+        bytesCanBeRead = m_inBuffwindex - m_inBuffrindex;
 
-        if(m_inBuffwindex - m_inBuffrindex >= 1600){
+        if(bytesCanBeRead >= 1600){ // mp3 or aac frame complete?
             if(!m_f_stream){
                 if(!playI2Sremains()) return; // release the thread, continue on the next pass
                 m_f_stream = true;
                 if(audio_info) audio_info("stream ready");
             }
-            m_inBuffrindex += sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);
+            m_inBuffrindex += sendBytes(m_inBuff + m_inBuffrindex, bytesCanBeRead);
             if(m_inBuffsize - m_inBuffrindex < 1600 ){
                 memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
                 m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
@@ -907,22 +909,31 @@ void Audio::processLocalFile()
             lastChunk = false;
             return;
         }
-        else{
-            if(!bytesAddedToBuffer){  // eof
-                sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex); // write last chunk(s)
-                if(lastChunk == false){
-                    lastChunk = true;
-                    return; // release the thread, continue on the next pass
+
+        if(!bytesAddedToBuffer){  // eof
+            if(lastChunk == false){
+                if(bytesCanBeRead){
+                    int ret = sendBytes(m_inBuff + m_inBuffrindex, bytesCanBeRead); // write last chunk(s)
+                    if(ret < 100){ // unlikely framesize
+                        m_inBuffwindex = 0;
+                        m_inBuffrindex = 0;
+                        lastChunk = true;
+                        return;
+                    }
+                    m_inBuffrindex += ret;
+                    return;
                 }
-                if(!playI2Sremains()) return;
-                stopSong();
-                m_f_stream=false;
-                m_f_localfile=false;
-                MP3Decoder_FreeBuffers();
-                sprintf(chbuf,"End of file %s", m_audioName.c_str());
-                if(audio_info) audio_info(chbuf);
-                if(audio_eof_mp3) audio_eof_mp3(m_audioName.c_str());
+                lastChunk = true;
+                return; // release the thread, continue on the next pass
             }
+            if(!playI2Sremains()) return;
+            stopSong();
+            m_f_stream=false;
+            m_f_localfile=false;
+            MP3Decoder_FreeBuffers();
+            sprintf(chbuf,"End of file %s", m_audioName.c_str());
+            if(audio_info) audio_info(chbuf);
+            if(audio_eof_mp3) audio_eof_mp3(m_audioName.c_str());
         }
     }
 }
@@ -1635,6 +1646,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
     if(m_codec == CODEC_AAC) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
     if(ret==0) lastRet=0;
     bytesDecoded=len-m_bytesLeft;
+    // log_i("bytesDecoded %i", bytesDecoded);
     if(bytesDecoded==0){ // unlikely framesize
         if(audio_info) audio_info("framesize is 0, start decoding again");
         m_f_playing=false; // seek for new syncword
@@ -1684,12 +1696,6 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
             if(MP3GetBitrate()!= lastBitRate){
                 if(lastBitRate == 0){
                     sprintf(chbuf,"BitRate=%i", MP3GetBitrate());
-                    if(audio_info) audio_info(chbuf);
-                }
-
-                if(m_contentlength >0 && MP3GetBitrate()>0){
-                    uint16_t duration=m_contentlength*8/MP3GetBitrate();
-                    sprintf(chbuf,"Duration=%is", duration);
                     if(audio_info) audio_info(chbuf);
                 }
                 lastBitRate = MP3GetBitrate();
