@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 21,2020
+ *  Updated on: Aug 18,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -37,10 +37,69 @@ extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstrea
 #define AUDIO_PLAYLISTDATA   64
 #define AUDIO_SWM           128
 
+//----------------------------------------------------------------------------------------------------------------------
+
+class AudioBuffer{
+// AudioBuffer will be allocated in PSRAM, If PSRAM not available or has not enough space AudioBuffer will be
+// allocated in FlashRAM with reduced size
+//
+//                      m_readPtr                 m_writePtr                 m_endPtr
+//                           |<------dataLength------->|<------ writeSpace ----->|
+//                           ▼                         ▼                         ▼
+// ---------------------------------------------------------------------------------------------------------------
+// |                       <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
+// ---------------------------------------------------------------------------------------------------------------
+// |<------freeSpace-------->|                         |<------freeSpace-------->|
+//
+//
+//
+// if the space between m_readPtr and buffend < 1600 bytes copy data from the beginning to resBuff
+// so that the mp3 frame is always completed
+//
+//                               m_writePtr                 m_readPtr        m_endPtr
+//                                    |<-------writeSpace-1 --->|<--dataLength-->|
+//                                    ▼                         ▼                ▼
+// ---------------------------------------------------------------------------------------------------------------
+// |                       <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
+// ---------------------------------------------------------------------------------------------------------------
+// |<---  ------dataLength--  ------>|<-------freeSpace------->|
+//
 //
 
+public:
+    AudioBuffer();                      // constructor
+    ~AudioBuffer();                     // frees the buffer
+    size_t   init();                    // set default values
+    size_t   freeSpace();               // number of free bytes to overwrite
+    size_t   writeSpace();              // space fom writepointer to bufferend
+    size_t   bufferFilled();            // returns the number of filled bytes
+    void     bytesWritten(size_t bw);   // update writepointer
+    void     bytesWasRead(size_t br);   // update readpointer
+    uint8_t* writePtr();                // returns the current writepointer
+    uint8_t* readPtr();                 // returns the current readpointer
+    uint32_t getWritePos();             // write position relative to the beginning
+    uint32_t getReadPos();              // read position relative to the beginning
+    void     resetBuffer();             // restore defaults
 
-class Audio  {
+protected:
+    const size_t m_buffSizePSRAM = 300000; // most webstreams limit the advance to 100...300Kbytes
+    const size_t m_buffSizeRAM   = 1600 * 5;
+    size_t       m_buffSize      = 0;
+    size_t       m_freeSpace     = 0;
+    size_t       m_writeSpace    = 0;
+    size_t       m_dataLength    = 0;
+    size_t       m_resBuffSize   = 1600; // reserved buffspace, >= one mp3 frame
+    uint8_t*     m_buffer        = NULL;
+    uint8_t*     m_writePtr      = NULL;
+    uint8_t*     m_readPtr       = NULL;
+    uint8_t*     m_endPtr        = NULL;
+    bool         m_f_start       = true;
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+class Audio : private AudioBuffer{
+
+    AudioBuffer InBuff; // instance of input buffer
 
 public:
     Audio();
@@ -140,17 +199,11 @@ private:
     int             m_LFcount;                      // Detection of end of header
     uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;
-    int             m_writePtr=0;                   // ptr sampleBuffer
-    int             m_readPtr=0;                    // ptr sampleBuffer
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
-    uint8_t         m_inBuff[1600 * 4];             // InputBuffer, min 1600 bytes
-    uint16_t        m_inBuffwindex=0;               // write index
-    uint16_t        m_inBuffrindex=0;               // read index
-    const uint16_t  m_inBuffsize=sizeof(m_inBuff);  // size of inputBuffer
     uint8_t         m_rev=0;                        // revision
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock

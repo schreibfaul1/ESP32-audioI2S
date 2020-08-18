@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 03,2020
+ *  Updated on: Aug 18,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -16,6 +16,117 @@
 #include "Audio.h"
 #include "mp3_decoder/mp3_decoder.h"
 #include "aac_decoder/aac_decoder.h"
+
+//---------------------------------------------------------------------------------------------------------------------
+AudioBuffer::AudioBuffer(){ ;
+}
+
+AudioBuffer::~AudioBuffer(){
+    if(m_buffer) free(m_buffer);
+    m_buffer = NULL;
+}
+
+size_t AudioBuffer::init(){
+    if(psramInit()){
+        // PSRAM found, AudioBuffer will be allocated in PSRAM
+        m_buffSize = m_buffSizePSRAM;
+        if(m_buffer == NULL){
+            m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
+            m_buffSize = m_buffSizePSRAM - m_resBuffSize;
+            if(m_buffer == NULL){
+                // not enough space in PSRAM, use ESP32 Flash Memory instead
+                m_buffer = (uint8_t*)calloc(m_buffSize, sizeof(uint8_t));
+                m_buffSize = m_buffSizeRAM - m_resBuffSize;
+            }
+        }
+    }
+    else{  // no PSRAM available, use ESP32 Flash Memory"
+        m_buffSize = m_buffSizeRAM;
+        m_buffer = (uint8_t*)calloc(m_buffSize, sizeof(uint8_t));
+        m_buffSize = m_buffSizeRAM - m_resBuffSize;
+    }
+    log_i("AudioBuffersize is %d bytes", m_buffSize);
+    if(!m_buffer) return 0;
+    resetBuffer();
+    return m_buffSize;
+}
+
+size_t AudioBuffer::freeSpace(){
+    if(m_readPtr >= m_writePtr){
+        m_freeSpace = (m_readPtr - m_writePtr);
+    }
+    else{
+        m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer);
+    }
+    if(m_f_start) m_freeSpace = m_buffSize;
+    return m_freeSpace;
+}
+
+size_t AudioBuffer::writeSpace(){
+    if(m_readPtr >= m_writePtr){
+        m_writeSpace = (m_readPtr -m_writePtr -1); // readPtr must not be overtaken
+    }
+    else{
+        if(getReadPos()==0) m_writeSpace = (m_endPtr -m_writePtr -1);
+        else m_writeSpace = (m_endPtr -m_writePtr);
+    }
+    if(m_f_start) m_writeSpace = m_buffSize -1;
+    return m_writeSpace;
+}
+
+size_t AudioBuffer::bufferFilled(){
+    if(m_writePtr >= m_readPtr){
+        m_dataLength = (m_writePtr - m_readPtr);
+    }
+    else{
+        m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer);
+    }
+    return m_dataLength;
+}
+
+void AudioBuffer::bytesWritten(size_t bw){
+    m_writePtr += bw;
+    if(m_writePtr == m_endPtr){
+        m_writePtr = m_buffer;
+    }
+    if(bw && m_f_start) m_f_start = false;
+}
+
+void AudioBuffer::bytesWasRead(size_t br){
+    m_readPtr += br;
+    if(m_readPtr >= m_endPtr){
+        size_t tmp = m_readPtr - m_endPtr;
+        m_readPtr = m_buffer + tmp;
+    }
+}
+
+uint8_t* AudioBuffer::writePtr(){
+    return m_writePtr;
+}
+
+uint8_t* AudioBuffer::readPtr(){
+    size_t len = m_endPtr -m_readPtr;
+    if(len < 1600){ // be sure the last frame is completed
+        memcpy(m_endPtr, m_buffer,  1600);
+    }
+    return m_readPtr;
+}
+
+void AudioBuffer::resetBuffer(){
+    m_writePtr = m_buffer;
+    m_readPtr  = m_buffer;
+    m_endPtr   = m_buffer + m_buffSize;
+    m_f_start  = true;
+}
+
+uint32_t AudioBuffer::getWritePos(){
+    return m_writePtr - m_buffer;
+}
+
+uint32_t AudioBuffer::getReadPos(){
+    return m_readPtr - m_buffer;
+}
+
 
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio() {
@@ -39,6 +150,9 @@ Audio::Audio() {
     m_LRC=25;                        // Left/Right Clock
     m_DOUT=27;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
+
+    InBuff.init();
+
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -52,12 +166,14 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
 //---------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
     I2Sstop(m_i2s_num);
+    InBuff.~AudioBuffer();
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::reset(){
     stopSong();
     I2Sstop(0);
     I2Sstart(0);
+    InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
     AACDecoder_FreeBuffers();
     client.stop(); client.flush(); // release memory
@@ -88,8 +204,6 @@ void Audio::reset(){
     m_contentlength=0;                                      // If Content-Length is known, count it
     m_curSample=0;
     m_icyname="";                                           // No StationName yet
-    m_inBuffrindex=0;                                       // Readpointer for inputbuffer
-    m_inBuffwindex=0;                                       // Writepointer for inputbuffer
     m_metaCount=0;                                          // count bytes between metadata
     m_metaint=0;                                            // No metaint yet
     m_metaline="";                                          // No metadata yet
@@ -361,7 +475,10 @@ bool Audio::connecttospeech(String speech, String lang){
     reset();
     String host="translate.google.com";
     String path="/translate_tts";
-    uint16_t free=0;
+    uint32_t bytesCanBeWritten = 0;
+    uint32_t bytesCanBeRead = 0;
+    int32_t  bytesAddedToBuffer = 0;
+    int16_t  bytesDecoded = 0;
 
     String resp=   String("GET / HTTP/1.0\r\n") +
                    String("Host: ") + host + String("\r\n") +
@@ -460,30 +577,33 @@ bool Audio::connecttospeech(String speech, String lang){
 //      if(audio_info) audio_info(line.c_str());
         if (line == "\r\n") break;
     }
-    m_inBuffwindex=0;
     m_codec = CODEC_MP3;
     AACDecoder_FreeBuffers();
     MP3Decoder_AllocateBuffers();
     sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
     if(audio_info) audio_info(chbuf);
-    uint16_t res;
-    uint16_t x=0;
+
     while(!playI2Sremains()){;}
     while(clientsecure.available()==0){;}
     while(clientsecure.available() > 0) {
-            free=m_inBuffsize-m_inBuffwindex;// free space
-            res=clientsecure.read(m_inBuff + m_inBuffwindex, free);
-            if(res>0){
-                m_inBuffwindex+=res;
-                free-=res;
-            }
-            while(m_inBuffwindex>=1600){
-                x=sendBytes(m_inBuff, m_inBuffsize);
-                m_inBuffwindex-=x;
-                memmove(m_inBuff, m_inBuff + x , m_inBuffsize-x);
+
+        bytesCanBeWritten = InBuff.writeSpace();
+        bytesAddedToBuffer=clientsecure.read(InBuff.writePtr(), bytesCanBeWritten);
+        if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
+
+        bytesCanBeRead = InBuff.bufferFilled();
+        if(bytesCanBeRead > 1600) bytesCanBeRead = 1600;
+        if(bytesCanBeRead == 1600){ // mp3 or aac frame complete?
+            while(InBuff.bufferFilled()>=1600){
+                bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+                InBuff.bytesWasRead(bytesDecoded);
            }
+        }
     }
-    sendBytes(m_inBuff, m_inBuffsize -free);
+    do{
+        bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+    }while (bytesDecoded > 100);
+
     memset(m_outBuff, 0, sizeof(m_outBuff));
     for(int i=0; i<4; i++){
         m_validSamples = 2048;
@@ -882,45 +1002,38 @@ void Audio::loop()
 void Audio::processLocalFile()
 {
     static boolean lastChunk = false;
-    if ( audiofile && m_f_running && m_f_localfile )
-    {
-        uint16_t bytesCanBeWritten = 0;
-        uint16_t bytesCanBeRead = 0;
-        int16_t  bytesAddedToBuffer = 0;
+    int bytesDecoded = 0;
+    if(audiofile && m_f_running && m_f_localfile){
+        uint32_t bytesCanBeWritten = 0;
+        uint32_t bytesCanBeRead = 0;
+        int32_t  bytesAddedToBuffer = 0;
 
-        bytesCanBeWritten = m_inBuffsize-m_inBuffwindex;
-        bytesAddedToBuffer = audiofile.read(&m_inBuff[0] + m_inBuffwindex, bytesCanBeWritten);
+        bytesCanBeWritten = InBuff.writeSpace();
+        bytesAddedToBuffer = audiofile.read(InBuff.writePtr(), bytesCanBeWritten);
 
-        if(bytesAddedToBuffer > 0) m_inBuffwindex += bytesAddedToBuffer;
-        bytesCanBeRead = m_inBuffwindex - m_inBuffrindex;
-
-        if(bytesCanBeRead >= 1600){ // mp3 or aac frame complete?
+        if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
+        bytesCanBeRead = InBuff.bufferFilled();
+        if(bytesCanBeRead > 1600) bytesCanBeRead = 1600;
+        if(bytesCanBeRead == 1600){ // mp3 or aac frame complete?
             if(!m_f_stream){
                 if(!playI2Sremains()) return; // release the thread, continue on the next pass
                 m_f_stream = true;
                 if(audio_info) audio_info("stream ready");
             }
-            m_inBuffrindex += sendBytes(m_inBuff + m_inBuffrindex, bytesCanBeRead);
-            if(m_inBuffsize - m_inBuffrindex < 1600 ){
-                memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
-                m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
-                m_inBuffrindex = 0;
-            }
+            bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
+            if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
             lastChunk = false;
             return;
         }
-
         if(!bytesAddedToBuffer){  // eof
             if(lastChunk == false){
                 if(bytesCanBeRead){
-                    int ret = sendBytes(m_inBuff + m_inBuffrindex, bytesCanBeRead); // write last chunk(s)
-                    if(ret < 100){ // unlikely framesize
-                        m_inBuffwindex = 0;
-                        m_inBuffrindex = 0;
+                    bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead); // play last chunk(s)
+                    if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
+                    if(bytesDecoded < 100){ // unlikely framesize
                         lastChunk = true;
                         return;
                     }
-                    m_inBuffrindex += ret;
                     return;
                 }
                 lastChunk = true;
@@ -940,7 +1053,7 @@ void Audio::processLocalFile()
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
     if (m_f_running && m_f_webstream) {
-        uint16_t bytesCanBeWritten = 0;
+        uint32_t bytesCanBeWritten = 0;
         int16_t bytesAddedToBuffer = 0;
         static uint32_t chunksize = 0;      // Chunkcount read from stream
         int32_t availableBytes = 0;         // Available bytes in stream
@@ -957,21 +1070,19 @@ void Audio::processWebStream() {
         }
 
         if (((m_datamode == AUDIO_DATA) || (m_datamode == AUDIO_SWM)) && (m_metaCount > 0)) {
-            bytesCanBeWritten = m_inBuffsize - m_inBuffwindex;
-            uint x = min(m_metaCount, uint32_t(bytesCanBeWritten));
-
+            bytesCanBeWritten = InBuff.writeSpace();
+            uint32_t x = min(m_metaCount, uint32_t(bytesCanBeWritten));
             if ((m_f_chunked) && (x > m_chunkcount)) {
                 x = m_chunkcount;
             }
 
             if (m_f_ssl == false) {
-                bytesAddedToBuffer = client.read(m_inBuff + m_inBuffwindex, x);
+                bytesAddedToBuffer = client.read(InBuff.writePtr(), x);
             }
 
             if (m_f_ssl == true) {
-                bytesAddedToBuffer = clientsecure.read(m_inBuff + m_inBuffwindex, x);
+                bytesAddedToBuffer = clientsecure.read(InBuff.writePtr(), x);
             }
-
             if (bytesAddedToBuffer > 0) {
                 if (m_f_webfile) {
                     m_bytectr += bytesAddedToBuffer;  // Pull request #42
@@ -980,39 +1091,23 @@ void Audio::processWebStream() {
                 if (m_f_chunked) {
                     m_chunkcount -= bytesAddedToBuffer;
                 }
-                m_inBuffwindex += bytesAddedToBuffer;
+                InBuff.bytesWritten(bytesAddedToBuffer);
             }
 
-            if (m_inBuffwindex - m_inBuffrindex >= 1600) {
+            if (InBuff.bufferFilled() >= 1600) {
                 if (m_f_stream == false) {
-                    if(!playI2Sremains()) return;
+                //    if(!playI2Sremains()) return;
                     m_f_stream = true;
                     if (audio_info) audio_info("stream ready");
                 }
-                bytesdecoded = sendBytes(m_inBuff + m_inBuffrindex, m_inBuffwindex - m_inBuffrindex);
+                bytesdecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
                 if (bytesdecoded < 0) {  // no syncword found or decode error, try next chunk
-                    m_inBuffrindex = 200; // try next chunk
+                    InBuff.bytesWasRead(200); // try next chunk
                     m_bytesNotDecoded += 200;
-                    memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
-                    m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
-                    m_inBuffrindex = 0;
                     return;
                 }
                 else {
-                    m_inBuffrindex += bytesdecoded;
-                    if(m_inBuffsize - m_inBuffrindex < 1600 ){
-                        memmove(m_inBuff, m_inBuff + m_inBuffrindex , m_inBuffsize-m_inBuffrindex);
-                        m_inBuffwindex = m_inBuffsize - m_inBuffrindex;
-                        m_inBuffrindex = 0;
-                    }
-                }
-            }
-            if (bytesAddedToBuffer == 0) {
-                if (m_f_stream) {
-//              seems no longer necessary, stream recognition over loopcounter loopCnt
-//                    m_f_stream = false;
-//                    i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-//                    if(audio_info) audio_info("stream lost");
+                    InBuff.bytesWasRead(bytesdecoded);
                 }
             }
 
@@ -1024,8 +1119,8 @@ void Audio::processWebStream() {
                     m_f_firstmetabyte = true;
                 }
             }
-        } else //!=DATA
-        {
+        }
+        else{ //!=DATA
             if (m_datamode == AUDIO_PLAYLISTDATA) {
                 if (m_t0 + 49 < millis()) {
                     handlebyte('\n');                       // send LF
