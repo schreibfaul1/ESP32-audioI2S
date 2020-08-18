@@ -1294,7 +1294,7 @@ void Audio::handlebyte(uint8_t b){
                 }
                 else if(lcml.startsWith("location:")){
                     host=m_metaline.substring(lcml.indexOf("http"),lcml.length()); // use metaline instead lcml
-                    if(host.indexOf("&")>0)host=host.substring(0,host.indexOf("&")); // remove parameter
+                    //if(host.indexOf("&")>0)host=host.substring(0,host.indexOf("&")); // remove parameter
                     sprintf(chbuf, "redirect to new host %s", host.c_str());
                     if(audio_info) audio_info(chbuf);
                     connecttohost(host);
