@@ -44,8 +44,8 @@ setVolume	KEYWORD2
 stopSong	KEYWORD2
 streamavail	KEYWORD2
 isRunning	KEYWORD2
-
-
+inBufferFilled  KEYWORD2
+inBufferFree  KEYWORD2
 
 
 
