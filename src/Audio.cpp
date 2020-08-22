@@ -45,7 +45,6 @@ size_t AudioBuffer::init(){
         m_buffer = (uint8_t*)calloc(m_buffSize, sizeof(uint8_t));
         m_buffSize = m_buffSizeRAM - m_resBuffSize;
     }
-    log_i("AudioBuffersize is %d bytes", m_buffSize);
     if(!m_buffer) return 0;
     resetBuffer();
     return m_buffSize;
@@ -59,7 +58,7 @@ size_t AudioBuffer::freeSpace(){
         m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer);
     }
     if(m_f_start) m_freeSpace = m_buffSize;
-    return m_freeSpace;
+    return m_freeSpace -1;
 }
 
 size_t AudioBuffer::writeSpace(){
@@ -151,7 +150,17 @@ Audio::Audio() {
     m_DOUT=27;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
 
-    InBuff.init();
+    size_t size = InBuff.init();
+    if(size == m_buffSizeRAM   - m_resBuffSize){
+        sprintf(chbuf, "PSRAM not found, inputBufferSize = %u bytes", size -1);
+        if(audio_info) audio_info(chbuf);
+        m_f_psram = false;
+    }
+    if(size == m_buffSizePSRAM - m_resBuffSize){
+        sprintf(chbuf, "PSRAM found, inputBufferSize = %u bytes", size -1);
+        if(audio_info) audio_info(chbuf);
+        m_f_psram = true;
+    }
 
 }
 
@@ -1058,6 +1067,7 @@ void Audio::processWebStream() {
         static uint32_t chunksize = 0;      // Chunkcount read from stream
         int32_t availableBytes = 0;         // Available bytes in stream
         static int bytesdecoded = 0;
+        static uint16_t cnt =0;
 
         if (m_f_ssl == false)
             availableBytes = client.available();         // Available from stream
@@ -1094,12 +1104,22 @@ void Audio::processWebStream() {
                 InBuff.bytesWritten(bytesAddedToBuffer);
             }
 
-            if (InBuff.bufferFilled() >= 1600) {
+            // waiting for buffer filled, set tresholds before the stream is starting
+            if ((InBuff.bufferFilled() > 6000 && !m_f_psram) || (InBuff.bufferFilled() > 60000 && m_f_psram)){
                 if (m_f_stream == false) {
-                //    if(!playI2Sremains()) return;
+                    cnt=0;
                     m_f_stream = true;
                     if (audio_info) audio_info("stream ready");
                 }
+            }
+            else{
+                if(m_f_stream == false){
+                    if(cnt == 0) if (audio_info) audio_info("inputbuffer is being filled");
+                    cnt++;
+                }
+            }
+
+            if((InBuff.bufferFilled() >1600) && (m_f_stream == true)){ // fill > framesize?
                 bytesdecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
                 if (bytesdecoded < 0) {  // no syncword found or decode error, try next chunk
                     InBuff.bytesWasRead(200); // try next chunk
@@ -1404,9 +1424,16 @@ void Audio::handlebyte(uint8_t b){
                 // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
                 // Isolate the StreamTitle, remove leading and trailing quotes if present.
                 //log_i("ST %s", m_metaline.c_str());
+
+                int pos = m_metaline.indexOf("song_spot"); // remove some irrelevant infos
+                if(pos>3){                                 // e.g. https://stream.revma.ihrhls.com/zc4422
+                    m_metaline=m_metaline.substring(0, pos);
+                    pos = m_metaline.indexOf("text=");
+                    if(pos>3) m_metaline.remove(pos, 5);
+                }
+
                 if( !m_f_localfile) showstreamtitle(m_metaline.c_str(), true);  // Show artist and title if present in metadata
             }
-
         }
     }
     if(m_datamode == AUDIO_PLAYLISTINIT)                       // Initialize for receive .m3u file
@@ -2071,4 +2098,12 @@ int16_t Audio::Gain(int16_t s) {
     return (int16_t)(v&0xffff);
 }
 //---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::inBufferFilled(){
+    return InBuff.bufferFilled();
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::inBufferFree(){
+    return InBuff.freeSpace();
+}
+
 

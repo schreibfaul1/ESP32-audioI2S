@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 18,2020
+ *  Updated on: Aug 22,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -152,6 +152,8 @@ public:
     inline void setDatamode(uint8_t dm){m_datamode=dm;}
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
     bool isRunning() {return m_f_running;}
+    uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
+    uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
 
 private:
     void reset(); // free buffers and set defaults
@@ -225,12 +227,12 @@ private:
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
-    uint32_t        m_t0;
-    uint32_t        m_metaCount=0;                      // Bytecounter between metadata
+    uint32_t        m_t0;                           // store millis(), is needed for a small delay
+    uint32_t        m_metaCount=0;                  // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytectr = 0;                  // count received data
     uint32_t        m_bytesNotDecoded=0;            // pictures or something else that comes with the stream
-    String          m_audioName="";                  // the name of the file
+    String          m_audioName="";                 // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost="";                  // Store the last URL to a webstream
     String          m_metaline ;                    // Readable line in metadata
@@ -259,7 +261,8 @@ private:
     uint8_t         m_codec = CODEC_NONE;           //
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
-    size_t          m_i2s_bytesWritten=0;               // set in i2s_write() but not used
+    bool            m_f_psram = false;              // set if PSRAM is availabe
+    size_t          m_i2s_bytesWritten=0;           // set in i2s_write() but not used
     uint32_t        m_audioFileDuration=0;
     float           m_audioCurrentTime=0;
 };
