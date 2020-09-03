@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 18,2020
+ *  Updated on: Sept 03,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -1067,7 +1067,13 @@ void Audio::processWebStream() {
         static uint32_t chunksize = 0;      // Chunkcount read from stream
         int32_t availableBytes = 0;         // Available bytes in stream
         static int bytesdecoded = 0;
-        static uint16_t cnt =0;
+        static uint32_t cnt0 = 0;
+        static uint32_t tmr_1s = 0;   // timer 1 sec
+        bool f_tmr_1s = false;
+        if((tmr_1s + 1000) < millis()){
+            f_tmr_1s = true;                // flag will be set every second for one loop only
+            tmr_1s = millis();
+        }
 
         if (m_f_ssl == false)
             availableBytes = client.available();         // Available from stream
@@ -1105,17 +1111,23 @@ void Audio::processWebStream() {
             }
 
             // waiting for buffer filled, set tresholds before the stream is starting
-            if ((InBuff.bufferFilled() > 6000 && !m_f_psram) || (InBuff.bufferFilled() > 60000 && m_f_psram)){
+            if ((InBuff.bufferFilled() > 6000 && !m_f_psram) || (InBuff.bufferFilled() > 80000 && m_f_psram)){
                 if (m_f_stream == false) {
-                    cnt=0;
                     m_f_stream = true;
+                    cnt0=0;
+                    uint16_t filltime = millis()-m_t0;
                     if (audio_info) audio_info("stream ready");
+                    sprintf(chbuf,"buffer filled in %d ms", filltime);
+                    if (audio_info) audio_info(chbuf);
                 }
             }
             else{
                 if(m_f_stream == false){
-                    if(cnt == 0) if (audio_info) audio_info("inputbuffer is being filled");
-                    cnt++;
+                    if(cnt0 == 0){
+                        m_t0=millis();
+                        if (audio_info) audio_info("inputbuffer is being filled");
+                    }
+                    cnt0++;
                 }
             }
 
@@ -1128,6 +1140,18 @@ void Audio::processWebStream() {
                 }
                 else {
                     InBuff.bytesWasRead(bytesdecoded);
+                }
+            }
+            else{ // InBuff almost empty, contains no complete mp3/aac frame
+                if(m_f_stream == true){
+                    static boolean f_once = true;
+                    if(f_once){
+                        if (audio_info) audio_info("slow stream, dropouts are possible");
+                        f_once = false;
+                    }
+                    if(f_tmr_1s){
+                        f_once = true;
+                    }
                 }
             }
 
