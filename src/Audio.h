@@ -18,6 +18,7 @@
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
+extern __attribute__((weak)) void audio_id3image(File&, int); //ID3 metadata image
 extern __attribute__((weak)) void audio_eof_mp3(const char*); //end of mp3 file
 extern __attribute__((weak)) void audio_showstreamtitle(const char*);
 extern __attribute__((weak)) void audio_showstation(const char*);
