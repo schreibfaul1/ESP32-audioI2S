@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sept 03,2020
+ *  Updated on: Oct 15,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -1079,6 +1079,7 @@ void Audio::processWebStream() {
             availableBytes = client.available();         // Available from stream
         if (m_f_ssl == true)
             availableBytes = clientsecure.available();   // Available from stream
+
         if ((m_f_firststream_ready == false) && (availableBytes > 0)) { // first streamdata recognized
             m_f_firststream_ready = true;
             m_f_stream = false;
@@ -1092,13 +1093,14 @@ void Audio::processWebStream() {
                 x = m_chunkcount;
             }
 
-            if (m_f_ssl == false) {
+            if ((m_f_ssl == false) && (availableBytes > 0)) {
                 bytesAddedToBuffer = client.read(InBuff.writePtr(), x);
             }
 
-            if (m_f_ssl == true) {
+            if ((m_f_ssl == true) && (availableBytes > 0)) {
                 bytesAddedToBuffer = clientsecure.read(InBuff.writePtr(), x);
             }
+
             if (bytesAddedToBuffer > 0) {
                 if (m_f_webfile) {
                     m_bytectr += bytesAddedToBuffer;  // Pull request #42
@@ -1213,15 +1215,17 @@ void Audio::processWebStream() {
                         audio_info("Stream lost -> try new connection");
                     connecttohost(m_lastHost); // try a new connection
                 }
-                if (m_f_webfile) // stream from fileserver with known content-length
-                {
-                    if ((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) {
-                        sprintf(chbuf, "End of webstream: %s", m_lastHost.c_str());
-                        if (audio_info)
-                            audio_info(chbuf);
-                        if (audio_eof_stream)
-                            audio_eof_stream(m_lastHost.c_str());
-                        m_f_running = false;
+                if (m_f_webfile) { // stream from fileserver with known content-length
+                    if ((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) { // received everything?
+                        if(InBuff.bufferFilled() < 1600){   // and buff almost empty, issue #66
+                            sprintf(chbuf, "End of webstream: %s", m_lastHost.c_str());
+                            if (audio_info)
+                                audio_info(chbuf);
+                            if (audio_eof_stream)
+                                audio_eof_stream(m_lastHost.c_str());
+                            m_f_running = false;
+                        }
+
                     }
                 }
             } else {
