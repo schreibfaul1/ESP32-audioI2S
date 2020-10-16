@@ -752,10 +752,13 @@ void Audio::readID3Metadata(){
                     i=framesize-1; value[framesize-1]=0;
                 }
                 else{
-                    if(tag=="APIC"){ // a image embedded in file, skip it
+                    if(tag=="APIC"){ // a image embedded in file, passing it to external function
                         //log_i("it's a image");
                         isUnicode = false;
-                        setFilePos(getFilePos()+framesize-1); id3Size-=framesize-1;
+                        const uint32_t preReadFilePos = getFilePos();
+                        if (audio_id3image) audio_id3image(audiofile, framesize);
+                        setFilePos(preReadFilePos+framesize-1);
+                        id3Size-=framesize-1;
                     }
                     else{
                         // store the first 255 bytes in buffer and cut the remains
