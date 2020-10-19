@@ -172,6 +172,31 @@ esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
 esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
     return i2s_stop((i2s_port_t) i2s_num);
 }
+
+esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
+    if (pin != 0 && pin != 1 && pin != 3)
+    {
+        ESP_LOGE(TAG, "Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
+        return ESP_ERR_INVALID_ARG;
+    }
+    switch (pin) {
+        case 0 :
+            PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
+            WRITE_PERI_REG(PIN_CTRL, 0xFFF0);
+        break;
+        case 1 :
+            PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD_CLK_OUT3);
+            WRITE_PERI_REG(PIN_CTRL, 0xF0F0);
+        break;
+        case 3 :
+            PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD_CLK_OUT2);
+            WRITE_PERI_REG(PIN_CTRL, 0xFF00);
+        break;
+        default:
+        break;
+    }
+    return ESP_OK;
+}
 //---------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
     I2Sstop(m_i2s_num);

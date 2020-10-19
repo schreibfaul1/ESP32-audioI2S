@@ -153,6 +153,7 @@ public:
     inline void setDatamode(uint8_t dm){m_datamode=dm;}
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
     bool isRunning() {return m_f_running;}
+    esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
 
