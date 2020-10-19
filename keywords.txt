@@ -47,7 +47,7 @@ streamavail	KEYWORD2
 isRunning	KEYWORD2
 inBufferFilled  KEYWORD2
 inBufferFree  KEYWORD2
-
+i2s_mclk_pin_select	KEYWORD2
 
 
 
