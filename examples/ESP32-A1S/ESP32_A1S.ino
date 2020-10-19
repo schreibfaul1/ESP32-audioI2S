@@ -92,11 +92,14 @@ void setup()
     // Enable amplifier
     pinMode(GPIO_PA_EN, OUTPUT);
     digitalWrite(GPIO_PA_EN, HIGH);
+  
+    // set I2S_MasterClock
+    audio.i2s_mclk_pin_select(I2S_MCLK);
 
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DSIN);
-  audio.setVolume(10); // 0...21
+    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DSIN);
+    audio.setVolume(10); // 0...21
 
-  audio.connecttoFS(SD, "/320k_test.mp3");
+    audio.connecttoFS(SD, "/320k_test.mp3");
 //  audio.connecttoSD("/Banana Boat Song - Harry Belafonte.mp3");
 //  audio.connecttohost("http://mp3channels.webradio.antenne.de:80/oldies-but-goldies");
 //  audio.connecttohost("http://dg-rbb-http-dus-dtag-cdn.cast.addradio.de/rbb/antennebrandenburg/live/mp3/128/stream.mp3");
