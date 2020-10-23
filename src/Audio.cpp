@@ -127,8 +127,8 @@ uint32_t AudioBuffer::getReadPos(){
 }
 
 
-//---------------------------------------------------------------------------------------------------------------------
-Audio::Audio() {
+
+Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
     m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -145,9 +145,9 @@ Audio::Audio() {
 
     i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 
-    m_BCLK=26;                       // Bit Clock
-    m_LRC=25;                        // Left/Right Clock
-    m_DOUT=27;                       // Data Out
+    m_BCLK=BCLK;                       // Bit Clock
+    m_LRC=LRC;                         // Left/Right Clock
+    m_DOUT=DOUT;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
 
     size_t size = InBuff.init();
