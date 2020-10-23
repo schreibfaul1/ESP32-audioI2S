@@ -125,9 +125,7 @@ uint32_t AudioBuffer::getWritePos(){
 uint32_t AudioBuffer::getReadPos(){
     return m_readPtr - m_buffer;
 }
-
-
-
+//---------------------------------------------------------------------------------------------------------------------
 Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
