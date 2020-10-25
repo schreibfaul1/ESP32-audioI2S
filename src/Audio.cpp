@@ -2021,7 +2021,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN){
       .data_out_num = m_DOUT,
       .data_in_num = m_DIN
     };
-    esp_err_t result = i2s_set_pin((i2s_port_t)m_i2s_num, &pins);
+    const esp_err_t result = i2s_set_pin((i2s_port_t)m_i2s_num, &pins);
     return (result == ESP_OK);
 }
 //---------------------------------------------------------------------------------------------------------------------
