@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 22,2020
+ *  Updated on: Nov 11,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -159,6 +159,7 @@ public:
 
 private:
     void reset(); // free buffers and set defaults
+    void initInBuff();
     void processLocalFile();
     void processWebStream();
     int  sendBytes(uint8_t *data, size_t len);

@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 15,2020
+ *  Updated on: Nov 11,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -147,21 +147,27 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     m_LRC=LRC;                         // Left/Right Clock
     m_DOUT=DOUT;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
-
-    size_t size = InBuff.init();
-    if(size == m_buffSizeRAM   - m_resBuffSize){
-        sprintf(chbuf, "PSRAM not found, inputBufferSize = %u bytes", size -1);
-        if(audio_info) audio_info(chbuf);
-        m_f_psram = false;
-    }
-    if(size == m_buffSizePSRAM - m_resBuffSize){
-        sprintf(chbuf, "PSRAM found, inputBufferSize = %u bytes", size -1);
-        if(audio_info) audio_info(chbuf);
-        m_f_psram = true;
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::initInBuff(){
+    static bool f_already_done = false;
+    if(!f_already_done){
+        size_t size = InBuff.init();
+        if(size == m_buffSizeRAM   - m_resBuffSize){
+            sprintf(chbuf, "PSRAM not found, inputBufferSize = %u bytes", size -1);
+            if(audio_info) audio_info(chbuf);
+            m_f_psram = false;
+            f_already_done = true;
+        }
+        if(size == m_buffSizePSRAM - m_resBuffSize){
+            sprintf(chbuf, "PSRAM found, inputBufferSize = %u bytes", size -1);
+            if(audio_info) audio_info(chbuf);
+            m_f_psram = true;
+            f_already_done = true;
+        }
     }
 
 }
-
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
     return i2s_start((i2s_port_t) i2s_num);
@@ -205,6 +211,7 @@ void Audio::reset(){
     stopSong();
     I2Sstop(0);
     I2Sstart(0);
+    initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
     AACDecoder_FreeBuffers();
@@ -346,7 +353,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
           //236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255    ISO
             000, 161, 140, 139, 000, 164, 000, 162, 147, 000, 148, 000, 000, 000, 163, 150, 129, 000, 000, 152};//ASCII
 
-    reset(); // free buffers an ser defaults
+    reset(); // free buffers an set defaults
 
     uint16_t i=0, s=0;
     m_f_localfile = true;
