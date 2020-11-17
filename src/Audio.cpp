@@ -2,12 +2,12 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 11,2020
+ *  Updated on: Nov 17,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
  *  play Google TTS and plays also aac-streams
- *  no DAC, no DeltSigma
+ *  no internal DAC, no DeltSigma
  *
  *  etrernal HW on I2S nessesary, e.g.MAX98357A
  *
@@ -166,7 +166,6 @@ void Audio::initInBuff(){
             f_already_done = true;
         }
     }
-
 }
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
@@ -176,7 +175,7 @@ esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
 esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
     return i2s_stop((i2s_port_t) i2s_num);
 }
-
+//---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
     if (pin != 0 && pin != 1 && pin != 3)
     {
@@ -250,7 +249,6 @@ void Audio::reset(){
     m_st_remember="";                                       // Delete the last streamtitle
     m_totalcount=0;                                         // Reset totalcount
 }
-
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host){
     if(host.length()==0){
@@ -415,8 +413,6 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         m_f_running=true;
         return true;
     } // end MP3 section
-
-
 
     if(afn.endsWith(".wav")) { // WAVE section
         m_codec = CODEC_WAV;
@@ -1331,6 +1327,13 @@ void Audio::handlebyte(uint8_t b){
                             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
                             if(audio_info) audio_info(chbuf);
                         }
+                        else if(ct.indexOf("mp3")>=0){
+                            m_codec = CODEC_MP3;
+                            if(audio_info) audio_info("format is mp3");
+                            MP3Decoder_AllocateBuffers();
+                            sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+                            if(audio_info) audio_info(chbuf);;
+                        }
                         else if(ct.indexOf("aac")>=0){
                             m_codec = CODEC_AAC;
 //                            stopSong(); // if no aac decoder available
@@ -1347,6 +1350,11 @@ void Audio::handlebyte(uint8_t b){
                             AACDecoder_AllocateBuffers();
                             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
                             if(audio_info) audio_info(chbuf);
+                        }
+                        else if(ct.indexOf("wav")>=0){ // audio/x-wav
+                            m_codec = CODEC_WAV;
+                            if(audio_info) audio_info("format is wave");
+                            if(audio_info) audio_info("can't play wav as webstream");
                         }
                         else if(ct.indexOf("ogg")>=0){
                             m_f_running=false;
