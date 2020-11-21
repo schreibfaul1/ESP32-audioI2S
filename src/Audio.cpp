@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 17,2020
+ *  Updated on: Nov 21,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -250,7 +250,9 @@ void Audio::reset(){
     m_totalcount=0;                                         // Reset totalcount
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttohost(String host){
+bool Audio::connecttohost(String host, const char* user, const char* pwd){
+    // connecttohost(streamURL);
+    // connecttohost(streamURL, username, password);
     if(host.length()==0){
         if(audio_info) audio_info("Hostaddress is empty");
         return false;
@@ -262,6 +264,10 @@ bool Audio::connecttohost(String host){
     }
     sprintf(chbuf, "Connect to new host: %s", host.c_str());
     if(audio_info) audio_info(chbuf);
+
+    // Authentication
+    String toEncode = String(user) + ":" + String(pwd);
+    String authorization = base64::encode(toEncode);
 
     // initializationsequence
     int16_t inx;                                          // Position of ":" in hostname
@@ -304,11 +310,10 @@ bool Audio::connecttohost(String host){
     if(audio_info) audio_info(chbuf);
     if(audio_showstreaminfo) audio_showstreaminfo(chbuf);
 
-    String resp=String("GET ") + extension +
-                String(" HTTP/1.1\r\n") +
-                String("Host: ") + hostwoext +
-                String("\r\n") +
+    String resp=String("GET ") + extension + String(" HTTP/1.1\r\n") +
+                String("Host: ") + hostwoext + String("\r\n") +
                 String("Icy-MetaData:1\r\n") +
+                String("Authorization: Basic " + authorization + "\r\n") +
                 String("Connection: close\r\n\r\n");
 
     if(m_f_ssl==false){
@@ -1252,7 +1257,8 @@ void Audio::processWebStream() {
                                 audio_info(chbuf);
                             if (audio_eof_stream)
                                 audio_eof_stream(m_lastHost.c_str());
-                            m_f_running = false;
+                            // m_f_running = false;
+                            stopSong(); // Correct close when play known length sound (#74)
                         }
 
                     }
@@ -1336,7 +1342,6 @@ void Audio::handlebyte(uint8_t b){
                         }
                         else if(ct.indexOf("aac")>=0){
                             m_codec = CODEC_AAC;
-//                            stopSong(); // if no aac decoder available
                             if(audio_info) audio_info("format is aac");
                             AACDecoder_AllocateBuffers();
                             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
@@ -1345,15 +1350,15 @@ void Audio::handlebyte(uint8_t b){
                         }
                         else if(ct.indexOf("mp4")>=0){
                             m_codec = CODEC_AAC;
-//                            stopSong(); // if no aac decoder available
                             if(audio_info) audio_info("format is aac");
                             AACDecoder_AllocateBuffers();
                             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
                             if(audio_info) audio_info(chbuf);
                         }
                         else if(ct.indexOf("wav")>=0){ // audio/x-wav
-                            m_codec = CODEC_WAV;
-                            if(audio_info) audio_info("format is wave");
+//                            m_codec = CODEC_WAV;
+//                            if(audio_info) audio_info("format is wave");
+                            m_f_running=false;
                             if(audio_info) audio_info("can't play wav as webstream");
                         }
                         else if(ct.indexOf("ogg")>=0){
@@ -1423,6 +1428,11 @@ void Audio::handlebyte(uint8_t b){
                     m_icyurl=m_metaline.substring(8);           // Get the URL
                     m_icyurl.trim();
                     if(audio_icyurl) audio_icyurl(m_icyurl.c_str());
+                }
+                else if(lcml.startsWith("www-authenticate:")){
+                    if(audio_info) audio_info("authentification failed, wrong credentials?");
+                    m_f_running=false;
+                    stopSong();
                 }
                 else{                                           // all other
 
