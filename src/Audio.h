@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 11,2020
+ *  Updated on: Nov 21,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -10,6 +10,7 @@
 #define AUDIO_H_
 
 #include "Arduino.h"
+#include "base64.h"
 #include "SPI.h"
 #include "SD.h"
 #include "FS.h"
@@ -107,7 +108,7 @@ public:
     ~Audio();
     bool connecttoFS(fs::FS &fs, String file);
     bool connecttoSD(String sdfile);
-    bool connecttohost(String host);
+    bool connecttohost(String host, const char* user = "", const char* pwd = "");
     bool connecttospeech(String speech, String lang);
     void loop();
     uint32_t getFileSize();
