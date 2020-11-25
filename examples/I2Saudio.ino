@@ -61,9 +61,6 @@ void audio_eof_mp3(const char *info){  //end of file
 void audio_showstation(const char *info){
     Serial.print("station     ");Serial.println(info);
 }
-void audio_showstreaminfo(const char *info){
-    Serial.print("streaminfo  ");Serial.println(info);
-}
 void audio_showstreamtitle(const char *info){
     Serial.print("streamtitle ");Serial.println(info);
 }
