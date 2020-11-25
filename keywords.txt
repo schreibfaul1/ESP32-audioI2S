@@ -22,7 +22,6 @@ audio_id3data	KEYWORD2
 audio_lasthost	KEYWORD2
 audio_showstreamtitle	KEYWORD2
 audio_showstation	KEYWORD2
-audio_showstreaminfo	KEYWORD2
 audio_eof_stream    KEYWORD2
 audioFileSeek	KEYWORD2
 audio_id3image  KEYWORD2
