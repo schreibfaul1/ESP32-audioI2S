@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 21,2020
+ *  Updated on: Nov 25,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -23,7 +23,6 @@ extern __attribute__((weak)) void audio_id3image(File&, const int); //ID3 metada
 extern __attribute__((weak)) void audio_eof_mp3(const char*); //end of mp3 file
 extern __attribute__((weak)) void audio_showstreamtitle(const char*);
 extern __attribute__((weak)) void audio_showstation(const char*);
-extern __attribute__((weak)) void audio_showstreaminfo(const char*);
 extern __attribute__((weak)) void audio_bitrate(const char*);
 extern __attribute__((weak)) void audio_commercial(const char*);
 extern __attribute__((weak)) void audio_icyurl(const char*);
@@ -175,7 +174,7 @@ private:
     bool playI2Sremains();
     int16_t Gain(int16_t s);
     bool fill_InputBuf();
-    void showstreamtitle(const char *ml, bool full);
+    void showstreamtitle(const char *ml);
     bool chkhdrline(const char* str);
     void handlebyte(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);

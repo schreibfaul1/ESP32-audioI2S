@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 21,2020
+ *  Updated on: Nov 25,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -251,8 +251,7 @@ void Audio::reset(){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host, const char* user, const char* pwd){
-    // connecttohost(streamURL);
-    // connecttohost(streamURL, username, password);
+    // user and pwd for authentication only, can be empty
     if(host.length()==0){
         if(audio_info) audio_info("Hostaddress is empty");
         return false;
@@ -262,18 +261,18 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
     if(m_lastHost!=host){                                 // New host or reconnection?
         m_lastHost=host;                                  // Remember the current host
     }
-    sprintf(chbuf, "Connect to new host: %s", host.c_str());
+    sprintf(chbuf, "Connect to new host: \"%s\"", host.c_str());
     if(audio_info) audio_info(chbuf);
 
-    // Authentication
+    // authentication
     String toEncode = String(user) + ":" + String(pwd);
     String authorization = base64::encode(toEncode);
 
     // initializationsequence
-    int16_t inx;                                          // Position of ":" in hostname
-    uint16_t port=80;                                     // Port number for host
-    String extension="/";                                 // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
-    String hostwoext;                                     // Host without extension and portnumber
+    int16_t inx;                                            // Position of ":" in hostname
+    uint16_t port=80;                                       // Port number for host
+    String extension="/";                                   // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
+    String hostwoext;                                       // Host without extension and portnumber
     String headerdata="";
     m_f_webstream=true;
     setDatamode(AUDIO_HEADER);                              // Handle header
@@ -305,10 +304,9 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
         port=host.substring(inx + 1).toInt();               // Get portnumber as integer
         hostwoext=host.substring(0, inx);                   // Host without portnumber
     }
-    sprintf(chbuf, "Connect to %s on port %d, extension %s",
+    sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"",
             hostwoext.c_str(), port, extension.c_str());
     if(audio_info) audio_info(chbuf);
-    if(audio_showstreaminfo) audio_showstreaminfo(chbuf);
 
     String resp=String("GET ") + extension + String(" HTTP/1.1\r\n") +
                 String("Host: ") + hostwoext + String("\r\n") +
@@ -334,12 +332,10 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
             return true;
         }
     }
-    log_i("freeHeap after %i", ESP.getFreeHeap());
     sprintf(chbuf, "Request %s failed!", host.c_str());
     if(audio_info) audio_info(chbuf);
     if(audio_showstation) audio_showstation("");
     if(audio_showstreamtitle) audio_showstreamtitle("");
-    if(audio_showstreaminfo) audio_showstreaminfo("");
     return false;
 }
 //-----------------------------------------------------------------------------------------------------------------------------------
@@ -362,7 +358,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
     m_f_localfile = true;
 
     if(!file.startsWith("/")) file="/"+file;
-    while(file[i] != 0){                                    //convert UTF8 to ASCII
+    while(file[i] != 0){                                    // convert UTF8 to ASCII
         path[i]=file[i];
         if(path[i] > 195){
             s=ascii[path[i]-196];
@@ -371,7 +367,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
     }
     path[i]=0;
     m_audioName=file.substring(file.lastIndexOf('/') + 1, file.length());
-    sprintf(chbuf, "Reading file: %s", m_audioName.c_str());
+    sprintf(chbuf, "Reading file: \"%s\"", m_audioName.c_str());
     if(audio_info) audio_info(chbuf);
     audiofile=fs.open(path);
     if(!audiofile){
@@ -379,7 +375,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         return false;
     }
     String afn = (String)audiofile.name();  //audioFileName
-    if(afn.endsWith(".mp3") || afn.endsWith(".MP3")) { // MP3 section
+    if(afn.endsWith(".mp3") || afn.endsWith(".MP3")) {      // MP3 section
         m_codec = CODEC_MP3;
         MP3Decoder_AllocateBuffers();
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
@@ -430,8 +426,6 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
 
         audiofile.readBytes(chbuf, 4); // read chunkSize (datalen)
         uint32_t cs = (uint32_t)(chbuf[0] + (chbuf[1] <<8) + (chbuf[2] <<16) + (chbuf[3] <<24) - 8);
-//        sprintf(chbuf, "DataLength = %u", cs);
-//        if(audio_info) audio_info(chbuf);
 
         audiofile.readBytes(chbuf, 4); /* read wav-format */ chbuf[5] = 0;
         if ((chbuf[0] != 'W') || (chbuf[1] != 'A') || (chbuf[2] != 'V') || (chbuf[3] != 'E')){
@@ -441,7 +435,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         }
 
         while(true){ // skip wave chunks, seek for fmt element
-            audiofile.readBytes(chbuf, 4); /* read wav-format */
+            audiofile.readBytes(chbuf, 4); // read wav-format
             if ((chbuf[0] == 'f') && (chbuf[1] == 'm') && (chbuf[2] == 't')){
                 //if(audio_info) audio_info("format tag found");
                 break;
@@ -452,21 +446,20 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
         cs = (uint32_t) (chbuf[0] + (chbuf[1] <<8));
         if(cs>40) return false; //something is wrong
         uint8_t bts=cs-16; // bytes to skip if fmt chunk is >16
-        //log_i("cs=%i, bts=%i", cs, bts);
         audiofile.readBytes(chbuf, 16);
-        uint16_t fc  = (uint16_t)(chbuf[0]  + (chbuf[1] <<8));  // Format code
-        uint16_t nic = (uint16_t)(chbuf[2]  + (chbuf[3] <<8));  // Number of interleaved channels
+        uint16_t fc  = (uint16_t)(chbuf[0]  + (chbuf[1] <<8));      // Format code
+        uint16_t nic = (uint16_t)(chbuf[2]  + (chbuf[3] <<8));      // Number of interleaved channels
         uint32_t sr  = (uint32_t)(chbuf[4]  + (chbuf[5] <<8) + (chbuf[6]  <<16) + (chbuf[7]  <<24)); // Smpling rate
         uint32_t dr  = (uint32_t)(chbuf[8]  + (chbuf[9] <<8) + (chbuf[10] <<16) + (chbuf[11] <<24)); // Data rate
-        uint16_t dbs = (uint16_t)(chbuf[12] + (chbuf[13] <<8));  // Data block size
-        uint16_t bps = (uint16_t)(chbuf[14] + (chbuf[15] <<8));  // Bits per sample
+        uint16_t dbs = (uint16_t)(chbuf[12] + (chbuf[13] <<8));     // Data block size
+        uint16_t bps = (uint16_t)(chbuf[14] + (chbuf[15] <<8));     // Bits per sample
         if(audio_info){
-            sprintf(chbuf, "FormatCode=%u", fc);      audio_info(chbuf);
-            sprintf(chbuf, "Channel=%u", nic);        audio_info(chbuf);
-            sprintf(chbuf, "SampleRate=%u", sr);    audio_info(chbuf);
-            sprintf(chbuf, "DataRate=%u", dr);        audio_info(chbuf);
-            sprintf(chbuf, "DataBlockSize=%u", dbs); audio_info(chbuf);
-            sprintf(chbuf, "BitsPerSample=%u", bps); audio_info(chbuf);
+            sprintf(chbuf, "FormatCode=%u", fc);        audio_info(chbuf);
+            sprintf(chbuf, "Channel=%u", nic);          audio_info(chbuf);
+            sprintf(chbuf, "SampleRate=%u", sr);        audio_info(chbuf);
+            sprintf(chbuf, "DataRate=%u", dr);          audio_info(chbuf);
+            sprintf(chbuf, "DataBlockSize=%u", dbs);    audio_info(chbuf);
+            sprintf(chbuf, "BitsPerSample=%u", bps);    audio_info(chbuf);
         }
 
         if(fc != 1){
@@ -491,7 +484,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
 
         audiofile.readBytes(chbuf, bts); // skip to data
         uint32_t s = getFilePos();
-        //here can be extra info, seek for data;
+        // here can be extra info, seek for data;
         while(true){
             setFilePos(s);
             audiofile.readBytes(chbuf, 4); /* read header signature */
@@ -591,7 +584,7 @@ bool Audio::connecttospeech(String speech, String lang){
         j++;
       }
     }
-//    log_i("Token=%s", token.c_str());
+
     String tts= String("https://") + host + path +
                         "?ie=UTF-8&q=" + urlencode(speech) +
                         "&tl=" + lang +
@@ -1087,7 +1080,7 @@ void Audio::processLocalFile()
             m_f_stream=false;
             m_f_localfile=false;
             MP3Decoder_FreeBuffers();
-            sprintf(chbuf,"End of file %s", m_audioName.c_str());
+            sprintf(chbuf,"End of file \"%s\"", m_audioName.c_str());
             if(audio_info) audio_info(chbuf);
             if(audio_eof_mp3) audio_eof_mp3(m_audioName.c_str());
         }
@@ -1098,21 +1091,21 @@ void Audio::processWebStream() {
     if (m_f_running && m_f_webstream) {
         uint32_t bytesCanBeWritten = 0;
         int16_t bytesAddedToBuffer = 0;
-        static uint32_t chunksize = 0;      // Chunkcount read from stream
-        int32_t availableBytes = 0;         // Available bytes in stream
+        static uint32_t chunksize = 0;                      // chunkcount read from stream
+        int32_t availableBytes = 0;                         // available bytes in stream
         static int bytesdecoded = 0;
         static uint32_t cnt0 = 0;
-        static uint32_t tmr_1s = 0;   // timer 1 sec
+        static uint32_t tmr_1s = 0;                         // timer 1 sec
         bool f_tmr_1s = false;
         if((tmr_1s + 1000) < millis()){
-            f_tmr_1s = true;                // flag will be set every second for one loop only
+            f_tmr_1s = true;                                // flag will be set every second for one loop only
             tmr_1s = millis();
         }
 
         if (m_f_ssl == false)
-            availableBytes = client.available();         // Available from stream
+            availableBytes = client.available();            // available from stream
         if (m_f_ssl == true)
-            availableBytes = clientsecure.available();   // Available from stream
+            availableBytes = clientsecure.available();      // available from stream
 
         if ((m_f_firststream_ready == false) && (availableBytes > 0)) { // first streamdata recognized
             m_f_firststream_ready = true;
@@ -1231,7 +1224,7 @@ void Audio::processWebStream() {
             if (m_datamode == AUDIO_DATA) {
                 m_metaCount = m_metaint;
                 if (m_metaint == 0) {
-                    m_datamode = AUDIO_SWM; // stream without metadata, can be mms
+                    m_datamode = AUDIO_SWM;         // stream without metadata, can be mms
                 }
             }
             if (m_datamode == AUDIO_SWM) {
@@ -1240,27 +1233,23 @@ void Audio::processWebStream() {
         }
 
         if (m_f_firststream_ready == true) {
-            static uint32_t loopCnt = 0;      // Count loops if clientbuffer is empty
-            if (availableBytes == 0) {   // empty buffer, broken stream or bad bitrate?
+            static uint32_t loopCnt = 0;            // count loops if clientbuffer is empty
+            if (availableBytes == 0) {              // empty buffer, broken stream or bad bitrate?
                 loopCnt++;
-                if (loopCnt > 200000) {  // wait several seconds
+                if (loopCnt > 200000) {             // wait several seconds
                     loopCnt = 0;
                     if (audio_info)
                         audio_info("Stream lost -> try new connection");
-                    connecttohost(m_lastHost); // try a new connection
+                    connecttohost(m_lastHost);      // try a new connection
                 }
                 if (m_f_webfile) { // stream from fileserver with known content-length
                     if ((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) { // received everything?
                         if(InBuff.bufferFilled() < 1600){   // and buff almost empty, issue #66
-                            sprintf(chbuf, "End of webstream: %s", m_lastHost.c_str());
-                            if (audio_info)
-                                audio_info(chbuf);
-                            if (audio_eof_stream)
-                                audio_eof_stream(m_lastHost.c_str());
-                            // m_f_running = false;
+                            sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost.c_str());
+                            if (audio_info)         audio_info(chbuf);
+                            if (audio_eof_stream)   audio_eof_stream(m_lastHost.c_str());
                             stopSong(); // Correct close when play known length sound (#74)
                         }
-
                     }
                 }
             } else {
@@ -1289,10 +1278,10 @@ void Audio::processWebStream() {
                     chunksize = 0;
                 } else {
                     // We have received a hexadecimal character.  Decode it and add to the result.
-                    b = toupper(b) - '0';                         // Be sure we have uppercase
+                    b = toupper(b) - '0';                       // Be sure we have uppercase
 
                     if (b > 9)
-                        b = b - 7;                        // Translate A..F to 10..15
+                        b = b - 7;                              // Translate A..F to 10..15
 
                     chunksize = (chunksize << 4) + b;
                 }
@@ -1359,7 +1348,7 @@ void Audio::handlebyte(uint8_t b){
 //                            m_codec = CODEC_WAV;
 //                            if(audio_info) audio_info("format is wave");
                             m_f_running=false;
-                            if(audio_info) audio_info("can't play wav as webstream");
+                            if(audio_info) audio_info("can't play wav as webstream"); // ToDo
                         }
                         else if(ct.indexOf("ogg")>=0){
                             m_f_running=false;
@@ -1380,16 +1369,12 @@ void Audio::handlebyte(uint8_t b){
                         if(audio_info) audio_info(chbuf);
                         if(audio_info) audio_info("no ogg decoder implemented");
                         stopSong();
-//                        m_metaint=0;                          // has no metadata
-//                        m_bitrate=0;
-//                        m_icyname=="";
-//                        m_f_swm=true;
                     }
                 }
                 else if(lcml.startsWith("location:")){
                     host=m_metaline.substring(lcml.indexOf("http"),lcml.length()); // use metaline instead lcml
                     //if(host.indexOf("&")>0)host=host.substring(0,host.indexOf("&")); // remove parameter
-                    sprintf(chbuf, "redirect to new host %s", host.c_str());
+                    sprintf(chbuf, "redirect to new host \"%s\"", host.c_str());
                     if(audio_info) audio_info(chbuf);
                     connecttohost(host);
                 }
@@ -1407,6 +1392,7 @@ void Audio::handlebyte(uint8_t b){
                     m_icyname=m_metaline.substring(9);          // Get station name
                     m_icyname.trim();                           // Remove leading and trailing spaces
                     if(m_icyname!=""){
+                        if(audio_info) audio_info(("icy-name: " + m_icyname).c_str());
                         if(audio_showstation) audio_showstation(m_icyname.c_str());
                     }
                 }
@@ -1427,6 +1413,7 @@ void Audio::handlebyte(uint8_t b){
                 else if(lcml.startsWith("icy-url:")){
                     m_icyurl=m_metaline.substring(8);           // Get the URL
                     m_icyurl.trim();
+                    if(audio_info) audio_info(("icy-url: " + m_icyurl).c_str());
                     if(audio_icyurl) audio_icyurl(m_icyurl.c_str());
                 }
                 else if(lcml.startsWith("www-authenticate:")){
@@ -1435,7 +1422,6 @@ void Audio::handlebyte(uint8_t b){
                     stopSong();
                 }
                 else{                                           // all other
-
                     sprintf(chbuf, "%s", m_metaline.c_str());
                     if(audio_info) audio_info(chbuf);
                 }
@@ -1475,12 +1461,7 @@ void Audio::handlebyte(uint8_t b){
     if(m_datamode == AUDIO_METADATA){                           // Handle next byte of metadata
         if(m_f_firstmetabyte){                                  // First byte of metadata?
             m_f_firstmetabyte=false;                            // Not the first anymore
-            m_metalen=b*16+1;                                 // New count for metadata including length byte
-            if(m_metalen > 1){
-                sprintf(chbuf, "Metacount=%d bytes",            // Most of the time there are zero bytes of metadata
-                        m_metalen-1);
-                if(audio_info) audio_info(chbuf);
-            }
+            m_metalen=b*16+1;                                   // New count for metadata including length byte
             m_metaline="";                                      // Set to empty
         }
         else{
@@ -1511,7 +1492,7 @@ void Audio::handlebyte(uint8_t b){
                     if(pos>3) m_metaline.remove(pos, 5);
                 }
 
-                if( !m_f_localfile) showstreamtitle(m_metaline.c_str(), true);  // Show artist and title if present in metadata
+                if( !m_f_localfile) showstreamtitle(m_metaline.c_str());  // Show artist and title if present in metadata
             }
         }
     }
@@ -1578,7 +1559,6 @@ void Audio::handlebyte(uint8_t b){
                         inx=m_metaline.indexOf(",");            // Comma in this line?
                         if(inx > 0){
                             // Show artist and title if present in metadata
-                            //if(vs1053_showstation) vs1053_showstation(m_metaline.substring(inx + 1).c_str());
                             if(audio_info) audio_info(m_metaline.substring(inx + 1).c_str());
                         }
                     }
@@ -1619,7 +1599,7 @@ void Audio::handlebyte(uint8_t b){
                 if(m_metaline.startsWith("Title1")){
                     m_plsStationName=m_metaline.substring(7);
                     if(audio_showstation) audio_showstation(m_plsStationName.c_str());
-                    sprintf(chbuf, "StationName: %s", m_plsStationName.c_str());
+                    sprintf(chbuf, "StationName=\"%s\"", m_plsStationName.c_str());
                     if(audio_info) audio_info(chbuf);
                     m_f_plsTitle=true;
                 }
@@ -1650,7 +1630,7 @@ void Audio::handlebyte(uint8_t b){
                         m_plsStationName=m_metaline.substring(7);
                         if(m_plsURL.indexOf('<')>0)m_plsURL=m_plsURL.substring(0,m_plsURL.indexOf('<')); // remove rest
                         if(audio_showstation) audio_showstation(m_plsStationName.c_str());
-                        sprintf(chbuf, "StationName: %s", m_plsStationName.c_str());
+                        sprintf(chbuf, "StationName=\"%s\"", m_plsStationName.c_str());
                         if(audio_info) audio_info(chbuf);
                         m_f_plsTitle=true;
                     }
@@ -1671,19 +1651,17 @@ void Audio::handlebyte(uint8_t b){
 }
 //---------------------------------------------------------------------------------------------------------------------
 
-void Audio::showstreamtitle(const char *ml, bool full){
+void Audio::showstreamtitle(const char *ml){
     // example for ml:
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
 
     int16_t pos1=0, pos2=0, pos3=0, pos4=0;
     String mline=ml, st="", su="", ad="", artist="", title="", icyurl="";
-    //log_i("%s",mline.c_str());
     pos1=mline.indexOf("StreamTitle=");
     if(pos1!=-1){                                       // StreamTitle found
         pos1=pos1+12;
         st=mline.substring(pos1);                       // remove "StreamTitle="
-//      log_i("st_orig %s", st.c_str());
         if(st.startsWith("'{")){
             // special coding like '{"t":"\u041f\u0438\u043a\u043d\u0438\u043a - \u0418...."m":"mdb","lAU":0,"lAuU":18}
             pos2= st.indexOf('"', 8);                   // end of '{"t":".......", seek for double quote at pos 8
@@ -1706,7 +1684,6 @@ void Audio::showstreamtitle(const char *ml, bool full){
                     u=strtol(uni.c_str(), 0, 16);       // convert hex to int
                     v=u/64 + 0xC0; st1+=char(v);        // compute UTF-8
                     w=u%64 + 0x80; st1+=char(w);
-                     //log_i("uni %i  %i", v, w );
                     uni="";
                 }
             }
@@ -1738,7 +1715,7 @@ void Audio::showstreamtitle(const char *ml, bool full){
         }
 
         m_st_remember=st;
-        st="StreamTitle=" + st;
+        st="StreamTitle=\"" + st + '\"';
         if(audio_info) audio_info(st.c_str());
     }
     pos4=mline.indexOf("StreamUrl=");
@@ -1748,7 +1725,7 @@ void Audio::showstreamtitle(const char *ml, bool full){
         pos2= su.indexOf(';',1);                // end of StreamUrl, first occurrence of ';'
         if(pos2!=-1) su=su.substring(0,pos2);   // extract StreamUrl
         if(su.startsWith("'")) su=su.substring(1,su.length()-1); // if exists remove ' at the begin and end
-        su="StreamUrl=" + su;
+        su="StreamUrl=\"" + su + '\"';
         if(audio_info) audio_info(su.c_str());
     }
     pos2=mline.indexOf("adw_ad=");              // advertising,
@@ -1763,16 +1740,12 @@ void Audio::showstreamtitle(const char *ml, bool full){
           if(audio_commercial) audio_commercial(mline.c_str());
        }
     }
-    if(!full){
-        m_icystreamtitle="";                    // Unknown type
-        return;                                 // Do not show
-    }
     if(pos1==-1 && pos4==-1){
         // Info probably from playlist
         st=mline;
         if(audio_showstreamtitle) audio_showstreamtitle(st.c_str());
-        st="Streamtitle: " + st;
-        if(audio_info) audio_info(chbuf);
+        st="Streamtitle=\"" + st + '\"';
+        if(audio_info) audio_info(st.c_str());
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1829,7 +1802,6 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         }
         if(audio_info) audio_info("syncword found at pos 0");
         count=0;
-//        m_bitRate=0;
         m_f_playing=true;
         return nextSync;
     }
