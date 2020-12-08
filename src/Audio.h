@@ -209,7 +209,7 @@ private:
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
     int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
-    uint8_t         m_rev=0;                        // revision
+    uint8_t         m_rev=0;                        // revision, ID3 version
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock
     uint8_t         m_DOUT=0;                       // Data Out
@@ -218,14 +218,9 @@ private:
     uint8_t         m_bitsPerSample=16;             // bitsPerSample
     uint8_t         m_channels=2;
     uint8_t         m_i2s_num= I2S_NUM_0;           // I2S_NUM_0 or I2S_NUM_1
-    int16_t         m_buffValid;
-    int16_t         m_lastFrameEnd;
-    int16_t         m_outBuff[2048*2];              //[1152 * 2];          // Interleaved L/R
+    int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
-    int16_t         m_Sample[2];
-    int16_t*        m_leftSample;
-    int16_t*        m_rightSample;
     uint16_t        m_datamode=0;                   // Statemaschine
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_totalcount = 0;               // Counter mp3 data
@@ -238,14 +233,14 @@ private:
     String          m_audioName="";                 // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost="";                  // Store the last URL to a webstream
-    String          m_metaline ;                    // Readable line in metadata
+    String          m_metaline="";                  // Readable line in metadata
     String          m_icyname ;                     // Icecast station name
     String          m_st_remember="";               // Save the last streamtitle
     String          m_icyurl="";                    // Store ie icy-url if received
-    String          m_plsURL;
-    String          m_plsStationName;
+    String          m_plsURL;                       // URL found in playlist
+    String          m_plsStationName;               // StationName found in playlist
     String          m_icystreamtitle ;              // Streamtitle from metadata
-    bool            m_f_unsync = false;
+    bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_localfile = false ;         // Play from local mp3-file
     bool            m_f_webstream = false ;         // Play from URL
@@ -254,7 +249,6 @@ private:
     bool            m_f_firststream_ready=false;    // Set after connecttohost and first streamdata are available
     bool            m_f_ctseen=false;               // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
-    bool            m_f_filled;                     // outputBuffer
     bool            m_f_swm=false;
     bool            m_f_firstmetabyte=false;        // True if first metabyte (counter)
     bool            m_f_plsFile=false;              // Set if URL is known
