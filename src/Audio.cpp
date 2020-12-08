@@ -536,12 +536,6 @@ bool Audio::connecttospeech(String speech, String lang){
 
     String tkkFunc="";
     char ch;
-    int ii = 0;
-    do{
-        String line = clientsecure.readStringUntil('\n');
-        log_i("%s", line.c_str());
-    } while(ii>100);
-
 
     do {  // search for TKK
         tkkFunc = "";
@@ -557,9 +551,7 @@ bool Audio::connecttospeech(String speech, String lang){
         clientsecure.readBytes(&ch, 1);
         if (ch != ':') continue;
         tkkFunc += String(ch);
-        log_i("tkk=%s", tkkFunc.c_str());
     } while(tkkFunc.length() < 4);
-    log_i("bis hier");
     tkkFunc +=  clientsecure.readStringUntil(',');  // "TKK='xxxxxxxxx.yyyyyyyyy'"
     tkkFunc = tkkFunc.substring(5 /* length of "TKK='" */, tkkFunc.lastIndexOf('\''));
 
