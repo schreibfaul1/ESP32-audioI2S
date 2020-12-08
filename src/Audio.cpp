@@ -508,18 +508,22 @@ bool Audio::connecttoFS(fs::FS &fs, String file){
 bool Audio::connecttospeech(String speech, String lang){
 
     reset();
-    String host="translate.google.com";
+    String host="translate.google.com.vn";
     String path="/translate_tts";
     uint32_t bytesCanBeWritten = 0;
     uint32_t bytesCanBeRead = 0;
     int32_t  bytesAddedToBuffer = 0;
     int16_t  bytesDecoded = 0;
 
-    String resp=   String("GET / HTTP/1.0\r\n") +
-                   String("Host: ") + host + String("\r\n") +
-                   String("User-Agent: GoogleTTS for ESP32/1.0.0\r\n") +
-                   String("Accept-Encoding: identity\r\n") +
-                   String("Accept: text/html\r\n\r\n");
+    String tts=   path + "?ie=UTF-8&q=" + urlencode(speech) +
+                  "&tl=" + lang + "&client=tw-ob";
+
+    String resp = String("GET ") + tts + String(" HTTP/1.1\r\n") +
+                  String("Host: ") + host + String("\r\n") +
+                  String("User-Agent: GoogleTTS for ESP32/1.0.0\r\n") +
+                  String("Accept-Encoding: identity\r\n") +
+                  String("Accept: text/html\r\n") +
+                  String("Connection: close\r\n\r\n");
 
     if (!clientsecure.connect(host.c_str(), 443)) {
         Serial.println("Connection failed");
@@ -531,86 +535,10 @@ bool Audio::connecttospeech(String speech, String lang){
     while (clientsecure.connected()) {  // read the header
         String line = clientsecure.readStringUntil('\n');
         line+="\n";
+        // if(audio_info) audio_info(line.c_str());
         if (line == "\r\n") break;
     }
 
-    String tkkFunc="";
-    char ch;
-
-    do {  // search for TKK
-        tkkFunc = "";
-        clientsecure.readBytes(&ch, 1);
-        if (ch != 't') continue;
-        tkkFunc += String(ch);
-        clientsecure.readBytes(&ch, 1);
-        if (ch != 'k') continue;
-        tkkFunc += String(ch);
-        clientsecure.readBytes(&ch, 1);
-        if (ch != 'k') continue;
-        tkkFunc += String(ch);
-        clientsecure.readBytes(&ch, 1);
-        if (ch != ':') continue;
-        tkkFunc += String(ch);
-    } while(tkkFunc.length() < 4);
-    tkkFunc +=  clientsecure.readStringUntil(',');  // "TKK='xxxxxxxxx.yyyyyyyyy'"
-    tkkFunc = tkkFunc.substring(5 /* length of "TKK='" */, tkkFunc.lastIndexOf('\''));
-
-//    log_i("tkkFunc_%s", tkkFunc.c_str());
-
-    // create token
-    int16_t periodPos = tkkFunc.indexOf('.');
-    String key1 = tkkFunc.substring(0,periodPos);
-    String key2 = tkkFunc.substring(periodPos + 1);
-    int64_t a, b;
-    a = b = strtoll(key1.c_str(), NULL, 10);
-
-    int f;
-    int len = strlen(speech.c_str());
-    for (f = 0; f < len; f++) {
-      a += speech[f];
-      a = XL(a, "+-a^+6");
-    }
-    a = XL(a, "+-3^+b+-f");
-    a = a ^ (strtoll(key2.c_str(), NULL, 10));
-    if (0 > a) {
-      a = (a & 2147483647) + 2147483648;
-    }
-    a = a % 1000000;
-    String token=String(lltoa(a, 10)) + '.' + lltoa(a ^ b, 10);
-
-    int i,j;
-    const char* t = speech.c_str();
-    for(i=0,j=0;i<strlen(t);i++) {
-      if (t[i] < 0x80 || t[i] > 0xbf) {
-        j++;
-      }
-    }
-
-    String tts= String("https://") + host + path +
-                        "?ie=UTF-8&q=" + urlencode(speech) +
-                        "&tl=" + lang +
-                        "&textlen=" + String(j) +
-                        "&tk=" + token +
-                        "&total=1&idx=0&client=t&prev=input&ttsspeed=1";
-
-    clientsecure.stop();  clientsecure.flush();
-
-    resp=   String("GET ") + tts + String("HTTP/1.1\r\n") +
-            String("Host: ") + host + String("\r\n") +
-            String("Connection: close\r\n\r\n");
-
-    if (!clientsecure.connect(host.c_str(), 443)) {
-        Serial.println("Connection failed");
-        return false;
-    }
-    clientsecure.print(resp);
-
-    while (clientsecure.connected()) {
-        String line = clientsecure.readStringUntil('\n');
-        line+="\n";
-//      if(audio_info) audio_info(line.c_str());
-        if (line == "\r\n") break;
-    }
     m_codec = CODEC_MP3;
     AACDecoder_FreeBuffers();
     MP3Decoder_AllocateBuffers();
