@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 25,2020
+ *  Updated on: Dec 14,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -179,8 +179,6 @@ private:
     void handlebyte(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
-    char* lltoa(long long val, int base);
-    long long int XL (long long int a, const char* b);
     String urlencode(String str);
 
 private:
