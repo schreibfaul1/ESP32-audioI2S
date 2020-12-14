@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 08,2020
+ *  Updated on: Dec 14,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -274,7 +274,7 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
     int16_t inx;                                            // Position of ":" in hostname
     uint16_t port=80;                                       // Port number for host
     String extension="/";                                   // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
-    String hostwoext;                                       // Host without extension and portnumber
+    String hostwoext="";                                    // Host without extension and portnumber
     String headerdata="";
     m_f_webstream=true;
     setDatamode(AUDIO_HEADER);                              // Handle header
@@ -298,11 +298,10 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
     if(inx > 0){                                            // Is there an extension?
         extension=host.substring(inx);                      // Yes, change the default
         hostwoext=host.substring(0, inx);                   // Host without extension
-
     }
     // In the URL there may be a portnumber
     inx=host.indexOf(":");                                  // Search for separator
-    if(inx >= 0){                                           // Portnumber available?
+    if(inx >= 0 && inx < host.indexOf("?")){                // Portnumber available? #82
         port=host.substring(inx + 1).toInt();               // Get portnumber as integer
         hostwoext=host.substring(0, inx);                   // Host without portnumber
     }
@@ -580,37 +579,6 @@ bool Audio::connecttospeech(String speech, String lang){
     m_codec = CODEC_NONE;
     if(audio_eof_speech) audio_eof_speech(speech.c_str());
     return true;
-}
-//---------------------------------------------------------------------------------------------------------------------
-long long int Audio::XL (long long int a, const char* b) {
-    int len = strlen(b);
-    for (int c = 0; c < len - 2; c += 3) {
-        int  d = (long long int)b[c + 2];
-        d = d >= 97 ? d - 87 : d - 48;
-        d = (b[c + 1] == '+' ? a >> d : a << d);
-        a = b[c] == '+' ? (a + d) & 4294967295 : a ^ d;
-    }
-    return a;
-}
-//---------------------------------------------------------------------------------------------------------------------
-char* Audio::lltoa(long long val, int base){
-
-    static char buf[64] = {0};
-    static char chn=0;
-    int i = 62;
-    int sign = (val < 0);
-    if(sign) val = -val;
-
-    if(val == 0) return &chn;
-
-    for(; val && i ; --i, val /= base) {
-        buf[i] = "0123456789abcdef"[val % base];
-    }
-
-    if(sign) {
-        buf[i--] = '-';
-    }
-    return &buf[i+1];
 }
 //---------------------------------------------------------------------------------------------------------------------
 String Audio::urlencode(String str){
