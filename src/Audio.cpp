@@ -272,6 +272,7 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
 
     // initializationsequence
     int16_t inx;                                            // Position of ":" in hostname
+    int16_t ampersand;                                      // Position of "&" in hostname
     uint16_t port=80;                                       // Port number for host
     String extension="/";                                   // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
     String hostwoext="";                                    // Host without extension and portnumber
@@ -301,9 +302,12 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
     }
     // In the URL there may be a portnumber
     inx=host.indexOf(":");                                  // Search for separator
-    if(inx >= 0 && inx < host.indexOf("&")){                // Portnumber available? #82
-        port=host.substring(inx + 1).toInt();               // Get portnumber as integer
-        hostwoext=host.substring(0, inx);                   // Host without portnumber
+    ampersand=host.indexOf("&");                            // Search for additional extensions
+    if(inx >= 0){                                           // Portnumber available?
+        if((ampersand == -1) or (ampersand > inx)){         // Portnumber is valid if ':' comes before '&' #82
+            port=host.substring(inx + 1).toInt();           // Get portnumber as integer
+            hostwoext=host.substring(0, inx);               // Host without portnumber
+        }
     }
     sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"",
             hostwoext.c_str(), port, extension.c_str());
