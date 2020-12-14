@@ -301,7 +301,7 @@ bool Audio::connecttohost(String host, const char* user, const char* pwd){
     }
     // In the URL there may be a portnumber
     inx=host.indexOf(":");                                  // Search for separator
-    if(inx >= 0 && inx < host.indexOf("?")){                // Portnumber available? #82
+    if(inx >= 0 && inx < host.indexOf("&")){                // Portnumber available? #82
         port=host.substring(inx + 1).toInt();               // Get portnumber as integer
         hostwoext=host.substring(0, inx);                   // Host without portnumber
     }
