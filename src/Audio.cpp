@@ -1079,6 +1079,7 @@ void Audio::processWebStream() {
     if(m_f_running && m_f_webstream) {
         uint32_t bytesCanBeWritten = 0;
         int16_t bytesAddedToBuffer = 0;
+        const uint16_t maxFrameSize = 1600;                 // every mp3/aac frame is no bigger
         static uint32_t chunksize = 0;                      // chunkcount read from stream
         int32_t availableBytes = 0;                         // available bytes in stream
         static int id3Size=0;                               // stores the size of ID3 metadata (if available)
@@ -1162,18 +1163,22 @@ void Audio::processWebStream() {
                 }
             }
 
-            if((InBuff.bufferFilled() > 1600) && (m_f_stream == true)) { // fill > framesize?
+            if((InBuff.bufferFilled() > maxFrameSize) && (m_f_stream == true)) { // fill > framesize?
                 if(id3Size==0) {
                     bytesdecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
                 }
                 else { // skip ID3 metadata
-                    if(id3Size >= InBuff.bufferFilled()){
-                        bytesdecoded = InBuff.bufferFilled();
-                        id3Size -= InBuff.bufferFilled();
+                    if(id3Size >= maxFrameSize){
+                        bytesdecoded = maxFrameSize;
+                        id3Size -= maxFrameSize;
+                        vTaskDelay(30); // if the bytes are consumed too fast, we have a InBuff underrun
                     }
-                    else {
+                    else if(id3Size <maxFrameSize) {
                         bytesdecoded = id3Size;
                         id3Size = 0;
+                    }
+                    else {
+                        ; // do nothing
                     }
                 } // end skip ID3 metadata
                 if(bytesdecoded < 0) {  // no syncword found or decode error, try next chunk
@@ -1259,7 +1264,7 @@ void Audio::processWebStream() {
                 }
                 if(m_f_webfile) { // stream from fileserver with known content-length
                     if((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) { // received everything?
-                        if(InBuff.bufferFilled() < 1600) {   // and buff almost empty, issue #66
+                        if(InBuff.bufferFilled() < maxFrameSize) {   // and buff almost empty, issue #66
                             sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost.c_str());
                             if(audio_info) audio_info(chbuf);
                             if(audio_eof_stream) audio_eof_stream(m_lastHost.c_str());
