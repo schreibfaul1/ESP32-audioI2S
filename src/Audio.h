@@ -40,7 +40,7 @@ extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstrea
 
 //----------------------------------------------------------------------------------------------------------------------
 
-class AudioBuffer{
+class AudioBuffer {
 // AudioBuffer will be allocated in PSRAM, If PSRAM not available or has not enough space AudioBuffer will be
 // allocated in FlashRAM with reduced size
 //
@@ -230,8 +230,8 @@ private:
     uint32_t        m_bytesNotDecoded=0;            // pictures or something else that comes with the stream
     String          m_audioName="";                 // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
-    String          m_lastHost="";                  // Store the last URL to a webstream
-    String          m_metaline="";                  // Readable line in metadata
+    String          m_lastHost = "";                // Store the last URL to a webstream
+    String          m_metaline = "";                // Readable line in metadata
     String          m_icyname ;                     // Icecast station name
     String          m_st_remember="";               // Save the last streamtitle
     String          m_icyurl="";                    // Store ie icy-url if received
@@ -242,24 +242,23 @@ private:
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_localfile = false ;         // Play from local mp3-file
     bool            m_f_webstream = false ;         // Play from URL
-    bool            m_f_ssl=false;
-    bool            m_f_running=false;
-    bool            m_f_firststream_ready=false;    // Set after connecttohost and first streamdata are available
-    bool            m_f_ctseen=false;               // First line of header seen or not
+    bool            m_f_ssl = false;
+    bool            m_f_running = false;
+    bool            m_f_firststream_ready = false;  // Set after connecttohost and first streamdata are available
+    bool            m_f_ctseen = false;             // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
-    bool            m_f_swm=false;
-    bool            m_f_firstmetabyte=false;        // True if first metabyte (counter)
-    bool            m_f_plsFile=false;              // Set if URL is known
-    bool            m_f_plsTitle=false;             // Set if StationName is known
-    bool            m_ctseen=false;                 // First line of header seen or not
-    bool            m_f_stream=false;               // Set false if stream is lost
+    bool            m_f_swm = false;
+    bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
+    bool            m_f_plsFile = false;            // Set if URL is known
+    bool            m_f_plsTitle = false;           // Set if StationName is known
+    bool            m_f_stream = false;             // Set false if stream is lost
     uint8_t         m_codec = CODEC_NONE;           //
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
     bool            m_f_psram = false;              // set if PSRAM is availabe
-    size_t          m_i2s_bytesWritten=0;           // set in i2s_write() but not used
-    uint32_t        m_audioFileDuration=0;
-    float           m_audioCurrentTime=0;
+    size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
+    uint32_t        m_audioFileDuration = 0;
+    float           m_audioCurrentTime = 0;
 };
 
 #endif /* AUDIO_H_ */
