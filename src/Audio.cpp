@@ -257,6 +257,11 @@ void Audio::reset() {
     m_LFcount = 0;                                            // For end of header detection
     m_st_remember = "";                                       // Delete the last streamtitle
     m_totalcount = 0;                                         // Reset totalcount
+
+    //TEST loop
+    m_f_loop_point = 0;
+    m_f_file_size = 0;
+    //TEST loop
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host, const char *user, const char *pwd) {
@@ -357,6 +362,14 @@ bool Audio::connecttohost(String host, const char *user, const char *pwd) {
     return false;
 }
 //-----------------------------------------------------------------------------------------------------------------------------------
+
+//TEST loop
+bool Audio::setFileLoop(bool input){
+    m_f_loop = input;
+    return input;
+}
+//-----------------------------------------------------------------------------------------------------------------------------------
+
 bool Audio::connecttoSD(String sdfile) {
     return connecttoFS(SD, sdfile);
 }
@@ -389,6 +402,9 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
     sprintf(chbuf, "Reading file: \"%s\"", m_audioName.c_str());
     if(audio_info) audio_info(chbuf);
     audiofile = fs.open(path);
+    
+    m_f_file_size = audiofile.size();//TEST loop
+    
     if(!audiofile) {
         if(audio_info) audio_info("Failed to open file for reading");
         return false;
@@ -403,6 +419,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         if((chbuf[0] != 'I') || (chbuf[1] != 'D') || (chbuf[2] != '3')) {
             if(audio_info) audio_info("file has no mp3 tag, skip metadata");
             setFilePos(0);
+            m_f_loop_point = 0;//TEST loop
             m_f_running = true;
             return false;
         }
@@ -434,6 +451,13 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         if(audio_info) audio_info(chbuf);
         readID3Metadata();
         m_f_running = true;
+
+        //TEST loop
+        m_f_loop_point = getFilePos();
+        sprintf(chbuf, "fp=%u", m_f_loop_point);
+        if(audio_info) audio_info(chbuf);
+        //TEST loop
+
         return true;
     } // end MP3 section
 
@@ -527,6 +551,13 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         sprintf(chbuf, "DataLength=%u", cs);
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
+
+        //TEST loop
+        m_f_loop_point = getFilePos();
+        sprintf(chbuf, "fp=%u", m_f_loop_point);
+        if(audio_info) audio_info(chbuf);
+        //TEST loop
+
         return true;
     } // end WAVE section
     if(audio_info) audio_info("Neither wave nor mp3 format found");
@@ -1033,7 +1064,19 @@ void Audio::processLocalFile() {
         int32_t bytesAddedToBuffer = 0;
 
         bytesCanBeWritten = InBuff.writeSpace();
+        
+        //TEST loop 
+        if((m_f_file_size == getFilePos()) && m_f_loop/* && m_f_stream */){  //eof
+            sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_f_loop_point);
+            if(audio_info) audio_info(chbuf);
+            setFilePos(m_f_loop_point);
+        }
+        //TEST loop
+        
         bytesAddedToBuffer = audiofile.read(InBuff.writePtr(), bytesCanBeWritten);
+
+        /*sprintf(chbuf, "Rp:%u Wp:%u Bw:%u Br:%u Bb:%u", InBuff.readPtr(), InBuff.writePtr(), bytesCanBeWritten, InBuff.bufferFilled(), bytesAddedToBuffer);//TEST
+        if(audio_info) audio_info(chbuf);//TEST*/
 
         if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
         bytesCanBeRead = InBuff.bufferFilled();
