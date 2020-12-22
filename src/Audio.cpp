@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 15,2020
+ *  Updated on: Dec 22,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -259,8 +259,8 @@ void Audio::reset() {
     m_totalcount = 0;                                         // Reset totalcount
 
     //TEST loop
-    m_f_loop_point = 0;
-    m_f_file_size = 0;
+    m_loop_point = 0;
+    m_file_size = 0;
     //TEST loop
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -375,35 +375,46 @@ bool Audio::connecttoSD(String sdfile) {
 }
 //-----------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS &fs, String file) {
+
     const uint8_t ascii[60] = {
-          //196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215,   ISO
-            142, 143, 146, 128, 000, 144, 000, 000, 000, 000, 000, 000, 000, 165, 000, 000, 000, 000, 153, 000, //ASCII
-          //216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235,   ISO
-            000, 000, 000, 000, 154, 000, 000, 225, 133, 000, 000, 000, 132, 143, 145, 135, 138, 130, 136, 137, //ASCII
-          //236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255    ISO
-            000, 161, 140, 139, 000, 164, 000, 162, 147, 000, 148, 000, 000, 000, 163, 150, 129, 000, 000, 152};//ASCII
+    //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
+    //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
+      000, 000, 000, 142, 143, 146, 128, 000, 144, 000, 000, 000, 000, 000, 000, 000, 165, 000, 000, 000, // ASCII
+    //149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168
+    //      Ö                             Ü              ß    à                   ä    å    æ         è
+      000, 153, 000, 000, 000, 000, 000, 154, 000, 000, 225, 133, 000, 000, 000, 132, 134, 145, 000, 138,
+    //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
+    //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
+      000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
 
     reset(); // free buffers an set defaults
 
-    uint16_t i = 0, s = 0;
+    uint16_t i = 0, j=0, s = 0;
+    bool f_C3_seen = false;
     m_f_localfile = true;
 
     if(!file.startsWith("/")) file = "/" + file;
     while(file[i] != 0) {                                     // convert UTF8 to ASCII
-        path[i] = file[i];
-        if(path[i] > 195) {
-            s = ascii[path[i] - 196];
-            if(s != 0) path[i] = s;                           // found a related ASCII sign
+        if(file[i] == 195){                                   // C3
+            i++;
+            f_C3_seen = true;
+            continue;
         }
-        i++;
+        path[j] = file[i];
+        if(path[j] > 128 && path[j] < 189 && f_C3_seen == true) {
+            s = ascii[path[j] - 129];
+            if(s != 0) path[j] = s;                         // found a related ASCII sign
+            f_C3_seen = false;
+        }
+        i++; j++;
     }
-    path[i] = 0;
+    path[j] = 0;
     m_audioName = file.substring(file.lastIndexOf('/') + 1, file.length());
     sprintf(chbuf, "Reading file: \"%s\"", m_audioName.c_str());
     if(audio_info) audio_info(chbuf);
     audiofile = fs.open(path);
     
-    m_f_file_size = audiofile.size();//TEST loop
+    m_file_size = audiofile.size();//TEST loop
     
     if(!audiofile) {
         if(audio_info) audio_info("Failed to open file for reading");
@@ -419,7 +430,7 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         if((chbuf[0] != 'I') || (chbuf[1] != 'D') || (chbuf[2] != '3')) {
             if(audio_info) audio_info("file has no mp3 tag, skip metadata");
             setFilePos(0);
-            m_f_loop_point = 0;//TEST loop
+            m_loop_point = 0;//TEST loop
             m_f_running = true;
             return false;
         }
@@ -453,8 +464,8 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         m_f_running = true;
 
         //TEST loop
-        m_f_loop_point = getFilePos();
-        sprintf(chbuf, "fp=%u", m_f_loop_point);
+        m_loop_point = getFilePos();
+        sprintf(chbuf, "fp=%u", m_loop_point);
         if(audio_info) audio_info(chbuf);
         //TEST loop
 
@@ -553,8 +564,8 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         m_f_running = true;
 
         //TEST loop
-        m_f_loop_point = getFilePos();
-        sprintf(chbuf, "fp=%u", m_f_loop_point);
+        m_loop_point = getFilePos();
+        sprintf(chbuf, "fp=%u", m_loop_point);
         if(audio_info) audio_info(chbuf);
         //TEST loop
 
@@ -1066,10 +1077,10 @@ void Audio::processLocalFile() {
         bytesCanBeWritten = InBuff.writeSpace();
         
         //TEST loop 
-        if((m_f_file_size == getFilePos()) && m_f_loop/* && m_f_stream */){  //eof
-            sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_f_loop_point);
+        if((m_file_size == getFilePos()) && m_f_loop/* && m_f_stream */){  //eof
+            sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_loop_point);
             if(audio_info) audio_info(chbuf);
-            setFilePos(m_f_loop_point);
+            setFilePos(m_loop_point);
         }
         //TEST loop
         

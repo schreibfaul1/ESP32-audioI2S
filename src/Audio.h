@@ -262,8 +262,8 @@ private:
     float           m_audioCurrentTime = 0;
     //TEST loop
     bool            m_f_loop = false;               // Set if audio file should loop
-    size_t          m_f_loop_point = 0;             // Point in the file where the audio data starts
-    size_t          m_f_file_size = 0;              // size of the file 
+    size_t          m_loop_point = 0;               // Point in the file where the audio data starts
+    size_t          m_file_size = 0;                // size of the file
     //TEST loop 
 };
 
