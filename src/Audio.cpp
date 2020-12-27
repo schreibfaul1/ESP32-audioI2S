@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 22,2020
+ *  Updated on: Dec 27,2020
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -262,6 +262,8 @@ void Audio::reset() {
     m_loop_point = 0;
     m_file_size = 0;
     //TEST loop
+
+    memset(m_filterBuff, 0, sizeof(m_filterBuff));            // zero IIR filterbuffer
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(String host, const char *user, const char *pwd) {
@@ -565,8 +567,8 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
 
         //TEST loop
         m_loop_point = getFilePos();
-        sprintf(chbuf, "fp=%u", m_loop_point);
-        if(audio_info) audio_info(chbuf);
+        // sprintf(chbuf, "fp=%u", m_loop_point);
+        // if(audio_info) audio_info(chbuf);
         //TEST loop
 
         return true;
@@ -2208,7 +2210,10 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[LEFTCHANNEL]  = ((sample[LEFTCHANNEL]  & 0xff) -128) << 8;
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
+    sample = IIR_filters(sample);
+
     uint32_t s32;
+
     s32 = ((Gain(sample[RIGHTCHANNEL])) << 16) | (Gain(sample[LEFTCHANNEL]) & 0xffff); // volume
     esp_err_t err = i2s_write((i2s_port_t) m_i2s_num, (const char*) &s32, sizeof(uint32_t), &m_i2s_bytesWritten, 1000);
     if(err != ESP_OK) {
@@ -2220,6 +2225,77 @@ bool Audio::playSample(int16_t sample[2]) {
         return false;
     }
     return true;
+}
+//---------------------------------------------------------------------------------------------------------------------
+int16_t* Audio::IIR_filters(int16_t iir_in[2]){  // Infinite Impulse Response (IIR) filters
+
+    uint8_t z1 = 0, z2 = 1;
+    enum: uint8_t {in = 0, out = 1};
+    float inSample[2];
+    float outSample[2];
+    static int16_t iir_out[2];
+
+    float a0[2], a1[2], a2[2], b1[2], b2[2];
+
+
+    // to calculate coefficients (a0, a1, a2, b1, b2) see
+    // https://www.easycalculation.com/physics/electromagnetism/biquad-calculator.php
+    a0[LEFTCHANNEL] = 1;
+    a1[LEFTCHANNEL] = 1;
+    a2[LEFTCHANNEL] = 1;
+    b1[LEFTCHANNEL] = 1;
+    b2[LEFTCHANNEL] = 1;
+
+    a0[RIGHTCHANNEL] = 1;
+    a1[RIGHTCHANNEL] = 1;
+    a2[RIGHTCHANNEL] = 1;
+    b1[RIGHTCHANNEL] = 1;
+    b2[RIGHTCHANNEL] = 1;
+
+// channel left lowpass 2KHz Q=0.7 SampleRate 44.1KHz
+//    a0[LEFTCHANNEL] = 0.0168;
+//    a1[LEFTCHANNEL] = 0.0336;
+//    a2[LEFTCHANNEL] = 0.0168;
+//    b1[LEFTCHANNEL] = -1.598;
+//    b2[LEFTCHANNEL] = 0.665;
+
+// channel right highpass 2KHz Q=0.7 SampleRate 44.1KHz
+//    a0[RIGHTCHANNEL] = 0.816;
+//    a1[RIGHTCHANNEL] = -1.632;
+//    a2[RIGHTCHANNEL] = 0.816;
+//    b1[RIGHTCHANNEL] = -1.598;
+//    b2[RIGHTCHANNEL] = 0.665;
+
+
+    inSample[LEFTCHANNEL]  = (float)iir_in[LEFTCHANNEL];
+    inSample[RIGHTCHANNEL] = (float)iir_in[RIGHTCHANNEL];
+
+    outSample[LEFTCHANNEL] =   a0[LEFTCHANNEL] * inSample[LEFTCHANNEL]
+                             + a1[LEFTCHANNEL] * m_filterBuff[z1][in] [LEFTCHANNEL]
+                             + a2[LEFTCHANNEL] * m_filterBuff[z2][in] [LEFTCHANNEL]
+                             - b1[LEFTCHANNEL]  * m_filterBuff[z1][out][LEFTCHANNEL]
+                             - b2[LEFTCHANNEL] * m_filterBuff[z2][out][LEFTCHANNEL];
+
+    m_filterBuff[z2][in][LEFTCHANNEL]  = m_filterBuff[z1][in][LEFTCHANNEL];
+    m_filterBuff[z1][in][LEFTCHANNEL]  = inSample[LEFTCHANNEL];
+    m_filterBuff[z2][out][LEFTCHANNEL] = m_filterBuff[z1][out][LEFTCHANNEL];
+    m_filterBuff[z1][out][LEFTCHANNEL] = outSample[LEFTCHANNEL];
+    iir_out[LEFTCHANNEL] = (int16_t)outSample[LEFTCHANNEL];
+
+
+    outSample[RIGHTCHANNEL] =  a0[RIGHTCHANNEL] * inSample[RIGHTCHANNEL]
+                             + a1[RIGHTCHANNEL] * m_filterBuff[z1][in][RIGHTCHANNEL]
+                             + a2[RIGHTCHANNEL] * m_filterBuff[z2][in][RIGHTCHANNEL]
+                             - b1[RIGHTCHANNEL] * m_filterBuff[z1][out][RIGHTCHANNEL]
+                             - b2[RIGHTCHANNEL] * m_filterBuff[z2][out][RIGHTCHANNEL];
+
+    m_filterBuff[z2][in][RIGHTCHANNEL] = m_filterBuff[z1][in][RIGHTCHANNEL];
+    m_filterBuff[z1][in][RIGHTCHANNEL] = inSample[RIGHTCHANNEL];
+    m_filterBuff[z2][out][RIGHTCHANNEL] = m_filterBuff[z1][out][RIGHTCHANNEL];
+    m_filterBuff[z1][out][RIGHTCHANNEL] = outSample[RIGHTCHANNEL];
+    iir_out[RIGHTCHANNEL] = (int16_t)outSample[RIGHTCHANNEL];
+
+    return iir_out;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setVolume(uint8_t vol) { // vol 22 steps, 0...21

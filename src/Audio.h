@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 14,2020
+ *  Updated on: Dec 27,2020
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -181,6 +181,7 @@ private:
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
+    int16_t* IIR_filters(int16_t iir_in[2]);
 
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -260,6 +261,7 @@ private:
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
+    float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP
     //TEST loop
     bool            m_f_loop = false;               // Set if audio file should loop
     size_t          m_loop_point = 0;               // Point in the file where the audio data starts
