@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 27,2020
+ *  Updated on: Jan 04,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -157,6 +157,7 @@ public:
     esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
+    void setTone(uint8_t l_type = 0, uint16_t l_freq = 0, uint8_t r_type = 0, uint16_t r_freq = 0);
 
 private:
     void reset(); // free buffers and set defaults
@@ -181,7 +182,8 @@ private:
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
-    int16_t* IIR_filters(int16_t iir_in[2]);
+    int16_t* IIR_filterChain(int16_t iir_in[2]);
+    void IIR_calculateCoefficients();
 
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -192,7 +194,13 @@ private:
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
                                      20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
 
-
+    typedef struct _filter{
+        float a0;
+        float a1;
+        float a2;
+        float b1;
+        float b2;
+    } filter_t;
 
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
@@ -266,7 +274,10 @@ private:
     bool            m_f_loop = false;               // Set if audio file should loop
     size_t          m_loop_point = 0;               // Point in the file where the audio data starts
     size_t          m_file_size = 0;                // size of the file
-    //TEST loop 
+    //TEST loop
+    filter_t        m_filter[2];
+    uint8_t         m_filterType[2];                // lowpass, highpass
+    uint16_t        m_filterFrequency[2];
 };
 
 #endif /* AUDIO_H_ */

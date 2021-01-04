@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 27,2020
+ *  Updated on: Jan 04,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -153,6 +153,17 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
 
     m_metaline.reserve(100);           // preallocate some space #77
+
+    m_filter[LEFTCHANNEL].a0 = 1;
+    m_filter[LEFTCHANNEL].a1 = 2;
+    m_filter[LEFTCHANNEL].a2 = 1;
+    m_filter[LEFTCHANNEL].b1 = 2;
+    m_filter[LEFTCHANNEL].b2 = 1;
+    m_filter[RIGHTCHANNEL].a0 = 1;
+    m_filter[RIGHTCHANNEL].a1 = -2;
+    m_filter[RIGHTCHANNEL].a2 = 1;
+    m_filter[RIGHTCHANNEL].b1 = -2;
+    m_filter[RIGHTCHANNEL].b2 = 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
@@ -2181,6 +2192,7 @@ bool Audio::audioFileSeek(const int8_t speed) {
 bool Audio::setSampleRate(uint32_t sampRate) {
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
     m_sampleRate = sampRate;
+    IIR_calculateCoefficients(); // must be recalculated after each samplerate change
     return true;
 }
 uint32_t Audio::getSampleRate(){
@@ -2210,7 +2222,7 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[LEFTCHANNEL]  = ((sample[LEFTCHANNEL]  & 0xff) -128) << 8;
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
-    sample = IIR_filters(sample);
+    sample = IIR_filterChain(sample);
 
     uint32_t s32;
 
@@ -2227,7 +2239,99 @@ bool Audio::playSample(int16_t sample[2]) {
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int16_t* Audio::IIR_filters(int16_t iir_in[2]){  // Infinite Impulse Response (IIR) filters
+void Audio::setTone(uint8_t l_type, uint16_t l_freq, uint8_t r_type, uint16_t r_freq){
+    // see https://www.earlevel.com/main/2013/10/13/biquad-calculator-v2/
+    // l_ left channel, r_ right channel
+    // type: 0- lowpass, 1- highpass
+    // freq: frequency in Hz (between 10....samlerate/2), freq =0 - no filter
+    m_filterType[LEFTCHANNEL]       = l_type;
+    m_filterType[RIGHTCHANNEL]      = r_type;
+    m_filterFrequency[LEFTCHANNEL]  = l_freq;
+    m_filterFrequency[RIGHTCHANNEL] = r_freq;
+    IIR_calculateCoefficients();
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) filters
+    // https://www.earlevel.com/main/2012/11/26/biquad-c-source-code/
+    float K, norm, Q, Fc ;
+    Q = 0.707;
+
+    if(m_filterFrequency[LEFTCHANNEL]  == 0)               m_filterType[LEFTCHANNEL] = 254; // filter without effect
+    if(m_filterFrequency[LEFTCHANNEL]  < 10)               m_filterFrequency[LEFTCHANNEL] = 10;
+    if(m_filterFrequency[LEFTCHANNEL]  > m_sampleRate / 2) m_filterFrequency[LEFTCHANNEL] = m_sampleRate / 2;
+    if(m_filterFrequency[RIGHTCHANNEL] == 0)               m_filterType[RIGHTCHANNEL] = 254; // filter without effect
+    if(m_filterFrequency[RIGHTCHANNEL] < 10)               m_filterFrequency[RIGHTCHANNEL] = 10;
+    if(m_filterFrequency[RIGHTCHANNEL] > m_sampleRate / 2) m_filterFrequency[RIGHTCHANNEL] = m_sampleRate / 2;
+
+    if(m_sampleRate!=0){
+        if(m_filterType[LEFTCHANNEL] == 0){ // lowpass
+            Fc = (float)m_filterFrequency[LEFTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + K / Q + K * K);
+            m_filter[LEFTCHANNEL].a0 = K * K * norm;
+            m_filter[LEFTCHANNEL].a1 = 2 * m_filter[LEFTCHANNEL].a0;
+            m_filter[LEFTCHANNEL].a2 = m_filter[LEFTCHANNEL].a0;
+            m_filter[LEFTCHANNEL].b1 = 2 * (K * K - 1) * norm;
+            m_filter[LEFTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
+        }
+        else if(m_filterType[LEFTCHANNEL] == 1){ // highpass
+            Fc = (float)m_filterFrequency[LEFTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + K / Q + K * K);
+            m_filter[LEFTCHANNEL].a0 = 1 * norm;
+            m_filter[LEFTCHANNEL].a1 = -2 * m_filter[LEFTCHANNEL].a0;
+            m_filter[LEFTCHANNEL].a2 = m_filter[LEFTCHANNEL].a0;
+            m_filter[LEFTCHANNEL].b1 = 2 * (K * K - 1) * norm;
+            m_filter[LEFTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
+        }
+        else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
+            m_filter[LEFTCHANNEL].a0 = 1;
+            m_filter[LEFTCHANNEL].a1 = -2;
+            m_filter[LEFTCHANNEL].a2 = 1;
+            m_filter[LEFTCHANNEL].b1 = -2;
+            m_filter[LEFTCHANNEL].b2 = 1;
+        }
+
+        if(m_filterType[RIGHTCHANNEL] == 0){ // lowpass
+            Fc = (float)m_filterFrequency[RIGHTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + K / Q + K * K);
+            m_filter[RIGHTCHANNEL].a0 = K * K * norm;
+            m_filter[RIGHTCHANNEL].a1 = 2 * m_filter[RIGHTCHANNEL].a0;
+            m_filter[RIGHTCHANNEL].a2 = m_filter[RIGHTCHANNEL].a0;
+            m_filter[RIGHTCHANNEL].b1 = 2 * (K * K - 1) * norm;
+            m_filter[RIGHTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
+        }
+        else if(m_filterType[RIGHTCHANNEL] == 1){ // highpass
+            Fc = (float)m_filterFrequency[RIGHTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + K / Q + K * K);
+            m_filter[RIGHTCHANNEL].a0 = 1 * norm;
+            m_filter[RIGHTCHANNEL].a1 = -2 * m_filter[RIGHTCHANNEL].a0;
+            m_filter[RIGHTCHANNEL].a2 = m_filter[RIGHTCHANNEL].a0;
+            m_filter[RIGHTCHANNEL].b1 = 2 * (K * K - 1) * norm;
+            m_filter[RIGHTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
+        }
+        else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
+            m_filter[RIGHTCHANNEL].a0 = 1;
+            m_filter[RIGHTCHANNEL].a1 = -2;
+            m_filter[RIGHTCHANNEL].a2 = 1;
+            m_filter[RIGHTCHANNEL].b1 = -2;
+            m_filter[RIGHTCHANNEL].b2 = 1;
+        }
+    }
+
+    m_filterBuff[0][0][0]=0.0;
+    m_filterBuff[0][0][1]=0.0;
+    m_filterBuff[0][1][0]=0.0;
+    m_filterBuff[0][1][1]=0.0;
+    m_filterBuff[1][0][0]=0.0;
+    m_filterBuff[1][0][1]=0.0;
+    m_filterBuff[1][1][0]=0.0;
+    m_filterBuff[1][1][1]=0.0;
+}
+//---------------------------------------------------------------------------------------------------------------------
+int16_t* Audio::IIR_filterChain(int16_t iir_in[2]){  // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum: uint8_t {in = 0, out = 1};
@@ -2235,48 +2339,15 @@ int16_t* Audio::IIR_filters(int16_t iir_in[2]){  // Infinite Impulse Response (I
     float outSample[2];
     static int16_t iir_out[2];
 
-    float a0[2], a1[2], a2[2], b1[2], b2[2];
 
-
-    // to calculate coefficients (a0, a1, a2, b1, b2) see
-    // https://www.easycalculation.com/physics/electromagnetism/biquad-calculator.php
-    // this example simulates a lowpass 22KHz SR 44.1KHz, Q0.7, has no effect
-    a0[LEFTCHANNEL] = 1;
-    a1[LEFTCHANNEL] = 2;
-    a2[LEFTCHANNEL] = 1;
-    b1[LEFTCHANNEL] = 2;
-    b2[LEFTCHANNEL] = 1;
-
-    // this example simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
-    a0[RIGHTCHANNEL] = 1;
-    a1[RIGHTCHANNEL] = -2;
-    a2[RIGHTCHANNEL] = 1;
-    b1[RIGHTCHANNEL] = -2;
-    b2[RIGHTCHANNEL] = 1;
-
-// channel left lowpass 2KHz Q=0.7 SampleRate 44.1KHz
-//    a0[LEFTCHANNEL] = 0.0168;
-//    a1[LEFTCHANNEL] = 0.0336;
-//    a2[LEFTCHANNEL] = 0.0168;
-//    b1[LEFTCHANNEL] = -1.598;
-//    b2[LEFTCHANNEL] = 0.665;
-
-// channel right highpass 2KHz Q=0.7 SampleRate 44.1KHz
-//    a0[RIGHTCHANNEL] = 0.816;
-//    a1[RIGHTCHANNEL] = -1.632;
-//    a2[RIGHTCHANNEL] = 0.816;
-//    b1[RIGHTCHANNEL] = -1.598;
-//    b2[RIGHTCHANNEL] = 0.665;
-
-
-    inSample[LEFTCHANNEL]  = (float)(iir_in[LEFTCHANNEL]  >> 1); // *1/2, prevent signed 16bit overflow
+    inSample[LEFTCHANNEL]  = (float)(iir_in[LEFTCHANNEL] >> 1);
     inSample[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL] >> 1);
 
-    outSample[LEFTCHANNEL] =   a0[LEFTCHANNEL]  * inSample[LEFTCHANNEL]
-                             + a1[LEFTCHANNEL]  * m_filterBuff[z1][in] [LEFTCHANNEL]
-                             + a2[LEFTCHANNEL]  * m_filterBuff[z2][in] [LEFTCHANNEL]
-                             - b1[LEFTCHANNEL]  * m_filterBuff[z1][out][LEFTCHANNEL]
-                             - b2[LEFTCHANNEL]  * m_filterBuff[z2][out][LEFTCHANNEL];
+    outSample[LEFTCHANNEL] =   m_filter[LEFTCHANNEL].a0  * inSample[LEFTCHANNEL]
+                             + m_filter[LEFTCHANNEL].a1  * m_filterBuff[z1][in] [LEFTCHANNEL]
+                             + m_filter[LEFTCHANNEL].a2  * m_filterBuff[z2][in] [LEFTCHANNEL]
+                             - m_filter[LEFTCHANNEL].b1  * m_filterBuff[z1][out][LEFTCHANNEL]
+                             - m_filter[LEFTCHANNEL].b2  * m_filterBuff[z2][out][LEFTCHANNEL];
 
     m_filterBuff[z2][in] [LEFTCHANNEL]  = m_filterBuff[z1][in][LEFTCHANNEL];
     m_filterBuff[z1][in] [LEFTCHANNEL]  = inSample[LEFTCHANNEL];
@@ -2285,11 +2356,11 @@ int16_t* Audio::IIR_filters(int16_t iir_in[2]){  // Infinite Impulse Response (I
     iir_out[LEFTCHANNEL] = (int16_t)outSample[LEFTCHANNEL];
 
 
-    outSample[RIGHTCHANNEL] =  a0[RIGHTCHANNEL] * inSample[RIGHTCHANNEL]
-                             + a1[RIGHTCHANNEL] * m_filterBuff[z1][in] [RIGHTCHANNEL]
-                             + a2[RIGHTCHANNEL] * m_filterBuff[z2][in] [RIGHTCHANNEL]
-                             - b1[RIGHTCHANNEL] * m_filterBuff[z1][out][RIGHTCHANNEL]
-                             - b2[RIGHTCHANNEL] * m_filterBuff[z2][out][RIGHTCHANNEL];
+    outSample[RIGHTCHANNEL] =  m_filter[RIGHTCHANNEL].a0 * inSample[RIGHTCHANNEL]
+                             + m_filter[RIGHTCHANNEL].a1 * m_filterBuff[z1][in] [RIGHTCHANNEL]
+                             + m_filter[RIGHTCHANNEL].a2 * m_filterBuff[z2][in] [RIGHTCHANNEL]
+                             - m_filter[RIGHTCHANNEL].b1 * m_filterBuff[z1][out][RIGHTCHANNEL]
+                             - m_filter[RIGHTCHANNEL].b2 * m_filterBuff[z2][out][RIGHTCHANNEL];
 
     m_filterBuff[z2][in] [RIGHTCHANNEL] = m_filterBuff[z1][in][RIGHTCHANNEL];
     m_filterBuff[z1][in] [RIGHTCHANNEL] = inSample[RIGHTCHANNEL];
