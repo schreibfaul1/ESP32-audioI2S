@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 04,2021
+ *  Updated on: Jan 09,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -2166,6 +2166,8 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
+    if (pos < m_id3Size) pos = m_id3Size; // issue #96
+    if (m_avr_bitrate) m_audioCurrentTime = (pos-m_id3Size) * 8 / m_avr_bitrate; // #96
     return audiofile.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
