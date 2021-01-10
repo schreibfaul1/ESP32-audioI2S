@@ -2047,17 +2047,17 @@ void Audio::compute_audioCurrentTime(int bd) {
         if(old_bitrate != m_bitRate) {
             if(!f_firstFrame && bitrate_counter == 0) {
                 if(audio_info) audio_info("VBR recognized, audioFileDuration is estimated");
-                f_CBR = false;
+                f_CBR = false; // variable bitrate
             }
         }
         old_bitrate = m_bitRate;
-        if(bitrate_counter < 100 && !f_CBR) { // average of the first 100 values
+        if(bitrate_counter < 100 && !f_CBR) { // if VBR: m_avr_bitrate is average of the first 100 values of m_bitrate
             bitrate_counter++;
             sum_bitrate += m_bitRate;
             m_avr_bitrate = sum_bitrate / bitrate_counter;
         }
         if(f_firstFrame) {
-            m_avr_bitrate = m_bitRate; // if CBR set m_avr_bitrate only once
+            m_avr_bitrate = m_bitRate; // if CBR set m_avr_bitrate equal to m_bitrate
         }
         f_firstFrame = false;
         m_audioCurrentTime += (float) bd * 8 / m_bitRate;
@@ -2142,10 +2142,9 @@ uint32_t Audio::getAudioFileDuration() {
     if(m_f_localfile) {
         if(!audiofile) return 0;
 
-        if(0 == m_audioFileDuration) // calculate only once per file
-                {
+        if(0 == m_audioFileDuration) { // calculate only once per file
             uint32_t fileSize = getFileSize();
-            uint32_t bitRate = m_avr_bitrate; //MP3GetBitrate();
+            uint32_t bitRate = m_avr_bitrate;
             if(0 < bitRate) {
                 m_audioFileDuration = 8 * (fileSize - m_id3Size) / bitRate;
             }
@@ -2226,9 +2225,8 @@ bool Audio::playSample(int16_t sample[2]) {
     }
     sample = IIR_filterChain(sample);
 
-    uint32_t s32;
+    uint32_t s32 = Gain(sample); // volume;
 
-    s32 = ((Gain(sample[RIGHTCHANNEL])) << 16) | (Gain(sample[LEFTCHANNEL]) & 0xffff); // volume
     esp_err_t err = i2s_write((i2s_port_t) m_i2s_num, (const char*) &s32, sizeof(uint32_t), &m_i2s_bytesWritten, 1000);
     if(err != ESP_OK) {
         log_e("ESP32 Errorcode %i", err);
@@ -2373,6 +2371,12 @@ int16_t* Audio::IIR_filterChain(int16_t iir_in[2]){  // Infinite Impulse Respons
     return iir_out;
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setBalance(int8_t bal){ // bal -16...16
+    if(bal < -16) bal = -16;
+    if(bal >  16) bal =  16;
+    m_balance = bal;
+}
+//---------------------------------------------------------------------------------------------------------------------
 void Audio::setVolume(uint8_t vol) { // vol 22 steps, 0...21
     if(vol > 21) vol = 21;
     m_vol = volumetable[vol];
@@ -2386,10 +2390,23 @@ uint8_t Audio::getVolume() {
     return m_vol;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int16_t Audio::Gain(int16_t s) {
-    int32_t v;
-    v= (s * m_vol)>>6;
-    return (int16_t)(v&0xffff);
+int32_t Audio::Gain(int16_t s[2]) {
+    int32_t v[2];
+    float step = (float)m_vol /64;
+    uint8_t l = 0, r = 0;
+
+    if(m_balance < 0){
+        step = step * abs(m_balance) * 4;
+        l = (uint8_t)(step);
+    }
+    if(m_balance > 0){
+        step = step * m_balance * 4;
+        r = (uint8_t)(step);
+    }
+
+    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * (m_vol - l)) >> 6;
+    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * (m_vol - r)) >> 6;
+    return (v[RIGHTCHANNEL] << 16) | (v[LEFTCHANNEL] & 0xffff);
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFilled() {

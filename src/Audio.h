@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 04,2021
+ *  Updated on: Jan 11,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -147,7 +147,7 @@ public:
      * @return true if audio file or stream is active, false otherwise
      */
     bool pauseResume();
-
+    void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
     uint8_t getVolume();
     inline uint8_t getDatamode(){return m_datamode;}
@@ -174,7 +174,7 @@ private:
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
     bool playI2Sremains();
-    int16_t Gain(int16_t s);
+    int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
     void showstreamtitle(const char *ml);
     bool chkhdrline(const char* str);
@@ -216,7 +216,8 @@ private:
     uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
-    int8_t          m_playlist_num = 0 ;            // Nonzero for selection from playlist
+    int8_t          m_playlist_num = 0;             // Nonzero for selection from playlist
+    int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint8_t         m_rev=0;                        // revision, ID3 version
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock
