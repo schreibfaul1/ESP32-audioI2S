@@ -1113,6 +1113,11 @@ void Audio::processLocalFile() {
             }
             bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
             if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
+            if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
+                InBuff.bytesWasRead(200); // try next chunk
+                m_bytesNotDecoded += 200;
+                return;
+            }
             lastChunk = false;
             return;
         }
@@ -1150,7 +1155,7 @@ void Audio::processWebStream() {
         static uint32_t chunksize = 0;                      // chunkcount read from stream
         int32_t availableBytes = 0;                         // available bytes in stream
         static int id3Size=0;                               // stores the size of ID3 metadata (if available)
-        static int bytesdecoded = 0;
+        static int bytesDecoded = 0;
         static uint32_t cnt0 = 0;
         static uint32_t tmr_1s = 0;                         // timer 1 sec
         bool f_tmr_1s = false;
@@ -1232,29 +1237,29 @@ void Audio::processWebStream() {
 
             if((InBuff.bufferFilled() > maxFrameSize) && (m_f_stream == true)) { // fill > framesize?
                 if(id3Size==0) {
-                    bytesdecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+                    bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
                 }
                 else { // skip ID3 metadata
                     if(id3Size >= maxFrameSize){
-                        bytesdecoded = maxFrameSize;
+                        bytesDecoded = maxFrameSize;
                         id3Size -= maxFrameSize;
                         vTaskDelay(30); // if the bytes are consumed too fast, we have a InBuff underrun
                     }
                     else if(id3Size <maxFrameSize) {
-                        bytesdecoded = id3Size;
+                        bytesDecoded = id3Size;
                         id3Size = 0;
                     }
                     else {
                         ; // do nothing
                     }
                 } // end skip ID3 metadata
-                if(bytesdecoded < 0) {  // no syncword found or decode error, try next chunk
+                if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
                     InBuff.bytesWasRead(200); // try next chunk
                     m_bytesNotDecoded += 200;
                     return;
                 }
                 else {
-                    InBuff.bytesWasRead(bytesdecoded);
+                    InBuff.bytesWasRead(bytesDecoded);
                 }
             }
             else { // InBuff almost empty, contains no complete mp3/aac frame
@@ -1890,8 +1895,8 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         if(m_codec == CODEC_AAC) nextSync = AACFindSyncWord(data, len);
 
         if(nextSync==-1) {
-            swnf++; // syncword not found counter, can be multimediadata
             if(audio_info && swnf<1) audio_info("syncword not found");
+            swnf++; // syncword not found counter, can be multimediadata
             return -1;
         }
         else{
