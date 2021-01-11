@@ -208,7 +208,7 @@ private:
     i2s_config_t      m_i2s_config; // stores values for I2S driver
     char            chbuf[256];
     char            path[256];
-    int             m_id3Size=0;                    // length id3 tag
+    size_t          m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
     uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;

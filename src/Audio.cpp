@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 09,2021
+ *  Updated on: Jan 11,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -252,6 +252,7 @@ void Audio::reset() {
     m_f_webfile = false;                                      // Assume radiostream (connecttohost)
     m_f_webstream = false;
 
+    m_id3Size = 0;
     m_audioCurrentTime = 0;                                   // Reset playtimer
     m_audioFileDuration = 0;
     m_avr_bitrate = 0;                                        // the same as m_bitrate if CBR, median if VBR
@@ -461,11 +462,11 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         };
 
         m_id3Size = chbuf[6];
-        m_id3Size = m_id3Size << 7;
+        m_id3Size = m_id3Size << 8;
         m_id3Size |= chbuf[7];
-        m_id3Size = m_id3Size << 7;
+        m_id3Size = m_id3Size << 8;
         m_id3Size |= chbuf[8];
-        m_id3Size = m_id3Size << 7;
+        m_id3Size = m_id3Size << 8;
         m_id3Size |= chbuf[9];
 
         // Every read from now may be unsync'd
@@ -704,7 +705,7 @@ void Audio::readID3Metadata() {
     bool bitorder = false;
     uint8_t uni_h = 0;
     uint8_t uni_l = 0;
-    int id3Size = m_id3Size;
+    size_t id3Size = m_id3Size;
     String tag = "";
     if(m_f_exthdr) {
         if(audio_info) audio_info("ID3 extended header");
@@ -851,7 +852,8 @@ void Audio::readID3Metadata() {
             j = 0;
             k = 0;
             while(j < i) {
-                if(value[j] > 0x19) {
+                if(value[j] == 0x0A) value[j] = 0x20; // replace LF by space
+                if(value[j] > 0x1F) {
                     value[k] = value[j];
                     k++;
                 }
@@ -860,7 +862,7 @@ void Audio::readID3Metadata() {
                 }
                 j++;
             } //remove non printables
-            value[i] = 0; // new termination
+            value[k] = 0; // new termination
             // Revision 2
             if(tag == "CNT") sprintf(chbuf, "Play counter: %s", value);
             if(tag == "COM") sprintf(chbuf, "Comments: %s", value);
@@ -2170,8 +2172,8 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
-    if (pos < m_id3Size) pos = m_id3Size; // issue #96
-    if (m_avr_bitrate) m_audioCurrentTime = (pos-m_id3Size) * 8 / m_avr_bitrate; // #96
+    if((m_codec == CODEC_MP3) && (pos < m_id3Size)) pos = m_id3Size; // issue #96
+    if((m_codec == CODEC_MP3) && m_avr_bitrate) m_audioCurrentTime = (pos-m_id3Size) * 8 / m_avr_bitrate; // #96
     return audiofile.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
