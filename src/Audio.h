@@ -167,7 +167,7 @@ private:
     int  sendBytes(uint8_t *data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
-    void readID3Metadata();
+    bool readID3Metadata();
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);

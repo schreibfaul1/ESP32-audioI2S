@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 11,2021
+ *  Updated on: Jan 12,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -440,47 +440,25 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         MP3Decoder_AllocateBuffers();
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
-        audiofile.readBytes(chbuf, 10);
-        if((chbuf[0] != 'I') || (chbuf[1] != 'D') || (chbuf[2] != '3')) {
-            if(audio_info) audio_info("file has no mp3 tag, skip metadata");
-            setFilePos(0);
-            m_loop_point = 0;//TEST loop
-            m_f_running = true;
-            return false;
+
+        if(!readID3Metadata()) return false; // must have one ID3 tag
+
+        uint32_t pos = 0;
+        bool f = false;
+        while(true){
+            pos = getFilePos();
+            f = readID3Metadata();         // can have more than one ID3 tag
+            if(!f){
+                audiofile.seek(pos);
+                break;
+            }
         }
-        m_rev = chbuf[3];
-        switch(m_rev){
-            case 2:
-                m_f_unsync = (chbuf[5] & 0x80);
-                m_f_exthdr = false;
-                break;
-            case 3:
-            case 4:
-                m_f_unsync = (chbuf[5] & 0x80); // bit7
-                m_f_exthdr = (chbuf[5] & 0x40); // bit6 extended header
-                break;
-        };
-
-        m_id3Size = chbuf[6];  //  ID3v2 size  4 * %0xxxxxxx
-        m_id3Size = m_id3Size << 7;
-        m_id3Size |= chbuf[7];
-        m_id3Size = m_id3Size << 7;
-        m_id3Size |= chbuf[8];
-        m_id3Size = m_id3Size << 7;
-        m_id3Size |= chbuf[9];
-
-        // Every read from now may be unsync'd
-        sprintf(chbuf, "ID3 version=%i", m_rev);
-        if(audio_info) audio_info(chbuf);
-        sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
-        if(audio_info) audio_info(chbuf);
-        readID3Metadata();
         m_f_running = true;
 
         //TEST loop
         m_loop_point = getFilePos();
-        sprintf(chbuf, "fp=%u", m_loop_point);
-        if(audio_info) audio_info(chbuf);
+//        sprintf(chbuf, "fp=%u", m_loop_point);
+//        if(audio_info) audio_info(chbuf);
         //TEST loop
 
         return true;
@@ -697,7 +675,46 @@ String Audio::urlencode(String str) {
     return encodedString;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::readID3Metadata() {
+bool Audio::readID3Metadata() {
+
+    /* read ID3 tag */
+
+    audiofile.readBytes(chbuf, 10);
+    if((chbuf[0] != 'I') || (chbuf[1] != 'D') || (chbuf[2] != '3')) {
+        // if(audio_info) audio_info("file has no mp3 tag, skip metadata");
+        setFilePos(0);
+        m_loop_point = 0;//TEST loop
+        m_f_running = true;
+        return false;
+    }
+    m_rev = chbuf[3];
+    switch(m_rev){
+        case 2:
+            m_f_unsync = (chbuf[5] & 0x80);
+            m_f_exthdr = false;
+            break;
+        case 3:
+        case 4:
+            m_f_unsync = (chbuf[5] & 0x80); // bit7
+            m_f_exthdr = (chbuf[5] & 0x40); // bit6 extended header
+            break;
+    };
+
+    m_id3Size = chbuf[6];  //  ID3v2 size  4 * %0xxxxxxx
+    m_id3Size = m_id3Size << 7;
+    m_id3Size |= chbuf[7];
+    m_id3Size = m_id3Size << 7;
+    m_id3Size |= chbuf[8];
+    m_id3Size = m_id3Size << 7;
+    m_id3Size |= chbuf[9];
+
+    // Every read from now may be unsync'd
+    sprintf(chbuf, "ID3 version=%i", m_rev);
+    if(audio_info) audio_info(chbuf);
+    sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
+    if(audio_info) audio_info(chbuf);
+
+    /* read ID3 metadata */
     char frameid[5];
     int framesize = 0;
     bool compressed;
@@ -774,9 +791,9 @@ void Audio::readID3Metadata() {
                 id3Size--;
                 if(framesize < 256) {
                     value[0] = ch; // if !isUnicode and ch!=0 this can be a char (e.g. URL is never unicode)
-                    audiofile.readBytes(&value[1], framesize - 1);
+                    audiofile.readBytes(&value[1], framesize -1);
                     id3Size -= framesize - 1;
-                    i = framesize + 1;
+                    i = framesize;
                 }
                 else {
                     if(tag == "APIC") { // a image embedded in file, passing it to external function
@@ -784,86 +801,85 @@ void Audio::readID3Metadata() {
                         isUnicode = false;
                         const uint32_t preReadFilePos = getFilePos();
                         if(audio_id3image) audio_id3image(audiofile, framesize);
-                        setFilePos(preReadFilePos + framesize - 1);
+                        audiofile.seek(preReadFilePos + uint32_t(framesize) - 1);
                         id3Size -= framesize - 1;
                     }
                     else {
                         // store the first 255 bytes in buffer and cut the remains
                         audiofile.readBytes(value, 255);
-                        id3Size -= 255;
                         value[255] = 0;
                         i = 255;
                         // big block, skip it
-                        setFilePos(getFilePos() + framesize - 1 - 255);
-                        id3Size -= framesize - 1;
+                        audiofile.seek(getFilePos() + uint32_t(framesize) - 1 -255);
+                        id3Size -= framesize-1;
                     }
-                }
-                if(isUnicode && framesize > 1) {  // convert unicode to utf-8 U+0020...U+07FF
-                    j = 0;
-                    m = 0;
-                    while(m < i - 1) {
-                        if((value[m] == 0xFE) && (value[m + 1] == 0xFF)) {
-                            bitorder = true;
-                            j = m + 2;
-                        }  // MSB/LSB
-                        if((value[m] == 0xFF) && (value[m + 1] == 0xFE)) {
-                            bitorder = false;
-                            j = m + 2;
-                        }  //LSB/MSB
-                        m++;
-                    } // seek for last bitorder
-                    m = 0;
-                    if(j > 0) {
-                        for(k = j; k < i - 1; k += 2) {
-                            if(bitorder == true) {
-                                uni_h = value[k];
-                                uni_l = value[k + 1];
-                            }
-                            else {
-                                uni_l = value[k];
-                                uni_h = value[k + 1];
-                            }
-                            uint16_t uni_hl = (uni_h << 8) + uni_l;
-                            uint8_t utf8_h = (uni_hl >> 6); // div64
-                            uint8_t utf8_l = uni_l;
-                            if(utf8_h > 3) {
-                                utf8_h += 0xC0;
-                                if(uni_l < 0x40)
-                                    utf8_l = uni_l + 0x80;
-                                else if(uni_l < 0x80)
-                                    utf8_l = uni_l += 0x40;
-                                else if(uni_l < 0xC0)
-                                    utf8_l = uni_l;
-                                else
-                                    utf8_l = uni_l - 0x40;
-                            }
-                            if(utf8_h > 3) {
-                                value[m] = utf8_h;
-                                m++;
-                            }
-                            value[m] = utf8_l;
-                            m++;
-                        }
-                    }
-                    value[m] = 0;
-                    i = m;
                 }
             }
+            if(isUnicode && framesize > 1) {  // convert unicode to utf-8 U+0020...U+07FF
+                j = 0;
+                m = 0;
+                while(m < i - 1) {
+                    if((value[m] == 0xFE) && (value[m + 1] == 0xFF)) {
+                        bitorder = true;
+                        j = m + 2;
+                    }  // MSB/LSB
+                    if((value[m] == 0xFF) && (value[m + 1] == 0xFE)) {
+                        bitorder = false;
+                        j = m + 2;
+                    }  //LSB/MSB
+                    m++;
+                } // seek for last bitorder
+                m = 0;
+                if(j > 0) {
+                    for(k = j; k < i - 1; k += 2) {
+                        if(bitorder == true) {
+                            uni_h = value[k];
+                            uni_l = value[k + 1];
+                        }
+                        else {
+                            uni_l = value[k];
+                            uni_h = value[k + 1];
+                        }
+                        uint16_t uni_hl = (uni_h << 8) + uni_l;
+                        uint8_t utf8_h = (uni_hl >> 6); // div64
+                        uint8_t utf8_l = uni_l;
+                        if(utf8_h > 3) {
+                            utf8_h += 0xC0;
+                            if(uni_l < 0x40)
+                                utf8_l = uni_l + 0x80;
+                            else if(uni_l < 0x80)
+                                utf8_l = uni_l += 0x40;
+                            else if(uni_l < 0xC0)
+                                utf8_l = uni_l;
+                            else
+                                utf8_l = uni_l - 0x40;
+                        }
+                        if(utf8_h > 3) {
+                            value[m] = utf8_h;
+                            m++;
+                        }
+                        value[m] = utf8_l;
+                        m++;
+                    }
+                }
+                value[m] = 0;
+                i = m;
+            }
+            if(!isUnicode){
+                j = 0;
+                k = 0;
+                while(j < i) {
+                    if(value[j] == 0x0A) value[j] = 0x20; // replace LF by space
+                    if(value[j] > 0x1F) {
+                        value[k] = value[j];
+                        k++;
+                    }
+                    j++;
+                } //remove non printables
+                if(k>0) value[k] = 0; else value[0] = 0; // new termination
+            }
+
             chbuf[0] = 0;
-            j = 0;
-            k = 0;
-            while(j < i) {
-                if(value[j] == 0x0A) value[j] = 0x20; // replace LF by space
-                if(value[j] > 0x1F) {
-                    value[k] = value[j];
-                    k++;
-                }
-                else {
-                    i--;
-                }
-                j++;
-            } //remove non printables
-            value[k] = 0; // new termination
             // Revision 2
             if(tag == "CNT") sprintf(chbuf, "Play counter: %s", value);
             if(tag == "COM") sprintf(chbuf, "Comments: %s", value);
@@ -920,9 +936,9 @@ void Audio::readID3Metadata() {
             if(tag == "WPB") sprintf(chbuf, "Publishers official webpage: %s", value);
             if(tag == "WXX") sprintf(chbuf, "User defined URL link frame: %s", value);
             // Revision 3
-            if(tag == "COMM") sprintf(chbuf, "Comment: %s", value);
+            //if(tag == "COMM") sprintf(chbuf, "Comment: %s", value);
             if(tag == "OWNE") sprintf(chbuf, "Ownership: %s", value);
-            if(tag == "PRIV") sprintf(chbuf, "Private: %s", value);
+            //if(tag == "PRIV") sprintf(chbuf, "Private: %s", value);
             if(tag == "SYLT") sprintf(chbuf, "SynLyrics: %s", value);
             if(tag == "TALB") sprintf(chbuf, "Album: %s", value);
             if(tag == "TBPM") sprintf(chbuf, "BeatsPerMinute: %s", value);
@@ -955,10 +971,13 @@ void Audio::readID3Metadata() {
             if(tag == "TYER") sprintf(chbuf, "Year: %s", value);
             if(tag == "USER") sprintf(chbuf, "TermsOfUse: %s", value);
             if(tag == "USLT") sprintf(chbuf, "Lyrics: %s", value);
+            if(tag == "WOAR") sprintf(chbuf, "OfficialArtistWebpage: %s", value);
             if(tag == "XDOR") sprintf(chbuf, "OriginalReleaseTime: %s", value);
             if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
         }
     } while(id3Size > 0);
+
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::stopSong() {
