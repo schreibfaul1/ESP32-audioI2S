@@ -461,12 +461,12 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
                 break;
         };
 
-        m_id3Size = chbuf[6];
-        m_id3Size = m_id3Size << 8;
+        m_id3Size = chbuf[6];  //  ID3v2 size  4 * %0xxxxxxx
+        m_id3Size = m_id3Size << 7;
         m_id3Size |= chbuf[7];
-        m_id3Size = m_id3Size << 8;
+        m_id3Size = m_id3Size << 7;
         m_id3Size |= chbuf[8];
-        m_id3Size = m_id3Size << 8;
+        m_id3Size = m_id3Size << 7;
         m_id3Size |= chbuf[9];
 
         // Every read from now may be unsync'd
@@ -705,7 +705,7 @@ void Audio::readID3Metadata() {
     bool bitorder = false;
     uint8_t uni_h = 0;
     uint8_t uni_l = 0;
-    size_t id3Size = m_id3Size;
+    int id3Size = m_id3Size;
     String tag = "";
     if(m_f_exthdr) {
         if(audio_info) audio_info("ID3 extended header");
@@ -767,15 +767,16 @@ void Audio::readID3Metadata() {
             // Read the value
             uint32_t i = 0;
             uint16_t j = 0, k = 0, m = 0;
-            bool isUnicode;
+            bool isUnicode = false;
             if(framesize > 0) {
-                isUnicode = (audiofile.read() == 1) ? true : false;
+                char ch = audiofile.read();
+                isUnicode = (ch == 1) ? true : false;
                 id3Size--;
                 if(framesize < 256) {
-                    audiofile.readBytes(value, framesize - 1);
+                    value[0] = ch; // if !isUnicode and ch!=0 this can be a char (e.g. URL is never unicode)
+                    audiofile.readBytes(&value[1], framesize - 1);
                     id3Size -= framesize - 1;
-                    i = framesize - 1;
-                    value[framesize - 1] = 0;
+                    i = framesize + 1;
                 }
                 else {
                     if(tag == "APIC") { // a image embedded in file, passing it to external function
@@ -927,6 +928,7 @@ void Audio::readID3Metadata() {
             if(tag == "TBPM") sprintf(chbuf, "BeatsPerMinute: %s", value);
             if(tag == "TCMP") sprintf(chbuf, "Compilation: %s", value);
             if(tag == "TCOM") sprintf(chbuf, "Composer: %s", value);
+            if(tag == "TCON") sprintf(chbuf, "ContentType: %s", value);
             if(tag == "TCOP") sprintf(chbuf, "Copyright: %s", value);
             if(tag == "TDAT") sprintf(chbuf, "Date: %s", value);
             if(tag == "TEXT") sprintf(chbuf, "Lyricist: %s", value);
@@ -947,6 +949,7 @@ void Audio::readID3Metadata() {
             if(tag == "TPOS") sprintf(chbuf, "PartOfSet: %s", value);
             if(tag == "TPUB") sprintf(chbuf, "Publisher: %s", value);
             if(tag == "TRCK") sprintf(chbuf, "Track: %s", value);
+            if(tag == "TSSE") sprintf(chbuf, "SettingsForEncoding: %s", value);
             if(tag == "TRDA") sprintf(chbuf, "RecordingDates: %s", value);
             if(tag == "TXXX") sprintf(chbuf, "UserDefinedText: %s", value);
             if(tag == "TYER") sprintf(chbuf, "Year: %s", value);
