@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 12,2021
+ *  Updated on: Jan 15,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -19,7 +19,7 @@
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
-extern __attribute__((weak)) void audio_id3image(File&, const int); //ID3 metadata image
+extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
 extern __attribute__((weak)) void audio_eof_mp3(const char*); //end of mp3 file
 extern __attribute__((weak)) void audio_showstreamtitle(const char*);
 extern __attribute__((weak)) void audio_showstation(const char*);
@@ -167,7 +167,8 @@ private:
     int  sendBytes(uint8_t *data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
-    bool readID3Metadata();
+    int  readWaveHeader(uint8_t *data, size_t len);
+    int  readID3Metadata(uint8_t *data, size_t len);
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
@@ -216,6 +217,7 @@ private:
     uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
+    int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_playlist_num = 0;             // Nonzero for selection from playlist
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint8_t         m_rev=0;                        // revision, ID3 version

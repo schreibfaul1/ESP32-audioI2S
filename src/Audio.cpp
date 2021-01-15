@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 12,2021
+ *  Updated on: Jan 15,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -269,6 +269,7 @@ void Audio::reset() {
     m_LFcount = 0;                                            // For end of header detection
     m_st_remember = "";                                       // Delete the last streamtitle
     m_totalcount = 0;                                         // Reset totalcount
+    m_controlCounter = 0;                                     // Status within readID3data() and readWaveHeader()
 
     //TEST loop
     m_loop_point = 0;
@@ -344,6 +345,8 @@ bool Audio::connecttohost(String host, const char *user, const char *pwd) {
     }
     sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"", hostwoext.c_str(), port, extension.c_str());
     if(audio_info) audio_info(chbuf);
+
+    extension.replace(" ", "%20");
 
     String resp = String("GET ") + extension + String(" HTTP/1.1\r\n")
                 + String("Host: ") + hostwoext + String("\r\n")
@@ -440,127 +443,13 @@ bool Audio::connecttoFS(fs::FS &fs, String file) {
         MP3Decoder_AllocateBuffers();
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
-
-        if(!readID3Metadata()) return false; // must have one ID3 tag
-
-        uint32_t pos = 0;
-        bool f = false;
-        while(true){
-            pos = getFilePos();
-            f = readID3Metadata();         // can have more than one ID3 tag
-            if(!f){
-                audiofile.seek(pos);
-                break;
-            }
-        }
         m_f_running = true;
-
-        //TEST loop
-        m_loop_point = getFilePos();
-//        sprintf(chbuf, "fp=%u", m_loop_point);
-//        if(audio_info) audio_info(chbuf);
-        //TEST loop
-
         return true;
     } // end MP3 section
 
     if(afn.endsWith(".wav")) { // WAVE section
         m_codec = CODEC_WAV;
-        audiofile.readBytes(chbuf, 4); // read RIFF tag
-        if((chbuf[0] != 'R') || (chbuf[1] != 'I') || (chbuf[2] != 'F') || (chbuf[3] != 'F')) {
-            if(audio_info) audio_info("file has no RIFF tag");
-            setFilePos(0);
-            return false;
-        }
-
-        audiofile.readBytes(chbuf, 4); // read chunkSize (datalen)
-        uint32_t cs = (uint32_t) (chbuf[0] + (chbuf[1] << 8) + (chbuf[2] << 16) + (chbuf[3] << 24) - 8);
-
-        audiofile.readBytes(chbuf, 4); /* read wav-format */
-        chbuf[5] = 0;
-        if((chbuf[0] != 'W') || (chbuf[1] != 'A') || (chbuf[2] != 'V') || (chbuf[3] != 'E')) {
-            if(audio_info) audio_info("format tag is not WAVE");
-            setFilePos(0);
-            return false;
-        }
-
-        while(true) { // skip wave chunks, seek for fmt element
-            audiofile.readBytes(chbuf, 4); // read wav-format
-            if((chbuf[0] == 'f') && (chbuf[1] == 'm') && (chbuf[2] == 't')) {
-                //if(audio_info) audio_info("format tag found");
-                break;
-            }
-        }
-
-        audiofile.readBytes(chbuf, 4); // fmt chunksize
-        cs = (uint32_t) (chbuf[0] + (chbuf[1] << 8));
-        if(cs > 40) return false; //something is wrong
-        uint8_t bts = cs - 16; // bytes to skip if fmt chunk is >16
-        audiofile.readBytes(chbuf, 16);
-        uint16_t fc  = (uint16_t) (chbuf[0]  + (chbuf[1]  << 8));      // Format code
-        uint16_t nic = (uint16_t) (chbuf[2]  + (chbuf[3]  << 8));      // Number of interleaved channels
-        uint32_t sr  = (uint32_t) (chbuf[4]  + (chbuf[5]  << 8) + (chbuf[6]  << 16) + (chbuf[7]  << 24)); // Samplerate
-        uint32_t dr  = (uint32_t) (chbuf[8]  + (chbuf[9]  << 8) + (chbuf[10] << 16) + (chbuf[11] << 24)); // Datarate
-        uint16_t dbs = (uint16_t) (chbuf[12] + (chbuf[13] << 8));      // Data block size
-        uint16_t bps = (uint16_t) (chbuf[14] + (chbuf[15] << 8));      // Bits per sample
-        if(audio_info) {
-            sprintf(chbuf, "FormatCode=%u", fc);
-            audio_info(chbuf);
-            sprintf(chbuf, "Channel=%u", nic);
-            audio_info(chbuf);
-            sprintf(chbuf, "SampleRate=%u", sr);
-            audio_info(chbuf);
-            sprintf(chbuf, "DataRate=%u", dr);
-            audio_info(chbuf);
-            sprintf(chbuf, "DataBlockSize=%u", dbs);
-            audio_info(chbuf);
-            sprintf(chbuf, "BitsPerSample=%u", bps);
-            audio_info(chbuf);
-        }
-
-        if(fc != 1) {
-            if(audio_info) audio_info("format code is not 1 (PCM)");
-            return false;
-        }
-
-        if(nic != 1 && nic != 2) {
-            if(audio_info) audio_info("number of channels must be 1 or 2");
-            return false;
-        }
-
-        if(bps != 8 && bps != 16) {
-            if(audio_info) audio_info("bits per sample must be 8 or 16");
-            return false;
-        }
-        setBitsPerSample(bps);
-        setChannels(nic);
-        setSampleRate(sr);
-        m_bitRate = nic * sr * bps;
-        if(audio_info) sprintf(chbuf, "BitRate=%u", m_bitRate);
-        audio_info(chbuf);
-
-        audiofile.readBytes(chbuf, bts); // skip to data
-        uint32_t s = getFilePos();
-        // here can be extra info, seek for data;
-        while(true) {
-            setFilePos(s);
-            audiofile.readBytes(chbuf, 4); /* read header signature */
-            if((chbuf[0] == 'd') && (chbuf[1] == 'a') && (chbuf[2] == 't') && (chbuf[3] == 'a')) break;
-            s++;
-        }
-
-        audiofile.readBytes(chbuf, 4); // read chunkSize (datalen)
-        cs = chbuf[0] + (chbuf[1] << 8) + (chbuf[2] << 16) + (chbuf[3] << 24) - 44;
-        sprintf(chbuf, "DataLength=%u", cs);
-        if(audio_info) audio_info(chbuf);
         m_f_running = true;
-
-        //TEST loop
-        m_loop_point = getFilePos();
-        // sprintf(chbuf, "fp=%u", m_loop_point);
-        // if(audio_info) audio_info(chbuf);
-        //TEST loop
-
         return true;
     } // end WAVE section
     if(audio_info) audio_info("Neither wave nor mp3 format found");
@@ -675,309 +564,439 @@ String Audio::urlencode(String str) {
     return encodedString;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::readID3Metadata() {
+int Audio::readWaveHeader(uint8_t *data, size_t len) {
+    static uint32_t cs = 0;
+    static uint8_t bts = 0;
+    static size_t headerLength = 0;
 
-    /* read ID3 tag */
-
-    audiofile.readBytes(chbuf, 10);
-    if((chbuf[0] != 'I') || (chbuf[1] != 'D') || (chbuf[2] != '3')) {
-        // if(audio_info) audio_info("file has no mp3 tag, skip metadata");
-        setFilePos(0);
-        m_loop_point = 0;//TEST loop
-        m_f_running = true;
-        return false;
-    }
-    m_rev = chbuf[3];
-    switch(m_rev){
-        case 2:
-            m_f_unsync = (chbuf[5] & 0x80);
-            m_f_exthdr = false;
-            break;
-        case 3:
-        case 4:
-            m_f_unsync = (chbuf[5] & 0x80); // bit7
-            m_f_exthdr = (chbuf[5] & 0x40); // bit6 extended header
-            break;
-    };
-
-    m_id3Size = chbuf[6];  //  ID3v2 size  4 * %0xxxxxxx
-    m_id3Size = m_id3Size << 7;
-    m_id3Size |= chbuf[7];
-    m_id3Size = m_id3Size << 7;
-    m_id3Size |= chbuf[8];
-    m_id3Size = m_id3Size << 7;
-    m_id3Size |= chbuf[9];
-
-    // Every read from now may be unsync'd
-    sprintf(chbuf, "ID3 version=%i", m_rev);
-    if(audio_info) audio_info(chbuf);
-    sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
-    if(audio_info) audio_info(chbuf);
-
-    /* read ID3 metadata */
-    char frameid[5];
-    int framesize = 0;
-    bool compressed;
-    char value[256];
-    bool bitorder = false;
-    uint8_t uni_h = 0;
-    uint8_t uni_l = 0;
-    int id3Size = m_id3Size;
-    String tag = "";
-    if(m_f_exthdr) {
-        if(audio_info) audio_info("ID3 extended header");
-        int ehsz = (audiofile.read() << 24) | (audiofile.read() << 16) | (audiofile.read() << 8) | (audiofile.read());
-        id3Size -= 4;
-        for(int j = 0; j < ehsz - 4; j++) {
-            audiofile.read();
-            id3Size--;
-        } // Throw it away
-    }
-    else if(audio_info) audio_info("ID3 normal frames");
-
-    do {
-        frameid[0] = audiofile.read();
-        frameid[1] = audiofile.read();
-        frameid[2] = audiofile.read();
-        id3Size -= 3;
-        if(m_rev == 2)
-            frameid[3] = 0;
-        else {
-            frameid[3] = audiofile.read();
-            id3Size--;
+    if(m_controlCounter == 0){
+        m_controlCounter ++;
+        if((*data != 'R') || (*(data + 1) != 'I') || (*(data + 2) != 'F') || (*(data + 3) != 'F')) {
+            if(audio_info) audio_info("file has no RIFF tag");
+            headerLength = 0;
+            return -1; //false;
         }
-        frameid[4] = 0; // terminate the string
+        else{
+            headerLength = 4;
+            return 4; // ok
+        }
+    }
+
+    if(m_controlCounter == 1){
+        m_controlCounter ++;
+        cs = (uint32_t) (*data + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24) - 8);
+        headerLength += 4;
+        return 4; // ok
+    }
+
+    if(m_controlCounter == 2){
+        m_controlCounter ++;
+        if((*data  != 'W') || (*(data + 1) != 'A') || (*(data + 2) != 'V') || (*(data + 3) != 'E')) {
+            if(audio_info) audio_info("format tag is not WAVE");
+            return -1;//false;
+        }
+        else {
+            headerLength += 4;
+            return 4;
+        }
+    }
+
+    if(m_controlCounter == 3){
+        if((*data  == 'f') && (*(data + 1) == 'm') && (*(data + 2) == 't')) {
+            //if(audio_info) audio_info("format tag found");
+            m_controlCounter ++;
+            headerLength += 4;
+            return 4;
+        }
+        else{
+            headerLength += 4;
+            return 4;
+        }
+    }
+
+    if(m_controlCounter == 4){
+        m_controlCounter ++;
+        cs = (uint32_t) (*data + (*(data + 1) << 8));
+        if(cs > 40) return -1; //false, something going wrong
+        bts = cs - 16; // bytes to skip if fmt chunk is >16
+        headerLength += 4;
+        return 4;
+    }
+
+    if(m_controlCounter == 5){
+        m_controlCounter ++;
+        uint16_t fc  = (uint16_t) (*(data + 0)  + (*(data + 1)  << 8));         // Format code
+        uint16_t nic = (uint16_t) (*(data + 2)  + (*(data + 3)  << 8));         // Number of interleaved channels
+        uint32_t sr  = (uint32_t) (*(data + 4)  + (*(data + 5)  << 8) +
+                                  (*(data + 6)  << 16) + (*(data + 7)  << 24)); // Samplerate
+        uint32_t dr  = (uint32_t) (*(data + 8)  + (*(data + 9)  << 8) +
+                                  (*(data + 10) << 16) + (*(data + 11) << 24)); // Datarate
+        uint16_t dbs = (uint16_t) (*(data + 12) + (*(data + 13) << 8));         // Data block size
+        uint16_t bps = (uint16_t) (*(data + 14) + (*(data + 15) << 8));         // Bits per sample
+        if(audio_info) {
+            sprintf(chbuf, "FormatCode=%u", fc);     audio_info(chbuf);
+            sprintf(chbuf, "Channel=%u", nic);       audio_info(chbuf);
+            sprintf(chbuf, "SampleRate=%u", sr);     audio_info(chbuf);
+            sprintf(chbuf, "DataRate=%u", dr);       audio_info(chbuf);
+            sprintf(chbuf, "DataBlockSize=%u", dbs); audio_info(chbuf);
+            sprintf(chbuf, "BitsPerSample=%u", bps); audio_info(chbuf);
+        }
+        if(fc != 1) {
+            if(audio_info) audio_info("format code is not 1 (PCM)");
+            return -1 ; //false;
+        }
+
+        if(nic != 1 && nic != 2) {
+            if(audio_info) audio_info("number of channels must be 1 or 2");
+            return -1; //false;
+        }
+
+        if(bps != 8 && bps != 16) {
+            if(audio_info) audio_info("bits per sample must be 8 or 16");
+            return -1; //false;
+        }
+        setBitsPerSample(bps);
+        setChannels(nic);
+        setSampleRate(sr);
+        m_bitRate = nic * sr * bps;
+        sprintf(chbuf, "BitRate=%u", m_bitRate);
+        if(audio_info) audio_info(chbuf);
+        headerLength += 16;
+        return 16; // ok
+    }
+
+    if(m_controlCounter == 6){
+        m_controlCounter ++;
+        headerLength += bts;
+        return bts; // skip to data
+    }
+
+    if(m_controlCounter == 7){
+        if((*(data + 0) == 'd') && (*(data + 1) == 'a') && (*(data + 2) == 't') && (*(data + 3) == 'a')){
+            m_controlCounter ++;
+            vTaskDelay(30);
+            headerLength += 4;
+            return 4;
+        }
+        else{
+            headerLength ++;
+            return 1;
+        }
+    }
+
+    if(m_controlCounter == 8){
+        m_controlCounter ++;
+        cs = *(data + 0) + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24) - 44; //read chunkSize
+        sprintf(chbuf, "DataLength = %u", cs);
+        if(audio_info) audio_info(chbuf);
+        headerLength += 4;
+        return 4;
+
+    }
+    m_controlCounter = 100; // header succesfully read
+    // log_i("headerLength %u", headerLength);
+    m_loop_point = headerLength; // TEST loop, used in localFile
+    return 0;
+}
+//---------------------------------------------------------------------------------------------------------------------
+int Audio::readID3Metadata(uint8_t *data, size_t len) {
+
+    static int id3Size = 0;
+    static int ehsz = 0;
+    static String tag = "";
+    static char frameid[5];
+    static size_t framesize = 0;
+    static bool compressed = false;
+
+    if(m_controlCounter == 0){  /* read ID3 tag */
+        m_controlCounter ++;
+        id3Size = 0;
+        ehsz = 0;
+        if((*(data + 0) != 'I') || (*(data + 1) != 'D') || (*(data + 2) != '3')) {
+        // if(audio_info) audio_info("file has no mp3 tag, skip metadata");
+            m_loop_point = 0;//TEST loop
+            return -1;
+        }
+        m_rev = *(data + 3);
+        switch(m_rev){
+            case 2:
+                m_f_unsync = (*(data + 5) & 0x80);
+                m_f_exthdr = false;
+                break;
+            case 3:
+            case 4:
+                m_f_unsync = (*(data + 5) & 0x80); // bit7
+                m_f_exthdr = (*(data + 5) & 0x40); // bit6 extended header
+                break;
+        };
+
+        m_id3Size = *(data + 6);  //  ID3v2 size  4 * %0xxxxxxx
+        m_id3Size = m_id3Size << 7;
+        m_id3Size |= *(data + 7);
+        m_id3Size = m_id3Size << 7;
+        m_id3Size |= *(data + 8);
+        m_id3Size = m_id3Size << 7;
+        m_id3Size |= *(data + 9);
+
+        m_id3Size += 10;
+
+        // Every read from now may be unsync'd
+        sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
+        if(audio_info) audio_info(chbuf);
+
+        sprintf(chbuf, "ID3 version=%i", m_rev);
+        if(audio_info) audio_info(chbuf);
+
+        if(m_rev == 2){
+            if(audio_info) audio_info("ID3 version must be 3, skip all metadata");
+            m_controlCounter = 98;
+            return 0;
+        }
+        id3Size = m_id3Size;
+        id3Size -= 10;
+
+        return 10;
+    }
+
+    if(m_controlCounter == 1){
+        m_controlCounter ++;
+        if(m_f_exthdr) {
+            if(audio_info) audio_info("ID3 extended header");
+            ehsz = (*(data + 0) << 24) | (*(data + 1) << 16) | (*(data + 2) << 8) | (*(data + 3));
+            id3Size -= 4;
+            ehsz -= 4;
+            return 4;
+        }
+        else{
+            if(audio_info) audio_info("ID3 normal frames");
+            return 0;
+        }
+    }
+
+    if(m_controlCounter == 2){
+        if(ehsz > 256) {
+            ehsz -=256;
+            id3Size -= 256;
+            return 256;} // Throw it away
+        else           {
+            m_controlCounter ++;
+            id3Size -= ehsz;
+            return ehsz;} // Throw it away
+    }
+
+    if(m_controlCounter == 3){
+        if(id3Size == 0){
+            m_controlCounter = 99;
+            return 0;
+        }
+        m_controlCounter ++;
+        frameid[0] = *(data + 0);
+        frameid[1] = *(data + 1);
+        frameid[2] = *(data + 2);
+        frameid[3] = *(data + 3);
+        frameid[4] = 0;
         tag = frameid;
+        id3Size -= 4;
         if(frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0 && frameid[3] == 0) {
             // We're in padding
-            while(id3Size != 0) {
-                audiofile.read();
-                id3Size--;
-            }
+            m_controlCounter = 98;
+        }
+        return 4;
+    }
+
+    if(m_controlCounter == 4){
+        m_controlCounter = 6;
+        framesize = (*(data + 0) << 24) | (*(data + 1) << 16) | (*(data + 2) << 8) | (*(data + 3));
+        id3Size -= 4;
+//        uint8_t dummy = *(data + 4); // skip 1st flag
+        id3Size--;
+        compressed = (*(data + 5)) & 0x80;
+        id3Size--;
+        if(compressed){
+            log_i("iscompressed");
+            int decompsize = (*(data + 6) << 24) | (*(data + 7) << 16) | (*(data + 8) << 8) | (*(data + 9));
+            id3Size -= 4;
+            (void) decompsize;
+            return 6 + 4;
+        }
+        return 6;
+    }
+
+    if(m_controlCounter == 5){ // skip frame
+        if(framesize > 256){
+            framesize -= 256;
+            id3Size -= 256;
+            return 256;
         }
         else {
-            if(m_rev == 2) {
-                framesize = (audiofile.read() << 16) | (audiofile.read() << 8) | (audiofile.read());
-                id3Size -= 3;
-                compressed = false;
+            m_controlCounter = 3; // check next frame
+            id3Size -= framesize;
+            return framesize;
+        }
+    }
+
+    if(m_controlCounter == 6){ // Read the value
+        m_controlCounter = 5;  // only read 256 bytes
+        uint32_t i = 0;
+        uint16_t j = 0, k = 0, m = 0;
+        bool bitorder = false;
+        uint8_t uni_h = 0;
+        uint8_t uni_l = 0;
+        char value[256];
+        char ch = *(data + 0);
+        bool isUnicode = (ch==1) ? true : false;
+
+        if(tag == "APIC") { // a image embedded in file, passing it to external function
+            //log_i("it's a image");
+            isUnicode = false;
+            if(m_f_localfile){
+                size_t pos = m_id3Size - id3Size;
+                if(audio_id3image) audio_id3image(audiofile, pos, framesize);
             }
-            else {
-                framesize = (audiofile.read() << 24) | (audiofile.read() << 16) | (audiofile.read() << 8)
-                        | (audiofile.read());
-                id3Size -= 4;
-                audiofile.read(); // skip 1st flag
-                id3Size--;
-                compressed = audiofile.read() & 0x80;
-                id3Size--;
-            }
-            if(compressed) {
-                log_i("iscompressed");
-                int decompsize = (audiofile.read() << 24) | (audiofile.read() << 16) | (audiofile.read() << 8)
-                        | (audiofile.read());
-                id3Size -= 4;
-                (void) decompsize;
-                for(int j = 0; j < framesize; j++) {
-                    audiofile.read();
-                    id3Size--;
-                }
-            }
-            // Read the value
-            uint32_t i = 0;
-            uint16_t j = 0, k = 0, m = 0;
-            bool isUnicode = false;
-            if(framesize > 0) {
-                char ch = audiofile.read();
-                isUnicode = (ch == 1) ? true : false;
-                id3Size--;
-                if(framesize < 256) {
-                    value[0] = ch; // if !isUnicode and ch!=0 this can be a char (e.g. URL is never unicode)
-                    audiofile.readBytes(&value[1], framesize -1);
-                    id3Size -= framesize - 1;
-                    i = framesize;
-                }
-                else {
-                    if(tag == "APIC") { // a image embedded in file, passing it to external function
-                        //log_i("it's a image");
-                        isUnicode = false;
-                        const uint32_t preReadFilePos = getFilePos();
-                        if(audio_id3image) audio_id3image(audiofile, framesize);
-                        audiofile.seek(preReadFilePos + uint32_t(framesize) - 1);
-                        id3Size -= framesize - 1;
+            return 0;
+        }
+
+        size_t fs = framesize;
+        if(fs >255) fs = 255;
+        for(int i=0; i<fs; i++){
+            value[i] = *(data + i);
+        }
+        framesize -= fs;
+        id3Size -= fs;
+        value[fs] = 0;
+        i = fs;
+        if(isUnicode && fs > 1) {  // convert unicode to utf-8 U+0020...U+07FF
+            j = 0;
+            m = 0;
+
+            while(m < i - 1) {
+                if((value[m] == 0xFE) && (value[m + 1] == 0xFF)) {
+                    bitorder = true;
+                    j = m + 2;
+                }  // MSB/LSB
+                if((value[m] == 0xFF) && (value[m + 1] == 0xFE)) {
+                    bitorder = false;
+                    j = m + 2;
+                }  //LSB/MSB
+                m++;
+            } // seek for last bitorder
+            m = 0;
+            if(j > 0) {
+                for(k = j; k < i - 1; k += 2) {
+                    if(bitorder == true) {
+                        uni_h = value[k];
+                        uni_l = value[k + 1];
                     }
                     else {
-                        // store the first 255 bytes in buffer and cut the remains
-                        audiofile.readBytes(value, 255);
-                        value[255] = 0;
-                        i = 255;
-                        // big block, skip it
-                        audiofile.seek(getFilePos() + uint32_t(framesize) - 1 -255);
-                        id3Size -= framesize-1;
+                        uni_l = value[k];
+                        uni_h = value[k + 1];
                     }
-                }
-            }
-            if(isUnicode && framesize > 1) {  // convert unicode to utf-8 U+0020...U+07FF
-                j = 0;
-                m = 0;
-                while(m < i - 1) {
-                    if((value[m] == 0xFE) && (value[m + 1] == 0xFF)) {
-                        bitorder = true;
-                        j = m + 2;
-                    }  // MSB/LSB
-                    if((value[m] == 0xFF) && (value[m + 1] == 0xFE)) {
-                        bitorder = false;
-                        j = m + 2;
-                    }  //LSB/MSB
-                    m++;
-                } // seek for last bitorder
-                m = 0;
-                if(j > 0) {
-                    for(k = j; k < i - 1; k += 2) {
-                        if(bitorder == true) {
-                            uni_h = value[k];
-                            uni_l = value[k + 1];
-                        }
-                        else {
-                            uni_l = value[k];
-                            uni_h = value[k + 1];
-                        }
-                        uint16_t uni_hl = (uni_h << 8) + uni_l;
-                        uint8_t utf8_h = (uni_hl >> 6); // div64
-                        uint8_t utf8_l = uni_l;
-                        if(utf8_h > 3) {
-                            utf8_h += 0xC0;
-                            if(uni_l < 0x40)
-                                utf8_l = uni_l + 0x80;
-                            else if(uni_l < 0x80)
-                                utf8_l = uni_l += 0x40;
-                            else if(uni_l < 0xC0)
-                                utf8_l = uni_l;
-                            else
-                                utf8_l = uni_l - 0x40;
-                        }
-                        if(utf8_h > 3) {
-                            value[m] = utf8_h;
-                            m++;
-                        }
-                        value[m] = utf8_l;
+                    uint16_t uni_hl = (uni_h << 8) + uni_l;
+                    uint8_t utf8_h = (uni_hl >> 6); // div64
+                    uint8_t utf8_l = uni_l;
+                    if(utf8_h > 3) {
+                        utf8_h += 0xC0;
+                        if(uni_l < 0x40)
+                            utf8_l = uni_l + 0x80;
+                        else if(uni_l < 0x80)
+                            utf8_l = uni_l += 0x40;
+                        else if(uni_l < 0xC0)
+                            utf8_l = uni_l;
+                        else
+                            utf8_l = uni_l - 0x40;
+                    }
+                    if(utf8_h > 3) {
+                        value[m] = utf8_h;
                         m++;
                     }
+                    value[m] = utf8_l;
+                    m++;
                 }
-                value[m] = 0;
-                i = m;
             }
-            if(!isUnicode){
-                j = 0;
-                k = 0;
-                while(j < i) {
-                    if(value[j] == 0x0A) value[j] = 0x20; // replace LF by space
-                    if(value[j] > 0x1F) {
-                        value[k] = value[j];
-                        k++;
-                    }
-                    j++;
-                } //remove non printables
-                if(k>0) value[k] = 0; else value[0] = 0; // new termination
-            }
-
-            chbuf[0] = 0;
-            // Revision 2
-            if(tag == "CNT") sprintf(chbuf, "Play counter: %s", value);
-            if(tag == "COM") sprintf(chbuf, "Comments: %s", value);
-            if(tag == "CRA") sprintf(chbuf, "Audio encryption: %s", value);
-            if(tag == "CRM") sprintf(chbuf, "Encrypted meta frame: %s", value);
-            if(tag == "ETC") sprintf(chbuf, "Event timing codes: %s", value);
-            if(tag == "EQU") sprintf(chbuf, "Equalization: %s", value);
-            if(tag == "IPL") sprintf(chbuf, "Involved people list: %s", value);
-            if(tag == "PIC") sprintf(chbuf, "Attached picture: %s", value);
-            if(tag == "SLT") sprintf(chbuf, "Synchronized lyric/text: %s", value);
-            if(tag == "TAL") sprintf(chbuf, "Album/Movie/Show title: %s", value);
-            if(tag == "TBP") sprintf(chbuf, "BPM (Beats Per Minute): %s", value);
-            if(tag == "TCM") sprintf(chbuf, "Composer: %s", value);
-            if(tag == "TCO") sprintf(chbuf, "Content type: %s", value);
-            if(tag == "TCR") sprintf(chbuf, "Copyright message: %s", value);
-            if(tag == "TDA") sprintf(chbuf, "Date: %s", value);
-            if(tag == "TDY") sprintf(chbuf, "Playlist delay: %s", value);
-            if(tag == "TEN") sprintf(chbuf, "Encoded by: %s", value);
-            if(tag == "TFT") sprintf(chbuf, "File type: %s", value);
-            if(tag == "TIM") sprintf(chbuf, "Time: %s", value);
-            if(tag == "TKE") sprintf(chbuf, "Initial key: %s", value);
-            if(tag == "TLA") sprintf(chbuf, "Language(s): %s", value);
-            if(tag == "TLE") sprintf(chbuf, "Length: %s", value);
-            if(tag == "TMT") sprintf(chbuf, "Media type: %s", value);
-            if(tag == "TOA") sprintf(chbuf, "Original artist(s)/performer(s): %s", value);
-            if(tag == "TOF") sprintf(chbuf, "Original filename: %s", value);
-            if(tag == "TOL") sprintf(chbuf, "Original Lyricist(s)/text writer(s): %s", value);
-            if(tag == "TOR") sprintf(chbuf, "Original release year: %s", value);
-            if(tag == "TOT") sprintf(chbuf, "Original album/Movie/Show title: %s", value);
-            if(tag == "TP1") sprintf(chbuf, "Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: %s", value);
-            if(tag == "TP2") sprintf(chbuf, "Band/Orchestra/Accompaniment: %s", value);
-            if(tag == "TP3") sprintf(chbuf, "Conductor/Performer refinement: %s", value);
-            if(tag == "TP4") sprintf(chbuf, "Interpreted, remixed, or otherwise modified by: %s", value);
-            if(tag == "TPA") sprintf(chbuf, "Part of a set: %s", value);
-            if(tag == "TPB") sprintf(chbuf, "Publisher: %s", value);
-            if(tag == "TRC") sprintf(chbuf, "ISRC (International Standard Recording Code): %s", value);
-            if(tag == "TRD") sprintf(chbuf, "Recording dates: %s", value);
-            if(tag == "TRK") sprintf(chbuf, "Track number/Position in set: %s", value);
-            if(tag == "TSI") sprintf(chbuf, "Size: %s", value);
-            if(tag == "TSS") sprintf(chbuf, "Software/hardware and settings used for encoding: %s", value);
-            if(tag == "TT1") sprintf(chbuf, "Content group description: %s", value);
-            if(tag == "TT2") sprintf(chbuf, "Title/Songname/Content description: %s", value);
-            if(tag == "TT3") sprintf(chbuf, "Subtitle/Description refinement: %s", value);
-            if(tag == "TXT") sprintf(chbuf, "Lyricist/text writer: %s", value);
-            if(tag == "TXX") sprintf(chbuf, "User defined text information frame: %s", value);
-            if(tag == "TYE") sprintf(chbuf, "Year: %s", value);
-            if(tag == "UFI") sprintf(chbuf, "Unique file identifier: %s", value);
-            if(tag == "ULT") sprintf(chbuf, "Unsychronized lyric/text transcription: %s", value);
-            if(tag == "WAF") sprintf(chbuf, "Official audio file webpage: %s", value);
-            if(tag == "WAR") sprintf(chbuf, "Official artist/performer webpage: %s", value);
-            if(tag == "WAS") sprintf(chbuf, "Official audio source webpage: %s", value);
-            if(tag == "WCM") sprintf(chbuf, "Commercial information: %s", value);
-            if(tag == "WCP") sprintf(chbuf, "Copyright/Legal information: %s", value);
-            if(tag == "WPB") sprintf(chbuf, "Publishers official webpage: %s", value);
-            if(tag == "WXX") sprintf(chbuf, "User defined URL link frame: %s", value);
-            // Revision 3
-            //if(tag == "COMM") sprintf(chbuf, "Comment: %s", value);
-            if(tag == "OWNE") sprintf(chbuf, "Ownership: %s", value);
-            //if(tag == "PRIV") sprintf(chbuf, "Private: %s", value);
-            if(tag == "SYLT") sprintf(chbuf, "SynLyrics: %s", value);
-            if(tag == "TALB") sprintf(chbuf, "Album: %s", value);
-            if(tag == "TBPM") sprintf(chbuf, "BeatsPerMinute: %s", value);
-            if(tag == "TCMP") sprintf(chbuf, "Compilation: %s", value);
-            if(tag == "TCOM") sprintf(chbuf, "Composer: %s", value);
-            if(tag == "TCON") sprintf(chbuf, "ContentType: %s", value);
-            if(tag == "TCOP") sprintf(chbuf, "Copyright: %s", value);
-            if(tag == "TDAT") sprintf(chbuf, "Date: %s", value);
-            if(tag == "TEXT") sprintf(chbuf, "Lyricist: %s", value);
-            if(tag == "TIME") sprintf(chbuf, "Time: %s", value);
-            if(tag == "TIT1") sprintf(chbuf, "Grouping: %s", value);
-            if(tag == "TIT2") sprintf(chbuf, "Title: %s", value);
-            if(tag == "TIT3") sprintf(chbuf, "Subtitle: %s", value);
-            if(tag == "TLAN") sprintf(chbuf, "Language: %s", value);
-            if(tag == "TLEN") sprintf(chbuf, "Length: %s", value);
-            if(tag == "TMED") sprintf(chbuf, "Media: %s", value);
-            if(tag == "TOAL") sprintf(chbuf, "OriginalAlbum: %s", value);
-            if(tag == "TOPE") sprintf(chbuf, "OriginalArtist: %s", value);
-            if(tag == "TORY") sprintf(chbuf, "OriginalReleaseYear: %s", value);
-            if(tag == "TPE1") sprintf(chbuf, "Artist: %s", value);
-            if(tag == "TPE2") sprintf(chbuf, "Band: %s", value);
-            if(tag == "TPE3") sprintf(chbuf, "Conductor: %s", value);
-            if(tag == "TPE4") sprintf(chbuf, "InterpretedBy: %s", value);
-            if(tag == "TPOS") sprintf(chbuf, "PartOfSet: %s", value);
-            if(tag == "TPUB") sprintf(chbuf, "Publisher: %s", value);
-            if(tag == "TRCK") sprintf(chbuf, "Track: %s", value);
-            if(tag == "TSSE") sprintf(chbuf, "SettingsForEncoding: %s", value);
-            if(tag == "TRDA") sprintf(chbuf, "RecordingDates: %s", value);
-            if(tag == "TXXX") sprintf(chbuf, "UserDefinedText: %s", value);
-            if(tag == "TYER") sprintf(chbuf, "Year: %s", value);
-            if(tag == "USER") sprintf(chbuf, "TermsOfUse: %s", value);
-            if(tag == "USLT") sprintf(chbuf, "Lyrics: %s", value);
-            if(tag == "WOAR") sprintf(chbuf, "OfficialArtistWebpage: %s", value);
-            if(tag == "XDOR") sprintf(chbuf, "OriginalReleaseTime: %s", value);
-            if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
+            value[m] = 0;
+            i = m;
         }
-    } while(id3Size > 0);
+        if(!isUnicode){
+            j = 0;
+            k = 0;
+            while(j < i) {
+                if(value[j] == 0x0A) value[j] = 0x20; // replace LF by space
+                if(value[j] > 0x1F) {
+                    value[k] = value[j];
+                    k++;
+                }
+                j++;
+            } //remove non printables
+            if(k>0) value[k] = 0; else value[0] = 0; // new termination
+        }
+        chbuf[0] = 0;
+        //if(tag == "COMM") sprintf(chbuf, "Comment: %s", value);
+        if(tag == "OWNE") sprintf(chbuf, "Ownership: %s", value);
+        //if(tag == "PRIV") sprintf(chbuf, "Private: %s", value);
+        if(tag == "SYLT") sprintf(chbuf, "SynLyrics: %s", value);
+        if(tag == "TALB") sprintf(chbuf, "Album: %s", value);
+        if(tag == "TBPM") sprintf(chbuf, "BeatsPerMinute: %s", value);
+        if(tag == "TCMP") sprintf(chbuf, "Compilation: %s", value);
+        if(tag == "TCOM") sprintf(chbuf, "Composer: %s", value);
+        if(tag == "TCON") sprintf(chbuf, "ContentType: %s", value);
+        if(tag == "TCOP") sprintf(chbuf, "Copyright: %s", value);
+        if(tag == "TDAT") sprintf(chbuf, "Date: %s", value);
+        if(tag == "TEXT") sprintf(chbuf, "Lyricist: %s", value);
+        if(tag == "TIME") sprintf(chbuf, "Time: %s", value);
+        if(tag == "TIT1") sprintf(chbuf, "Grouping: %s", value);
+        if(tag == "TIT2") sprintf(chbuf, "Title: %s", value);
+        if(tag == "TIT3") sprintf(chbuf, "Subtitle: %s", value);
+        if(tag == "TLAN") sprintf(chbuf, "Language: %s", value);
+        if(tag == "TLEN") sprintf(chbuf, "Length (ms): %s", value);
+        if(tag == "TMED") sprintf(chbuf, "Media: %s", value);
+        if(tag == "TOAL") sprintf(chbuf, "OriginalAlbum: %s", value);
+        if(tag == "TOPE") sprintf(chbuf, "OriginalArtist: %s", value);
+        if(tag == "TORY") sprintf(chbuf, "OriginalReleaseYear: %s", value);
+        if(tag == "TPE1") sprintf(chbuf, "Artist: %s", value);
+        if(tag == "TPE2") sprintf(chbuf, "Band: %s", value);
+        if(tag == "TPE3") sprintf(chbuf, "Conductor: %s", value);
+        if(tag == "TPE4") sprintf(chbuf, "InterpretedBy: %s", value);
+        if(tag == "TPOS") sprintf(chbuf, "PartOfSet: %s", value);
+        if(tag == "TPUB") sprintf(chbuf, "Publisher: %s", value);
+        if(tag == "TRCK") sprintf(chbuf, "Track: %s", value);
+        if(tag == "TSSE") sprintf(chbuf, "SettingsForEncoding: %s", value);
+        if(tag == "TRDA") sprintf(chbuf, "RecordingDates: %s", value);
+        if(tag == "TXXX") sprintf(chbuf, "UserDefinedText: %s", value);
+        if(tag == "TYER") sprintf(chbuf, "Year: %s", value);
+        if(tag == "USER") sprintf(chbuf, "TermsOfUse: %s", value);
+        if(tag == "USLT") sprintf(chbuf, "Lyrics: %s", value);
+        if(tag == "WOAR") sprintf(chbuf, "OfficialArtistWebpage: %s", value);
+        if(tag == "XDOR") sprintf(chbuf, "OriginalReleaseTime: %s", value);
 
-    return true;
+        if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
+
+        return fs;
+    }
+
+    if(m_controlCounter == 98){ // skip all ID3 metadata
+        if(id3Size > 256) {
+            id3Size -=256;
+            return 256;
+        } // Throw it away
+        else           {
+            m_controlCounter = 99;
+            return id3Size;
+        } // Throw it away
+    }
+
+    if(m_controlCounter == 99){ //  exist another ID3tag?
+        m_loop_point += m_id3Size;
+        vTaskDelay(30);
+        if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
+            m_controlCounter = 0;
+            return 0;
+        }
+        else {
+            m_controlCounter = 100; // ok
+            return 0;
+        }
+    }
+    return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::stopSong() {
@@ -1135,7 +1154,25 @@ void Audio::processLocalFile() {
                 m_f_stream = true;
                 if(audio_info) audio_info("stream ready");
             }
-            bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
+            if(m_controlCounter != 100){
+                if(m_codec == CODEC_WAV){
+                    int res = readWaveHeader(InBuff.readPtr(), bytesCanBeRead);
+                    if(res >= 0) bytesDecoded = res;
+                    else{ // error, skip header
+                        m_controlCounter = 100;
+                    }
+                }
+                if(m_codec == CODEC_MP3){
+                    int res = readID3Metadata(InBuff.readPtr(), bytesCanBeRead);
+                    if(res >= 0) bytesDecoded = res;
+                    else{ // error, skip header
+                        m_controlCounter = 100;
+                    }
+                }
+            }
+            else {
+                bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
+            }
             if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
             if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
                 InBuff.bytesWasRead(200); // try next chunk
@@ -1178,7 +1215,6 @@ void Audio::processWebStream() {
         const uint16_t maxFrameSize = 1600;                 // every mp3/aac frame is no bigger
         static uint32_t chunksize = 0;                      // chunkcount read from stream
         int32_t availableBytes = 0;                         // available bytes in stream
-        static int id3Size=0;                               // stores the size of ID3 metadata (if available)
         static int bytesDecoded = 0;
         static uint32_t cnt0 = 0;
         static uint32_t tmr_1s = 0;                         // timer 1 sec
@@ -1232,21 +1268,6 @@ void Audio::processWebStream() {
                     if(audio_info) audio_info("stream ready");
                     sprintf(chbuf, "buffer filled in %d ms", filltime);
                     if(audio_info) audio_info(chbuf);
-                    if(m_f_webfile){  // can contain ID3 metadata, issue #83
-                        uint8_t *ch = InBuff.readPtr();
-                        if(*ch =='I' && *(ch+1) =='D' && *(ch+2) == '3'){
-                            id3Size = *(ch+6);
-                            id3Size = id3Size << 7;
-                            id3Size |= *(ch+7);
-                            id3Size = id3Size << 7;
-                            id3Size |= *(ch+8);
-                            id3Size = id3Size << 7;
-                            id3Size |= *(ch+9);
-                            sprintf(chbuf, "ID3 Metadata recognized, skip %d bytes", id3Size);
-                            if(audio_info) audio_info(chbuf);
-                            id3Size +=10; // +10 bytes ID3 info
-                        }
-                    }
                 }
             }
             else {
@@ -1260,23 +1281,32 @@ void Audio::processWebStream() {
             }
 
             if((InBuff.bufferFilled() > maxFrameSize) && (m_f_stream == true)) { // fill > framesize?
-                if(id3Size==0) {
-                    bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
-                }
-                else { // skip ID3 metadata
-                    if(id3Size >= maxFrameSize){
-                        bytesDecoded = maxFrameSize;
-                        id3Size -= maxFrameSize;
-                        vTaskDelay(30); // if the bytes are consumed too fast, we have a InBuff underrun
-                    }
-                    else if(id3Size <maxFrameSize) {
-                        bytesDecoded = id3Size;
-                        id3Size = 0;
+                if(m_f_webfile){  // can contain ID3 metadata, issue #83
+                    if(m_controlCounter != 100){
+                        if(m_codec == CODEC_WAV){
+                            int res = readWaveHeader(InBuff.readPtr(), InBuff.bufferFilled());
+                            if(res >= 0) bytesDecoded = res;
+                            else{ // error, skip header
+                                m_controlCounter = 100;
+                            }
+                        }
+                        if(m_codec == CODEC_MP3){
+                            int res = readID3Metadata(InBuff.readPtr(), InBuff.bufferFilled());
+                            if(res >= 0) bytesDecoded = res;
+                            else{ // error, skip header
+                                m_controlCounter = 100;
+                            }
+                        }
+
                     }
                     else {
-                        ; // do nothing
+                        bytesDecoded = sendBytes(InBuff.readPtr(), maxFrameSize);
                     }
-                } // end skip ID3 metadata
+                }
+                else { // not a webfile
+                    bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+                }
+
                 if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
                     InBuff.bytesWasRead(200); // try next chunk
                     m_bytesNotDecoded += 200;
@@ -1462,10 +1492,10 @@ void Audio::handlebyte(uint8_t b) {
                             if(audio_info) audio_info(chbuf);
                         }
                         else if(ct.indexOf("wav") >= 0) {        // audio/x-wav
-//                            m_codec = CODEC_WAV;
-//                            if(audio_info) audio_info("format is wave");
-                            m_f_running = false;
-                            if(audio_info) audio_info("can't play wav as webstream"); // ToDo
+                            m_codec = CODEC_WAV;
+                            if(audio_info) audio_info("format is wave");
+//                            m_f_running = false;
+//                            if(audio_info) audio_info("can't play wav as webstream"); // ToDo
                         }
                         else if(ct.indexOf("ogg") >= 0) {
                             m_f_running = false;
@@ -1914,7 +1944,7 @@ int Audio::sendBytes(uint8_t *data, size_t len) {
         lastChannels=0;
         lastBitsPerSeconds=0;
         lastBitRate=0;
-        if(m_codec == CODEC_WAV){ m_f_playing = true; return 0;}
+        if(m_codec == CODEC_WAV){m_f_playing = true; return 0;}
         if(m_codec == CODEC_MP3) nextSync = MP3FindSyncWord(data, len);
         if(m_codec == CODEC_AAC) nextSync = AACFindSyncWord(data, len);
 
