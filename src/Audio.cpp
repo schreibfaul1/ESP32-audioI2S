@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 15,2021
+ *  Updated on: Jan 16,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -131,6 +131,7 @@ uint32_t AudioBuffer::getReadPos() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
+   clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
     m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -1297,7 +1298,6 @@ void Audio::processWebStream() {
                                 m_controlCounter = 100;
                             }
                         }
-
                     }
                     else {
                         bytesDecoded = sendBytes(InBuff.readPtr(), maxFrameSize);
@@ -1494,8 +1494,6 @@ void Audio::handlebyte(uint8_t b) {
                         else if(ct.indexOf("wav") >= 0) {        // audio/x-wav
                             m_codec = CODEC_WAV;
                             if(audio_info) audio_info("format is wave");
-//                            m_f_running = false;
-//                            if(audio_info) audio_info("can't play wav as webstream"); // ToDo
                         }
                         else if(ct.indexOf("ogg") >= 0) {
                             m_f_running = false;
@@ -2301,8 +2299,9 @@ bool Audio::playSample(int16_t sample[2]) {
 void Audio::setTone(uint8_t l_type, uint16_t l_freq, uint8_t r_type, uint16_t r_freq){
     // see https://www.earlevel.com/main/2013/10/13/biquad-calculator-v2/
     // l_ left channel, r_ right channel
-    // type: 0- lowpass, 1- highpass
+    // type: 0- lowpass, 1- highpass, 2 - lowshelf, 3 - highshelf
     // freq: frequency in Hz (between 10....samlerate/2), freq =0 - no filter
+    // low/highpass have Qfactor = 0.707, low/highshelf have Gain -5dB
     m_filterType[LEFTCHANNEL]       = l_type;
     m_filterType[RIGHTCHANNEL]      = r_type;
     m_filterFrequency[LEFTCHANNEL]  = l_freq;
@@ -2312,8 +2311,10 @@ void Audio::setTone(uint8_t l_type, uint16_t l_freq, uint8_t r_type, uint16_t r_
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) filters
     // https://www.earlevel.com/main/2012/11/26/biquad-c-source-code/
-    float K, norm, Q, Fc ;
-    Q = 0.707;
+    float K, G, norm, Q, Fc ;
+    Q = 0.707; // Quality factor
+    G = -5;    // Gain (dB)
+    double V = pow(10, fabs(G) / 20.0);
 
     if(m_filterFrequency[LEFTCHANNEL]  == 0)               m_filterType[LEFTCHANNEL] = 254; // filter without effect
     if(m_filterFrequency[LEFTCHANNEL]  < 10)               m_filterFrequency[LEFTCHANNEL] = 10;
@@ -2343,6 +2344,26 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
             m_filter[LEFTCHANNEL].b1 = 2 * (K * K - 1) * norm;
             m_filter[LEFTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
         }
+        else if(m_filterType[LEFTCHANNEL] == 2){ // lowshelf
+            Fc = (float)m_filterFrequency[LEFTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + sqrt(2*V) * K + V * K * K);
+            m_filter[LEFTCHANNEL].a0 = (1 + sqrt(2) * K + K * K) * norm;
+            m_filter[LEFTCHANNEL].a1 = 2 * (K * K - 1) * norm;
+            m_filter[LEFTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
+            m_filter[LEFTCHANNEL].b1 = 2 * (V * K * K - 1) * norm;
+            m_filter[LEFTCHANNEL].b2 = (1 - sqrt(2*V) * K + V * K * K) * norm;
+        }
+        else if(m_filterType[LEFTCHANNEL] == 3){ // highshelf
+            Fc = (float)m_filterFrequency[LEFTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (V + sqrt(2*V) * K + K * K);
+            m_filter[LEFTCHANNEL].a0 = (1 + sqrt(2) * K + K * K) * norm;
+            m_filter[LEFTCHANNEL].a1 = 2 * (K * K - 1) * norm;
+            m_filter[LEFTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
+            m_filter[LEFTCHANNEL].b1 = 2 * (K * K - V) * norm;
+            m_filter[LEFTCHANNEL].b2 = (V - sqrt(2*V) * K + K * K) * norm;
+        }
         else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
             m_filter[LEFTCHANNEL].a0 = 1;
             m_filter[LEFTCHANNEL].a1 = -2;
@@ -2370,6 +2391,26 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
             m_filter[RIGHTCHANNEL].a2 = m_filter[RIGHTCHANNEL].a0;
             m_filter[RIGHTCHANNEL].b1 = 2 * (K * K - 1) * norm;
             m_filter[RIGHTCHANNEL].b2 = (1 - K / Q + K * K) * norm;
+        }
+        else if(m_filterType[RIGHTCHANNEL] == 2){ // lowshelf
+            Fc = (float)m_filterFrequency[RIGHTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (1 + sqrt(2*V) * K + V * K * K);
+            m_filter[RIGHTCHANNEL].a0 = (1 + sqrt(2) * K + K * K) * norm;
+            m_filter[RIGHTCHANNEL].a1 = 2 * (K * K - 1) * norm;
+            m_filter[RIGHTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
+            m_filter[RIGHTCHANNEL].b1 = 2 * (V * K * K - 1) * norm;
+            m_filter[RIGHTCHANNEL].b2 = (1 - sqrt(2*V) * K + V * K * K) * norm;
+        }
+        else if(m_filterType[RIGHTCHANNEL] == 3){ // highshelf
+            Fc = (float)m_filterFrequency[RIGHTCHANNEL] / (float)m_sampleRate;
+            K = tan(PI * Fc);
+            norm = 1 / (V + sqrt(2*V) * K + K * K);
+            m_filter[RIGHTCHANNEL].a0 = (1 + sqrt(2) * K + K * K) * norm;
+            m_filter[RIGHTCHANNEL].a1 = 2 * (K * K - 1) * norm;
+            m_filter[RIGHTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
+            m_filter[RIGHTCHANNEL].b1 = 2 * (K * K - V) * norm;
+            m_filter[RIGHTCHANNEL].b2 = (V - sqrt(2*V) * K + K * K) * norm;
         }
         else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
             m_filter[RIGHTCHANNEL].a0 = 1;
