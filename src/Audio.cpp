@@ -155,16 +155,16 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
 
     m_metaline.reserve(100);           // preallocate some space #77
 
-    m_filter[LEFTCHANNEL].a0 = 1;
-    m_filter[LEFTCHANNEL].a1 = 2;
-    m_filter[LEFTCHANNEL].a2 = 1;
-    m_filter[LEFTCHANNEL].b1 = 2;
-    m_filter[LEFTCHANNEL].b2 = 1;
+    m_filter[LEFTCHANNEL].a0  = 1;
+    m_filter[LEFTCHANNEL].a1  = 0;
+    m_filter[LEFTCHANNEL].a2  = 0;
+    m_filter[LEFTCHANNEL].b1  = 0;
+    m_filter[LEFTCHANNEL].b2  = 0;
     m_filter[RIGHTCHANNEL].a0 = 1;
-    m_filter[RIGHTCHANNEL].a1 = -2;
-    m_filter[RIGHTCHANNEL].a2 = 1;
-    m_filter[RIGHTCHANNEL].b1 = -2;
-    m_filter[RIGHTCHANNEL].b2 = 1;
+    m_filter[RIGHTCHANNEL].a1 = 0;
+    m_filter[RIGHTCHANNEL].a2 = 0;
+    m_filter[RIGHTCHANNEL].b1 = 0;
+    m_filter[RIGHTCHANNEL].b2 = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
@@ -268,7 +268,7 @@ void Audio::reset() {
     m_metaint = 0;                                            // No metaint yet
     m_metaline = "";                                          // No metadata yet
     m_LFcount = 0;                                            // For end of header detection
-    m_st_remember = "";                                       // Delete the last streamtitle
+    m_st_remember = 0;                                        // Delete the last streamtitle hash
     m_totalcount = 0;                                         // Reset totalcount
     m_controlCounter = 0;                                     // Status within readID3data() and readWaveHeader()
 
@@ -467,7 +467,7 @@ bool Audio::connecttospeech(String speech, String lang){
     int32_t  bytesAddedToBuffer = 0;
     int16_t  bytesDecoded = 0;
 
-    String tts=   path + "?ie=UTF-8&q=" + urlencode(speech) +
+    String tts =  path + "?ie=UTF-8&q=" + urlencode(speech) +
                   "&tl=" + lang + "&client=tw-ob";
 
     String resp = String("GET ") + tts + String(" HTTP/1.1\r\n")
@@ -1643,7 +1643,6 @@ void Audio::handlebyte(uint8_t b) {
                     pos = m_metaline.indexOf("text=");
                     if(pos > 3) m_metaline.remove(pos, 5);
                 }
-
                 if(!m_f_localfile) showstreamtitle(m_metaline.c_str());  // Show artist and title if present in metadata
             }
         }
@@ -1876,13 +1875,19 @@ void Audio::showstreamtitle(const char* ml) {
             }
         }
 
-        if(m_st_remember != st) {                             // show only changes
-            if(audio_showstreamtitle) audio_showstreamtitle(st.c_str());
+        uint16_t i = 0;
+        uint16_t hash = 0;
+        while(i < st.length()){
+            hash += st[i] * i+1;
+            i++;
         }
 
-        m_st_remember = st;
-        st = "StreamTitle=\"" + st + '\"';
-        if(audio_info) audio_info(st.c_str());
+        if(m_st_remember != hash) {                             // show only changes
+            if(audio_showstreamtitle) audio_showstreamtitle(st.c_str());
+            st = "StreamTitle=\"" + st + '\"';
+            if(audio_info) audio_info(st.c_str());
+            m_st_remember = hash;
+        }
     }
     pos4 = mline.indexOf("StreamUrl=");
     if(pos4 != -1) {                                          // StreamUrl found
@@ -1937,19 +1942,19 @@ bool Audio::chkhdrline(const char* str) {
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
 
-    static uint32_t lastRet=0, count=0, swnf=0;
-    static uint32_t lastSampleRate=0, lastChannels=0, lastBitsPerSeconds=0, lastBitRate=0;
-    int nextSync=0;
-    if(!m_f_playing){
-        lastSampleRate=0;
-        lastChannels=0;
-        lastBitsPerSeconds=0;
-        lastBitRate=0;
+    static uint32_t lastRet = 0, count = 0, swnf = 0;
+    static uint32_t lastSampleRate = 0, lastChannels = 0, lastBitsPerSeconds = 0, lastBitRate = 0;
+    int nextSync = 0;
+    if(!m_f_playing) {
+        lastSampleRate = 0;
+        lastChannels = 0;
+        lastBitsPerSeconds = 0;
+        lastBitRate = 0;
         if(m_codec == CODEC_WAV){m_f_playing = true; return 0;}
         if(m_codec == CODEC_MP3) nextSync = MP3FindSyncWord(data, len);
         if(m_codec == CODEC_AAC) nextSync = AACFindSyncWord(data, len);
 
-        if(nextSync==-1) {
+        if(nextSync == -1) {
             if(audio_info && swnf<1) audio_info("syncword not found");
             swnf++; // syncword not found counter, can be multimediadata
             return -1;
@@ -1959,7 +1964,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 sprintf(chbuf, "syncword not found %i times", swnf);
                 audio_info(chbuf);
             }
-            swnf=0;
+            swnf = 0;
         }
         if(nextSync > 0){
             sprintf(chbuf, "syncword found at pos %i", nextSync);
@@ -1967,8 +1972,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             return nextSync;
         }
         if(audio_info) audio_info("syncword found at pos 0");
-        count=0;
-        m_f_playing=true;
+        count = 0;
+        m_f_playing = true;
         return nextSync;
     }
 
@@ -1983,27 +1988,27 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     if(m_codec == CODEC_MP3) ret = MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
     if(m_codec == CODEC_AAC) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
-    if(ret==0) lastRet=0;
-    bytesDecoded=len-m_bytesLeft;
+    if(ret == 0) lastRet = 0;
+    bytesDecoded = len-m_bytesLeft;
     // log_i("bytesDecoded %i", bytesDecoded);
-    if(bytesDecoded==0){ // unlikely framesize
+    if(bytesDecoded == 0){ // unlikely framesize
         if(audio_info) audio_info("framesize is 0, start decoding again");
-        m_f_playing=false; // seek for new syncword
+        m_f_playing = false; // seek for new syncword
         
         // we're here because there was a wrong sync word
         // so skip two sync bytes and seek for next
         return 2; 
     }
-    if(ret){ // Error, skip the frame...
-        m_f_playing=false; // seek for new syncword
-        if(count==0){
+    if(ret) { // Error, skip the frame...
+        m_f_playing = false; // seek for new syncword
+        if(count == 0) {
             i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
             printDecodeError(ret);
         }
-        if(lastRet==ret) count++;
-        if(count>10){ count=0; lastRet=0;} // more than 10 errors
-        if(ret!=lastRet){
-            lastRet=ret; count=0;
+        if(lastRet == ret) count++;
+        if(count > 10) {count = 0; lastRet = 0;} // more than 10 errors
+        if(ret != lastRet) {
+            lastRet = ret; count = 0;
         }
         return bytesDecoded;
     }
@@ -2023,7 +2028,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
             if((int) MP3GetSampRate() ==0){ // error can't be
                 if(audio_info) audio_info("SampleRate=0, try new frame");
-                m_f_playing=false;
+                m_f_playing = false;
                 return 1;
             }
             if(MP3GetBitsPerSample() != lastBitsPerSeconds){
@@ -2032,7 +2037,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 sprintf(chbuf,"BitsPerSample=%i", MP3GetBitsPerSample());
                 if(audio_info) audio_info(chbuf);
             }
-            if(MP3GetBitrate()!= lastBitRate){
+            if(MP3GetBitrate() != lastBitRate){
                 if(lastBitRate == 0){
                     sprintf(chbuf,"BitRate=%i", MP3GetBitrate());
                     if(audio_info) audio_info(chbuf);
@@ -2057,7 +2062,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
             if(AACGetSampRate() == 0){ // error can't be
                 if(audio_info) audio_info("AAC SampleRate=0, try new frame");
-                m_f_playing=false;
+                m_f_playing = false;
                 return 1;
             }
             if (AACGetBitsPerSample() != lastBitsPerSeconds){
@@ -2355,7 +2360,7 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
             m_filter[LEFTCHANNEL].a1 = 2 * (K * K - 1) * norm;
             m_filter[LEFTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
             m_filter[LEFTCHANNEL].b1 = 2 * (V * K * K - 1) * norm;
-            m_filter[LEFTCHANNEL].b2 = (1 - sqrt(2*V) * K + V * K * K) * norm;
+            m_filter[LEFTCHANNEL].b2 = (1 - sqrt(2 * V) * K + V * K * K) * norm;
         }
         else if(m_filterType[LEFTCHANNEL] == 3){ // highshelf
             Fc = (float)m_filterFrequency[LEFTCHANNEL] / (float)m_sampleRate;
@@ -2365,14 +2370,14 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
             m_filter[LEFTCHANNEL].a1 = 2 * (K * K - 1) * norm;
             m_filter[LEFTCHANNEL].a2 = (1 - sqrt(2) * K + K * K) * norm;
             m_filter[LEFTCHANNEL].b1 = 2 * (K * K - V) * norm;
-            m_filter[LEFTCHANNEL].b2 = (V - sqrt(2*V) * K + K * K) * norm;
+            m_filter[LEFTCHANNEL].b2 = (V - sqrt(2 * V) * K + K * K) * norm;
         }
-        else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
-            m_filter[LEFTCHANNEL].a0 = 1;
-            m_filter[LEFTCHANNEL].a1 = -2;
-            m_filter[LEFTCHANNEL].a2 = 1;
-            m_filter[LEFTCHANNEL].b1 = -2;
-            m_filter[LEFTCHANNEL].b2 = 1;
+        else { // IIR filter: out = in
+            m_filter[RIGHTCHANNEL].a0 = 1;
+            m_filter[RIGHTCHANNEL].a1 = 0;
+            m_filter[RIGHTCHANNEL].a2 = 0;
+            m_filter[RIGHTCHANNEL].b1 = 0;
+            m_filter[RIGHTCHANNEL].b2 = 0;
         }
 
         if(m_filterType[RIGHTCHANNEL] == 0){ // lowpass
@@ -2415,12 +2420,12 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
             m_filter[RIGHTCHANNEL].b1 = 2 * (K * K - V) * norm;
             m_filter[RIGHTCHANNEL].b2 = (V - sqrt(2*V) * K + K * K) * norm;
         }
-        else { // simulates a highpass 1Hz SR 44.1KHz, Q0.7, has no effect
+        else { // IIR filter: out = in
             m_filter[RIGHTCHANNEL].a0 = 1;
-            m_filter[RIGHTCHANNEL].a1 = -2;
-            m_filter[RIGHTCHANNEL].a2 = 1;
-            m_filter[RIGHTCHANNEL].b1 = -2;
-            m_filter[RIGHTCHANNEL].b2 = 1;
+            m_filter[RIGHTCHANNEL].a1 = 0;
+            m_filter[RIGHTCHANNEL].a2 = 0;
+            m_filter[RIGHTCHANNEL].b1 = 0;
+            m_filter[RIGHTCHANNEL].b2 = 0;
         }
     }
 
@@ -2438,17 +2443,11 @@ int16_t* Audio::IIR_filterChain(int16_t iir_in[2], bool clear){  // Infinite Imp
     static int16_t iir_out[2];
 
     if(clear){
-        m_filterBuff[0][0][0]=0.0;
-        m_filterBuff[0][0][1]=0.0;
-        m_filterBuff[0][1][0]=0.0;
-        m_filterBuff[0][1][1]=0.0;
-        m_filterBuff[1][0][0]=0.0;
-        m_filterBuff[1][0][1]=0.0;
-        m_filterBuff[1][1][0]=0.0;
-        m_filterBuff[1][1][1]=0.0;
+        memset(m_filterBuff, 0, sizeof(m_filterBuff));            // zero IIR filterbuffer
         iir_out[0] = 0;
         iir_out[1] = 0;
-        return iir_out;
+        iir_in[0]  = 0;
+        iir_in[1]  = 0;
     }
 
     inSample[LEFTCHANNEL]  = (float)(iir_in[LEFTCHANNEL] >> 1);

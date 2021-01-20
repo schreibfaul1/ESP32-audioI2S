@@ -226,27 +226,27 @@ private:
     uint8_t         m_DOUT=0;                       // Data Out
     int8_t          m_DIN=0;                        // Data In, can be negative if unused (I2S_PIN_NO_CHANGE is -1)
     uint8_t         m_vol=64;                       // volume
-    uint8_t         m_bitsPerSample=16;             // bitsPerSample
+    uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
-    uint8_t         m_i2s_num= I2S_NUM_0;           // I2S_NUM_0 or I2S_NUM_1
+    uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
-    uint16_t        m_datamode=0;                   // Statemaschine
+    uint16_t        m_st_remember = 0;              // Save hash from the last streamtitle
+    uint16_t        m_datamode = 0;                 // Statemaschine
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0;                           // store millis(), is needed for a small delay
-    uint32_t        m_metaCount=0;                  // Bytecounter between metadata
+    uint32_t        m_metaCount = 0;                // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytectr = 0;                  // count received data
-    uint32_t        m_bytesNotDecoded=0;            // pictures or something else that comes with the stream
+    uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     String          m_audioName="";                 // the name of the file
     String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost = "";                // Store the last URL to a webstream
     String          m_metaline = "";                // Readable line in metadata
     String          m_icyname ;                     // Icecast station name
-    String          m_st_remember="";               // Save the last streamtitle
     String          m_icyurl="";                    // Store ie icy-url if received
     String          m_plsURL;                       // URL found in playlist
     String          m_plsStationName;               // StationName found in playlist
