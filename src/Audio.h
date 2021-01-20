@@ -164,11 +164,11 @@ private:
     void initInBuff();
     void processLocalFile();
     void processWebStream();
-    int  sendBytes(uint8_t *data, size_t len);
+    int  sendBytes(uint8_t* data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
-    int  readWaveHeader(uint8_t *data, size_t len);
-    int  readID3Metadata(uint8_t *data, size_t len);
+    int  readWaveHeader(uint8_t* data, size_t len);
+    int  readID3Metadata(uint8_t* data, size_t len);
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
@@ -177,13 +177,13 @@ private:
     bool playI2Sremains();
     int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
-    void showstreamtitle(const char *ml);
+    void showstreamtitle(const char* ml);
     bool chkhdrline(const char* str);
     void handlebyte(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
-    int16_t* IIR_filterChain(int16_t iir_in[2]);
+    int16_t* IIR_filterChain(int16_t iir_in[2], bool clear = false);
     void IIR_calculateCoefficients();
 
 private:

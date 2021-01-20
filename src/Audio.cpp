@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 16,2021
+ *  Updated on: Jan 20,2021
  *      Author: Wolle
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -280,7 +280,7 @@ void Audio::reset() {
     memset(m_filterBuff, 0, sizeof(m_filterBuff));            // zero IIR filterbuffer
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttohost(String host, const char *user, const char *pwd) {
+bool Audio::connecttohost(String host, const char* user, const char* pwd) {
     // user and pwd for authentication only, can be empty
     if(host.length() == 0) {
         if(audio_info) audio_info("Hostaddress is empty");
@@ -311,8 +311,8 @@ bool Audio::connecttohost(String host, const char *user, const char *pwd) {
     if(host.startsWith("http://")) {
         host = host.substring(7);
         m_f_ssl = false;
-        ;
     }
+
     if(host.startsWith("https://")) {
         host = host.substring(8);
         m_f_ssl = true;
@@ -565,7 +565,7 @@ String Audio::urlencode(String str) {
     return encodedString;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int Audio::readWaveHeader(uint8_t *data, size_t len) {
+int Audio::readWaveHeader(uint8_t* data, size_t len) {
     static uint32_t cs = 0;
     static uint8_t bts = 0;
     static size_t headerLength = 0;
@@ -809,13 +809,16 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         m_controlCounter = 6;
         framesize = (*(data + 0) << 24) | (*(data + 1) << 16) | (*(data + 2) << 8) | (*(data + 3));
         id3Size -= 4;
-//        uint8_t dummy = *(data + 4); // skip 1st flag
+        uint8_t flag = *(data + 4); // skip 1st flag
+        (void) flag;
         id3Size--;
-        compressed = (*(data + 5)) & 0x80;
+        compressed = (*(data + 5)) & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
+                                           // size' appended to the frame header.
         id3Size--;
+        int decompsize = 0;
         if(compressed){
             log_i("iscompressed");
-            int decompsize = (*(data + 6) << 24) | (*(data + 7) << 16) | (*(data + 8) << 8) | (*(data + 9));
+            decompsize = (*(data + 6) << 24) | (*(data + 7) << 16) | (*(data + 8) << 8) | (*(data + 9));
             id3Size -= 4;
             (void) decompsize;
             return 6 + 4;
@@ -1134,7 +1137,7 @@ void Audio::processLocalFile() {
         bytesCanBeWritten = InBuff.writeSpace();
         
         //TEST loop 
-        if((m_file_size == getFilePos()) && m_f_loop/* && m_f_stream */){  //eof
+        if((m_file_size == getFilePos()) && m_f_loop /* && m_f_stream */){  //eof
             sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_loop_point);
             if(audio_info) audio_info(chbuf);
             setFilePos(m_loop_point);
@@ -1806,7 +1809,7 @@ void Audio::handlebyte(uint8_t b) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::showstreamtitle(const char *ml) {
+void Audio::showstreamtitle(const char* ml) {
     // example for ml:
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
@@ -1912,7 +1915,7 @@ void Audio::showstreamtitle(const char *ml) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::chkhdrline(const char *str) {
+bool Audio::chkhdrline(const char* str) {
     char b;                                            // Byte examined
     int len = 0;                                       // Length of the string
 
@@ -1932,7 +1935,7 @@ bool Audio::chkhdrline(const char *str) {
     return false;                                      // End of string without colon
 }
 //---------------------------------------------------------------------------------------------------------------------
-int Audio::sendBytes(uint8_t *data, size_t len) {
+int Audio::sendBytes(uint8_t* data, size_t len) {
 
     static uint32_t lastRet=0, count=0, swnf=0;
     static uint32_t lastSampleRate=0, lastChannels=0, lastBitsPerSeconds=0, lastBitRate=0;
@@ -2317,10 +2320,10 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
     double V = pow(10, fabs(G) / 20.0);
 
     if(m_filterFrequency[LEFTCHANNEL]  == 0)               m_filterType[LEFTCHANNEL] = 254; // filter without effect
-    if(m_filterFrequency[LEFTCHANNEL]  < 10)               m_filterFrequency[LEFTCHANNEL] = 10;
+    else if(m_filterFrequency[LEFTCHANNEL]  < 10)          m_filterFrequency[LEFTCHANNEL] = 10;
     if(m_filterFrequency[LEFTCHANNEL]  > m_sampleRate / 2) m_filterFrequency[LEFTCHANNEL] = m_sampleRate / 2;
     if(m_filterFrequency[RIGHTCHANNEL] == 0)               m_filterType[RIGHTCHANNEL] = 254; // filter without effect
-    if(m_filterFrequency[RIGHTCHANNEL] < 10)               m_filterFrequency[RIGHTCHANNEL] = 10;
+    else if(m_filterFrequency[RIGHTCHANNEL] < 10)          m_filterFrequency[RIGHTCHANNEL] = 10;
     if(m_filterFrequency[RIGHTCHANNEL] > m_sampleRate / 2) m_filterFrequency[RIGHTCHANNEL] = m_sampleRate / 2;
 
     if(m_sampleRate!=0){
@@ -2421,17 +2424,12 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
         }
     }
 
-    m_filterBuff[0][0][0]=0.0;
-    m_filterBuff[0][0][1]=0.0;
-    m_filterBuff[0][1][0]=0.0;
-    m_filterBuff[0][1][1]=0.0;
-    m_filterBuff[1][0][0]=0.0;
-    m_filterBuff[1][0][1]=0.0;
-    m_filterBuff[1][1][0]=0.0;
-    m_filterBuff[1][1][1]=0.0;
+    int16_t tmp[2];
+    IIR_filterChain(tmp, true ); // flush the filter
+
 }
 //---------------------------------------------------------------------------------------------------------------------
-int16_t* Audio::IIR_filterChain(int16_t iir_in[2]){  // Infinite Impulse Response (IIR) filters
+int16_t* Audio::IIR_filterChain(int16_t iir_in[2], bool clear){  // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum: uint8_t {in = 0, out = 1};
@@ -2439,6 +2437,19 @@ int16_t* Audio::IIR_filterChain(int16_t iir_in[2]){  // Infinite Impulse Respons
     float outSample[2];
     static int16_t iir_out[2];
 
+    if(clear){
+        m_filterBuff[0][0][0]=0.0;
+        m_filterBuff[0][0][1]=0.0;
+        m_filterBuff[0][1][0]=0.0;
+        m_filterBuff[0][1][1]=0.0;
+        m_filterBuff[1][0][0]=0.0;
+        m_filterBuff[1][0][1]=0.0;
+        m_filterBuff[1][1][0]=0.0;
+        m_filterBuff[1][1][1]=0.0;
+        iir_out[0] = 0;
+        iir_out[1] = 0;
+        return iir_out;
+    }
 
     inSample[LEFTCHANNEL]  = (float)(iir_in[LEFTCHANNEL] >> 1);
     inSample[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL] >> 1);
