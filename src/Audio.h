@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 16,2021
+ *  Updated on: Jan 24,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -30,6 +30,7 @@ extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 
+#define AUDIO_NONE            1
 #define AUDIO_HEADER          2    //const for datamode
 #define AUDIO_DATA            4
 #define AUDIO_METADATA        8
@@ -178,6 +179,9 @@ private:
     int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
     void showstreamtitle(const char* ml);
+    void parsePlaylistData(const char* pd);
+    void parseAudioHeader(const char* ah);
+    bool parseContentType(const char* ct);
     bool chkhdrline(const char* str);
     void handlebyte(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
@@ -186,10 +190,30 @@ private:
     int16_t* IIR_filterChain(int16_t iir_in[2], bool clear = false);
     void IIR_calculateCoefficients();
 
+    // implement several function with respect to the index of string
+    bool startsWith (const char* base, const char* str) { return (strstr(base, str) - base) == 0;}
+    bool endsWith (const char* base, const char* str) {
+        int blen = strlen(base);
+        int slen = strlen(str);
+        return (blen >= slen) && (0 == strcmp(base + blen - slen, str));
+    }
+    int indexOf (const char* base, const char* str, int startIndex) {
+        int result;
+        int baselen = strlen(base);
+        if (strlen(str) > baselen || startIndex > baselen) result = -1;
+        else {
+            char* pos = strstr(base + startIndex, str);
+            if (pos == NULL) result = -1;
+            else result = pos - base;
+        }
+        return result;
+    }
+
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_FLAC = 5};
+    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
@@ -218,7 +242,6 @@ private:
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
-    int8_t          m_playlist_num = 0;             // Nonzero for selection from playlist
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint8_t         m_rev=0;                        // revision, ID3 version
     uint8_t         m_BCLK=0;                       // Bit Clock
@@ -229,6 +252,7 @@ private:
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
+    uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
@@ -243,11 +267,10 @@ private:
     uint32_t        m_bytectr = 0;                  // count received data
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     String          m_audioName="";                 // the name of the file
-    String          m_playlist ;                    // The URL of the specified playlist
+//    String          m_playlist ;                    // The URL of the specified playlist
     String          m_lastHost = "";                // Store the last URL to a webstream
-    String          m_metaline = "";                // Readable line in metadata
     String          m_icyname ;                     // Icecast station name
-    String          m_icyurl="";                    // Store ie icy-url if received
+    String          m_icyurl = "";                  // Store ie icy-url if received
     String          m_plsURL;                       // URL found in playlist
     String          m_plsStationName;               // StationName found in playlist
     String          m_icystreamtitle ;              // Streamtitle from metadata
@@ -262,8 +285,8 @@ private:
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_swm = false;
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
-    bool            m_f_plsFile = false;            // Set if URL is known
-    bool            m_f_plsTitle = false;           // Set if StationName is known
+//    bool            m_f_plsFile = false;            // Set if URL is known
+//    bool            m_f_plsTitle = false;           // Set if StationName is known
     bool            m_f_stream = false;             // Set false if stream is lost
     uint8_t         m_codec = CODEC_NONE;           //
     bool            m_f_playing = false;            // valid mp3 stream recognized
