@@ -2,8 +2,8 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 24,2021
- *      Author: Wolle (schreibfaul1)
+ *  Updated on: Jan 25,2021
+ *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
 #ifndef AUDIO_H_
@@ -29,15 +29,6 @@ extern __attribute__((weak)) void audio_icyurl(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
-
-#define AUDIO_NONE            1
-#define AUDIO_HEADER          2    //const for datamode
-#define AUDIO_DATA            4
-#define AUDIO_METADATA        8
-#define AUDIO_PLAYLISTINIT   16
-#define AUDIO_PLAYLISTHEADER 32
-#define AUDIO_PLAYLISTDATA   64
-#define AUDIO_SWM           128
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -106,11 +97,11 @@ class Audio : private AudioBuffer{
 public:
     Audio(const uint8_t BCLK=26, const uint8_t LRC=25, const uint8_t DOUT=27);
     ~Audio();
-    bool connecttoFS(fs::FS &fs, String file);
-    bool connecttoSD(String sdfile);
+    bool connecttoFS(fs::FS &fs, const char* file);
+    bool connecttoSD(const char* sdfile);
     bool setFileLoop(bool input);//TEST loop
-    bool connecttohost(String host, const char* user = "", const char* pwd = "");
-    bool connecttospeech(String speech, String lang);
+    bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
+    bool connecttospeech(const char* speech, const char* lang);
     void loop();
     uint32_t getFileSize();
     uint32_t getFilePos();
@@ -182,8 +173,7 @@ private:
     void parsePlaylistData(const char* pd);
     void parseAudioHeader(const char* ah);
     bool parseContentType(const char* ct);
-    bool chkhdrline(const char* str);
-    void handlebyte(uint8_t b);
+    void processControlData(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
@@ -214,6 +204,8 @@ private:
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_FLAC = 5};
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
+    enum : int { AUDIO_NONE, AUDIO_HEADER , AUDIO_DATA, AUDIO_METADATA, AUDIO_PLAYLISTINIT,
+                 AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA, AUDIO_SWM };
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
@@ -231,8 +223,14 @@ private:
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     i2s_config_t      m_i2s_config; // stores values for I2S driver
+
+
     char            chbuf[256];
     char            path[256];
+    char            m_plsURL[256];                  // URL found in playlist
+    char            m_lastHost[256];                // Store the last URL to a webstream
+    char            m_audioName[256];               // the name of the file
+    filter_t        m_filter[2];
     int             m_id3Size=0;                    // length id3 tag
     int             m_LFcount;                      // Detection of end of header
     uint32_t        m_sampleRate=16000;
@@ -243,16 +241,18 @@ private:
     int             m_metalen=0;                    // Number of bytes in metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
+    int8_t          m_DIN=0;                        // Data In, can be negative if unused (I2S_PIN_NO_CHANGE is -1)
     uint8_t         m_rev=0;                        // revision, ID3 version
     uint8_t         m_BCLK=0;                       // Bit Clock
     uint8_t         m_LRC=0;                        // Left/Right Clock
     uint8_t         m_DOUT=0;                       // Data Out
-    int8_t          m_DIN=0;                        // Data In, can be negative if unused (I2S_PIN_NO_CHANGE is -1)
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
+    uint8_t         m_codec = CODEC_NONE;           //
+    uint8_t         m_filterType[2];                // lowpass, highpass
     int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample;
@@ -266,14 +266,6 @@ private:
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytectr = 0;                  // count received data
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
-    String          m_audioName="";                 // the name of the file
-//    String          m_playlist ;                    // The URL of the specified playlist
-    String          m_lastHost = "";                // Store the last URL to a webstream
-    String          m_icyname ;                     // Icecast station name
-    String          m_icyurl = "";                  // Store ie icy-url if received
-    String          m_plsURL;                       // URL found in playlist
-    String          m_plsStationName;               // StationName found in playlist
-    String          m_icystreamtitle ;              // Streamtitle from metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_localfile = false ;         // Play from local mp3-file
@@ -285,24 +277,17 @@ private:
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_swm = false;
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
-//    bool            m_f_plsFile = false;            // Set if URL is known
-//    bool            m_f_plsTitle = false;           // Set if StationName is known
     bool            m_f_stream = false;             // Set false if stream is lost
-    uint8_t         m_codec = CODEC_NONE;           //
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
     bool            m_f_psram = false;              // set if PSRAM is availabe
-    size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
+    bool            m_f_loop = false;               // Set if audio file should loop
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP
-    //TEST loop
-    bool            m_f_loop = false;               // Set if audio file should loop
+    size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
     size_t          m_loop_point = 0;               // Point in the file where the audio data starts
     size_t          m_file_size = 0;                // size of the file
-    //TEST loop
-    filter_t        m_filter[2];
-    uint8_t         m_filterType[2];                // lowpass, highpass
     uint16_t        m_filterFrequency[2];
 };
 
