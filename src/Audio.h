@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 25,2021
+ *  Updated on: Jan 26,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -95,7 +95,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(const uint8_t BCLK=26, const uint8_t LRC=25, const uint8_t DOUT=27);
+    Audio(const uint8_t BCLK=27, const uint8_t LRC=26, const uint8_t DOUT=25); // #99
     ~Audio();
     bool connecttoFS(fs::FS &fs, const char* file);
     bool connecttoSD(const char* sdfile);

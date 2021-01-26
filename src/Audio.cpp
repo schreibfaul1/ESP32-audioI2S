@@ -280,9 +280,7 @@ void Audio::reset() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
-    // user and pwd for authentication only, can be empty
-
-
+    // user and pwd for authentification only, can be empty
 
     if(strlen(host) == 0) {
         if(audio_info) audio_info("Hostaddress is empty");
@@ -290,7 +288,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
     reset();
 
-    sprintf(chbuf, "Connect to new s_host: \"%s\"", host);
+    sprintf(chbuf, "Connect to new host: \"%s\"", host);
     if(audio_info) audio_info(chbuf);
 
     // authentification
@@ -300,7 +298,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     // initializationsequence
     int16_t pos_colon;                                        // Position of ":" in hostname
     int16_t pos_ampersand;                                    // Position of "&" in hostname
-    uint16_t port = 80;                                       // Port number for s_host
+    uint16_t port = 80;                                       // Port number for host
     String extension = "/";                                   // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
     String hostwoext = "";                                    // Host without extension and portnumber
     String headerdata = "";
