@@ -139,6 +139,7 @@ public:
      * @return true if audio file or stream is active, false otherwise
      */
     bool pauseResume();
+    void forceMono(bool m);
     void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
     uint8_t getVolume();
@@ -282,6 +283,7 @@ private:
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
     bool            m_f_psram = false;              // set if PSRAM is availabe
     bool            m_f_loop = false;               // Set if audio file should loop
+    bool            m_f_forceMono = false;          // if true stereo -> mono
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP

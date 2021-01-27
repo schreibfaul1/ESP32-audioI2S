@@ -251,6 +251,7 @@ void Audio::reset() {
     m_f_swm = true;                                           // Assume no metaint (stream without metadata)
     m_f_webfile = false;                                      // Assume radiostream (connecttohost)
     m_f_webstream = false;
+    m_f_forceMono = false;
 
     m_playlistFormat = FORMAT_NONE;
     m_id3Size = 0;
@@ -1073,8 +1074,16 @@ bool Audio::playChunk() {
             while(m_validSamples) {
                 uint8_t x =  m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
-                sample[LEFTCHANNEL]  = x;
-                sample[RIGHTCHANNEL] = y;
+                if(!m_f_forceMono) { // stereo mode
+                    sample[LEFTCHANNEL]  = x;
+                    sample[RIGHTCHANNEL] = y;
+                }
+                else { // force mono
+                    uint8_t xy = (x + y) / 2;
+                    sample[LEFTCHANNEL]  = xy;
+                    sample[RIGHTCHANNEL] = xy;
+                }
+
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
@@ -1099,8 +1108,15 @@ bool Audio::playChunk() {
         }
         if(m_channels == 2) {
             while(m_validSamples) {
-                sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
-                sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+                if(!m_f_forceMono) { // stereo mode
+                    sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
+                    sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+                }
+                else { // mono mode, #100
+                    int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2;
+                    sample[LEFTCHANNEL] = xy;
+                    sample[RIGHTCHANNEL] = xy;
+                }
                 if(!playSample(sample)) {
                     return false;
                 } // Can't send
@@ -2576,6 +2592,10 @@ int16_t* Audio::IIR_filterChain(int16_t iir_in[2], bool clear){  // Infinite Imp
     iir_out[RIGHTCHANNEL] = (int16_t) outSample[RIGHTCHANNEL];
 
     return iir_out;
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::forceMono(bool m) { // #100 mono option
+    m_f_forceMono = m; // false stereo, true mono
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setBalance(int8_t bal){ // bal -16...16
