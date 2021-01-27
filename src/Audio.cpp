@@ -252,7 +252,6 @@ void Audio::reset() {
     m_f_swm = true;                                           // Assume no metaint (stream without metadata)
     m_f_webfile = false;                                      // Assume radiostream (connecttohost)
     m_f_webstream = false;
-//    m_f_forceMono = false;
 
     m_playlistFormat = FORMAT_NONE;
     m_id3Size = 0;
