@@ -50,6 +50,7 @@ i2s_mclk_pin_select	KEYWORD2
 setFileLoop KEYWORD2
 setTone KEYWORD2
 setBalance  KEYWORD2
+forceMono KEYWORD2
 
 
 
