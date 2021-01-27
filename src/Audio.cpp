@@ -152,6 +152,7 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     m_LRC=LRC;                         // Left/Right Clock
     m_DOUT=DOUT;                       // Data Out
     setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
+    m_f_forceMono = false;
 
     m_filter[LEFTCHANNEL].a0  = 1;
     m_filter[LEFTCHANNEL].a1  = 0;
@@ -251,7 +252,7 @@ void Audio::reset() {
     m_f_swm = true;                                           // Assume no metaint (stream without metadata)
     m_f_webfile = false;                                      // Assume radiostream (connecttohost)
     m_f_webstream = false;
-    m_f_forceMono = false;
+//    m_f_forceMono = false;
 
     m_playlistFormat = FORMAT_NONE;
     m_id3Size = 0;
