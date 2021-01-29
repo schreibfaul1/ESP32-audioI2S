@@ -2,17 +2,19 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 26,2021
+ *  Updated on: Jan 29,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
 #ifndef AUDIO_H_
 #define AUDIO_H_
-
+#define FF_LFN_UNICODE      2
 #include "Arduino.h"
 #include "base64.h"
 #include "SPI.h"
 #include "SD.h"
+#include "SD_MMC.h"
+#include "SPIFFS.h"
 #include "FS.h"
 #include "WiFiClientSecure.h"
 #include "driver/i2s.h"

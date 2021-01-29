@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 25,2021
+ *  Updated on: Jan 29,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -428,11 +428,33 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     }
     path[j] = 0;
     memcpy(m_audioName, s_file.c_str() + 1, s_file.length()); // skip the first '/'
-
     sprintf(chbuf, "Reading file: \"%s\"", m_audioName);
     if(audio_info) audio_info(chbuf);
-    audiofile = fs.open(path);
     
+    // - - - - - - - - - - - - - - - - - - - - - - -   What is the source?
+    fs::FS &obj_SD     = SD;
+    fs::FS &obj_SPIFFS = SPIFFS;
+    fs::FS &obj_SD_MMC = SD_MMC;
+
+    (void)obj_SPIFFS; (void)obj_SD; (void)obj_SD_MMC; // suppress unused varialbles
+
+    // if(&fs  == &obj_SD)     log_i("play from SD card");
+    // if(&fs  == &obj_SPIFFS) log_i("play from SPIFFS");
+    // if(&fs  == &obj_SD_MMC) log_i("play from SD_MMC");
+
+    if((&fs  == &obj_SD) || (&fs  == &obj_SPIFFS)){
+        int cp = CONFIG_FATFS_CODEPAGE;
+        // log_i("codepage is %i", cp);
+        if(cp == 850)
+            audiofile = fs.open(path);      // convert codepage 850 (Latin-1) to ASCII
+        else
+            audiofile = fs.open(s_file);    // not cp 850, make something else if required
+    }
+    else{
+        audiofile = fs.open(s_file);        // assume all other can handle UTF-8 characters
+    }
+    // - - - - - - - - - - - - - - - - - - - - - - -
+
     m_file_size = audiofile.size();//TEST loop
     
     if(!audiofile) {
