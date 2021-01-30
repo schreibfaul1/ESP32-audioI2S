@@ -431,29 +431,11 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     sprintf(chbuf, "Reading file: \"%s\"", m_audioName);
     if(audio_info) audio_info(chbuf);
     
-    // - - - - - - - - - - - - - - - - - - - - - - -   What is the source?
-    fs::FS &obj_SD     = SD;
-    fs::FS &obj_SPIFFS = SPIFFS;
-    fs::FS &obj_SD_MMC = SD_MMC;
-
-    (void)obj_SPIFFS; (void)obj_SD; (void)obj_SD_MMC; // suppress unused varialbles
-
-    // if(&fs  == &obj_SD)     log_i("play from SD card");
-    // if(&fs  == &obj_SPIFFS) log_i("play from SPIFFS");
-    // if(&fs  == &obj_SD_MMC) log_i("play from SD_MMC");
-
-    if((&fs  == &obj_SD) || (&fs  == &obj_SPIFFS)){
-        int cp = CONFIG_FATFS_CODEPAGE;
-        // log_i("codepage is %i", cp);
-        if(cp == 850)
-            audiofile = fs.open(path);      // convert codepage 850 (Latin-1) to ASCII
-        else
-            audiofile = fs.open(s_file);    // not cp 850, make something else if required
+    if(fs.exists(path)) {
+        audiofile = fs.open(path); // #86
+    } else {
+        audiofile = fs.open(s_file);
     }
-    else{
-        audiofile = fs.open(s_file);        // assume all other can handle UTF-8 characters
-    }
-    // - - - - - - - - - - - - - - - - - - - - - - -
 
     m_file_size = audiofile.size();//TEST loop
     
