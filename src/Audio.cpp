@@ -2403,12 +2403,44 @@ uint8_t Audio::getChannels(){
     return m_channels;
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setInternalDAC(bool internalDAC) {
+
+    m_f_internalDAC = internalDAC;
+
+    if (internalDAC)  {
+        log_i("internal DAC");
+        m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+        i2s_set_pin((i2s_port_t) m_i2s_num, NULL);
+    }
+    else {  // external DAC
+        m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+
+        i2s_pin_config_t pins = {
+                .bck_io_num   = m_BCLK,
+                .ws_io_num    = m_LRC,     //  wclk,
+                .data_out_num = m_DOUT,
+                .data_in_num  = m_DIN
+        };
+        i2s_set_pin((i2s_port_t) m_i2s_num, &pins);
+    }
+    i2s_driver_uninstall((i2s_port_t)m_i2s_num);
+    i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
+}
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::playSample(int16_t sample[2]) {
     if (getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
         sample[LEFTCHANNEL]  = ((sample[LEFTCHANNEL]  & 0xff) -128) << 8;
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
+
     sample = IIR_filterChain(sample);
+
+     if(m_f_internalDAC) {
+         sample[LEFTCHANNEL]  += 0x8000;
+         sample[RIGHTCHANNEL] += 0x8000;
+    }
 
     uint32_t s32 = Gain(sample); // volume;
 
@@ -2551,7 +2583,6 @@ void Audio::IIR_calculateCoefficients(){  // Infinite Impulse Response (IIR) fil
 
     int16_t tmp[2];
     IIR_filterChain(tmp, true ); // flush the filter
-
 }
 //---------------------------------------------------------------------------------------------------------------------
 int16_t* Audio::IIR_filterChain(int16_t iir_in[2], bool clear){  // Infinite Impulse Response (IIR) filters
@@ -2640,6 +2671,7 @@ int32_t Audio::Gain(int16_t s[2]) {
 
     v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * (m_vol - l)) >> 6;
     v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * (m_vol - r)) >> 6;
+
     return (v[RIGHTCHANNEL] << 16) | (v[LEFTCHANNEL] & 0xffff);
 }
 //---------------------------------------------------------------------------------------------------------------------

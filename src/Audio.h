@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 03,2021
+ *  Updated on: Jan 29,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -153,6 +153,7 @@ public:
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(uint8_t l_type = 0, uint16_t l_freq = 0, uint8_t r_type = 0, uint16_t r_freq = 0);
+    void setInternalDAC(bool internalDAC);
 
 private:
     void reset(); // free buffers and set defaults
@@ -286,6 +287,7 @@ private:
     bool            m_f_psram = false;              // set if PSRAM is availabe
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
+    bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP
