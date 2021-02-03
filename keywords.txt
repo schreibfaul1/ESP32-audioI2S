@@ -51,6 +51,7 @@ setFileLoop KEYWORD2
 setTone KEYWORD2
 setBalance  KEYWORD2
 forceMono KEYWORD2
+setInternalDAC  KEYWORD2
 
 
 
