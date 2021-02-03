@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 29,2021
+ *  Updated on: Feb 03,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -1156,14 +1156,6 @@ void Audio::processLocalFile() {
 
         bytesCanBeWritten = InBuff.writeSpace();
         
-        //TEST loop 
-        if((m_file_size == getFilePos()) && m_f_loop /* && m_f_stream */){  //eof
-            sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_loop_point);
-            if(audio_info) audio_info(chbuf);
-            setFilePos(m_loop_point);
-        }
-        //TEST loop
-        
         bytesAddedToBuffer = audiofile.read(InBuff.writePtr(), bytesCanBeWritten);
 
         /*sprintf(chbuf, "Rp:%u Wp:%u Bw:%u Br:%u Bb:%u", InBuff.readPtr(), InBuff.writePtr(), bytesCanBeWritten, InBuff.bufferFilled(), bytesAddedToBuffer);//TEST
@@ -1220,6 +1212,17 @@ void Audio::processLocalFile() {
                 lastChunk = true;
                 return; // release the thread, continue on the next pass
             }
+
+            //TEST loop
+            if(m_f_loop /* && m_f_stream */){  //eof
+                sprintf(chbuf, "loop from:%u to=%u", getFilePos(), m_loop_point);
+                if(audio_info) audio_info(chbuf);
+                setFilePos(m_loop_point);
+                InBuff.resetBuffer();
+                return;
+            }
+            //TEST loop
+
             if(!playI2Sremains()) return;
             stopSong();
             m_f_stream = false;
