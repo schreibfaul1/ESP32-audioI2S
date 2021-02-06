@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 03,2021
+ *  Updated on: Feb 06,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -750,7 +750,7 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
         if(audio_info) audio_info(chbuf);
 
-        sprintf(chbuf, "ID3 version=%i", m_rev);
+        sprintf(chbuf, "ID3 version=2.%i", m_rev);
         if(audio_info) audio_info(chbuf);
 
         if(m_rev == 2){
@@ -812,7 +812,15 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
 
     if(m_controlCounter == 4){
         m_controlCounter = 6;
-        framesize = (*(data + 0) << 24) | (*(data + 1) << 16) | (*(data + 2) << 8) | (*(data + 3));
+
+        if(m_rev == 4){
+            framesize = ((*(data + 0) & 127) << 21) | ((*(data + 1) & 127) << 14) |
+                        ((*(data + 2) & 127) <<  7) | ((*(data + 3) & 127));
+        }
+        else {
+            framesize = (*(data + 0) << 24) | (*(data + 1) << 16) | (*(data + 2) << 8) | (*(data + 3));
+        }
+
         id3Size -= 4;
         uint8_t flag = *(data + 4); // skip 1st flag
         (void) flag;
@@ -820,12 +828,13 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         compressed = (*(data + 5)) & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
                                            // size' appended to the frame header.
         id3Size--;
-        int decompsize = 0;
+        uint32_t decompsize = 0;
         if(compressed){
             log_i("iscompressed");
             decompsize = (*(data + 6) << 24) | (*(data + 7) << 16) | (*(data + 8) << 8) | (*(data + 9));
             id3Size -= 4;
             (void) decompsize;
+            log_i("decompsize=%u", decompsize);
             return 6 + 4;
         }
         return 6;
@@ -856,7 +865,7 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         bool isUnicode = (ch==1) ? true : false;
 
         if(tag == "APIC") { // a image embedded in file, passing it to external function
-            //log_i("it's a image");
+            log_i("framesize=%i", framesize);
             isUnicode = false;
             if(m_f_localfile){
                 size_t pos = m_id3Size - id3Size;
