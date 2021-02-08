@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 06,2021
+ *  Updated on: Feb 09,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -2446,12 +2446,11 @@ bool Audio::playSample(int16_t sample[2]) {
 
     sample = IIR_filterChain(sample);
 
-     if(m_f_internalDAC) {
-         sample[LEFTCHANNEL]  += 0x8000;
-         sample[RIGHTCHANNEL] += 0x8000;
-    }
-
     uint32_t s32 = Gain(sample); // volume;
+
+    if(m_f_internalDAC) {
+        s32 += 0x80008000;
+    }
 
     esp_err_t err = i2s_write((i2s_port_t) m_i2s_num, (const char*) &s32, sizeof(uint32_t), &m_i2s_bytesWritten, 1000);
     if(err != ESP_OK) {
