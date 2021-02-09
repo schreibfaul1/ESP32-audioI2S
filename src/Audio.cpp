@@ -142,7 +142,7 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // high interrupt priority
     m_i2s_config.dma_buf_count        = 8;      // max buffers
     m_i2s_config.dma_buf_len          = 1024;   // max value
-    m_i2s_config.use_apll             = APLL_ENABLE;
+    m_i2s_config.use_apll             = APLL_DISABLE;
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
 
@@ -2434,6 +2434,22 @@ void Audio::setInternalDAC(bool internalDAC) {
         };
         i2s_set_pin((i2s_port_t) m_i2s_num, &pins);
     }
+    i2s_driver_uninstall((i2s_port_t)m_i2s_num);
+    i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::setI2SCommFMT_LSB(bool commFMT) {
+    // false: I2S communication format is by default I2S_COMM_FORMAT_I2S_MSB, right->left (AC101, PCM5102A)
+    // true:  can be changed to I2S_COMM_FORMAT_I2S_LSB for some DACs (PT8211)
+    if (commFMT) {
+        log_i("commFMT LSB");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_LSB);
+    }
+    else {
+        log_i("commFMT MSB");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+    }
+    log_i("commFMT = %i", m_i2s_config.communication_format);
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);
     i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 }

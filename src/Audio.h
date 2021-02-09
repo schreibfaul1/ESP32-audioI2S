@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 29,2021
+ *  Updated on: Feb 09,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -154,6 +154,7 @@ public:
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(uint8_t l_type = 0, uint16_t l_freq = 0, uint8_t r_type = 0, uint16_t r_freq = 0);
     void setInternalDAC(bool internalDAC);
+    void setI2SCommFMT_LSB(bool commFMT);
 
 private:
     void reset(); // free buffers and set defaults
