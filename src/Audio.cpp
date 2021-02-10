@@ -142,16 +142,19 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // high interrupt priority
     m_i2s_config.dma_buf_count        = 8;      // max buffers
     m_i2s_config.dma_buf_len          = 1024;   // max value
-    m_i2s_config.use_apll             = APLL_DISABLE;
+    m_i2s_config.use_apll             = APLL_ENABLE;
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
 
     i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 
-    m_BCLK=BCLK;                       // Bit Clock
-    m_LRC=LRC;                         // Left/Right Clock
-    m_DOUT=DOUT;                       // Data Out
-    setPinout(m_BCLK, m_LRC, m_DOUT, m_DIN);
+    m_pin_config.bck_io_num   = BCLK;           // Bit Clock
+    m_pin_config.ws_io_num    = LRC;            // Left/Right Clock, wclk
+    m_pin_config.data_out_num = DOUT;           // Data Out
+    m_pin_config.data_in_num  = I2S_PIN_NO_CHANGE;
+
+    i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
+
     m_f_forceMono = false;
 
     m_filter[LEFTCHANNEL].a0  = 1;
@@ -2307,18 +2310,13 @@ void Audio::printDecodeError(int r) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN) {
-    m_BCLK = BCLK;            // Bit Clock
-    m_LRC = LRC;              // Left/Right Clock
-    m_DOUT = DOUT;            // Data Out
-    m_DIN = DIN;              // Data In
 
-    i2s_pin_config_t pins = {
-            .bck_io_num   = m_BCLK,
-            .ws_io_num    = m_LRC,     //  wclk,
-            .data_out_num = m_DOUT,
-            .data_in_num  = m_DIN
-    };
-    const esp_err_t result = i2s_set_pin((i2s_port_t) m_i2s_num, &pins);
+    m_pin_config.bck_io_num   = BCLK;
+    m_pin_config.ws_io_num    = LRC; //  wclk
+    m_pin_config.data_out_num = DOUT;
+    m_pin_config.data_in_num  = DIN;
+
+    const esp_err_t result = i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
     return (result == ESP_OK);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2425,14 +2423,7 @@ void Audio::setInternalDAC(bool internalDAC) {
     else {  // external DAC
         m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
         m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
-
-        i2s_pin_config_t pins = {
-                .bck_io_num   = m_BCLK,
-                .ws_io_num    = m_LRC,     //  wclk,
-                .data_out_num = m_DOUT,
-                .data_in_num  = m_DIN
-        };
-        i2s_set_pin((i2s_port_t) m_i2s_num, &pins);
+        i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
     }
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);
     i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
@@ -2440,7 +2431,9 @@ void Audio::setInternalDAC(bool internalDAC) {
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setI2SCommFMT_LSB(bool commFMT) {
     // false: I2S communication format is by default I2S_COMM_FORMAT_I2S_MSB, right->left (AC101, PCM5102A)
-    // true:  can be changed to I2S_COMM_FORMAT_I2S_LSB for some DACs (PT8211)
+    // true:  changed to I2S_COMM_FORMAT_I2S_LSB for some DACs (PT8211)
+    //        Japanese or called LSBJ (Least Significant Bit Justified) format
+
     if (commFMT) {
         log_i("commFMT LSB");
         m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_LSB);

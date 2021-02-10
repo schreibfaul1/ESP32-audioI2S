@@ -228,7 +228,7 @@ private:
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     i2s_config_t      m_i2s_config; // stores values for I2S driver
-
+    i2s_pin_config_t  m_pin_config;
 
     char            chbuf[256];
     char            path[256];
@@ -237,20 +237,16 @@ private:
     char            m_audioName[256];               // the name of the file
     filter_t        m_filter[2];
     int             m_id3Size=0;                    // length id3 tag
-    int             m_LFcount;                      // Detection of end of header
+    int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
-    uint32_t        m_avr_bitrate;                  // average bitrate, median computed by VBR
+    uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read
     int             m_metalen=0;                    // Number of bytes in metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
-    int8_t          m_DIN=0;                        // Data In, can be negative if unused (I2S_PIN_NO_CHANGE is -1)
     uint8_t         m_rev=0;                        // revision, ID3 version
-    uint8_t         m_BCLK=0;                       // Bit Clock
-    uint8_t         m_LRC=0;                        // Left/Right Clock
-    uint8_t         m_DOUT=0;                       // Data Out
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
@@ -260,13 +256,13 @@ private:
     uint8_t         m_filterType[2];                // lowpass, highpass
     int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
     int16_t         m_validSamples = 0;
-    int16_t         m_curSample;
+    int16_t         m_curSample = 0;
     uint16_t        m_st_remember = 0;              // Save hash from the last streamtitle
     uint16_t        m_datamode = 0;                 // Statemaschine
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
-    uint32_t        m_t0;                           // store millis(), is needed for a small delay
+    uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_metaCount = 0;                // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytectr = 0;                  // count received data
