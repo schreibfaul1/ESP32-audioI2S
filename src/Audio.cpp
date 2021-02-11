@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 09,2021
+ *  Updated on: Feb 11,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -474,6 +474,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     uint32_t bytesCanBeRead = 0;
     int32_t  bytesAddedToBuffer = 0;
     int16_t  bytesDecoded = 0;
+    uint32_t contentLength = 0;
 
     String tts =  path + "?ie=UTF-8&q=" + urlencode(speech) +
                   "&tl=" + lang + "&client=tw-ob";
@@ -494,16 +495,19 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     if(audio_info) audio_info(chbuf);
     while(clientsecure.connected()) {  // read the header
         String line = clientsecure.readStringUntil('\n');
+        if(line.startsWith("Content-Length:")){
+            m_contentlength = line.substring(15).toInt();
+            log_i("contentLength=%i", m_contentlength);
+            m_codec = CODEC_MP3;
+            AACDecoder_FreeBuffers();
+            MP3Decoder_AllocateBuffers();
+            sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            if(audio_info) audio_info(chbuf);
+        }
         line += "\n";
-        // if(audio_info) audio_info(line.c_str());
         if(line == "\r\n") break;
     }
-
-    m_codec = CODEC_MP3;
-    AACDecoder_FreeBuffers();
-    MP3Decoder_AllocateBuffers();
-    sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-    if(audio_info) audio_info(chbuf);
+    if(!m_contentlength) return false;
 
     while(!playI2Sremains()) {
         ;
@@ -511,31 +515,26 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     while(clientsecure.available() == 0) {
         ;
     }
-    while(clientsecure.available() > 0) {
 
+    while(contentLength < m_contentlength) {
         bytesCanBeWritten = InBuff.writeSpace();
         bytesAddedToBuffer = clientsecure.read(InBuff.writePtr(), bytesCanBeWritten);
+        contentLength += bytesAddedToBuffer;
         if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
         bytesCanBeRead = InBuff.bufferFilled();
         if(bytesCanBeRead > 1600) bytesCanBeRead = 1600;
-        if(bytesCanBeRead == 1600) { // mp3 or aac frame complete?
-            while(InBuff.bufferFilled() >= 1600) {
+        if(bytesCanBeRead) {
+            while(InBuff.bufferFilled() >= 1600) { // mp3 frame complete?
                 bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
                 InBuff.bytesWasRead(bytesDecoded);
             }
         }
     }
-    do {
+    while(InBuff.bufferFilled()){
         bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
-    } while(bytesDecoded > 100);
-
-    memset(m_outBuff, 0, sizeof(m_outBuff));
-    for(int i = 0; i < 4; i++) {
-        m_validSamples = 2048;
-        while(m_validSamples) {
-            playChunk();
-        }
+        InBuff.bytesWasRead(bytesDecoded);
     }
+
     while(!playI2Sremains()) {
         ;
     }
@@ -1430,6 +1429,7 @@ void Audio::processWebStream() {
                 if(m_f_webfile) { // stream from fileserver with known content-length
                     if((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) { // received everything?
                         if(InBuff.bufferFilled() < maxFrameSize) {   // and buff almost empty, issue #66
+                            playI2Sremains();
                             sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost);
                             if(audio_info) audio_info(chbuf);
                             if(audio_eof_stream) audio_eof_stream(m_lastHost);
