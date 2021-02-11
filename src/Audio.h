@@ -16,6 +16,7 @@
 #include "SD_MMC.h"
 #include "SPIFFS.h"
 #include "FS.h"
+#include "FFat.h"
 #include "WiFiClientSecure.h"
 #include "driver/i2s.h"
 
@@ -166,6 +167,7 @@ private:
     void printDecodeError(int r);
     int  readWaveHeader(uint8_t* data, size_t len);
     int  readID3Metadata(uint8_t* data, size_t len);
+    int  readM4AContainer(uint8_t* data, size_t len);
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);

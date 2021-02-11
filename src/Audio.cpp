@@ -447,7 +447,8 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
         return false;
     }
     String afn = (String) audiofile.name();                   // audioFileName
-    if(afn.endsWith(".mp3") || afn.endsWith(".MP3")) {        // MP3 section
+    afn.toLowerCase();
+    if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
         MP3Decoder_AllocateBuffers();
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
@@ -455,6 +456,16 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
         m_f_running = true;
         return true;
     } // end MP3 section
+
+    if(afn.endsWith(".m4a")) {        // AAC section, iTunes
+        m_codec = CODEC_AAC;
+        AACDecoder_AllocateBuffers();
+        sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+        if(audio_info) audio_info(chbuf);
+        m_f_running = true;
+        return true;
+    } // end AAC section
+
 
     if(afn.endsWith(".wav")) { // WAVE section
         m_codec = CODEC_WAV;
@@ -495,9 +506,10 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     if(audio_info) audio_info(chbuf);
     while(clientsecure.connected()) {  // read the header
         String line = clientsecure.readStringUntil('\n');
-        if(line.startsWith("Content-Length:")){
+        if(line.startsWith("Content-Length:")){  // content length seen
             m_contentlength = line.substring(15).toInt();
-            log_i("contentLength=%i", m_contentlength);
+            sprintf(chbuf, "contentLength=%u bytes", m_contentlength);
+            if(audio_info) audio_info(chbuf);
             m_codec = CODEC_MP3;
             AACDecoder_FreeBuffers();
             MP3Decoder_AllocateBuffers();
@@ -1019,6 +1031,34 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
+int Audio::readM4AContainer(uint8_t* data, size_t len){ // todo read header
+    static size_t m4a_len = 0;
+
+    if(m_controlCounter == 0){  /* check_m4a_file */
+
+        log_e("detect m4a container, not supported yet!!!!!!!");
+        stopSong();
+
+        m4a_len = ((*(data + 1) << 24) | (*(data + 2) << 16) | (*(data + 3) << 8) | (*(data + 4)));
+        if((*(data + 16) != 'M') || (*(data + 17) != '4') || (*(data + 18) != 'A') || (*(data + 19) != ' ')){
+            m_controlCounter = 100;
+            return 20; // is not "M4A "
+        }
+        m_controlCounter = 100;
+        log_i("File is m4a");
+        return 20;
+    }
+    if(m_controlCounter == 1){ /* check  MP4ESDescrTag */
+        if((*(data + 0) != 'e') || (*(data + 1) != 's') || (*(data + 2) != 'd') || (*(data + 3) != 's')){
+            log_i("esds %c%c%c%c",*(data + 1) | *(data + 2)  | *(data + 3) | *(data + 4));
+        }
+        m_controlCounter = 2;
+        log_i("File is esds");
+        return m4a_len +1;
+    }
+    return 20;
+}
+//---------------------------------------------------------------------------------------------------------------------
 void Audio::stopSong() {
     if(m_f_running) {
         m_f_running = false;
@@ -1196,6 +1236,11 @@ void Audio::processLocalFile() {
                         m_controlCounter = 100;
                     }
                 }
+                if(m_codec == CODEC_AAC){
+                    int res = readM4AContainer(InBuff.readPtr(), bytesCanBeRead);
+                    log_e("m4a files not implementet yet");
+                        m_controlCounter = 100;
+                }
             }
             else {
                 bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
@@ -1330,6 +1375,13 @@ void Audio::processWebStream() {
                         }
                         if(m_codec == CODEC_MP3){
                             int res = readID3Metadata(InBuff.readPtr(), InBuff.bufferFilled());
+                            if(res >= 0) bytesDecoded = res;
+                            else{ // error, skip header
+                                m_controlCounter = 100;
+                            }
+                        }
+                        if(m_codec == CODEC_AAC){
+                            int res = readM4AContainer(InBuff.readPtr(), InBuff.bufferFilled());
                             if(res >= 0) bytesDecoded = res;
                             else{ // error, skip header
                                 m_controlCounter = 100;
@@ -1930,6 +1982,15 @@ bool Audio::parseContentType(const char* ct) {
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
+        else if(indexOf(ct, "m4a", 13) >= 0) {  // audio/x-m4a
+            m_codec = CODEC_AAC;
+            sprintf(chbuf, "%s, format is aac", ct);
+            if(audio_info) audio_info(chbuf);
+            AACDecoder_AllocateBuffers();
+//            sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            sprintf(chbuf, "m4a format not supported yet!!!!");
+            if(audio_info) audio_info(chbuf);
+        }
         else if(indexOf(ct, "wav", 13) >= 0) {        // audio/x-wav
             m_codec = CODEC_WAV;
             sprintf(chbuf, "%s, format is wav", ct);
@@ -2099,7 +2160,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             return nextSync;
         }
         else {
-            if(audio_info) audio_info("mp3 decoder syncword not found, unknown reason");
+            if(audio_info) audio_info("decoder syncword not found, unknown reason");
             return -1;
         }
     }
