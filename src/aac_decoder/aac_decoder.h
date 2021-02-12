@@ -237,6 +237,7 @@ bool AACDecoder_AllocateBuffers(void);
 void AACDecoder_FreeBuffers(void);
 int AACFindSyncWord(uint8_t *buf, int nBytes);
 void AACGetLastFrameInfo(AACFrameInfo_t *aacFrameInfo);
+int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile);
 int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 int AACGetSampRate();
 int AACGetChannels();

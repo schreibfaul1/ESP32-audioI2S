@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.06.2020
+ *  Updated on: 12.02.2021
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1306,6 +1306,38 @@ int AACGetChannels(){return m_AACDecInfo->nChans;}
 int AACGetBitsPerSample(){return 16;}
 int AACGetBitrate() {return m_AACDecInfo->bitRate;}
 int AACGetOutputSamps(){return m_AACDecInfo->nChans * AAC_MAX_NSAMPS;}
+
+/**************************************************************************************
+ * Function:    AACSetRawBlockParams
+ *
+ * Description: set internal state variables for decoding a stream of raw data blocks
+ *
+ * Inputs:      flag indicating source of parameters
+ *              nChans, sampRate,
+ *              and profile  0 = main, 1 = LC, 2 = SSR, 3 = reserved
+ *                optionally filled-in
+ *
+ * Outputs:     updated codec state
+ *
+ * Return:      0 if successful, error code (< 0) if error
+ *
+ * Notes:       if copyLast == 1, then the codec sets up its internal state (for
+ *                decoding raw blocks) based on previously-decoded ADTS header info
+ *              if copyLast == 0, then the codec uses the values passed in
+ *                aacFrameInfo to configure its internal state (useful when the
+ *                source is MP4 format, for example)
+ **************************************************************************************/
+int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile)
+{
+    if (!m_AACDecInfo)
+        return ERR_AAC_NULL_POINTER;
+
+    m_AACDecInfo->format = AAC_FF_RAW;
+    if (copyLast)
+        return SetRawBlockParams(1, 0, 0, 0);
+    else
+        return SetRawBlockParams(0, nChans, sampRateCore, profile);
+}
 
 /***********************************************************************************************************************
  * Function:    AACDecode
