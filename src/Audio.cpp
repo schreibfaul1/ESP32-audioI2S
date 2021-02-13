@@ -30,7 +30,7 @@ AudioBuffer::~AudioBuffer() {
 
 size_t AudioBuffer::init() {
     if(psramInit()) {
-        // PSRAM found, AudioBuffer will be allocated in PSRAM
+        // PSRAM found, AudioBuffer will be allocated in PSRAM 
         m_buffSize = m_buffSizePSRAM;
         if(m_buffer == NULL) {
             m_buffer = (uint8_t*) ps_calloc(m_buffSize, sizeof(uint8_t));
