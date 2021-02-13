@@ -205,11 +205,34 @@ private:
         }
         return result;
     }
+    int specialIndexOf (uint8_t* base, const char* str, int baselen){
+        int result;  // seek for str in buffer or in header up to baselen, not nullterninated
+        if (strlen(str) > baselen) return -1;
+        for (int i = 0; i < baselen - strlen(str); i++){
+            result = i;
+            for (int j = 0; j < strlen(str); j++){
+                if (*(base + i + j) != *(str + j)){
+                    result = -1;
+                    break;
+                }
+            }
+            if (result >= 0) break;
+        }
+        return result;
+    }
+    size_t bigEndian(uint8_t* base, uint8_t numBytes){
+        size_t result = 0;
+        if(numBytes < 1 or numBytes > 4) return 0;
+        for (int i = 0; i < numBytes; i++) {
+                result += *(base + i) << (numBytes -i - 1) * 8;
+        }
+        return result;
+    }
 
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
-    enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_FLAC = 5};
+    enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_M4A = 5};
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
     enum : int { AUDIO_NONE, AUDIO_HEADER , AUDIO_DATA, AUDIO_METADATA, AUDIO_PLAYLISTINIT,
                  AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA, AUDIO_SWM };
@@ -248,7 +271,7 @@ private:
     int             m_metalen=0;                    // Number of bytes in metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
-    uint8_t         m_rev=0;                        // revision, ID3 version
+    uint8_t         m_ID3version=0;                 // revision, ID3 version
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
