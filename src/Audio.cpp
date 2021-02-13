@@ -30,7 +30,7 @@ AudioBuffer::~AudioBuffer() {
 
 size_t AudioBuffer::init() {
     if(psramInit()) {
-        // PSRAM found, AudioBuffer will be allocated in PSRAM 
+        // PSRAM found, AudioBuffer will be allocated in PSRAM
         m_buffSize = m_buffSizePSRAM;
         if(m_buffer == NULL) {
             m_buffer = (uint8_t*) ps_calloc(m_buffSize, sizeof(uint8_t));
@@ -457,14 +457,14 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
         return true;
     } // end MP3 section
 
-    if(afn.endsWith(".m4a")) {        // AAC section, iTunes
-        m_codec = CODEC_AAC;
+    if(afn.endsWith(".m4a")) {        // M4A section, iTunes
+        m_codec = CODEC_M4A;
         AACDecoder_AllocateBuffers();
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
         return true;
-    } // end AAC section
+    } // end M4A section
 
 
     if(afn.endsWith(".wav")) { // WAVE section
@@ -737,8 +737,8 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
             m_loop_point = 0;//TEST loop
             return -1;
         }
-        m_rev = *(data + 3);
-        switch(m_rev){
+        m_ID3version = *(data + 3);
+        switch(m_ID3version){
             case 2:
                 m_f_unsync = (*(data + 5) & 0x80);
                 m_f_exthdr = false;
@@ -764,13 +764,11 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         sprintf(chbuf, "ID3 framesSize=%i", m_id3Size);
         if(audio_info) audio_info(chbuf);
 
-        sprintf(chbuf, "ID3 version=2.%i", m_rev);
+        sprintf(chbuf, "ID3 version=2.%i", m_ID3version);
         if(audio_info) audio_info(chbuf);
 
-        if(m_rev == 2){
-            if(audio_info) audio_info("ID3 version must be 3, skip all metadata");
-            m_controlCounter = 98;
-            return 0;
+        if(m_ID3version == 2){
+            m_controlCounter = 10;
         }
         id3Size = m_id3Size;
         id3Size -= 10;
@@ -827,7 +825,7 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
     if(m_controlCounter == 4){
         m_controlCounter = 6;
 
-        if(m_rev == 4){
+        if(m_ID3version == 4){
             framesize = ((*(data + 0) & 127) << 21) | ((*(data + 1) & 127) << 14) |
                         ((*(data + 2) & 127) <<  7) | ((*(data + 3) & 127));
         }
@@ -1005,6 +1003,86 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         return fs;
     }
 
+    // -- section V2.2 only , greater Vers above ----
+    if(m_controlCounter == 10){ // frames in V2.2, 3bytes identifier, 3bytes size descriptor
+        frameid[0] = *(data + 0);
+        frameid[1] = *(data + 1);
+        frameid[2] = *(data + 2);
+        frameid[3] = 0;
+        tag = frameid;
+        id3Size -= 3;
+        size_t len = bigEndian(data + 3, 3);
+        id3Size -= 3;
+        id3Size -= len;
+        char value[256];
+        size_t tmp = len;
+        if(tmp > 254) tmp = 254;
+        memcpy(value, (data + 7), tmp);
+        value[tmp+1] = 0;
+        chbuf[0] = 0;
+
+        if(tag == "CNT") sprintf(chbuf, "Play counter: %s", value);
+//        if(tag == "COM") sprintf(chbuf, "Comments: %s", value);
+        if(tag == "CRA") sprintf(chbuf, "Audio encryption: %s", value);
+        if(tag == "CRM") sprintf(chbuf, "Encrypted meta frame: %s", value);
+        if(tag == "ETC") sprintf(chbuf, "Event timing codes: %s", value);
+        if(tag == "EQU") sprintf(chbuf, "Equalization: %s", value);
+        if(tag == "IPL") sprintf(chbuf, "Involved people list: %s", value);
+        if(tag == "PIC") sprintf(chbuf, "Attached picture: %s", value);
+        if(tag == "SLT") sprintf(chbuf, "Synchronized lyric/text: %s", value);
+//        if(tag == "TAL") sprintf(chbuf, "Album/Movie/Show title: %s", value);
+        if(tag == "TBP") sprintf(chbuf, "BPM (Beats Per Minute): %s", value);
+        if(tag == "TCM") sprintf(chbuf, "Composer: %s", value);
+        if(tag == "TCO") sprintf(chbuf, "Content type: %s", value);
+        if(tag == "TCR") sprintf(chbuf, "Copyright message: %s", value);
+        if(tag == "TDA") sprintf(chbuf, "Date: %s", value);
+        if(tag == "TDY") sprintf(chbuf, "Playlist delay: %s", value);
+        if(tag == "TEN") sprintf(chbuf, "Encoded by: %s", value);
+        if(tag == "TFT") sprintf(chbuf, "File type: %s", value);
+        if(tag == "TIM") sprintf(chbuf, "Time: %s", value);
+        if(tag == "TKE") sprintf(chbuf, "Initial key: %s", value);
+        if(tag == "TLA") sprintf(chbuf, "Language(s): %s", value);
+        if(tag == "TLE") sprintf(chbuf, "Length: %s", value);
+        if(tag == "TMT") sprintf(chbuf, "Media type: %s", value);
+        if(tag == "TOA") sprintf(chbuf, "Original artist(s)/performer(s): %s", value);
+        if(tag == "TOF") sprintf(chbuf, "Original filename: %s", value);
+        if(tag == "TOL") sprintf(chbuf, "Original Lyricist(s)/text writer(s): %s", value);
+        if(tag == "TOR") sprintf(chbuf, "Original release year: %s", value);
+        if(tag == "TOT") sprintf(chbuf, "Original album/Movie/Show title: %s", value);
+        if(tag == "TP1") sprintf(chbuf, "Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: %s", value);
+        if(tag == "TP2") sprintf(chbuf, "Band/Orchestra/Accompaniment: %s", value);
+        if(tag == "TP3") sprintf(chbuf, "Conductor/Performer refinement: %s", value);
+        if(tag == "TP4") sprintf(chbuf, "Interpreted, remixed, or otherwise modified by: %s", value);
+        if(tag == "TPA") sprintf(chbuf, "Part of a set: %s", value);
+        if(tag == "TPB") sprintf(chbuf, "Publisher: %s", value);
+        if(tag == "TRC") sprintf(chbuf, "ISRC (International Standard Recording Code): %s", value);
+        if(tag == "TRD") sprintf(chbuf, "Recording dates: %s", value);
+        if(tag == "TRK") sprintf(chbuf, "Track number/Position in set: %s", value);
+        if(tag == "TSI") sprintf(chbuf, "Size: %s", value);
+        if(tag == "TSS") sprintf(chbuf, "Software/hardware and settings used for encoding: %s", value);
+        if(tag == "TT1") sprintf(chbuf, "Content group description: %s", value);
+        if(tag == "TT2") sprintf(chbuf, "Title/Songname/Content description: %s", value);
+        if(tag == "TT3") sprintf(chbuf, "Subtitle/Description refinement: %s", value);
+        if(tag == "TXT") sprintf(chbuf, "Lyricist/text writer: %s", value);
+        if(tag == "TXX") sprintf(chbuf, "User defined text information frame: %s", value);
+        if(tag == "TYE") sprintf(chbuf, "Year: %s", value);
+        if(tag == "UFI") sprintf(chbuf, "Unique file identifier: %s", value);
+        if(tag == "ULT") sprintf(chbuf, "Unsychronized lyric/text transcription: %s", value);
+        if(tag == "WAF") sprintf(chbuf, "Official audio file webpage: %s", value);
+        if(tag == "WAR") sprintf(chbuf, "Official artist/performer webpage: %s", value);
+        if(tag == "WAS") sprintf(chbuf, "Official audio source webpage: %s", value);
+        if(tag == "WCM") sprintf(chbuf, "Commercial information: %s", value);
+        if(tag == "WCP") sprintf(chbuf, "Copyright/Legal information: %s", value);
+        if(tag == "WPB") sprintf(chbuf, "Publishers official webpage: %s", value);
+        if(tag == "WXX") sprintf(chbuf, "User defined URL link frame: %s", value);
+
+        if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
+        if(len == 0) m_controlCounter = 98;
+
+        return 3 + 3 + len;
+    }
+    // -- end section V2.2 -----------
+
     if(m_controlCounter == 98){ // skip all ID3 metadata
         if(id3Size > 256) {
             id3Size -=256;
@@ -1032,31 +1110,104 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::readM4AContainer(uint8_t* data, size_t len){ // todo read header
-    static size_t m4a_len = 0;
 
-    if(m_controlCounter == 0){  /* check_m4a_file */
+    //  ftyp
+    //   | - moov -> trak -> mdia -> minf -> stbl -> stsd -> mp4a contains bitspersample, samplerate, channels
+    //        | ---> udta -> meta -> ilst  contains artist, composer ....
+    //       free (optional)
+    //        |
+    //       mdat contains the audio data
 
-        log_e("detect m4a container, not supported yet!!!!!!!");
-        stopSong();
+        static size_t headerpos = 0;
+        static size_t retvalue = 0;
 
-        m4a_len = ((*(data + 1) << 24) | (*(data + 2) << 16) | (*(data + 3) << 8) | (*(data + 4)));
-        if((*(data + 16) != 'M') || (*(data + 17) != '4') || (*(data + 18) != 'A') || (*(data + 19) != ' ')){
-            m_controlCounter = 100;
-            return 20; // is not "M4A "
+        if(retvalue){
+            if(retvalue > len) { // if returnvalue > bufferfillsize
+                retvalue -= len; // and wait for more bufferdata
+                return len;
+            }
+            size_t tmp = retvalue;
+            retvalue = 0;
+            return tmp;
         }
-        m_controlCounter = 100;
-        log_i("File is m4a");
-        return 20;
-    }
-    if(m_controlCounter == 1){ /* check  MP4ESDescrTag */
-        if((*(data + 0) != 'e') || (*(data + 1) != 's') || (*(data + 2) != 'd') || (*(data + 3) != 's')){
-            log_i("esds %c%c%c%c",*(data + 1) | *(data + 2)  | *(data + 3) | *(data + 4));
+
+        if(m_controlCounter == 0){  /* check_m4a_file */
+            size_t clen = bigEndian(data, 4); // length of first atom
+            if(specialIndexOf(data, "ftyp", 10) != 4) {
+                log_e("atom 'type' not found in header");
+                stopSong();
+                return -1;
+            }
+            if(specialIndexOf(data, "M4A ", 20) != 8) {
+                log_e("subtype 'MA4 ' not found");
+                stopSong();
+                return -1;
+            }
+            m_controlCounter = 1;
+            retvalue = clen;
+            headerpos = clen;
+            return 0;
         }
-        m_controlCounter = 2;
-        log_i("File is esds");
-        return m4a_len +1;
-    }
-    return 20;
+        if(m_controlCounter == 1){ /* check  moovTag */
+            size_t clen = bigEndian(data, 4); // length of this atom
+            if(specialIndexOf(data, "moov", 10) != 4) {
+                log_e("atom 'moov' not found in header");
+                stopSong();
+                return -1;
+            }
+            int stsd = specialIndexOf(data, "stsd", len);
+            if(stsd == -1){
+                log_e("stsd not found");
+            }
+            int m4aInf = specialIndexOf(data + stsd, "mp4a", len);
+            if(m4aInf == -1){
+                log_e("stsd not found");
+            }
+            m4aInf += stsd;
+            int channel = bigEndian(data + m4aInf + 20, 2);
+            int bps     = bigEndian(data + m4aInf + 22, 2);
+            int srate   = bigEndian(data + m4aInf + 26, 4);
+            setBitsPerSample(bps);
+            setChannels(channel);
+            setSampleRate(srate);
+            log_i("channel %i, bps %i, srate %i", channel, bps, srate);
+            m_bitsPerSample = bps;
+
+            m_controlCounter = 2;
+            retvalue = clen;
+            headerpos += clen;
+            return 0;
+        }
+        if(m_controlCounter == 2){ /* check free Tag */
+            size_t clen = bigEndian(data, 4); // length of this atom
+            log_i("clen=%u", clen);
+            if(specialIndexOf(data, "free", 10) != 4) {
+                log_e("atom 'free' not found in header");
+                stopSong();
+                return -1;
+            }
+            m_controlCounter = 3;
+            retvalue = clen;
+            headerpos += clen;
+            return 0;
+        }
+        if(m_controlCounter == 3){ /* check mdat Tag */
+            size_t clen = bigEndian(data, 4); // length of this atom
+            log_i("clen mdat=%u", clen);
+            if(specialIndexOf(data, "mdat", 10) != 4) {
+                log_e("atom 'mdat' not found in header");
+                stopSong();
+                return -1;
+            }
+            log_i("mdat found");
+            retvalue = 8; // todo: is not the right position?
+            headerpos += 8;
+            log_i("headerpos %u", headerpos);
+            m_controlCounter = 99;
+            return 0;
+        }
+        m_controlCounter = 100; // ready
+        return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::stopSong() {
@@ -1236,10 +1387,15 @@ void Audio::processLocalFile() {
                         m_controlCounter = 100;
                     }
                 }
-                if(m_codec == CODEC_AAC){
-                    int res = readM4AContainer(InBuff.readPtr(), bytesCanBeRead);
-                    log_e("m4a files not implementet yet");
-                        m_controlCounter = 100;
+                if(m_codec == CODEC_M4A){
+                    log_e("m4a files not supported");
+                    stopSong();
+                    return;
+//                    int res = readM4AContainer(InBuff.readPtr(), bytesCanBeRead);
+//                    if(res >= 0) bytesDecoded = res;
+//                    else{ // error, skip header
+//                        m_controlCounter = 100;
+//                    }
                 }
             }
             else {
@@ -1983,12 +2139,13 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "m4a", 13) >= 0) {  // audio/x-m4a
-            m_codec = CODEC_AAC;
-            sprintf(chbuf, "%s, format is aac", ct);
+            m_codec = CODEC_M4A;
+            sprintf(chbuf, "%s, format is aac (mp4a)", ct);
             if(audio_info) audio_info(chbuf);
-            AACDecoder_AllocateBuffers();
+//            AACDecoder_AllocateBuffers();
 //            sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            sprintf(chbuf, "m4a format not supported yet!!!!");
+            stopSong();
+            sprintf(chbuf, "m4a format not supported!");
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "wav", 13) >= 0) {        // audio/x-wav
@@ -2135,7 +2292,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if(m_codec == CODEC_WAV){m_f_playing = true; return 0;}
         if(m_codec == CODEC_MP3) nextSync = MP3FindSyncWord(data, len);
         if(m_codec == CODEC_AAC) nextSync = AACFindSyncWord(data, len);
-
+        if(m_codec == CODEC_M4A){AACSetRawBlockParams(0, 2, 44100, 1);
+                                 nextSync = AACFindSyncWord(data, len);}
         if(nextSync == -1) {
             if(audio_info && swnf<1) audio_info("syncword not found");
             swnf++; // syncword not found counter, can be multimediadata
@@ -2176,13 +2334,15 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     if(m_codec == CODEC_MP3) ret = MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
     if(m_codec == CODEC_AAC) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
+    if(m_codec == CODEC_M4A) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
     if(ret == 0) lastRet = 0;
     bytesDecoded = len-m_bytesLeft;
     // log_i("bytesDecoded %i", bytesDecoded);
     if(bytesDecoded == 0){ // unlikely framesize
-        if(audio_info) audio_info("framesize is 0, start decoding again");
-        m_f_playing = false; // seek for new syncword
-        
+        if(m_codec != CODEC_M4A){
+            if(audio_info) audio_info("framesize is 0, start decoding again");
+            m_f_playing = false; // seek for new syncword
+        }
         // we're here because there was a wrong sync word
         // so skip two sync bytes and seek for next
         return 2; 
@@ -2240,7 +2400,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
             m_validSamples = MP3GetOutputSamps() / lastChannels;
         }
-        if(m_codec == CODEC_AAC){
+        if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
             if (AACGetChannels() != lastChannels) {
                 setChannels(AACGetChannels());
                 lastChannels = AACGetChannels();
@@ -2250,7 +2410,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if (AACGetSampRate() != lastSampleRate) {
                 setSampleRate(AACGetSampRate());
                 lastSampleRate = AACGetSampRate();
-                sprintf(chbuf,"AAC SampleRate=%i",AACGetSampRate() * getChannels());
+                sprintf(chbuf,"AAC SampleRate=%i",AACGetSampRate());
                 if(audio_info) audio_info(chbuf);
             }
             if(AACGetSampRate() == 0){ // error can't be
