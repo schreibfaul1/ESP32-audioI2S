@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 11,2021
+ *  Updated on: Feb 13,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -1482,10 +1482,10 @@ void Audio::processWebStream() {
                     if((uint32_t) m_bytectr >= (uint32_t) m_contentlength - 10) { // received everything?
                         if(InBuff.bufferFilled() < maxFrameSize) {   // and buff almost empty, issue #66
                             playI2Sremains();
+                            stopSong(); // Correct close when play known length sound #74 and before callback #112
                             sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost);
                             if(audio_info) audio_info(chbuf);
                             if(audio_eof_stream) audio_eof_stream(m_lastHost);
-                            stopSong(); // Correct close when play known length sound (#74)
                         }
                     }
                 }
