@@ -98,7 +98,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(const uint8_t BCLK=27, const uint8_t LRC=26, const uint8_t DOUT=25); // #99
+    Audio(); // #99
     ~Audio();
     bool connecttoFS(fs::FS &fs, const char* file);
     bool connecttoSD(const char* sdfile);

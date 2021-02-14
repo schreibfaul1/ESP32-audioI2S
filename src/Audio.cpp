@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 13,2021
+ *  Updated on: Feb 14,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -130,7 +130,7 @@ uint32_t AudioBuffer::getReadPos() {
     return m_readPtr - m_buffer;
 }
 //---------------------------------------------------------------------------------------------------------------------
-Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
+Audio::Audio() {
    clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
@@ -147,13 +147,6 @@ Audio::Audio(const uint8_t BCLK, const uint8_t LRC, const uint8_t DOUT) {
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
 
     i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
-
-    m_pin_config.bck_io_num   = BCLK;           // Bit Clock
-    m_pin_config.ws_io_num    = LRC;            // Left/Right Clock, wclk
-    m_pin_config.data_out_num = DOUT;           // Data Out
-    m_pin_config.data_in_num  = I2S_PIN_NO_CHANGE;
-
-    i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
 
     m_f_forceMono = false;
 
