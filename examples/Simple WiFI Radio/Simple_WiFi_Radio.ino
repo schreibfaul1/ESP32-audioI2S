@@ -24,9 +24,6 @@ Audio audio;
 //String ssid =     "*****";
 //String password = "*****";
 
-String ssid =     "Wolles-FRITZBOX";
-String password = "40441061073895958449";
-
 String stations[] ={
         "0n-80s.radionetz.de:8000/0n-70s.mp3",
         "mediaserv30.live-streams.nl:8000/stream",
