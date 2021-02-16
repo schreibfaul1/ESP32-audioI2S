@@ -21,8 +21,11 @@ TFT tft;
 TP tp(TP_CS, TP_IRQ);
 Audio audio;
 
-String ssid =     "*****";
-String password = "*****";
+//String ssid =     "*****";
+//String password = "*****";
+
+String ssid =     "Wolles-FRITZBOX";
+String password = "40441061073895958449";
 
 String stations[] ={
         "0n-80s.radionetz.de:8000/0n-70s.mp3",
@@ -144,7 +147,7 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(cur_volume); // 0...21
-    audio.connecttohost(stations[cur_station]);
+    audio.connecttohost(stations[cur_station].c_str());
     for(uint8_t i=0; i<(sizeof(btn)/sizeof(*btn)); i++) draw_button(btn[i]);
     write_volume(cur_volume);
     write_stationNr(cur_station);
@@ -204,14 +207,14 @@ void tp_released(){
                                 cur_station++;
                                 write_stationNr(cur_station);
                                 tft.fillRect(0, 0, 480, 250, TFT_BLACK);
-                                audio.connecttohost(stations[cur_station]);
+                                audio.connecttohost(stations[cur_station].c_str());
                                 pref.putShort("station", cur_station);} // store the current station in nvs
                               break;
             case STATION_DOWN:if(cur_station>0){
                                 cur_station--;
                                 write_stationNr(cur_station);
                                 tft.fillRect(0, 0, 480, 250, TFT_BLACK);
-                                audio.connecttohost(stations[cur_station]);
+                                audio.connecttohost(stations[cur_station].c_str());
                                 pref.putShort("station", cur_station);} // store the current station in nvs
                               break;
         }
