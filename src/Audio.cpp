@@ -1424,6 +1424,13 @@ void Audio::processLocalFile() {
                 if(audio_info) audio_info(chbuf);
                 setFilePos(m_loop_point);
                 InBuff.resetBuffer();
+                /*
+                    The current time of the loop mode is not reset, 
+                    which will cause the total audio duration to be exceeded.
+                    For example: current time   ====progress bar====>  total audio duration
+                                    3:43        ====================>        3:33
+                */
+                m_audioCurrentTime = 0;
                 return;
             }
             //TEST loop
