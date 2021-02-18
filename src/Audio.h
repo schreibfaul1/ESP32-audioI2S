@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 10,2021
+ *  Updated on: Feb 18,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -111,6 +111,7 @@ public:
     uint32_t getSampleRate();
     uint8_t  getBitsPerSample();
     uint8_t  getChannels();
+    uint32_t getBitRate();
 
     /**
      * @brief Get the audio file duration in seconds
@@ -162,6 +163,8 @@ private:
     void initInBuff();
     void processLocalFile();
     void processWebStream();
+    void showCodecParams();
+    int  findNextSync(uint8_t* data, size_t len);
     int  sendBytes(uint8_t* data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
@@ -171,6 +174,7 @@ private:
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
+    bool setBitrate(int br);
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
     bool playI2Sremains();
@@ -205,12 +209,12 @@ private:
         }
         return result;
     }
-    int specialIndexOf (uint8_t* base, const char* str, int baselen){
+    int specialIndexOf (uint8_t* base, const char* str, int baselen, bool exact = false){
         int result;  // seek for str in buffer or in header up to baselen, not nullterninated
-        if (strlen(str) > baselen) return -1;
+        if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
         for (int i = 0; i < baselen - strlen(str); i++){
             result = i;
-            for (int j = 0; j < strlen(str); j++){
+            for (int j = 0; j < strlen(str) + exact; j++){
                 if (*(base + i + j) != *(str + j)){
                     result = -1;
                     break;
@@ -236,6 +240,8 @@ private:
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
     enum : int { AUDIO_NONE, AUDIO_HEADER , AUDIO_DATA, AUDIO_METADATA, AUDIO_PLAYLISTINIT,
                  AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA, AUDIO_SWM };
+    enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
+                 M4A_ILST = 7, M4A_MP4A = 8, M4A_READY = 99, M4A_OKAY = 100};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
@@ -261,7 +267,9 @@ private:
     char            m_lastHost[256];                // Store the last URL to a webstream
     char            m_audioName[256];               // the name of the file
     filter_t        m_filter[2];
-    int             m_id3Size=0;                    // length id3 tag
+    size_t          m_id3Size = 0;                  // length id3 tag
+    size_t          m_wavHeaderSize = 0;
+    uint32_t        m_m4aAudioDataLength = 0;
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;
