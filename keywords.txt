@@ -23,7 +23,6 @@ audio_lasthost	KEYWORD2
 audio_showstreamtitle	KEYWORD2
 audio_showstation	KEYWORD2
 audio_eof_stream	KEYWORD2
-audioFileSeek	KEYWORD2
 audio_id3image	KEYWORD2
 connecttoSD	KEYWORD2
 connecttoFS	KEYWORD2
