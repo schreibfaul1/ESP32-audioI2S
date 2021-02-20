@@ -1,5 +1,5 @@
 # ESP32-audioI2S
-Plays mp3 and wav files from SD card via I2S with external hardware.
+Plays mp3 , m4a and wav files from SD card via I2S with external hardware.
 HELIX-mp3 and -aac decoder is included.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
 For stereo are two MAX98357A necessary. AudioI2S works with UDA1334A (Adafruit I2S Stereo Decoder Breakout Board) and PCM1502A.
