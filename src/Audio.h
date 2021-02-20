@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 18,2021
+ *  Updated on: Feb 20,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -168,6 +168,8 @@ private:
     int  sendBytes(uint8_t* data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
+    void showID3Tag(String tag, const char* val);
+    void unicode2utf8(char* buff, uint32_t len);
     int  readWaveHeader(uint8_t* data, size_t len);
     int  readID3Metadata(uint8_t* data, size_t len);
     int  readM4AContainer(uint8_t* data, size_t len);
@@ -224,11 +226,11 @@ private:
         }
         return result;
     }
-    size_t bigEndian(uint8_t* base, uint8_t numBytes){
+    size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
         size_t result = 0;
         if(numBytes < 1 or numBytes > 4) return 0;
         for (int i = 0; i < numBytes; i++) {
-                result += *(base + i) << (numBytes -i - 1) * 8;
+                result += *(base + i) << (numBytes -i - 1) * shiftLeft;
         }
         return result;
     }
@@ -241,7 +243,7 @@ private:
     enum : int { AUDIO_NONE, AUDIO_HEADER , AUDIO_DATA, AUDIO_METADATA, AUDIO_PLAYLISTINIT,
                  AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA, AUDIO_SWM };
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
-                 M4A_ILST = 7, M4A_MP4A = 8, M4A_READY = 99, M4A_OKAY = 100};
+                 M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
@@ -269,7 +271,7 @@ private:
     filter_t        m_filter[2];
     size_t          m_id3Size = 0;                  // length id3 tag
     size_t          m_wavHeaderSize = 0;
-    uint32_t        m_m4aAudioDataLength = 0;
+    size_t          m_audioDataSize = 0;
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
     int             m_bytesLeft=0;
@@ -298,7 +300,6 @@ private:
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_metaCount = 0;                // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
-    uint32_t        m_bytectr = 0;                  // count received data
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -306,6 +307,7 @@ private:
     bool            m_f_webstream = false ;         // Play from URL
     bool            m_f_ssl = false;
     bool            m_f_running = false;
+    bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firststream_ready = false;  // Set after connecttohost and first streamdata are available
     bool            m_f_ctseen = false;             // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
