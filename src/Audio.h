@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 20,2021
+ *  Updated on: Feb 23,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -63,19 +63,20 @@ class AudioBuffer {
 //
 
 public:
-    AudioBuffer();                      // constructor
-    ~AudioBuffer();                     // frees the buffer
-    size_t   init();                    // set default values
-    size_t   freeSpace();               // number of free bytes to overwrite
-    size_t   writeSpace();              // space fom writepointer to bufferend
-    size_t   bufferFilled();            // returns the number of filled bytes
-    void     bytesWritten(size_t bw);   // update writepointer
-    void     bytesWasRead(size_t br);   // update readpointer
-    uint8_t* writePtr();                // returns the current writepointer
-    uint8_t* readPtr();                 // returns the current readpointer
-    uint32_t getWritePos();             // write position relative to the beginning
-    uint32_t getReadPos();              // read position relative to the beginning
-    void     resetBuffer();             // restore defaults
+    AudioBuffer(size_t maxBlockSize = 0);       // constructor
+    ~AudioBuffer();                             // frees the buffer
+    size_t   init();                            // set default values
+    size_t   freeSpace();                       // number of free bytes to overwrite
+    size_t   writeSpace();                      // space fom writepointer to bufferend
+    size_t   bufferFilled();                    // returns the number of filled bytes
+    void     bytesWritten(size_t bw);           // update writepointer
+    void     bytesWasRead(size_t br);           // update readpointer
+    uint8_t* getWritePtr();                     // returns the current writepointer
+    uint8_t* getReadPtr();                      // returns the current readpointer
+    size_t   getMaxBlockLength();               // max length of read or write blocks
+    uint32_t getWritePos();                     // write position relative to the beginning
+    uint32_t getReadPos();                      // read position relative to the beginning
+    void     resetBuffer();                     // restore defaults
 
 protected:
     const size_t m_buffSizePSRAM = 300000; // most webstreams limit the advance to 100...300Kbytes
@@ -85,6 +86,7 @@ protected:
     size_t       m_writeSpace    = 0;
     size_t       m_dataLength    = 0;
     size_t       m_resBuffSize   = 1600; // reserved buffspace, >= one mp3 frame
+    size_t       m_maxBlockSize  = 1600;
     uint8_t*     m_buffer        = NULL;
     uint8_t*     m_writePtr      = NULL;
     uint8_t*     m_readPtr       = NULL;
@@ -238,7 +240,7 @@ private:
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
-    enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 4, CODEC_M4A = 5};
+    enum : int { CODEC_NONE, CODEC_WAV, CODEC_MP3, CODEC_AAC, CODEC_M4A, CODEC_APP, CODEC_FLAC, CODEC_OGG};
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
     enum : int { AUDIO_NONE, AUDIO_HEADER , AUDIO_DATA, AUDIO_METADATA, AUDIO_PLAYLISTINIT,
                  AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA, AUDIO_SWM };
@@ -274,7 +276,6 @@ private:
     size_t          m_audioDataSize = 0;
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
-    int             m_bytesLeft=0;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
     int             m_readbytes=0;                  // bytes read

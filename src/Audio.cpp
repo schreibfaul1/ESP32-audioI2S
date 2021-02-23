@@ -18,8 +18,10 @@
 #include "aac_decoder/aac_decoder.h"
 
 //---------------------------------------------------------------------------------------------------------------------
-AudioBuffer::AudioBuffer() {
-    ;
+AudioBuffer::AudioBuffer(size_t maxBlockSize) {
+    // if maxBlockSize isn't set use defaultspace (1600 bytes) is enough for aac and mp3 player
+    if(maxBlockSize) m_resBuffSize  = maxBlockSize;
+    if(maxBlockSize) m_maxBlockSize = maxBlockSize;
 }
 
 AudioBuffer::~AudioBuffer() {
@@ -103,16 +105,21 @@ void AudioBuffer::bytesWasRead(size_t br) {
     }
 }
 
-uint8_t* AudioBuffer::writePtr() {
+uint8_t* AudioBuffer::getWritePtr() {
     return m_writePtr;
 }
 
-uint8_t* AudioBuffer::readPtr() {
+uint8_t* AudioBuffer::getReadPtr() {
     size_t len = m_endPtr - m_readPtr;
-    if(len < 1600) { // be sure the last frame is completed
-        memcpy(m_endPtr, m_buffer, 1600);
+    if(len < m_resBuffSize) { // be sure the last frame is completed
+        memcpy(m_endPtr, m_buffer, m_resBuffSize - len);
     }
     return m_readPtr;
+}
+
+size_t AudioBuffer::getMaxBlockLength(){
+    // max size of read or write blocks
+    return m_maxBlockSize; //  assert(m_maxBlockSize <= m_resBuffSize)
 }
 
 void AudioBuffer::resetBuffer() {
@@ -477,9 +484,10 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
         m_f_running = true;
         return true;
     } // end WAVE section
-    if(audio_info) audio_info("Neither wave nor mp3 format found");
-    return false;
 
+    sprintf(chbuf, "The %s format is not supported", afn.c_str() + afn.lastIndexOf(".") + 1);
+    if(audio_info) audio_info(chbuf);
+    return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
@@ -536,20 +544,20 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
 
     while(contentLength < m_contentlength) {
         bytesCanBeWritten = InBuff.writeSpace();
-        bytesAddedToBuffer = clientsecure.read(InBuff.writePtr(), bytesCanBeWritten);
+        bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), bytesCanBeWritten);
         contentLength += bytesAddedToBuffer;
         if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
         bytesCanBeRead = InBuff.bufferFilled();
-        if(bytesCanBeRead > 1600) bytesCanBeRead = 1600;
+        if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
         if(bytesCanBeRead) {
-            while(InBuff.bufferFilled() >= 1600) { // mp3 frame complete?
-                bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+            while(InBuff.bufferFilled() >= InBuff.getMaxBlockLength()) { // mp3 frame complete?
+                bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
                 InBuff.bytesWasRead(bytesDecoded);
             }
         }
     }
     while(InBuff.bufferFilled()){
-        bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+        bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
         InBuff.bytesWasRead(bytesDecoded);
     }
 
@@ -1145,11 +1153,10 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
     static size_t retvalue = 0;
     static size_t atomsize = 0;
     static size_t audioDataPos = 0;
-    static bool f_params = false;
 
     if(retvalue) {
         if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > 1600) len = 1600;
+            if(len > InBuff.getMaxBlockLength()) len = InBuff.getMaxBlockLength();
             retvalue -= len; // and wait for more bufferdata
             return len;
         }
@@ -1166,7 +1173,6 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
         retvalue = 0;
         atomsize = 0;
         audioDataPos = 0;
-        f_params = false;
         m_controlCounter = M4A_FTYP;
         return 0;
     }
@@ -1179,7 +1185,7 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
             return -1;
         }
         if(specialIndexOf(data, "M4A ", 20) != 8) {
-            log_e("subtype 'MA4 ' not found");
+            log_e("subtype 'MA4 ' expected, but found '%s '", (data + 8));
             stopSong();
             return -1;
         }
@@ -1263,7 +1269,6 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
             setBitrate(bps * channel * srate);
             sprintf(chbuf, "ch; %i, bps: %i, sr: %i", channel, bps, srate);
             if(audio_info) audio_info(chbuf);
-            f_params = true;
             if(audioDataPos && m_f_localfile) {
                 m_controlCounter = M4A_AMRDY;
                 setFilePos(audioDataPos);
@@ -1323,6 +1328,7 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_AMRDY){ // almost ready
         m_loop_point = headerSize; // TEST loop, used in localFile
         m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
+        //log_i("begin mdat %i", headerSize);
         if(m_f_localfile){
             sprintf(chbuf, "Content-Length: %u", m_contentlength);
             if(audio_info) audio_info(chbuf);
@@ -1497,15 +1503,15 @@ void Audio::processLocalFile() {
            }
     }
 
-    bytesAddedToBuffer = audiofile.read(InBuff.writePtr(), bytesCanBeWritten);
+    bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), bytesCanBeWritten);
     if(bytesAddedToBuffer > 0) {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
     if(bytesAddedToBuffer == -1) bytesAddedToBuffer = 0; // read error? eof?
 
     bytesCanBeRead = InBuff.bufferFilled();
-    if(bytesCanBeRead > 1600) bytesCanBeRead = 1600;
-    if(bytesCanBeRead == 1600) { // mp3 or aac frame complete?
+    if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
+    if(bytesCanBeRead == InBuff.getMaxBlockLength()) { // mp3 or aac frame complete?
         if(!m_f_stream) {
             if(!playI2Sremains()) return; // release the thread, continue on the next pass
             m_f_stream = true;
@@ -1513,29 +1519,33 @@ void Audio::processLocalFile() {
         }
         if(m_controlCounter != 100){
             if(m_codec == CODEC_WAV){
-                int res = readWaveHeader(InBuff.readPtr(), bytesCanBeRead);
+                int res = readWaveHeader(InBuff.getReadPtr(), bytesCanBeRead);
                 if(res >= 0) bytesDecoded = res;
                 else{ // error, skip header
                     m_controlCounter = 100;
                 }
             }
             if(m_codec == CODEC_MP3){
-                int res = readID3Metadata(InBuff.readPtr(), bytesCanBeRead);
+                int res = readID3Metadata(InBuff.getReadPtr(), bytesCanBeRead);
                 if(res >= 0) bytesDecoded = res;
                 else{ // error, skip header
                     m_controlCounter = 100;
                 }
             }
             if(m_codec == CODEC_M4A){
-                int res = readM4AContainer(InBuff.readPtr(), bytesCanBeRead);
+                int res = readM4AContainer(InBuff.getReadPtr(), bytesCanBeRead);
                 if(res >= 0) bytesDecoded = res;
                 else{ // error, skip header
                     m_controlCounter = 100;
                 }
             }
+            if(m_codec == CODEC_AAC){
+                // stream only, no header
+                m_controlCounter = 100;
+            }
         }
         else {
-            bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead);
+            bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead);
         }
         if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
         if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
@@ -1551,7 +1561,7 @@ void Audio::processLocalFile() {
             bytesCanBeRead = InBuff.bufferFilled();
             //log_i("bytesCanBeRead %i", bytesCanBeRead);
             if(bytesCanBeRead >200) {
-                bytesDecoded = sendBytes(InBuff.readPtr(), bytesCanBeRead); // play last chunk(s)
+                bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead); // play last chunk(s)
                 if(bytesDecoded > 0) InBuff.bytesWasRead(bytesDecoded);
             }
             else {
@@ -1593,14 +1603,14 @@ void Audio::processWebStream() {
 
     uint32_t bytesCanBeWritten = 0;
     int16_t bytesAddedToBuffer = 0;
-    const uint16_t maxFrameSize = 1600;                 // every mp3/aac frame is not bigger
-    int32_t availableBytes = 0;                         // available bytes in stream
+    const uint16_t maxFrameSize = InBuff.getMaxBlockLength();   // every mp3/aac frame is not bigger
+    int32_t availableBytes = 0;                                 // available bytes in stream
     bool f_tmr_1s = false;
     static int bytesDecoded;
-    static uint32_t byteCounter;                        // count received data
-    static uint32_t chunksize;                          // chunkcount read from stream
+    static uint32_t byteCounter;                                // count received data
+    static uint32_t chunksize;                                  // chunkcount read from stream
     static uint32_t cnt0;
-    static uint32_t tmr_1s = 0;                         // timer 1 sec
+    static uint32_t tmr_1s = 0;                                 // timer 1 sec
 
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
@@ -1612,7 +1622,7 @@ void Audio::processWebStream() {
     }
 
     if((tmr_1s + 1000) < millis()) {
-        f_tmr_1s = true;                                // flag will be set every second for one loop only
+        f_tmr_1s = true;                                        // flag will be set every second for one loop only
         tmr_1s = millis();
     }
 
@@ -1643,11 +1653,11 @@ void Audio::processWebStream() {
         }
 
         if((m_f_ssl == false) && (availableBytes > 0)) {
-            bytesAddedToBuffer = client.read(InBuff.writePtr(), len);
+            bytesAddedToBuffer = client.read(InBuff.getWritePtr(), len);
         }
 
         if((m_f_ssl == true) && (availableBytes > 0)) {
-            bytesAddedToBuffer = clientsecure.read(InBuff.writePtr(), len);
+            bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), len);
         }
 
         if(bytesAddedToBuffer > 0) {
@@ -1686,21 +1696,21 @@ void Audio::processWebStream() {
             if(m_f_webfile){  // can contain ID3 metadata, issue #83
                 if(m_controlCounter != 100){
                     if(m_codec == CODEC_WAV){
-                        int res = readWaveHeader(InBuff.readPtr(), InBuff.bufferFilled());
+                        int res = readWaveHeader(InBuff.getReadPtr(), InBuff.bufferFilled());
                         if(res >= 0) bytesDecoded = res;
                         else{ // error, skip header
                             m_controlCounter = 100;
                         }
                     }
                     if(m_codec == CODEC_MP3){
-                        int res = readID3Metadata(InBuff.readPtr(), InBuff.bufferFilled());
+                        int res = readID3Metadata(InBuff.getReadPtr(), InBuff.bufferFilled());
                         if(res >= 0) bytesDecoded = res;
                         else{ // error, skip header
                             m_controlCounter = 100;
                         }
                     }
                     if(m_codec == CODEC_M4A){
-                        int res = readM4AContainer(InBuff.readPtr(), InBuff.bufferFilled());
+                        int res = readM4AContainer(InBuff.getReadPtr(), InBuff.bufferFilled());
                         if(res >= 0) bytesDecoded = res;
                         else{ // error, skip header
                             m_controlCounter = 100;
@@ -1708,11 +1718,11 @@ void Audio::processWebStream() {
                     }
                 }
                 else {
-                    bytesDecoded = sendBytes(InBuff.readPtr(), maxFrameSize);
+                    bytesDecoded = sendBytes(InBuff.getReadPtr(), maxFrameSize);
                 }
             }
             else { // not a webfile
-                bytesDecoded = sendBytes(InBuff.readPtr(), InBuff.bufferFilled());
+                bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
             }
 
             if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
@@ -2246,7 +2256,7 @@ void Audio::parseAudioHeader(const char* ah) {
         pos = 0;
         while(icyurl[pos] == ' ') {pos ++;} icyurl += pos; // remove leading blanks
         sprintf(chbuf, "icy-url: %s", icyurl);
-        if(audio_info) audio_info("icyurl");
+        if(audio_info) audio_info(chbuf);
         if(audio_icyurl) audio_icyurl(icyurl);
     }
     else if(startsWith(ah_buff, "www-authenticate:")) {
@@ -2266,7 +2276,6 @@ bool Audio::parseContentType(const char* ct) {
     bool ct_seen = false;
     if(indexOf(ct, "audio", 0) >= 0) {             // Is ct audio?
         ct_seen = true;                       // Yes, remember seeing this
-//        if(audio_info) audio_info(chbuf);
         if(indexOf(ct, "mpeg", 13) >= 0) {
             m_codec = CODEC_MP3;
             sprintf(chbuf, "%s, format is mp3", ct);
@@ -2291,7 +2300,15 @@ bool Audio::parseContentType(const char* ct) {
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
-        else if(indexOf(ct, "mp4", 13) >= 0) {      // audio/x-m4a, audio/mp4a, audio/mp4a-latm
+        else if(indexOf(ct, "mp4", 13) >= 0) {      // audio/mp4a, audio/mp4a-latm
+            m_codec = CODEC_M4A;
+            sprintf(chbuf, "%s, format is aac", ct);
+            if(audio_info) audio_info(chbuf);
+            AACDecoder_AllocateBuffers();
+            sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            if(audio_info) audio_info(chbuf);
+        }
+        else if(indexOf(ct, "m4a", 13) >= 0) {      // audio/x-m4a
             m_codec = CODEC_M4A;
             sprintf(chbuf, "%s, format is aac", ct);
             if(audio_info) audio_info(chbuf);
@@ -2314,6 +2331,16 @@ bool Audio::parseContentType(const char* ct) {
             m_f_running = false;
             sprintf(chbuf, "%s, unsupported audio format", ct);
             if(audio_info) audio_info(chbuf);
+        }
+    }
+    if(indexOf(ct, "application", 0) >= 0) {  // Is ct application?
+        ct_seen = true;                       // Yes, remember seeing this
+        if(indexOf(ct, "ogg", 13) >= 0) {
+            m_codec = CODEC_APP;
+            m_f_running = false;
+            sprintf(chbuf, "%s, can't play ogg/flac", ct);
+            if(audio_info) audio_info(chbuf);
+            stopSong();
         }
     }
     return ct_seen;
@@ -2498,7 +2525,7 @@ int Audio::findNextSync(uint8_t* data, size_t len){
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
-
+    int bytesLeft;
     static bool f_setDecodeParamsOnce = true;
     int nextSync = 0;
     if(!m_f_playing) {
@@ -2508,20 +2535,20 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return nextSync;
     }
     // m_f_playing is true at this pos
-    m_bytesLeft = len;
+    bytesLeft = len;
     int ret = 0;
     int bytesDecoded = 0;
     if(m_codec == CODEC_WAV){ //copy len data in outbuff and set validsamples and bytesdecoded=len
         memmove(m_outBuff, data , len);
         if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
         if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
-        m_bytesLeft = 0;
+        bytesLeft = 0;
     }
-    if(m_codec == CODEC_MP3) ret = MP3Decode(data, &m_bytesLeft, m_outBuff, 0);
-    if(m_codec == CODEC_AAC) ret = AACDecode(data, &m_bytesLeft, m_outBuff);
-    if(m_codec == CODEC_M4A){ret = AACDecode(data, &m_bytesLeft, m_outBuff);}
+    if(m_codec == CODEC_MP3) ret = MP3Decode(data, &bytesLeft, m_outBuff, 0);
+    if(m_codec == CODEC_AAC) ret = AACDecode(data, &bytesLeft, m_outBuff);
+    if(m_codec == CODEC_M4A){ret = AACDecode(data, &bytesLeft, m_outBuff);}
 
-    bytesDecoded = len-m_bytesLeft;
+    bytesDecoded = len - bytesLeft;
     // log_i("bytesDecoded %i", bytesDecoded);
     if(bytesDecoded == 0){ // unlikely framesize
             if(audio_info) audio_info("framesize is 0, start decoding again");
@@ -3064,10 +3091,12 @@ int32_t Audio::Gain(int16_t s[2]) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFilled() {
+    // current audio input buffer fillsize in bytes
     return InBuff.bufferFilled();
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFree() {
+    // current audio input buffer free space in bytes
     return InBuff.freeSpace();
 }
 
