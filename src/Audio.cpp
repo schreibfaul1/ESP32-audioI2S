@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 20,2021
+ *  Updated on: Feb 24,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -262,6 +262,7 @@ void Audio::reset() {
     m_wavHeaderSize = 0;
     m_audioCurrentTime = 0;                                   // Reset playtimer
     m_audioFileDuration = 0;
+    m_audioDataSize = 0;
     m_avr_bitrate = 0;                                        // the same as m_bitrate if CBR, median if VBR
     m_bitRate = 0;                                            // Bitrate still unknown
     m_bytesNotDecoded = 0;                                    // counts all not decodable bytes
@@ -906,12 +907,20 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
     static bool compressed = false;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0){      /* read ID3 tag and ID3 header size */
+        if(m_f_localfile){
+            m_contentlength = getFileSize();
+            sprintf(chbuf, "Content-Length: %u", m_contentlength);
+            if(audio_info) audio_info(chbuf);
+        }
         m_controlCounter ++;
         id3Size = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
             if(audio_info) audio_info("file has no mp3 tag, skip metadata");
             m_loop_point = 0;//TEST loop
+            m_audioDataSize = m_contentlength;
+            sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
+            if(audio_info) audio_info(chbuf);
             return -1; // error, no ID3 signature found
         }
         m_ID3version = *(data + 3);
@@ -1124,11 +1133,6 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         }
         else {
             m_controlCounter = 100; // ok
-            if(m_f_localfile){
-                m_contentlength = getFileSize();
-                sprintf(chbuf, "Content-Length: %u", m_contentlength);
-                if(audio_info) audio_info(chbuf);
-            }
             m_audioDataSize = m_contentlength - m_loop_point;
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
