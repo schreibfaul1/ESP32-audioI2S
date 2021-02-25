@@ -2834,7 +2834,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     else {
         if(loop_counter == 2) m_avr_bitrate = getBitRate();
     }
-    m_audioCurrentTime += (float) bd * 8 / m_avr_bitrate;
+    m_audioCurrentTime += (float) bd * 8000 / m_avr_bitrate;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
@@ -2914,19 +2914,25 @@ uint32_t Audio::getFilePos() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
+  return getAudioFileDurationMS() / 1000;
+}
+uint32_t Audio::getAudioFileDurationMS() {
     if(m_f_localfile) {if(!audiofile) return 0;}
     if(m_f_webfile)   {if(!m_contentlength) return 0;}
 
     if(!m_avr_bitrate) return 0;
-    if     (m_codec == CODEC_MP3) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_WAV) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_M4A) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_AAC) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    if     (m_codec == CODEC_MP3) m_audioFileDuration = 8000 * m_audioDataSize / m_avr_bitrate;
+    else if(m_codec == CODEC_WAV) m_audioFileDuration = 8000 * m_audioDataSize / m_avr_bitrate;
+    else if(m_codec == CODEC_M4A) m_audioFileDuration = 8000 * m_audioDataSize / m_avr_bitrate;
+    else if(m_codec == CODEC_AAC) m_audioFileDuration = 8000 * m_audioDataSize / m_avr_bitrate;
     else return 0;
     return m_audioFileDuration;
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
+    return getAudioCurrentTimeMS() / 1000;
+}
+uint32_t Audio::getAudioCurrentTimeMS() {  // return current time in ms
     if(m_codec == CODEC_FLAC) return 0;
     return (uint32_t) m_audioCurrentTime;
 }
