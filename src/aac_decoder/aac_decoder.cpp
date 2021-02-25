@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 17.02.2021
+ *  Updated on: 25.02.2021
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1764,16 +1764,18 @@ int AACFindSyncWord(uint8_t *buf, int nBytes)
 
     return -1;
 }
-
+//**************************************************************************************
 int AACGetSampRate(){return m_AACDecInfo->sampRate * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
 int AACGetChannels(){return m_AACDecInfo->nChans;}
 int AACGetBitsPerSample(){return 16;}
-int AACGetBitrate() {return m_AACDecInfo->bitRate;}
 int AACGetID() {return m_AACDecInfo->id;} // 0-MPEG4, 1-MPEG2
 uint8_t AACGetProfile() {return (uint8_t)m_AACDecInfo->profile;} // 0-Main, 1-LC, 2-SSR, 3-reserved
 uint8_t AACGetFormat() {return (uint8_t)m_AACDecInfo->format;}   // 0-unknown 1-ADTS 2-ADIF, 3-RAW
 int AACGetOutputSamps(){return m_AACDecInfo->nChans * AAC_MAX_NSAMPS  * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
-
+int AACGetBitrate() {
+    uint32_t br = AACGetBitsPerSample() * AACGetChannels() *  AACGetSampRate();
+    return (br / m_AACDecInfo->compressionRatio);
+}
 /**************************************************************************************
  * Function:    AACSetRawBlockParams
  *
@@ -1984,6 +1986,8 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
         if (bitsAvail < 0)
             return ERR_AAC_INDATA_UNDERFLOW;
     }
+
+    m_AACDecInfo->compressionRatio = (float)(AACGetOutputSamps()) * 2 / (inptr - inbuf);
 
     /* update pointers */
     m_AACDecInfo->frameCount++;

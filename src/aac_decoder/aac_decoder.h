@@ -91,28 +91,29 @@ enum {
 
 typedef struct _AACDecInfo_t {
     /* raw decoded data, before rounding to 16-bit PCM (for postprocessing such as SBR) */
-    void *rawSampleBuf[2];
-    int rawSampleBytes;
-    int rawSampleFBits;
+    void  *rawSampleBuf[2];
+    int   rawSampleBytes;
+    int   rawSampleFBits;
     /* fill data (can be used for processing SBR or other extensions) */
     uint8_t *fillBuf;
-    int fillCount;
-    int fillExtType;
-    int prevBlockID;    /* block information */
-    int currBlockID;
-    int currInstTag;
-    int sbDeinterleaveReqd[2]; // [MAX_NCHANS_ELEM]
-    int adtsBlocksLeft;
-    int bitRate;    /* user-accessible info */
-    int nChans;
-    int sampRate;
-    int id;         /* 0: MPEG-4, 1: MPEG2 */
-    int profile;    /* 0: Main profile, 1: LowComplexity (LC), 2: ScalableSamplingRate (SSR), 3: reserved */
-    int format;
-    int sbrEnabled;
-    int tnsUsed;
-    int pnsUsed;
-    int frameCount;
+    int   fillCount;
+    int   fillExtType;
+    int   prevBlockID;    /* block information */
+    int   currBlockID;
+    int   currInstTag;
+    int   sbDeinterleaveReqd[2]; // [MAX_NCHANS_ELEM]
+    int   adtsBlocksLeft;
+    int   bitRate;    /* user-accessible info */
+    int   nChans;
+    int   sampRate;
+    float compressionRatio;
+    int   id;         /* 0: MPEG-4, 1: MPEG2 */
+    int   profile;    /* 0: Main profile, 1: LowComplexity (LC), 2: ScalableSamplingRate (SSR), 3: reserved */
+    int   format;
+    int   sbrEnabled;
+    int   tnsUsed;
+    int   pnsUsed;
+    int   frameCount;
 } AACDecInfo_t;
 
 

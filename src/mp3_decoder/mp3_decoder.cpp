@@ -1494,6 +1494,7 @@ void MP3Decoder_ClearBuffer(void) {
     memset( m_MP3FrameInfo,       0, sizeof(MP3FrameInfo_t));                                  //Clear MP3FrameInfo
 
     return;
+
 }
 /***********************************************************************************************************************
  * Function:    MP3Decoder_AllocateBuffers
