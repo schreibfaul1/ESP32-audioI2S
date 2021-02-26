@@ -2937,6 +2937,18 @@ uint32_t Audio::getAudioFileDuration() {
     else return 0;
     return m_audioFileDuration;
 }
+float Audio::getAudioFileDurationFloat() {
+    if(m_f_localfile) {if(!audiofile) return 0.0;}
+    if(m_f_webfile)   {if(!m_contentlength) return 0.0;}
+
+    if(!m_avr_bitrate) return 0.0;
+    if     (m_codec == CODEC_MP3) return 8.0 * (float)m_audioDataSize / (float)m_avr_bitrate;
+    else if(m_codec == CODEC_WAV) return 8.0 * (float)m_audioDataSize / (float)m_avr_bitrate;
+    else if(m_codec == CODEC_M4A) return 8.0 * (float)m_audioDataSize / (float)m_avr_bitrate;
+    else if(m_codec == CODEC_AAC) return 8.0 * (float)m_audioDataSize / (float)m_avr_bitrate;
+    else return 0.0;
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
     if(m_codec == CODEC_FLAC) return 0;

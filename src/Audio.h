@@ -121,6 +121,7 @@ public:
      * @return uint32_t file duration in seconds, 0 if no file active
      */
     uint32_t getAudioFileDuration();
+    float getAudioFileDurationFloat();
     /**
      * @brief Get the current plying time in seconds
      * 
