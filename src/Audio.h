@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 23,2021
+ *  Updated on: Feb 26,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -136,6 +136,7 @@ public:
      *      speed < 0 : fast-rewind
      * @return true if audio file active and speed is valid, otherwise false
      */
+    uint32_t getTotalPlayingTime();
     bool audioFileSeek(const int8_t speed);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
     void stopSong();
@@ -305,6 +306,7 @@ private:
     uint32_t        m_metaCount = 0;                // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
+    uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_localfile = false ;         // Play from local mp3-file

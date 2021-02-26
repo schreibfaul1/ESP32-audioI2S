@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 25,2021
+ *  Updated on: Feb 26,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -193,6 +193,8 @@ void Audio::initInBuff() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
+    // It is not necessary to call this function after i2s_driver_install() (it is started automatically),
+    // however it is necessary to call it after i2s_stop()
     return i2s_start((i2s_port_t) i2s_num);
 }
 
@@ -231,8 +233,8 @@ Audio::~Audio() {
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::reset() {
     stopSong();
-    I2Sstop(0);
-    I2Sstart(0);
+//    I2Sstop(m_i2s_num);
+//    I2Sstart(m_i2s_num);
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
@@ -495,9 +497,13 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".flac")) { // FLAC section
         m_codec = CODEC_FLAC;
+        //FLACDecoder_AllocateBuffers();
+        sprintf(chbuf, "FLCDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+        if(audio_info) audio_info(chbuf);
         m_f_running = true;
         return true;
     } // end FLAC section
+
     sprintf(chbuf, "The %s format is not supported", afn.c_str() + afn.lastIndexOf(".") + 1);
     if(audio_info) audio_info(chbuf);
     return false;
@@ -979,6 +985,7 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
         retvalue = 0;
         if(audio_info) audio_info("flac is unsupported");
         return -1; //stop
+//        return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_SINFO) { /* Stream info block */
@@ -1505,7 +1512,7 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_AMRDY){ // almost ready
         m_loop_point = headerSize; // TEST loop, used in localFile
         m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
-        //log_i("begin mdat %i", headerSize);
+        log_i("begin mdat %i", headerSize);
         if(m_f_localfile){
             sprintf(chbuf, "Content-Length: %u", m_contentlength);
             if(audio_info) audio_info(chbuf);
@@ -1535,7 +1542,6 @@ bool Audio::playI2Sremains() { // returns true if all dma_buffs flushed
     if(m_channels == 0) setChannels(2);
     if(getBitsPerSample() > 8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
     else                       memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
-
     //play remains and then flush dmaBuff
     m_validSamples = m_i2s_config.dma_buf_len;
     while(m_validSamples) {
@@ -1666,19 +1672,22 @@ void Audio::processLocalFile() {
     int32_t bytesAddedToBuffer = 0;
 
     if(m_f_firstCall) {  // runs only ont time per connection, prepare for start
-        if(!playI2Sremains()) return;  // make I2S empty
         m_f_firstCall = false;
+        return;
     }
 
     bytesCanBeWritten = InBuff.writeSpace();
 
-    // playback stops after the audio block
+    //----------------------------------------------------------------------------------------------------
+    // some files contain further data after the audio block (e.g. pictures).
+    // In that case, the end of the audio block is not the end of the file. An 'eof' has to be forced.
     if((m_controlCounter == 100) && (m_contentlength > 0)) { // fileheader was read
            if(bytesCanBeWritten + getFilePos() >= m_contentlength){
                if(m_contentlength > getFilePos()) bytesCanBeWritten = m_contentlength - getFilePos();
                else bytesCanBeWritten = 0;
            }
     }
+    //----------------------------------------------------------------------------------------------------
 
     bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), bytesCanBeWritten);
     if(bytesAddedToBuffer > 0) {
@@ -1767,7 +1776,6 @@ void Audio::processLocalFile() {
         } //TEST loop
         if(!playI2Sremains()) return;
         stopSong();
-        vTaskDelay(100);
         m_f_stream = false;
         m_f_localfile = false;
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
@@ -2692,10 +2700,11 @@ int Audio::findNextSync(uint8_t* data, size_t len){
 
     int nextSync;
     static uint32_t swnf = 0;
-    if(m_codec == CODEC_WAV){m_f_playing = true; nextSync = 0;}
-    if(m_codec == CODEC_MP3) nextSync = MP3FindSyncWord(data, len);
-    if(m_codec == CODEC_AAC) nextSync = AACFindSyncWord(data, len);
-    if(m_codec == CODEC_M4A){AACSetRawBlockParams(0, 2,44100, 1); m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_WAV)  {m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_FLAC) {m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_MP3)  nextSync = MP3FindSyncWord(data, len);
+    if(m_codec == CODEC_AAC)  nextSync = AACFindSyncWord(data, len);
+    if(m_codec == CODEC_M4A)  {AACSetRawBlockParams(0, 2,44100, 1); m_f_playing = true; nextSync = 0;}
 
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
@@ -2738,9 +2747,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
         bytesLeft = 0;
     }
-    if(m_codec == CODEC_MP3) ret = MP3Decode(data, &bytesLeft, m_outBuff, 0);
-    if(m_codec == CODEC_AAC) ret = AACDecode(data, &bytesLeft, m_outBuff);
-    if(m_codec == CODEC_M4A){ret = AACDecode(data, &bytesLeft, m_outBuff);}
+    if(m_codec == CODEC_MP3)  ret = MP3Decode(data, &bytesLeft, m_outBuff, 0);
+    if(m_codec == CODEC_AAC)  ret = AACDecode(data, &bytesLeft, m_outBuff);
+    if(m_codec == CODEC_M4A)  ret = AACDecode(data, &bytesLeft, m_outBuff);
+    //if(m_codec == CODEC_FLAC) ret = FLACDecode(data, &bytesLeft, m_outBuff);
 
     bytesDecoded = len - bytesLeft;
     if(bytesDecoded == 0){ // unlikely framesize
@@ -2766,6 +2776,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     else{  // ret==0
         if(f_setDecodeParamsOnce){
             f_setDecodeParamsOnce = false;
+            m_PlayingStartTime = millis();
+
             if(m_codec == CODEC_MP3){
                 setChannels(MP3GetChannels());
                 setSampleRate(MP3GetSampRate());
@@ -2929,6 +2941,12 @@ uint32_t Audio::getAudioFileDuration() {
 uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
     if(m_codec == CODEC_FLAC) return 0;
     return (uint32_t) m_audioCurrentTime;
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::getTotalPlayingTime() {
+    // Is set to zero by a connectToXXX() and starts as soon as the first audio data is available,
+    // the time counting is not interrupted by a 'pause / resume' and is not reset by a fileloop
+    return millis() - m_PlayingStartTime;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
