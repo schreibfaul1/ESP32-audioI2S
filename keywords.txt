@@ -52,7 +52,7 @@ setBalance	KEYWORD2
 forceMono	KEYWORD2
 setInternalDAC	KEYWORD2
 setI2SCommFMT_LSB	KEYWORD2
-
+setTimeOffset KEYWORD2
 
 
 
