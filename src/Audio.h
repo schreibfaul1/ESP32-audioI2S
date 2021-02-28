@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 26,2021
+ *  Updated on: Feb 28,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -137,6 +137,7 @@ public:
      * @return true if audio file active and speed is valid, otherwise false
      */
     uint32_t getTotalPlayingTime();
+    bool setTimeOffset(int sec);
     bool audioFileSeek(const int8_t speed);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
     void stopSong();
@@ -277,7 +278,6 @@ private:
     filter_t        m_filter[2];
     size_t          m_id3Size = 0;                  // length id3 tag
     size_t          m_wavHeaderSize = 0;
-    size_t          m_audioDataSize = 0;
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
@@ -328,9 +328,10 @@ private:
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
+    uint32_t        m_audioDataStart = 0;           // in bytes
+    size_t          m_audioDataSize = 0;            //
     float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
-    size_t          m_loop_point = 0;               // Point in the file where the audio data starts
     size_t          m_file_size = 0;                // size of the file
     uint16_t        m_filterFrequency[2];
 };

@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 26,2021
+ *  Updated on: Feb 28,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -271,6 +271,7 @@ void Audio::reset() {
     m_wavHeaderSize = 0;
     m_audioCurrentTime = 0;                                   // Reset playtimer
     m_audioFileDuration = 0;
+    m_audioDataStart = 0;
     m_audioDataSize = 0;
     m_avr_bitrate = 0;                                        // the same as m_bitrate if CBR, median if VBR
     m_bitRate = 0;                                            // Bitrate still unknown
@@ -289,7 +290,6 @@ void Audio::reset() {
 
 
     //TEST loop
-    m_loop_point = 0;
     m_file_size = 0;
     //TEST loop
 
@@ -911,7 +911,7 @@ int Audio::readWaveHeader(uint8_t* data, size_t len) {
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
-    m_loop_point = m_wavHeaderSize; // TEST loop, used in localFile
+    m_audioDataStart = m_wavHeaderSize;
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -937,7 +937,7 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
     if(m_controlCounter == FLAC_BEGIN) {  // init
         headerSize = 0;
         retvalue = 0;
-        m_loop_point = 0;
+        m_audioDataStart = 0;
         f_lastMetaBlock = false;
         m_controlCounter = FLAC_MAGIC;
         if(m_f_localfile){
@@ -978,8 +978,8 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
             return 0;
         }
         m_controlCounter = FLAC_OKAY;
-        m_loop_point = headerSize;
-        m_audioDataSize = m_contentlength - m_loop_point;
+        m_audioDataStart = headerSize;
+        m_audioDataSize = m_contentlength - m_audioDataStart;
         sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
         if(audio_info) audio_info(chbuf);
         retvalue = 0;
@@ -1097,7 +1097,6 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
             if(audio_info) audio_info("file has no mp3 tag, skip metadata");
-            m_loop_point = 0;//TEST loop
             m_audioDataSize = m_contentlength;
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
@@ -1305,7 +1304,7 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 99){ //  exist another ID3tag?
-        m_loop_point += m_id3Size;
+        m_audioDataStart += m_id3Size;
         vTaskDelay(30);
         if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
             m_controlCounter = 0;
@@ -1313,7 +1312,7 @@ int Audio::readID3Metadata(uint8_t *data, size_t len) {
         }
         else {
             m_controlCounter = 100; // ok
-            m_audioDataSize = m_contentlength - m_loop_point;
+            m_audioDataSize = m_contentlength - m_audioDataStart;
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
 
@@ -1510,7 +1509,7 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
     }
 
     if(m_controlCounter == M4A_AMRDY){ // almost ready
-        m_loop_point = headerSize; // TEST loop, used in localFile
+        m_audioDataStart = headerSize;
         m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
         log_i("begin mdat %i", headerSize);
         if(m_f_localfile){
@@ -1760,11 +1759,14 @@ void Audio::processLocalFile() {
                 return;
             }
         }
+        InBuff.resetBuffer();
+        if(!playI2Sremains()) return;
+
         if(m_f_loop  && m_f_stream){  //eof
-            sprintf(chbuf, "loop from: %u to: %u", getFilePos(), m_loop_point);  //TEST loop
+            sprintf(chbuf, "loop from: %u to: %u", getFilePos(), m_audioDataStart);  //TEST loop
             if(audio_info) audio_info(chbuf);
-            setFilePos(m_loop_point);
-            InBuff.resetBuffer();
+            setFilePos(m_audioDataStart);
+
             /*
                 The current time of the loop mode is not reset,
                 which will cause the total audio duration to be exceeded.
@@ -1774,7 +1776,6 @@ void Audio::processLocalFile() {
             m_audioCurrentTime = 0;
             return;
         } //TEST loop
-        if(!playI2Sremains()) return;
         stopSong();
         m_f_stream = false;
         m_f_localfile = false;
@@ -2949,10 +2950,38 @@ uint32_t Audio::getTotalPlayingTime() {
     return millis() - m_PlayingStartTime;
 }
 //---------------------------------------------------------------------------------------------------------------------
+bool Audio::setTimeOffset(int sec){
+    // fast forward or rewind the current position in seconds
+    // audiosource must be a mp3 file
+
+    if(!audiofile || !m_avr_bitrate) return false;
+
+    uint32_t oneSec  = m_avr_bitrate / 8;                   // bytes decoded in one sec
+    int32_t  offset  = oneSec * sec;                        // bytes to be wind/rewind
+    uint32_t startAB = m_audioDataStart;                    // audioblock begin
+    uint32_t endAB   = m_audioDataStart + m_audioDataSize;  // audioblock end
+
+    if(m_codec == CODEC_MP3 || m_codec == CODEC_AAC || m_codec == CODEC_WAV){
+        int32_t pos = getFilePos();
+        pos += offset;
+        if(pos <  (int32_t)startAB) pos = startAB;
+        if(pos >= (int32_t)endAB)   pos = endAB;
+        setFilePos(pos);
+        return true;
+    }
+    return false;
+}
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
-    if((m_codec == CODEC_MP3) && (pos < m_id3Size)) pos = m_id3Size; // issue #96
-    if((m_codec == CODEC_MP3) && m_avr_bitrate) m_audioCurrentTime = (pos-m_id3Size) * 8 / m_avr_bitrate; // #96
+    if(!m_avr_bitrate) return false;
+    if(m_codec == CODEC_M4A) return false;
+    m_f_playing = false;
+    if(m_codec == CODEC_MP3) MP3Decoder_ClearBuffer();
+    if(m_codec == CODEC_WAV) {while((pos % 4) != 0) pos++;} // must be divisible by four
+    InBuff.resetBuffer();
+    if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
+    m_audioCurrentTime = (pos-m_audioDataStart) * 8 / m_avr_bitrate; // #96
     return audiofile.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2970,6 +2999,7 @@ bool Audio::audioFileSeek(const int8_t speed) {
         newPos = (newPos < m_id3Size) ? m_id3Size : newPos;
         newPos = (newPos >= audiofile.size()) ? audiofile.size() - 1 : newPos;
         if(audiofile.position() != newPos) {
+            m_f_playing = false;
             retVal = audiofile.seek(newPos);
         }
     }
