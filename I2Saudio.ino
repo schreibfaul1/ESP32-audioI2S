@@ -66,7 +66,7 @@ void loop()
     if(Serial.available()){ // put streamURL in serial monitor
         audio.stopSong();
         String r=Serial.readString(); r.trim();
-        if(r.length()>5) audio.connecttohost(r);
+        if(r.length()>5) audio.connecttohost(r.c_str());
         log_i("free heap=%i", ESP.getFreeHeap());
     }
 }
