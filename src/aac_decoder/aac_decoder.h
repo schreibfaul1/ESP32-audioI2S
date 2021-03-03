@@ -6,7 +6,7 @@
 #include "Arduino.h"
 
 #define AAC_ENABLE_MPEG4
-#define AAC_ENABLE_SBR  // needs additional 60KB Heap,
+//#define AAC_ENABLE_SBR  // needs additional 60KB Heap,
 
 #define ASSERT(x) /* do nothing */
 
