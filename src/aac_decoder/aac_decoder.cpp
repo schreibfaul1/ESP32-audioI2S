@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 25.02.2021
+ *  Updated on: 03.03.2021
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1633,15 +1633,28 @@ static const int negMask[3] = {~0x03, ~0x07, ~0x0f};
  *
  **********************************************************************************************************************/
 bool AACDecoder_AllocateBuffers(void){
-    if(!m_AACDecInfo)      {m_AACDecInfo   = (AACDecInfo_t*)           malloc(sizeof(AACDecInfo_t));}
-    if(!m_PSInfoBase)      {m_PSInfoBase   = (PSInfoBase_t*)           malloc(sizeof(PSInfoBase_t));}
-    if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
 
+    if(psramInit()) {
+        // PSRAM found, Buffer will be allocated in PSRAM
+        if(!m_AACDecInfo) {m_AACDecInfo   = (AACDecInfo_t*)           ps_calloc(sizeof(AACDecInfo_t), sizeof(uint8_t));}
+        if(!m_PSInfoBase) {m_PSInfoBase   = (PSInfoBase_t*)           ps_calloc(sizeof(PSInfoBase_t), sizeof(uint8_t));}
+        if(!m_pce[0])    {m_pce[0] = (ProgConfigElement_t*) ps_calloc(sizeof(ProgConfigElement_t)*16, sizeof(uint8_t));}
+    }
+    else {
+        if(!m_AACDecInfo)      {m_AACDecInfo   = (AACDecInfo_t*)           malloc(sizeof(AACDecInfo_t));}
+        if(!m_PSInfoBase)      {m_PSInfoBase   = (PSInfoBase_t*)           malloc(sizeof(PSInfoBase_t));}
+        if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
+    }
 #ifdef AAC_ENABLE_SBR
-    if(!m_PSInfoSBR)       {m_PSInfoSBR   = (PSInfoSBR_t*)             malloc(sizeof(PSInfoSBR_t));}
+    if(psramInit()) {
+        if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)ps_calloc(sizeof(PSInfoSBR_t), sizeof(uint8_t));}
+    }
+    else {
+        if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)malloc(sizeof(PSInfoSBR_t));}
+    }
     if(!m_PSInfoSBR) {
         log_e("OOM in SBR, can't allocate %d bytes\n", sizeof(PSInfoSBR_t));
-        return ERR_AAC_SBR_INIT;
+        return false; // ERR_AAC_SBR_INIT;
     }
 #endif
 

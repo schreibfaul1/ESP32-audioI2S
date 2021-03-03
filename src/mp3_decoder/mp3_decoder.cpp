@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.06.2020
+ *  Updated on: 03.03.2021
  */
 #include "mp3_decoder.h"
 
@@ -1507,20 +1507,33 @@ void MP3Decoder_ClearBuffer(void) {
  *
  * Return:      pointer to MP3DecInfo structure (initialized with pointers to all
  *                the internal buffers needed for decoding)
+ *
  **********************************************************************************************************************/
-bool MP3Decoder_AllocateBuffers(void)
-{
+bool MP3Decoder_AllocateBuffers(void) {
 
-    if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)      malloc(sizeof(MP3DecInfo_t)   );}
-    if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)     malloc(sizeof(FrameHeader_t)  );}
-    if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)        malloc(sizeof(SideInfo_t)     );}
-    if(!m_ScaleFactorJS)    {m_ScaleFactorJS = (ScaleFactorJS_t*)   malloc(sizeof(ScaleFactorJS_t));}
-    if(!m_HuffmanInfo)      {m_HuffmanInfo   = (HuffmanInfo_t*)     malloc(sizeof(HuffmanInfo_t)  );}
-    if(!m_DequantInfo)      {m_DequantInfo   = (DequantInfo_t*)     malloc(sizeof(DequantInfo_t)  );}
-    if(!m_IMDCTInfo)        {m_IMDCTInfo     = (IMDCTInfo_t*)       malloc(sizeof(IMDCTInfo_t)    );}
-    if(!m_SubbandInfo)      {m_SubbandInfo   = (SubbandInfo_t*)     malloc(sizeof(SubbandInfo_t)  );}
-    if(!m_MP3FrameInfo)     {m_MP3FrameInfo  = (MP3FrameInfo_t*)    malloc(sizeof(MP3FrameInfo_t) );}
-
+    if(psramInit()) {
+        // PSRAM found, Buffer will be allocated in PSRAM
+        if(!m_MP3DecInfo)    {m_MP3DecInfo    = (MP3DecInfo_t*)    ps_calloc(sizeof(MP3DecInfo_t)   , sizeof(uint8_t));}
+        if(!m_FrameHeader)   {m_FrameHeader   = (FrameHeader_t*)   ps_calloc(sizeof(FrameHeader_t)  , sizeof(uint8_t));}
+        if(!m_SideInfo)      {m_SideInfo      = (SideInfo_t*)      ps_calloc(sizeof(SideInfo_t)     , sizeof(uint8_t));}
+        if(!m_ScaleFactorJS) {m_ScaleFactorJS = (ScaleFactorJS_t*) ps_calloc(sizeof(ScaleFactorJS_t), sizeof(uint8_t));}
+        if(!m_HuffmanInfo)   {m_HuffmanInfo   = (HuffmanInfo_t*)   ps_calloc(sizeof(HuffmanInfo_t)  , sizeof(uint8_t));}
+        if(!m_DequantInfo)   {m_DequantInfo   = (DequantInfo_t*)   ps_calloc(sizeof(DequantInfo_t)  , sizeof(uint8_t));}
+        if(!m_IMDCTInfo)     {m_IMDCTInfo     = (IMDCTInfo_t*)     ps_calloc(sizeof(IMDCTInfo_t)    , sizeof(uint8_t));}
+        if(!m_SubbandInfo)   {m_SubbandInfo   = (SubbandInfo_t*)   ps_calloc(sizeof(SubbandInfo_t)  , sizeof(uint8_t));}
+        if(!m_MP3FrameInfo)  {m_MP3FrameInfo  = (MP3FrameInfo_t*)  ps_calloc(sizeof(MP3FrameInfo_t) , sizeof(uint8_t));}
+    }
+    else {
+        if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)      malloc(sizeof(MP3DecInfo_t)   );}
+        if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)     malloc(sizeof(FrameHeader_t)  );}
+        if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)        malloc(sizeof(SideInfo_t)     );}
+        if(!m_ScaleFactorJS)    {m_ScaleFactorJS = (ScaleFactorJS_t*)   malloc(sizeof(ScaleFactorJS_t));}
+        if(!m_HuffmanInfo)      {m_HuffmanInfo   = (HuffmanInfo_t*)     malloc(sizeof(HuffmanInfo_t)  );}
+        if(!m_DequantInfo)      {m_DequantInfo   = (DequantInfo_t*)     malloc(sizeof(DequantInfo_t)  );}
+        if(!m_IMDCTInfo)        {m_IMDCTInfo     = (IMDCTInfo_t*)       malloc(sizeof(IMDCTInfo_t)    );}
+        if(!m_SubbandInfo)      {m_SubbandInfo   = (SubbandInfo_t*)     malloc(sizeof(SubbandInfo_t)  );}
+        if(!m_MP3FrameInfo)     {m_MP3FrameInfo  = (MP3FrameInfo_t*)    malloc(sizeof(MP3FrameInfo_t) );}
+    }
 
     if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
        !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
