@@ -1646,12 +1646,9 @@ bool AACDecoder_AllocateBuffers(void){
         if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
     }
 #ifdef AAC_ENABLE_SBR
-    if(psramInit()) {
-        if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)ps_calloc(sizeof(PSInfoSBR_t), sizeof(uint8_t));}
-    }
-    else {
-        if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)malloc(sizeof(PSInfoSBR_t));}
-    }
+    // can't allocated in PSRAM, because PSRAM ist too slow
+    if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)malloc(sizeof(PSInfoSBR_t));}
+
     if(!m_PSInfoSBR) {
         log_e("OOM in SBR, can't allocate %d bytes\n", sizeof(PSInfoSBR_t));
         return false; // ERR_AAC_SBR_INIT;
