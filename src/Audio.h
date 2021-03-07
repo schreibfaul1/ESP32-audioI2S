@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 28,2021
+ *  Updated on: Mar 07,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -128,17 +128,9 @@ public:
      */
     uint32_t getAudioCurrentTime();
     bool setFilePos(uint32_t pos);
-    /**
-     * @brief audioFileSeek seeks the file in both directions
-     * 
-     * @param[in] speed
-     *      speed > 0 : fast-forward
-     *      speed < 0 : fast-rewind
-     * @return true if audio file active and speed is valid, otherwise false
-     */
+    bool audioFileSeek(const float speed);
     uint32_t getTotalPlayingTime();
     bool setTimeOffset(int sec);
-    bool audioFileSeek(const int8_t speed);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
     void stopSong();
     /**

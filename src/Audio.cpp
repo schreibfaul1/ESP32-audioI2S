@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 28,2021
+ *  Updated on: Mar 07,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -464,7 +464,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     afn.toLowerCase();
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
-        MP3Decoder_AllocateBuffers();
+        if(!MP3Decoder_AllocateBuffers()) return false;
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -473,7 +473,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
-        AACDecoder_AllocateBuffers();
+        if(!AACDecoder_AllocateBuffers()) return false;
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -482,7 +482,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".aac")) {        // AAC section, without FileHeader
         m_codec = CODEC_AAC;
-        AACDecoder_AllocateBuffers();
+        if(!AACDecoder_AllocateBuffers()) return false;
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -545,7 +545,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
             if(audio_info) audio_info(chbuf);
             m_codec = CODEC_MP3;
             AACDecoder_FreeBuffers();
-            MP3Decoder_AllocateBuffers();
+            if(!MP3Decoder_AllocateBuffers()) return false;
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2074,7 +2074,7 @@ void Audio::processControlData(uint8_t b) {
             pos_ml = 0; metaline[pos_ml] = 0;                   // Reset this line
             if((m_LFcount == 2) && m_f_ctseen) {                // Some data seen and a double LF?
                 if(getBitRate() == 0) {
-                    if(audio_bitrate) audio_bitrate("");
+                    //if(audio_bitrate) audio_bitrate("");
                 } // no bitrate received
                 if(m_f_swm == true) { // stream without metadata
                     m_datamode = AUDIO_SWM;
@@ -2478,7 +2478,7 @@ bool Audio::parseContentType(const char* ct) {
             m_codec = CODEC_MP3;
             sprintf(chbuf, "%s, format is mp3", ct);
             if(audio_info) audio_info(chbuf); //ok is likely mp3
-            MP3Decoder_AllocateBuffers();
+            if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2486,7 +2486,7 @@ bool Audio::parseContentType(const char* ct) {
             m_codec = CODEC_MP3;
             sprintf(chbuf, "%s, format is mp3", ct);
             if(audio_info) audio_info(chbuf);
-            MP3Decoder_AllocateBuffers();
+            if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2494,7 +2494,7 @@ bool Audio::parseContentType(const char* ct) {
             m_codec = CODEC_AAC;
             sprintf(chbuf, "%s, format is aac", ct);
             if(audio_info) audio_info(chbuf);
-            AACDecoder_AllocateBuffers();
+            if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2502,7 +2502,7 @@ bool Audio::parseContentType(const char* ct) {
             m_codec = CODEC_M4A;
             sprintf(chbuf, "%s, format is aac", ct);
             if(audio_info) audio_info(chbuf);
-            AACDecoder_AllocateBuffers();
+            if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2510,7 +2510,7 @@ bool Audio::parseContentType(const char* ct) {
             m_codec = CODEC_M4A;
             sprintf(chbuf, "%s, format is aac", ct);
             if(audio_info) audio_info(chbuf);
-            AACDecoder_AllocateBuffers();
+            if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
         }
@@ -2985,25 +2985,15 @@ bool Audio::setFilePos(uint32_t pos) {
     return audiofile.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::audioFileSeek(const int8_t speed) {
-    bool retVal = false;
-    if(audiofile && speed) {
-        retVal = true; //    
-        int32_t steps = 20 * speed;
+bool Audio::audioFileSeek(const float speed) {
+    // 0.5 is half speed
+    // 1.0 is normal speed
+    // 1.5 is one and half speed
+    if(speed > 1.5 || speed <0.25) return false;
 
-        if((steps < 0) && m_f_running) {
-            // fast-rewind faster than fast-forward because we still playing
-            steps = steps * 2;
-        }
-        uint32_t newPos = audiofile.position() + steps * MP3GetBitsPerSample();
-        newPos = (newPos < m_id3Size) ? m_id3Size : newPos;
-        newPos = (newPos >= audiofile.size()) ? audiofile.size() - 1 : newPos;
-        if(audiofile.position() != newPos) {
-            m_f_playing = false;
-            retVal = audiofile.seek(newPos);
-        }
-    }
-    return retVal;
+    uint32_t srate = m_sampleRate * speed;
+    i2s_set_sample_rates((i2s_port_t)m_i2s_num, srate);
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
