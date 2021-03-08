@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 07,2021
+ *  Updated on: Mar 08,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -150,7 +150,7 @@ public:
     esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
-    void setTone(uint8_t l_type = 0, uint16_t l_freq = 0, uint8_t r_type = 0, uint16_t r_freq = 0);
+    void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void setInternalDAC(bool internalDAC);
     void setI2SCommFMT_LSB(bool commFMT);
 
@@ -187,8 +187,10 @@ private:
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
-    int16_t* IIR_filterChain(int16_t iir_in[2], bool clear = false);
-    void IIR_calculateCoefficients();
+    int16_t* IIR_filterChain0(int16_t iir_in[2], bool clear = false);
+    int16_t* IIR_filterChain1(int16_t* iir_in, bool clear = false);
+    int16_t* IIR_filterChain2(int16_t* iir_in, bool clear = false);
+    void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
 
     // implement several function with respect to the index of string
     bool startsWith (const char* base, const char* str) { return (strstr(base, str) - base) == 0;}
@@ -244,6 +246,7 @@ private:
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
+    typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
     const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
                                      20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
@@ -267,7 +270,7 @@ private:
     char            m_plsURL[256];                  // URL found in playlist
     char            m_lastHost[256];                // Store the last URL to a webstream
     char            m_audioName[256];               // the name of the file
-    filter_t        m_filter[2];
+    filter_t        m_filter[3];                    // digital filters
     size_t          m_id3Size = 0;                  // length id3 tag
     size_t          m_wavHeaderSize = 0;
     int             m_LFcount = 0;                  // Detection of end of header
@@ -322,10 +325,13 @@ private:
     float           m_audioCurrentTime = 0;
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
-    float           m_filterBuff[2][2][2];          // IIR filters memory for Audio DSP
+    float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
     size_t          m_file_size = 0;                // size of the file
     uint16_t        m_filterFrequency[2];
+    int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
+    int8_t          m_gain1 = 0;
+    int8_t          m_gain2 = 0;
 };
 
 #endif /* AUDIO_H_ */
