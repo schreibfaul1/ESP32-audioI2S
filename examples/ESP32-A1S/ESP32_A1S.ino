@@ -7,7 +7,7 @@
 #include "SD.h"
 #include "FS.h"
 #include "Wire.h"
-#include "AC101.h" //https://github.com/Yveaux/AC101
+#include "AC101.h" //https://github.com/schreibfaul1/AC101
 #include "Audio.h" //https://github.com/schreibfaul1/ESP32-audioI2S
 
 
