@@ -357,7 +357,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                 + String("Authorization: Basic " + authorization + "\r\n")
                 + String("Connection: close\r\n\r\n");
 
-    const uint32_t TIMEOUT_MS{500};
+    const uint32_t TIMEOUT_MS{250};
     if(m_f_ssl == false) {
         if(client.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
             if(audio_info) audio_info("Connected to server");
