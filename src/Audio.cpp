@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 08,2021
+ *  Updated on: Mar 13,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -367,8 +367,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             return true;
         }
     }
+
+    const uint32_t TIMEOUT_MS_SSL{2500};
     if(m_f_ssl == true) {
-        if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
+        if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS_SSL)) {
             // if(audio_info) audio_info("SSL/TLS Connected to server");
             clientsecure.print(resp);
             sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
