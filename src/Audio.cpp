@@ -357,8 +357,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                 + String("Authorization: Basic " + authorization + "\r\n")
                 + String("Connection: close\r\n\r\n");
 
+    const uint32_t TIMEOUT_MS{250};
     if(m_f_ssl == false) {
-        if(client.connect(hostwoext.c_str(), port)) {
+        if(client.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
             if(audio_info) audio_info("Connected to server");
             client.print(resp);
             memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
@@ -367,7 +368,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         }
     }
     if(m_f_ssl == true) {
-        if(clientsecure.connect(hostwoext.c_str(), port)) {
+        if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
             // if(audio_info) audio_info("SSL/TLS Connected to server");
             clientsecure.print(resp);
             sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
