@@ -139,7 +139,9 @@ uint32_t AudioBuffer::getReadPos() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio() {
-   clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
+    client.setNoDelay(true);
+    clientsecure.setNoDelay(true);
+    clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
     m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
