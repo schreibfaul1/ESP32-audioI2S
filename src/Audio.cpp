@@ -139,8 +139,6 @@ uint32_t AudioBuffer::getReadPos() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio() {
-    client.setNoDelay(true);
-    clientsecure.setNoDelay(true);
     clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     //i2s configuration
     m_i2s_num = I2S_NUM_0; // i2s port number
@@ -362,6 +360,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     const uint32_t TIMEOUT_MS{250};
     if(m_f_ssl == false) {
         if(client.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
+            client.setNoDelay(true);
             if(audio_info) audio_info("Connected to server");
             client.print(resp);
             memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
@@ -373,6 +372,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     const uint32_t TIMEOUT_MS_SSL{2500};
     if(m_f_ssl == true) {
         if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS_SSL)) {
+            clientsecure.setNoDelay(true);
             // if(audio_info) audio_info("SSL/TLS Connected to server");
             clientsecure.print(resp);
             sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
