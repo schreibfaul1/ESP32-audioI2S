@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 13,2021
+ *  Updated on: Mar 18,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -359,10 +359,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     const uint32_t TIMEOUT_MS{250};
     if(m_f_ssl == false) {
+        uint32_t t = millis();
         if(client.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
             client.setNoDelay(true);
-            if(audio_info) audio_info("Connected to server");
             client.print(resp);
+            uint32_t dt = millis() - t;
+            sprintf(chbuf, "Connected to server in %u ms", dt);
+            if(audio_info) audio_info(chbuf);
+
             memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
             m_f_running = true;
             return true;
@@ -371,11 +375,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     const uint32_t TIMEOUT_MS_SSL{2500};
     if(m_f_ssl == true) {
+        uint32_t t = millis();
         if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS_SSL)) {
             clientsecure.setNoDelay(true);
             // if(audio_info) audio_info("SSL/TLS Connected to server");
             clientsecure.print(resp);
-            sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
+            uint32_t dt = millis() - t;
+            sprintf(chbuf, "SSL has been established in %u ms, free Heap: %u bytes", dt, ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
             memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
             m_f_running = true;
@@ -1434,6 +1440,62 @@ int Audio::readM4AContainer(uint8_t *data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == M4A_TRAK) {  // trak
         //log_i("we are in track, len=%i", len);
+        if(specialIndexOf(data, "esds", len) > 0){
+            int esds = specialIndexOf(data, "esds", len); // Packaging/Encapsulation And Setup Data
+            uint8_t *pos = data + esds;
+            uint8_t len_of_OD  = *(pos + 12); // length of this OD (which includes the next 2 tags)
+            uint8_t len_of_ESD = *(pos + 20); // length of this Elementary Stream Descriptor
+
+            uint8_t audioType  = *(pos + 21);
+            if     (audioType == 0x40) sprintf(chbuf, "AudioType: MPEG4 / Audio"); // ObjectTypeIndication
+            else if(audioType == 0x66) sprintf(chbuf, "AudioType: MPEG2 / Audio");
+            else if(audioType == 0x69) sprintf(chbuf, "AudioType: MPEG2 / Audio Part 3"); // Backward Compatible Audio
+            else if(audioType == 0x6B) sprintf(chbuf, "AudioType: MPEG1 / Audio");
+            else                       sprintf(chbuf, "unknown Audio Type %x", audioType);
+            if(audio_info) audio_info(chbuf);
+
+            uint8_t streamType = *(pos + 22);
+            streamType = streamType >> 2;  // 6 bits
+            if(streamType!= 5) log_e("Streamtype is not audio!");
+
+            uint32_t maxBr = bigEndian(pos + 26, 4); // max bitrate
+            sprintf(chbuf, "max bitrate: %i", maxBr); if(audio_info) audio_info(chbuf);
+
+            uint32_t avrBr = bigEndian(pos + 30, 4); // avg bitrate
+            sprintf(chbuf, "avr bitrate: %i", avrBr); if(audio_info) audio_info(chbuf);
+
+            uint16_t ASC   = bigEndian(pos + 39, 2);
+
+            uint8_t objectType = ASC >> 11; // first 5 bits
+            if     (objectType == 1) sprintf(chbuf, "AudioObjectType: AAC Main"); // Audio Object Types
+            else if(objectType == 2) sprintf(chbuf, "AudioObjectType: AAC Low Complexity");
+            else if(objectType == 3) sprintf(chbuf, "AudioObjectType: AAC Scalable Sample Rate");
+            else if(objectType == 4) sprintf(chbuf, "AudioObjectType: AAC Long Term Prediction");
+            else if(objectType == 5) sprintf(chbuf, "AudioObjectType: AAC Spectral Band Replication");
+            else if(objectType == 6) sprintf(chbuf, "AudioObjectType: AAC Scalable");
+            else                     sprintf(chbuf, "unknown Audio Type %x", audioType);
+            if(audio_info) audio_info(chbuf);
+
+            const uint32_t samplingFrequencies[13] = {
+                    96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350
+            };
+            uint8_t sRate = (ASC & 0x0600) >> 7; // next 4 bits Sampling Frequencies
+            sprintf(chbuf, "Sampling Frequency: %lu",samplingFrequencies[sRate]);
+            if(audio_info) audio_info(chbuf);
+
+            uint8_t chConfig = (ASC & 0x78) >> 3;  // next 4 bits
+            if(chConfig == 0) if(audio_info) audio_info("Channel Configurations: AOT Specifc Config");
+            if(chConfig == 1) if(audio_info) audio_info("Channel Configurations: front-center");
+            if(chConfig == 2) if(audio_info) audio_info("Channel Configurations: front-left, front-right");
+            if(chConfig >  2) log_e("Channel Configurations with more than 2 channels is not allowed!");
+
+            uint8_t frameLengthFlag     = (ASC & 0x04);
+            uint8_t dependsOnCoreCoder  = (ASC & 0x02);
+            uint8_t extensionFlag       = (ASC & 0x01);
+
+            if(frameLengthFlag == 0) if(audio_info) audio_info("AAC FrameLength: 1024 bytes");
+            if(frameLengthFlag == 1) if(audio_info) audio_info("AAC FrameLength: 960 bytes");
+        }
         if(specialIndexOf(data, "mp4a", len) > 0){
             int offset = specialIndexOf(data, "mp4a", len);
             int channel = bigEndian(data + offset + 20, 2); // audio parameter must be set before starting
@@ -2993,7 +3055,6 @@ bool Audio::setSampleRate(uint32_t sampRate) {
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
     m_sampleRate = sampRate;
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
-    log_i("g0 %i, g1 %i, g2 %i", m_gain0, m_gain1, m_gain2);
     return true;
 }
 uint32_t Audio::getSampleRate(){
