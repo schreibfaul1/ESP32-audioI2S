@@ -2,9 +2,13 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 08,2021
+ *  Updated on: Mar 21,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
+
+//#define SDFATFS_USED   // activate to use SdFat
+
+//----------------------------------------------------------------------------------------------------------------------
 
 #ifndef AUDIO_H_
 #define AUDIO_H_
@@ -12,13 +16,18 @@
 #include "Arduino.h"
 #include "base64.h"
 #include "SPI.h"
-#include "SD.h"
-#include "SD_MMC.h"
-#include "SPIFFS.h"
-#include "FS.h"
-#include "FFat.h"
 #include "WiFiClientSecure.h"
 #include "driver/i2s.h"
+
+#ifdef SDFATFS_USED
+#include "SD_Libs/SD_Libs.h"
+#else
+  #include "SD.h"
+  #include "SD_MMC.h"
+  #include "SPIFFS.h"
+  #include "FS.h"
+  #include "FFat.h"
+#endif
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
@@ -335,3 +344,8 @@ private:
 };
 
 #endif /* AUDIO_H_ */
+
+
+
+
+
