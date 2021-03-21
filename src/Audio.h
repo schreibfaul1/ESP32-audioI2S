@@ -6,28 +6,28 @@
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
-//#define SDFATFS_USED   // activate to use SdFat
+
 
 //----------------------------------------------------------------------------------------------------------------------
 
 #ifndef AUDIO_H_
 #define AUDIO_H_
 #define FF_LFN_UNICODE      2
+#define USE_SDFAT           0   // set to 0 if SD, SD_MMC or SPIFFS is to be used
 #include "Arduino.h"
 #include "base64.h"
 #include "SPI.h"
+#if USE_SDFAT
+    #include "SD_Libs/SD_SdFat.h"
+#else
+    #include "SD.h"
+    #include "SD_MMC.h"
+    #include "SPIFFS.h"
+    #include "FS.h"
+    #include "FFat.h"
+#endif
 #include "WiFiClientSecure.h"
 #include "driver/i2s.h"
-
-#ifdef SDFATFS_USED
-#include "SD_Libs/SD_Libs.h"
-#else
-  #include "SD.h"
-  #include "SD_MMC.h"
-  #include "SPIFFS.h"
-  #include "FS.h"
-  #include "FFat.h"
-#endif
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
