@@ -2,12 +2,11 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 21,2021
+ *  Updated on: Mar 22,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
  *  play Google TTS and plays also aac-streams
- *  no internal DAC, no DeltSigma
  *
  *  etrernal HW on I2S nessesary, e.g.MAX98357A
  *
@@ -409,19 +408,6 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     String s_file = file;
 
-#ifdef SDFATFS_USED
-    //UTF8->UTF16 (lowbyte)
-    const uint8_t ascii[60] = {
-    //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
-    //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
-      000, 000, 000, 0xC4, 143, 0xC6,0xC7, 000,0xC9,000, 000, 000, 000, 000, 000, 000, 0xD1, 000, 000, 000, // ASCII (Latin1)
-    //149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168
-    //      Ö                             Ü              ß    à                   ä    å    æ         è
-      000, 0xD6,000, 000, 000, 000, 000, 0xDC, 000, 000, 0xDF,0xE0, 000, 000, 000,0xE4,0xE5,0xE6, 000,0xE8,
-    //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
-    //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
-      000, 0xEA, 0xEB,0xEC, 000,0xEE,0xEB, 000,0xF1,0xF2, 000,0xF4, 000,0xF6, 000, 000,0xF9, 000,0xFB,0xFC};
-#else
     const uint8_t ascii[60] = {
     //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
     //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
@@ -432,7 +418,6 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
     //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
       000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
-#endif
 
     reset(); // free buffers an set defaults
 
@@ -473,13 +458,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     m_file_size = audiofile.size();//TEST loop
 
-#ifdef SDFATFS_USED
-    audiofile.getName(chbuf, sizeof(chbuf));
-    String afn = chbuf;
-#else
     String afn = (String) audiofile.name();                   // audioFileName
-#endif
-
     afn.toLowerCase();
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;

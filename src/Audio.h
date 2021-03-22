@@ -2,30 +2,21 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 21,2021
+ *  Updated on: Mar 22,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
-
-
-
-//----------------------------------------------------------------------------------------------------------------------
 
 #ifndef AUDIO_H_
 #define AUDIO_H_
 #define FF_LFN_UNICODE      2
-#define USE_SDFAT           0   // set to 0 if SD, SD_MMC or SPIFFS is to be used
 #include "Arduino.h"
 #include "base64.h"
 #include "SPI.h"
-#if USE_SDFAT
-    #include "SD_Libs/SD_SdFat.h"
-#else
-    #include "SD.h"
-    #include "SD_MMC.h"
-    #include "SPIFFS.h"
-    #include "FS.h"
-    #include "FFat.h"
-#endif
+#include "SD.h"
+#include "SD_MMC.h"
+#include "SPIFFS.h"
+#include "FS.h"
+#include "FFat.h"
 #include "WiFiClientSecure.h"
 #include "driver/i2s.h"
 
@@ -344,8 +335,3 @@ private:
 };
 
 #endif /* AUDIO_H_ */
-
-
-
-
-
