@@ -127,6 +127,7 @@ public:
      * @return uint32_t current second of audio file, 0 if no file active
      */
     uint32_t getAudioCurrentTime();
+    bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
     uint32_t getTotalPlayingTime();

@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 22,2021
+ *  Updated on: Mar 26,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -2998,6 +2998,17 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
     return (uint32_t) m_audioCurrentTime;
 }
 //---------------------------------------------------------------------------------------------------------------------
+bool Audio::setAudioPlayPosition(uint16_t sec){
+    // Jump to an absolute position in time within an audio file
+    // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
+    // works only with format mp3 or wav
+    if(m_codec == CODEC_FLAC) return false;
+    if(m_codec == CODEC_M4A)  return false;
+    if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
+    uint32_t filepos = m_audioDataStart + (m_avr_bitrate * sec / 8);
+    return setFilePos(filepos);
+}
+//---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getTotalPlayingTime() {
     // Is set to zero by a connectToXXX() and starts as soon as the first audio data is available,
     // the time counting is not interrupted by a 'pause / resume' and is not reset by a fileloop
@@ -3006,7 +3017,7 @@ uint32_t Audio::getTotalPlayingTime() {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec){
     // fast forward or rewind the current position in seconds
-    // audiosource must be a mp3 file
+    // audiosource must be a mp3, aac or wav file
 
     if(!audiofile || !m_avr_bitrate) return false;
 
