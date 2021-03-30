@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 22,2021
+ *  Updated on: Mar 30,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  */
 
@@ -66,6 +66,7 @@ public:
     AudioBuffer(size_t maxBlockSize = 0);       // constructor
     ~AudioBuffer();                             // frees the buffer
     size_t   init();                            // set default values
+    void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     size_t   freeSpace();                       // number of free bytes to overwrite
     size_t   writeSpace();                      // space fom writepointer to bufferend
     size_t   bufferFilled();                    // returns the number of filled bytes
@@ -86,7 +87,7 @@ protected:
     size_t       m_writeSpace    = 0;
     size_t       m_dataLength    = 0;
     size_t       m_resBuffSize   = 1600; // reserved buffspace, >= one mp3 frame
-    size_t       m_maxBlockSize  = 1600;
+    size_t       m_maxBlockSize  = 1601;
     uint8_t*     m_buffer        = NULL;
     uint8_t*     m_writePtr      = NULL;
     uint8_t*     m_readPtr       = NULL;
@@ -290,11 +291,17 @@ private:
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_codec = CODEC_NONE;           //
     uint8_t         m_filterType[2];                // lowpass, highpass
-    int16_t         m_outBuff[2048*2];              // [1152 * 2];          // Interleaved L/R
+    int16_t         m_outBuff[4096*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
     uint16_t        m_st_remember = 0;              // Save hash from the last streamtitle
     uint16_t        m_datamode = 0;                 // Statemaschine
+    uint8_t         m_flacBitsPerSample = 0;        // bps should be 16
+    uint8_t         m_flacNumChannels = 0;          // can be read out in the FLAC file header
+    uint32_t        m_flacSampleRate = 0;           // can be read out in the FLAC file header
+    uint16_t        m_flacMaxFrameSize = 0;         // can be read out in the FLAC file header
+    uint16_t        m_flacMaxBlockSize = 0;         // can be read out in the FLAC file header
+    uint32_t        m_flacTotalSamplesInStream = 0; // can be read out in the FLAC file header
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer

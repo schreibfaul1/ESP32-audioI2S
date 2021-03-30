@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 26,2021
+ *  Updated on: Mar 30,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -15,6 +15,7 @@
 #include "Audio.h"
 #include "mp3_decoder/mp3_decoder.h"
 #include "aac_decoder/aac_decoder.h"
+#include "flac_decoder/flac_decoder.h"
 
 //---------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
@@ -51,6 +52,15 @@ size_t AudioBuffer::init() {
         return 0;
     resetBuffer();
     return m_buffSize;
+}
+
+void AudioBuffer::changeMaxBlockSize(uint16_t mbs){
+    m_resBuffSize = mbs;
+    m_maxBlockSize = mbs;
+    if(psramFound())  m_buffSize = m_buffSizePSRAM - m_resBuffSize;
+    else              m_buffSize = m_buffSizeRAM   - m_resBuffSize;
+    resetBuffer();
+    return;
 }
 
 size_t AudioBuffer::freeSpace() {
@@ -185,6 +195,7 @@ void Audio::initInBuff() {
             f_already_done = true;
         }
     }
+    changeMaxBlockSize(1600); // default size mp3 or aac
 }
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
@@ -463,6 +474,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
         if(!MP3Decoder_AllocateBuffers()) return false;
+        InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -472,6 +484,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
         if(!AACDecoder_AllocateBuffers()) return false;
+        InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -481,6 +494,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".aac")) {        // AAC section, without FileHeader
         m_codec = CODEC_AAC;
         if(!AACDecoder_AllocateBuffers()) return false;
+        InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -494,9 +508,11 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     } // end WAVE section
 
     if(afn.endsWith(".flac")) { // FLAC section
+        if(!psramFound()){ if(audio_info) audio_info("FLAC works only with PSRAM!"); return false;}
         m_codec = CODEC_FLAC;
-        //FLACDecoder_AllocateBuffers();
-        sprintf(chbuf, "FLCDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+        if(!FLACDecoder_AllocateBuffers()) return false;
+        InBuff.changeMaxBlockSize(4*4096);
+        sprintf(chbuf, "FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
         return true;
@@ -952,7 +968,7 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
             stopSong();
             return -1;
         }
-        log_i("Magig String found");
+//        log_i("Magig String found");
         m_controlCounter = FLAC_MBH;
         headerSize = 4;
         retvalue = 4;
@@ -962,7 +978,7 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
     if(m_controlCounter == FLAC_MBH) { /* METADATA_BLOCK_HEADER */
         uint8_t blockType = *data;
         if(!f_lastMetaBlock){
-            if(blockType & 128) {log_i("Last-metadata-block flag"); f_lastMetaBlock = true;}
+            if(blockType & 128) {f_lastMetaBlock = true;}
             blockType &= 127;
             if(blockType == 0) m_controlCounter = FLAC_SINFO;
             if(blockType == 1) m_controlCounter = FLAC_PADDING;
@@ -981,28 +997,39 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
         sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
         if(audio_info) audio_info(chbuf);
         retvalue = 0;
-        if(audio_info) audio_info("flac is unsupported");
-        return -1; //stop
-//        return 0;
+//        if(audio_info) audio_info("flac is unsupported");
+//        return -1; //stop
+        return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_SINFO) { /* Stream info block */
         size_t l = bigEndian(data, 3);
-        // log_i("Metadata STREAMINFO, len = %u", len);
-        log_i("minblocksize %u", bigEndian(data + 3, 2));
-        log_i("maxblocksize %u", bigEndian(data + 5, 2));
-        log_i("minframesize %u", bigEndian(data + 7, 3));
-        log_i("maxframesize %u", bigEndian(data + 10, 3));
+//        log_i("minblocksize %u", bigEndian(data + 3, 2));
+        vTaskDelay(2);
+        m_flacMaxBlockSize = bigEndian(data + 5, 2);
+        sprintf(chbuf, "FLAC maxBlockSize: %u", m_flacMaxBlockSize); if(audio_info) audio_info(chbuf);
+//        vTaskDelay(2);
+//        log_i("minframesize %u", bigEndian(data + 7, 3));
+        vTaskDelay(2);
+        m_flacMaxFrameSize = bigEndian(data + 10, 3);
+        sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
-        uint16_t sr = nextval >> 4;
-        log_i("sampleRate %u", sr);
-        log_i("numChannels %u", ((nextval & 0x06) >> 1) + 1);
+        m_flacSampleRate = nextval >> 4;
+        sprintf(chbuf, "FLAC sampleRate: %u", m_flacSampleRate);  if(audio_info) audio_info(chbuf);
+        vTaskDelay(2);
+        m_flacNumChannels = ((nextval & 0x06) >> 1) + 1;
+        sprintf(chbuf, "FLAC numChannels: %u", m_flacNumChannels);   if(audio_info) audio_info(chbuf);
+        vTaskDelay(2);
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data +16) >> 4) + 1;
-        log_i("bits per sample %u", bps);
+        m_flacBitsPerSample = bps;
+        sprintf(chbuf, "FLAC bitsPerSample: %u", m_flacBitsPerSample);   if(audio_info) audio_info(chbuf);
+
         uint32_t tsis = bigEndian(data + 17, 4);
         log_i("total samples in stream %u", tsis);
-        if(bps != 0 && tsis)log_i("audio file duration %u seconds", tsis / sr);
+        m_flacTotalSamplesInStream = tsis;
+        if(bps != 0 && tsis)log_i("audio file duration %u seconds", tsis / m_flacSampleRate);
         m_controlCounter = FLAC_MBH;
         retvalue = l + 3;
         headerSize += retvalue;
@@ -1728,9 +1755,7 @@ void Audio::processLocalFile() {
         m_f_firstCall = false;
         return;
     }
-
     bytesCanBeWritten = InBuff.writeSpace();
-
     //----------------------------------------------------------------------------------------------------
     // some files contain further data after the audio block (e.g. pictures).
     // In that case, the end of the audio block is not the end of the file. An 'eof' has to be forced.
@@ -1747,7 +1772,6 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
     if(bytesAddedToBuffer == -1) bytesAddedToBuffer = 0; // read error? eof?
-
     bytesCanBeRead = InBuff.bufferFilled();
     if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
     if(bytesCanBeRead == InBuff.getMaxBlockLength()) { // mp3 or aac frame complete?
@@ -1833,8 +1857,10 @@ void Audio::processLocalFile() {
         stopSong();
         m_f_stream = false;
         m_f_localfile = false;
-        if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
-        if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
+        if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
         sprintf(chbuf, "End of file \"%s\"", m_audioName);
         if(audio_info) audio_info(chbuf);
         if(audio_eof_mp3) audio_eof_mp3(m_audioName);
@@ -2755,11 +2781,22 @@ int Audio::findNextSync(uint8_t* data, size_t len){
 
     int nextSync;
     static uint32_t swnf = 0;
-    if(m_codec == CODEC_WAV)  {m_f_playing = true; nextSync = 0;}
-    if(m_codec == CODEC_FLAC) {m_f_playing = true; nextSync = 0;}
-    if(m_codec == CODEC_MP3)  nextSync = MP3FindSyncWord(data, len);
-    if(m_codec == CODEC_AAC)  nextSync = AACFindSyncWord(data, len);
-    if(m_codec == CODEC_M4A)  {AACSetRawBlockParams(0, 2,44100, 1); m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_WAV) {
+        m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_MP3) {
+        nextSync = MP3FindSyncWord(data, len);
+    }
+    if(m_codec == CODEC_AAC) {
+        nextSync = AACFindSyncWord(data, len);
+    }
+    if(m_codec == CODEC_M4A) {
+        AACSetRawBlockParams(0, 2,44100, 1);
+        m_f_playing = true; nextSync = 0;
+    }
+    if(m_codec == CODEC_FLAC) {
+        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream);
+        m_f_playing = true; nextSync = 0;
+    }
 
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
@@ -2805,7 +2842,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(m_codec == CODEC_MP3)  ret = MP3Decode(data, &bytesLeft, m_outBuff, 0);
     if(m_codec == CODEC_AAC)  ret = AACDecode(data, &bytesLeft, m_outBuff);
     if(m_codec == CODEC_M4A)  ret = AACDecode(data, &bytesLeft, m_outBuff);
-    //if(m_codec == CODEC_FLAC) ret = FLACDecode(data, &bytesLeft, m_outBuff);
+    if(m_codec == CODEC_FLAC) ret = FLACDecode(data, &bytesLeft, m_outBuff);
 
     bytesDecoded = len - bytesLeft;
     if(bytesDecoded == 0){ // unlikely framesize
@@ -2845,6 +2882,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 setBitsPerSample(AACGetBitsPerSample());
                 setBitrate(AACGetBitrate());
             }
+            if(m_codec == CODEC_FLAC){
+                setChannels(2);//FLACGetChannels());
+                setSampleRate(44100);//FLACGetSampRate());
+                setBitsPerSample(16);//FLACGetBitsPerSample());
+                //setBitrate(FLACGetBitRate());
+            }
             showCodecParams();
         }
         if(m_codec == CODEC_MP3){
@@ -2852,6 +2895,9 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
             m_validSamples = AACGetOutputSamps() / getChannels();
+        }
+        if(m_codec == CODEC_FLAC){
+            m_validSamples = FLACGetOutputSamps() / getChannels();
         }
     }
     compute_audioCurrentTime(bytesDecoded);
@@ -2867,9 +2913,10 @@ void Audio::compute_audioCurrentTime(int bd) {
     static uint64_t sum_bitrate = 0;
     static boolean f_CBR = true; // constant bitrate
 
-    if(m_codec == CODEC_MP3){setBitrate(MP3GetBitrate());} // if not CBR, bitrate can be changed
-    if(m_codec == CODEC_M4A){setBitrate(AACGetBitrate());} // if not CBR, bitrate can be changed
-    if(m_codec == CODEC_AAC){setBitrate(AACGetBitrate());} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_MP3) {setBitrate(MP3GetBitrate() );} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_M4A) {setBitrate(AACGetBitrate() );} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_AAC) {setBitrate(AACGetBitrate() );} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_FLAC){ ; }// todo
     if(!getBitRate()) return;
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2892,7 +2939,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     old_bitrate = getBitRate();
 
     if(!f_CBR) {
-        if(loop_counter > 20 && loop_counter < 200) {
+        if(loop_counter > 20 && loop_counter < 2000) {
             // if VBR: m_avr_bitrate is average of the first values of m_bitrate
             sum_bitrate += getBitRate();
             m_avr_bitrate = sum_bitrate / (loop_counter - 20);
@@ -2983,12 +3030,11 @@ uint32_t Audio::getFilePos() {
 uint32_t Audio::getAudioFileDuration() {
     if(m_f_localfile) {if(!audiofile) return 0;}
     if(m_f_webfile)   {if(!m_contentlength) return 0;}
-
-    if(!m_avr_bitrate) return 0;
-    if     (m_codec == CODEC_MP3) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_WAV) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_M4A) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
-    else if(m_codec == CODEC_AAC) m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    if     (m_avr_bitrate && m_codec == CODEC_MP3)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    else if(m_avr_bitrate && m_codec == CODEC_WAV)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    else if(m_avr_bitrate && m_codec == CODEC_M4A)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    else if(m_avr_bitrate && m_codec == CODEC_AAC)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
+    else if(FLACGetSamprate() && m_codec == CODEC_FLAC) m_audioFileDuration = FLACGetTotoalSamplesInStream() / FLACGetSamprate();
     else return 0;
     return m_audioFileDuration;
 }
