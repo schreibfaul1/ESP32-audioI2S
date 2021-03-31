@@ -475,7 +475,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     afn.toLowerCase();
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
-        if(!MP3Decoder_AllocateBuffers()) return false;
+        if(!MP3Decoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
@@ -485,7 +485,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
-        if(!AACDecoder_AllocateBuffers()) return false;
+        if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -494,7 +494,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".aac")) {        // AAC section, without FileHeader
         m_codec = CODEC_AAC;
-        if(!AACDecoder_AllocateBuffers()) return false;
+        if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
@@ -509,9 +509,13 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     } // end WAVE section
 
     if(afn.endsWith(".flac")) { // FLAC section
-        if(!psramFound()){ if(audio_info) audio_info("FLAC works only with PSRAM!"); return false;}
+        if(!psramFound()){
+            if(audio_info) audio_info("FLAC works only with PSRAM!");
+            audiofile.close();
+            return false;
+        }
         m_codec = CODEC_FLAC;
-        if(!FLACDecoder_AllocateBuffers()) return false;
+        if(!FLACDecoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(4*4096);
         sprintf(chbuf, "FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
@@ -521,6 +525,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     sprintf(chbuf, "The %s format is not supported", afn.c_str() + afn.lastIndexOf(".") + 1);
     if(audio_info) audio_info(chbuf);
+    audiofile.close();
     return false;
 }
 //---------------------------------------------------------------------------------------------------------------------

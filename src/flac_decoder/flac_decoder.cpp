@@ -193,7 +193,7 @@ int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
         }
 
-        if(m_blockSize>8192){
+        if(m_blockSize>4096){
             log_e("Error: blockSize too big");
             return ERR_FLAC_BLOCKSIZE_TOO_BIG;
         }
