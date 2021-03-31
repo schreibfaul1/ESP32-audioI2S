@@ -486,6 +486,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
         if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
+        InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -2565,6 +2566,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf); //ok is likely mp3
             if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(1600);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "mp3", 13) >= 0) {
@@ -2573,6 +2575,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(1600);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "aac", 13) >= 0) {
@@ -2581,6 +2584,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(1600);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "mp4", 13) >= 0) {      // audio/mp4a, audio/mp4a-latm
@@ -2589,6 +2593,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(1600);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "m4a", 13) >= 0) {      // audio/x-m4a
@@ -2597,12 +2602,14 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(1600);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "wav", 13) >= 0) {      // audio/x-wav
             m_codec = CODEC_WAV;
             sprintf(chbuf, "%s, format is wav", ct);
             if(audio_info) audio_info(chbuf);
+            InBuff.changeMaxBlockSize(1600);
         }
         else if(indexOf(ct, "ogg", 13) >= 0) {
             m_f_running = false;
@@ -2613,6 +2620,9 @@ bool Audio::parseContentType(const char* ct) {
         else if(indexOf(ct, "flac", 13) >= 0) {     // audio/flac, audio/x-flac
             m_codec = CODEC_FLAC;
             sprintf(chbuf, "%s, format is flac", ct);
+            if(!FLACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
+            sprintf(chbuf, "FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(4*4096);
             if(audio_info) audio_info(chbuf);
         }
         else {
