@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 30,2021
+ *  Updated on: Mar 31,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -31,6 +31,8 @@ AudioBuffer::~AudioBuffer() {
 }
 
 size_t AudioBuffer::init() {
+    if(m_buffer) free(m_buffer);
+    m_buffer = NULL;
     if(psramInit()) {
         // PSRAM found, AudioBuffer will be allocated in PSRAM
         m_buffSize = m_buffSizePSRAM;
@@ -59,7 +61,7 @@ void AudioBuffer::changeMaxBlockSize(uint16_t mbs){
     m_maxBlockSize = mbs;
     if(psramFound())  m_buffSize = m_buffSizePSRAM - m_resBuffSize;
     else              m_buffSize = m_buffSizeRAM   - m_resBuffSize;
-    resetBuffer();
+    init();
     return;
 }
 
@@ -484,7 +486,6 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
         if(!AACDecoder_AllocateBuffers()) return false;
-        InBuff.changeMaxBlockSize(1600);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -1004,7 +1005,6 @@ int Audio::readFlacMetadata(uint8_t *data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_SINFO) { /* Stream info block */
         size_t l = bigEndian(data, 3);
-//        log_i("minblocksize %u", bigEndian(data + 3, 2));
         vTaskDelay(2);
         m_flacMaxBlockSize = bigEndian(data + 5, 2);
         sprintf(chbuf, "FLAC maxBlockSize: %u", m_flacMaxBlockSize); if(audio_info) audio_info(chbuf);
@@ -2781,8 +2781,9 @@ int Audio::findNextSync(uint8_t* data, size_t len){
 
     int nextSync;
     static uint32_t swnf = 0;
-    if(m_codec == CODEC_WAV) {
-        m_f_playing = true; nextSync = 0;}
+    if(m_codec == CODEC_WAV)  {
+        m_f_playing = true; nextSync = 0;
+    }
     if(m_codec == CODEC_MP3) {
         nextSync = MP3FindSyncWord(data, len);
     }
@@ -2790,14 +2791,12 @@ int Audio::findNextSync(uint8_t* data, size_t len){
         nextSync = AACFindSyncWord(data, len);
     }
     if(m_codec == CODEC_M4A) {
-        AACSetRawBlockParams(0, 2,44100, 1);
-        m_f_playing = true; nextSync = 0;
+        AACSetRawBlockParams(0, 2,44100, 1); m_f_playing = true; nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream);
         m_f_playing = true; nextSync = 0;
     }
-
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
          swnf++; // syncword not found counter, can be multimediadata
@@ -2913,9 +2912,9 @@ void Audio::compute_audioCurrentTime(int bd) {
     static uint64_t sum_bitrate = 0;
     static boolean f_CBR = true; // constant bitrate
 
-    if(m_codec == CODEC_MP3) {setBitrate(MP3GetBitrate() );} // if not CBR, bitrate can be changed
-    if(m_codec == CODEC_M4A) {setBitrate(AACGetBitrate() );} // if not CBR, bitrate can be changed
-    if(m_codec == CODEC_AAC) {setBitrate(AACGetBitrate() );} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_MP3){setBitrate(MP3GetBitrate());} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_M4A){setBitrate(AACGetBitrate());} // if not CBR, bitrate can be changed
+    if(m_codec == CODEC_AAC){setBitrate(AACGetBitrate());} // if not CBR, bitrate can be changed
     if(m_codec == CODEC_FLAC){ ; }// todo
     if(!getBitRate()) return;
 
@@ -2939,7 +2938,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     old_bitrate = getBitRate();
 
     if(!f_CBR) {
-        if(loop_counter > 20 && loop_counter < 2000) {
+        if(loop_counter > 20 && loop_counter < 200) {
             // if VBR: m_avr_bitrate is average of the first values of m_bitrate
             sum_bitrate += getBitRate();
             m_avr_bitrate = sum_bitrate / (loop_counter - 20);
@@ -3030,6 +3029,7 @@ uint32_t Audio::getFilePos() {
 uint32_t Audio::getAudioFileDuration() {
     if(m_f_localfile) {if(!audiofile) return 0;}
     if(m_f_webfile)   {if(!m_contentlength) return 0;}
+
     if     (m_avr_bitrate && m_codec == CODEC_MP3)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
     else if(m_avr_bitrate && m_codec == CODEC_WAV)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
     else if(m_avr_bitrate && m_codec == CODEC_M4A)  m_audioFileDuration = 8 * m_audioDataSize / m_avr_bitrate;
