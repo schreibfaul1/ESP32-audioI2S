@@ -2859,14 +2859,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(m_codec == CODEC_FLAC) ret = FLACDecode(data, &bytesLeft, m_outBuff);
 
     bytesDecoded = len - bytesLeft;
-    if(bytesDecoded == 0){ // unlikely framesize
+    if(bytesDecoded == 0 && ret <= 0){ // unlikely framesize
             if(audio_info) audio_info("framesize is 0, start decoding again");
             m_f_playing = false; // seek for new syncword
         // we're here because there was a wrong sync word
         // so skip two sync bytes and seek for next
         return 1;
     }
-    if(ret) { // Error, skip the frame...
+    if(ret < 0) { // Error, skip the frame...
         //if(m_codec == CODEC_M4A){log_i("begin not found"); return 1;}
         i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
         if(!getChannels() && (ret == -2)) {
@@ -2876,10 +2876,9 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             printDecodeError(ret);
             m_f_playing = false; // seek for new syncword
         }
-
         return bytesDecoded;
     }
-    else{  // ret==0
+    else{  // ret>=0
         if(f_setDecodeParamsOnce){
             f_setDecodeParamsOnce = false;
             m_PlayingStartTime = millis();

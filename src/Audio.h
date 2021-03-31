@@ -291,7 +291,7 @@ private:
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_codec = CODEC_NONE;           //
     uint8_t         m_filterType[2];                // lowpass, highpass
-    int16_t         m_outBuff[4096*2];              // Interleaved L/R
+    int16_t         m_outBuff[2048*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
     uint16_t        m_st_remember = 0;              // Save hash from the last streamtitle

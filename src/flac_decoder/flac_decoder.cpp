@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Mar 30,2021
+ * Updated on: Mar 31,2021
  *
  * Author: Wolle
  *
@@ -20,7 +20,7 @@ FLACMetadataBlock_t *FLACMetadataBlock;
 FLACsubFramesBuff_t *FLACsubFramesBuff;
 
 vector<int32_t>coefs;
-
+const uint16_t outBuffSize = 2048;   // outbuffer size divided by two, the same size as in audio.h declared
 uint16_t m_blockSize=0;
 uint16_t m_blockSizeLeft = 0;
 uint16_t m_validSamples = 0;
@@ -60,6 +60,7 @@ void FLACDecoder_ClearBuffer(){
     memset(FLACFrameHeader,   0, sizeof(FLACFrameHeader_t));
     memset(FLACMetadataBlock, 0, sizeof(FLACMetadataBlock_t));
     memset(FLACsubFramesBuff, 0, sizeof(FLACsubFramesBuff_t));
+    m_status = DECODE_FRAME;
     return;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -115,13 +116,16 @@ void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32
 }
 //----------------------------------------------------------------------------------------------------------------------
 int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
-    int bitOffset, bitsAvail;
-    m_rIndex = 0;
-    m_bytesAvail = (*bytesLeft);
-    if(m_bytesAvail < 8192){log_i("_bytesAvail %i", m_bytesAvail); return 0;}
-    m_inptr = inbuf;
+
+    if(m_status != OUT_SAMPLES){
+        m_rIndex = 0;
+        m_bytesAvail = (*bytesLeft);
+        if(m_bytesAvail < 8192){log_i("_bytesAvail %i", m_bytesAvail); return 0;}
+        m_inptr = inbuf;
+    }
 
     if(m_status == DECODE_FRAME){  // Read a ton of header fields, and ignore most of them
+
         uint32_t temp = readUint(8);
         uint16_t sync = temp << 6 |readUint(6);
         if (sync != 0x3FFE){
@@ -162,8 +166,6 @@ int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             if(FLACFrameHeader->sampleRateCode == 11) FLACMetadataBlock->sampleRate =  96000;
         }
 
-
-
         readUint(1);
         temp = (readUint(8) << 24);
         temp = ~temp;
@@ -193,7 +195,7 @@ int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
         }
 
-        if(m_blockSize>4096){
+        if(m_blockSize > 8192){
             log_e("Error: blockSize too big");
             return ERR_FLAC_BLOCKSIZE_TOO_BIG;
         }
@@ -210,6 +212,7 @@ int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
         return ERR_FLAC_NONE;
     }
+
     if(m_status == DECODE_SUBFRAMES){
 
         // Decode each channel's subframe, then skip footer
@@ -217,20 +220,31 @@ int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         if(ret != 0) return ret;
         m_status = OUT_SAMPLES;
     }
-    alignToByte();
-    readUint(16);
 
     if(m_status == OUT_SAMPLES){  // Write the decoded samples
+        // blocksize can be much greater than outbuff, so we can't stuff all in once
+        // therefore we need often more than one loop
+        uint16_t blockSize;
+        static uint16_t offset = 0;
+        if(m_blockSize< outBuffSize + offset) blockSize = m_blockSize - offset;
+        else blockSize = outBuffSize;
 
-        for (int i = 0; i < m_blockSize; i++) {
+        for (int i = 0; i < blockSize; i++) {
             for (int j = 0; j < FLACMetadataBlock->numChannels; j++) {
-                int val = FLACsubFramesBuff->samplesBuffer[j][i];
+                int val = FLACsubFramesBuff->samplesBuffer[j][i + offset];
                 if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
                 outbuf[2*i+j] = val;
             }
         }
-        m_validSamples = m_blockSize * FLACMetadataBlock->numChannels;
+        m_validSamples = blockSize * FLACMetadataBlock->numChannels;
+        offset += blockSize;
+
+        if(offset != m_blockSize) return GIVE_NEXT_LOOP;
+        offset = 0;
     }
+
+    alignToByte();
+    readUint(16);
     m_bytesDecoded = *bytesLeft - m_bytesAvail;
     m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize;
 //    log_i("m_compressionRatio % f", m_compressionRatio);
@@ -251,7 +265,6 @@ uint32_t FLACGetSamprate(){return FLACMetadataBlock->sampleRate;}
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetSampleRate() {return FLACMetadataBlock->sampleRate;}
 //----------------------------------------------------------------------------------------------------------------------
-
 
 int8_t decodeSubframes(){
 
