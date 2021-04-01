@@ -246,7 +246,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     alignToByte();
     readUint(16);
     m_bytesDecoded = *bytesLeft - m_bytesAvail;
-    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize;
+//    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("m_compressionRatio % f", m_compressionRatio);
     *bytesLeft = m_bytesAvail;
     m_status = DECODE_FRAME;
@@ -271,12 +271,18 @@ uint8_t FLACGetChannels(){
     return FLACMetadataBlock->numChannels;
 }
 //----------------------------------------------------------------------------------------------------------------------
-uint32_t FLACGetSamprate(){
+uint32_t FLACGetSampRate(){
     return FLACMetadataBlock->sampleRate;
 }
 //----------------------------------------------------------------------------------------------------------------------
-uint32_t FLACGetSampleRate(){
-    return FLACMetadataBlock->sampleRate;
+uint32_t FLACGetBitRate(){
+    // todo
+    return 0;
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint32_t FLACGetAudioFileDuration() {
+    uint32_t afd = FLACGetTotoalSamplesInStream()/ FLACGetSampRate(); // AudioFileDuration
+    return afd;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeSubframes(){

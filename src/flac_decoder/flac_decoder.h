@@ -144,9 +144,9 @@ uint16_t FLACGetOutputSamps();
 uint64_t FLACGetTotoalSamplesInStream();
 uint8_t  FLACGetBitsPerSample();
 uint8_t  FLACGetChannels();
-uint32_t FLACGetSamprate();
-uint32_t FLACGetSampleRate();
-
+uint32_t FLACGetSampRate();
+uint32_t FLACGetBitRate();
+uint32_t FLACGetAudioFileDuration();
 uint32_t readUint(uint8_t nBits);
 int32_t  readSignedInt(int nBits);
 int64_t  readRiceSignedInt(uint8_t param);
