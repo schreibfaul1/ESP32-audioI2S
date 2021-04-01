@@ -116,17 +116,35 @@ void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32
     FLACMetadataBlock->audioDataLength = AuDaLength;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void FLACDecoderReset(){ // set var to default
+    m_status = DECODE_FRAME;
+    m_bitBuffer = 0;
+    m_bitBufferLen = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------
+int FLACFindSyncWord(unsigned char *buf, int nBytes) {
+    int i;
+
+    /* find byte-aligned syncword - need 13 matching bits */
+    for (i = 0; i < nBytes - 1; i++) {
+        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xF8) == 0xF8) {
+            FLACDecoderReset();
+            return i;
+        }
+    }
+    return -1;
+}
+//----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(m_status != OUT_SAMPLES){
         m_rIndex = 0;
         m_bytesAvail = (*bytesLeft);
-        if(m_bytesAvail < 8192){log_i("_bytesAvail %i", m_bytesAvail); return 0;}
         m_inptr = inbuf;
     }
 
     if(m_status == DECODE_FRAME){  // Read a ton of header fields, and ignore most of them
-
+//        FLACFindSyncWord(inbuf, *bytesLeft);
         uint32_t temp = readUint(8);
         uint16_t sync = temp << 6 |readUint(6);
         if (sync != 0x3FFE){
@@ -144,14 +162,17 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             if(FLACFrameHeader->chanAsgn == 1) FLACMetadataBlock->numChannels = 2;
             if(FLACFrameHeader->chanAsgn > 7)  FLACMetadataBlock->numChannels = 2;
         }
+        if(FLACMetadataBlock->numChannels < 1) return ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT;
 
         if(!FLACMetadataBlock->bitsPerSample){
             if(FLACFrameHeader->sampleSizeCode == 1) FLACMetadataBlock->bitsPerSample =  8;
             if(FLACFrameHeader->sampleSizeCode == 2) FLACMetadataBlock->bitsPerSample = 12;
             if(FLACFrameHeader->sampleSizeCode == 4) FLACMetadataBlock->bitsPerSample = 16;
             if(FLACFrameHeader->sampleSizeCode == 5) FLACMetadataBlock->bitsPerSample = 20;
-            if(FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 26;
+            if(FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
         }
+        if(FLACMetadataBlock->bitsPerSample > 16) return ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG;
+        if(FLACMetadataBlock->bitsPerSample < 8 ) return ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN;
 
         if(!FLACMetadataBlock->sampleRate){
             if(FLACFrameHeader->sampleRateCode == 1)  FLACMetadataBlock->sampleRate =  88200;

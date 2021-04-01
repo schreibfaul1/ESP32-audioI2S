@@ -6,6 +6,12 @@
  *
  *      Author: wolle
  *
+ *  Restrictions:
+ *  blocksize must not exceed 8192
+ *  bits per sample must be 8 or 16
+ *  num Channels must be 1 or 2
+ *
+ *
  */
 #pragma once
 #pragma GCC optimize ("O3")
@@ -34,7 +40,9 @@ enum : int8_t  {GIVE_NEXT_LOOP = +1,
                 ERR_FLAC_RESERVED_SUB_TYPE = -6,
                 ERR_FLAC_PREORDER_TOO_BIG = -7,
                 ERR_FLAC_RESERVED_RESIDUAL_CODING = -8,
-                ERR_FLAC_WRONG_RICE_PARTITION_NR = -9};
+                ERR_FLAC_WRONG_RICE_PARTITION_NR = -9,
+                ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG = -10,
+                ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN = 11};
 
 typedef struct FLACMetadataBlock_t{
                               // METADATA_BLOCK_STREAMINFO
@@ -137,12 +145,13 @@ typedef struct FLACFrameHeader_t {
 
 }FLACFrameHeader_t;
 
-
+int      FLACFindSyncWord(unsigned char *buf, int nBytes);
 bool     FLACDecoder_AllocateBuffers(void);
 void     FLACDecoder_ClearBuffer();
 void     FLACDecoder_FreeBuffers();
 int      FLACFindSyncWord(); // todo
 void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength);
+void     FLACDecoderReset();
 int8_t   FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 uint16_t FLACGetOutputSamps();
 uint64_t FLACGetTotoalSamplesInStream();

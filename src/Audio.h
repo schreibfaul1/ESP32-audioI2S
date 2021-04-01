@@ -157,7 +157,7 @@ public:
     void setI2SCommFMT_LSB(bool commFMT);
 
 private:
-    void reset(); // free buffers and set defaults
+    void setDefaults(); // free buffers and set defaults
     void initInBuff();
     void processLocalFile();
     void processWebStream();
@@ -168,10 +168,11 @@ private:
     void printDecodeError(int r);
     void showID3Tag(String tag, const char* val);
     void unicode2utf8(char* buff, uint32_t len);
-    int  readWaveHeader(uint8_t* data, size_t len);
-    int  readFlacMetadata(uint8_t *data, size_t len);
-    int  readID3Metadata(uint8_t* data, size_t len);
-    int  readM4AContainer(uint8_t* data, size_t len);
+    int  read_WAV_Header(uint8_t* data, size_t len);
+    int  read_FLAC_Header(uint8_t *data, size_t len);
+    int  read_MP3_Header(uint8_t* data, size_t len);
+    int  read_M4A_Header(uint8_t* data, size_t len);
+    int  read_OGG_Header(uint8_t *data, size_t len);
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
@@ -247,6 +248,7 @@ private:
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
+    enum : int { OGG_BEGIN = 0, OGG_MAGIC = 1, OGG_OKAY = 100};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
