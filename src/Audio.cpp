@@ -2968,19 +2968,19 @@ void Audio::printDecodeError(int r) {
     String e = "";
     if(m_codec == CODEC_MP3){
         switch(r){
-            case ERR_MP3_NONE:                 e = "NONE";                  break;
-            case ERR_MP3_INDATA_UNDERFLOW:     e = "INDATA_UNDERFLOW";      break;
-            case ERR_MP3_MAINDATA_UNDERFLOW:   e = "MAINDATA_UNDERFLOW";    break;
-            case ERR_MP3_FREE_BITRATE_SYNC:    e = "FREE_BITRATE_SYNC";     break;
-            case ERR_MP3_OUT_OF_MEMORY:        e = "OUT_OF_MEMORY";         break;
-            case ERR_MP3_NULL_POINTER:         e = "NULL_POINTER";          break;
-            case ERR_MP3_INVALID_FRAMEHEADER:  e = "INVALID_FRAMEHEADER";   break;
-            case ERR_MP3_INVALID_SIDEINFO:     e = "INVALID_SIDEINFO";      break;
-            case ERR_MP3_INVALID_SCALEFACT:    e = "INVALID_SCALEFACT";     break;
-            case ERR_MP3_INVALID_HUFFCODES:    e = "INVALID_HUFFCODES";     break;
-            case ERR_MP3_INVALID_DEQUANTIZE:   e = "INVALID_DEQUANTIZE";    break;
-            case ERR_MP3_INVALID_IMDCT:        e = "INVALID_IMDCT";         break;
-            case ERR_MP3_INVALID_SUBBAND:      e = "INVALID_SUBBAND";       break;
+            case ERR_MP3_NONE:                              e = "NONE";                             break;
+            case ERR_MP3_INDATA_UNDERFLOW:                  e = "INDATA_UNDERFLOW";                 break;
+            case ERR_MP3_MAINDATA_UNDERFLOW:                e = "MAINDATA_UNDERFLOW";               break;
+            case ERR_MP3_FREE_BITRATE_SYNC:                 e = "FREE_BITRATE_SYNC";                break;
+            case ERR_MP3_OUT_OF_MEMORY:                     e = "OUT_OF_MEMORY";                    break;
+            case ERR_MP3_NULL_POINTER:                      e = "NULL_POINTER";                     break;
+            case ERR_MP3_INVALID_FRAMEHEADER:               e = "INVALID_FRAMEHEADER";              break;
+            case ERR_MP3_INVALID_SIDEINFO:                  e = "INVALID_SIDEINFO";                 break;
+            case ERR_MP3_INVALID_SCALEFACT:                 e = "INVALID_SCALEFACT";                break;
+            case ERR_MP3_INVALID_HUFFCODES:                 e = "INVALID_HUFFCODES";                break;
+            case ERR_MP3_INVALID_DEQUANTIZE:                e = "INVALID_DEQUANTIZE";               break;
+            case ERR_MP3_INVALID_IMDCT:                     e = "INVALID_IMDCT";                    break;
+            case ERR_MP3_INVALID_SUBBAND:                   e = "INVALID_SUBBAND";                  break;
             default: e = "ERR_UNKNOWN";
         }
         sprintf(chbuf, "MP3 decode error %d : %s", r, e.c_str());
@@ -2988,33 +2988,49 @@ void Audio::printDecodeError(int r) {
     }
     if(m_codec == CODEC_AAC){
         switch(r){
-            case ERR_AAC_NONE:                          e = "NONE";                         break;
-            case ERR_AAC_INDATA_UNDERFLOW:              e = "INDATA_UNDERFLOW";             break;
-            case ERR_AAC_NULL_POINTER:                  e = "NULL_POINTER";                 break;
-            case ERR_AAC_INVALID_ADTS_HEADER:           e = "INVALID_ADTS_HEADER";          break;
-            case ERR_AAC_INVALID_ADIF_HEADER:           e = "INVALID_ADIF_HEADER";          break;
-            case ERR_AAC_INVALID_FRAME:                 e = "INVALID_FRAME";                break;
-            case ERR_AAC_MPEG4_UNSUPPORTED:             e = "MPEG4_UNSUPPORTED";            break;
-            case ERR_AAC_CHANNEL_MAP:                   e = "CHANNEL_MAP";                  break;
-            case ERR_AAC_SYNTAX_ELEMENT:                e = "SYNTAX_ELEMENT";               break;
-            case ERR_AAC_DEQUANT:                       e = "DEQUANT";                      break;
-            case ERR_AAC_STEREO_PROCESS:                e = "STEREO_PROCESS";               break;
-            case ERR_AAC_PNS:                           e = "PNS";                          break;
-            case ERR_AAC_SHORT_BLOCK_DEINT:             e = "SHORT_BLOCK_DEINT";            break;
-            case ERR_AAC_TNS:                           e = "TNS";                          break;
-            case ERR_AAC_IMDCT:                         e = "IMDCT";                        break;
-            case ERR_AAC_SBR_INIT:                      e = "SBR_INIT";                     break;
-            case ERR_AAC_SBR_BITSTREAM:                 e = "SBR_BITSTREAM";                break;
-            case ERR_AAC_SBR_DATA:                      e = "SBR_DATA";                     break;
-            case ERR_AAC_SBR_PCM_FORMAT:                e = "SBR_PCM_FORMAT";               break;
-            case ERR_AAC_SBR_NCHANS_TOO_HIGH:           e = "SBR_NCHANS_TOO_HIGH";          break;
-            case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED:    e = "BR_SINGLERATE_UNSUPPORTED";    break;
-            case ERR_AAC_NCHANS_TOO_HIGH:               e = "NCHANS_TOO_HIGH";              break;
-            case ERR_AAC_RAWBLOCK_PARAMS:               e = "RAWBLOCK_PARAMS";              break;
+            case ERR_AAC_NONE:                              e = "NONE";                             break;
+            case ERR_AAC_INDATA_UNDERFLOW:                  e = "INDATA_UNDERFLOW";                 break;
+            case ERR_AAC_NULL_POINTER:                      e = "NULL_POINTER";                     break;
+            case ERR_AAC_INVALID_ADTS_HEADER:               e = "INVALID_ADTS_HEADER";              break;
+            case ERR_AAC_INVALID_ADIF_HEADER:               e = "INVALID_ADIF_HEADER";              break;
+            case ERR_AAC_INVALID_FRAME:                     e = "INVALID_FRAME";                    break;
+            case ERR_AAC_MPEG4_UNSUPPORTED:                 e = "MPEG4_UNSUPPORTED";                break;
+            case ERR_AAC_CHANNEL_MAP:                       e = "CHANNEL_MAP";                      break;
+            case ERR_AAC_SYNTAX_ELEMENT:                    e = "SYNTAX_ELEMENT";                   break;
+            case ERR_AAC_DEQUANT:                           e = "DEQUANT";                          break;
+            case ERR_AAC_STEREO_PROCESS:                    e = "STEREO_PROCESS";                   break;
+            case ERR_AAC_PNS:                               e = "PNS";                              break;
+            case ERR_AAC_SHORT_BLOCK_DEINT:                 e = "SHORT_BLOCK_DEINT";                break;
+            case ERR_AAC_TNS:                               e = "TNS";                              break;
+            case ERR_AAC_IMDCT:                             e = "IMDCT";                            break;
+            case ERR_AAC_SBR_INIT:                          e = "SBR_INIT";                         break;
+            case ERR_AAC_SBR_BITSTREAM:                     e = "SBR_BITSTREAM";                    break;
+            case ERR_AAC_SBR_DATA:                          e = "SBR_DATA";                         break;
+            case ERR_AAC_SBR_PCM_FORMAT:                    e = "SBR_PCM_FORMAT";                   break;
+            case ERR_AAC_SBR_NCHANS_TOO_HIGH:               e = "SBR_NCHANS_TOO_HIGH";              break;
+            case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED:        e = "BR_SINGLERATE_UNSUPPORTED";        break;
+            case ERR_AAC_NCHANS_TOO_HIGH:                   e = "NCHANS_TOO_HIGH";                  break;
+            case ERR_AAC_RAWBLOCK_PARAMS:                   e = "RAWBLOCK_PARAMS";                  break;
             default: e = "ERR_UNKNOWN";
         }
-
         sprintf(chbuf, "AAC decode error %d : %s", r, e.c_str());
+        if(audio_info) audio_info(chbuf);
+    }
+    if(m_codec == CODEC_FLAC){
+        switch(r){
+            case ERR_FLAC_NONE:                             e = "NONE";                             break;
+            case ERR_FLAC_BLOCKSIZE_TOO_BIG:                e = "BLOCKSIZE TOO BIG";                break;
+            case ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED:   e = "Reserved Blocksize unsupported";   break;
+            case ERR_FLAC_SYNC_CODE_NOT_FOUND:              e = "SYNC CODE NOT FOUND";              break;
+            case ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT:       e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
+            case ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT:      e = "RESERVED CHANNEL ASSIGNMENT";      break;
+            case ERR_FLAC_RESERVED_SUB_TYPE:                e = "RESERVED SUB TYPE";                break;
+            case ERR_FLAC_PREORDER_TOO_BIG:                 e = "PREORDER TOO BIG";                 break;
+            case ERR_FLAC_RESERVED_RESIDUAL_CODING:         e = "RESERVED RESIDUAL CODING";         break;
+            case ERR_FLAC_WRONG_RICE_PARTITION_NR:          e = "WRONG RICE PARTITION NR";          break;
+            default: e = "ERR_UNKNOWN";
+        }
+        sprintf(chbuf, "FLAC decode error %d : %s", r, e.c_str());
         if(audio_info) audio_info(chbuf);
     }
 }

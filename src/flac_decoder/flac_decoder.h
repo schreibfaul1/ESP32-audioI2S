@@ -2,19 +2,15 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Mar 30,2021
+ * Updated on: Apr 01,2021
  *
  *      Author: wolle
  *
  */
-#include "Arduino.h"
-#include "SPI.h"
-#include "SD.h"
-#include "FS.h"
-#include "driver/i2s.h"
-
 #pragma once
 #pragma GCC optimize ("O3")
+
+#include "Arduino.h"
 
 #define MAX_CHANNELS 2
 #define MAX_BLOCKSIZE 8192
@@ -28,9 +24,17 @@ typedef struct FLACsubFramesBuff_t{
 
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
-enum : int8_t  {ERR_FLAC_NONE = 0, ERR_FLAC_BLOCKSIZE_TOO_BIG = -1, ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED = -2,
-                ERR_FLAC_SYNC_CODE_NOT_FOUND = -3, ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT = -4,
-                ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT = -5, GIVE_NEXT_LOOP = +1};
+enum : int8_t  {GIVE_NEXT_LOOP = +1,
+                ERR_FLAC_NONE = 0,
+                ERR_FLAC_BLOCKSIZE_TOO_BIG = -1,
+                ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED = -2,
+                ERR_FLAC_SYNC_CODE_NOT_FOUND = -3,
+                ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT = -4,
+                ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT = -5,
+                ERR_FLAC_RESERVED_SUB_TYPE = -6,
+                ERR_FLAC_PREORDER_TOO_BIG = -7,
+                ERR_FLAC_RESERVED_RESIDUAL_CODING = -8,
+                ERR_FLAC_WRONG_RICE_PARTITION_NR = -9};
 
 typedef struct FLACMetadataBlock_t{
                               // METADATA_BLOCK_STREAMINFO
@@ -130,30 +134,28 @@ typedef struct FLACFrameHeader_t {
 }FLACFrameHeader_t;
 
 
-bool FLACDecoder_AllocateBuffers(void);
-void FLACDecoder_ClearBuffer();
-void FLACDecoder_FreeBuffers();
-int FLACFindSyncWord();
-void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis);
-int FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
-uint32_t readUint(uint8_t nBits);
-int32_t readSignedInt(int nBits);
-int64_t readRiceSignedInt(uint8_t param);
-void alignToByte();
-boolean FLAC_findMagicString();
-boolean FLAC_decodeFile();
-boolean FLAC_decodeFrame();
-int8_t decodeSubframes();
-void decodeSubframe(uint8_t sampleDepth, uint8_t ch);
-void decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch);
-void decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch);
-void decodeResiduals(uint8_t warmup, uint8_t ch);
-void restoreLinearPrediction(uint8_t ch, uint8_t shift);
-
-uint FLACGetOutputSamps();
+bool     FLACDecoder_AllocateBuffers(void);
+void     FLACDecoder_ClearBuffer();
+void     FLACDecoder_FreeBuffers();
+int      FLACFindSyncWord(); // todo
+void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis);
+int8_t   FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
+uint16_t FLACGetOutputSamps();
 uint64_t FLACGetTotoalSamplesInStream();
-int FLACGetBitsPerSample();
-int FLACGetChannels();
+uint8_t  FLACGetBitsPerSample();
+uint8_t  FLACGetChannels();
 uint32_t FLACGetSamprate();
 uint32_t FLACGetSampleRate();
+
+uint32_t readUint(uint8_t nBits);
+int32_t  readSignedInt(int nBits);
+int64_t  readRiceSignedInt(uint8_t param);
+void     alignToByte();
+int8_t   decodeSubframes();
+int8_t   decodeSubframe(uint8_t sampleDepth, uint8_t ch);
+int8_t   decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch);
+int8_t   decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch);
+int8_t   decodeResiduals(uint8_t warmup, uint8_t ch);
+void     restoreLinearPrediction(uint8_t ch, uint8_t shift);
+
 
