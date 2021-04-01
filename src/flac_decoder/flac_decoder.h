@@ -69,6 +69,10 @@ typedef struct FLACMetadataBlock_t{
                               // Total samples in stream. 'Samples' means inter-channel sample,
                               // i.e. one second of 44.1Khz audio will have 44100 samples regardless of the number
      uint64_t totalSamples;   // of channels. A value of zero here means the number of total samples is unknown.
+                              //----------------------------------------------------------------------------------------
+     uint32_t audioDataLength;// is not the filelength, is only the length of the audio datablock in bytes
+
+
 
 }FLACMetadataBlock_t;
 
@@ -138,7 +142,7 @@ bool     FLACDecoder_AllocateBuffers(void);
 void     FLACDecoder_ClearBuffer();
 void     FLACDecoder_FreeBuffers();
 int      FLACFindSyncWord(); // todo
-void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis);
+void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength);
 int8_t   FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 uint16_t FLACGetOutputSamps();
 uint64_t FLACGetTotoalSamplesInStream();

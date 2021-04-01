@@ -2809,7 +2809,8 @@ int Audio::findNextSync(uint8_t* data, size_t len){
         AACSetRawBlockParams(0, 2,44100, 1); m_f_playing = true; nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
-        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream);
+        FLACSetRawBlockParams(m_flacNumChannels,   m_flacSampleRate,
+                              m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         m_f_playing = true; nextSync = 0;
     }
     if(nextSync == -1) {
@@ -2899,7 +2900,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 setChannels(FLACGetChannels());
                 setSampleRate(FLACGetSampRate());
                 setBitsPerSample(FLACGetBitsPerSample());
-                //setBitrate(FLACGetBitRate()); // todo
+                setBitrate(FLACGetBitRate());
             }
             showCodecParams();
         }
@@ -2929,7 +2930,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     if(m_codec == CODEC_MP3) {setBitrate(MP3GetBitrate()) ;} // if not CBR, bitrate can be changed
     if(m_codec == CODEC_M4A) {setBitrate(AACGetBitrate()) ;} // if not CBR, bitrate can be changed
     if(m_codec == CODEC_AAC) {setBitrate(AACGetBitrate()) ;} // if not CBR, bitrate can be changed
-//    if(m_codec == CODEC_FLAC){setBitrate(FLACGetBitRate());}
+    if(m_codec == CODEC_FLAC){setBitrate(FLACGetBitRate());} // if not CBR, bitrate can be changed
     if(!getBitRate()) return;
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -108,11 +108,12 @@ void alignToByte() {
 //----------------------------------------------------------------------------------------------------------------------
 //              F L A C - D E C O D E R
 //----------------------------------------------------------------------------------------------------------------------
-void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis){
+void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength){
     FLACMetadataBlock->numChannels = Chans;
     FLACMetadataBlock->sampleRate = SampRate;
     FLACMetadataBlock->bitsPerSample = BPS;
     FLACMetadataBlock->totalSamples = tsis;  // total samples in stream
+    FLACMetadataBlock->audioDataLength = AuDaLength;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
@@ -276,13 +277,19 @@ uint32_t FLACGetSampRate(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetBitRate(){
-    // todo
+    if(FLACMetadataBlock->totalSamples){
+        float BitsPerSamp = (float)FLACMetadataBlock->audioDataLength / (float)FLACMetadataBlock->totalSamples * 8;
+        return ((uint32_t)BitsPerSamp * FLACMetadataBlock->sampleRate);
+    }
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetAudioFileDuration() {
-    uint32_t afd = FLACGetTotoalSamplesInStream()/ FLACGetSampRate(); // AudioFileDuration
-    return afd;
+    if(FLACGetSampRate()){
+        uint32_t afd = FLACGetTotoalSamplesInStream()/ FLACGetSampRate(); // AudioFileDuration
+        return afd;
+    }
+    return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeSubframes(){
