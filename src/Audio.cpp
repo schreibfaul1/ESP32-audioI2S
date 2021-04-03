@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Mar 31,2021
+ *  Updated on: Apr 03,2021
  *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
  *
  *  This library plays mp3 files from SD card or icy-webstream  via I2S,
@@ -65,6 +65,10 @@ void AudioBuffer::changeMaxBlockSize(uint16_t mbs){
     return;
 }
 
+uint16_t AudioBuffer::getMaxBlockSize(){
+    return m_maxBlockSize;
+}
+
 size_t AudioBuffer::freeSpace() {
     if(m_readPtr >= m_writePtr) {
         m_freeSpace = (m_readPtr - m_writePtr);
@@ -123,14 +127,9 @@ uint8_t* AudioBuffer::getWritePtr() {
 uint8_t* AudioBuffer::getReadPtr() {
     size_t len = m_endPtr - m_readPtr;
     if(len < m_resBuffSize) { // be sure the last frame is completed
-        memcpy(m_endPtr, m_buffer, m_resBuffSize - len);
+        memcpy(m_endPtr, m_buffer, m_resBuffSize - len);  // cpy from m_buffer to m_endPtr with len
     }
     return m_readPtr;
-}
-
-size_t AudioBuffer::getMaxBlockLength(){
-    // max size of read or write blocks
-    return m_maxBlockSize; //  assert(m_maxBlockSize <= m_resBuffSize)
 }
 
 void AudioBuffer::resetBuffer() {
@@ -245,6 +244,7 @@ void Audio::setDefaults() {
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
     AACDecoder_FreeBuffers();
+    FLACDecoder_FreeBuffers();
     client.stop();
     client.flush(); // release memory
     clientsecure.stop();
@@ -476,7 +476,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
         if(!MP3Decoder_AllocateBuffers()){audiofile.close(); return false;}
-        InBuff.changeMaxBlockSize(1600);
+        InBuff.changeMaxBlockSize(m_frameSizeMP3);
         sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -486,7 +486,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".m4a")) {        // M4A section, iTunes
         m_codec = CODEC_M4A;
         if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
-        InBuff.changeMaxBlockSize(1600);
+        InBuff.changeMaxBlockSize(m_frameSizeAAC);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -496,7 +496,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     if(afn.endsWith(".aac")) {        // AAC section, without FileHeader
         m_codec = CODEC_AAC;
         if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
-        InBuff.changeMaxBlockSize(1600);
+        InBuff.changeMaxBlockSize(m_frameSizeAAC);
         sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -505,6 +505,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
 
     if(afn.endsWith(".wav")) { // WAVE section
         m_codec = CODEC_WAV;
+        InBuff.changeMaxBlockSize(m_frameSizeWav);
         m_f_running = true;
         return true;
     } // end WAVE section
@@ -517,7 +518,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
         }
         m_codec = CODEC_FLAC;
         if(!FLACDecoder_AllocateBuffers()){audiofile.close(); return false;}
-        InBuff.changeMaxBlockSize(4*4096);
+        InBuff.changeMaxBlockSize(m_frameSizeFLAC);
         sprintf(chbuf, "FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
         if(audio_info) audio_info(chbuf);
         m_f_running = true;
@@ -588,9 +589,9 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
         contentLength += bytesAddedToBuffer;
         if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
         bytesCanBeRead = InBuff.bufferFilled();
-        if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
+        if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
         if(bytesCanBeRead) {
-            while(InBuff.bufferFilled() >= InBuff.getMaxBlockLength()) { // mp3 frame complete?
+            while(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) { // mp3 frame complete?
                 bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
                 InBuff.bytesWasRead(bytesDecoded);
             }
@@ -943,7 +944,7 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
 
     if(retvalue) {
         if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > InBuff.getMaxBlockLength()) len = InBuff.getMaxBlockLength();
+            if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
             retvalue -= len; // and wait for more bufferdata
             return len;
         }
@@ -1017,6 +1018,12 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         vTaskDelay(2);
         m_flacMaxFrameSize = bigEndian(data + 10, 3);
         sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        if(m_flacMaxFrameSize > InBuff.getMaxBlockSize()) {
+            log_e("FLAC maxFrameSize too large!");
+            stopSong();
+            return -1;
+        }
+//        InBuff.changeMaxBlockSize(m_flacMaxFrameSize);
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
         m_flacSampleRate = nextval >> 4;
@@ -1029,11 +1036,12 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         bps += (*(data +16) >> 4) + 1;
         m_flacBitsPerSample = bps;
         sprintf(chbuf, "FLAC bitsPerSample: %u", m_flacBitsPerSample);   if(audio_info) audio_info(chbuf);
-
-        uint32_t tsis = bigEndian(data + 17, 4);
-        log_i("total samples in stream %u", tsis);
-        m_flacTotalSamplesInStream = tsis;
-        if(bps != 0 && tsis)log_i("audio file duration %u seconds", tsis / m_flacSampleRate);
+        m_flacTotalSamplesInStream = bigEndian(data + 17, 4);
+        sprintf(chbuf, "total samples in stream: %u", m_flacTotalSamplesInStream);   if(audio_info) audio_info(chbuf);
+        if(bps != 0 && m_flacTotalSamplesInStream) {
+            sprintf(chbuf, "audio file duration: %u seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
+            if(audio_info) audio_info(chbuf);
+        }
         m_controlCounter = FLAC_MBH;
         retvalue = l + 3;
         headerSize += retvalue;
@@ -1368,7 +1376,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
 
     if(retvalue) {
         if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > InBuff.getMaxBlockLength()) len = InBuff.getMaxBlockLength();
+            if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
             retvalue -= len; // and wait for more bufferdata
             return len;
         }
@@ -1616,7 +1624,7 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
 
     if(retvalue) {
         if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > InBuff.getMaxBlockLength()) len = InBuff.getMaxBlockLength();
+            if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
             retvalue -= len; // and wait for more bufferdata
             return len;
         }
@@ -1825,10 +1833,14 @@ void Audio::processLocalFile() {
     if(bytesAddedToBuffer > 0) {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
+
+//    if(psramFound() && bytesAddedToBuffer >4096)
+//        vTaskDelay(2);// PSRAM has a bottleneck in the queue, so wait a little bit
+
     if(bytesAddedToBuffer == -1) bytesAddedToBuffer = 0; // read error? eof?
     bytesCanBeRead = InBuff.bufferFilled();
-    if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
-    if(bytesCanBeRead == InBuff.getMaxBlockLength()) { // mp3 or aac frame complete?
+    if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
+    if(bytesCanBeRead == InBuff.getMaxBlockSize()) { // mp3 or aac frame complete?
         if(!m_f_stream) {
             m_f_stream = true;
             if(audio_info) audio_info("stream ready");
@@ -1884,7 +1896,7 @@ void Audio::processLocalFile() {
     if(!bytesAddedToBuffer) {  // eof
         bytesCanBeRead = InBuff.bufferFilled();
         if(bytesCanBeRead > 200){
-            if(bytesCanBeRead > InBuff.getMaxBlockLength()) bytesCanBeRead = InBuff.getMaxBlockLength();
+            if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
             bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead); // play last chunk(s)
             if(bytesDecoded > 0){
                 InBuff.bytesWasRead(bytesDecoded);
@@ -1927,7 +1939,7 @@ void Audio::processWebStream() {
 
     uint32_t bytesCanBeWritten = 0;
     int16_t bytesAddedToBuffer = 0;
-    const uint16_t maxFrameSize = InBuff.getMaxBlockLength();   // every mp3/aac frame is not bigger
+    const uint16_t maxFrameSize = InBuff.getMaxBlockSize();   // every mp3/aac frame is not bigger
     int32_t availableBytes = 0;                                 // available bytes in stream
     bool f_tmr_1s = false;
     static int bytesDecoded;
@@ -1983,6 +1995,9 @@ void Audio::processWebStream() {
         if((m_f_ssl == true) && (availableBytes > 0)) {
             bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), len);
         }
+
+        if(psramFound() && bytesAddedToBuffer >4096)
+            vTaskDelay(2);// PSRAM has a bottleneck in the queue, so wait a little bit
 
         if(bytesAddedToBuffer > 0) {
             if(m_f_webfile) {
@@ -2624,7 +2639,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf); //ok is likely mp3
             if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeMP3);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "mp3", 13) >= 0) {
@@ -2633,7 +2648,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!MP3Decoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeMP3);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "aac", 13) >= 0) {
@@ -2642,7 +2657,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeAAC);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "mp4", 13) >= 0) {      // audio/mp4a, audio/mp4a-latm
@@ -2651,7 +2666,7 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeAAC);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "m4a", 13) >= 0) {      // audio/x-m4a
@@ -2660,14 +2675,14 @@ bool Audio::parseContentType(const char* ct) {
             if(audio_info) audio_info(chbuf);
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeAAC);
             if(audio_info) audio_info(chbuf);
         }
         else if(indexOf(ct, "wav", 13) >= 0) {      // audio/x-wav
             m_codec = CODEC_WAV;
             sprintf(chbuf, "%s, format is wav", ct);
             if(audio_info) audio_info(chbuf);
-            InBuff.changeMaxBlockSize(1600);
+            InBuff.changeMaxBlockSize(m_frameSizeWav);
         }
         else if(indexOf(ct, "ogg", 13) >= 0) {
             m_codec = CODEC_APP;
@@ -2677,9 +2692,15 @@ bool Audio::parseContentType(const char* ct) {
         else if(indexOf(ct, "flac", 13) >= 0) {     // audio/flac, audio/x-flac
             m_codec = CODEC_FLAC;
             sprintf(chbuf, "%s, format is flac", ct);
+            if(audio_info) audio_info(chbuf);
+            if(!psramFound()){
+                if(audio_info) audio_info("FLAC works only with PSRAM!");
+                m_f_running = false;
+                return false;
+            }
             if(!FLACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
             sprintf(chbuf, "FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-            InBuff.changeMaxBlockSize(4*4096);
+            InBuff.changeMaxBlockSize(m_frameSizeFLAC);
             if(audio_info) audio_info(chbuf);
         }
         else {

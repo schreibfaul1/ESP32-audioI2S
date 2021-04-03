@@ -14,7 +14,7 @@
  *
  */
 #pragma once
-#pragma GCC optimize ("O3")
+#pragma GCC optimize ("Ofast")
 
 #include "Arduino.h"
 

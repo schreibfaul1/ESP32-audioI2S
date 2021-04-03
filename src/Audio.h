@@ -8,6 +8,8 @@
 
 #ifndef AUDIO_H_
 #define AUDIO_H_
+#pragma GCC optimize ("Ofast")
+
 #define FF_LFN_UNICODE      2
 #include "Arduino.h"
 #include "base64.h"
@@ -39,26 +41,26 @@ class AudioBuffer {
 // AudioBuffer will be allocated in PSRAM, If PSRAM not available or has not enough space AudioBuffer will be
 // allocated in FlashRAM with reduced size
 //
-//                      m_readPtr                 m_writePtr                 m_endPtr
-//                           |<------dataLength------->|<------ writeSpace ----->|
-//                           ▼                         ▼                         ▼
-// ---------------------------------------------------------------------------------------------------------------
-// |                       <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
-// ---------------------------------------------------------------------------------------------------------------
-// |<------freeSpace-------->|                         |<------freeSpace-------->|
+//  m_buffer            m_readPtr                 m_writePtr                 m_endPtr
+//   |                       |<------dataLength------->|<------ writeSpace ----->|
+//   ▼                       ▼                         ▼                         ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                     <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<-----freeSpace------->|                         |<------freeSpace-------->|
 //
 //
 //
-// if the space between m_readPtr and buffend < 1600 bytes copy data from the beginning to resBuff
-// so that the mp3 frame is always completed
+//   if the space between m_readPtr and buffend < m_resBuffSize copy data from the beginning to resBuff
+//   so that the mp3/aac/flac frame is always completed
 //
-//                               m_writePtr                 m_readPtr        m_endPtr
-//                                    |<-------writeSpace-1 --->|<--dataLength-->|
-//                                    ▼                         ▼                ▼
-// ---------------------------------------------------------------------------------------------------------------
-// |                       <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
-// ---------------------------------------------------------------------------------------------------------------
-// |<---  ------dataLength--  ------>|<-------freeSpace------->|
+//  m_buffer                      m_writePtr                 m_readPtr        m_endPtr
+//   |                                 |<-------writeSpace------>|<--dataLength-->|
+//   ▼                                 ▼                         ▼                ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                        <--m_buffSize-->                                    |      <--m_resBuffSize -->     |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<---  ------dataLength--  ------>|<-------freeSpace------->|
 //
 //
 
@@ -67,6 +69,7 @@ public:
     ~AudioBuffer();                             // frees the buffer
     size_t   init();                            // set default values
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
+    uint16_t getMaxBlockSize();                 // returns maxBlockSize
     size_t   freeSpace();                       // number of free bytes to overwrite
     size_t   writeSpace();                      // space fom writepointer to bufferend
     size_t   bufferFilled();                    // returns the number of filled bytes
@@ -74,7 +77,6 @@ public:
     void     bytesWasRead(size_t br);           // update readpointer
     uint8_t* getWritePtr();                     // returns the current writepointer
     uint8_t* getReadPtr();                      // returns the current readpointer
-    size_t   getMaxBlockLength();               // max length of read or write blocks
     uint32_t getWritePos();                     // write position relative to the beginning
     uint32_t getReadPos();                      // read position relative to the beginning
     void     resetBuffer();                     // restore defaults
@@ -268,6 +270,11 @@ private:
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     i2s_config_t      m_i2s_config; // stores values for I2S driver
     i2s_pin_config_t  m_pin_config;
+
+    const size_t    m_frameSizeWav  = 1600;
+    const size_t    m_frameSizeMP3  = 1600;
+    const size_t    m_frameSizeAAC  = 1600;
+    const size_t    m_frameSizeFLAC = 4096 * 4;
 
     char            chbuf[256];
     char            path[256];

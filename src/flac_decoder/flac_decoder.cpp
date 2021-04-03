@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 01,2021
+ * Updated on: Apr 03,2021
  *
  * Author: Wolle
  *
@@ -20,7 +20,7 @@ FLACMetadataBlock_t *FLACMetadataBlock;
 FLACsubFramesBuff_t *FLACsubFramesBuff;
 
 vector<int32_t>coefs;
-const uint16_t outBuffSize = 2048;   // outbuffer size divided by two, the same size as in audio.h declared
+const uint16_t outBuffSize = 2048;
 uint16_t m_blockSize=0;
 uint16_t m_blockSizeLeft = 0;
 uint16_t m_validSamples = 0;
@@ -65,9 +65,9 @@ void FLACDecoder_ClearBuffer(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_FreeBuffers(){
-        if(FLACFrameHeader)    {free(FLACFrameHeader);  }
-        if(FLACMetadataBlock)  {free(FLACMetadataBlock);}
-        if(FLACsubFramesBuff)  {free(FLACsubFramesBuff);}
+    if(FLACFrameHeader)    {free(FLACFrameHeader);   FLACFrameHeader   = NULL;}
+    if(FLACMetadataBlock)  {free(FLACMetadataBlock); FLACMetadataBlock = NULL;}
+    if(FLACsubFramesBuff)  {free(FLACsubFramesBuff); FLACsubFramesBuff = NULL;}
 }
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
@@ -247,8 +247,9 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         // therefore we need often more than one loop (split outputblock into pieces)
         uint16_t blockSize;
         static uint16_t offset = 0;
-        if(m_blockSize< outBuffSize + offset) blockSize = m_blockSize - offset;
+        if(m_blockSize < outBuffSize + offset) blockSize = m_blockSize - offset;
         else blockSize = outBuffSize;
+
 
         for (int i = 0; i < blockSize; i++) {
             for (int j = 0; j < FLACMetadataBlock->numChannels; j++) {
@@ -257,6 +258,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                 outbuf[2*i+j] = val;
             }
         }
+
         m_validSamples = blockSize * FLACMetadataBlock->numChannels;
         offset += blockSize;
 
@@ -268,6 +270,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     alignToByte();
     readUint(16);
     m_bytesDecoded = *bytesLeft - m_bytesAvail;
+//    log_i("m_bytesDecoded %i", m_bytesDecoded);
 //    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("m_compressionRatio % f", m_compressionRatio);
     *bytesLeft = m_bytesAvail;
