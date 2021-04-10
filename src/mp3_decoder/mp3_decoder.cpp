@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 03.03.2021
+ *  Updated on: 10.04.2021
  */
 #include "mp3_decoder.h"
 
@@ -1511,7 +1511,30 @@ void MP3Decoder_ClearBuffer(void) {
  **********************************************************************************************************************/
 bool MP3Decoder_AllocateBuffers(void) {
 
-    if(psramInit()) {
+    // try first SRAM because its faster than PSRAM
+
+
+    if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)      malloc(sizeof(MP3DecInfo_t)   );}
+    if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)     malloc(sizeof(FrameHeader_t)  );}
+    if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)        malloc(sizeof(SideInfo_t)     );}
+    if(!m_ScaleFactorJS)    {m_ScaleFactorJS = (ScaleFactorJS_t*)   malloc(sizeof(ScaleFactorJS_t));}
+    if(!m_HuffmanInfo)      {m_HuffmanInfo   = (HuffmanInfo_t*)     malloc(sizeof(HuffmanInfo_t)  );}
+    if(!m_DequantInfo)      {m_DequantInfo   = (DequantInfo_t*)     malloc(sizeof(DequantInfo_t)  );}
+    if(!m_IMDCTInfo)        {m_IMDCTInfo     = (IMDCTInfo_t*)       malloc(sizeof(IMDCTInfo_t)    );}
+    if(!m_SubbandInfo)      {m_SubbandInfo   = (SubbandInfo_t*)     malloc(sizeof(SubbandInfo_t)  );}
+    if(!m_MP3FrameInfo)     {m_MP3FrameInfo  = (MP3FrameInfo_t*)    malloc(sizeof(MP3FrameInfo_t) );}
+
+    if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
+       !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
+        log_i("not enough memory to allocate mp3decoder buffers in heap, look for PSRAM");
+        MP3Decoder_FreeBuffers();
+    }
+    else{
+        MP3Decoder_ClearBuffer();
+        return true; // success, all buffers allocated in SRAM (Heap)
+    }
+
+    if(psramFound()) {
         // PSRAM found, Buffer will be allocated in PSRAM
         if(!m_MP3DecInfo)    {m_MP3DecInfo    = (MP3DecInfo_t*)    ps_calloc(sizeof(MP3DecInfo_t)   , sizeof(uint8_t));}
         if(!m_FrameHeader)   {m_FrameHeader   = (FrameHeader_t*)   ps_calloc(sizeof(FrameHeader_t)  , sizeof(uint8_t));}
@@ -1524,20 +1547,14 @@ bool MP3Decoder_AllocateBuffers(void) {
         if(!m_MP3FrameInfo)  {m_MP3FrameInfo  = (MP3FrameInfo_t*)  ps_calloc(sizeof(MP3FrameInfo_t) , sizeof(uint8_t));}
     }
     else {
-        if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)      malloc(sizeof(MP3DecInfo_t)   );}
-        if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)     malloc(sizeof(FrameHeader_t)  );}
-        if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)        malloc(sizeof(SideInfo_t)     );}
-        if(!m_ScaleFactorJS)    {m_ScaleFactorJS = (ScaleFactorJS_t*)   malloc(sizeof(ScaleFactorJS_t));}
-        if(!m_HuffmanInfo)      {m_HuffmanInfo   = (HuffmanInfo_t*)     malloc(sizeof(HuffmanInfo_t)  );}
-        if(!m_DequantInfo)      {m_DequantInfo   = (DequantInfo_t*)     malloc(sizeof(DequantInfo_t)  );}
-        if(!m_IMDCTInfo)        {m_IMDCTInfo     = (IMDCTInfo_t*)       malloc(sizeof(IMDCTInfo_t)    );}
-        if(!m_SubbandInfo)      {m_SubbandInfo   = (SubbandInfo_t*)     malloc(sizeof(SubbandInfo_t)  );}
-        if(!m_MP3FrameInfo)     {m_MP3FrameInfo  = (MP3FrameInfo_t*)    malloc(sizeof(MP3FrameInfo_t) );}
+        log_e("not enough memory to allocate mp3decoder buffers");
+        return false;
     }
 
     if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
        !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
-        log_e("not enough memory to allocate mp3decoder buffers");
+        log_e("not enough memory to allocate mp3decoder buffers in PSRAM");
+        return false;
     }
     MP3Decoder_ClearBuffer();
     return true;

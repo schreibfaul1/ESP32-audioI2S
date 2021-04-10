@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 03.03.2021
+ *  Updated on: 10.04.2021
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1623,7 +1623,8 @@ static const int negMask[3] = {~0x03, ~0x07, ~0x0f};
 /***********************************************************************************************************************
  * Function:    AACDecoder_AllocateBuffers
  *
- * Description: allocate all the memory needed for the MP3 decoder
+ * Description: allocate all the memory needed for the AAC decoder
+ *              try heap first, because it's faster
  *
  * Inputs:      none
  *
@@ -1634,17 +1635,35 @@ static const int negMask[3] = {~0x03, ~0x07, ~0x0f};
  **********************************************************************************************************************/
 bool AACDecoder_AllocateBuffers(void){
 
-    if(psramInit()) {
+    if(!m_AACDecInfo)      {m_AACDecInfo   = (AACDecInfo_t*)           malloc(sizeof(AACDecInfo_t));}
+    if(!m_PSInfoBase)      {m_PSInfoBase   = (PSInfoBase_t*)           malloc(sizeof(PSInfoBase_t));}
+    if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
+
+    if(!m_AACDecInfo || !m_PSInfoBase || !m_pce[0]) {
+            log_i("not enough memory to allocate aacdecoder buffers in heap, try PSRAM");
+            AACDecoder_FreeBuffers();
+    }
+    else{
+        goto nextStep;
+    }
+
+    if(psramFound()) {
         // PSRAM found, Buffer will be allocated in PSRAM
         if(!m_AACDecInfo) {m_AACDecInfo   = (AACDecInfo_t*)           ps_calloc(sizeof(AACDecInfo_t), sizeof(uint8_t));}
         if(!m_PSInfoBase) {m_PSInfoBase   = (PSInfoBase_t*)           ps_calloc(sizeof(PSInfoBase_t), sizeof(uint8_t));}
         if(!m_pce[0])    {m_pce[0] = (ProgConfigElement_t*) ps_calloc(sizeof(ProgConfigElement_t)*16, sizeof(uint8_t));}
     }
-    else {
-        if(!m_AACDecInfo)      {m_AACDecInfo   = (AACDecInfo_t*)           malloc(sizeof(AACDecInfo_t));}
-        if(!m_PSInfoBase)      {m_PSInfoBase   = (PSInfoBase_t*)           malloc(sizeof(PSInfoBase_t));}
-        if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
+
+    if(!m_AACDecInfo || !m_PSInfoBase || !m_pce[0]) {
+            log_e("not enough memory to allocate aacdecoder buffers");
+            AACDecoder_FreeBuffers();
+            return false;
     }
+
+
+    nextStep:
+
+
 #ifdef AAC_ENABLE_SBR
     // can't allocated in PSRAM, because PSRAM ist too slow
     if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)malloc(sizeof(PSInfoSBR_t));}
@@ -1655,10 +1674,7 @@ bool AACDecoder_AllocateBuffers(void){
     }
 #endif
 
-    if(!m_AACDecInfo || !m_PSInfoBase) {
-            log_e("not enough memory to allocate aacdecoder buffers");
-            return false;
-    }
+
     // Clear Buffer
     memset( m_AACDecInfo,        0, sizeof(AACDecInfo_t));              //Clear AACDecInfo
     memset( m_PSInfoBase,        0, sizeof(PSInfoBase_t));              //Clear PSInfoBase
