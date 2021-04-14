@@ -118,17 +118,7 @@ public:
     uint8_t  getChannels();
     uint32_t getBitRate();
 
-    /**
-     * @brief Get the audio file duration in seconds
-     * 
-     * @return uint32_t file duration in seconds, 0 if no file active
-     */
     uint32_t getAudioFileDuration();
-    /**
-     * @brief Get the current plying time in seconds
-     * 
-     * @return uint32_t current second of audio file, 0 if no file active
-     */
     uint32_t getAudioCurrentTime();
     bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
@@ -137,20 +127,38 @@ public:
     bool setTimeOffset(int sec);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
     void stopSong();
-    /**
-     * @brief pauseResume pauses current playback 
-     * 
-     * @return true if audio file or stream is active, false otherwise
-     */
+
     bool pauseResume();
     void forceMono(bool m);
     void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
     uint8_t getVolume();
+
+    ///
+     /// @brief A method that return data mode.
+     /// 
+     /// @return uint8_t data mode.
     inline uint8_t getDatamode(){return m_datamode;}
+
+    ///
+     /// @brief A method set the Datamode object
+     /// 
+     /// @param dm data mode.
     inline void setDatamode(uint8_t dm){m_datamode=dm;}
+
+    ///
+     /// @brief Return available bytes to play from stream.
+     /// 
+     /// @return uint32_t Available data in bytes.
     inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
-    bool isRunning() {return m_f_running;}
+    
+    ///
+     /// @brief A method that return current playing state.
+     /// 
+     /// @return true if something is played.
+     /// @return false if nothing is played.
+    inline bool isRunning() {return m_f_running;}
+ 
     esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
