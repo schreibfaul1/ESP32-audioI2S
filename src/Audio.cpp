@@ -456,17 +456,21 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     }
     path[j] = 0;
     memcpy(m_audioName, s_file.c_str() + 1, s_file.length()); // skip the first '/'
+
     sprintf(chbuf, "Reading file: \"%s\"", m_audioName);
     if(audio_info) audio_info(chbuf);
     
     if(fs.exists(path)) {
         audiofile = fs.open(path); // #86
     } else {
-        audiofile = fs.open(s_file);
+        if(fs.exists(s_file)) {
+            audiofile = fs.open(s_file);
+        }
     }
     
     if(!audiofile) {
         if(audio_info) audio_info("Failed to open file for reading");
+        m_f_localfile = false;
         return false;
     }
 
@@ -874,19 +878,20 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             sprintf(chbuf, "DataBlockSize: %u", dbs); audio_info(chbuf);
         //    sprintf(chbuf, "BitsPerSample: %u", bps); audio_info(chbuf);
         }
+        if((bps != 8) && (bps != 16)){
+            sprintf(chbuf, "BitsPerSample is %u,  must be 8 or 16" , bps); audio_info(chbuf);
+            stopSong();
+            return -1;
+        }
+        if((nic != 1) && (nic != 2)){
+            sprintf(chbuf, "num channels is %u,  must be 1 or 2" , nic); audio_info(chbuf);
+            stopSong();
+            return -1;
+        }
         if(fc != 1) {
             if(audio_info) audio_info("format code is not 1 (PCM)");
+            stopSong();
             return -1 ; //false;
-        }
-
-        if(nic != 1 && nic != 2) {
-            if(audio_info) audio_info("number of channels must be 1 or 2");
-            return -1; //false;
-        }
-
-        if(bps != 8 && bps != 16) {
-            if(audio_info) audio_info("bits per sample must be 8 or 16");
-            return -1; //false;
         }
         setBitsPerSample(bps);
         setChannels(nic);
@@ -3020,6 +3025,7 @@ void Audio::compute_audioCurrentTime(int bd) {
         m_avr_bitrate = getBitRate();
         old_bitrate = getBitRate();
     }
+    if(!m_avr_bitrate) return;
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if(loop_counter < 1000) loop_counter ++;
