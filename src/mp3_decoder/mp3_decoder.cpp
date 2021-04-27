@@ -1526,7 +1526,7 @@ bool MP3Decoder_AllocateBuffers(void) {
 
     if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
        !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
-        log_i("not enough memory to allocate mp3decoder buffers in heap, look for PSRAM");
+        log_i("heap is too small, try PSRAM");
         MP3Decoder_FreeBuffers();
     }
     else{

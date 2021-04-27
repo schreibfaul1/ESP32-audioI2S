@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 03,2021
+ * Updated on: Apr 27,2021
  *
  * Author: Wolle
  *
@@ -32,6 +32,7 @@ float    m_compressionRatio = 0;
 uint16_t m_rIndex=0;
 uint64_t m_bitBuffer = 0;
 uint8_t  m_bitBufferLen = 0;
+bool     m_f_OggS_found = false;
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -135,7 +136,79 @@ int FLACFindSyncWord(unsigned char *buf, int nBytes) {
     return -1;
 }
 //----------------------------------------------------------------------------------------------------------------------
+int FLACFindOggSyncWord(unsigned char *buf, int nBytes){
+    int i;
+
+    /* find byte-aligned syncword - need 13 matching bits */
+    for (i = 0; i < nBytes - 1; i++) {
+        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xF8) == 0xF8) {
+            FLACDecoderReset();
+            log_i("FLAC sync found");
+            return i;
+        }
+    }
+    /* find byte-aligned OGG Magic - OggS */
+    for (i = 0; i < nBytes - 1; i++) {
+        if ((buf[i + 0] == 'O') && (buf[i + 1] == 'g') && (buf[i + 2] == 'g') && (buf[i + 3] == 'S')) {
+            FLACDecoderReset();
+            log_i("OggS found");
+            m_f_OggS_found = true;
+            return i;
+        }
+    }
+    return -1;
+}
+//----------------------------------------------------------------------------------------------------------------------
+int FLACparseOggHeader(unsigned char *buf){
+    uint8_t i = 0;
+    uint8_t ssv = *(buf + i);                  // stream_structure_version
+    i++;
+    uint8_t htf = *(buf + i);                  // header_type_flag
+    i++;
+    uint32_t tmp = 0;                         // absolute granule position
+    for (int j = 0; j < 4; j++) {
+        tmp += *(buf + j + i) << (4 -j - 1) * 8;
+    }
+    i += 4;
+    uint64_t agp = (uint64_t) tmp << 32;
+    for (int j = 0; j < 4; j++) {
+        agp += *(buf + j + i) << (4 -j - 1) * 8;
+    }
+    i += 4;
+    uint32_t ssnr = 0;                        // stream serial number
+    for (int j = 0; j < 4; j++) {
+        ssnr += *(buf + j + i) << (4 -j - 1) * 8;
+    }
+    i += 4;
+    uint32_t psnr = 0;                        // page sequence no
+    for (int j = 0; j < 4; j++) {
+        psnr += *(buf + j + i) << (4 -j - 1) * 8;
+    }
+    i += 4;
+    uint32_t pchk = 0;                        // page checksum
+    for (int j = 0; j < 4; j++) {
+        pchk += *(buf + j + i) << (4 -j - 1) * 8;
+    }
+    i += 4;
+    uint8_t psegm = *(buf + i);
+    i++;
+    uint8_t psegmBuff[256];
+    uint32_t pageLen = 0;
+    for(uint8_t j = 0; j < psegm; j++){
+        psegmBuff[j] = *(buf + i);
+        pageLen += psegmBuff[j];
+        i++;
+    }
+    return i;
+}
+//----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
+
+    if(m_f_OggS_found == true){
+        m_f_OggS_found = false;
+        *bytesLeft -= FLACparseOggHeader(inbuf);
+        return ERR_FLAC_NONE;
+    }
 
     if(m_status != OUT_SAMPLES){
         m_rIndex = 0;
@@ -144,12 +217,20 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     }
 
     if(m_status == DECODE_FRAME){  // Read a ton of header fields, and ignore most of them
-//        FLACFindSyncWord(inbuf, *bytesLeft);
+
+        if ((inbuf[0] == 'O') && (inbuf[1] == 'g') && (inbuf[2] == 'g') && (inbuf[3] == 'S')){
+            *bytesLeft -= 4;
+            m_f_OggS_found = true;
+            return ERR_FLAC_NONE;
+        }
+
         uint32_t temp = readUint(8);
         uint16_t sync = temp << 6 |readUint(6);
         if (sync != 0x3FFE){
-//            log_i("Sync code expected 0x3FFE but received %X", sync);
-            return ERR_FLAC_SYNC_CODE_NOT_FOUND;}
+            log_i("Sync code expected 0x3FFE but received %X", sync);
+            return ERR_FLAC_SYNC_CODE_NOT_FOUND;
+        }
+
         readUint(1);
         FLACFrameHeader->blockingStrategy = readUint(1);
         FLACFrameHeader->blockSizeCode = readUint(4);

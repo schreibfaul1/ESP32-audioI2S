@@ -1640,7 +1640,7 @@ bool AACDecoder_AllocateBuffers(void){
     if(!m_pce[0])          {m_pce[0]       = (ProgConfigElement_t*)    malloc(sizeof(ProgConfigElement_t)*16);}
 
     if(!m_AACDecInfo || !m_PSInfoBase || !m_pce[0]) {
-            log_i("not enough memory to allocate aacdecoder buffers in heap, try PSRAM");
+            log_i("heap is too small, try PSRAM");
             AACDecoder_FreeBuffers();
     }
     else{
@@ -1659,7 +1659,7 @@ bool AACDecoder_AllocateBuffers(void){
             AACDecoder_FreeBuffers();
             return false;
     }
-
+    log_i("AAC buffers allocated in PSRAM");
 
     nextStep:
 
