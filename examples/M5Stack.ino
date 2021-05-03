@@ -32,7 +32,7 @@ void setup() {
   /* Setup wm8978 I2S interface */
   audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_DIN);
 
-  /* Setup wm8978 MCLK on gpio - for example M5Stack Node needs a 24Mhz clock on gpio 0 */
+  /* Setup wm8978 MCLK - for example M5Stack Node needs MCLK on GPIO 0 */
   audio.i2s_mclk_pin_select(I2S_MCLKPIN);
 
   WiFi.begin("xxx", "xxx");
