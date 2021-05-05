@@ -449,7 +449,6 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     char audioName[256];
 
     setDefaults(); // free buffers an set defaults
-    m_f_localfile = true;
 
     memcpy(audioName, path, strlen(path)+1);
     if(audioName[0] != '/'){
@@ -460,7 +459,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     }
 
     sprintf(chbuf, "Reading file: \"%s\"", audioName);
-    if(audio_info) audio_info(chbuf);
+    if(audio_info) {vTaskDelay(2); audio_info(chbuf);}
     
     if(fs.exists(audioName)) {
         audiofile = fs.open(audioName); // #86
@@ -470,13 +469,13 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
             audiofile = fs.open(audioName);
         }
     }
-    
+
     if(!audiofile) {
-        if(audio_info) audio_info("Failed to open file for reading");
-        m_f_localfile = false;
+        if(audio_info) {vTaskDelay(2); audio_info("Failed to open file for reading");}
         return false;
     }
 
+    m_f_localfile = true;
     m_file_size = audiofile.size();//TEST loop
 
     String afn = (String) audiofile.name();                   // audioFileName
@@ -515,6 +514,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         m_codec = CODEC_WAV;
         InBuff.changeMaxBlockSize(m_frameSizeWav);
         m_f_running = true;
+        log_i("is open m_f_localfile = %i", m_f_localfile);
         return true;
     } // end WAVE section
 
@@ -1952,14 +1952,12 @@ void Audio::loop() {
     // - localfile - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_localfile) {                                      // Playing file fron SPIFFS or SD?
         processLocalFile();
-        return;
     }
     // - webstream - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_webstream) {                                      // Playing file from URL?
         processWebStream();
-        return;
     }
-    return; // empty loop
+    return;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {
@@ -1971,7 +1969,7 @@ void Audio::processLocalFile() {
     uint32_t bytesCanBeRead = 0;
     int32_t bytesAddedToBuffer = 0;
 
-    if(m_f_firstCall) {  // runs only ont time per connection, prepare for start
+    if(m_f_firstCall) {  // runs only one time per connection, prepare for start
         m_f_firstCall = false;
         return;
     }
@@ -2078,16 +2076,18 @@ void Audio::processLocalFile() {
             m_audioCurrentTime = 0;
             return;
         } //TEST loop
-        sprintf(chbuf, "End of file \"%s\"", audiofile.name());
-        if(audio_info) audio_info(chbuf);
-        if(audio_eof_mp3) audio_eof_mp3(audiofile.name());
-        stopSong();
         m_f_stream = false;
         m_f_localfile = false;
+        String afn = audiofile.name(); // store temporary the name
+        stopSong();
         if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
+        sprintf(chbuf, "End of file \"%s\"", afn.c_str());
+        if(audio_info) {vTaskDelay(2); audio_info(chbuf);}
+        if(audio_eof_mp3) audio_eof_mp3(afn.c_str());
+
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
