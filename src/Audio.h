@@ -2,8 +2,8 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 10,2021
- *      Author: Wolle (schreibfaul1)   ¯\_(ツ)_/¯
+ *  Updated on: May 04,2021
+ *      Author: Wolle (schreibfaul1)
  */
 
 #ifndef AUDIO_H_
@@ -106,9 +106,10 @@ class Audio : private AudioBuffer{
 public:
     Audio(); // #99
     ~Audio();
-    bool connecttoFS(fs::FS &fs, const char* file);
-    bool connecttoSD(const char* sdfile);
+    bool connecttoFS(fs::FS &fs, const char* path);
+    bool connecttoSD(const char* path);
     bool setFileLoop(bool input);//TEST loop
+    void UTF8toASCII(char* str);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     void loop();
@@ -279,10 +280,8 @@ private:
     const size_t    m_frameSizeFLAC = 4096 * 4;
 
     char            chbuf[256];
-    char            path[256];
     char            m_plsURL[256];                  // URL found in playlist
     char            m_lastHost[256];                // Store the last URL to a webstream
-    char            m_audioName[256];               // the name of the file
     filter_t        m_filter[3];                    // digital filters
     size_t          m_id3Size = 0;                  // length id3 tag
     size_t          m_wavHeaderSize = 0;

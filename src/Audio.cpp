@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 26,2021
+ *  Updated on: May 04,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -337,15 +337,15 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_colon = s_host.indexOf("/");                                  // Search for begin of extension
-    if(pos_colon > 0) {                                             // Is there an extension?
+    if(pos_colon > 0) {                                               // Is there an extension?
         extension = s_host.substring(pos_colon);                      // Yes, change the default
         hostwoext = s_host.substring(0, pos_colon);                   // Host without extension
     }
     // In the URL there may be a portnumber
     pos_colon = s_host.indexOf(":");                                  // Search for separator
     pos_ampersand = s_host.indexOf("&");                              // Search for additional extensions
-    if(pos_colon >= 0) {                                            // Portnumber available?
-        if((pos_ampersand == -1) or (pos_ampersand > pos_colon)) {  // Portnumber is valid if ':' comes before '&' #82
+    if(pos_colon >= 0) {                                              // Portnumber available?
+        if((pos_ampersand == -1) or (pos_ampersand > pos_colon)) {    // Portnumber is valid if ':' comes before '&' #82
             port = s_host.substring(pos_colon + 1).toInt();           // Get portnumber as integer
             hostwoext = s_host.substring(0, pos_colon);               // Host without portnumber
         }
@@ -405,13 +405,7 @@ bool Audio::setFileLoop(bool input){
     return input;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoSD(const char* sdfile) {
-    return connecttoFS(SD, sdfile);
-}
-//---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoFS(fs::FS &fs, const char* file) {
-
-    String s_file = file;
+void Audio::UTF8toASCII(char* str){
 
     const uint8_t ascii[60] = {
     //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
@@ -424,38 +418,56 @@ bool Audio::connecttoFS(fs::FS &fs, const char* file) {
     //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
       000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
 
-    setDefaults(); // free buffers an set defaults
-
     uint16_t i = 0, j=0, s = 0;
     bool f_C3_seen = false;
-    m_f_localfile = true;
 
-    if(!s_file.startsWith("/")) s_file = "/" + s_file;
-    while(s_file[i] != 0) {                                     // convert UTF8 to ASCII
-        if(s_file[i] == 195){                                   // C3
+    while(str[i] != 0) {                                     // convert UTF8 to ASCII
+        if(str[i] == 195){                                   // C3
             i++;
             f_C3_seen = true;
             continue;
         }
-        path[j] = s_file[i];
-        if(path[j] > 128 && path[j] < 189 && f_C3_seen == true) {
-            s = ascii[path[j] - 129];
-            if(s != 0) path[j] = s;                         // found a related ASCII sign
+        str[j] = str[i];
+        if(str[j] > 128 && str[j] < 189 && f_C3_seen == true) {
+            s = ascii[str[j] - 129];
+            if(s != 0) str[j] = s;                         // found a related ASCII sign
             f_C3_seen = false;
         }
         i++; j++;
     }
-    path[j] = 0;
-    memcpy(m_audioName, s_file.c_str() + 1, s_file.length()); // skip the first '/'
+    str[j] = 0;
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool Audio::connecttoSD(const char* path) {
+    return connecttoFS(SD, path);
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool Audio::connecttoFS(fs::FS &fs, const char* path) {
 
-    sprintf(chbuf, "Reading file: \"%s\"", m_audioName);
+    if(strlen(path)>255) return false;
+
+    char audioName[256];
+
+    setDefaults(); // free buffers an set defaults
+    m_f_localfile = true;
+
+    memcpy(audioName, path, strlen(path)+1);
+    if(audioName[0] != '/'){
+        for(int i = 255; i > 0; i--){
+            audioName[i] = audioName[i-1];
+        }
+        audioName[0] = '/';
+    }
+
+    sprintf(chbuf, "Reading file: \"%s\"", audioName);
     if(audio_info) audio_info(chbuf);
     
-    if(fs.exists(path)) {
-        audiofile = fs.open(path); // #86
+    if(fs.exists(audioName)) {
+        audiofile = fs.open(audioName); // #86
     } else {
-        if(fs.exists(s_file)) {
-            audiofile = fs.open(s_file);
+        UTF8toASCII(audioName);
+        if(fs.exists(audioName)) {
+            audiofile = fs.open(audioName);
         }
     }
     
@@ -1011,7 +1023,12 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         sprintf(chbuf, "FLAC maxBlockSize: %u", m_flacMaxBlockSize); if(audio_info) audio_info(chbuf);
         vTaskDelay(2);
         m_flacMaxFrameSize = bigEndian(data + 10, 3);
-        sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        if(m_flacMaxFrameSize){
+            sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        }
+        else {
+            if(audio_info) audio_info("FLAC maxFrameSize: N/A");
+        }
         if(m_flacMaxFrameSize > InBuff.getMaxBlockSize()) {
             log_e("FLAC maxFrameSize too large!");
             stopSong();
@@ -1029,9 +1046,19 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data +16) >> 4) + 1;
         m_flacBitsPerSample = bps;
+        if((bps != 8) && (bps != 16)){
+            log_e("bits per sample must be 8 or 16, is %i", bps);
+            stopSong();
+            return -1;
+        }
         sprintf(chbuf, "FLAC bitsPerSample: %u", m_flacBitsPerSample);   if(audio_info) audio_info(chbuf);
         m_flacTotalSamplesInStream = bigEndian(data + 17, 4);
-        sprintf(chbuf, "total samples in stream: %u", m_flacTotalSamplesInStream);   if(audio_info) audio_info(chbuf);
+        if(m_flacTotalSamplesInStream){
+            sprintf(chbuf, "total samples in stream: %u", m_flacTotalSamplesInStream); if(audio_info) audio_info(chbuf);
+        }
+        else{
+            if(audio_info) audio_info("total samples in stream: N/A");
+        }
         if(bps != 0 && m_flacTotalSamplesInStream) {
             sprintf(chbuf, "audio file duration: %u seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
             if(audio_info) audio_info(chbuf);
@@ -1714,6 +1741,7 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         }
         i += 4;
         // STREAMINFO metadata block begins
+        uint32_t mblen = bigEndian(data + i, 4);
         i += 4; // skip metadata block header + length
         i += 2; // skip minimun block size
         m_flacMaxBlockSize = bigEndian(data + i, 2);
@@ -1724,7 +1752,12 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         vTaskDelay(2);
         m_flacMaxFrameSize = bigEndian(data + i, 3);
         i += 3;
-        sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        if(m_flacMaxFrameSize){
+            sprintf(chbuf, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); if(audio_info) audio_info(chbuf);
+        }
+        else {
+            if(audio_info) audio_info("FLAC maxFrameSize: N/A");
+        }
         if(m_flacMaxFrameSize > InBuff.getMaxBlockSize()) {
             log_e("FLAC maxFrameSize too large!");
             stopSong();
@@ -1749,10 +1782,20 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         bps += (*(data +i) >> 4) + 1;
         i++;
         m_flacBitsPerSample = bps;
+        if((bps != 8) && (bps != 16)){
+            log_e("bits per sample must be 8 or 16, is %i", bps);
+            stopSong();
+            return -1;
+        }
         sprintf(chbuf, "FLAC bitsPerSample: %u", m_flacBitsPerSample);   if(audio_info) audio_info(chbuf);
         m_flacTotalSamplesInStream = bigEndian(data + i, 4);
         i++;
-        sprintf(chbuf, "total samples in stream: %u", m_flacTotalSamplesInStream);   if(audio_info) audio_info(chbuf);
+        if(m_flacTotalSamplesInStream) {
+            sprintf(chbuf, "total samples in stream: %u", m_flacTotalSamplesInStream); if(audio_info) audio_info(chbuf);
+        }
+        else {
+            if(audio_info) audio_info("total samples in stream: N/A");
+        }
         if(bps != 0 && m_flacTotalSamplesInStream) {
             sprintf(chbuf, "audio file duration: %u seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
             if(audio_info) audio_info(chbuf);
@@ -2035,6 +2078,9 @@ void Audio::processLocalFile() {
             m_audioCurrentTime = 0;
             return;
         } //TEST loop
+        sprintf(chbuf, "End of file \"%s\"", audiofile.name());
+        if(audio_info) audio_info(chbuf);
+        if(audio_eof_mp3) audio_eof_mp3(audiofile.name());
         stopSong();
         m_f_stream = false;
         m_f_localfile = false;
@@ -2042,9 +2088,6 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
-        sprintf(chbuf, "End of file \"%s\"", m_audioName);
-        if(audio_info) audio_info(chbuf);
-        if(audio_eof_mp3) audio_eof_mp3(m_audioName);
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2411,7 +2454,7 @@ void Audio::processControlData(uint8_t b) {
                 // Sometimes it is just other info like:
                 // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
                 // Isolate the StreamTitle, remove leading and trailing quotes if present.
-                //log_i("ST %s", m_metaline.c_str());
+                // log_i("ST %s", metaline);
 
                 int pos = indexOf(metaline, "song_spot", 0);    // remove some irrelevant infos
                 if(pos > 3) {                                   // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
@@ -2949,8 +2992,13 @@ void Audio::showCodecParams(){
     if(audio_info) audio_info(chbuf);
     sprintf(chbuf,"BitsPerSample: %i", getBitsPerSample());
     if(audio_info) audio_info(chbuf);
-    sprintf(chbuf,"BitRate: %i", getBitRate());
-    if(audio_info) audio_info(chbuf);
+    if(getBitRate()){
+        sprintf(chbuf,"BitRate: %i", getBitRate());
+        if(audio_info) audio_info(chbuf);
+    }
+    else {
+        if(audio_info) audio_info("BitRate: N/A");
+    }
 
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
         uint8_t answ;
