@@ -2,11 +2,10 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 04,2021
+ *  Updated on: May 12,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
-
 #include "Audio.h"
 #include "mp3_decoder/mp3_decoder.h"
 #include "aac_decoder/aac_decoder.h"
@@ -280,23 +279,23 @@ void Audio::setDefaults() {
     m_playlistFormat = FORMAT_NONE;
     m_id3Size = 0;
     m_wavHeaderSize = 0;
-    m_audioCurrentTime = 0;                                   // Reset playtimer
+    m_audioCurrentTime = 0;                                 // Reset playtimer
     m_audioFileDuration = 0;
     m_audioDataStart = 0;
     m_audioDataSize = 0;
-    m_avr_bitrate = 0;                                        // the same as m_bitrate if CBR, median if VBR
-    m_bitRate = 0;                                            // Bitrate still unknown
-    m_bytesNotDecoded = 0;                                    // counts all not decodable bytes
-    m_chunkcount = 0;                                         // for chunked streams
+    m_avr_bitrate = 0;                                      // the same as m_bitrate if CBR, median if VBR
+    m_bitRate = 0;                                          // Bitrate still unknown
+    m_bytesNotDecoded = 0;                                  // counts all not decodable bytes
+    m_chunkcount = 0;                                       // for chunked streams
     m_codec = CODEC_NONE;
-    m_contentlength = 0;                                      // If Content-Length is known, count it
+    m_contentlength = 0;                                    // If Content-Length is known, count it
     m_curSample = 0;
-    m_metaCount = 0;                                          // count bytes between metadata
-    m_metaint = 0;                                            // No metaint yet
-    m_LFcount = 0;                                            // For end of header detection
-    m_st_remember = 0;                                        // Delete the last streamtitle hash
-    m_totalcount = 0;                                         // Reset totalcount
-    m_controlCounter = 0;                                     // Status within readID3data() and readWaveHeader()
+    m_metaCount = 0;                                        // count bytes between metadata
+    m_metaint = 0;                                          // No metaint yet
+    m_LFcount = 0;                                          // For end of header detection
+    m_st_remember = 0;                                      // Delete the last streamtitle hash
+    m_totalcount = 0;                                       // Reset totalcount
+    m_controlCounter = 0;                                   // Status within readID3data() and readWaveHeader()
     m_channels = 0;
 
 
@@ -529,7 +528,6 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         m_codec = CODEC_WAV;
         InBuff.changeMaxBlockSize(m_frameSizeWav);
         m_f_running = true;
-        log_i("is open m_f_localfile = %i", m_f_localfile);
         return true;
     } // end WAVE section
 
@@ -765,7 +763,9 @@ void Audio::showID3Tag(String tag, const char* value){
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::unicode2utf8(char* buff, uint32_t len){
     // converts unicode in UTF-8, buff contains the string to be converted up to len
-    // pos will be updated after the converting is complete
+    // range U+1 ... U+FFFF
+    uint8_t* tmpbuff = (uint8_t*)malloc(len * 2);
+    if(!tmpbuff) {log_e("out of memory"); return;}
     bool bitorder = false;
     uint16_t j = 0;
     uint16_t k = 0;
@@ -777,47 +777,50 @@ void Audio::unicode2utf8(char* buff, uint32_t len){
         if((buff[m] == 0xFE) && (buff[m + 1] == 0xFF)) {
             bitorder = true;
             j = m + 2;
-        }  // MSB/LSB
+        }  // LSB/MSB
         if((buff[m] == 0xFF) && (buff[m + 1] == 0xFE)) {
             bitorder = false;
             j = m + 2;
-        }  //LSB/MSB
+        }  // MSB/LSB
         m++;
     } // seek for last bitorder
     m = 0;
     if(j > 0) {
-        for(k = j; k < len - 1; k += 2) {
+        for(k = j; k < len; k += 2) {
             if(bitorder == true) {
-                uni_h = buff[k];
-                uni_l = buff[k + 1];
+                uni_h = (uint8_t)buff[k];
+                uni_l = (uint8_t)buff[k + 1];
             }
             else {
-                uni_l = buff[k];
-                uni_h = buff[k + 1];
+                uni_l = (uint8_t)buff[k];
+                uni_h = (uint8_t)buff[k + 1];
             }
-            uint16_t uni_hl = (uni_h << 8) + uni_l;
-            uint8_t utf8_h = (uni_hl >> 6); // div64
-            uint8_t utf8_l = uni_l;
-            if(utf8_h > 3) {
-                utf8_h += 0xC0;
-                if(uni_l < 0x40)
-                    utf8_l = uni_l + 0x80;
-                else if(uni_l < 0x80)
-                    utf8_l = uni_l += 0x40;
-                else if(uni_l < 0xC0)
-                    utf8_l = uni_l;
-                else
-                    utf8_l = uni_l - 0x40;
-            }
-            if(utf8_h > 3) {
-                buff[m] = utf8_h;
+
+            uint16_t uni_hl = ((uni_h << 8) | uni_l);
+
+            if (uni_hl < 0X80){
+                tmpbuff[m] = uni_l;
                 m++;
             }
-            buff[m] = utf8_l;
-            m++;
+            else if (uni_hl < 0X800) {
+                tmpbuff[m]= ((uni_hl >> 6) | 0XC0);
+                m++;
+                tmpbuff[m] =((uni_hl & 0X3F) | 0X80);
+                m++;
+            }
+            else {
+                tmpbuff[m] = ((uni_hl >> 12) | 0XE0);
+                m++;
+                tmpbuff[m] = (((uni_hl >> 6) & 0X3F) | 0X80);
+                m++;
+                tmpbuff[m] = ((uni_hl & 0X3F) | 0X80);
+                m++;
+            }
         }
     }
     buff[m] = 0;
+    memcpy(buff, tmpbuff, m);
+    free(tmpbuff);
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::read_WAV_Header(uint8_t* data, size_t len) {
@@ -2093,16 +2096,16 @@ void Audio::processLocalFile() {
         } //TEST loop
         m_f_stream = false;
         m_f_localfile = false;
-        String afn = audiofile.name(); // store temporary the name
+        char *afn =strdup(audiofile.name()); // store temporary the name
         stopSong();
         if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
-        sprintf(chbuf, "End of file \"%s\"", afn.c_str());
-        if(audio_info) {vTaskDelay(2); audio_info(chbuf);}
-        if(audio_eof_mp3) audio_eof_mp3(afn.c_str());
-
+        sprintf(chbuf, "End of file \"%s\"", afn);
+        if(audio_info) audio_info(chbuf);
+        if(audio_eof_mp3) audio_eof_mp3(afn);
+        if(afn) free(afn);
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
