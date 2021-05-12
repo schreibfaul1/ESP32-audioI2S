@@ -104,7 +104,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(); // #99
+    Audio(bool internalDAC = false, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN); // #99
     ~Audio();
     bool connecttoFS(fs::FS &fs, const char* path);
     bool connecttoSD(const char* path);
@@ -157,7 +157,7 @@ public:
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
-    void setInternalDAC(bool internalDAC);
+    void setInternalDAC(bool internalDAC = true, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN);
     void setI2SCommFMT_LSB(bool commFMT);
 
 private:
@@ -339,6 +339,7 @@ private:
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
+    i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     uint32_t        m_audioDataStart = 0;           // in bytes
