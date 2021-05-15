@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 12,2021
+ *  Updated on: May 15,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -10,6 +10,10 @@
 #include "mp3_decoder/mp3_decoder.h"
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
+
+#ifdef SDFATFS_USED
+fs::SDFATFS SD_SDFAT;
+#endif
 
 //---------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
@@ -421,6 +425,19 @@ bool Audio::setFileLoop(bool input){
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::UTF8toASCII(char* str){
 
+#ifdef SDFATFS_USED
+    //UTF8->UTF16 (lowbyte)
+    const uint8_t ascii[60] = {
+    //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
+    //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
+      000, 000, 000, 0xC4, 143, 0xC6,0xC7, 000,0xC9,000, 000, 000, 000, 000, 000, 000, 0xD1, 000, 000, 000, // ASCII (Latin1)
+    //149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168
+    //      Ö                             Ü              ß    à                   ä    å    æ         è
+      000, 0xD6,000, 000, 000, 000, 000, 0xDC, 000, 000, 0xDF,0xE0, 000, 000, 000,0xE4,0xE5,0xE6, 000,0xE8,
+    //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
+    //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
+      000, 0xEA, 0xEB,0xEC, 000,0xEE,0xEB, 000,0xF1,0xF2, 000,0xF4, 000,0xF6, 000, 000,0xF9, 000,0xFB,0xFC};
+#else
     const uint8_t ascii[60] = {
     //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
     //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
@@ -431,6 +448,7 @@ void Audio::UTF8toASCII(char* str){
     //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
     //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
       000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
+#endif
 
     uint16_t i = 0, j=0, s = 0;
     bool f_C3_seen = false;
@@ -492,7 +510,13 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     m_f_localfile = true;
     m_file_size = audiofile.size();//TEST loop
 
+#ifdef SDFATFS_USED
+    audiofile.getName(chbuf, sizeof(chbuf));
+    String afn = chbuf;
+#else
     String afn = (String) audiofile.name();                   // audioFileName
+#endif
+
     afn.toLowerCase();
     if(afn.endsWith(".mp3")) {        // MP3 section
         m_codec = CODEC_MP3;
@@ -2096,7 +2120,14 @@ void Audio::processLocalFile() {
         } //TEST loop
         m_f_stream = false;
         m_f_localfile = false;
+
+#ifdef SDFATFS_USED
+        audiofile.getName(chbuf, sizeof(chbuf));
+        char *afn =strdup(chbuf);
+#else
         char *afn =strdup(audiofile.name()); // store temporary the name
+#endif
+
         stopSong();
         if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
@@ -3442,8 +3473,8 @@ uint32_t Audio::getBitRate(){
     return m_bitRate;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::setInternalDAC(bool internalDAC /* = true */, i2s_dac_mode_t channelEnabled /* = I2S_DAC_CHANNEL_LEFT_EN */  ) {
-
+[[deprecated]]void Audio::setInternalDAC(bool internalDAC /* = true */, i2s_dac_mode_t channelEnabled /* = I2S_DAC_CHANNEL_LEFT_EN */  ) {
+// is deprecated, set internal DAC in constructor e.g. Audio audio(true, I2S_DAC_CHANNEL_BOTH_EN);
     m_f_channelEnabled = channelEnabled;
     m_f_internalDAC = internalDAC;
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);

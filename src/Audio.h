@@ -2,25 +2,67 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 12,2021
+ *  Updated on: May 15,2021
  *      Author: Wolle (schreibfaul1)
  */
 
-#ifndef AUDIO_H_
-#define AUDIO_H_
+//#define SDFATFS_USED  // activate for SdFat
+
+
+#pragma once
 #pragma GCC optimize ("Ofast")
 
-#define FF_LFN_UNICODE      2
 #include "Arduino.h"
 #include "base64.h"
 #include "SPI.h"
+#include "WiFi.h"
+#include "WiFiClientSecure.h"
+#include "driver/i2s.h"
+
+#ifdef SDFATFS_USED
+#include "SdFat.h"  // use https://github.com/greiman/SdFat-beta for UTF-8 filenames
+#else
 #include "SD.h"
 #include "SD_MMC.h"
 #include "SPIFFS.h"
 #include "FS.h"
 #include "FFat.h"
-#include "WiFiClientSecure.h"
-#include "driver/i2s.h"
+#endif // SDFATFS_USED
+
+
+#ifdef SDFATFS_USED
+typedef File32 File;
+
+namespace fs {
+    class FS : public SdFat {
+    public:
+        bool begin(SdCsPin_t csPin = SS, uint32_t maxSck = SD_SCK_MHZ(25)) { return SdFat::begin(csPin, maxSck); }
+    };
+
+    class SDFATFS : public fs::FS {
+    public:
+        // sdcard_type_t cardType();
+        uint64_t cardSize() {
+            return totalBytes();
+        }
+        uint64_t usedBytes() {
+            // set SdFatConfig MAINTAIN_FREE_CLUSTER_COUNT non-zero. Then only the first call will take time.
+            return (uint64_t)(clusterCount() - freeClusterCount()) * (uint64_t)bytesPerCluster();
+        }
+        uint64_t totalBytes() {
+            return (uint64_t)clusterCount() * (uint64_t)bytesPerCluster();
+        }
+    };
+}
+
+extern fs::SDFATFS SD_SDFAT;
+
+using namespace fs;
+#define SD SD_SDFAT
+#endif //SDFATFS_USED
+
+
+
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
@@ -106,61 +148,45 @@ class Audio : private AudioBuffer{
 public:
     Audio(bool internalDAC = false, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN); // #99
     ~Audio();
+    bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
+    bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path);
     bool connecttoSD(const char* path);
     bool setFileLoop(bool input);//TEST loop
-    void UTF8toASCII(char* str);
-    bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
-    bool connecttospeech(const char* speech, const char* lang);
+    bool setAudioPlayPosition(uint16_t sec);
+    bool setFilePos(uint32_t pos);
+    bool audioFileSeek(const float speed);
+    bool setTimeOffset(int sec);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
+    bool pauseResume();
+    bool isRunning() {return m_f_running;}
     void loop();
+    void stopSong();
+    void forceMono(bool m);
+    void setBalance(int8_t bal = 0);
+    void setVolume(uint8_t vol);
+    uint8_t getVolume();
+
+
     uint32_t getFileSize();
     uint32_t getFilePos();
     uint32_t getSampleRate();
     uint8_t  getBitsPerSample();
     uint8_t  getChannels();
     uint32_t getBitRate();
-
-    /**
-     * @brief Get the audio file duration in seconds
-     * 
-     * @return uint32_t file duration in seconds, 0 if no file active
-     */
     uint32_t getAudioFileDuration();
-    /**
-     * @brief Get the current plying time in seconds
-     * 
-     * @return uint32_t current second of audio file, 0 if no file active
-     */
     uint32_t getAudioCurrentTime();
-    bool setAudioPlayPosition(uint16_t sec);
-    bool setFilePos(uint32_t pos);
-    bool audioFileSeek(const float speed);
     uint32_t getTotalPlayingTime();
-    bool setTimeOffset(int sec);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
-    void stopSong();
-    /**
-     * @brief pauseResume pauses current playback 
-     * 
-     * @return true if audio file or stream is active, false otherwise
-     */
-    bool pauseResume();
-    void forceMono(bool m);
-    void setBalance(int8_t bal = 0);
-    void setVolume(uint8_t vol);
-    uint8_t getVolume();
-    inline uint8_t getDatamode(){return m_datamode;}
-    inline void setDatamode(uint8_t dm){m_datamode=dm;}
-    inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
-    bool isRunning() {return m_f_running;}
+
     esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
-    void setInternalDAC(bool internalDAC = true, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN);
+    [[deprecated]]void setInternalDAC(bool internalDAC = true, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN);
     void setI2SCommFMT_LSB(bool commFMT);
 
 private:
+    void UTF8toASCII(char* str);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
     void processLocalFile();
@@ -197,6 +223,9 @@ private:
     int16_t* IIR_filterChain0(int16_t iir_in[2], bool clear = false);
     int16_t* IIR_filterChain1(int16_t* iir_in, bool clear = false);
     int16_t* IIR_filterChain2(int16_t* iir_in, bool clear = false);
+    inline void setDatamode(uint8_t dm){m_datamode=dm;}
+    inline uint8_t getDatamode(){return m_datamode;}
+    inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
     void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
 
     // implement several function with respect to the index of string
@@ -353,4 +382,5 @@ private:
     int8_t          m_gain2 = 0;
 };
 
-#endif /* AUDIO_H_ */
+//----------------------------------------------------------------------------------------------------------------------
+
