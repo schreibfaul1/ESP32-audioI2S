@@ -1880,6 +1880,7 @@ void Audio::stopSong() {
     }
     memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
+    power = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playI2Sremains() { // returns true if all dma_buffs flushed
@@ -1915,10 +1916,18 @@ bool Audio::pauseResume() {
     }
     return retVal;
 }
+
+//---------------------------------------------------------------------------------------------------------------------
+uint8_t Audio::getPowerLevel() {
+    return power;
+}
+
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playChunk() {
     // If we've got data, try and pump it out..
     int16_t sample[2];
+    uint8_t max = 0;
+    uint8_t min = 0xFF;
     if(getBitsPerSample() == 8) {
         if(m_channels == 1) {
             while(m_validSamples) {
@@ -1926,11 +1935,19 @@ bool Audio::playChunk() {
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 sample[LEFTCHANNEL]  = x;
                 sample[RIGHTCHANNEL] = x;
+                if(sample[LEFTCHANNEL] > max ) max = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] > max ) max = sample[RIGHTCHANNEL];
+                if(sample[LEFTCHANNEL] < min ) min = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] < min ) min = sample[RIGHTCHANNEL];
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
                 sample[LEFTCHANNEL]  = y;
                 sample[RIGHTCHANNEL] = y;
+                if(sample[LEFTCHANNEL] > max ) max = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] > max ) max = sample[RIGHTCHANNEL];
+                if(sample[LEFTCHANNEL] < min ) min = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] < min ) min = sample[RIGHTCHANNEL];
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
@@ -1952,6 +1969,10 @@ bool Audio::playChunk() {
                     sample[RIGHTCHANNEL] = xy;
                 }
 
+                if(sample[LEFTCHANNEL] > max ) max = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] > max ) max = sample[RIGHTCHANNEL];
+                if(sample[LEFTCHANNEL] < min ) min = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] < min ) min = sample[RIGHTCHANNEL];
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
@@ -1967,6 +1988,10 @@ bool Audio::playChunk() {
             while(m_validSamples) {
                 sample[LEFTCHANNEL]  = m_outBuff[m_curSample];
                 sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
+                if(sample[LEFTCHANNEL] > max ) max = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] > max ) max = sample[RIGHTCHANNEL];
+                if(sample[LEFTCHANNEL] < min ) min = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] < min ) min = sample[RIGHTCHANNEL];
                 if(!playSample(sample)) {
                     return false;
                 } // Can't send
@@ -1985,6 +2010,10 @@ bool Audio::playChunk() {
                     sample[LEFTCHANNEL] = xy;
                     sample[RIGHTCHANNEL] = xy;
                 }
+                if(sample[LEFTCHANNEL] > max ) max = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] > max ) max = sample[RIGHTCHANNEL];
+                if(sample[LEFTCHANNEL] < min ) min = sample[LEFTCHANNEL];
+                if(sample[RIGHTCHANNEL] < min ) min = sample[RIGHTCHANNEL];
                 if(!playSample(sample)) {
                     return false;
                 } // Can't send
@@ -1992,6 +2021,7 @@ bool Audio::playChunk() {
                 m_curSample++;
             }
         }
+        power = max - min;
         m_curSample = 0;
         return true;
     }
