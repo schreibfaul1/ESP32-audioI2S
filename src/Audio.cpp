@@ -1499,6 +1499,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
         }
         else {
             char atomName[5];
+            (void)atomName;
             atomName[0] = *data;
             atomName[1] = *(data + 1);
             atomName[2] = *(data + 2);
@@ -1542,8 +1543,9 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
             int esds = specialIndexOf(data, "esds", len); // Packaging/Encapsulation And Setup Data
             uint8_t *pos = data + esds;
             uint8_t len_of_OD  = *(pos + 12); // length of this OD (which includes the next 2 tags)
+            (void)len_of_OD;
             uint8_t len_of_ESD = *(pos + 20); // length of this Elementary Stream Descriptor
-
+            (void)len_of_ESD;
             uint8_t audioType  = *(pos + 21);
             if     (audioType == 0x40) sprintf(chbuf, "AudioType: MPEG4 / Audio"); // ObjectTypeIndication
             else if(audioType == 0x66) sprintf(chbuf, "AudioType: MPEG2 / Audio");
@@ -1578,7 +1580,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
                     96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350
             };
             uint8_t sRate = (ASC & 0x0600) >> 7; // next 4 bits Sampling Frequencies
-            sprintf(chbuf, "Sampling Frequency: %lu",samplingFrequencies[sRate]);
+            sprintf(chbuf, "Sampling Frequency: %u",samplingFrequencies[sRate]);
             if(audio_info) audio_info(chbuf);
 
             uint8_t chConfig = (ASC & 0x78) >> 3;  // next 4 bits
@@ -1589,7 +1591,9 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
 
             uint8_t frameLengthFlag     = (ASC & 0x04);
             uint8_t dependsOnCoreCoder  = (ASC & 0x02);
+            (void)dependsOnCoreCoder;
             uint8_t extensionFlag       = (ASC & 0x01);
+            (void)extensionFlag;
 
             if(frameLengthFlag == 0) if(audio_info) audio_info("AAC FrameLength: 1024 bytes");
             if(frameLengthFlag == 1) if(audio_info) audio_info("AAC FrameLength: 960 bytes");
@@ -1722,8 +1726,10 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
     if(m_controlCounter == OGG_HEADER) { /* check OGG PAGE HEADER */
         uint8_t i = 0;
         uint8_t ssv = *(data + i);                  // stream_structure_version
+        (void)ssv;
         i++;
         uint8_t htf = *(data + i);                  // header_type_flag
+        (void)htf;
         i++;
         uint32_t tmp = bigEndian(data + i, 4);      // absolute granule position
         uint64_t agp = (uint64_t) tmp << 32;
@@ -1731,10 +1737,13 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         agp += bigEndian(data + i, 4);
         i += 4;
         uint32_t ssnr = bigEndian(data + i, 4);     // stream serial number
+        (void)ssnr;
         i += 4;
         uint32_t psnr = bigEndian(data + i, 4);     // page sequence no
+        (void)psnr;
         i += 4;
         uint32_t pchk = bigEndian(data + i, 4);     // page checksum
+        (void)pchk;
         i += 4;
         uint8_t psegm = *(data + i);
         i++;
@@ -1772,6 +1781,7 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
     if(m_controlCounter == OGG_FIRST) { /* check OGG FIRST PAGES (has no streaming content) */
         uint8_t i = 0;
         uint8_t obp = *(data + i);                  // oneBytePacket shold be 0x7F
+        (void)obp;
         i++;
         if(specialIndexOf(data + i, "FLAC", 10) == 0){
         }
@@ -1782,10 +1792,13 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         }
         i += 4;
         uint8_t major_vers = *(data + i);
+        (void)major_vers;
         i++;
         uint8_t minor_vers = *(data + i);
+        (void)minor_vers;
         i++;
         uint16_t nonah = bigEndian(data + i, 2); // number of non audio headers (0x00 = unknown)
+        (void)nonah;
         i += 2;
         if(specialIndexOf(data + i, "fLaC", 10) == 0){
             m_codec = CODEC_OGG_FLAC;
@@ -1793,6 +1806,7 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
         i += 4;
         // STREAMINFO metadata block begins
         uint32_t mblen = bigEndian(data + i, 4);
+        (void)mblen;
         i += 4; // skip metadata block header + length
         i += 2; // skip minimun block size
         m_flacMaxBlockSize = bigEndian(data + i, 2);
@@ -3531,10 +3545,6 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playSample(int16_t sample[2]) {
-
-    int16_t sample1[2]; int16_t* s1;
-    int16_t sample2[2]; int16_t* s2 = sample2;
-    int16_t sample3[2]; int16_t* s3 = sample3;
 
     if (getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
         sample[LEFTCHANNEL]  = ((sample[LEFTCHANNEL]  & 0xff) -128) << 8;
