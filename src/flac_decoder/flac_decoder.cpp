@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 27,2021
+ * Updated on: Jul 03,2021
  *
  * Author: Wolle
  *
@@ -162,8 +162,10 @@ int FLACFindOggSyncWord(unsigned char *buf, int nBytes){
 int FLACparseOggHeader(unsigned char *buf){
     uint8_t i = 0;
     uint8_t ssv = *(buf + i);                  // stream_structure_version
+    (void)ssv;
     i++;
     uint8_t htf = *(buf + i);                  // header_type_flag
+    (void)htf;
     i++;
     uint32_t tmp = 0;                         // absolute granule position
     for (int j = 0; j < 4; j++) {
