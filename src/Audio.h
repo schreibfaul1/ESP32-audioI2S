@@ -122,6 +122,7 @@ public:
     uint32_t getWritePos();                     // write position relative to the beginning
     uint32_t getReadPos();                      // read position relative to the beginning
     void     resetBuffer();                     // restore defaults
+    
 
 protected:
     const size_t m_buffSizePSRAM    = 300000; // most webstreams limit the advance to 100...300Kbytes
@@ -161,6 +162,7 @@ public:
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
+    uint8_t getPowerLevel();
     void stopSong();
     void forceMono(bool m);
     void setBalance(int8_t bal = 0);
@@ -380,6 +382,7 @@ private:
     int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
     int8_t          m_gain1 = 0;
     int8_t          m_gain2 = 0;
+    uint8_t          power = 0;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
