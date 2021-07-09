@@ -198,7 +198,7 @@ void Audio::initInBuff() {
             m_f_psram = false;
             f_already_done = true;
         }
-        if(size == m_buffSizePSRAM - m_resBuffSizeRAM) {
+        if(size == m_buffSizePSRAM - m_resBuffSizePSRAM) {
             sprintf(chbuf, "PSRAM found, inputBufferSize: %u bytes", size - 1);
             if(audio_info)
                 audio_info(chbuf);
