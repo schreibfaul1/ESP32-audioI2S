@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 15,2021
+ *  Updated on: Jul 19,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -191,6 +191,7 @@ private:
     void initInBuff();
     void processLocalFile();
     void processWebStream();
+    void processPlayListData();
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
     int  sendBytes(uint8_t* data, size_t len);
@@ -213,9 +214,8 @@ private:
     int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
     void showstreamtitle(const char* ml);
-    void parsePlaylistData(const char* pd);
-    void parseAudioHeader(const char* ah);
     bool parseContentType(const char* ct);
+    void processAudioHeaderData();
     void processControlData(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
@@ -309,8 +309,8 @@ private:
     const size_t    m_frameSizeFLAC = 4096 * 4;
 
     char            chbuf[256];
-    char            m_plsURL[256];                  // URL found in playlist
     char            m_lastHost[256];                // Store the last URL to a webstream
+    char            m_line[512];                    // stores plsLine or metaLine
     filter_t        m_filter[3];                    // digital filters
     size_t          m_id3Size = 0;                  // length id3 tag
     size_t          m_wavHeaderSize = 0;
@@ -342,7 +342,6 @@ private:
     uint16_t        m_flacMaxBlockSize = 0;         // can be read out in the FLAC file header
     uint32_t        m_flacTotalSamplesInStream = 0; // can be read out in the FLAC file header
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
-    uint32_t        m_totalcount = 0;               // Counter mp3 data
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_metaCount = 0;                // Bytecounter between metadata
