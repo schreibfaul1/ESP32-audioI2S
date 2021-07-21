@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 19,2021
+ *  Updated on: Jul 21,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -266,7 +266,6 @@ void Audio::setDefaults() {
     m_f_chunked = false;                                    // Assume not chunked
     m_f_ctseen = false;                                     // Contents type not seen yet
     m_f_firstmetabyte = false;
-    m_f_firststream_ready = false;
     m_f_localfile = false;                                  // SPIFFS or SD? (onnecttoFS)
     m_f_playing = false;
     m_f_ssl = false;
@@ -396,7 +395,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         }
     }
 
-    const uint32_t TIMEOUT_MS_SSL{2500};
+    const uint32_t TIMEOUT_MS_SSL{2600};
     if(m_f_ssl == true) {
         uint32_t t = millis();
         if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS_SSL)) {
@@ -2028,8 +2027,12 @@ void Audio::loop() {
         }
         if(m_datamode == AUDIO_HEADER){
             processAudioHeaderData();
+            return;
         }
-        processWebStream();
+        if(m_datamode == AUDIO_DATA || m_datamode == AUDIO_METADATA){
+            processWebStream();
+            return;
+        }
     }
     return;
 }
@@ -2361,24 +2364,29 @@ void Audio::processLocalFile() {
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
 
-    uint32_t bytesCanBeWritten = 0;
-    int16_t bytesAddedToBuffer = 0;
-    const uint16_t maxFrameSize = InBuff.getMaxBlockSize();   // every mp3/aac frame is not bigger
-    int32_t availableBytes = 0;                                 // available bytes in stream
-    bool f_tmr_1s = false;
-    static int bytesDecoded;
+    uint32_t        bytesCanBeWritten = 0;
+    int16_t         bytesAddedToBuffer = 0;
+    const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
+    int32_t         availableBytes = 0;                         // available bytes in stream
+    bool            f_tmr_1s = false;
+    static int      bytesDecoded;
     static uint32_t byteCounter;                                // count received data
     static uint32_t chunksize;                                  // chunkcount read from stream
     static uint32_t cnt0;
     static uint32_t tmr_1s = 0;                                 // timer 1 sec
+    static bool     firststream_ready;                          // set after first streamdata are available
+    static uint32_t loopCnt = 0;                                // count loops if clientbuffer is empty
 
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        m_f_stream = false;
+        firststream_ready = false;
         byteCounter = 0;
         chunksize = 0;
         bytesDecoded = 0;
         cnt0 = 0;
-        tmr_1s = 0;
+        tmr_1s = millis();
+        m_metaCount = m_metaint;
     }
 
     if((tmr_1s + 1000) < millis()) {
@@ -2389,44 +2397,55 @@ void Audio::processWebStream() {
     if(m_f_ssl == false) availableBytes = client.available();            // available from stream
     if(m_f_ssl == true)  availableBytes = clientsecure.available();      // available from stream
 
+    if(InBuff.bufferFilled() < maxFrameSize && m_f_stream == true){ // InBuff almost empty
+        static uint8_t cnt_slow = 0;
+        cnt_slow ++;
+        if(f_tmr_1s) {
+            if(cnt_slow > 18 && audio_info) audio_info("slow stream, dropouts are possible");
+            f_tmr_1s = false;
+            cnt_slow = 0;
+        }
+    }
+
+    if(firststream_ready && !availableBytes){
+        loopCnt++;
+        if(loopCnt > 200000) {              // wait several seconds
+            loopCnt = 0;
+            if(audio_info) audio_info("Stream lost -> try new connection");
+            connecttohost(m_lastHost);      // try a new connection
+        }
+        return;
+    }
+
+    loopCnt = 0;
+
+    if(firststream_ready == false) { // first streamdata recognized
+        firststream_ready = true;
+    }
+
     if(psramFound() && availableBytes >4096) {
         availableBytes = 4096; // PSRAM has a bottleneck in the queue, reduce blocks
     }
 
-    if((m_datamode == AUDIO_DATA || m_datamode == AUDIO_SWM) && m_f_webfile){
+    if(m_f_webfile){
         // normally there is nothing to do here, if byteCounter == contentLength
         // then the file is completely read, but:
         // m4a files can have more data  (e.g. pictures ..) after the audio Block
         // therefore it is bad to read anything else (this can generate noise)
-        if(byteCounter >= m_contentlength){
-            availableBytes = 0;
-        }
+        if(byteCounter >= m_contentlength) availableBytes = 0;
     }
 
-    if((m_f_firststream_ready == false) && (availableBytes > 0)) { // first streamdata recognized
-        m_f_firststream_ready = true;
-        m_f_stream = false;
-        //m_bytectr = 0;
-    }
+    if((m_datamode == AUDIO_DATA && m_metaCount > 0)|| m_f_swm) {
+        uint32_t len = bytesCanBeWritten = InBuff.writeSpace();
+        if(!m_f_swm)    len = min(m_metaCount, len);
+        if(m_f_chunked) len = min(m_chunkcount, len);
 
-    if(((m_datamode == AUDIO_DATA) || (m_datamode == AUDIO_SWM)) && (m_metaCount > 0)) {
-        bytesCanBeWritten = InBuff.writeSpace();
-        uint32_t len = min(m_metaCount, uint32_t(bytesCanBeWritten));
-        if((m_f_chunked) && (len > m_chunkcount)) {
-            len = m_chunkcount;
-        }
-
-        if((m_f_ssl == false) && (availableBytes > 0)) {
-            bytesAddedToBuffer = client.read(InBuff.getWritePtr(), len);
-        }
-
-        if((m_f_ssl == true) && (availableBytes > 0)) {
-            bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), len);
-        }
+        if(m_f_ssl == false) bytesAddedToBuffer = client.read(InBuff.getWritePtr(), len);
+        else                 bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), len);
 
         if(bytesAddedToBuffer > 0) {
             if(m_f_webfile)             byteCounter  += bytesAddedToBuffer;  // Pull request #42
-            if(m_datamode != AUDIO_SWM) m_metaCount  -= bytesAddedToBuffer;
+            if(!m_f_swm)                m_metaCount  -= bytesAddedToBuffer;
             if(m_f_chunked)             m_chunkcount -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
@@ -2458,8 +2477,9 @@ void Audio::processWebStream() {
                     if(m_codec == CODEC_WAV){
                         int res = read_WAV_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
                         if(res >= 0) bytesDecoded = res;
-                        else{ // error, skip header
-                            m_controlCounter = 100;
+                        else{
+                            stopSong();
+                            return;
                         }
                     }
                     if(m_codec == CODEC_MP3){
@@ -2472,8 +2492,9 @@ void Audio::processWebStream() {
                     if(m_codec == CODEC_M4A){
                         int res = read_M4A_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
                         if(res >= 0) bytesDecoded = res;
-                        else{ // error, skip header
-                            m_controlCounter = 100;
+                        else{
+                            stopSong();
+                            return;
                         }
                     }
                     if(m_codec == CODEC_FLAC){
@@ -2481,7 +2502,7 @@ void Audio::processWebStream() {
                         if(res >= 0) bytesDecoded = res;
                         else{ // error, skip header
                             stopSong();
-                            m_controlCounter = 100;
+                            return;
                         }
                     }
                 }
@@ -2511,78 +2532,39 @@ void Audio::processWebStream() {
                 InBuff.bytesWasRead(bytesDecoded);
             }
         }
-        else { // InBuff almost empty, contains no complete mp3/aac frame
-            static uint8_t cnt_slow = 0;
-            if(m_f_stream == true) {
-                cnt_slow ++;
-
-                if(f_tmr_1s) {
-                    if(cnt_slow > 18)
-                        if(audio_info) audio_info("slow stream, dropouts are possible");
-                    f_tmr_1s = false;
-                    cnt_slow = 0;
-                }
-            }
-        }
 
         if(m_metaCount == 0) {
-            if(m_datamode == AUDIO_SWM) {
-                m_metaCount = 16000; //mms has no metadata
-            }
-            else {
-                m_datamode = AUDIO_METADATA;
-                m_f_firstmetabyte = true;
-            }
+            m_datamode = AUDIO_METADATA;
+            m_f_firstmetabyte = true;
         }
     }
     else { //!=DATA
         int16_t x = 0;
-        if(m_f_chunked && (m_datamode != AUDIO_HEADER)) {
-            if(m_chunkcount > 0) {
+        if(m_f_chunked && m_chunkcount > 0) {
                 if(m_f_ssl == false)
                     x = client.read();
                 else
                     x = clientsecure.read();
 
                 if(x >= 0) {
-                    processControlData(x);
+                    readMetadata(x);
                     m_chunkcount--;
                 }
-            }
         }
         else {
+
             if(m_f_ssl == false)
                 x = client.read();
             else
                 x = clientsecure.read();
             if(x >= 0) {
-                processControlData(x);
+                readMetadata(x);
             }
         }
-        if(m_datamode == AUDIO_DATA) {
-            m_metaCount = m_metaint;
-            if(m_metaint == 0) {
-                m_datamode = AUDIO_SWM;         // stream without metadata, can be mms
-            }
-        }
-        if(m_datamode == AUDIO_SWM) {
-            m_metaCount = 16000;
-        }
+        if(m_datamode == AUDIO_DATA) m_metaCount = m_metaint;
     }
 
-    if(m_f_firststream_ready == true) {
-        static uint32_t loopCnt = 0;            // count loops if clientbuffer is empty
-        if(availableBytes == 0) {              // empty buffer, broken stream or bad bitrate?
-            loopCnt++;
-            if(loopCnt > 200000) {             // wait several seconds
-                loopCnt = 0;
-                if(audio_info) audio_info("Stream lost -> try new connection");
-                connecttohost(m_lastHost);      // try a new connection
-            }
-        }
-        else {
-            loopCnt = 0;
-        }
+    if(firststream_ready == true) {
         if(m_f_webfile && (byteCounter >= m_contentlength - 10) && (InBuff.bufferFilled() < maxFrameSize)) {
             // it is stream from fileserver with known content-length? and
             // everything is received?  and
@@ -2596,11 +2578,6 @@ void Audio::processWebStream() {
     }
 
     if(m_f_chunked) {
-        if(m_datamode == AUDIO_HEADER){
-            chunksize = 0;
-            return;
-        }
-
         if(m_chunkcount == 0) {             // Expecting a new chunkcount?
             int b;
             if(m_f_ssl == false) {
@@ -2631,48 +2608,44 @@ void Audio::processAudioHeaderData() {
     int av = 0;
     if(!m_f_ssl) av=client.available();
     else         av= clientsecure.available();
-    if(av < 1) return;
+    if(av <= 0) return;
 
     char hl[256]; // headerline
     uint8_t b = 0;
-    int16_t pos = 0;
+    uint8_t pos = 0;
+    int16_t idx = 0;
 
     while(true){
         if(!m_f_ssl) b = client.read();
         else         b = clientsecure.read();
-        if(b == '\r') {hl[pos] = 0; break;}
+        if(b == '\n') break;
+        if(b == '\r') hl[pos] = 0;
         if(b < 0x20 || b > 0x7E) continue;
         hl[pos] = b;
         pos++;
         if(pos == 255){hl[pos] = '\0'; log_e("headerline oberflow"); break;}
     }
 
-    if(!strlen(hl) && m_f_ctseen){  // audio header complete?
-        if(m_f_swm == true) { // stream without metadata
-            m_datamode = AUDIO_SWM;
-            sprintf(chbuf, "Switch to SWM, bitrate is %d, metaint is %d", getBitRate(), m_metaint);
-            if(audio_info) audio_info(chbuf);
-            memcpy(chbuf, m_lastHost, strlen(m_lastHost)+1);
-            uint idx = indexOf(chbuf, "?", 0);
-            if(idx > 0) chbuf[idx] = 0;
-            if(audio_lasthost) audio_lasthost(chbuf);
-            m_f_swm = false;
-        }
-        else {
-            m_datamode = AUDIO_DATA;                         // Expecting data now
-            sprintf(chbuf, "Switch to DATA, metaint is %d", m_metaint);
-            if(audio_info) audio_info(chbuf);
-            memcpy(chbuf, m_lastHost, strlen(m_lastHost)+1);
-            uint idx = indexOf(chbuf, "?", 0);
-            if(idx > 0) chbuf[idx] = 0;
-            if(audio_lasthost) audio_lasthost(chbuf);
-        }
+    if(!pos && m_f_ctseen){  // audio header complete?
+        m_datamode = AUDIO_DATA;                         // Expecting data now
+        sprintf(chbuf, "Switch to DATA, metaint is %d", m_metaint);
+        if(audio_info) audio_info(chbuf);
+        memcpy(chbuf, m_lastHost, strlen(m_lastHost)+1);
+        uint idx = indexOf(chbuf, "?", 0);
+        if(idx > 0) chbuf[idx] = 0;
+        if(audio_lasthost) audio_lasthost(chbuf);
         delay(50);  // #77
+        return;
+    }
+    if(!pos){
+        stopSong();
+        log_e("can't see content in audioHeaderData");
+        return;
     }
 
-    pos = indexOf(hl, ":", 0); // lowercase all letters up to the colon
-    if(pos >= 0) {
-        for(int i=0; i<pos; i++) {
+    idx = indexOf(hl, ":", 0); // lowercase all letters up to the colon
+    if(idx >= 0) {
+        for(int i=0; i< idx; i++) {
             hl[i] = toLowerCase(hl[i]);
         }
     }
@@ -2713,14 +2686,14 @@ void Audio::processAudioHeaderData() {
         const char* c_metaint = (hl + 12);
         int32_t i_metaint = atoi(c_metaint);
         m_metaint = i_metaint;
-        if(m_metaint > 0) m_f_swm = false;                          // Multimediastream
+        if(m_metaint) m_f_swm = false     ;                            // Multimediastream
     }
     else if(startsWith(hl, "icy-name:")) {
         char* c_icyname = (hl + 9); // Get station name
-        pos = 0;
-        while(c_icyname[pos] == ' '){pos++;} c_icyname += pos;      // Remove leading spaces
-        pos = strlen(c_icyname);
-        while(c_icyname[pos] == ' '){pos--;} c_icyname[pos+1] = 0;  // Remove trailing spaces
+        idx = 0;
+        while(c_icyname[idx] == ' '){idx++;} c_icyname += idx;        // Remove leading spaces
+        idx = strlen(c_icyname);
+        while(c_icyname[idx] == ' '){idx--;} c_icyname[idx + 1] = 0;  // Remove trailing spaces
 
         if(strlen(c_icyname) > 0) {
             sprintf(chbuf, "icy-name: %s", c_icyname);
@@ -2745,8 +2718,8 @@ void Audio::processAudioHeaderData() {
     }
     else if(startsWith(hl, "icy-url:")) {
         const char* icyurl = (hl + 8);
-        pos = 0;
-        while(icyurl[pos] == ' ') {pos ++;} icyurl += pos; // remove leading blanks
+        idx = 0;
+        while(icyurl[idx] == ' ') {idx ++;} icyurl += idx; // remove leading blanks
         sprintf(chbuf, "icy-url: %s", icyurl);
         if(audio_info) audio_info(chbuf);
         if(audio_icyurl) audio_icyurl(icyurl);
@@ -2766,7 +2739,7 @@ void Audio::processAudioHeaderData() {
 }
 
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::processControlData(uint8_t b) {
+void Audio::readMetadata(uint8_t b) {
 
     static uint16_t pos_ml = 0;                                 // determines the current position in metaline
 
@@ -2777,23 +2750,20 @@ void Audio::processControlData(uint8_t b) {
             m_metalen = b * 16 + 1;                               // New count for metadata including length byte
             if(m_metalen >512){
                 if(audio_info) audio_info("Metadata block to long! Skipping all Metadata from now on.");
-                m_metaint = 16000;                                // Probably no metadata
-                m_datamode = AUDIO_SWM;                           // expect stream without metadata
+                m_f_swm = true;                           // expect stream without metadata
             }
             pos_ml = 0; m_line[pos_ml] = 0;                       // Prepare for new line
         }
         else {
-            if(m_datamode != AUDIO_SWM) {
-                m_line[pos_ml] = (char) b;                        // Put new char in metaline
-                if(pos_ml < 510) pos_ml ++;
-                m_line[pos_ml] = 0;
-                if(pos_ml == 509) log_i("metaline overflow in AUDIO_METADATA! metaline=%s", m_line) ;
-                if(pos_ml == 510) { ; /* last current char in b */}
+            m_line[pos_ml] = (char) b;                        // Put new char in metaline
+            if(pos_ml < 510) pos_ml ++;
+            m_line[pos_ml] = 0;
+            if(pos_ml == 509) log_i("metaline overflow in AUDIO_METADATA! metaline=%s", m_line) ;
+            if(pos_ml == 510) { ; /* last current char in b */}
 
-            }
         }
         if(--m_metalen == 0) {
-            if(m_datamode != AUDIO_SWM) m_datamode = AUDIO_DATA;                          // Expecting data
+            m_datamode = AUDIO_DATA;                          // Expecting data
             if(strlen(m_line)) {                             // Any info present?
                 // metaline contains artist and song name.  For example:
                 // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
