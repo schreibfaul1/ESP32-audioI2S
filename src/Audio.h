@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 24,2021
+ *  Updated on: Jul 27,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -216,7 +216,7 @@ private:
     void showstreamtitle(const char* ml);
     bool parseContentType(const char* ct);
     void processAudioHeaderData();
-    void readMetadata(uint8_t b);
+    bool readMetadata(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     String urlencode(String str);
@@ -276,7 +276,7 @@ private:
     enum : int { CODEC_NONE, CODEC_WAV, CODEC_MP3, CODEC_AAC, CODEC_M4A, CODEC_FLAC, CODEC_OGG,
                  CODEC_OGG_FLAC, CODEC_OGG_OPUS};
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
-    enum : int { AUDIO_NONE, AUDIO_HEADER, AUDIO_DATA, AUDIO_METADATA,
+    enum : int { AUDIO_NONE, AUDIO_HEADER, AUDIO_DATA,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
@@ -308,12 +308,9 @@ private:
     const size_t    m_frameSizeAAC  = 1600;
     const size_t    m_frameSizeFLAC = 4096 * 4;
 
-    char            chbuf[256];
+    char            chbuf[512];
     char            m_lastHost[256];                // Store the last URL to a webstream
-    char            m_line[512];                    // stores plsLine or metaLine
     filter_t        m_filter[3];                    // digital filters
-    size_t          m_id3Size = 0;                  // length id3 tag
-    size_t          m_wavHeaderSize = 0;
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
@@ -322,7 +319,6 @@ private:
     int             m_metalen=0;                    // Number of bytes in metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
-    uint8_t         m_ID3version=0;                 // revision, ID3 version
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels=2;
@@ -344,7 +340,6 @@ private:
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
-    uint32_t        m_metaCount = 0;                // Bytecounter between metadata
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
@@ -359,7 +354,6 @@ private:
     bool            m_f_ctseen = false;             // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
-    bool            m_f_stream = false;             // Set false if stream is lost
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
     bool            m_f_psram = false;              // set if PSRAM is availabe
