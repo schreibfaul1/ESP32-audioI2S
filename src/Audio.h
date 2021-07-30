@@ -197,7 +197,7 @@ private:
     int  sendBytes(uint8_t* data, size_t len);
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
-    void showID3Tag(String tag, const char* val);
+    void showID3Tag(const char* tag, const char* val);
     void unicode2utf8(char* buff, uint32_t len);
     int  read_WAV_Header(uint8_t* data, size_t len);
     int  read_FLAC_Header(uint8_t *data, size_t len);
