@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 27,2021
+ *  Updated on: Jul 30,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -219,7 +219,7 @@ private:
     bool readMetadata(uint8_t b);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
-    String urlencode(String str);
+    void urlencode(char* buff, uint16_t buffLen);
     int16_t* IIR_filterChain0(int16_t iir_in[2], bool clear = false);
     int16_t* IIR_filterChain1(int16_t* iir_in, bool clear = false);
     int16_t* IIR_filterChain2(int16_t* iir_in, bool clear = false);
@@ -355,7 +355,8 @@ private:
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
-    bool            m_f_webfile= false;             // assume it's a radiostream, not a podcast
+    bool            m_f_webfile = false;            // assume it's a radiostream, not a podcast
+    bool            m_f_tts = false;                // text to speech
     bool            m_f_psram = false;              // set if PSRAM is availabe
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono

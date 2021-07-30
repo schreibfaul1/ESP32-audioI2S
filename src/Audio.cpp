@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 27,2021
+ *  Updated on: Jul 30,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -259,6 +259,7 @@ void Audio::setDefaults() {
     client.flush(); // release memory
     clientsecure.stop();
     clientsecure.flush();
+    while(!playI2Sremains()){;}
 
     sprintf(chbuf, "buffers freed, free Heap: %u bytes", ESP.getFreeHeap());
     if(audio_info) audio_info(chbuf);
@@ -272,6 +273,7 @@ void Audio::setDefaults() {
     m_f_swm = true;                                         // Assume no metaint (stream without metadata)
     m_f_webfile = false;                                    // Assume radiostream (connecttohost)
     m_f_webstream = false;
+    m_f_tts = false;
     m_f_firstCall = true;                                   // InitSequence for processWebstream and processLokalFile
     m_f_running = false;
     m_f_loop = false;                                       // Set if audio file should loop
@@ -575,118 +577,85 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
 bool Audio::connecttospeech(const char* speech, const char* lang){
 
     setDefaults();
-    bool     f_ct = false;
-    String   host = "translate.google.com.vn";
-    String   path = "/translate_tts";
-    uint32_t bytesCanBeWritten = 0;
-    uint32_t bytesCanBeRead = 0;
-    int32_t  bytesAddedToBuffer = 0;
-    int16_t  bytesDecoded = 0;
-    uint32_t contentLength = 0;
+    char host[] = "translate.google.com.vn";
+    char path[] = "/translate_tts";
 
-    String tts =  path + "?ie=UTF-8" +
-                  "&tl=" + lang + "&client=tw-ob" + "&q=" + urlencode(speech) ;
+    uint16_t speechLen = strlen(speech);
+    uint16_t speechBuffLen = speechLen + 300;
+    memcpy(m_lastHost, speech, 256);
+    char* speechBuff = (char*)malloc(speechBuffLen);
+    if(!speechBuff) {log_e("out of memory"); return false;}
+    memcpy(speechBuff, speech, speechLen);
+    speechBuff[speechLen] = '\0';
+    urlencode(speechBuff, speechBuffLen);
 
-    String resp = String("GET ") + tts + String(" HTTP/1.1\r\n")
-                + String("Host: ") + host + String("\r\n")
-                + String("User-Agent: Mozilla/5.0 \r\n")
-                + String("Accept-Encoding: identity\r\n")
-                + String("Accept: text/html\r\n")
-                + String("Connection: close\r\n\r\n");
+    char resp[strlen(speechBuff) + 200] = "";
+    strcat(resp, "GET ");
+    strcat(resp, path);
+    strcat(resp, "?ie=UTF-8&tl=");
+    strcat(resp, lang);
+    strcat(resp, "&client=tw-ob&q=");
+    strcat(resp, speechBuff);
+    strcat(resp, " HTTP/1.1\r\n");
+    strcat(resp, "Host: ");
+    strcat(resp, host);
+    strcat(resp, "\r\n");
+    strcat(resp, "User-Agent: Mozilla/5.0 \r\n");
+    strcat(resp, "Accept-Encoding: identity\r\n");
+    strcat(resp, "Accept: text/html\r\n");
+    strcat(resp, "Connection: close\r\n\r\n");
 
-    if(!clientsecure.connect(host.c_str(), 443)) {
+    free(speechBuff);
+
+    if(!clientsecure.connect(host, 443)) {
         log_e("Connection failed");
         return false;
     }
     clientsecure.print(resp);
     sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
     if(audio_info) audio_info(chbuf);
-    while(clientsecure.connected()) {  // read the header
-        String line = clientsecure.readStringUntil('\n');
-        if(line.startsWith("Content-Type")){
-            if(line.indexOf("audio/mpeg") > 12) f_ct = true; // Content-Type mpeg seen
-        }
-        line += "\n";
-        if(line == "\r\n") break;
-    }
-    if(f_ct){
-        m_codec = CODEC_MP3;
-        AACDecoder_FreeBuffers();
-        if(!MP3Decoder_AllocateBuffers()) return false;
-        sprintf(chbuf, "MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-        if(audio_info) audio_info(chbuf);
-    }
-    else{
-        return false;
-    }
 
+    m_f_webstream = true;
+    m_f_running = true;
+    m_f_ssl = true;
+    m_f_tts = true;
+    setDatamode(AUDIO_HEADER);
 
-    while(!playI2Sremains()) {
-        ;
-    }
-
-    while(clientsecure.available() == 0) {
-        ;
-    }
-
-    while(clientsecure.available()) {
-
-        bytesCanBeWritten = InBuff.writeSpace();
-        bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), bytesCanBeWritten);
-        contentLength += bytesAddedToBuffer;
-        if(bytesAddedToBuffer > 0) InBuff.bytesWritten(bytesAddedToBuffer);
-        bytesCanBeRead = InBuff.bufferFilled();
-        if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
-        if(bytesCanBeRead) {
-            while(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) { // mp3 frame complete?
-                bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-                InBuff.bytesWasRead(bytesDecoded);
-                contentLength -= bytesDecoded;
-            }
-        }
-    }
-    while(InBuff.bufferFilled()){
-        bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-        InBuff.bytesWasRead(bytesDecoded);
-        contentLength -= bytesDecoded;
-        if(contentLength < 100 || bytesDecoded < 10) break;
-    }
-
-    while(!playI2Sremains()) {
-        ;
-    }
-    MP3Decoder_FreeBuffers();
-    stopSong();
-    clientsecure.stop();
-    clientsecure.flush();
-    m_codec = CODEC_NONE;
-    if(audio_eof_speech) audio_eof_speech(speech);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
-String Audio::urlencode(String str) {
-    String encodedString = "";
+void Audio::urlencode(char* buff, uint16_t buffLen) {
+
+    uint16_t len = strlen(buff);
+    uint8_t* tmpbuff = (uint8_t*)malloc(buffLen);
+    if(!tmpbuff) {log_e("out of memory"); return;}
     char c;
     char code0;
     char code1;
-    for(int i = 0; i < str.length(); i++) {
-        c = str.charAt(i);
-        if(c == ' ')
-            encodedString += '+';
-        else if(isalnum(c))
-            encodedString += c;
+    uint16_t j = 0;
+    for(int i = 0; i < len; i++) {
+        c = buff[i];
+        //if     (c == ' ')   tmpbuff[j++] = '+';
+        if(isalnum(c)) tmpbuff[j++] = c;
         else {
             code1 = (c & 0xf) + '0';
             if((c & 0xf) > 9) code1 = (c & 0xf) - 10 + 'A';
             c = (c >> 4) & 0xf;
             code0 = c + '0';
             if(c > 9) code0 = c - 10 + 'A';
-            encodedString += '%';
-            encodedString += code0;
-            encodedString += code1;
+            tmpbuff[j++] = '%';
+            tmpbuff[j++] = code0;
+            tmpbuff[j++] = code1;
+        }
+        if(j == buffLen - 1){
+            log_e("out of memory");
+            break;
         }
     }
-    return encodedString;
+    memcpy(buff, tmpbuff, j);
+    buff[j] ='\0';
+    log_i("buff %s", buff);
+    free(tmpbuff);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::showID3Tag(String tag, const char* value){
@@ -1331,7 +1300,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
         bool isUnicode = (ch==1) ? true : false;
 
         if(tag == "APIC") { // a image embedded in file, passing it to external function
-            log_i("framesize=%i", framesize);
+            //log_i("framesize=%i", framesize);
             isUnicode = false;
             if(m_f_localfile){
                 size_t pos = id3Size - headerSize;
@@ -2396,16 +2365,26 @@ void Audio::processWebStream() {
         tmr_1s = millis();
     }
 
+    if(m_f_ssl == false) availableBytes = client.available();            // available from stream
+    if(m_f_ssl == true)  availableBytes = clientsecure.available();      // available from stream
+
     // if we have chunked data transfer: get the chunksize- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_chunked && !m_chunkcount) { // Expecting a new chunkcount?
+    if(m_f_chunked && !m_chunkcount && availableBytes) { // Expecting a new chunkcount?
         int b;
         if(!m_f_ssl) b = client.read();
         else         b = clientsecure.read();
 
-        if(b < 1) return;
         if(b == '\r') return;
-        if(b == '\n'){ m_chunkcount = chunksize;  chunksize = 0; return;}
-
+        if(b == '\n'){
+            m_chunkcount = chunksize;
+            chunksize = 0;
+            if(m_f_tts){
+                m_contentlength = m_chunkcount; // tts has one chunk only
+                m_f_webfile = true;
+                m_f_chunked = false;
+            }
+            return;        
+        }
         // We have received a hexadecimal character.  Decode it and add to the result.
         b = toupper(b) - '0';                       // Be sure we have uppercase
         if(b > 9) b = b - 7;                        // Translate A..F to 10..15
@@ -2414,7 +2393,7 @@ void Audio::processWebStream() {
     }
 
     // if we have metadata: get them - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!metacount && !m_f_swm){
+    if(!metacount && !m_f_swm && availableBytes){
         int16_t b = 0;
         if(!m_f_ssl) b = client.read();
         else         b = clientsecure.read();
@@ -2425,12 +2404,8 @@ void Audio::processWebStream() {
         return;
     }
 
-    // now we can get the pure audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_ssl == false) availableBytes = client.available();            // available from stream
-    if(m_f_ssl == true)  availableBytes = clientsecure.available();      // available from stream
-
     // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() < maxFrameSize && f_stream == true){
+    if(InBuff.bufferFilled() < maxFrameSize && f_stream){
         static uint8_t cnt_slow = 0;
         cnt_slow ++;
         if(f_tmr_1s) {
@@ -2546,13 +2521,28 @@ void Audio::processWebStream() {
     }
 
     // have we reached the end of the webfile?  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream == true) {
-        if(m_f_webfile && (byteCounter >= m_contentlength - 10) && (InBuff.bufferFilled() < maxFrameSize)) {
-            // it is stream from fileserver with known content-length? and
-            // everything is received?  and
-            // the buff is almost empty?, issue #66 then comes to an end
-            playI2Sremains();
-            stopSong(); // Correct close when play known length sound #74 and before callback #112
+    if(m_f_webfile && byteCounter == m_contentlength){
+        while(InBuff.bufferFilled() > 0){
+            if(InBuff.bufferFilled() == 128){ // post tag?
+                if(indexOf((const char*)InBuff.getReadPtr(), "TAG", 0) == 0){
+                    log_i("%s", InBuff.getReadPtr() + 3);
+                    break;
+                }
+                else log_v("%s", InBuff.getReadPtr());
+            }
+            bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
+            if(bytesDecoded < 0) break;
+            InBuff.bytesWasRead(bytesDecoded);
+        }
+        while(!playI2Sremains()){;}
+        stopSong(); // Correct close when play known length sound #74 and before callback #112
+
+        if(m_f_tts){
+            sprintf(chbuf, "End of speech: \"%s\"", m_lastHost);
+            if(audio_info) audio_info(chbuf);
+            if(audio_eof_speech) audio_eof_speech(m_lastHost); 
+        }
+        else{
             sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost);
             if(audio_info) audio_info(chbuf);
             if(audio_eof_stream) audio_eof_stream(m_lastHost);
@@ -2567,7 +2557,7 @@ void Audio::processAudioHeaderData() {
     else         av= clientsecure.available();
     if(av <= 0) return;
 
-    char hl[256]; // headerline
+    char hl[261]; // headerline
     uint8_t b = 0;
     uint8_t pos = 0;
     int16_t idx = 0;
@@ -2580,7 +2570,11 @@ void Audio::processAudioHeaderData() {
         if(b < 0x20 || b > 0x7E) continue;
         hl[pos] = b;
         pos++;
-        if(pos == 255){hl[pos] = '\0'; log_e("headerline oberflow"); break;}
+        if(pos == 260){
+            hl[pos] = '\0'; 
+            log_e("headerline overflow");
+            break;
+        }
     }
 
     if(!pos && m_f_ctseen){  // audio header complete?
@@ -3105,6 +3099,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 setBitrate(FLACGetBitRate());
             }
             showCodecParams();
+            if(m_f_tts) while(!playI2Sremains()){;} // short silence
         }
         if(m_codec == CODEC_MP3){
             m_validSamples = MP3GetOutputSamps() / getChannels();
