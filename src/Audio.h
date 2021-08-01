@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 30,2021
+ *  Updated on: Aug 01,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -13,7 +13,8 @@
 #pragma GCC optimize ("Ofast")
 
 #include "Arduino.h"
-#include "base64.h"
+#include "libb64/cdecode.h"
+#include "libb64/cencode.h"
 #include "SPI.h"
 #include "WiFi.h"
 #include "WiFiClientSecure.h"
@@ -216,10 +217,10 @@ private:
     void showstreamtitle(const char* ml);
     bool parseContentType(const char* ct);
     void processAudioHeaderData();
-    bool readMetadata(uint8_t b);
+    bool readMetadata(uint8_t b, bool first = false);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
-    void urlencode(char* buff, uint16_t buffLen);
+    void urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
     int16_t* IIR_filterChain0(int16_t iir_in[2], bool clear = false);
     int16_t* IIR_filterChain1(int16_t* iir_in, bool clear = false);
     int16_t* IIR_filterChain2(int16_t* iir_in, bool clear = false);
@@ -269,6 +270,36 @@ private:
         }
         return result;
     }
+    bool b64encode(const char* source, uint16_t sourceLength, char* dest){
+        size_t size = base64_encode_expected_len(sourceLength) + 1;
+        char * buffer = (char *) malloc(size);
+        if(buffer) {
+            base64_encodestate _state;
+            base64_init_encodestate(&_state);
+            int len = base64_encode_block(&source[0], sourceLength, &buffer[0], &_state);
+            len = base64_encode_blockend((buffer + len), &_state);
+            memcpy(dest, buffer, strlen(buffer));
+            dest[strlen(buffer)] = '\0';
+            free(buffer);
+            return true;
+        }
+        return false;
+    }
+    size_t urlencode_expected_len(const char* source){
+        size_t expectedLen = strlen(source);
+        for(int i = 0; i < strlen(source); i++) {
+            if(isalnum(source[i])){;}
+            else expectedLen += 2;
+        }
+        return expectedLen;
+    }
+    void trim(char* s){
+        while(isspace(*s)) s++;  // ltrim
+        char* back = s + strlen(s);
+        while(isspace(*--back));
+        *(back + 1) = '\0';      // rtrim
+    }
+
 
 private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };

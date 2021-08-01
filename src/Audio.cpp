@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 30,2021
+ *  Updated on: Aug 01,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -319,16 +319,21 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(audio_info) audio_info(chbuf);
 
     // authentification
-    String toEncode = String(user) + ":" + String(pwd);
-    String authorization = base64::encode(toEncode);
+    uint8_t auth = strlen(user) + strlen(pwd);
+    char toEncode[auth + 4];
+    toEncode[0] = '\0';
+    strcat(toEncode, user);
+    strcat(toEncode, ":");
+    strcat(toEncode, pwd);
+    char authorization[base64_encode_expected_len(strlen(toEncode)) + 1];
+    authorization[0] = '\0';
+    b64encode((const char*)toEncode, strlen(toEncode), authorization);
 
     // initializationsequence
-    int16_t pos_colon;                                        // Position of ":" in hostname
-    int16_t pos_ampersand;                                    // Position of "&" in hostname
-    uint16_t port = 80;                                       // Port number for host
-    String extension = "/";                                   // May be like "/mp3" in "skonto.ls.lv:8002/mp3"
-    String hostwoext = "";                                    // Host without extension and portnumber
-    String headerdata = "";
+    int16_t pos_slash;                                        // position of "/" in hostname
+    int16_t pos_colon;                                        // position of "/" in hostname
+    int16_t pos_ampersand;                                    // position of "&" in hostname
+    uint16_t port = 80;                                       // port number
     m_f_webstream = true;
     setDatamode(AUDIO_HEADER);                                // Handle header
 
@@ -343,51 +348,69 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         port = 443;
     }
 
-    String s_host = host;
-    s_host.trim();
-
     // Is it a playlist?
-    if(s_host.endsWith(".m3u")) {m_playlistFormat = FORMAT_M3U; m_datamode = AUDIO_PLAYLISTINIT;}
-    if(s_host.endsWith(".pls")) {m_playlistFormat = FORMAT_PLS; m_datamode = AUDIO_PLAYLISTINIT;}
-    if(s_host.endsWith(".asx")) {m_playlistFormat = FORMAT_ASX; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".m3u")) {m_playlistFormat = FORMAT_M3U; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".pls")) {m_playlistFormat = FORMAT_PLS; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".asx")) {m_playlistFormat = FORMAT_ASX; m_datamode = AUDIO_PLAYLISTINIT;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_colon = s_host.indexOf("/");                                  // Search for begin of extension
-    if(pos_colon > 0) {                                               // Is there an extension?
-        extension = s_host.substring(pos_colon);                      // Yes, change the default
-        hostwoext = s_host.substring(0, pos_colon);                   // Host without extension
+    pos_slash     = indexOf(host, "/", 0);
+    pos_colon     = indexOf(host, ":", 0);
+    pos_ampersand = indexOf(host, "&", 0);
+
+    char* hostwoext;                                          // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
+    char* extension;                                          // "/mp3" in "skonto.ls.lv:8002/mp3"
+
+    if(pos_slash > 1) {
+        uint8_t hostwoextLen = pos_slash;
+        hostwoext = (char*)malloc(hostwoextLen);
+        memcpy(hostwoext, host, hostwoextLen);
+        hostwoext[hostwoextLen] = '\0';
+        uint8_t extLen =  urlencode_expected_len(host + pos_slash);
+        extension = (char*)malloc(extLen);
+        memcpy(extension, host  + pos_slash, extLen);
+        trim(extension);
+        urlencode(extension, extLen, true);
     }
-    // In the URL there may be a portnumber
-    pos_colon = s_host.indexOf(":");                                  // Search for separator
-    pos_ampersand = s_host.indexOf("&");                              // Search for additional extensions
-    if(pos_colon >= 0) {                                              // Portnumber available?
-        if((pos_ampersand == -1) or (pos_ampersand > pos_colon)) {    // Portnumber is valid if ':' comes before '&' #82
-            port = s_host.substring(pos_colon + 1).toInt();           // Get portnumber as integer
-            hostwoext = s_host.substring(0, pos_colon);               // Host without portnumber
-        }
+    else{  // url has no extension
+        hostwoext = strdup(host);
+        extension = strdup("/");
     }
-    sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"", hostwoext.c_str(), port, extension.c_str());
+
+    if((pos_colon >= 0) && ((pos_ampersand == -1) or (pos_ampersand > pos_colon))){
+        port = atoi(host+ pos_colon + 1);// Get portnumber as integer
+        hostwoext[pos_colon] = '\0';// Host without portnumber
+    }
+
+    sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
     if(audio_info) audio_info(chbuf);
 
-    extension.replace(" ", "%20");
+    char resp[strlen(host) + strlen(authorization) + 100];
+    resp[0] = '\0';
 
-    String resp = String("GET ") + extension + String(" HTTP/1.1\r\n")
-                + String("Host: ") + hostwoext + String("\r\n")
-                + String("Icy-MetaData:1\r\n")
-                + String("Authorization: Basic " + authorization + "\r\n")
-                + String("Connection: close\r\n\r\n");
+    strcat(resp, "GET ");
+    strcat(resp, extension);
+    strcat(resp, " HTTP/1.1\r\n");
+    strcat(resp, "Host: ");
+    strcat(resp, hostwoext);
+    strcat(resp, "\r\n");
+    strcat(resp, "Icy-MetaData:1\r\n");
+    strcat(resp, "Authorization: Basic ");
+    strcat(resp, authorization);
+    strcat(resp, "\r\n");
+    strcat(resp, "Connection: close\r\n\r\n");
 
     const uint32_t TIMEOUT_MS{250};
     if(m_f_ssl == false) {
         uint32_t t = millis();
-        if(client.connect(hostwoext.c_str(), port, TIMEOUT_MS)) {
+        if(client.connect(hostwoext, port, TIMEOUT_MS)) {
             client.setNoDelay(true);
             client.print(resp);
             uint32_t dt = millis() - t;
             sprintf(chbuf, "Connected to server in %u ms", dt);
             if(audio_info) audio_info(chbuf);
 
-            memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
+            memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
             m_f_running = true;
             return true;
         }
@@ -396,23 +419,25 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     const uint32_t TIMEOUT_MS_SSL{2700};
     if(m_f_ssl == true) {
         uint32_t t = millis();
-        if(clientsecure.connect(hostwoext.c_str(), port, TIMEOUT_MS_SSL)) {
+        if(clientsecure.connect(hostwoext, port, TIMEOUT_MS_SSL)) {
             clientsecure.setNoDelay(true);
             // if(audio_info) audio_info("SSL/TLS Connected to server");
             clientsecure.print(resp);
             uint32_t dt = millis() - t;
             sprintf(chbuf, "SSL has been established in %u ms, free Heap: %u bytes", dt, ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
-            memcpy(m_lastHost, s_host.c_str(), s_host.length()+1);               // Remember the current s_host
+            memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
             m_f_running = true;
             return true;
         }
     }
-    sprintf(chbuf, "Request %s failed!", s_host.c_str());
+    sprintf(chbuf, "Request %s failed!", host);
     if(audio_info) audio_info(chbuf);
     if(audio_showstation) audio_showstation("");
     if(audio_showstreamtitle) audio_showstreamtitle("");
     m_lastHost[0] = 0;
+    if(hostwoext) free(hostwoext);
+    if(extension) free(extension);
     return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -624,7 +649,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::urlencode(char* buff, uint16_t buffLen) {
+void Audio::urlencode(char* buff, uint16_t buffLen, bool spacesOnly) {
 
     uint16_t len = strlen(buff);
     uint8_t* tmpbuff = (uint8_t*)malloc(buffLen);
@@ -635,8 +660,17 @@ void Audio::urlencode(char* buff, uint16_t buffLen) {
     uint16_t j = 0;
     for(int i = 0; i < len; i++) {
         c = buff[i];
-        //if     (c == ' ')   tmpbuff[j++] = '+';
         if(isalnum(c)) tmpbuff[j++] = c;
+        else if(spacesOnly){
+            if(c == ' '){
+                tmpbuff[j++] = '%';
+                tmpbuff[j++] = '2';
+                tmpbuff[j++] = '0';
+            }
+            else{
+                tmpbuff[j++] = c;
+            }
+        }
         else {
             code1 = (c & 0xf) + '0';
             if((c & 0xf) > 9) code1 = (c & 0xf) - 10 + 'A';
@@ -654,7 +688,6 @@ void Audio::urlencode(char* buff, uint16_t buffLen) {
     }
     memcpy(buff, tmpbuff, j);
     buff[j] ='\0';
-    log_i("buff %s", buff);
     free(tmpbuff);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1153,7 +1186,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
     static size_t headerSize;
     static uint8_t ID3version;
     static int ehsz = 0;
-    static String tag = "";
+    static char tag[5];
     static char frameid[5];
     static size_t framesize = 0;
     static bool compressed = false;
@@ -1243,7 +1276,8 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
         frameid[2] = *(data + 2);
         frameid[3] = *(data + 3);
         frameid[4] = 0;
-        tag = frameid;
+        for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
+
         headerSize -= 4;
         if(frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0 && frameid[3] == 0) {
             // We're in padding
@@ -1299,7 +1333,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
         char ch = *(data + 0);
         bool isUnicode = (ch==1) ? true : false;
 
-        if(tag == "APIC") { // a image embedded in file, passing it to external function
+        if(startsWith(tag, "APIC")) { // a image embedded in file, passing it to external function
             //log_i("framesize=%i", framesize);
             isUnicode = false;
             if(m_f_localfile){
@@ -1334,7 +1368,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             } //remove non printables
             if(k>0) value[k] = 0; else value[0] = 0; // new termination
         }
-        showID3Tag(tag.c_str(), value);
+        showID3Tag(tag, value);
         return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1345,7 +1379,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
         frameid[1] = *(data + 1);
         frameid[2] = *(data + 2);
         frameid[3] = 0;
-        tag = frameid;
+        for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
         headerSize -= 3;
         size_t len = bigEndian(data + 3, 3);
         headerSize -= 3;
@@ -1357,7 +1391,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
         value[tmp+1] = 0;
         chbuf[0] = 0;
 
-        showID3Tag(tag.c_str(), value);
+        showID3Tag(tag, value);
         if(len == 0) m_controlCounter = 98;
 
         return 3 + 3 + len;
@@ -2357,6 +2391,7 @@ void Audio::processWebStream() {
         tmr_1s = millis();
         m_t0 = millis();
         metacount = m_metaint;
+        readMetadata(0, true); // reset all static vars
     }
 
     // timer, triggers every second - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2690,10 +2725,16 @@ void Audio::processAudioHeaderData() {
 }
 
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::readMetadata(uint8_t b) {
+bool Audio::readMetadata(uint8_t b, bool first) {
 
     static uint16_t pos_ml = 0;                          // determines the current position in metaline
     static uint16_t metalen = 0;
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(first){
+        pos_ml = 0;
+        metalen = 0;
+        return true;
+    }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(!metalen) {                                       // First byte of metadata?
         metalen = b * 16 + 1;                            // New count for metadata including length byte
@@ -3164,76 +3205,78 @@ void Audio::compute_audioCurrentTime(int bd) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
-    String e = "";
+    char* e;
+
     if(m_codec == CODEC_MP3){
         switch(r){
-            case ERR_MP3_NONE:                              e = "NONE";                             break;
-            case ERR_MP3_INDATA_UNDERFLOW:                  e = "INDATA_UNDERFLOW";                 break;
-            case ERR_MP3_MAINDATA_UNDERFLOW:                e = "MAINDATA_UNDERFLOW";               break;
-            case ERR_MP3_FREE_BITRATE_SYNC:                 e = "FREE_BITRATE_SYNC";                break;
-            case ERR_MP3_OUT_OF_MEMORY:                     e = "OUT_OF_MEMORY";                    break;
-            case ERR_MP3_NULL_POINTER:                      e = "NULL_POINTER";                     break;
-            case ERR_MP3_INVALID_FRAMEHEADER:               e = "INVALID_FRAMEHEADER";              break;
-            case ERR_MP3_INVALID_SIDEINFO:                  e = "INVALID_SIDEINFO";                 break;
-            case ERR_MP3_INVALID_SCALEFACT:                 e = "INVALID_SCALEFACT";                break;
-            case ERR_MP3_INVALID_HUFFCODES:                 e = "INVALID_HUFFCODES";                break;
-            case ERR_MP3_INVALID_DEQUANTIZE:                e = "INVALID_DEQUANTIZE";               break;
-            case ERR_MP3_INVALID_IMDCT:                     e = "INVALID_IMDCT";                    break;
-            case ERR_MP3_INVALID_SUBBAND:                   e = "INVALID_SUBBAND";                  break;
-            default: e = "ERR_UNKNOWN";
+            case ERR_MP3_NONE:                              e = strdup("NONE");                             break;
+            case ERR_MP3_INDATA_UNDERFLOW:                  e = strdup("INDATA_UNDERFLOW");                 break;
+            case ERR_MP3_MAINDATA_UNDERFLOW:                e = strdup("MAINDATA_UNDERFLOW");               break;
+            case ERR_MP3_FREE_BITRATE_SYNC:                 e = strdup("FREE_BITRATE_SYNC");                break;
+            case ERR_MP3_OUT_OF_MEMORY:                     e = strdup("OUT_OF_MEMORY");                    break;
+            case ERR_MP3_NULL_POINTER:                      e = strdup("NULL_POINTER");                     break;
+            case ERR_MP3_INVALID_FRAMEHEADER:               e = strdup("INVALID_FRAMEHEADER");              break;
+            case ERR_MP3_INVALID_SIDEINFO:                  e = strdup("INVALID_SIDEINFO");                 break;
+            case ERR_MP3_INVALID_SCALEFACT:                 e = strdup("INVALID_SCALEFACT");                break;
+            case ERR_MP3_INVALID_HUFFCODES:                 e = strdup("INVALID_HUFFCODES");                break;
+            case ERR_MP3_INVALID_DEQUANTIZE:                e = strdup("INVALID_DEQUANTIZE");               break;
+            case ERR_MP3_INVALID_IMDCT:                     e = strdup("INVALID_IMDCT");                    break;
+            case ERR_MP3_INVALID_SUBBAND:                   e = strdup("INVALID_SUBBAND");                  break;
+            default: e = strdup("ERR_UNKNOWN");
         }
-        sprintf(chbuf, "MP3 decode error %d : %s", r, e.c_str());
+        sprintf(chbuf, "MP3 decode error %d : %s", r, e);
         if(audio_info) audio_info(chbuf);
     }
     if(m_codec == CODEC_AAC){
         switch(r){
-            case ERR_AAC_NONE:                              e = "NONE";                             break;
-            case ERR_AAC_INDATA_UNDERFLOW:                  e = "INDATA_UNDERFLOW";                 break;
-            case ERR_AAC_NULL_POINTER:                      e = "NULL_POINTER";                     break;
-            case ERR_AAC_INVALID_ADTS_HEADER:               e = "INVALID_ADTS_HEADER";              break;
-            case ERR_AAC_INVALID_ADIF_HEADER:               e = "INVALID_ADIF_HEADER";              break;
-            case ERR_AAC_INVALID_FRAME:                     e = "INVALID_FRAME";                    break;
-            case ERR_AAC_MPEG4_UNSUPPORTED:                 e = "MPEG4_UNSUPPORTED";                break;
-            case ERR_AAC_CHANNEL_MAP:                       e = "CHANNEL_MAP";                      break;
-            case ERR_AAC_SYNTAX_ELEMENT:                    e = "SYNTAX_ELEMENT";                   break;
-            case ERR_AAC_DEQUANT:                           e = "DEQUANT";                          break;
-            case ERR_AAC_STEREO_PROCESS:                    e = "STEREO_PROCESS";                   break;
-            case ERR_AAC_PNS:                               e = "PNS";                              break;
-            case ERR_AAC_SHORT_BLOCK_DEINT:                 e = "SHORT_BLOCK_DEINT";                break;
-            case ERR_AAC_TNS:                               e = "TNS";                              break;
-            case ERR_AAC_IMDCT:                             e = "IMDCT";                            break;
-            case ERR_AAC_SBR_INIT:                          e = "SBR_INIT";                         break;
-            case ERR_AAC_SBR_BITSTREAM:                     e = "SBR_BITSTREAM";                    break;
-            case ERR_AAC_SBR_DATA:                          e = "SBR_DATA";                         break;
-            case ERR_AAC_SBR_PCM_FORMAT:                    e = "SBR_PCM_FORMAT";                   break;
-            case ERR_AAC_SBR_NCHANS_TOO_HIGH:               e = "SBR_NCHANS_TOO_HIGH";              break;
-            case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED:        e = "BR_SINGLERATE_UNSUPPORTED";        break;
-            case ERR_AAC_NCHANS_TOO_HIGH:                   e = "NCHANS_TOO_HIGH";                  break;
-            case ERR_AAC_RAWBLOCK_PARAMS:                   e = "RAWBLOCK_PARAMS";                  break;
-            default: e = "ERR_UNKNOWN";
+            case ERR_AAC_NONE:                              e = strdup("NONE");                             break;
+            case ERR_AAC_INDATA_UNDERFLOW:                  e = strdup("INDATA_UNDERFLOW");                 break;
+            case ERR_AAC_NULL_POINTER:                      e = strdup("NULL_POINTER");                     break;
+            case ERR_AAC_INVALID_ADTS_HEADER:               e = strdup("INVALID_ADTS_HEADER");              break;
+            case ERR_AAC_INVALID_ADIF_HEADER:               e = strdup("INVALID_ADIF_HEADER");              break;
+            case ERR_AAC_INVALID_FRAME:                     e = strdup("INVALID_FRAME");                    break;
+            case ERR_AAC_MPEG4_UNSUPPORTED:                 e = strdup("MPEG4_UNSUPPORTED");                break;
+            case ERR_AAC_CHANNEL_MAP:                       e = strdup("CHANNEL_MAP");                      break;
+            case ERR_AAC_SYNTAX_ELEMENT:                    e = strdup("SYNTAX_ELEMENT");                   break;
+            case ERR_AAC_DEQUANT:                           e = strdup("DEQUANT");                          break;
+            case ERR_AAC_STEREO_PROCESS:                    e = strdup("STEREO_PROCESS");                   break;
+            case ERR_AAC_PNS:                               e = strdup("PNS");                              break;
+            case ERR_AAC_SHORT_BLOCK_DEINT:                 e = strdup("SHORT_BLOCK_DEINT");                break;
+            case ERR_AAC_TNS:                               e = strdup("TNS");                              break;
+            case ERR_AAC_IMDCT:                             e = strdup("IMDCT");                            break;
+            case ERR_AAC_SBR_INIT:                          e = strdup("SBR_INIT");                         break;
+            case ERR_AAC_SBR_BITSTREAM:                     e = strdup("SBR_BITSTREAM");                    break;
+            case ERR_AAC_SBR_DATA:                          e = strdup("SBR_DATA");                         break;
+            case ERR_AAC_SBR_PCM_FORMAT:                    e = strdup("SBR_PCM_FORMAT");                   break;
+            case ERR_AAC_SBR_NCHANS_TOO_HIGH:               e = strdup("SBR_NCHANS_TOO_HIGH");              break;
+            case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED:        e = strdup("BR_SINGLERATE_UNSUPPORTED");        break;
+            case ERR_AAC_NCHANS_TOO_HIGH:                   e = strdup("NCHANS_TOO_HIGH");                  break;
+            case ERR_AAC_RAWBLOCK_PARAMS:                   e = strdup("RAWBLOCK_PARAMS");                  break;
+            default: e = strdup("ERR_UNKNOWN");
         }
-        sprintf(chbuf, "AAC decode error %d : %s", r, e.c_str());
+        sprintf(chbuf, "AAC decode error %d : %s", r, e);
         if(audio_info) audio_info(chbuf);
     }
     if(m_codec == CODEC_FLAC){
         switch(r){
-            case ERR_FLAC_NONE:                             e = "NONE";                             break;
-            case ERR_FLAC_BLOCKSIZE_TOO_BIG:                e = "BLOCKSIZE TOO BIG";                break;
-            case ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED:   e = "Reserved Blocksize unsupported";   break;
-            case ERR_FLAC_SYNC_CODE_NOT_FOUND:              e = "SYNC CODE NOT FOUND";              break;
-            case ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT:       e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
-            case ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT:      e = "RESERVED CHANNEL ASSIGNMENT";      break;
-            case ERR_FLAC_RESERVED_SUB_TYPE:                e = "RESERVED SUB TYPE";                break;
-            case ERR_FLAC_PREORDER_TOO_BIG:                 e = "PREORDER TOO BIG";                 break;
-            case ERR_FLAC_RESERVED_RESIDUAL_CODING:         e = "RESERVED RESIDUAL CODING";         break;
-            case ERR_FLAC_WRONG_RICE_PARTITION_NR:          e = "WRONG RICE PARTITION NR";          break;
-            case ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG:          e = "BITS PER SAMPLE > 16";             break;
-            case ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN:          e = "BITS PER SAMPLE UNKNOWN";          break;
-            default: e = "ERR_UNKNOWN";
+            case ERR_FLAC_NONE:                             e = strdup("NONE");                             break;
+            case ERR_FLAC_BLOCKSIZE_TOO_BIG:                e = strdup("BLOCKSIZE TOO BIG");                break;
+            case ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED:   e = strdup("Reserved Blocksize unsupported");   break;
+            case ERR_FLAC_SYNC_CODE_NOT_FOUND:              e = strdup("SYNC CODE NOT FOUND");              break;
+            case ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT:       e = strdup("UNKNOWN CHANNEL ASSIGNMENT");       break;
+            case ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT:      e = strdup("RESERVED CHANNEL ASSIGNMENT");      break;
+            case ERR_FLAC_RESERVED_SUB_TYPE:                e = strdup("RESERVED SUB TYPE");                break;
+            case ERR_FLAC_PREORDER_TOO_BIG:                 e = strdup("PREORDER TOO BIG");                 break;
+            case ERR_FLAC_RESERVED_RESIDUAL_CODING:         e = strdup("RESERVED RESIDUAL CODING");         break;
+            case ERR_FLAC_WRONG_RICE_PARTITION_NR:          e = strdup("WRONG RICE PARTITION NR");          break;
+            case ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG:          e = strdup("BITS PER SAMPLE > 16");             break;
+            case ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN:          e = strdup("BITS PER SAMPLE UNKNOWN");          break;
+            default: e = strdup("ERR_UNKNOWN");
         }
-        sprintf(chbuf, "FLAC decode error %d : %s", r, e.c_str());
+        sprintf(chbuf, "FLAC decode error %d : %s", r, e);
         if(audio_info) audio_info(chbuf);
     }
+    if(e) free(e);
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN) {
