@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 01,2021
+ *  Updated on: Aug 02,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -358,21 +358,22 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     pos_colon     = indexOf(host, ":", 0);
     pos_ampersand = indexOf(host, "&", 0);
 
-    char* hostwoext;                                          // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    char* extension;                                          // "/mp3" in "skonto.ls.lv:8002/mp3"
+    char *hostwoext = NULL;                                  // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
+    char *extension = NULL;                                  // "/mp3" in "skonto.ls.lv:8002/mp3"
 
     if(pos_slash > 1) {
         uint8_t hostwoextLen = pos_slash;
-        hostwoext = (char*)malloc(hostwoextLen);
+        hostwoext = (char*)malloc(hostwoextLen + 1);
         memcpy(hostwoext, host, hostwoextLen);
         hostwoext[hostwoextLen] = '\0';
         uint8_t extLen =  urlencode_expected_len(host + pos_slash);
-        extension = (char*)malloc(extLen);
+        extension = (char *)malloc(extLen);
         memcpy(extension, host  + pos_slash, extLen);
         trim(extension);
         urlencode(extension, extLen, true);
     }
     else{  // url has no extension
+        log_i("hier");
         hostwoext = strdup(host);
         extension = strdup("/");
     }
@@ -412,6 +413,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
             memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
             m_f_running = true;
+            if(hostwoext) free(hostwoext);
+            if(extension) free(extension);
             return true;
         }
     }
@@ -428,6 +431,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             if(audio_info) audio_info(chbuf);
             memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
             m_f_running = true;
+            if(hostwoext) free(hostwoext);
+            if(extension) free(extension);
             return true;
         }
     }
@@ -2868,8 +2873,19 @@ void Audio::showstreamtitle(const char* ml) {
     // example for ml:
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
+
+//    char* metaline = strdup(ml);
+//    if(indexOf(metaline, "StreamTitle=", 0) == 0){              // Streamtitle found
+//        char* pos = metaline;
+//        while(*(pos + 12)){ *pos = *(pos + 12); pos++;}         // remove "StreamTitle="
+//        *pos = '\0';
+//        log_i("Streamtitle=%s", metaline);
+//    }
+//    if(metaline) free(metaline);
+
     int16_t pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     String mline = ml, st = "", su = "", ad = "", artist = "", title = "", icyurl = "";
+
     pos1 = mline.indexOf("StreamTitle=");
     if(pos1 != -1) {                                          // StreamTitle found
         pos1 = pos1 + 12;

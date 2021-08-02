@@ -13,7 +13,7 @@
 #pragma GCC optimize ("Ofast")
 
 #include "Arduino.h"
-#include "libb64/cdecode.h"
+//#include "libb64/cdecode.h"
 #include "libb64/cencode.h"
 #include "SPI.h"
 #include "WiFi.h"
