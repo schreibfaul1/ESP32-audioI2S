@@ -13,7 +13,6 @@
 #pragma GCC optimize ("Ofast")
 
 #include "Arduino.h"
-//#include "libb64/cdecode.h"
 #include "libb64/cencode.h"
 #include "SPI.h"
 #include "WiFi.h"
@@ -74,6 +73,7 @@ extern __attribute__((weak)) void audio_showstation(const char*);
 extern __attribute__((weak)) void audio_bitrate(const char*);
 extern __attribute__((weak)) void audio_commercial(const char*);
 extern __attribute__((weak)) void audio_icyurl(const char*);
+extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
@@ -234,7 +234,10 @@ private:
     bool endsWith (const char* base, const char* str) {
         int blen = strlen(base);
         int slen = strlen(str);
-        return (blen >= slen) && (0 == strcmp(base + blen - slen, str));
+        while(isspace(*(base + blen - 1))) blen--;  // rtrim
+        char* pos = strstr(base + blen - slen, str);
+        if (pos == NULL) return false;
+        else return true;
     }
     int indexOf (const char* base, const char* str, int startIndex) {
         int result;
@@ -246,6 +249,15 @@ private:
             else result = pos - base;
         }
         return result;
+    }
+    int lastIndexOf(const char* base, const char* str){
+        int pos = -1, lastIndex = -1;
+        while(true){
+            pos = indexOf(base, str, pos + 1);
+            if(pos >= 0) lastIndex = pos;
+            else break;
+        }
+        return lastIndex;
     }
     int specialIndexOf (uint8_t* base, const char* str, int baselen, bool exact = false){
         int result;  // seek for str in buffer or in header up to baselen, not nullterninated
@@ -294,7 +306,9 @@ private:
         return expectedLen;
     }
     void trim(char* s){
-        while(isspace(*s)) s++;  // ltrim
+        uint8_t l = 0;
+        while(isspace(*(s + l))) l++;
+        for(uint16_t i = 0; i< strlen(s) - l; i++)  *(s + i) = *(s + i + l); // ltrim
         char* back = s + strlen(s);
         while(isspace(*--back));
         *(back + 1) = '\0';      // rtrim
