@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 02,2021
+ *  Updated on: Aug 21,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -160,8 +160,13 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
     if (internalDAC)  {
         log_i("internal DAC");
         m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+        #endif
+
         i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
         i2s_set_dac_mode(m_f_channelEnabled);
         if(m_f_channelEnabled != I2S_DAC_CHANNEL_BOTH_EN) {
@@ -170,8 +175,13 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
     } 
     else {
         m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // Arduino vers. > 2.0.0
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // Arduino vers. > 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+        #endif
+
         i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
         m_f_forceMono = false;
     }
@@ -418,6 +428,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             m_f_running = true;
             if(hostwoext) free(hostwoext);
             if(extension) free(extension);
+            while(!client.connected()){;} // wait until the connection is established
             return true;
         }
     }
@@ -436,6 +447,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             m_f_running = true;
             if(hostwoext) free(hostwoext);
             if(extension) free(extension);
+            while(!clientsecure.connected()){;} // wait until the connection is established
             return true;
         }
     }
@@ -443,12 +455,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(audio_info) audio_info(chbuf);
     if(audio_showstation) audio_showstation("");
     if(audio_showstreamtitle) audio_showstreamtitle("");
+    if(audio_icydescription) audio_icydescription("");
+    if(audio_icyurl) audio_icyurl("");
     m_lastHost[0] = 0;
     if(hostwoext) free(hostwoext);
     if(extension) free(extension);
-    if(audio_showstation) audio_showstation("");
-    if(audio_icydescription) audio_icydescription("");
-    if(audio_icyurl) audio_icyurl("");
     return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -529,7 +540,8 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     
     if(fs.exists(audioName)) {
         audiofile = fs.open(audioName); // #86
-    } else {
+    }
+    else {
         UTF8toASCII(audioName);
         if(fs.exists(audioName)) {
             audiofile = fs.open(audioName);
@@ -544,15 +556,21 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     m_f_localfile = true;
     m_file_size = audiofile.size();//TEST loop
 
+    char* afn = NULL;  // audioFileName
+
 #ifdef SDFATFS_USED
     audiofile.getName(chbuf, sizeof(chbuf));
-    String afn = chbuf;
+    afn = strdup(chbuf);
 #else
-    String afn = (String) audiofile.name();                   // audioFileName
+    afn = strdup(audiofile.name());
 #endif
 
-    afn.toLowerCase();
-    if(afn.endsWith(".mp3")) {        // MP3 section
+    uint8_t dotPos = lastIndexOf(afn, ".");
+    for(uint8_t i = dotPos + 1; i < strlen(afn); i++){
+        afn[i] = toLowerCase(afn[i]);
+    }
+
+    if(endsWith(afn, ".mp3")){      // MP3 section
         m_codec = CODEC_MP3;
         if(!MP3Decoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(m_frameSizeMP3);
@@ -562,7 +580,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         return true;
     } // end MP3 section
 
-    if(afn.endsWith(".m4a")) {        // M4A section, iTunes
+    if(endsWith(afn, ".m4a")){      // M4A section, iTunes
         m_codec = CODEC_M4A;
         if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(m_frameSizeAAC);
@@ -572,7 +590,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         return true;
     } // end M4A section
 
-    if(afn.endsWith(".aac")) {        // AAC section, without FileHeader
+    if(endsWith(afn, ".aac")){      // AAC section, without FileHeader
         m_codec = CODEC_AAC;
         if(!AACDecoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(m_frameSizeAAC);
@@ -582,14 +600,14 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         return true;
     } // end AAC section
 
-    if(afn.endsWith(".wav")) { // WAVE section
+    if(endsWith(afn, ".wav")){      // WAVE section
         m_codec = CODEC_WAV;
         InBuff.changeMaxBlockSize(m_frameSizeWav);
         m_f_running = true;
         return true;
     } // end WAVE section
 
-    if(afn.endsWith(".flac")) { // FLAC section
+    if(endsWith(afn, ".flac")) {     // FLAC section
         m_codec = CODEC_FLAC;
         if(!psramFound()){
             if(audio_info) audio_info("FLAC works only with PSRAM!");
@@ -604,9 +622,10 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
         return true;
     } // end FLAC section
 
-    sprintf(chbuf, "The %s format is not supported", afn.c_str() + afn.lastIndexOf(".") + 1);
+    sprintf(chbuf, "The %s format is not supported", afn + dotPos);
     if(audio_info) audio_info(chbuf);
     audiofile.close();
+    if(afn) free(afn);
     return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -800,6 +819,7 @@ void Audio::showID3Tag(const char* tag, const char* value){
     if(!strcmp(tag, "WOAR")) sprintf(chbuf, "OfficialArtistWebpage: %s", value);
     if(!strcmp(tag, "XDOR")) sprintf(chbuf, "OriginalReleaseTime: %s", value);
 
+    latinToUTF8(chbuf, sizeof(chbuf));
     if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -863,6 +883,51 @@ void Audio::unicode2utf8(char* buff, uint32_t len){
     buff[m] = 0;
     memcpy(buff, tmpbuff, m);
     free(tmpbuff);
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool Audio::latinToUTF8(char* buff, size_t bufflen){
+    // most stations send  strings in UTF-8 but a few sends in latin. To standardize this, all latin strings are
+    // converted to UTF-8. If UTF-8 is already present, nothing is done and true is returned.
+    // A conversion to UTF-8 extends the string. Therefore it is necessary to know the buffer size. If the converted
+    // string does not fit into the buffer, false is returned
+    // utf8 bytelength: >=0xF0 3 bytes, >=0xE0 2 bytes, >=0xC0 1 byte, e.g. e293ab is ⓫
+
+    uint16_t pos = 0;
+    uint8_t  ext_bytes = 0;
+    uint16_t len = strlen(buff);
+    uint8_t  c;
+
+    while(pos < len){
+        c = buff[pos];
+        if(c >= 0xC2) {    // is UTF8 char
+            pos++;
+            if(c >= 0xC0 && buff[pos] < 0x80) {ext_bytes++; pos++;}
+            if(c >= 0xE0 && buff[pos] < 0x80) {ext_bytes++; pos++;}
+            if(c >= 0xF0 && buff[pos] < 0x80) {ext_bytes++; pos++;}
+        }
+        else pos++;
+    }
+    if(!ext_bytes) return true; // is UTF-8, do nothing
+
+    pos = 0;
+
+    while(buff[pos] != 0){
+        len = strlen(buff);
+        if(buff[pos] >= 0x80 && buff[pos+1] < 0x80){       // is not UTF8, is latin?
+            for(int i = len+1; i > pos; i--){
+                buff[i+1] = buff[i];
+            }
+            uint8_t c = buff[pos];
+            buff[pos++] = 0xc0 | ((c >> 6) & 0x1f);      // 2+1+5 bits
+            buff[pos++] = 0x80 | ((char)c & 0x3f);       // 1+1+6 bits
+        }
+        pos++;
+        if(pos > bufflen -3){
+            buff[bufflen -1] = '\0';
+            return false; // do not overwrite
+        }
+    }
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::read_WAV_Header(uint8_t* data, size_t len) {
@@ -1201,6 +1266,9 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
     static char frameid[5];
     static size_t framesize = 0;
     static bool compressed = false;
+    static bool APIC_seen = false;
+    static size_t APIC_size = 0;
+    static uint32_t APIC_pos = 0;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0){      /* read ID3 tag and ID3 header size */
         if(m_f_localfile){
@@ -1210,6 +1278,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             if(audio_info) audio_info(chbuf);
         }
         m_controlCounter ++;
+        APIC_seen = false;
         headerSize = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
@@ -1348,8 +1417,9 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             //log_i("framesize=%i", framesize);
             isUnicode = false;
             if(m_f_localfile){
-                size_t pos = id3Size - headerSize;
-                if(audio_id3image) audio_id3image(audiofile, pos, framesize);
+                APIC_seen = true;
+                APIC_pos = id3Size - headerSize;
+                APIC_size = framesize;
             }
             return 0;
         }
@@ -1433,7 +1503,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             m_audioDataSize = m_contentlength - m_audioDataStart;
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
-
+            if(APIC_seen && audio_id3image) audio_id3image(audiofile, APIC_pos, APIC_size);
             return 0;
         }
     }
@@ -2177,7 +2247,7 @@ void Audio::processPlayListData() {
                return;
            }
            //sprintf(chbuf, "Entry in playlist found: %s", pl);
-           //if(vs1053_info) vs1053_info(chbuf);
+           //if(audio_info) audio_info(chbuf);
            pos = indexOf(pl, "http", 0);                    // Search for "http"
            const char* host;
            if(pos >= 0) {                                   // Does URL contain "http://"?
@@ -2742,6 +2812,7 @@ void Audio::processAudioHeaderData() {
             startsWith(hl, "expires:")       ||
             startsWith(hl, "cache-control:") ||
             startsWith(hl, "icy-pub:")       ||
+            startsWith(hl, "p3p:")           ||
             startsWith(hl, "accept-ranges:") ){
         ; // do nothing
     }
@@ -2790,6 +2861,7 @@ void Audio::processAudioHeaderData() {
     else if(startsWith(hl, "icy-description:")) {
         const char* c_idesc = (hl + 16);
         while(c_idesc[0] == ' ') c_idesc++;
+        latinToUTF8(hl, sizeof(hl)); // if already UTF-0 do nothing, otherwise convert to UTF-8
         if(audio_icydescription) audio_icydescription(c_idesc);
         f_icydescription = true;
     }
@@ -2805,7 +2877,7 @@ void Audio::processAudioHeaderData() {
         idx = 0;
         while(icyurl[idx] == ' ') {idx ++;} icyurl += idx; // remove leading blanks
         sprintf(chbuf, "icy-url: %s", icyurl);
-        if(audio_info) audio_info(chbuf);
+        // if(audio_info) audio_info(chbuf);
         if(audio_icyurl) audio_icyurl(icyurl);
         f_icyurl = true;
     }
@@ -2844,7 +2916,7 @@ bool Audio::readMetadata(uint8_t b, bool first) {
         pos_ml = 0; chbuf[pos_ml] = 0;                   // Prepare for new line
     }
     else {
-        chbuf[pos_ml] = (char) b;                        // Put new char in metaline
+        chbuf[pos_ml] = (char) b;                        // Put new char in +++++
         if(pos_ml < 510) pos_ml ++;
         chbuf[pos_ml] = 0;
         if(pos_ml == 509) log_e("metaline overflow in AUDIO_METADATA! metaline=%s", chbuf) ;
@@ -2859,6 +2931,8 @@ bool Audio::readMetadata(uint8_t b, bool first) {
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
             // log_i("ST %s", metaline);
+
+            latinToUTF8(chbuf, sizeof(chbuf)); // convert to UTF-8 if necessary
 
             int pos = indexOf(chbuf, "song_spot", 0);    // remove some irrelevant infos
             if(pos > 3) {                                // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
@@ -3350,6 +3424,11 @@ uint32_t Audio::getFilePos() {
     return audiofile.position();
 }
 //---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::getAudioDataStartPos() {
+    if(!audiofile) return 0;
+    return m_audioDataStart;
+}
+//---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
     if(m_f_localfile) {if(!audiofile) return 0;}
     if(m_f_webfile)   {if(!m_contentlength) return 0;}
@@ -3476,8 +3555,13 @@ uint32_t Audio::getBitRate(){
     if (internalDAC)  {
         log_i("internal DAC");
         m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+        #endif
+
         i2s_driver_install((i2s_port_t) m_i2s_num, &m_i2s_config, 0, NULL);
         // enable the DAC channels
         i2s_set_dac_mode(m_f_channelEnabled);
@@ -3487,8 +3571,13 @@ uint32_t Audio::getBitRate(){
     }
     else {  // external DAC
         m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+        #endif
+
         i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
         i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
     }
@@ -3503,13 +3592,23 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 
     if (commFMT) {
         log_i("commFMT LSB");
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_LSB);
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB); // v >= 2.0.0
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB); // v >= 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_LSB);
+        #endif
+
     }
     else {
         log_i("commFMT MSB");
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
-        //m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+
+        #if ESP_ARDUINO_VERSION_MAJOR >= 2
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+        #else
+            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
+        #endif
+
     }
     log_i("commFMT = %i", m_i2s_config.communication_format);
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);

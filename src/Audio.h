@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 01,2021
+ *  Updated on: Aug 12,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -168,7 +168,7 @@ public:
     void setVolume(uint8_t vol);
     uint8_t getVolume();
 
-
+    uint32_t getAudioDataStartPos();
     uint32_t getFileSize();
     uint32_t getFilePos();
     uint32_t getSampleRate();
@@ -188,6 +188,7 @@ public:
 
 private:
     void UTF8toASCII(char* str);
+    bool latinToUTF8(char* buff, size_t bufflen);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
     void processLocalFile();
