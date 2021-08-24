@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 21,2021
+ *  Updated on: Aug 24,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2186,6 +2186,10 @@ void Audio::processPlayListData() {
         sprintf(chbuf, "Playlistheader: %s", pl);           // Show playlistheader
         if(audio_info) audio_info(chbuf);
 
+        if(indexOf(pl, "Connection:close", 0) >= 0){        // #193 is not a playlist
+            m_datamode = AUDIO_HEADER;
+        }
+
         int pos = indexOf(pl, "404 Not Found", 0);
         if(pos >= 0) {
             m_datamode = AUDIO_NONE;
@@ -2224,6 +2228,14 @@ void Audio::processPlayListData() {
         sprintf(chbuf, "Playlistdata: %s", pl);             // Show playlistdata
         if(audio_info) audio_info(chbuf);
         if(!f_begin) f_begin = true;                        // first playlistdata received
+
+        pos = indexOf(pl, "<!DOCTYPE", 0);                  // webpage found
+        if(pos >= 0) {
+            m_datamode = AUDIO_NONE;
+            if(audio_info) audio_info("Not Found");
+            stopSong();
+            return;
+        }
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_M3U) {
