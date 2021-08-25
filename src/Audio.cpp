@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 24,2021
+ *  Updated on: Aug 25,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2305,6 +2305,14 @@ void Audio::processPlayListData() {
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_ASX) { // Advanced Stream Redirector
+            int p1 = indexOf(pl, "<", 0);
+            int p2 = indexOf(pl, ">", 1);
+            if(p1 >= 0 && p2 > p1){                                 // #196 set all between "< ...> to lowercase
+                for(uint8_t i = p1; i < p2; i++){
+                    pl[i] = toLowerCase(pl[i]);
+                }
+            }
+
             if(indexOf(pl, "<entry>", 0) >= 0) f_entry = true;      // found entry tag (returns -1 if not found)
 
             if(f_entry) {
@@ -2336,7 +2344,7 @@ void Audio::processPlayListData() {
                     f_title = true;
                 }
             } //entry
-            if(indexOf(pl, "http", 0) == 0) { //url only in asx
+            if(indexOf(pl, "http", 0) == 0 && !f_entry) { //url only in asx
                 memcpy(m_lastHost, pl, strlen(pl)); // save url in array
                 m_lastHost[strlen(pl)] = '\0';
                 log_d("m_lastHost = %s",m_lastHost);
