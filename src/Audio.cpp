@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 25,2021
+ *  Updated on: Aug 29,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2128,6 +2128,7 @@ void Audio::processPlayListData() {
     static bool f_ref   = false;                            // refflag   for asx playlist
     static bool f_begin = false;
     static bool f_end   = false;
+    static bool f_ct    = false;
 
     (void)f_title;  // is unused yet
 
@@ -2140,6 +2141,7 @@ void Audio::processPlayListData() {
         f_ref   = false;
         f_begin = false;
         f_end   = false;
+        f_ct    = false;
         m_datamode = AUDIO_PLAYLISTHEADER;                  // Handle playlist data
         if(audio_info) audio_info("Read from playlist");
     } // end AUDIO_PLAYLISTINIT
@@ -2181,12 +2183,16 @@ void Audio::processPlayListData() {
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_datamode == AUDIO_PLAYLISTHEADER) {                // Read header
+    if(m_datamode == AUDIO_PLAYLISTHEADER) {                    // Read header
 
-        sprintf(chbuf, "Playlistheader: %s", pl);           // Show playlistheader
+        sprintf(chbuf, "Playlistheader: %s", pl);               // Show playlistheader
         if(audio_info) audio_info(chbuf);
 
-        if(indexOf(pl, "Connection:close", 0) >= 0){        // #193 is not a playlist
+        if(indexOf(pl, "Content-Type:", 0)){
+            f_ct = true;                                        // found ContentType in pl
+        }
+
+        if((indexOf(pl, "Connection:close", 0) >= 0) && !f_ct){ // #193 is not a playlist if no ct found
             m_datamode = AUDIO_HEADER;
         }
 
