@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 29,2021
+ *  Updated on: Aug 29a,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2208,6 +2208,14 @@ void Audio::processPlayListData() {
         if(pos >= 0) {
             m_datamode = AUDIO_NONE;
             if(audio_info) audio_info("Error 404 File Not Found");
+            stopSong();
+            return;
+        }
+
+        pos = indexOf(pl, "HTTP/1.0 404", 0);
+        if(pos >= 0) {
+            m_datamode = AUDIO_NONE;
+            if(audio_info) audio_info("Error 404 Not Available");
             stopSong();
             return;
         }
