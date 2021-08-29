@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 29a,2021
+ *  Updated on: Aug 29b,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2189,6 +2189,10 @@ void Audio::processPlayListData() {
         if(audio_info) audio_info(chbuf);
 
         if(indexOf(pl, "Content-Type:", 0)){
+            f_ct = true;                                        // found ContentType in pl
+        }
+
+        if(indexOf(pl, "content-type:", 0)){
             f_ct = true;                                        // found ContentType in pl
         }
 
