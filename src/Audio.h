@@ -321,7 +321,7 @@ private:
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { CODEC_NONE, CODEC_WAV, CODEC_MP3, CODEC_AAC, CODEC_M4A, CODEC_FLAC, CODEC_OGG,
                  CODEC_OGG_FLAC, CODEC_OGG_OPUS};
-    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3};
+    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
     enum : int { AUDIO_NONE, AUDIO_HEADER, AUDIO_DATA,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
@@ -407,6 +407,7 @@ private:
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
+    bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;

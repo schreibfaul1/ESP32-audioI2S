@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 29b,2021
+ *  Updated on: Aug 30,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -289,6 +289,7 @@ void Audio::setDefaults() {
     m_f_loop = false;                                       // Set if audio file should loop
     m_f_unsync = false;                                     // set within ID3 tag but not used
     m_f_exthdr = false;                                     // ID3 extended header
+    m_f_rtsp = false;                                       // RTSP (m3u8)stream
 
     m_codec = CODEC_NONE;
     m_playlistFormat = FORMAT_NONE;
@@ -359,12 +360,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
 
     // Is it a playlist?
-    if(endsWith(host, ".m3u")) {m_playlistFormat = FORMAT_M3U; m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, ".pls")) {m_playlistFormat = FORMAT_PLS; m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, ".asx")) {m_playlistFormat = FORMAT_ASX; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".m3u" )) {m_playlistFormat = FORMAT_M3U;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".pls" )) {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".asx" )) {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
     // if url ...=asx   www.fantasyfoxradio.de/infusions/gr_radiostatus_panel/gr_radiostatus_player.php?id=2&p=asx
-    if(endsWith(host, "=asx")) {m_playlistFormat = FORMAT_ASX; m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, "=pls")) {m_playlistFormat = FORMAT_PLS; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, "=asx" )) {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, "=pls" )) {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(host, ".m3u8")) {m_playlistFormat = FORMAT_M3U8; m_datamode = AUDIO_PLAYLISTINIT;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(host, "/", 0);
@@ -423,7 +425,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             sprintf(chbuf, "Connected to server in %u ms", dt);
             if(audio_info) audio_info(chbuf);
 
-            memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
+            strcpy(m_lastHost, "http://");
+            memcpy(m_lastHost + 7, host, strlen(host) + 1);               // Remember the current s_host
             trim(m_lastHost);
             m_f_running = true;
             if(hostwoext) free(hostwoext);
@@ -443,7 +446,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             uint32_t dt = millis() - t;
             sprintf(chbuf, "SSL has been established in %u ms, free Heap: %u bytes", dt, ESP.getFreeHeap());
             if(audio_info) audio_info(chbuf);
-            memcpy(m_lastHost, host, strlen(host) + 1);               // Remember the current s_host
+
+            strcpy(m_lastHost, "https://");
+            memcpy(m_lastHost + 8, host, strlen(host) + 1);               // Remember the current s_host
             m_f_running = true;
             if(hostwoext) free(hostwoext);
             if(extension) free(extension);
@@ -2371,8 +2376,34 @@ void Audio::processPlayListData() {
             if(f_end) {   //we have both StationName and StationURL
                 connecttohost(m_lastHost);                          // Connect to it
             }
+            return;
         }  //asx
-        return;
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if(m_playlistFormat == FORMAT_M3U8) {
+            pos = indexOf(pl, "nimblesessionid=", 0);  // we have a nimbleserver
+            if(pos > 0){
+                uint64_t nimbleseSessionId = atoi(pl + pos + 16);
+                log_i("nimbesessionid=%d", nimbleseSessionId);
+                uint8_t pos1 = 8;       // assume http
+                if(m_f_ssl) pos1++;     // is     https
+                int pos2 = indexOf(pl, "/", pos1);
+                if(pos2 > pos1){
+                    memcpy(&m_lastHost[pos1 + pos2], pl, strlen(pl));
+                    log_i("%s", m_lastHost);
+                    m_f_rtsp = true;
+                    // todo
+                    // establish UDP via werserver
+                    // send DESCRIBE to get the contentType
+                    // send SETUP
+                    // send PLAY
+                    // send TEARDOWN to terminate the session
+
+                }
+            }
+            if(f_end)connecttohost(m_lastHost);
+            return;
+        }
+
     } // end AUDIO_PLAYLISTDATA
 }
 //---------------------------------------------------------------------------------------------------------------------
