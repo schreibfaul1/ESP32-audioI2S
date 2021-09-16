@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Aug 12,2021
+ *  Updated on: Sep 16,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -194,6 +194,7 @@ private:
     void processLocalFile();
     void processWebStream();
     void processPlayListData();
+    void processM3U8entries(uint8_t nrOfEntries = 0, uint32_t seqNr = 0, uint8_t pos = 0, uint16_t targetDuration = 0);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
     int  sendBytes(uint8_t* data, size_t len);
@@ -346,6 +347,7 @@ private:
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
+    WiFiUDP           udpclient;    // @suppress("Abstract class cannot be instantiated")
     i2s_config_t      m_i2s_config; // stores values for I2S driver
     i2s_pin_config_t  m_pin_config;
 
@@ -356,6 +358,8 @@ private:
 
     char            chbuf[512];
     char            m_lastHost[256];                // Store the last URL to a webstream
+    char*           m_playlistBuff = NULL;          // stores playlistdata
+    const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=16000;
@@ -370,6 +374,7 @@ private:
     uint8_t         m_channels=2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
+    uint8_t         m_m3u8codec = CODEC_NONE;       // M4A
     uint8_t         m_codec = CODEC_NONE;           //
     uint8_t         m_filterType[2];                // lowpass, highpass
     int16_t         m_outBuff[2048*2];              // Interleaved L/R
@@ -408,6 +413,9 @@ private:
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
+    bool            m_f_m3u8data = false;           // used in processM3U8entries
+    bool            m_f_Log = true;                 // if m3u8: log is cancelled
+    bool            m_f_continue = false;           // next m3u8 chunk is available
     i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
