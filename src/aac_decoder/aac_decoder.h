@@ -431,6 +431,7 @@ typedef struct _PSInfoSBR {
 bool AACDecoder_AllocateBuffers(void);
 int AACFlushCodec();
 void AACDecoder_FreeBuffers(void);
+bool AACDecoder_IsInit(void);
 int AACFindSyncWord(uint8_t *buf, int nBytes);
 int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile);
 int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);

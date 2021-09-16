@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 10.04.2021
+ *  Updated on: 10.09.2021
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1764,6 +1764,38 @@ void AACDecoder_FreeBuffers(void) {
 
 //    log_i("AACDecoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
 }
+
+/***********************************************************************************************************************
+ * Function:    AACDecoder_IsInit
+ *
+ * Description: returns AAC decoder initialization status
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      true if buffers allocated, otherwise false
+
+ **********************************************************************************************************************/
+bool AACDecoder_IsInit(void) {
+    if(m_AACDecInfo && m_PSInfoBase && m_pce[0]){
+        return true;
+    }
+    return false;
+}
+
+/***********************************************************************************************************************
+ * Function:    AACDecoder_FreeBuffers
+ *
+ * Description: allocate all the memory needed for the AAC decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+
+ **********************************************************************************************************************/
 
 /***********************************************************************************************************************
  * Function:    AACFindSyncWord
