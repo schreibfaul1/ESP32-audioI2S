@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sep 16,2021
+ *  Updated on: Sep 18,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -316,27 +316,114 @@ void Audio::setDefaults() {
     //TEST loop
     m_file_size = 0;
     //TEST loop
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::httpPrint(const char* url) {
 
+    // call to a new subdomain or if no connection is present connect first
+
+    char* host = NULL;
+    char* extension = NULL;
+    char resp[256 + 100];
+    uint8_t p1 = 0, p2 = 0;
+
+    if(startsWith(url, "http")){if(m_f_ssl) p1 = 8; else p1 = 7;}
+
+    p2 = indexOf(url, "/", p1);
+    host = strndup(url + p1, p2 - p1);
+
+    extension = strdup(url + p2 + 1);
+
+//    log_i("host %s", host);
+//    log_i("extension %s", extension);
+
+    resp[0] = '\0';
+    strcat(resp, "GET /");
+    strcat(resp, extension);
+    strcat(resp, " HTTP/1.1\r\n");
+    strcat(resp, "Host: ");
+    strcat(resp,  host);
+    strcat(resp, "\r\nUser-Agent: ESP32 audioI2S\r\n");
+    strcat(resp, "icy-metadata: 1\r\n");
+    strcat(resp, "Accept-Encoding: identity\r\n");
+    strcat(resp, "Connection: Keep-Alive\r\n\r\n");
+
+    int pos_colon     = indexOf(host, ":", 0);
+    int pos_ampersand = indexOf(host, "&", 0);
+    int port = 80;
+    if(m_f_ssl) port = 443;
+
+    if((pos_colon >= 0) && ((pos_ampersand == -1) or (pos_ampersand > pos_colon))){
+        port = atoi(host + pos_colon + 1);// Get portnumber as integer
+        host[pos_colon] = '\0';// Host without portnumber
+    }
+
+    if(!m_f_ssl){
+        if(!client.connected()){
+            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%i, port=%i", host, extension, port);
+            if(m_f_Log) if(audio_info) audio_info(chbuf);
+            client.connect(host, port);
+            if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
+        }
+        client.print(resp);
+
+    }
+    else{
+        if(!clientsecure.connected()){
+            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%i, port=%i", host, extension, port);
+            if(m_f_Log) if(audio_info) audio_info(chbuf);
+            clientsecure.connect(host, port);
+            if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
+        }
+        clientsecure.print(resp);
+    }
+
+
+    if(host)      {free(host);      host = NULL;}
+    if(extension) {free(extension); extension = NULL;}
+
+    strcpy(m_lastHost, url);
+
+    return;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     // user and pwd for authentification only, can be empty
 
-    char* l_host = NULL;
+    char* l_host = NULL; // local copy of host
+    char* h_host = NULL; // pointer of l_host without http:// or https://
+
 
     if(strlen(host) == 0) {
         if(audio_info) audio_info("Hostaddress is empty");
         return false;
     }
-    else{
-        l_host = (char*)malloc(strlen(host) + 1);
-        strcpy(l_host, host);
-        trim(l_host);
+
+    if(strlen(host) > 255) {
+        if(audio_info) audio_info("Hostaddress is too long");
+        return false;
     }
+
+    l_host = (char*)malloc(strlen(host) + 10);
+    strcpy(l_host, host);
+    trim(l_host);
+    int p = indexOf(l_host, "http", 0);
+    if(p > 0){
+        if(audio_info) audio_info("Hostaddress is wrong");
+        if(l_host) { free(l_host); l_host = NULL;}
+        return false;
+    }
+    if(p < 0){ // http not found, shift right +7, then insert http://
+        for(int i = strlen(l_host) + 1; i >= 0; i--){
+            l_host[i + 7] = l_host[i];
+        }
+        memcpy(l_host, "http://", 7);
+    }
+
     setDefaults();
 
-    //sprintf(chbuf, "Connect to new host: \"%s\"", l_host);
-    //if(audio_info) audio_info(chbuf);
+    sprintf(chbuf, "Connect to new host: \"%s\"", l_host);
+    if(audio_info) audio_info(chbuf);
 
     // authentification
     uint8_t auth = strlen(user) + strlen(pwd);
@@ -357,31 +444,33 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     m_f_webstream = true;
     setDatamode(AUDIO_HEADER);                                // Handle header
 
-    if(startsWith(host, "http://")) {
-        host += 7;
+    h_host = l_host;
+
+    if(startsWith(l_host, "http://")) {
+        h_host += 7;
         m_f_ssl = false;
     }
 
-    if(startsWith(host, "https://")) {
-        host += 8;
+    if(startsWith(l_host, "https://")) {
+        h_host += 8;
         m_f_ssl = true;
         port = 443;
     }
 
     // Is it a playlist?
-    if(endsWith(host, ".m3u" ))       {m_playlistFormat = FORMAT_M3U;  m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, ".pls" ))       {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, ".asx" ))       {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(h_host, ".m3u" ))       {m_playlistFormat = FORMAT_M3U;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(h_host, ".pls" ))       {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(h_host, ".asx" ))       {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
     // if url ...=asx   www.fantasyfoxradio.de/infusions/gr_radiostatus_panel/gr_radiostatus_player.php?id=2&p=asx
-    if(endsWith(host, "=asx" ))       {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
-    if(endsWith(host, "=pls" ))       {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(h_host, "=asx" ))       {m_playlistFormat = FORMAT_ASX;  m_datamode = AUDIO_PLAYLISTINIT;}
+    if(endsWith(h_host, "=pls" ))       {m_playlistFormat = FORMAT_PLS;  m_datamode = AUDIO_PLAYLISTINIT;}
     // if url  "http://n3ea-e2.revma.ihrhls.com/zc7729/hls.m3u8?rj-ttl=5&rj-tok=AAABe8unpPAAyu36Dkm0J4mzJg"
-    if(indexOf(host, ".m3u8", 0) >10) {m_playlistFormat = FORMAT_M3U8; m_datamode = AUDIO_PLAYLISTINIT;}
+    if(indexOf(h_host, ".m3u8", 0) >10) {m_playlistFormat = FORMAT_M3U8; m_datamode = AUDIO_PLAYLISTINIT;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = indexOf(host, "/", 0);
-    pos_colon     = indexOf(host, ":", 0);
-    pos_ampersand = indexOf(host, "&", 0);
+    pos_slash     = indexOf(h_host, "/", 0);
+    pos_colon     = indexOf(h_host, ":", 0);
+    pos_ampersand = indexOf(h_host, "&", 0);
 
     char *hostwoext = NULL;                                  // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
     char *extension = NULL;                                  // "/mp3" in "skonto.ls.lv:8002/mp3"
@@ -389,28 +478,28 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(pos_slash > 1) {
         uint8_t hostwoextLen = pos_slash;
         hostwoext = (char*)malloc(hostwoextLen + 1);
-        memcpy(hostwoext, host, hostwoextLen);
+        memcpy(hostwoext, h_host, hostwoextLen);
         hostwoext[hostwoextLen] = '\0';
-        uint8_t extLen =  urlencode_expected_len(host + pos_slash);
+        uint8_t extLen =  urlencode_expected_len(h_host + pos_slash);
         extension = (char *)malloc(extLen);
-        memcpy(extension, host + pos_slash, extLen);
+        memcpy(extension, h_host + pos_slash, extLen);
         trim(extension);
         urlencode(extension, extLen, true);
     }
     else{  // url has no extension
-        hostwoext = strdup(host);
+        hostwoext = strdup(h_host);
         extension = strdup("/");
     }
 
     if((pos_colon >= 0) && ((pos_ampersand == -1) or (pos_ampersand > pos_colon))){
-        port = atoi(host + pos_colon + 1);// Get portnumber as integer
+        port = atoi(h_host + pos_colon + 1);// Get portnumber as integer
         hostwoext[pos_colon] = '\0';// Host without portnumber
     }
 
     sprintf(chbuf, "Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
     if(audio_info) audio_info(chbuf);
 
-    char resp[strlen(host) + strlen(authorization) + 100];
+    char resp[strlen(h_host) + strlen(authorization) + 100];
     resp[0] = '\0';
 
     strcat(resp, "GET ");
@@ -423,7 +512,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(resp, "Authorization: Basic ");
     strcat(resp, authorization);
     strcat(resp, "\r\n");
-    strcat(resp, "User-Agent: ESP32 SIP/2.0\r\n");
+    strcat(resp, "User-Agent: ESP32 audioI2S\r\n");
 //    strcat(resp, "Accept-Encoding: gzip;q=0\r\n");  // otherwise the server assumes gzip compression
 //    strcat(resp, "Transfer-Encoding: \r\n");  // otherwise the server assumes gzip compression
     strcat(resp, "Connection: keep-alive\r\n\r\n");
@@ -468,7 +557,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
             return true;
         }
     }
-    sprintf(chbuf, "Request %s failed!", host);
+    sprintf(chbuf, "Request %s failed!", l_host);
     if(audio_info) audio_info(chbuf);
     if(audio_showstation) audio_showstation("");
     if(audio_showstreamtitle) audio_showstreamtitle("");
@@ -2231,7 +2320,15 @@ void Audio::processPlayListData() {
             m_datamode = AUDIO_HEADER;
         }
 
-        int pos = indexOf(pl, "404 Not Found", 0);
+        int pos = indexOf(pl, "400 Bad Request", 0);
+        if(pos >= 0) {
+            m_datamode = AUDIO_NONE;
+            if(audio_info) audio_info("Error 400 Bad Request");
+            stopSong();
+            return;
+        }
+
+        pos = indexOf(pl, "404 Not Found", 0);
         if(pos >= 0) {
             m_datamode = AUDIO_NONE;
             if(audio_info) audio_info("Error 404 Not Found");
@@ -2263,6 +2360,14 @@ void Audio::processPlayListData() {
             return;
         }
 
+        pos = indexOf(pl, "HTTP/1.1 403", 0);
+        if(pos >= 0) {
+            m_datamode = AUDIO_NONE;
+            if(audio_info) audio_info("Error 403 Forbidden");
+            stopSong();
+            return;
+        }
+
         pos = indexOf(pl, ":", 0);                          // lowercase all letters up to the colon
         if(pos >= 0) {
             for(int i=0; i < pos; i++) {
@@ -2273,11 +2378,15 @@ void Audio::processPlayListData() {
             char* host;
             pos = indexOf(pl, "http", 0);
             host = (pl + pos);
-            pos = indexOf(pl, "?", 0);
-//           if(pos > 0) pl[pos] = '\0'; // remove ?....
 //            sprintf(chbuf, "redirect to new host %s", host);
 //            if(m_f_Log) if(audio_info) audio_info(chbuf);
-            connecttohost(host);
+            pos = indexOf(pl, "/", 10);
+            if(strncmp(host, m_lastHost, pos) == 0){                                    // same host?
+                if(!m_f_ssl) {client.stop(); client.flush();}
+                else         {clientsecure.stop(); clientsecure.flush();}
+                httpPrint(host);
+            }
+            else connecttohost(host);                                                   // different host,
         }
         return;
     } // end AUDIO_PLAYLISTHEADER
@@ -2525,11 +2634,11 @@ void Audio::processPlayListData() {
 
             if(f_ExtInf){
                 f_ExtInf = false;
-                log_i("ExtInf=%s", pl);
+//                log_i("ExtInf=%s", pl);
                 int16_t lastSlash = lastIndexOf(m_lastHost, "/");
 
                 if(!m_playlistBuff){ // will  be freed in setDefaults()
-                    m_playlistBuff = (char*)malloc(9 * m_plsBuffEntryLen);
+                    m_playlistBuff = (char*)malloc(2 * m_plsBuffEntryLen);
                     strcpy(m_playlistBuff, m_lastHost); // save the m3u8 url at pos 0
                 }
 
@@ -2629,6 +2738,8 @@ void Audio::processM3U8entries(uint8_t _nrOfEntries, uint32_t _seqNr, uint8_t _s
         if(currentSeqNr == maxSeqNr){ // we need a new playlist
             entryaddr = m_playlistBuff;
             // log_i("entryaddr=%s", entryaddr);
+
+
             goto label1;
         }
         if(currentSeqNr > maxSeqNr){
@@ -2653,31 +2764,7 @@ void Audio::processM3U8entries(uint8_t _nrOfEntries, uint32_t _seqNr, uint8_t _s
 
 label1:
 
-    char* m3u8addr = entryaddr;
-    if(m_f_ssl) m3u8addr += 8; else m3u8addr += 7;
-    int pos = indexOf(m3u8addr, "/", 10);
-    host = (char*)malloc(pos + 1);
-    strncpy(host, m3u8addr, pos); host[pos] = '\0';
-    extension = (char*)malloc(strlen(m3u8addr) + 1 - pos);
-    strcpy(extension, &m3u8addr[pos + 1]);
-
-    resp[0] = '\0';
-    strcat(resp, "GET /");
-    strcat(resp, extension);
-    strcat(resp, " HTTP/1.1\r\n");
-    strcat(resp, "Host: ");
-    strcat(resp,  host);
-    strcat(resp, "\r\nUser-Agent: ESP32\r\n");
-    strcat(resp, "icy-metadata: 1\r\n");
-    strcat(resp, "Accept-Encoding: identity\r\n");
-    strcat(resp, "Connection: Keep-Alive\r\n\r\n");
-    strcpy(m_lastHost, entryaddr);
-    if(host)      {free(host);      host = NULL;}
-    if(extension) {free(extension); extension = NULL;}
-
-    if(!m_f_ssl)        client.print(resp);
-    else          clientsecure.print(resp);
-
+    httpPrint(entryaddr);
 
     if(currentSeqNr < maxSeqNr){
         m_datamode = AUDIO_HEADER;

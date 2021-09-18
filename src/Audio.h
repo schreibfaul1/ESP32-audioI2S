@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sep 16,2021
+ *  Updated on: Sep 18,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -189,6 +189,7 @@ public:
 private:
     void UTF8toASCII(char* str);
     bool latinToUTF8(char* buff, size_t bufflen);
+    void httpPrint(const char* url);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
     void processLocalFile();
