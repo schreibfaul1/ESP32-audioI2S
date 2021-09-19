@@ -4128,11 +4128,18 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
 
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
 
+    /* 
+        This will cause a clicking sound when adjusting the EQ.
+        Because when the EQ is adjusted, the IIR filter will be cleared and played, 
+        mixed in the audio data frame, and a click-like sound will be produced.
+    */
+    /*
     int16_t tmp[2]; tmp[0] = 0; tmp[1]= 0;
 
     IIR_filterChain0(tmp, true ); // flush the filter
     IIR_filterChain1(tmp, true ); // flush the filter
     IIR_filterChain2(tmp, true ); // flush the filter
+    */
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::forceMono(bool m) { // #100 mono option
