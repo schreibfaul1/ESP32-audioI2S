@@ -644,7 +644,9 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
 
     sprintf(chbuf, "Reading file: \"%s\"", audioName);
     if(audio_info) {vTaskDelay(2); audio_info(chbuf);}
-    
+
+    //Support unicode encoding filename
+#ifndef SDFATFS_USED
     if(fs.exists(audioName)) {
         audiofile = fs.open(audioName); // #86
     }
@@ -654,6 +656,12 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
             audiofile = fs.open(audioName);
         }
     }
+#else //ifndef SDFATFS_USED
+    if (!audiofile.open(audioName, O_RDONLY)) {
+		vTaskDelay(2); 
+		audio_info("Failed to open file for reading");
+	}
+#endif //SDFATFS_USED
 
     if(!audiofile) {
         if(audio_info) {vTaskDelay(2); audio_info("Failed to open file for reading");}
