@@ -8,10 +8,10 @@
 // activate SDFATFS_USED in Audio.h
 
 
-#include "Arduino.h"
-#include "SdFat.h" // https://github.com/greiman/SdFat-beta
+//#include "Arduino.h"
+//#include "SdFat.h" // https://github.com/greiman/SdFat-beta
 #include "Audio.h"
-#include "SPI.h"
+//#include "SPI.h"
 
 // Digital I/O used
 #define SD_CS          5
@@ -25,16 +25,17 @@
 Audio audio;
 
 void setup() {
-    pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
-    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
-    SPI.setFrequency(1000000);
+    //pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
+    //SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
+    //SPI.setFrequency(1000000);
     Serial.begin(115200);
     SD.begin(SD_CS);
 
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(12); // 0...21
 
-    audio.connecttoFS(SD, "test.mp3");
+    audio.connecttoFS(SD, "朴树 - 平凡之路.mp3"); //After testing, it works fine.
+//    audio.connecttoFS(SD, "test.mp3");
 //    audio.connecttoFS(SD, "良い一日私の友達.mp3");
 }
 
