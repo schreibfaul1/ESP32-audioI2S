@@ -36,7 +36,15 @@ typedef File32 File;
 namespace fs {
     class FS : public SdFat {
     public:
-        bool begin(SdCsPin_t csPin = SS, uint32_t maxSck = SD_SCK_MHZ(25)) { return SdFat::begin(csPin, maxSck); }
+        // bool begin(SdCsPin_t csPin = SS, uint32_t maxSck = SD_SCK_MHZ(25)) { return SdFat::begin(csPin, maxSck); }
+        //25MHz Failed to open file for reading. The  format is not supported
+  		//SD_SCK = 16MHz is normal
+        // support unicode encoding filename
+        bool begin(SdCsPin_t csPin = SS, uint32_t maxSck = SD_SCK_MHZ(16)) {
+            sd.begin(SdSpiConfig(csPin, DEDICATED_SPI, maxSck));
+        }
+    private:
+        SdFat sd; //SdFat does not work without this.
     };
 
     class SDFATFS : public fs::FS {
