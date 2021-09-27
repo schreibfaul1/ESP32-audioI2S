@@ -20,7 +20,7 @@
 #include "driver/i2s.h"
 
 #ifdef SDFATFS_USED
-#include "SdFat.h"  // use https://github.com/greiman/SdFat-beta for UTF-8 filenames
+#include "SdFat.h"  // https://github.com/greiman/SdFat
 #else
 #include "SD.h"
 #include "SD_MMC.h"
