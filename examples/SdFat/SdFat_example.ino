@@ -1,15 +1,18 @@
 //**********************************************************************************************************
-//*    audioI2S-- I2S audiodecoder for ESP32,                                                              *
+//*    audioI2S-- I2S audiodecoder for ESP32,  SdFat example                                                             *
 //**********************************************************************************************************
 //
 // first release on 05/2020
-//
-// SdFat example
-// activate SDFATFS_USED in Audio.h
+// updated on Sep. 27, 2021
+/*
 
+ ⒈ install SdFat V2 from https://github.com/greiman/SdFat
+ ⒉ activate "SDFATFS_USED"                   in Audio.h
+ ⒊ activate "#define USE_UTF8_LONG_NAMES 1"  in SdFatConfig.h
+
+*/
 
 #include "Arduino.h"
-#include "SdFat.h" // https://github.com/greiman/SdFat-beta
 #include "Audio.h"
 #include "SPI.h"
 
@@ -34,8 +37,8 @@ void setup() {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(12); // 0...21
 
-    audio.connecttoFS(SD, "test.mp3");
-//    audio.connecttoFS(SD, "良い一日私の友達.mp3");
+//    audio.connecttoFS(SD, "test.mp3");
+    audio.connecttoFS(SD, "良い一日私の友達.mp3");
 }
 
 void loop()
