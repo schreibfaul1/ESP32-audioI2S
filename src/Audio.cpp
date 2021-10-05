@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Sep 18,2021
+ *  Updated on: Oct 5,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2374,6 +2374,14 @@ void Audio::processPlayListData() {
                 pl[i] = toLowerCase(pl[i]);
             }
         }
+
+        if(startsWith(pl, "icy-")){                         // icy-data in playlist? that can not be
+            m_datamode = AUDIO_HEADER;
+            if(audio_info) audio_info("playlist is not valid, switch to AUDIO_HEADER");
+            return;
+        }
+
+
         if(startsWith(pl, "location:") || startsWith(pl, "Location:")) {
             char* host;
             pos = indexOf(pl, "http", 0);
@@ -2395,7 +2403,6 @@ void Audio::processPlayListData() {
     if(m_datamode == AUDIO_PLAYLISTDATA) {                  // Read next byte of .m3u file data
         sprintf(chbuf, "Playlistdata: %s", pl);             // Show playlistdata
         if(m_f_Log) if(audio_info) audio_info(chbuf);
-        if(!f_begin) f_begin = true;                        // first playlistdata received
 
         pos = indexOf(pl, "<!DOCTYPE", 0);                  // webpage found
         if(pos >= 0) {
@@ -2408,6 +2415,7 @@ void Audio::processPlayListData() {
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_M3U) {
 
+            if(!f_begin) f_begin = true;                    // first playlistdata received
             if(indexOf(pl, "#EXTINF:", 0) >= 0) {           // Info?
                pos = indexOf(pl, ",", 0);                   // Comma in this line?
                if(pos > 0) {
@@ -2423,6 +2431,7 @@ void Audio::processPlayListData() {
            pos = indexOf(pl, "http://:@", 0); // ":@"??  remove that!
            if(pos >= 0) {
                sprintf(chbuf, "Entry in playlist found: %s", (pl + pos + 9));
+               if(audio_info) audio_info(chbuf);
                connecttohost(pl + pos + 9);
                return;
            }
@@ -2439,6 +2448,19 @@ void Audio::processPlayListData() {
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_PLS) {
+
+            if(!f_begin){
+                if(strcmp(pl, "[playlist]") == 0){          // first entry in valid pls
+                    f_begin = true;                         // we have first playlistdata received
+                    return;
+                }
+                else{
+                    m_datamode = AUDIO_HEADER;                // pls is not vald
+                    if(audio_info) audio_info("pls is not valid, switch to AUDIO_HEADER");
+                    return;
+                }
+            }
+
             if(startsWith(pl, "File1")) {
                 pos = indexOf(pl, "http", 0);                   // File1=http://streamplus30.leonex.de:14840/;
                 if(pos >= 0) {                                  // yes, URL contains "http"?
@@ -2473,6 +2495,7 @@ void Audio::processPlayListData() {
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_ASX) { // Advanced Stream Redirector
+            if(!f_begin) f_begin = true;                        // first playlistdata received
             int p1 = indexOf(pl, "<", 0);
             int p2 = indexOf(pl, ">", 1);
             if(p1 >= 0 && p2 > p1){                                 // #196 set all between "< ...> to lowercase
@@ -2525,6 +2548,8 @@ void Audio::processPlayListData() {
         }  //asx
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_M3U8) {
+
+            if(!f_begin) f_begin = true;                        // first playlistdata received
 
             static bool f_ExtM3U    = false;                            // #EXTM3U flag
             static bool f_StreamInf = false;                            // set if  #EXT-X-STREAM-INF in m3u8
