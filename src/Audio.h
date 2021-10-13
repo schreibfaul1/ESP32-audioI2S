@@ -196,6 +196,7 @@ private:
     void processWebStream();
     void processPlayListData();
     void processM3U8entries(uint8_t nrOfEntries = 0, uint32_t seqNr = 0, uint8_t pos = 0, uint16_t targetDuration = 0);
+    bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
     int  sendBytes(uint8_t* data, size_t len);

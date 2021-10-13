@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 5,2021
+ *  Updated on: Oct 13,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2251,7 +2251,6 @@ void Audio::processPlayListData() {
     static bool f_begin     = false;
     static bool f_end       = false;
     static bool f_ct        = false;
-    static bool f_m3u8init  = false;
 
     (void)f_title;  // is unused yet
 
@@ -2265,7 +2264,6 @@ void Audio::processPlayListData() {
         f_begin     = false;
         f_end       = false;
         f_ct        = false;
-        f_m3u8init  = true;
 
         m_datamode = AUDIO_PLAYLISTHEADER;                  // Handle playlist data
         //if(audio_info) audio_info("Read from playlist");
@@ -2450,12 +2448,13 @@ void Audio::processPlayListData() {
         if(m_playlistFormat == FORMAT_PLS) {
 
             if(!f_begin){
+                if(strlen(pl) == 0) return;                 // empty line
                 if(strcmp(pl, "[playlist]") == 0){          // first entry in valid pls
                     f_begin = true;                         // we have first playlistdata received
                     return;
                 }
                 else{
-                    m_datamode = AUDIO_HEADER;                // pls is not vald
+                    m_datamode = AUDIO_HEADER;                // pls is not valid
                     if(audio_info) audio_info("pls is not valid, switch to AUDIO_HEADER");
                     return;
                 }
@@ -2549,20 +2548,26 @@ void Audio::processPlayListData() {
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_playlistFormat == FORMAT_M3U8) {
 
-            if(!f_begin) f_begin = true;                        // first playlistdata received
-
-            static bool f_ExtM3U    = false;                            // #EXTM3U flag
             static bool f_StreamInf = false;                            // set if  #EXT-X-STREAM-INF in m3u8
             static bool f_ExtInf    = false;                            // set if  #EXTINF in m3u8
             static uint8_t plsEntry = 0;                                // used in m3u8, counts url entries
             static uint8_t seqNrPos = 0;                                // position at which the SeqNr is found
 
-            if(f_m3u8init){                                             // prepare for first call
-                f_m3u8init   = false;
-                f_ExtM3U     = false;
-                f_StreamInf  = false;
-                f_ExtInf     = false;
-                plsEntry     = 0;
+            if(!f_begin){
+                if(strlen(pl) == 0) return;                             // empty line
+                if(strcmp(pl, "#EXTM3U") == 0){                         // what we expected
+                    f_begin      = true;
+                    f_StreamInf  = false;
+                    f_ExtInf     = false;
+                    plsEntry     = 0;
+                    return;
+                }
+                else{
+                    m_datamode = AUDIO_HEADER;                          // m3u8 is not valid
+                    m_playlistFormat = FORMAT_NONE;
+                    if(audio_info) audio_info("m3u8 is not valid, switch to AUDIO_HEADER");
+                    return;
+                }
             }
 
             // example: redirection
@@ -2579,16 +2584,6 @@ void Audio::processPlayListData() {
             // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374038.aac
             // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
             // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
-
-            if(startsWith(pl, "#EXTM3U")) {f_ExtM3U = true; return;}        // m3u playlist seen
-
-            if(!f_ExtM3U){                                                  // first guard
-                if(!f_end) return;
-                else {
-                    log_e("is not a m3u8 playlist");
-                    connecttohost(m_lastHost); return;
-                }
-            }
 
             if(startsWith(pl,"#EXT-X-STREAM-INF:")){
                 int pos = indexOf(pl, "CODECS=\"mp4a", 18);
@@ -2630,30 +2625,8 @@ void Audio::processPlayListData() {
             if(startsWith(pl, "#EXT-X-TARGETDURATION:")) {targetDuration = atoi(pl + 22);}
 
             if(startsWith(pl,"#EXTINF")) {
-                int t1, t2, t3, n0, n1, n2;
                 f_ExtInf = true;
-                // log_i("pl=%s", pl);
-                n1 = 0;
-                t1 = indexOf(pl, "title", 0);
-                if(t1 > 0){
-                    strcpy(chbuf, "StreamTitle="); n0 = 12;
-                    t2 = indexOf(pl, "=\"", t1); t2+=2;
-                    t3 = indexOf(pl, "\"", t2);
-                    if(t2 < 0 || t2 > t3) return;
-                    n1 = t3 - t2;
-                    strncpy(chbuf + n0, pl + t2, n1);
-                }
-                t1 = indexOf(pl, "artist", 0);
-                if(t1 > 0){
-                    strcpy(chbuf + n0 + n1, " - ");   n1 += 3;
-                    t2 = indexOf(pl, "=\"", t1); t2 += 2;
-                    t3 = indexOf(pl, "\"", t2);
-                    if(t2 < 0 || t2 > t3) return;
-                    n2 = t3 - t2;
-                    strncpy(chbuf + n0 + n1, pl + t2, n2);
-                    chbuf[n0 + n1 + n2] = '\0';
-                }
-                showstreamtitle(chbuf);
+                if(STfromEXTINF(pl)) showstreamtitle(pl);
                 return;
             }
 
@@ -2802,6 +2775,44 @@ label1:
     }
     m_f_Log = false;
     return;
+}
+//---------------------------------------------------------------------------------------------------------------------
+bool Audio::STfromEXTINF(char* str){
+    // extraxt StreamTitle from m3u #EXTINF line to icy-format
+    // orig: #EXTINF:10,title="text="TitleName",artist="ArtistName"
+    // conv: StreamTitle=TitleName - ArtistName
+    // orig: #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
+    // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
+
+    if(!startsWith(str,"#EXTINF")) return false;
+    int t1, t2, t3, n0, n1, n2;
+
+    t1 = indexOf(str, "title", 0);
+    if(t1 > 0){
+        strcpy(chbuf, "StreamTitle="); n0 = 12;
+        t2 = t1 + 7; // title="
+        t3 = indexOf(str, "\"", t2);
+        while(str[t3 - 1] == '\\'){
+            t3 = indexOf(str, "\"", t3 + 1);
+        }
+        if(t2 < 0 || t2 > t3) return false;
+        n1 = t3 - t2;
+        strncpy(chbuf + n0, str + t2, n1);
+    }
+
+    t1 = indexOf(str, "artist", 0);
+    if(t1 > 0){
+        strcpy(chbuf + n0 + n1, " - ");   n1 += 3;
+        t2 = indexOf(str, "=\"", t1); t2 += 2;
+        t3 = indexOf(str, "\"", t2);
+        if(t2 < 0 || t2 > t3) return false;
+        n2 = t3 - t2;
+        strncpy(chbuf + n0 + n1, str + t2, n2);
+        chbuf[n0 + n1 + n2] = '\0';
+    }
+    strcpy(str, chbuf);
+
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {
@@ -3155,7 +3166,6 @@ void Audio::processWebStream() {
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
     if((InBuff.bufferFilled() >= maxFrameSize) && (f_stream == true)) { // fill > framesize?
         if(m_f_webfile){
                 bytesDecoded = sendBytes(InBuff.getReadPtr(), maxFrameSize);
