@@ -4015,6 +4015,7 @@ bool Audio::audioFileSeek(const float speed) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
+    if(!sampRate) sampRate = 16000; // fuse, if there is no value -> set default #209
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
     m_sampleRate = sampRate;
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
