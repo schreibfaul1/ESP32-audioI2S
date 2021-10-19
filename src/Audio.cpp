@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 13,2021
+ *  Updated on: Oct 19,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -311,7 +311,7 @@ void Audio::setDefaults() {
     m_LFcount = 0;                                          // For end of header detection
     m_st_remember = 0;                                      // Delete the last streamtitle hash
     m_controlCounter = 0;                                   // Status within readID3data() and readWaveHeader()
-    m_channels = 0;
+    m_channels = 2;                                         // assume stereo #209
 
     //TEST loop
     m_file_size = 0;
@@ -4040,6 +4040,9 @@ bool Audio::setChannels(int ch) {
     return true;
 }
 uint8_t Audio::getChannels(){
+    if (m_channels == 0) {    // this should not happen! #209
+        m_channels = 2;
+    }
     return m_channels;
 }
 //---------------------------------------------------------------------------------------------------------------------
