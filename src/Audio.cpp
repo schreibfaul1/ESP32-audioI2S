@@ -1614,8 +1614,11 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             m_audioDataSize = m_contentlength - m_audioDataStart;
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
-            if(APIC_seen && audio_id3image) audio_id3image(audiofile, APIC_pos, APIC_size);
-            setFilePos(m_audioDataStart); // the filepointer could have been changed by the user, set it back
+            if(APIC_seen && audio_id3image){
+                size_t pos = audiofile.position();
+                audio_id3image(audiofile, APIC_pos, APIC_size);
+                audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
+            }
             return 0;
         }
     }
