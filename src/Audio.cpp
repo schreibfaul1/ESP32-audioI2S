@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 19,2021
+ *  Updated on: Oct 20,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1615,6 +1615,7 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);
             if(audio_info) audio_info(chbuf);
             if(APIC_seen && audio_id3image) audio_id3image(audiofile, APIC_pos, APIC_size);
+            setFilePos(m_audioDataStart); // the filepointer could have been changed by the user, set it back
             return 0;
         }
     }
