@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 5,2021
+ *  Updated on: Oct 27,2021
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -418,6 +418,7 @@ private:
     bool            m_f_m3u8data = false;           // used in processM3U8entries
     bool            m_f_Log = true;                 // if m3u8: log is cancelled
     bool            m_f_continue = false;           // next m3u8 chunk is available
+    bool            m_f_initInbuffOnce = false;     // init InBuff only once
     i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;

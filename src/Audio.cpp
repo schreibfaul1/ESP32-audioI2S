@@ -198,22 +198,21 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
-    static bool f_already_done = false;
-    if(!f_already_done) {
+    if(!m_f_initInbuffOnce) {
         size_t size = InBuff.init();
         if(size == m_buffSizeRAM - m_resBuffSizeRAM) {
             sprintf(chbuf, "PSRAM not found, inputBufferSize: %u bytes", size - 1);
             if(audio_info)
                 audio_info(chbuf);
             m_f_psram = false;
-            f_already_done = true;
+            m_f_initInbuffOnce = true;
         }
         if(size == m_buffSizePSRAM - m_resBuffSizePSRAM) {
             sprintf(chbuf, "PSRAM found, inputBufferSize: %u bytes", size - 1);
             if(audio_info)
                 audio_info(chbuf);
             m_f_psram = true;
-            f_already_done = true;
+            m_f_initInbuffOnce = true;
         }
     }
     changeMaxBlockSize(1600); // default size mp3 or aac
@@ -254,8 +253,11 @@ esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
-    I2Sstop(m_i2s_num);
-    InBuff.~AudioBuffer();
+    //I2Sstop(m_i2s_num);
+    //InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
+    m_f_initInbuffOnce = false;
+    setDefaults();
+    if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
@@ -629,11 +631,8 @@ bool Audio::connecttoSD(const char* path) {
 bool Audio::connecttoFS(fs::FS &fs, const char* path) {
 
     if(strlen(path)>255) return false;
-
     char audioName[256];
-
     setDefaults(); // free buffers an set defaults
-
     memcpy(audioName, path, strlen(path)+1);
     if(audioName[0] != '/'){
         for(int i = 255; i > 0; i--){
