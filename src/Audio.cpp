@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 27,2021
+ *  Updated on: Oct 28,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -258,6 +258,7 @@ Audio::~Audio() {
     m_f_initInbuffOnce = false;
     setDefaults();
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
+    i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
