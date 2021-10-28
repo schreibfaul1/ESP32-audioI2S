@@ -678,6 +678,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     }
 
     if(endsWith(afn, ".mp3")){      // MP3 section
+        free(afn);
         m_codec = CODEC_MP3;
         if(!MP3Decoder_AllocateBuffers()){audiofile.close(); return false;}
         InBuff.changeMaxBlockSize(m_frameSizeMP3);
@@ -688,6 +689,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     } // end MP3 section
 
     if(endsWith(afn, ".m4a")){      // M4A section, iTunes
+        free(afn);
         m_codec = CODEC_M4A;
         if(!AACDecoder_IsInit()){
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
@@ -700,6 +702,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     } // end M4A section
 
     if(endsWith(afn, ".aac")){      // AAC section, without FileHeader
+        free(afn);
         m_codec = CODEC_AAC;
         if(!AACDecoder_IsInit()){
             if(!AACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return false;}
@@ -712,6 +715,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     } // end AAC section
 
     if(endsWith(afn, ".wav")){      // WAVE section
+        free(afn);
         m_codec = CODEC_WAV;
         InBuff.changeMaxBlockSize(m_frameSizeWav);
         m_f_running = true;
@@ -719,6 +723,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
     } // end WAVE section
 
     if(endsWith(afn, ".flac")) {     // FLAC section
+        free(afn);
         m_codec = CODEC_FLAC;
         if(!psramFound()){
             if(audio_info) audio_info("FLAC works only with PSRAM!");
