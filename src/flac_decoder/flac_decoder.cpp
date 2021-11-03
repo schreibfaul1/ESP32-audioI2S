@@ -78,7 +78,7 @@ uint32_t readUint(uint8_t nBits){
         uint8_t temp = *(m_inptr + m_rIndex);
         m_rIndex++;
         m_bytesAvail--;
-        if(m_bytesAvail < 0) log_i("error in bitreader");
+        if(m_bytesAvail < 0) { log_i("error in bitreader"); }
         m_bitBuffer = (m_bitBuffer << 8) | temp;
         m_bitBufferLen += 8;
     }
@@ -347,7 +347,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
         if(offset != m_blockSize) return GIVE_NEXT_LOOP;
         offset = 0;
-        if(offset > m_blockSize) log_e("offset has a wrong value");
+        if(offset > m_blockSize) { log_e("offset has a wrong value"); }
     }
 
     alignToByte();
