@@ -1760,7 +1760,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
 
             uint8_t streamType = *(pos + 22);
             streamType = streamType >> 2;  // 6 bits
-            if(streamType!= 5) log_e("Streamtype is not audio!");
+            if(streamType!= 5) { log_e("Streamtype is not audio!"); }
 
             uint32_t maxBr = bigEndian(pos + 26, 4); // max bitrate
             sprintf(chbuf, "max bitrate: %i", maxBr); if(audio_info) audio_info(chbuf);
@@ -1791,7 +1791,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
             if(chConfig == 0) if(audio_info) audio_info("Channel Configurations: AOT Specifc Config");
             if(chConfig == 1) if(audio_info) audio_info("Channel Configurations: front-center");
             if(chConfig == 2) if(audio_info) audio_info("Channel Configurations: front-left, front-right");
-            if(chConfig >  2) log_e("Channel Configurations with more than 2 channels is not allowed!");
+            if(chConfig >  2) { log_e("Channel Configurations with more than 2 channels is not allowed!"); }
 
             uint8_t frameLengthFlag     = (ASC & 0x04);
             uint8_t dependsOnCoreCoder  = (ASC & 0x02);
@@ -2794,7 +2794,7 @@ bool Audio::STfromEXTINF(char* str){
     // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
 
     if(!startsWith(str,"#EXTINF")) return false;
-    int t1, t2, t3, n0, n1, n2;
+    int t1, t2, t3, n0 = 0, n1 = 0, n2 = 0;
 
     t1 = indexOf(str, "title", 0);
     if(t1 > 0){
@@ -3426,7 +3426,7 @@ bool Audio::readMetadata(uint8_t b, bool first) {
         chbuf[pos_ml] = (char) b;                        // Put new char in +++++
         if(pos_ml < 510) pos_ml ++;
         chbuf[pos_ml] = 0;
-        if(pos_ml == 509) log_e("metaline overflow in AUDIO_METADATA! metaline=%s", chbuf) ;
+        if(pos_ml == 509) { log_e("metaline overflow in AUDIO_METADATA! metaline=%s", chbuf); }
         if(pos_ml == 510) { ; /* last current char in b */}
 
     }
@@ -3842,7 +3842,7 @@ void Audio::compute_audioCurrentTime(int bd) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
-    char* e;
+    char* e = nullptr;
 
     if(m_codec == CODEC_MP3){
         switch(r){
