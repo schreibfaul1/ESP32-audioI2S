@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Oct 28,2021
+ *  Updated on: Nov 03,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -363,7 +363,7 @@ void Audio::httpPrint(const char* url) {
 
     if(!m_f_ssl){
         if(!client.connected()){
-            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%i, port=%i", host, extension, port);
+            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%s, port=%i", host, extension, port);
             if(m_f_Log) if(audio_info) audio_info(chbuf);
             client.connect(host, port);
             if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
@@ -373,7 +373,7 @@ void Audio::httpPrint(const char* url) {
     }
     else{
         if(!clientsecure.connected()){
-            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%i, port=%i", host, extension, port);
+            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%s, port=%i", host, extension, port);
             if(m_f_Log) if(audio_info) audio_info(chbuf);
             clientsecure.connect(host, port);
             if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
@@ -2730,6 +2730,13 @@ void Audio::processM3U8entries(uint8_t _nrOfEntries, uint32_t _seqNr, uint8_t _s
 //        log_i("m3u8_url=%s", m_playlistBuff);
 //        log_i("aac_url=%s", m_playlistBuff+ m_plsBuffEntryLen);
 
+        (void)nrOfEntries;    // suppress warning -Wunused-but-set-variable
+        (void)sequenceNr;
+        (void)targetDuration;
+        (void)resp;
+        (void)host;
+        (void)extension;
+
         currentSeqNr++;
         return;
     }
@@ -4016,7 +4023,7 @@ bool Audio::audioFileSeek(const float speed) {
     // 0.5 is half speed
     // 1.0 is normal speed
     // 1.5 is one and half speed
-    if(speed > 1.5 || speed <0.25) return false;
+    if((speed > 1.5f) || (speed < 0.25f)) return false;
 
     uint32_t srate = getSampleRate() * speed;
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, srate);
@@ -4219,7 +4226,7 @@ int32_t Audio::Gain(int16_t s[2]) {
     uint8_t l = 0, r = 0;
 
     if(m_balance < 0){
-        step = step * abs(m_balance) * 4;
+        step = step * (float)(abs(m_balance) * 4);
         l = (uint8_t)(step);
     }
     if(m_balance > 0){
@@ -4264,35 +4271,34 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
     const float FcPKEQ = 3000;   // Frequency PeakEQ[Hz]
     const float FcHS   = 6000;   // Frequency HighShelf[Hz]
 
-    float K, norm, Q, Fc ;
-    double V;
+    float K, norm, Q, Fc, V ;
 
     // LOWSHELF
     Fc = (float)FcLS / (float)getSampleRate(); // Cutoff frequency
-    K = tan(PI * Fc);
-    V = pow(10, fabs(G0) / 20.0);
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G0) / 20.0);
 
     if (G0 >= 0) {  // boost
-        norm = 1 / (1 + sqrt(2) * K + K * K);
-        m_filter[LOWSHELF].a0 = (1 + sqrt(2*V) * K + V * K * K) * norm;
+        norm = 1 / (1 + sqrtf(2) * K + K * K);
+        m_filter[LOWSHELF].a0 = (1 + sqrtf(2*V) * K + V * K * K) * norm;
         m_filter[LOWSHELF].a1 = 2 * (V * K * K - 1) * norm;
-        m_filter[LOWSHELF].a2 = (1 - sqrt(2*V) * K + V * K * K) * norm;
+        m_filter[LOWSHELF].a2 = (1 - sqrtf(2*V) * K + V * K * K) * norm;
         m_filter[LOWSHELF].b1 = 2 * (K * K - 1) * norm;
-        m_filter[LOWSHELF].b2 = (1 - sqrt(2) * K + K * K) * norm;
+        m_filter[LOWSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
     }
     else {          // cut
-        norm = 1 / (1 + sqrt(2*V) * K + V * K * K);
-        m_filter[LOWSHELF].a0 = (1 + sqrt(2) * K + K * K) * norm;
+        norm = 1 / (1 + sqrtf(2*V) * K + V * K * K);
+        m_filter[LOWSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
         m_filter[LOWSHELF].a1 = 2 * (K * K - 1) * norm;
-        m_filter[LOWSHELF].a2 = (1 - sqrt(2) * K + K * K) * norm;
+        m_filter[LOWSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
         m_filter[LOWSHELF].b1 = 2 * (V * K * K - 1) * norm;
-        m_filter[LOWSHELF].b2 = (1 - sqrt(2*V) * K + V * K * K) * norm;
+        m_filter[LOWSHELF].b2 = (1 - sqrtf(2*V) * K + V * K * K) * norm;
     }
 
     // PEAK EQ
     Fc = (float)FcPKEQ / (float)getSampleRate(); // Cutoff frequency
-    K = tan(PI * Fc);
-    V = pow(10, fabs(G1) / 20.0);
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G1) / 20.0);
     Q = 2.5; // Quality factor
     if (G1 >= 0) { // boost
         norm = 1 / (1 + 1/Q * K + K * K);
@@ -4313,23 +4319,23 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
 
     // HIGHSHELF
     Fc = (float)FcHS / (float)getSampleRate(); // Cutoff frequency
-    K = tan(PI * Fc);
-    V = pow(10, fabs(G2) / 20.0);
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G2) / 20.0);
     if (G2 >= 0) {  // boost
-        norm = 1 / (1 + sqrt(2) * K + K * K);
-        m_filter[HIFGSHELF].a0 = (V + sqrt(2*V) * K + K * K) * norm;
+        norm = 1 / (1 + sqrtf(2) * K + K * K);
+        m_filter[HIFGSHELF].a0 = (V + sqrtf(2*V) * K + K * K) * norm;
         m_filter[HIFGSHELF].a1 = 2 * (K * K - V) * norm;
-        m_filter[HIFGSHELF].a2 = (V - sqrt(2*V) * K + K * K) * norm;
+        m_filter[HIFGSHELF].a2 = (V - sqrtf(2*V) * K + K * K) * norm;
         m_filter[HIFGSHELF].b1 = 2 * (K * K - 1) * norm;
-        m_filter[HIFGSHELF].b2 = (1 - sqrt(2) * K + K * K) * norm;
+        m_filter[HIFGSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
     }
     else {
-        norm = 1 / (V + sqrt(2*V) * K + K * K);
-        m_filter[HIFGSHELF].a0 = (1 + sqrt(2) * K + K * K) * norm;
+        norm = 1 / (V + sqrtf(2*V) * K + K * K);
+        m_filter[HIFGSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
         m_filter[HIFGSHELF].a1 = 2 * (K * K - 1) * norm;
-        m_filter[HIFGSHELF].a2 = (1 - sqrt(2) * K + K * K) * norm;
+        m_filter[HIFGSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
         m_filter[HIFGSHELF].b1 = 2 * (K * K - V) * norm;
-        m_filter[HIFGSHELF].b2 = (V - sqrt(2*V) * K + K * K) * norm;
+        m_filter[HIFGSHELF].b2 = (V - sqrtf(2*V) * K + K * K) * norm;
     }
 
 //    log_i("LS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", m_filter[0].a0, m_filter[0].a1, m_filter[0].a2,
