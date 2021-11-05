@@ -509,7 +509,8 @@ int HybridTransform(int *xCurr, int *xPrev, int y[m_BLOCK_SIZE][m_NBANDS], SideI
 inline uint64_t SAR64(uint64_t x, int n) {return x >> n;}
 inline int MULSHIFT32(int x, int y) { int z; z = (uint64_t) x * (uint64_t) y >> 32; return z;}
 inline uint64_t MADD64(uint64_t sum64, int x, int y) {sum64 += (uint64_t) x * (uint64_t) y; return sum64;}/* returns 64-bit value in [edx:eax] */
-inline int CLZ(int x){int numZeros; if (!x) return(sizeof(int) * 8);  numZeros = 0; while (!(x & 0x80000000)){numZeros++;  x <<= 1;} return numZeros;}
+//inline int CLZ(int x){int numZeros; if (!x) return(sizeof(int) * 8);  numZeros = 0; while (!(x & 0x80000000)){numZeros++;  x <<= 1;} return numZeros;}
+#define CLZ(x) __builtin_clz(x)
 inline uint64_t xSAR64(uint64_t x, int n){return x >> n;}
 inline int FASTABS(int x){ int sign; sign=x>>(sizeof(int)*8-1); x^=sign; x-=sign; return x;}
 
