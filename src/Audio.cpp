@@ -3797,6 +3797,15 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
     }
     compute_audioCurrentTime(bytesDecoded);
+
+    if(audio_process_extern){
+        bool continueI2S = false;
+        audio_process_extern(m_outBuff, m_validSamples, &continueI2S);
+        if(!continueI2S){
+            return bytesDecoded;
+        }
+    }
+
     while(m_validSamples) {
         playChunk();
     }
