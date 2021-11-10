@@ -1,3 +1,4 @@
+// the pin assignment matches the Olimex ADF board
 
 #include "Arduino.h"
 #include "WiFi.h"
