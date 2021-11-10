@@ -8,6 +8,7 @@
 #include "FS.h"
 #include "Wire.h"
 #include "AC101.h" //https://github.com/schreibfaul1/AC101
+// #include "ES8388.h"  // https://github.com/maditnerd/es8388
 #include "Audio.h" //https://github.com/schreibfaul1/ESP32-audioI2S
 
 
@@ -24,7 +25,7 @@
 #define I2S_MCLK       0
 #define I2S_DOUT      35
 
-// I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 3378
+// I2S GPIOs, the names refer on ES8388, AS1 Audio Kit V2.2 3378
 //#define I2S_DSIN    35
 //#define I2S_BCLK    27
 //#define I2S_LRC     25
@@ -50,7 +51,8 @@
 String ssid =     "xxxxxxxxx";
 String password = "xxxxxxxxx";
 
-static AC101 ac;
+static AC101 dac;                                 // AC101
+//    ES8388 dac;                                 // ES8388 (new board)
 int volume = 40;                                  // 0...100
 
 Audio audio;
@@ -84,22 +86,22 @@ void setup()
   Serial.print(" IP: ");
   Serial.println(WiFi.localIP());
 
-    Serial.printf("Connect to AC101 codec... ");
-    while (not ac.begin(IIC_DATA, IIC_CLK))
+    Serial.printf("Connect to DAC codec... ");
+    while (not dac.begin(IIC_DATA, IIC_CLK))
     {
         Serial.printf("Failed!\n");
         delay(1000);
     }
     Serial.printf("OK\n");
 
-    ac.SetVolumeSpeaker(volume);
-    ac.SetVolumeHeadphone(volume);
+    dac.SetVolumeSpeaker(volume);
+    dac.SetVolumeHeadphone(volume);
 //  ac.DumpRegisters();
 
     // Enable amplifier
     pinMode(GPIO_PA_EN, OUTPUT);
     digitalWrite(GPIO_PA_EN, HIGH);
-  
+
     // set I2S_MasterClock
     audio.i2s_mclk_pin_select(I2S_MCLK);
 
