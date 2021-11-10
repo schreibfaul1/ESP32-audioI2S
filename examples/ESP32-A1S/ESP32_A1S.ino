@@ -17,12 +17,19 @@
 #define SPI_MISO       2
 #define SPI_SCK       14
 
-// I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 2379 and V2.2 3378
+// I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 2379
 #define I2S_DSIN      25
 #define I2S_BCLK      27
 #define I2S_LRC       26
 #define I2S_MCLK       0
 #define I2S_DOUT      35
+
+// I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 3378
+//#define I2S_DSIN    35
+//#define I2S_BCLK    27
+//#define I2S_LRC     25
+//#define I2S_MCLK     0
+//#define I2S_DOUT    26
 
 // I2C GPIOs
 #define IIC_CLK       32
