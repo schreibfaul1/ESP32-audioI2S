@@ -17,7 +17,7 @@
 #define SPI_MISO       2
 #define SPI_SCK       14
 
-// I2S GPIOs, the names refer on AC101
+// I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 2379 and V2.2 3378
 #define I2S_DSIN      25
 #define I2S_BCLK      27
 #define I2S_LRC       26
@@ -28,14 +28,14 @@
 #define IIC_CLK       32
 #define IIC_DATA      33
 
-// Tasten
+// buttons
 // #define BUTTON_2_PIN 13             // shared mit SPI_CS
 #define BUTTON_3_PIN  19
 #define BUTTON_4_PIN  23
 #define BUTTON_5_PIN  18               // Stop
 #define BUTTON_6_PIN   5               // Play
 
-// VerstÃ¤rker enable
+// amplifier enable
 #define GPIO_PA_EN    21
 
 //Switch S1: 1-OFF, 2-ON, 3-ON, 4-OFF, 5-OFF
