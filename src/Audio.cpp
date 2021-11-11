@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 03,2021
+ *  Updated on: Nov 12,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3879,6 +3879,7 @@ void Audio::printDecodeError(int r) {
         }
         sprintf(chbuf, "MP3 decode error %d : %s", r, e);
         if(audio_info) audio_info(chbuf);
+        if(r == ERR_MP3_FREE_BITRATE_SYNC) MP3Decoder_ClearBuffer(); // avoid TG1WDT_SYS_RESET #227
     }
     if(m_codec == CODEC_AAC){
         switch(r){
