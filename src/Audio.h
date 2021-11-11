@@ -235,35 +235,82 @@ private:
     void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
 
     // implement several function with respect to the index of string
-    bool startsWith (const char* base, const char* str) { return (strstr(base, str) - base) == 0;}
-    bool endsWith (const char* base, const char* str) {
-        int blen = strlen(base);
-        int slen = strlen(str);
-        while(isspace(*(base + blen - 1))) blen--;  // rtrim
-        char* pos = strstr(base + blen - slen, str);
-        if (pos == NULL) return false;
-        else return true;
-    }
-    int indexOf (const char* base, const char* str, int startIndex) {
-        int result;
-        int baselen = strlen(base);
-        if (strlen(str) > baselen || startIndex > baselen) result = -1;
-        else {
-            char* pos = strstr(base + startIndex, str);
-            if (pos == NULL) result = -1;
-            else result = pos - base;
+    void trim(char *s) {
+    //fb   trim in place
+        char *pe;
+        char *p = s;
+        while ( isspace(*p) ) p++; //left
+        pe = p; //right
+        while ( *pe != '\0' ) pe++;
+        do {
+            pe--;
+        } while ( (pe > p) && isspace(*pe) );
+        if (p == s) {
+            *++pe = '\0';
+        } else {  //move
+            while ( p <= pe ) *s++ = *p++;
+            *s = '\0';
         }
-        return result;
     }
-    int lastIndexOf(const char* base, const char* str){
-        int pos = -1, lastIndex = -1;
-        while(true){
-            pos = indexOf(base, str, pos + 1);
-            if(pos >= 0) lastIndex = pos;
-            else break;
+
+    const bool startsWith (const char* base, const char* str) {
+    //fb
+        char c;
+        while ( (c = *str++) != '\0' )
+          if (c != *base++) return false;
+        return true;
+    }
+
+    const bool endsWith (const char* base, const char* str) {
+    //fb
+        int slen = strlen(str) - 1;
+        const char *p = base + strlen(base) - 1;
+        while(p > base && isspace(*p)) p--;  // rtrim
+        p -= slen;
+        if (p < base) return false;
+        return (strncmp(p, str, slen) == 0);
+    }
+
+    const int indexOf (const char* base, const char* str, int startIndex) {
+    //fb
+        const char *p = base;
+        for (; startIndex > 0; startIndex--)
+            if (*p++ == '\0') return -1;
+        char* pos = strstr(p, str);
+        if (pos == nullptr) return -1;
+        return pos - base;
+    }
+
+    const int indexOf (const char* base, char ch, int startIndex) {
+    //fb
+        const char *p = base;
+        for (; startIndex > 0; startIndex--)
+            if (*p++ == '\0') return -1;
+        char *pos = strchr(p, ch);
+        if (pos == nullptr) return -1;
+        return pos - base;
+    }
+
+    const int lastIndexOf(const char* haystack, const char* needle) {
+    //fb
+        int nlen = strlen(needle);
+        if (nlen == 0) return -1;
+        const char *p = haystack - nlen + strlen(haystack);
+        while (p >= haystack) {
+          int i = 0;
+          while (needle[i] == p[i])
+            if (++i == nlen) return p - haystack;
+          p--;
         }
-        return lastIndex;
+        return -1;
     }
+
+    const int lastIndexOf(const char* haystack, const char needle) {
+    //fb
+        const char *p = strrchr(haystack, needle);
+        return (p ? p - haystack : -1);
+    }
+
     int specialIndexOf (uint8_t* base, const char* str, int baselen, bool exact = false){
         int result;  // seek for str in buffer or in header up to baselen, not nullterninated
         if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
@@ -309,14 +356,6 @@ private:
             else expectedLen += 2;
         }
         return expectedLen;
-    }
-    void trim(char* s){
-        uint8_t l = 0;
-        while(isspace(*(s + l))) l++;
-        for(uint16_t i = 0; i< strlen(s) - l; i++)  *(s + i) = *(s + i + l); // ltrim
-        char* back = s + strlen(s);
-        while(isspace(*--back));
-        *(back + 1) = '\0';      // rtrim
     }
 
 
@@ -435,4 +474,3 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-
