@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 10.04.2021
+ *  Updated on: 12.11.2021
  */
 #include "mp3_decoder.h"
 
@@ -1351,6 +1351,7 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
             m_MP3DecInfo->freeBitrateSlots=MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
             if(m_MP3DecInfo->freeBitrateSlots < 0){
                 MP3ClearBadFrame(outbuf);
+                m_MP3DecInfo->freeBitrateFlag = 0;
                 return ERR_MP3_FREE_BITRATE_SYNC;
             }
             freeFrameBytes=m_MP3DecInfo->freeBitrateSlots + fhBytes + siBytes;

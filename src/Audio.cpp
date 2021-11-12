@@ -3879,8 +3879,7 @@ void Audio::printDecodeError(int r) {
         }
         sprintf(chbuf, "MP3 decode error %d : %s", r, e);
         if(audio_info) audio_info(chbuf);
-        if(r == ERR_MP3_FREE_BITRATE_SYNC) MP3Decoder_ClearBuffer(); // avoid TG1WDT_SYS_RESET #227
-    }
+     }
     if(m_codec == CODEC_AAC){
         switch(r){
             case ERR_AAC_NONE:                              e = strdup("NONE");                             break;
