@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 12,2021
+ *  Updated on: Nov 14,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -778,17 +778,16 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
 
     free(speechBuff);
 
-    if(!clientsecure.connect(host, 443)) {
+    if(!client.connect(host, 80)) {
         log_e("Connection failed");
         return false;
     }
-    clientsecure.print(resp);
-    sprintf(chbuf, "SSL has been established, free Heap: %u bytes", ESP.getFreeHeap());
+    client.print(resp);
     if(audio_info) audio_info(chbuf);
 
     m_f_webstream = true;
     m_f_running = true;
-    m_f_ssl = true;
+    m_f_ssl = false;
     m_f_tts = true;
     setDatamode(AUDIO_HEADER);
 
