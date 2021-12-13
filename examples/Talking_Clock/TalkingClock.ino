@@ -31,7 +31,7 @@ void tckr1s(){
     sec++;
     if(sec > 59)   {sec = 0;     minute++;}
     if(minute > 59){minute = 0; hour++;}
-    if(hour > 24)  {hour = 0;}
+    if(hour > 23)  {hour = 0;}
     if(minute == 59 && sec == 50) f_time = true;  // flag will be set 10s before full hour
     Serial.printf("%02d:%02d:%02d\n", hour, minute, sec);
 }
