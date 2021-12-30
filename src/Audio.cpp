@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Nov 14,2021
+ *  Updated on: Dec 30,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3023,6 +3023,7 @@ void Audio::processWebStream() {
             }
             bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
             if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
+            if(bytesDecoded == 0) return; // syncword ar pos0 found
         }
         if(m_f_m3u8data) return;
 
