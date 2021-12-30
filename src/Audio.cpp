@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 30,2021
+ *  Updated on: Dec 30a,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -402,7 +402,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         return false;
     }
 
-    if(strlen(host) > 255) {
+    if(strlen(host) > 511) {
         if(audio_info) audio_info("Hostaddress is too long");
         return false;
     }
@@ -483,7 +483,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         hostwoext = (char*)malloc(hostwoextLen + 1);
         memcpy(hostwoext, h_host, hostwoextLen);
         hostwoext[hostwoextLen] = '\0';
-        uint8_t extLen =  urlencode_expected_len(h_host + pos_slash);
+        uint16_t extLen =  urlencode_expected_len(h_host + pos_slash);
         extension = (char *)malloc(extLen);
         memcpy(extension, h_host + pos_slash, extLen);
         trim(extension);
@@ -3023,7 +3023,7 @@ void Audio::processWebStream() {
             }
             bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
             if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
-            if(bytesDecoded == 0) return; // syncword ar pos0 found
+            if(bytesDecoded == 0) return; // syncword at pos0 found
         }
         if(m_f_m3u8data) return;
 
