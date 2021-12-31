@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 30a,2021
+ *  Updated on: Dec 31,2021
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -402,7 +402,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         return false;
     }
 
-    if(strlen(host) > 511) {
+    if(strlen(host) >= 512 - 10) {
         if(audio_info) audio_info("Hostaddress is too long");
         return false;
     }
