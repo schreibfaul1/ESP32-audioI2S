@@ -509,5 +509,5 @@ inline uint64_t SAR64(uint64_t x, int n) {return x >> n;}
 inline int MULSHIFT32(int x, int y) { int z; z = (uint64_t) x * (uint64_t) y >> 32; return z;}
 inline uint64_t MADD64(uint64_t sum64, int x, int y) {sum64 += (uint64_t) x * (uint64_t) y; return sum64;}/* returns 64-bit value in [edx:eax] */
 inline uint64_t xSAR64(uint64_t x, int n){return x >> n;}
-inline int FASTABS(int x){ return __builtin_abs(x);} //xtensa has a fast abs instruction
-#define CLZ(x) __builtin_clz(x)
+inline int FASTABS(int x){ return __builtin_abs(x);} //xtensa has a fast abs instruction //fb
+#define CLZ(x) __builtin_clz(x) //fb

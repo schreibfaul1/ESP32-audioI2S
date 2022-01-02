@@ -3512,171 +3512,171 @@ int Subband( short *pcmBuf) {
  *              guard bit analysis verified by exhaustive testing of all 2^32
  *                combinations of max pos/max neg values in x[]
  **********************************************************************************************************************/
-// about 1ms faster in RAM
-const uint8_t FDCT32s[16] = { 5, 3, 3, 2, 2, 1, 1, 1,   1, 1, 1, 1, 1, 2, 2, 4};
+#define D32FP(i, s1, s2) { \
+    a0 = buf[i];			a3 = buf[31-i]; \
+	a1 = buf[15-i];			a2 = buf[16+i]; \
+    b0 = a0 + a3;			b3 = MULSHIFT32(*cptr++, a0 - a3) << 1;	\
+	b1 = a1 + a2;			b2 = MULSHIFT32(*cptr++, a1 - a2) << (s1);	\
+	buf[i] = b0 + b1;		buf[15-i] = MULSHIFT32(*cptr,   b0 - b1) << (s2); \
+	buf[16+i] = b2 + b3;    buf[31-i] = MULSHIFT32(*cptr++, b3 - b2) << (s2); \
+}
 
-void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
+static const uint8_t FDCT32s1s2[16] = {5,3,3,2,2,1,1,1, 1,1,1,1,1,2,2,4};
+
+void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb) {
     int i, s, tmp, es;
-    const uint32_t *cptr = m_dcttab;
+    const int *cptr = (const int*)m_dcttab;
     int a0, a1, a2, a3, a4, a5, a6, a7;
     int b0, b1, b2, b3, b4, b5, b6, b7;
-    int *d;
+	int *d;
 
-    /* scaling - ensure at least 6 guard bits for DCT
-     * (in practice this is already true 99% of time, so this code is
-     *  almost never triggered)
-     */
-    es = 0;
-    if (gb < 6) {
-        es = 6 - gb;
-        for (i = 0; i < 32; i++)
-            buf[i] >>= es;
+	/* scaling - ensure at least 6 guard bits for DCT
+	 * (in practice this is already true 99% of time, so this code is
+	 *  almost never triggered)
+	 */
+	es = 0;
+	if (gb < 6) {
+		es = 6 - gb;
+		for (i = 0; i < 32; i++)
+			buf[i] >>= es;
+	}
+
+	/* first pass */
+    for (unsigned i=0; i < 8; i++) {
+        D32FP(i, FDCT32s1s2[0 + i], FDCT32s1s2[8 + i]);
     }
 
-    for(int j=0; j<8; j++){
-        a0 = buf[j];            a3 = buf[31-j]; \
-        a1 = buf[15-j];         a2 = buf[16+j]; \
-        b0 = a0 + a3;           b3 = MULSHIFT32(*cptr++, a0 - a3) << 1;
-        b1 = a1 + a2;           b2 = MULSHIFT32(*cptr++, a1 - a2) << FDCT32s[j];
-        buf[j] = b0 + b1;       buf[15-j] = MULSHIFT32(*cptr,   b0 - b1) << FDCT32s[j + 8];
-        buf[16+j] = b2 + b3;    buf[31-j] = MULSHIFT32(*cptr++, b3 - b2) << FDCT32s[j + 8];
-    }
+	/* second pass */
+	for (i = 4; i > 0; i--) {
+		a0 = buf[0]; 	    a7 = buf[7];		a3 = buf[3];	    a4 = buf[4];
+		b0 = a0 + a7;	    b7 = MULSHIFT32(*cptr++, a0 - a7) << 1;
+		b3 = a3 + a4;	    b4 = MULSHIFT32(*cptr++, a3 - a4) << 3;
+		a0 = b0 + b3;	    a3 = MULSHIFT32(*cptr,   b0 - b3) << 1;
+		a4 = b4 + b7;		a7 = MULSHIFT32(*cptr++, b7 - b4) << 1;
 
-    /* second pass */
-    for (i = 4; i > 0; i--) {
-        a0 = buf[0];        a7 = buf[7];        a3 = buf[3];        a4 = buf[4];
-        b0 = a0 + a7;       b7 = MULSHIFT32(*cptr++, a0 - a7) << 1;
-        b3 = a3 + a4;       b4 = MULSHIFT32(*cptr++, a3 - a4) << 3;
-        a0 = b0 + b3;       a3 = MULSHIFT32(*cptr,   b0 - b3) << 1;
-        a4 = b4 + b7;       a7 = MULSHIFT32(*cptr++, b7 - b4) << 1;
+		a1 = buf[1];	    a6 = buf[6];	    a2 = buf[2];	    a5 = buf[5];
+		b1 = a1 + a6;	    b6 = MULSHIFT32(*cptr++, a1 - a6) << 1;
+		b2 = a2 + a5;	    b5 = MULSHIFT32(*cptr++, a2 - a5) << 1;
+		a1 = b1 + b2;		a2 = MULSHIFT32(*cptr,   b1 - b2) << 2;
+		a5 = b5 + b6;	    a6 = MULSHIFT32(*cptr++, b6 - b5) << 2;
 
-        a1 = buf[1];        a6 = buf[6];        a2 = buf[2];        a5 = buf[5];
-        b1 = a1 + a6;       b6 = MULSHIFT32(*cptr++, a1 - a6) << 1;
-        b2 = a2 + a5;       b5 = MULSHIFT32(*cptr++, a2 - a5) << 1;
-        a1 = b1 + b2;       a2 = MULSHIFT32(*cptr,   b1 - b2) << 2;
-        a5 = b5 + b6;       a6 = MULSHIFT32(*cptr++, b6 - b5) << 2;
+		b0 = a0 + a1;	    b1 = MULSHIFT32(m_COS4_0, a0 - a1) << 1;
+		b2 = a2 + a3;	    b3 = MULSHIFT32(m_COS4_0, a3 - a2) << 1;
+		buf[0] = b0;	    buf[1] = b1;
+		buf[2] = b2 + b3;	buf[3] = b3;
 
-        b0 = a0 + a1;       b1 = MULSHIFT32(m_COS4_0, a0 - a1) << 1;
-        b2 = a2 + a3;       b3 = MULSHIFT32(m_COS4_0, a3 - a2) << 1;
-        buf[0] = b0;        buf[1] = b1;
-        buf[2] = b2 + b3;   buf[3] = b3;
+		b4 = a4 + a5;	    b5 = MULSHIFT32(m_COS4_0, a4 - a5) << 1;
+		b6 = a6 + a7;	    b7 = MULSHIFT32(m_COS4_0, a7 - a6) << 1;
+		b6 += b7;
+		buf[4] = b4 + b6;	buf[5] = b5 + b7;
+		buf[6] = b5 + b6;	buf[7] = b7;
 
-        b4 = a4 + a5;       b5 = MULSHIFT32(m_COS4_0, a4 - a5) << 1;
-        b6 = a6 + a7;       b7 = MULSHIFT32(m_COS4_0, a7 - a6) << 1;
-        b6 += b7;
-        buf[4] = b4 + b6;   buf[5] = b5 + b7;
-        buf[6] = b5 + b6;   buf[7] = b7;
+		buf += 8;
+	}
+	buf -= 32;	/* reset */
 
-        buf += 8;
-    }
-    buf -= 32;  /* reset */
+	/* sample 0 - always delayed one block */
+	d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+	s = buf[ 0];				d[0] = d[8] = s;
 
-    /* sample 0 - always delayed one block */
-    d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-    s = buf[ 0];                d[0] = d[8] = s;
+	/* samples 16 to 31 */
+	d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
 
-    /* samples 16 to 31 */
-    d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
+	s = buf[ 1];				d[0] = d[8] = s;	d += 64;
 
-    s = buf[ 1];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[25] + buf[29];
+	s = buf[17] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 9] + buf[13];		d[0] = d[8] = s;	d += 64;
+	s = buf[21] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[25] + buf[29];
-    s = buf[17] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 9] + buf[13];      d[0] = d[8] = s;    d += 64;
-    s = buf[21] + tmp;          d[0] = d[8] = s;    d += 64;
+	tmp = buf[29] + buf[27];
+	s = buf[ 5];				d[0] = d[8] = s;	d += 64;
+	s = buf[21] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[13] + buf[11];		d[0] = d[8] = s;	d += 64;
+	s = buf[19] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[29] + buf[27];
-    s = buf[ 5];                d[0] = d[8] = s;    d += 64;
-    s = buf[21] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[13] + buf[11];      d[0] = d[8] = s;    d += 64;
-    s = buf[19] + tmp;          d[0] = d[8] = s;    d += 64;
+	tmp = buf[27] + buf[31];
+	s = buf[ 3];				d[0] = d[8] = s;	d += 64;
+	s = buf[19] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[11] + buf[15];		d[0] = d[8] = s;	d += 64;
+	s = buf[23] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[27] + buf[31];
-    s = buf[ 3];                d[0] = d[8] = s;    d += 64;
-    s = buf[19] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[11] + buf[15];      d[0] = d[8] = s;    d += 64;
-    s = buf[23] + tmp;          d[0] = d[8] = s;    d += 64;
+	tmp = buf[31];
+	s = buf[ 7];				d[0] = d[8] = s;	d += 64;
+	s = buf[23] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[15];				d[0] = d[8] = s;	d += 64;
+	s = tmp;					d[0] = d[8] = s;
 
-    tmp = buf[31];
-    s = buf[ 7];                d[0] = d[8] = s;    d += 64;
-    s = buf[23] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[15];                d[0] = d[8] = s;    d += 64;
-    s = tmp;                    d[0] = d[8] = s;
+	/* samples 16 to 1 (sample 16 used again) */
+	d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
 
-    /* samples 16 to 1 (sample 16 used again) */
-    d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+	s = buf[ 1];				d[0] = d[8] = s;	d += 64;
 
-    s = buf[ 1];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[30] + buf[25];
+	s = buf[17] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[14] + buf[ 9];		d[0] = d[8] = s;	d += 64;
+	s = buf[22] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 6];				d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[30] + buf[25];
-    s = buf[17] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[14] + buf[ 9];      d[0] = d[8] = s;    d += 64;
-    s = buf[22] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 6];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[26] + buf[30];
+	s = buf[22] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[10] + buf[14];		d[0] = d[8] = s;	d += 64;
+	s = buf[18] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 2];				d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[26] + buf[30];
-    s = buf[22] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[10] + buf[14];      d[0] = d[8] = s;    d += 64;
-    s = buf[18] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 2];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[28] + buf[26];
+	s = buf[18] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[12] + buf[10];		d[0] = d[8] = s;	d += 64;
+	s = buf[20] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 4];				d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[28] + buf[26];
-    s = buf[18] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[12] + buf[10];      d[0] = d[8] = s;    d += 64;
-    s = buf[20] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 4];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[24] + buf[28];
+	s = buf[20] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 8] + buf[12];		d[0] = d[8] = s;	d += 64;
+	s = buf[16] + tmp;			d[0] = d[8] = s;
 
-    tmp = buf[24] + buf[28];
-    s = buf[20] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 8] + buf[12];      d[0] = d[8] = s;    d += 64;
-    s = buf[16] + tmp;          d[0] = d[8] = s;
+	/* this is so rarely invoked that it's not worth making two versions of the output
+	 *   shuffle code (one for no shift, one for clip + variable shift) like in IMDCT
+	 * here we just load, clip, shift, and store on the rare instances that es != 0
+	 */
+	if (es) {
+		d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+		s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);
 
-    /* this is so rarely invoked that it's not worth making two versions of the output
-     *   shuffle code (one for no shift, one for clip + variable shift) like in IMDCT
-     * here we just load, clip, shift, and store on the rare instances that es != 0
-     */
-    if (es) {
-        d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-        s = d[0];
-        int sign = (s) >> 31;
-        if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-        d[0] = d[8] = (s << es);
-        d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
-        for (i = 16; i <= 31; i++) {
-            s = d[0];
-            int sign = (s) >> 31;
-            if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-            d[0] = d[8] = (s << es);
-            d += 64;
-        }
+		d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
+		for (i = 16; i <= 31; i++) {
+			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+		}
 
-        d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-        for (i = 15; i >= 0; i--) {
-            s = d[0];
-            int sign = (s) >> 31;
-            if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-            d[0] = d[8] = (s << es);
-            d += 64;
-        }
-    }
+		d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+		for (i = 15; i >= 0; i--) {
+			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+		}
+	}
 }
 
 /***********************************************************************************************************************
  * P O L Y P H A S E
  **********************************************************************************************************************/
-
+inline
 short ClipToShort(int x, int fracBits){
-    int sign;
 
     /* assumes you've already rounded (x += (1 << (fracBits-1))) */
     x >>= fracBits;
 
+#ifndef __XTENSA__
     /* Ken's trick: clips to [-32768, 32767] */
-    sign = x >> 31;
+    //ok vor generic case (fb)
+    int sign = x >> 31;
     if (sign != (x >> 15))
         x = sign ^ ((1 << 15) - 1);
 
     return (short)x;
+#else
+    //this is better on xtensa (fb)
+    asm ("clamps %0, %1, 15" : "=a" (x) : "a" (x) : );
+    return x;
+#endif
 }
 /***********************************************************************************************************************
  * Function:    PolyphaseMono
