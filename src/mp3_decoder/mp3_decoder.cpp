@@ -533,7 +533,7 @@ const unsigned char quadTable[64+16] PROGMEM = {
  *   - bitrate index == 0 is "free" mode (bitrate determined on the fly by
  *       counting bits between successive sync words)
  */
-const int/*short*/bitrateTab[3][3][15] PROGMEM = { {
+const short bitrateTab[3][3][15] PROGMEM = { {
 /* MPEG-1 */
 { 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448 }, /* Layer 1 */
 { 0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384 }, /* Layer 2 */
@@ -554,7 +554,7 @@ const int/*short*/bitrateTab[3][3][15] PROGMEM = { {
  * for layer3, nSlots = floor(samps/frame * bitRate / sampleRate / 8)
  *   - add one pad slot if necessary
  */
-const int/*short*/slotTab[3][3][15] PROGMEM = {
+const short slotTab[3][3][15] PROGMEM = {
     { /* MPEG-1 */
         { 0, 104, 130, 156, 182, 208, 261, 313, 365, 417, 522, 626, 731, 835, 1044 }, /* 44 kHz */
         { 0, 96, 120, 144, 168, 192, 240, 288, 336, 384, 480, 576, 672, 768, 960 }, /* 48 kHz */
@@ -3559,6 +3559,8 @@ int Subband( short *pcmBuf) {
  *                combinations of max pos/max neg values in x[]
  **********************************************************************************************************************/
 // about 1ms faster in RAM
+const uint8_t FDCT32s[16] = { 5, 3, 3, 2, 2, 1, 1, 1,   1, 1, 1, 1, 1, 2, 2, 4};
+
 void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
     int i, s, tmp, es;
     const uint32_t *cptr = m_dcttab;
@@ -3577,17 +3579,13 @@ void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
             buf[i] >>= es;
     }
 
-    int s0[8]={ 1, 1, 1, 1, 1, 1, 1, 1};
-    int s1[8]={ 5, 3, 3, 2, 2, 1, 1, 1};
-    int s2[8]={ 1, 1, 1, 1, 1, 2, 2, 4};
-
     for(int j=0; j<8; j++){
         a0 = buf[j];            a3 = buf[31-j]; \
         a1 = buf[15-j];         a2 = buf[16+j]; \
-        b0 = a0 + a3;           b3 = MULSHIFT32(*cptr++, a0 - a3) << s0[j];
-        b1 = a1 + a2;           b2 = MULSHIFT32(*cptr++, a1 - a2) << s1[j];
-        buf[j] = b0 + b1;       buf[15-j] = MULSHIFT32(*cptr,   b0 - b1) << s2[j];
-        buf[16+j] = b2 + b3;    buf[31-j] = MULSHIFT32(*cptr++, b3 - b2) << s2[j];
+        b0 = a0 + a3;           b3 = MULSHIFT32(*cptr++, a0 - a3) << 1;
+        b1 = a1 + a2;           b2 = MULSHIFT32(*cptr++, a1 - a2) << FDCT32s[j];
+        buf[j] = b0 + b1;       buf[15-j] = MULSHIFT32(*cptr,   b0 - b1) << FDCT32s[j + 8];
+        buf[16+j] = b2 + b3;    buf[31-j] = MULSHIFT32(*cptr++, b3 - b2) << FDCT32s[j + 8];
     }
 
     /* second pass */
