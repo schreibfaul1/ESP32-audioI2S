@@ -6,6 +6,22 @@
  *  Updated on: 27.11.2021
  */
 #include "mp3_decoder.h"
+/* clip to range [-2^n, 2^n - 1] */
+#if 0 //Fast on ARM:
+#define CLIP_2N(y, n) { \
+	int sign = (y) >> 31;  \
+	if (sign != (y) >> (n))  { \
+		(y) = sign ^ ((1 << (n)) - 1); \
+	} \
+}
+#else //on xtensa this is faster, due to asm min/max instructions:
+#define CLIP_2N(y, n) { \
+    int x = 1 << n; \
+    if (y < -x) y = -x; \
+    x--; \
+    if (y > x) y = x; \
+}
+#endif
 
 const uint8_t  m_SYNCWORDH              =0xff;
 const uint8_t  m_SYNCWORDL              =0xf0;
@@ -2849,100 +2865,38 @@ void WinPrevious(int *xPrev, int *xPrevWin, int btPrev){
  * Return:      updated mOut (from new outputs y)
  **********************************************************************************************************************/
 
-int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es){
-    int i, d, mOut;
-    int y0, y1, y2, y3, y4, y5, y6, y7, y8;
+int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es) {
 
-    if (es == 0) {
-        /* fast case - frequency invert only (no rescaling) - can fuse into overlap-add for speed, if desired */
-        if (blockIdx & 0x01) {
-            y += m_NBANDS;
-            y0 = *y;
-            y += 2 * m_NBANDS;
-            y1 = *y;
-            y += 2 * m_NBANDS;
-            y2 = *y;
-            y += 2 * m_NBANDS;
-            y3 = *y;
-            y += 2 * m_NBANDS;
-            y4 = *y;
-            y += 2 * m_NBANDS;
-            y5 = *y;
-            y += 2 * m_NBANDS;
-            y6 = *y;
-            y += 2 * m_NBANDS;
-            y7 = *y;
-            y += 2 * m_NBANDS;
-            y8 = *y;
-            y += 2 * m_NBANDS;
+	if (es == 0) {
+		/* fast case - frequency invert only (no rescaling) */
+		if (blockIdx & 0x01) {
+			y += m_NBANDS;
+            for (int i = 0; i < 9; i++) {
+    			*y = - *y;	y += 2 * m_NBANDS;
+            }
+		}
+		return 0;
+	}
 
-            y -= 18 * m_NBANDS;
-            *y = -y0;
-            y += 2 * m_NBANDS;
-            *y = -y1;
-            y += 2 * m_NBANDS;
-            *y = -y2;
-            y += 2 * m_NBANDS;
-            *y = -y3;
-            y += 2 * m_NBANDS;
-            *y = -y4;
-            y += 2 * m_NBANDS;
-            *y = -y5;
-            y += 2 * m_NBANDS;
-            *y = -y6;
-            y += 2 * m_NBANDS;
-            *y = -y7;
-            y += 2 * m_NBANDS;
-            *y = -y8;
-            y += 2 * m_NBANDS;
+    int d, mOut;
+    /* undo pre-IMDCT scaling, clipping if necessary */
+    mOut = 0;
+    if (blockIdx & 0x01) {
+        /* frequency invert */
+        for (int i = 0; i < 9; i++) {
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = -*y;	CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
         }
-        return 0;
     } else {
-        /* undo pre-IMDCT scaling, clipping if necessary */
-        mOut = 0;
-        int sign=0;
-        if (blockIdx & 0x01) {
-            /* frequency invert */
-            for (i = 0; i < 18; i += 2) {
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = -*y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *xPrev;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *xPrev++ = d << es;
-            }
-        } else {
-            for (i = 0; i < 18; i += 2) {
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *xPrev;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *xPrev++ = d << es;
-            }
+        for (int i = 0; i < 9; i++) {
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
         }
-        return mOut;
     }
+    return mOut;
+
 }
 
 
