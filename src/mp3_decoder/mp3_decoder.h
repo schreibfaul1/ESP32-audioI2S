@@ -1,6 +1,5 @@
 // based om helix mp3 decoder
 #pragma once
-#pragma GCC optimize ("O3")
 
 #include "Arduino.h"
 #include "assert.h"
@@ -172,7 +171,7 @@ typedef struct ScaleFactorJS { /* used in MPEG 2, 2.5 intensity (joint) stereo o
 /* NOTE - could get by with smaller vbuf if memory is more important than speed
  *  (in Subband, instead of replicating each block in FDCT32 you would do a memmove on the
  *   last 15 blocks to shift them down one, a hardware style FIFO)
- */ 
+ */
 typedef struct SubbandInfo {
     int vbuf[m_MAX_NCHAN * m_VBUF_LENGTH];      /* vbuf for fast DCT-based synthesis PQMF - double size for speed (no modulo indexing) */
     int vindex;                             /* internal index for tracking position in vbuf */
@@ -509,9 +508,6 @@ int HybridTransform(int *xCurr, int *xPrev, int y[m_BLOCK_SIZE][m_NBANDS], SideI
 inline uint64_t SAR64(uint64_t x, int n) {return x >> n;}
 inline int MULSHIFT32(int x, int y) { int z; z = (uint64_t) x * (uint64_t) y >> 32; return z;}
 inline uint64_t MADD64(uint64_t sum64, int x, int y) {sum64 += (uint64_t) x * (uint64_t) y; return sum64;}/* returns 64-bit value in [edx:eax] */
-//inline int CLZ(int x){int numZeros; if (!x) return(sizeof(int) * 8);  numZeros = 0; while (!(x & 0x80000000)){numZeros++;  x <<= 1;} return numZeros;}
-#define CLZ(x) __builtin_clz(x)
 inline uint64_t xSAR64(uint64_t x, int n){return x >> n;}
-inline int FASTABS(int x){ int sign; sign=x>>(sizeof(int)*8-1); x^=sign; x-=sign; return x;}
-
-
+inline int FASTABS(int x){ return __builtin_abs(x);} //xtensa has a fast abs instruction //fb
+#define CLZ(x) __builtin_clz(x) //fb

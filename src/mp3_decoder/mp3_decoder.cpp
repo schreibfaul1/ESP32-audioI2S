@@ -6,6 +6,22 @@
  *  Updated on: 27.11.2021
  */
 #include "mp3_decoder.h"
+/* clip to range [-2^n, 2^n - 1] */
+#if 0 //Fast on ARM:
+#define CLIP_2N(y, n) { \
+	int sign = (y) >> 31;  \
+	if (sign != (y) >> (n))  { \
+		(y) = sign ^ ((1 << (n)) - 1); \
+	} \
+}
+#else //on xtensa this is faster, due to asm min/max instructions:
+#define CLIP_2N(y, n) { \
+    int x = 1 << n; \
+    if (y < -x) y = -x; \
+    x--; \
+    if (y > x) y = x; \
+}
+#endif
 
 const uint8_t  m_SYNCWORDH              =0xff;
 const uint8_t  m_SYNCWORDL              =0xf0;
@@ -533,7 +549,7 @@ const unsigned char quadTable[64+16] PROGMEM = {
  *   - bitrate index == 0 is "free" mode (bitrate determined on the fly by
  *       counting bits between successive sync words)
  */
-const int/*short*/bitrateTab[3][3][15] PROGMEM = { {
+const short bitrateTab[3][3][15] PROGMEM = { {
 /* MPEG-1 */
 { 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448 }, /* Layer 1 */
 { 0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384 }, /* Layer 2 */
@@ -554,7 +570,7 @@ const int/*short*/bitrateTab[3][3][15] PROGMEM = { {
  * for layer3, nSlots = floor(samps/frame * bitRate / sampleRate / 8)
  *   - add one pad slot if necessary
  */
-const int/*short*/slotTab[3][3][15] PROGMEM = {
+const short slotTab[3][3][15] PROGMEM = {
     { /* MPEG-1 */
         { 0, 104, 130, 156, 182, 208, 261, 313, 365, 417, 522, 626, 731, 835, 1044 }, /* 44 kHz */
         { 0, 96, 120, 144, 168, 192, 240, 288, 336, 384, 480, 576, 672, 768, 960 }, /* 48 kHz */
@@ -2849,100 +2865,38 @@ void WinPrevious(int *xPrev, int *xPrevWin, int btPrev){
  * Return:      updated mOut (from new outputs y)
  **********************************************************************************************************************/
 
-int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es){
-    int i, d, mOut;
-    int y0, y1, y2, y3, y4, y5, y6, y7, y8;
+int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es) {
 
-    if (es == 0) {
-        /* fast case - frequency invert only (no rescaling) - can fuse into overlap-add for speed, if desired */
-        if (blockIdx & 0x01) {
-            y += m_NBANDS;
-            y0 = *y;
-            y += 2 * m_NBANDS;
-            y1 = *y;
-            y += 2 * m_NBANDS;
-            y2 = *y;
-            y += 2 * m_NBANDS;
-            y3 = *y;
-            y += 2 * m_NBANDS;
-            y4 = *y;
-            y += 2 * m_NBANDS;
-            y5 = *y;
-            y += 2 * m_NBANDS;
-            y6 = *y;
-            y += 2 * m_NBANDS;
-            y7 = *y;
-            y += 2 * m_NBANDS;
-            y8 = *y;
-            y += 2 * m_NBANDS;
+	if (es == 0) {
+		/* fast case - frequency invert only (no rescaling) */
+		if (blockIdx & 0x01) {
+			y += m_NBANDS;
+            for (int i = 0; i < 9; i++) {
+    			*y = - *y;	y += 2 * m_NBANDS;
+            }
+		}
+		return 0;
+	}
 
-            y -= 18 * m_NBANDS;
-            *y = -y0;
-            y += 2 * m_NBANDS;
-            *y = -y1;
-            y += 2 * m_NBANDS;
-            *y = -y2;
-            y += 2 * m_NBANDS;
-            *y = -y3;
-            y += 2 * m_NBANDS;
-            *y = -y4;
-            y += 2 * m_NBANDS;
-            *y = -y5;
-            y += 2 * m_NBANDS;
-            *y = -y6;
-            y += 2 * m_NBANDS;
-            *y = -y7;
-            y += 2 * m_NBANDS;
-            *y = -y8;
-            y += 2 * m_NBANDS;
+    int d, mOut;
+    /* undo pre-IMDCT scaling, clipping if necessary */
+    mOut = 0;
+    if (blockIdx & 0x01) {
+        /* frequency invert */
+        for (int i = 0; i < 9; i++) {
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = -*y;	CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
         }
-        return 0;
     } else {
-        /* undo pre-IMDCT scaling, clipping if necessary */
-        mOut = 0;
-        int sign=0;
-        if (blockIdx & 0x01) {
-            /* frequency invert */
-            for (i = 0; i < 18; i += 2) {
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = -*y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *xPrev;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *xPrev++ = d << es;
-            }
-        } else {
-            for (i = 0; i < 18; i += 2) {
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *y;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *y = d << es;
-                mOut |= FASTABS(*y);
-                y += m_NBANDS;
-                d = *xPrev;
-                sign = (d) >> 31;
-                if (sign != (d) >> (31 - es)){(d) = sign ^ ((1 << (31 - es)) - 1);}
-                *xPrev++ = d << es;
-            }
+        for (int i = 0; i < 9; i++) {
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
         }
-        return mOut;
     }
+    return mOut;
+
 }
 
 
@@ -3558,173 +3512,171 @@ int Subband( short *pcmBuf) {
  *              guard bit analysis verified by exhaustive testing of all 2^32
  *                combinations of max pos/max neg values in x[]
  **********************************************************************************************************************/
-// about 1ms faster in RAM
-void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb){
+#define D32FP(i, s1, s2) { \
+    a0 = buf[i];			a3 = buf[31-i]; \
+	a1 = buf[15-i];			a2 = buf[16+i]; \
+    b0 = a0 + a3;			b3 = MULSHIFT32(*cptr++, a0 - a3) << 1;	\
+	b1 = a1 + a2;			b2 = MULSHIFT32(*cptr++, a1 - a2) << (s1);	\
+	buf[i] = b0 + b1;		buf[15-i] = MULSHIFT32(*cptr,   b0 - b1) << (s2); \
+	buf[16+i] = b2 + b3;    buf[31-i] = MULSHIFT32(*cptr++, b3 - b2) << (s2); \
+}
+
+static const uint8_t FDCT32s1s2[16] = {5,3,3,2,2,1,1,1, 1,1,1,1,1,2,2,4};
+
+void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb) {
     int i, s, tmp, es;
-    const uint32_t *cptr = m_dcttab;
+    const int *cptr = (const int*)m_dcttab;
     int a0, a1, a2, a3, a4, a5, a6, a7;
     int b0, b1, b2, b3, b4, b5, b6, b7;
-    int *d;
+	int *d;
 
-    /* scaling - ensure at least 6 guard bits for DCT
-     * (in practice this is already true 99% of time, so this code is
-     *  almost never triggered)
-     */
-    es = 0;
-    if (gb < 6) {
-        es = 6 - gb;
-        for (i = 0; i < 32; i++)
-            buf[i] >>= es;
+	/* scaling - ensure at least 6 guard bits for DCT
+	 * (in practice this is already true 99% of time, so this code is
+	 *  almost never triggered)
+	 */
+	es = 0;
+	if (gb < 6) {
+		es = 6 - gb;
+		for (i = 0; i < 32; i++)
+			buf[i] >>= es;
+	}
+
+	/* first pass */
+    for (unsigned i=0; i < 8; i++) {
+        D32FP(i, FDCT32s1s2[0 + i], FDCT32s1s2[8 + i]);
     }
 
-    int s0[8]={ 1, 1, 1, 1, 1, 1, 1, 1};
-    int s1[8]={ 5, 3, 3, 2, 2, 1, 1, 1};
-    int s2[8]={ 1, 1, 1, 1, 1, 2, 2, 4};
+	/* second pass */
+	for (i = 4; i > 0; i--) {
+		a0 = buf[0]; 	    a7 = buf[7];		a3 = buf[3];	    a4 = buf[4];
+		b0 = a0 + a7;	    b7 = MULSHIFT32(*cptr++, a0 - a7) << 1;
+		b3 = a3 + a4;	    b4 = MULSHIFT32(*cptr++, a3 - a4) << 3;
+		a0 = b0 + b3;	    a3 = MULSHIFT32(*cptr,   b0 - b3) << 1;
+		a4 = b4 + b7;		a7 = MULSHIFT32(*cptr++, b7 - b4) << 1;
 
-    for(int j=0; j<8; j++){
-        a0 = buf[j];            a3 = buf[31-j]; \
-        a1 = buf[15-j];         a2 = buf[16+j]; \
-        b0 = a0 + a3;           b3 = MULSHIFT32(*cptr++, a0 - a3) << s0[j];
-        b1 = a1 + a2;           b2 = MULSHIFT32(*cptr++, a1 - a2) << s1[j];
-        buf[j] = b0 + b1;       buf[15-j] = MULSHIFT32(*cptr,   b0 - b1) << s2[j];
-        buf[16+j] = b2 + b3;    buf[31-j] = MULSHIFT32(*cptr++, b3 - b2) << s2[j];
-    }
+		a1 = buf[1];	    a6 = buf[6];	    a2 = buf[2];	    a5 = buf[5];
+		b1 = a1 + a6;	    b6 = MULSHIFT32(*cptr++, a1 - a6) << 1;
+		b2 = a2 + a5;	    b5 = MULSHIFT32(*cptr++, a2 - a5) << 1;
+		a1 = b1 + b2;		a2 = MULSHIFT32(*cptr,   b1 - b2) << 2;
+		a5 = b5 + b6;	    a6 = MULSHIFT32(*cptr++, b6 - b5) << 2;
 
-    /* second pass */
-    for (i = 4; i > 0; i--) {
-        a0 = buf[0];        a7 = buf[7];        a3 = buf[3];        a4 = buf[4];
-        b0 = a0 + a7;       b7 = MULSHIFT32(*cptr++, a0 - a7) << 1;
-        b3 = a3 + a4;       b4 = MULSHIFT32(*cptr++, a3 - a4) << 3;
-        a0 = b0 + b3;       a3 = MULSHIFT32(*cptr,   b0 - b3) << 1;
-        a4 = b4 + b7;       a7 = MULSHIFT32(*cptr++, b7 - b4) << 1;
+		b0 = a0 + a1;	    b1 = MULSHIFT32(m_COS4_0, a0 - a1) << 1;
+		b2 = a2 + a3;	    b3 = MULSHIFT32(m_COS4_0, a3 - a2) << 1;
+		buf[0] = b0;	    buf[1] = b1;
+		buf[2] = b2 + b3;	buf[3] = b3;
 
-        a1 = buf[1];        a6 = buf[6];        a2 = buf[2];        a5 = buf[5];
-        b1 = a1 + a6;       b6 = MULSHIFT32(*cptr++, a1 - a6) << 1;
-        b2 = a2 + a5;       b5 = MULSHIFT32(*cptr++, a2 - a5) << 1;
-        a1 = b1 + b2;       a2 = MULSHIFT32(*cptr,   b1 - b2) << 2;
-        a5 = b5 + b6;       a6 = MULSHIFT32(*cptr++, b6 - b5) << 2;
+		b4 = a4 + a5;	    b5 = MULSHIFT32(m_COS4_0, a4 - a5) << 1;
+		b6 = a6 + a7;	    b7 = MULSHIFT32(m_COS4_0, a7 - a6) << 1;
+		b6 += b7;
+		buf[4] = b4 + b6;	buf[5] = b5 + b7;
+		buf[6] = b5 + b6;	buf[7] = b7;
 
-        b0 = a0 + a1;       b1 = MULSHIFT32(m_COS4_0, a0 - a1) << 1;
-        b2 = a2 + a3;       b3 = MULSHIFT32(m_COS4_0, a3 - a2) << 1;
-        buf[0] = b0;        buf[1] = b1;
-        buf[2] = b2 + b3;   buf[3] = b3;
+		buf += 8;
+	}
+	buf -= 32;	/* reset */
 
-        b4 = a4 + a5;       b5 = MULSHIFT32(m_COS4_0, a4 - a5) << 1;
-        b6 = a6 + a7;       b7 = MULSHIFT32(m_COS4_0, a7 - a6) << 1;
-        b6 += b7;
-        buf[4] = b4 + b6;   buf[5] = b5 + b7;
-        buf[6] = b5 + b6;   buf[7] = b7;
+	/* sample 0 - always delayed one block */
+	d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+	s = buf[ 0];				d[0] = d[8] = s;
 
-        buf += 8;
-    }
-    buf -= 32;  /* reset */
+	/* samples 16 to 31 */
+	d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
 
-    /* sample 0 - always delayed one block */
-    d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-    s = buf[ 0];                d[0] = d[8] = s;
+	s = buf[ 1];				d[0] = d[8] = s;	d += 64;
 
-    /* samples 16 to 31 */
-    d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
+	tmp = buf[25] + buf[29];
+	s = buf[17] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 9] + buf[13];		d[0] = d[8] = s;	d += 64;
+	s = buf[21] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    s = buf[ 1];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[29] + buf[27];
+	s = buf[ 5];				d[0] = d[8] = s;	d += 64;
+	s = buf[21] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[13] + buf[11];		d[0] = d[8] = s;	d += 64;
+	s = buf[19] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[25] + buf[29];
-    s = buf[17] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 9] + buf[13];      d[0] = d[8] = s;    d += 64;
-    s = buf[21] + tmp;          d[0] = d[8] = s;    d += 64;
+	tmp = buf[27] + buf[31];
+	s = buf[ 3];				d[0] = d[8] = s;	d += 64;
+	s = buf[19] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[11] + buf[15];		d[0] = d[8] = s;	d += 64;
+	s = buf[23] + tmp;			d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[29] + buf[27];
-    s = buf[ 5];                d[0] = d[8] = s;    d += 64;
-    s = buf[21] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[13] + buf[11];      d[0] = d[8] = s;    d += 64;
-    s = buf[19] + tmp;          d[0] = d[8] = s;    d += 64;
+	tmp = buf[31];
+	s = buf[ 7];				d[0] = d[8] = s;	d += 64;
+	s = buf[23] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[15];				d[0] = d[8] = s;	d += 64;
+	s = tmp;					d[0] = d[8] = s;
 
-    tmp = buf[27] + buf[31];
-    s = buf[ 3];                d[0] = d[8] = s;    d += 64;
-    s = buf[19] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[11] + buf[15];      d[0] = d[8] = s;    d += 64;
-    s = buf[23] + tmp;          d[0] = d[8] = s;    d += 64;
+	/* samples 16 to 1 (sample 16 used again) */
+	d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
 
-    tmp = buf[31];
-    s = buf[ 7];                d[0] = d[8] = s;    d += 64;
-    s = buf[23] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[15];                d[0] = d[8] = s;    d += 64;
-    s = tmp;                    d[0] = d[8] = s;
+	s = buf[ 1];				d[0] = d[8] = s;	d += 64;
 
-    /* samples 16 to 1 (sample 16 used again) */
-    d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+	tmp = buf[30] + buf[25];
+	s = buf[17] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[14] + buf[ 9];		d[0] = d[8] = s;	d += 64;
+	s = buf[22] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 6];				d[0] = d[8] = s;	d += 64;
 
-    s = buf[ 1];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[26] + buf[30];
+	s = buf[22] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[10] + buf[14];		d[0] = d[8] = s;	d += 64;
+	s = buf[18] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 2];				d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[30] + buf[25];
-    s = buf[17] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[14] + buf[ 9];      d[0] = d[8] = s;    d += 64;
-    s = buf[22] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 6];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[28] + buf[26];
+	s = buf[18] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[12] + buf[10];		d[0] = d[8] = s;	d += 64;
+	s = buf[20] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 4];				d[0] = d[8] = s;	d += 64;
 
-    tmp = buf[26] + buf[30];
-    s = buf[22] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[10] + buf[14];      d[0] = d[8] = s;    d += 64;
-    s = buf[18] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 2];                d[0] = d[8] = s;    d += 64;
+	tmp = buf[24] + buf[28];
+	s = buf[20] + tmp;			d[0] = d[8] = s;	d += 64;
+	s = buf[ 8] + buf[12];		d[0] = d[8] = s;	d += 64;
+	s = buf[16] + tmp;			d[0] = d[8] = s;
 
-    tmp = buf[28] + buf[26];
-    s = buf[18] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[12] + buf[10];      d[0] = d[8] = s;    d += 64;
-    s = buf[20] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 4];                d[0] = d[8] = s;    d += 64;
+	/* this is so rarely invoked that it's not worth making two versions of the output
+	 *   shuffle code (one for no shift, one for clip + variable shift) like in IMDCT
+	 * here we just load, clip, shift, and store on the rare instances that es != 0
+	 */
+	if (es) {
+		d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+		s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);
 
-    tmp = buf[24] + buf[28];
-    s = buf[20] + tmp;          d[0] = d[8] = s;    d += 64;
-    s = buf[ 8] + buf[12];      d[0] = d[8] = s;    d += 64;
-    s = buf[16] + tmp;          d[0] = d[8] = s;
+		d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
+		for (i = 16; i <= 31; i++) {
+			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+		}
 
-    /* this is so rarely invoked that it's not worth making two versions of the output
-     *   shuffle code (one for no shift, one for clip + variable shift) like in IMDCT
-     * here we just load, clip, shift, and store on the rare instances that es != 0
-     */
-    if (es) {
-        d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-        s = d[0];
-        int sign = (s) >> 31;
-        if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-        d[0] = d[8] = (s << es);
-        d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
-        for (i = 16; i <= 31; i++) {
-            s = d[0];
-            int sign = (s) >> 31;
-            if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-            d[0] = d[8] = (s << es);
-            d += 64;
-        }
-
-        d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-        for (i = 15; i >= 0; i--) {
-            s = d[0];
-            int sign = (s) >> 31;
-            if (sign != (s) >> (31 - es)){(s) = sign ^ ((1 << (31 - es)) - 1);}
-            d[0] = d[8] = (s << es);
-            d += 64;
-        }
-    }
+		d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
+		for (i = 15; i >= 0; i--) {
+			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+		}
+	}
 }
 
 /***********************************************************************************************************************
  * P O L Y P H A S E
  **********************************************************************************************************************/
-
+inline
 short ClipToShort(int x, int fracBits){
-    int sign;
 
     /* assumes you've already rounded (x += (1 << (fracBits-1))) */
     x >>= fracBits;
 
+#ifndef __XTENSA__
     /* Ken's trick: clips to [-32768, 32767] */
-    sign = x >> 31;
+    //ok vor generic case (fb)
+    int sign = x >> 31;
     if (sign != (x >> 15))
         x = sign ^ ((1 << 15) - 1);
 
     return (short)x;
+#else
+    //this is better on xtensa (fb)
+    asm ("clamps %0, %1, 15" : "=a" (x) : "a" (x) : );
+    return x;
+#endif
 }
 /***********************************************************************************************************************
  * Function:    PolyphaseMono

@@ -12,21 +12,22 @@
 #pragma once
 #pragma GCC optimize ("Ofast")
 
-#include "Arduino.h"
-#include "libb64/cencode.h"
-#include "SPI.h"
-#include "WiFi.h"
-#include "WiFiClientSecure.h"
-#include "driver/i2s.h"
+#include <Arduino.h>
+#include <libb64/cencode.h>
+#include <SPI.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+
+#include <driver/i2s.h>
 
 #ifdef SDFATFS_USED
-#include "SdFat.h"  // https://github.com/greiman/SdFat
+#include <SdFat.h>  // https://github.com/greiman/SdFat
 #else
-#include "SD.h"
-#include "SD_MMC.h"
-#include "SPIFFS.h"
-#include "FS.h"
-#include "FFat.h"
+#include <SD.h>
+#include <SD_MMC.h>
+#include <SPIFFS.h>
+#include <FS.h>
+#include <FFat.h>
 #endif // SDFATFS_USED
 
 
@@ -253,7 +254,7 @@ private:
         }
     }
 
-    const bool startsWith (const char* base, const char* str) {
+    bool startsWith (const char* base, const char* str) {
     //fb
         char c;
         while ( (c = *str++) != '\0' )
@@ -261,7 +262,7 @@ private:
         return true;
     }
 
-    const bool endsWith (const char* base, const char* str) {
+    bool endsWith (const char* base, const char* str) {
     //fb
         int slen = strlen(str) - 1;
         const char *p = base + strlen(base) - 1;
@@ -271,7 +272,7 @@ private:
         return (strncmp(p, str, slen) == 0);
     }
 
-    const int indexOf (const char* base, const char* str, int startIndex) {
+    int indexOf (const char* base, const char* str, int startIndex) {
     //fb
         const char *p = base;
         for (; startIndex > 0; startIndex--)
@@ -281,7 +282,7 @@ private:
         return pos - base;
     }
 
-    const int indexOf (const char* base, char ch, int startIndex) {
+    int indexOf (const char* base, char ch, int startIndex) {
     //fb
         const char *p = base;
         for (; startIndex > 0; startIndex--)
@@ -291,7 +292,7 @@ private:
         return pos - base;
     }
 
-    const int lastIndexOf(const char* haystack, const char* needle) {
+    int lastIndexOf(const char* haystack, const char* needle) {
     //fb
         int nlen = strlen(needle);
         if (nlen == 0) return -1;
@@ -305,7 +306,7 @@ private:
         return -1;
     }
 
-    const int lastIndexOf(const char* haystack, const char needle) {
+    int lastIndexOf(const char* haystack, const char needle) {
     //fb
         const char *p = strrchr(haystack, needle);
         return (p ? p - haystack : -1);
