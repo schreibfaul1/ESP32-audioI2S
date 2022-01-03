@@ -1,6 +1,6 @@
-// based om helix aac decoder
+// based on helix aac decoder
 #pragma once
-#pragma GCC optimize ("O3")
+//#pragma GCC optimize ("O3")
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
 #include "Arduino.h"
@@ -11,11 +11,11 @@
 #define ASSERT(x) /* do nothing */
 
 #ifndef MAX
-#define MAX(a,b)    ((a) > (b) ? (a) : (b))
+#define MAX(a,b)    std::max(a,b)
 #endif
 
 #ifndef MIN
-#define MIN(a,b)    ((a) < (b) ? (a) : (b))
+#define MIN(a,b)    std::min(a,b)
 #endif
 
 

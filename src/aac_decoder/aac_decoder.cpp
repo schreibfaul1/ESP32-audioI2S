@@ -92,6 +92,9 @@ inline int MULSHIFT32(int x, int y){
     return z;
 }
 inline int CLZ(int x){
+#ifdef __XTENSA__
+    return __builtin_clz(x);
+#else
     int numZeros;
     if(!x) return 32; /* count leading zeros with binary search (function should be 17 ARM instructions total) */
     numZeros = 1;
@@ -101,27 +104,45 @@ inline int CLZ(int x){
     if (!((unsigned int)x >> 30))    { numZeros +=  2; x <<=  2; }
     numZeros -= ((unsigned int)x >> 31);
     return numZeros;
+#endif
 }
 inline int FASTABS(int x){
+#ifdef __XTENSA__ //fb
+    return __builtin_abs(x);
+#else
     int sign;
     sign = x >> (sizeof(int) * 8 - 1);
     x ^= sign; x -= sign; return x;
+#endif
 }
 inline int64_t MADD64(int64_t sum64, int x, int y){
     sum64 += (int64_t)x * (int64_t)y;
     return sum64;
 }
 inline short CLIPTOSHORT(int x){
+#ifdef __XTENSA__ //fb
+    asm ("clamps %0, %1, 15" : "=a" (x) : "a" (x) : );
+    return x;
+#else
     int sign; /* clip to [-32768, 32767] */
     sign = x >> 31;
     if (sign != (x >> 15)) x = sign ^ ((1 << 15) - 1);
     return (short)x;
+#endif
 }
 inline int CLIP_2N(int y, int n){
+#ifdef __XTENSA__ //fb
+    int x = 1 << n; \
+    if (y < -x) y = -x; \
+    x--; \
+    if (y > x) y = x; \
+    return y;
+#else
     int sign = y >> 31;
     if(sign != (y >> n))
         y = sign ^ ((1 << n) - 1);
     return y;
+#endif
 }
 inline int CLIP_2N_SHIFT30(int y, int n){
     int sign = y >> 31;
@@ -895,7 +916,7 @@ const HuffInfo_t huffTabSpecInfo[11] PROGMEM = {
     {12, {  0,  0,  0,  2,  6,  7, 16, 59, 55, 95, 43,  6,  0,  0,  0,  0,  0,  0,  0,  0}, 952},
 };
 
-const int huffTabSpec[1241] PROGMEM = {
+const short huffTabSpec[1241] PROGMEM = {
     /* spectrum table 1 [81] (signed) */
     0x0000, 0x0200, 0x0e00, 0x0007, 0x0040, 0x0001, 0x0038, 0x0008, 0x01c0, 0x03c0, 0x0e40, 0x0039, 0x0078, 0x01c8, 0x000f, 0x0240,
     0x003f, 0x0fc0, 0x01f8, 0x0238, 0x0047, 0x0e08, 0x0009, 0x0208, 0x01c1, 0x0048, 0x0041, 0x0e38, 0x0201, 0x0e07, 0x0207, 0x0e01,
@@ -1070,7 +1091,7 @@ const HuffInfo_t huffTabScaleFactInfo PROGMEM =
     {19, { 1,  0,  1,  3,  2,  4,  3,  5,  4,  6,  6,  6,  5,  8,  4,  7,  3,  7, 46,  0},   0};
 
 /* note - includes offset of -60 (4.6.2.3 in spec) */
-const int huffTabScaleFact[121] PROGMEM = { /* scale factor table [121] */
+const short huffTabScaleFact[121] PROGMEM = { /* scale factor table [121] */
        0,   -1,    1,   -2,    2,   -3,    3,   -4,    4,   -5,    5,    6,   -6,    7,   -7,    8,
       -8,    9,   -9,   10,  -10,  -11,   11,   12,  -12,   13,  -13,   14,  -14,   16,   15,   17,
       18,  -15,  -17,  -16,   19,  -18,  -19,   20,  -20,   21,  -21,   22,  -22,   23,  -23,  -25,
@@ -1225,7 +1246,7 @@ const uint8_t predSFBMax[12] PROGMEM = {
 };
 
 /* channel mapping (table 1.6.3.4) (-1 = unknown, so need to determine mapping based on rules in 8.5.1) */
-const int channelMapTab[8] PROGMEM = {
+const int8_t channelMapTab[8] PROGMEM = {
     -1, 1, 2, 3, 4, 5, 6, 8
 };
 
@@ -1246,7 +1267,7 @@ const uint8_t /*char*/ sfBandTotalLong[12] PROGMEM = {
 };
 
 /* scale factor band tables */
-const uint16_t sfBandTabShortOffset[12] PROGMEM = {0, 0, 0, 13, 13, 13, 28, 28, 44, 44, 44, 60};
+const uint8_t sfBandTabShortOffset[12] PROGMEM = {0, 0, 0, 13, 13, 13, 28, 28, 44, 44, 44, 60};
 
 const uint16_t sfBandTabShort[76] PROGMEM = {
     /* short block 64, 88, 96 kHz [13] (tables 4.5.24, 4.5.26) */
@@ -1305,23 +1326,23 @@ const uint16_t sfBandTabLong[325] PROGMEM = {
 };
 
 /* TNS max bands (table 4.139) and max order (table 4.138) */
-const uint16_t tnsMaxBandsShortOffset[3] PROGMEM = {0, 0, 12};
+const uint8_t tnsMaxBandsShortOffset[3] PROGMEM = {0, 0, 12};
 
 const uint16_t tnsMaxBandsShort[2*12] PROGMEM = {
      9,  9, 10, 14, 14, 14, 14, 14, 14, 14, 14, 14,        /* short block, Main/LC */
      7,  7,  7,  6,  6,  6,  7,  7,  8,  8,  8,  7        /* short block, SSR */
 };
 
-const uint16_t tnsMaxOrderShort[3] PROGMEM = {7, 7, 7};
+const uint8_t tnsMaxOrderShort[3] PROGMEM = {7, 7, 7};
 
-const uint16_t tnsMaxBandsLongOffset[3] PROGMEM = {0, 0, 12};
+const uint8_t tnsMaxBandsLongOffset[3] PROGMEM = {0, 0, 12};
 
 const uint16_t tnsMaxBandsLong[2*12] PROGMEM = {
     31, 31, 34, 40, 42, 51, 46, 46, 42, 42, 42, 39,        /* long block, Main/LC */
     28, 28, 27, 26, 26, 26, 29, 29, 23, 23, 23, 19,        /* long block, SSR */
 };
 
-const uint16_t tnsMaxOrderLong[3] PROGMEM = {20, 12, 12};
+const uint8_t tnsMaxOrderLong[3] PROGMEM = {20, 12, 12};
 
 
 /* k0Tab[sampRateIdx][k] = k0 = startMin + offset(bs_start_freq) for given sample rate (4.6.18.3.2.1)
@@ -1617,8 +1638,8 @@ static const uint32_t invQuant4[16] PROGMEM = {
     0x7f7437ad, 0x7b1d1a49, 0x7294b5f2, 0x66256db2, 0x563ba8aa, 0x4362210e, 0x2e3d2abb, 0x17851aad,
 };
 
-static const int sgnMask[3] = {0x02,  0x04,  0x08};
-static const int negMask[3] = {~0x03, ~0x07, ~0x0f};
+static const int8_t sgnMask[3] = {0x02,  0x04,  0x08};
+static const int8_t negMask[3] = {~0x03, ~0x07, ~0x0f};
 
 /***********************************************************************************************************************
  * Function:    AACDecoder_AllocateBuffers
@@ -1630,7 +1651,7 @@ static const int negMask[3] = {~0x03, ~0x07, ~0x0f};
  *
  * Outputs:     none
  *
- * Return:      false if mot enough memory, otherwise true
+ * Return:      false if not enough memory, otherwise true
  *
  **********************************************************************************************************************/
 bool AACDecoder_AllocateBuffers(void){
