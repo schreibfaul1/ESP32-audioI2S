@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.11.2021
+ *  Updated on: 03.01.2022
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -2884,15 +2884,15 @@ int FreqInvertRescale(int *y, int *xPrev, int blockIdx, int es) {
     if (blockIdx & 0x01) {
         /* frequency invert */
         for (int i = 0; i < 9; i++) {
-            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
-            d = -*y;	CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
-            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
+            d = *y;		CLIP_2N(d, (31 - es));	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = -*y;	CLIP_2N(d, (31 - es));	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, (31 - es));	*xPrev++ = d << es;
         }
     } else {
         for (int i = 0; i < 9; i++) {
-            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
-            d = *y;		CLIP_2N(d, 31 - es);	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
-            d = *xPrev;	CLIP_2N(d, 31 - es);	*xPrev++ = d << es;
+            d = *y;		CLIP_2N(d, (31 - es));	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *y;		CLIP_2N(d, (31 - es));	*y = d << es;	mOut |= FASTABS(*y);	y += m_NBANDS;
+            d = *xPrev;	CLIP_2N(d, (31 - es));	*xPrev++ = d << es;
         }
     }
     return mOut;
@@ -3641,16 +3641,16 @@ void FDCT32(int *buf, int *dest, int offset, int oddBlock, int gb) {
 	 */
 	if (es) {
 		d = dest + 64*16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
-		s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);
+		s = d[0];	CLIP_2N(s, (31 - es));	d[0] = d[8] = (s << es);
 
 		d = dest + offset + (oddBlock ? m_VBUF_LENGTH  : 0);
 		for (i = 16; i <= 31; i++) {
-			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+			s = d[0];	CLIP_2N(s, (31 - es));	d[0] = d[8] = (s << es);	d += 64;
 		}
 
 		d = dest + 16 + ((offset - oddBlock) & 7) + (oddBlock ? 0 : m_VBUF_LENGTH);
 		for (i = 15; i >= 0; i--) {
-			s = d[0];	CLIP_2N(s, 31 - es);	d[0] = d[8] = (s << es);	d += 64;
+			s = d[0];	CLIP_2N(s, (31 - es));	d[0] = d[8] = (s << es);	d += 64;
 		}
 	}
 }
