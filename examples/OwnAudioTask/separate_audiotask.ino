@@ -78,7 +78,6 @@ void audioTask(void *parameter) {
 }
 
 void audioInit() {
-    CreateQueues();
     xTaskCreatePinnedToCore(
         audioTask,             /* Function to implement the task */
         "audioplay",           /* Name of the task */
