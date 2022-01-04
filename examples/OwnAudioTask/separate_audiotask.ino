@@ -80,8 +80,8 @@ void audioTask(void *parameter) {
 void audioInit() {
     CreateQueues();
     xTaskCreatePinnedToCore(
-        audioTask,           /* Function to implement the task */
-        "vs1053play",          /* Name of the task */
+        audioTask,             /* Function to implement the task */
+        "audioplay",           /* Name of the task */
         5000,                  /* Stack size in words */
         NULL,                  /* Task input parameter */
         2 | portPRIVILEGE_BIT, /* Priority of the task */
