@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Dec 31,2021
+ *  Updated on: Jan 05,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4272,13 +4272,16 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    if(G0 < -40) G0 = -40; if(G0 > 6) G0 = 6; //  -40dB -> Vin*0.01  +6dB -> Vin*2
-    if(G1 < -40) G1 = -40; if(G1 > 6) G1 = 6;
-    if(G2 < -40) G2 = -40; if(G2 > 6) G2 = 6;
+    if(G0 < -40) G0 = -40;      // -40dB -> Vin*0.01  
+    if(G0 > 6) G0 = 6;          // +6dB -> Vin*2
+    if(G1 < -40) G1 = -40;
+    if(G1 > 6) G1 = 6;
+    if(G2 < -40) G2 = -40; 
+    if(G2 > 6) G2 = 6;
 
-    const float FcLS   =  500;   // Frequency LowShelf[Hz]
-    const float FcPKEQ = 3000;   // Frequency PeakEQ[Hz]
-    const float FcHS   = 6000;   // Frequency HighShelf[Hz]
+    const float FcLS   =  500;  // Frequency LowShelf[Hz]
+    const float FcPKEQ = 3000;  // Frequency PeakEQ[Hz]
+    const float FcHS   = 6000;  // Frequency HighShelf[Hz]
 
     float K, norm, Q, Fc, V ;
 
