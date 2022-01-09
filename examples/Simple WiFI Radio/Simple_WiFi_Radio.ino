@@ -84,7 +84,7 @@ void write_stationNr(uint8_t nr){
     String snr = String(nr);
     if(snr.length()<2) snr = "0"+snr;
     tft.setCursor(98, 255);
-    tft.setFont(Garamond44x54);
+    tft.setFont(Times_New_Roman66x53);
     tft.setTextColor(TFT_YELLOW);
     tft.print(snr);
 }
@@ -93,7 +93,7 @@ void write_volume(uint8_t vol){
     String svol = String(vol);
     if(svol.length()<2) svol = "0"+svol;
     tft.setCursor(338, 255);
-    tft.setFont(Garamond44x54);
+    tft.setFont(Times_New_Roman66x53);
     tft.setTextColor(TFT_YELLOW);
     tft.print(svol);
 }
