@@ -27,8 +27,8 @@ TP tp(TP_CS, TP_IRQ);
 Audio audio;
 IR ir(IR_PIN);  // do not change the objectname, it must be "ir"
 
-String ssid =     "Wolles-FRITZBOX";
-String password = "40441061073895958449";
+String ssid =     "*********";
+String password = "*********";
 
 String stations[] ={
         "0n-80s.radionetz.de:8000/0n-70s.mp3",
@@ -90,7 +90,7 @@ void write_stationNr(uint8_t nr){
     String snr = String(nr);
     if(snr.length()<2) snr = "0"+snr;
     tft.setCursor(98, 255);
-    tft.setFont(Garamond44x54);
+    tft.setFont(Times_New_Roman66x53);
     tft.setTextColor(TFT_YELLOW);
     tft.print(snr);
 }
@@ -99,7 +99,7 @@ void write_volume(uint8_t vol){
     String svol = String(vol);
     if(svol.length()<2) svol = "0"+svol;
     tft.setCursor(338, 255);
-    tft.setFont(Garamond44x54);
+    tft.setFont(Times_New_Roman66x53);
     tft.setTextColor(TFT_YELLOW);
     tft.print(svol);
 }
