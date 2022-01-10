@@ -7,7 +7,7 @@
 
 #define TFT_CS        22
 #define TFT_DC        21
-#define TP_CS         16
+#define TP_CS         14 //16
 #define TP_IRQ        39
 #define SPI_MOSI      23
 #define SPI_MISO      19
@@ -109,7 +109,10 @@ void write_streamTitle(String sTitle){
     tft.setFont(Times_New_Roman43x35);
     tft.setTextColor(TFT_LIGHTBLUE);
     tft.setCursor(20, 100);
-    tft.print(sTitle);
+    int l = tft.writeText((const uint8_t*) sTitle.c_str(), 100 + 150); // do not write under y=250
+    if(l < sTitle.length()){
+        // sTitle has been shortened, is too long for the display
+    }
 }
 //**************************************************************************************************
 //                                           S E T U P                                             *
@@ -131,10 +134,11 @@ void setup() {
         cur_station = pref.getShort("station");
         cur_volume = pref.getShort("volume");
     }
-    WiFi.mode(WIFI_STA);
+
+    WiFi.begin(ssid.c_str(), password.c_str());
     while (WiFi.status() != WL_CONNECTED){
-        WiFi.begin(ssid.c_str(), password.c_str());
-        delay(1500);
+        delay(2000);
+        Serial.print(".");
     }
     log_i("Connect to %s", WiFi.SSID().c_str());
     tft.begin(TFT_CS, TFT_DC, SPI_MOSI, SPI_MISO, SPI_SCK);
