@@ -232,7 +232,7 @@ private:
     int16_t* IIR_filterChain2(int16_t* iir_in, bool clear = false);
     inline void setDatamode(uint8_t dm){m_datamode=dm;}
     inline uint8_t getDatamode(){return m_datamode;}
-    inline uint32_t streamavail() {if(m_f_ssl==false) return client.available(); else return clientsecure.available();}
+    inline uint32_t streamavail(){ return _client ? _client->available() : 0;}
     void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
 
     // implement several function with respect to the index of string
@@ -390,6 +390,7 @@ private:
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
+    WiFiClient*       _client = nullptr;
     WiFiUDP           udpclient;    // @suppress("Abstract class cannot be instantiated")
     i2s_config_t      m_i2s_config; // stores values for I2S driver
     i2s_pin_config_t  m_pin_config;

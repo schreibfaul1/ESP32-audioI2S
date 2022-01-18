@@ -273,6 +273,7 @@ void Audio::setDefaults() {
     client.flush(); // release memory
     clientsecure.stop();
     clientsecure.flush();
+    _client = static_cast<WiFiClient*>(&clientsecure); /* default to *something* so that no NULL deref can happen */
     while(!playI2Sremains()){;}
 
     sprintf(chbuf, "buffers freed, free Heap: %u bytes", ESP.getFreeHeap());
@@ -361,26 +362,13 @@ void Audio::httpPrint(const char* url) {
         host[pos_colon] = '\0';// Host without portnumber
     }
 
-    if(!m_f_ssl){
-        if(!client.connected()){
-            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%s, port=%i", host, extension, port);
-            if(m_f_Log) if(audio_info) audio_info(chbuf);
-            client.connect(host, port);
-            if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
-        }
-        client.print(resp);
-
+    if(!_client->connected()){
+        if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%s, port=%i", host, extension, port);
+        if(m_f_Log) if(audio_info) audio_info(chbuf);
+        _client->connect(host, port);
+        if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
     }
-    else{
-        if(!clientsecure.connected()){
-            if(m_f_Log) sprintf(chbuf, "new connection, host=%s, extension=%s, port=%i", host, extension, port);
-            if(m_f_Log) if(audio_info) audio_info(chbuf);
-            clientsecure.connect(host, port);
-            if(m_f_m3u8data && m_playlistBuff) strcpy(m_playlistBuff, url); // save new m3u8 chunklist
-        }
-        clientsecure.print(resp);
-    }
-
+    _client->print(resp);
 
     if(host)      {free(host);      host = NULL;}
     if(extension) {free(extension); extension = NULL;}
@@ -452,12 +440,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(startsWith(l_host, "http://")) {
         h_host += 7;
         m_f_ssl = false;
+        _client = static_cast<WiFiClient*>(&client);
     }
 
     if(startsWith(l_host, "https://")) {
         h_host += 8;
         m_f_ssl = true;
         port = 443;
+        _client = static_cast<WiFiClient*>(&clientsecure);
     }
 
     // Is it a playlist?
@@ -519,46 +509,24 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //    strcat(resp, "Accept-Encoding: gzip;q=0\r\n");  // otherwise the server assumes gzip compression
 //    strcat(resp, "Transfer-Encoding: \r\n");  // otherwise the server assumes gzip compression
     strcat(resp, "Connection: keep-alive\r\n\r\n");
-
     const uint32_t TIMEOUT_MS{250};
-    if(m_f_ssl == false) {
-        uint32_t t = millis();
-        if(client.connect(hostwoext, port, TIMEOUT_MS)) {
-            client.setNoDelay(true);
-            client.print(resp);
-            uint32_t dt = millis() - t;
-            sprintf(chbuf, "Connected to server in %u ms", dt);
-            if(audio_info) audio_info(chbuf);
-
-            strcpy(m_lastHost, l_host);
-            m_f_running = true;
-            if(hostwoext) {free(hostwoext); hostwoext = NULL;}
-            if(extension) {free(extension); extension = NULL;}
-            if(l_host   ) {free(l_host);    l_host    = NULL;}
-            while(!client.connected()){;} // wait until the connection is established
-            return true;
-        }
-    }
-
     const uint32_t TIMEOUT_MS_SSL{2700};
-    if(m_f_ssl == true) {
-        uint32_t t = millis();
-        if(clientsecure.connect(hostwoext, port, TIMEOUT_MS_SSL)) {
-//            clientsecure.setNoDelay(true);
-            // if(audio_info) audio_info("SSL/TLS Connected to server");
-            clientsecure.print(resp);
-            uint32_t dt = millis() - t;
-            sprintf(chbuf, "SSL has been established in %u ms, free Heap: %u bytes", dt, ESP.getFreeHeap());
-            if(audio_info) audio_info(chbuf);
+    uint32_t t = millis();
+    if(_client->connect(hostwoext, port, m_f_ssl ? TIMEOUT_MS_SSL : TIMEOUT_MS)) {
+//      clientsecure.setNoDelay(true);
+        // if(audio_info) audio_info("SSL/TLS Connected to server");
+        _client->print(resp);
+        uint32_t dt = millis() - t;
+        sprintf(chbuf, "%s has been established in %u ms, free Heap: %u bytes", m_f_ssl?"SSL":"Connection", dt, ESP.getFreeHeap());
+        if(audio_info) audio_info(chbuf);
 
-            strcpy(m_lastHost, l_host);
-            m_f_running = true;
-            if(hostwoext) {free(hostwoext); hostwoext = NULL;}
-            if(extension) {free(extension); extension = NULL;}
-            if(l_host   ) {free(l_host);    l_host    = NULL;}
-            while(!clientsecure.connected()){;} // wait until the connection is established
-            return true;
-        }
+        strcpy(m_lastHost, l_host);
+        m_f_running = true;
+        if(hostwoext) {free(hostwoext); hostwoext = NULL;}
+        if(extension) {free(extension); extension = NULL;}
+        if(l_host   ) {free(l_host);    l_host    = NULL;}
+        while(!_client->connected()){;} // wait until the connection is established
+        return true;
     }
     sprintf(chbuf, "Request %s failed!", l_host);
     if(audio_info) audio_info(chbuf);
@@ -2279,8 +2247,7 @@ void Audio::processPlayListData() {
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     int av = 0;
-    if(!m_f_ssl) av = client.available();
-    else         av = clientsecure.available();
+    av = _client->available();
     if(av < 1){
         if(f_end) return;
         if(f_begin) {f_end = true;}
@@ -2292,8 +2259,7 @@ void Audio::processPlayListData() {
     int16_t pos = 0;
 
     while(true){
-        if(!m_f_ssl)  b = client.read();
-        else          b = clientsecure.read();
+        b = _client->read();
         if(b == 0xff) b = '\n'; // no more to read? send new line
         if(b == '\n') {pl[pos] = 0; break;}
         if(b < 0x20 || b > 0x7E) continue;
@@ -2396,8 +2362,7 @@ void Audio::processPlayListData() {
 //            if(m_f_Log) if(audio_info) audio_info(chbuf);
             pos = indexOf(pl, "/", 10);
             if(strncmp(host, m_lastHost, pos) == 0){                                    // same host?
-                if(!m_f_ssl) {client.stop(); client.flush();}
-                else         {clientsecure.stop(); clientsecure.flush();}
+                _client->stop(); _client->flush();
                 httpPrint(host);
             }
             else connecttohost(host);                                                   // different host,
@@ -3051,14 +3016,12 @@ void Audio::processWebStream() {
         tmr_1s = millis();
     }
 
-    if(m_f_ssl == false) availableBytes = client.available();            // available from stream
-    if(m_f_ssl == true)  availableBytes = clientsecure.available();      // available from stream
+    availableBytes = _client->available();      // available from stream
 
     // if we have chunked data transfer: get the chunksize- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && !m_chunkcount && availableBytes) { // Expecting a new chunkcount?
         int b;
-        if(!m_f_ssl) b = client.read();
-        else         b = clientsecure.read();
+        b = _client->read();
 
         if(b == '\r') return;
         if(b == '\n'){
@@ -3081,8 +3044,7 @@ void Audio::processWebStream() {
     // if we have metadata: get them - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(!metacount && !m_f_swm && availableBytes){
         int16_t b = 0;
-        if(!m_f_ssl) b = client.read();
-        else         b = clientsecure.read();
+        b = _client->read();
         if(b >= 0) {
             if(m_f_chunked) m_chunkcount--;
             if(readMetadata(b)) metacount = m_metaint;
@@ -3130,8 +3092,7 @@ void Audio::processWebStream() {
             if(byteCounter + bytesCanBeWritten >= m_contentlength) bytesCanBeWritten = m_contentlength - byteCounter;
         }
 
-        if(m_f_ssl == false) bytesAddedToBuffer = client.read(InBuff.getWritePtr(), bytesCanBeWritten);
-        else                 bytesAddedToBuffer = clientsecure.read(InBuff.getWritePtr(), bytesCanBeWritten);
+        bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), bytesCanBeWritten);
 
         if(bytesAddedToBuffer > 0) {
             if(m_f_webfile)             byteCounter  += bytesAddedToBuffer;  // Pull request #42
@@ -3214,8 +3175,7 @@ void Audio::processWebStream() {
 void Audio::processAudioHeaderData() {
 
     int av = 0;
-    if(!m_f_ssl) av=client.available();
-    else         av= clientsecure.available();
+    av= _client->available();
     if(av <= 0) return;
 
     char hl[512]; // headerline
@@ -3227,8 +3187,7 @@ void Audio::processAudioHeaderData() {
     static bool f_icyurl = false;
 
     while(true){
-        if(!m_f_ssl) b = client.read();
-        else         b = clientsecure.read();
+        b = _client->read();
         if(b == '\n') break;
         if(b == '\r') hl[pos] = 0;
         if(b < 0x20) continue;
