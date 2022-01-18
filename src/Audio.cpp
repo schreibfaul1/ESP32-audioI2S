@@ -15,6 +15,7 @@
 fs::SDFATFS SD_SDFAT;
 #endif
 
+
 //---------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
     // if maxBlockSize isn't set use defaultspace (1600 bytes) is enough for aac and mp3 player
@@ -513,7 +514,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     const uint32_t TIMEOUT_MS_SSL{2700};
     uint32_t t = millis();
     if(_client->connect(hostwoext, port, m_f_ssl ? TIMEOUT_MS_SSL : TIMEOUT_MS)) {
-//      clientsecure.setNoDelay(true);
+        _client->setNoDelay(true);
         // if(audio_info) audio_info("SSL/TLS Connected to server");
         _client->print(resp);
         uint32_t dt = millis() - t;
