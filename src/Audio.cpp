@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 05,2022
+ *  Updated on: Jan 19,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2069,23 +2069,15 @@ void Audio::stopSong() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::playI2Sremains() { // returns true if all dma_buffs flushed
-    static uint8_t dma_buf_count = 0;
-    // there is no  function to see if dma_buff is empty. So fill the dma completely.
-    // As soon as all remains played this function returned. Or you can take this to create a short silence.
     if(!getSampleRate()) setSampleRate(96000);
     if(!getChannels()) setChannels(2);
     if(getBitsPerSample() > 8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
     else                       memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
-    //play remains and then flush dmaBuff
+
     m_validSamples = m_i2s_config.dma_buf_len;
     while(m_validSamples) {
         playChunk();
     }
-    if(dma_buf_count < m_i2s_config.dma_buf_count){
-        dma_buf_count++;
-        return false;
-    }
-    dma_buf_count = 0;
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
