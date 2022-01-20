@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 19,2022
+ *  Updated on: Jan 20,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4142,7 +4142,7 @@ int32_t Audio::Gain(int16_t s[2]) {
     v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * (m_vol - l)) >> 6;
     v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * (m_vol - r)) >> 6;
 
-    return (v[RIGHTCHANNEL] << 16) | (v[LEFTCHANNEL] & 0xffff);
+    return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFilled() {
