@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 20,2022
+ *  Updated on: Jan 22,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -315,9 +315,10 @@ void Audio::setDefaults() {
     m_curSample = 0;
     m_metaint = 0;                                          // No metaint yet
     m_LFcount = 0;                                          // For end of header detection
-    m_st_remember = 0;                                      // Delete the last streamtitle hash
     m_controlCounter = 0;                                   // Status within readID3data() and readWaveHeader()
     m_channels = 2;                                         // assume stereo #209
+    m_streamTitleHash = 0;
+    m_streamUrlHash = 0;
 
     //TEST loop
     m_file_size = 0;
@@ -3463,7 +3464,6 @@ void Audio::showstreamtitle(const char* ml) {
 
     int16_t idx1, idx2;
     uint16_t i = 0, hash = 0;
-    static uint16_t sTit_remember = 0, sUrl_renember = 0;
 
     idx1 = indexOf(ml, "StreamTitle=", 0);
     if(idx1 >= 0){                                                              // Streamtitle found
@@ -3474,8 +3474,8 @@ void Audio::showstreamtitle(const char* ml) {
 
         while(i < strlen(sTit)){hash += sTit[i] * i+1; i++;}
 
-        if(sTit_remember != hash){
-            sTit_remember = hash;
+        if(m_streamTitleHash != hash){
+            m_streamTitleHash = hash;
             if(audio_info) audio_info(sTit);
             uint8_t pos = 12;                                                   // remove "StreamTitle="
             if(sTit[pos] == '\'') pos++;                                        // remove leading  \'
@@ -3493,8 +3493,8 @@ void Audio::showstreamtitle(const char* ml) {
         sUrl = strndup(ml + idx1, len + 1); sUrl[len] = '\0';
 
         while(i < strlen(sUrl)){hash += sUrl[i] * i+1; i++;}
-        if(sUrl_renember != hash){
-            sUrl_renember = hash;
+        if(m_streamTitleHash != hash){
+            m_streamTitleHash = hash;
             if(audio_info) audio_info(sUrl);
         }
         free(sUrl);

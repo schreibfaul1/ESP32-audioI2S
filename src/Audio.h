@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 19,2022
+ *  Updated on: Jan 22,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -423,8 +423,9 @@ private:
     int16_t         m_outBuff[2048*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
-    uint16_t        m_st_remember = 0;              // Save hash from the last streamtitle
     uint16_t        m_datamode = 0;                 // Statemaschine
+    uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
+    uint16_t        m_streamUrlHash = 0;            // remember streamURL, ignore multiple occurence in metadata
     uint8_t         m_flacBitsPerSample = 0;        // bps should be 16
     uint8_t         m_flacNumChannels = 0;          // can be read out in the FLAC file header
     uint32_t        m_flacSampleRate = 0;           // can be read out in the FLAC file header
