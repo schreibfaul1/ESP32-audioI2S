@@ -57,6 +57,7 @@ size_t AudioBuffer::init() {
     }
     if(!m_buffer)
         return 0;
+    m_f_init = true;
     resetBuffer();
     return m_buffSize;
 }
@@ -205,17 +206,15 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
-    if(!m_f_initInbuffOnce) {
+    if(!InBuff.isInitialized()) {
         size_t size = InBuff.init();
         if(size == m_buffSizeRAM - m_resBuffSizeRAM) {
             AUDIO_INFO(sprintf(chbuf, "PSRAM not found, inputBufferSize: %u bytes", size - 1);)
             m_f_psram = false;
-            m_f_initInbuffOnce = true;
         }
         if(size == m_buffSizePSRAM - m_resBuffSizePSRAM) {
             AUDIO_INFO(sprintf(chbuf, "PSRAM found, inputBufferSize: %u bytes", size - 1);)
             m_f_psram = true;
-            m_f_initInbuffOnce = true;
         }
     }
     changeMaxBlockSize(1600); // default size mp3 or aac
@@ -258,7 +257,6 @@ esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
 Audio::~Audio() {
     //I2Sstop(m_i2s_num);
     //InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
-    m_f_initInbuffOnce = false;
     setDefaults();
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer

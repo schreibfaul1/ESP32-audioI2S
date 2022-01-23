@@ -113,6 +113,7 @@ public:
     AudioBuffer(size_t maxBlockSize = 0);       // constructor
     ~AudioBuffer();                             // frees the buffer
     size_t   init();                            // set default values
+    bool     isInitialized() { return m_f_init; };
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     uint16_t getMaxBlockSize();                 // returns maxBlockSize
     size_t   freeSpace();                       // number of free bytes to overwrite
@@ -141,6 +142,7 @@ protected:
     uint8_t*     m_readPtr          = NULL;
     uint8_t*     m_endPtr           = NULL;
     bool         m_f_start          = true;
+    bool         m_f_init           = false;
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -460,7 +462,6 @@ private:
     bool            m_f_m3u8data = false;           // used in processM3U8entries
     bool            m_f_Log = true;                 // if m3u8: log is cancelled
     bool            m_f_continue = false;           // next m3u8 chunk is available
-    bool            m_f_initInbuffOnce = false;     // init InBuff only once
     i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
