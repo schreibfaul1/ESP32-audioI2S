@@ -35,28 +35,33 @@ AudioBuffer::~AudioBuffer() {
     m_buffer = NULL;
 }
 
+void AudioBuffer::setBufsize(int ram, int psram) {
+    if (ram > -1) // -1 == default / no change
+        m_buffSizeRAM = ram;
+    if (psram > -1)
+        m_buffSizePSRAM = psram;
+}
+
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    if(psramInit()) {
+    if(psramInit() && m_buffSizePSRAM > 0) {
         // PSRAM found, AudioBuffer will be allocated in PSRAM
+        m_f_psram = true;
         m_buffSize = m_buffSizePSRAM;
-        if(m_buffer == NULL) {
-            m_buffer = (uint8_t*) ps_calloc(m_buffSize, sizeof(uint8_t));
-            m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
-            if(m_buffer == NULL) {
-                // not enough space in PSRAM, use ESP32 Flash Memory instead
-                m_buffer = (uint8_t*) calloc(m_buffSize, sizeof(uint8_t));
-                m_buffSize = m_buffSizeRAM - m_resBuffSizeRAM;
-            }
-        }
-    } else {  // no PSRAM available, use ESP32 Flash Memory"
+        m_buffer = (uint8_t*) ps_calloc(m_buffSize, sizeof(uint8_t));
+        m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
+    }
+    if(m_buffer == NULL) {
+        // PSRAM not found, not configured or not enough available
+        m_f_psram = false;
         m_buffSize = m_buffSizeRAM;
         m_buffer = (uint8_t*) calloc(m_buffSize, sizeof(uint8_t));
         m_buffSize = m_buffSizeRAM - m_resBuffSizeRAM;
     }
     if(!m_buffer)
         return 0;
+    m_f_init = true;
     resetBuffer();
     return m_buffSize;
 }
@@ -204,22 +209,24 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
+    if(InBuff.isInitialized()) {
+        ESP_LOGE(TAG, "Audio::setBufsize must not be called after audio is initialized");
+        return;
+    }
+    InBuff.setBufsize(rambuf_sz, psrambuf_sz);
+};
+
 void Audio::initInBuff() {
-    if(!m_f_initInbuffOnce) {
+    if(!InBuff.isInitialized()) {
         size_t size = InBuff.init();
-        if(size == m_buffSizeRAM - m_resBuffSizeRAM) {
-            AUDIO_INFO(sprintf(chbuf, "PSRAM not found, inputBufferSize: %u bytes", size - 1);)
-            m_f_psram = false;
-            m_f_initInbuffOnce = true;
-        }
-        if(size == m_buffSizePSRAM - m_resBuffSizePSRAM) {
-            AUDIO_INFO(sprintf(chbuf, "PSRAM found, inputBufferSize: %u bytes", size - 1);)
-            m_f_psram = true;
-            m_f_initInbuffOnce = true;
+        if (size > 0) {
+            AUDIO_INFO(sprintf(chbuf, "PSRAM %sfound, inputBufferSize: %u bytes", InBuff.havePSRAM()?"":"not ", size - 1);)
         }
     }
     changeMaxBlockSize(1600); // default size mp3 or aac
 }
+
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
     // It is not necessary to call this function after i2s_driver_install() (it is started automatically),
@@ -258,7 +265,6 @@ esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
 Audio::~Audio() {
     //I2Sstop(m_i2s_num);
     //InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
-    m_f_initInbuffOnce = false;
     setDefaults();
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
@@ -3045,7 +3051,7 @@ void Audio::processWebStream() {
 
         int16_t bytesAddedToBuffer = 0;
 
-        if(m_f_psram) if(bytesCanBeWritten > 4096) bytesCanBeWritten = 4096; // PSRAM throttle
+        if(InBuff.havePSRAM()) if(bytesCanBeWritten > 4096) bytesCanBeWritten = 4096; // PSRAM throttle
 
         if(m_f_webfile){
             // normally there is nothing to do here, if byteCounter == contentLength
