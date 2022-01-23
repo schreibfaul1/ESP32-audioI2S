@@ -114,6 +114,7 @@ public:
     ~AudioBuffer();                             // frees the buffer
     size_t   init();                            // set default values
     bool     isInitialized() { return m_f_init; };
+    void     setBufsize(int ram, int psram);
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     uint16_t getMaxBlockSize();                 // returns maxBlockSize
     size_t   freeSpace();                       // number of free bytes to overwrite
@@ -126,10 +127,11 @@ public:
     uint32_t getWritePos();                     // write position relative to the beginning
     uint32_t getReadPos();                      // read position relative to the beginning
     void     resetBuffer();                     // restore defaults
+    bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    const size_t m_buffSizePSRAM    = 300000; // most webstreams limit the advance to 100...300Kbytes
-    const size_t m_buffSizeRAM      = 1600 * 5;
+    size_t       m_buffSizePSRAM    = 300000;   // most webstreams limit the advance to 100...300Kbytes
+    size_t       m_buffSizeRAM      = 1600 * 5;
     size_t       m_buffSize         = 0;
     size_t       m_freeSpace        = 0;
     size_t       m_writeSpace       = 0;
@@ -143,6 +145,7 @@ protected:
     uint8_t*     m_endPtr           = NULL;
     bool         m_f_start          = true;
     bool         m_f_init           = false;
+    bool         m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -153,6 +156,7 @@ class Audio : private AudioBuffer{
 public:
     Audio(bool internalDAC = false, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN); // #99
     ~Audio();
+    void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path);
@@ -454,7 +458,6 @@ private:
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_webfile = false;            // assume it's a radiostream, not a podcast
     bool            m_f_tts = false;                // text to speech
-    bool            m_f_psram = false;              // set if PSRAM is availabe
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
