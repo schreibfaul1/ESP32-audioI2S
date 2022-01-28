@@ -182,7 +182,7 @@ public:
     uint32_t getSampleRate();
     uint8_t  getBitsPerSample();
     uint8_t  getChannels();
-    uint32_t getBitRate();
+    uint32_t getBitRate(bool avg = false);
     uint32_t getAudioFileDuration();
     uint32_t getAudioCurrentTime();
     uint32_t getTotalPlayingTime();

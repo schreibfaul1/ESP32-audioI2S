@@ -3978,7 +3978,9 @@ bool Audio::setBitrate(int br){
     if(br)return true;
     return false;
 }
-uint32_t Audio::getBitRate(){
+uint32_t Audio::getBitRate(bool avg){
+    if (avg)
+        return m_avr_bitrate;
     return m_bitRate;
 }
 //---------------------------------------------------------------------------------------------------------------------
