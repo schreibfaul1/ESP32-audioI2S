@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jan 22,2022
+ *  Updated on: Feb 04,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -283,7 +283,7 @@ void Audio::setDefaults() {
     clientsecure.stop();
     clientsecure.flush();
     _client = static_cast<WiFiClient*>(&clientsecure); /* default to *something* so that no NULL deref can happen */
-    while(!playI2Sremains()){;}
+    playI2Sremains();
 
     AUDIO_INFO(sprintf(chbuf, "buffers freed, free Heap: %u bytes", ESP.getFreeHeap());)
 
@@ -712,53 +712,8 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
-
-    setDefaults();
-    char host[] = "translate.google.com.vn";
-    char path[] = "/translate_tts";
-
-    uint16_t speechLen = strlen(speech);
-    uint16_t speechBuffLen = speechLen + 300;
-    memcpy(m_lastHost, speech, 256);
-    char* speechBuff = (char*)malloc(speechBuffLen);
-    if(!speechBuff) {log_e("out of memory"); return false;}
-    memcpy(speechBuff, speech, speechLen);
-    speechBuff[speechLen] = '\0';
-    urlencode(speechBuff, speechBuffLen);
-
-    char resp[strlen(speechBuff) + 200] = "";
-    strcat(resp, "GET ");
-    strcat(resp, path);
-    strcat(resp, "?ie=UTF-8&tl=");
-    strcat(resp, lang);
-    strcat(resp, "&client=tw-ob&q=");
-    strcat(resp, speechBuff);
-    strcat(resp, " HTTP/1.1\r\n");
-    strcat(resp, "Host: ");
-    strcat(resp, host);
-    strcat(resp, "\r\n");
-    strcat(resp, "User-Agent: Mozilla/5.0 \r\n");
-    strcat(resp, "Accept-Encoding: identity\r\n");
-    strcat(resp, "Accept: text/html\r\n");
-    strcat(resp, "Connection: close\r\n\r\n");
-
-    free(speechBuff);
-
-    if(!client.connect(host, 80)) {
-        log_e("Connection failed");
-        return false;
-    }
-    client.print(resp);
-    /* ??? where is chbuf filled here ??? */
-    if(audio_info) audio_info(chbuf);
-
-    m_f_webstream = true;
-    m_f_running = true;
-    m_f_ssl = false;
-    m_f_tts = true;
-    setDatamode(AUDIO_HEADER);
-
-    return true;
+    log_e("GoogleTTS is no longer available due to restrictions");
+    return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::urlencode(char* buff, uint16_t buffLen, bool spacesOnly) {
@@ -2053,7 +2008,7 @@ void Audio::stopSong() {
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::playI2Sremains() { // returns true if all dma_buffs flushed
+void Audio::playI2Sremains() { // returns true if all dma_buffs flushed
     if(!getSampleRate()) setSampleRate(96000);
     if(!getChannels()) setChannels(2);
     if(getBitsPerSample() > 8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
@@ -2063,7 +2018,7 @@ bool Audio::playI2Sremains() { // returns true if all dma_buffs flushed
     while(m_validSamples) {
         playChunk();
     }
-    return true;
+    return;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
@@ -2870,7 +2825,7 @@ void Audio::processLocalFile() {
             }
         }
         InBuff.resetBuffer();
-        if(!playI2Sremains()) return;
+        playI2Sremains();
 
         if(m_f_loop  && f_stream){  //eof
             AUDIO_INFO(sprintf(chbuf, "loop from: %u to: %u", getFilePos(), m_audioDataStart);) //TEST loop
@@ -2963,7 +2918,7 @@ void Audio::processWebStream() {
         }
         if(m_f_m3u8data) return;
 
-        while(!playI2Sremains()){;}
+        playI2Sremains();
         stopSong(); // Correct close when play known length sound #74 and before callback #112
 
         if(m_f_tts){
@@ -3690,7 +3645,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 setBitrate(FLACGetBitRate());
             }
             showCodecParams();
-            if(m_f_tts) while(!playI2Sremains()){;} // short silence
         }
         if(m_codec == CODEC_MP3){
             m_validSamples = MP3GetOutputSamps() / getChannels();
