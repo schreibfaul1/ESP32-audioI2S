@@ -57,7 +57,6 @@ void setup() {
 //    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
 //    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
       audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
-//    audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de");
 }
 
 void loop()
@@ -98,7 +97,4 @@ void audio_icyurl(const char *info){  //homepage
 }
 void audio_lasthost(const char *info){  //stream URL played
     Serial.print("lasthost    ");Serial.println(info);
-}
-void audio_eof_speech(const char *info){
-    Serial.print("eof_speech  ");Serial.println(info);
 }
