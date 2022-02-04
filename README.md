@@ -80,9 +80,6 @@ void audio_icyurl(const char *info){  //homepage
 void audio_lasthost(const char *info){  //stream URL played
     Serial.print("lasthost    ");Serial.println(info);
 }
-void audio_eof_speech(const char *info){
-    Serial.print("eof_speech  ");Serial.println(info);
-}
 
 ````
 Breadboard
