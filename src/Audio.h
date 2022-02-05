@@ -8,7 +8,6 @@
 
 //#define SDFATFS_USED  // activate for SdFat
 
-
 #pragma once
 #pragma GCC optimize ("Ofast")
 
