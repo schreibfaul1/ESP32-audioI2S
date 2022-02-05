@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 04,2022
+ *  Updated on: Feb 05,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1830,7 +1830,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_AMRDY){ // almost ready
         m_audioDataStart = headerSize;
         m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
-        log_i("begin mdat %i", headerSize);
+//        log_i("begin mdat %i", headerSize);
         if(m_f_localfile){
             AUDIO_INFO(sprintf(chbuf, "Content-Length: %u", m_contentlength);)
         }
@@ -2848,6 +2848,10 @@ void Audio::processLocalFile() {
                     stopSong();
                     m_controlCounter = 100;
                 }
+            }
+            if(!isRunning()){
+                log_e("Processing stopped due to invalid audio header");
+                return;
             }
         }
         else {
