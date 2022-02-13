@@ -1764,7 +1764,7 @@ void AACDecoder_FreeBuffers(void) {
 
     if(m_AACDecInfo)                         {free(m_AACDecInfo);    m_AACDecInfo=NULL;}
     if(m_PSInfoBase)                         {free(m_PSInfoBase);    m_PSInfoBase=NULL;}
-    if(m_pce[0])     {for(int i=0; i<16; i++) free(m_pce[i]);        m_pce[0]=NULL;}
+    if(m_pce[0])                             {free(m_pce[0]);        m_pce[0]=NULL;}
 
 #ifdef AAC_ENABLE_SBR
     if(m_PSInfoSBR)                           {free(m_PSInfoSBR);    m_PSInfoSBR=NULL;}               //Clear AACDecInfo
