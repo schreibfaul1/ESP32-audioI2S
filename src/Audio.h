@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 04,2022
+ *  Updated on: Feb 19,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -159,8 +159,8 @@ public:
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
-    bool connecttoFS(fs::FS &fs, const char* path);
-    bool connecttoSD(const char* path);
+    bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
+    bool connecttoSD(const char* path, uint32_t resumeFilePos = 0);
     bool setFileLoop(bool input);//TEST loop
     bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
@@ -170,7 +170,7 @@ public:
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
-    void stopSong();
+    uint32_t stopSong();
     void forceMono(bool m);
     void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
@@ -446,6 +446,7 @@ private:
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
+    uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
     bool            m_f_swm = true;                 // Stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header

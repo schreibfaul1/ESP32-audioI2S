@@ -597,13 +597,15 @@ void Audio::UTF8toASCII(char* str){
     str[j] = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoSD(const char* path) {
-    return connecttoFS(SD, path);
+bool Audio::connecttoSD(const char* path, uint32_t resumeFilePos) {
+    return connecttoFS(SD, path, resumeFilePos);
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoFS(fs::FS &fs, const char* path) {
+bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
     if(strlen(path)>255) return false;
+
+    m_resumeFilePos = resumeFilePos;
     char audioName[256];
     setDefaults(); // free buffers an set defaults
     memcpy(audioName, path, strlen(path)+1);
@@ -2046,13 +2048,18 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::stopSong() {
+uint32_t Audio::stopSong() {
+    uint32_t pos = 0;
     if(m_f_running) {
         m_f_running = false;
-        audiofile.close();
+        if(m_f_localfile){
+            pos = getFilePos() - inBufferFilled();
+            audiofile.close();
+        }
     }
     memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
+    return pos;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::playI2Sremains() { // returns true if all dma_buffs flushed
@@ -2785,6 +2792,15 @@ void Audio::processLocalFile() {
         f_stream = false;
         return;
     }
+
+    if(!f_stream && m_controlCounter == 100) {
+        f_stream = true;
+        if(audio_info) audio_info("stream ready");
+        if(m_resumeFilePos){
+            setFilePos(m_resumeFilePos);
+            log_i("m_resumeFilePos %i", m_resumeFilePos);
+        }
+    }
     bytesCanBeWritten = InBuff.writeSpace();
     //----------------------------------------------------------------------------------------------------
     // some files contain further data after the audio block (e.g. pictures).
@@ -2802,17 +2818,11 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
-//    if(psramFound() && bytesAddedToBuffer >4096)
-//        vTaskDelay(2);// PSRAM has a bottleneck in the queue, so wait a little bit
-
     if(bytesAddedToBuffer == -1) bytesAddedToBuffer = 0; // read error? eof?
     bytesCanBeRead = InBuff.bufferFilled();
     if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
     if(bytesCanBeRead == InBuff.getMaxBlockSize()) { // mp3 or aac frame complete?
-        if(!f_stream) {
-            f_stream = true;
-            if(audio_info) audio_info("stream ready");
-        }
+
         if(m_controlCounter != 100){
             if(m_codec == CODEC_WAV){
                 int res = read_WAV_Header(InBuff.getReadPtr(), bytesCanBeRead);
@@ -2865,6 +2875,7 @@ void Audio::processLocalFile() {
         }
         return;
     }
+
     if(!bytesAddedToBuffer) {  // eof
         bytesCanBeRead = InBuff.bufferFilled();
         if(bytesCanBeRead > 200){
