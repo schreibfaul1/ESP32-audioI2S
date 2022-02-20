@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 05,2022
+ *  Updated on: Feb 20,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2797,10 +2797,14 @@ void Audio::processLocalFile() {
         f_stream = true;
         if(audio_info) audio_info("stream ready");
         if(m_resumeFilePos){
-            setFilePos(m_resumeFilePos);
+            if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+            if(m_avr_bitrate) m_audioCurrentTime = (m_resumeFilePos - m_audioDataStart) * 8 / m_avr_bitrate;
+            audiofile.seek(m_resumeFilePos);
+            InBuff.resetBuffer();
             log_i("m_resumeFilePos %i", m_resumeFilePos);
         }
     }
+
     bytesCanBeWritten = InBuff.writeSpace();
     //----------------------------------------------------------------------------------------------------
     // some files contain further data after the audio block (e.g. pictures).
