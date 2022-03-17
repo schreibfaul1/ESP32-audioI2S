@@ -437,7 +437,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // initializationsequence
     int16_t pos_slash;                                        // position of "/" in hostname
-    int16_t pos_colon;                                        // position of "/" in hostname
+    int16_t pos_colon;                                        // position of ":" in hostname
     int16_t pos_ampersand;                                    // position of "&" in hostname
     uint16_t port = 80;                                       // port number
     m_f_webstream = true;
