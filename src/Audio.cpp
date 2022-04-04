@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 20,2022
+ *  Updated on: Apr 04,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3775,10 +3775,18 @@ void Audio::compute_audioCurrentTime(int bd) {
             // if VBR: m_avr_bitrate is average of the first values of m_bitrate
             sum_bitrate += getBitRate();
             m_avr_bitrate = sum_bitrate / (loop_counter - 20);
+            if(loop_counter == 199 && m_resumeFilePos){
+                m_audioCurrentTime = (getFilePos() - m_audioDataStart - inBufferFilled()) * 8 / m_avr_bitrate; // #293
+            }
         }
     }
     else {
-        if(loop_counter == 2) m_avr_bitrate = getBitRate();
+        if(loop_counter == 2){
+            m_avr_bitrate = getBitRate();
+            if(m_resumeFilePos){  // if connecttoFS() is called with resumeFilePos != 0
+                m_audioCurrentTime = (getFilePos() - m_audioDataStart - inBufferFilled()) * 8 / m_avr_bitrate; // #293
+            }
+        }
     }
     m_audioCurrentTime += (float) bd * 8 / m_avr_bitrate;
 }
