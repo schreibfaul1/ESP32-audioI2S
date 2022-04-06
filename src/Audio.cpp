@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 04,2022
+ *  Updated on: Apr 06,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2798,7 +2798,7 @@ void Audio::processLocalFile() {
         if(audio_info) audio_info("stream ready");
         if(m_resumeFilePos){
             if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-            if(m_avr_bitrate) m_audioCurrentTime = (m_resumeFilePos - m_audioDataStart) * 8 / m_avr_bitrate;
+            if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
             audiofile.seek(m_resumeFilePos);
             InBuff.resetBuffer();
             log_i("m_resumeFilePos %i", m_resumeFilePos);
@@ -3776,7 +3776,7 @@ void Audio::compute_audioCurrentTime(int bd) {
             sum_bitrate += getBitRate();
             m_avr_bitrate = sum_bitrate / (loop_counter - 20);
             if(loop_counter == 199 && m_resumeFilePos){
-                m_audioCurrentTime = (getFilePos() - m_audioDataStart - inBufferFilled()) * 8 / m_avr_bitrate; // #293
+                m_audioCurrentTime = ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8; // #293
             }
         }
     }
@@ -3784,11 +3784,11 @@ void Audio::compute_audioCurrentTime(int bd) {
         if(loop_counter == 2){
             m_avr_bitrate = getBitRate();
             if(m_resumeFilePos){  // if connecttoFS() is called with resumeFilePos != 0
-                m_audioCurrentTime = (getFilePos() - m_audioDataStart - inBufferFilled()) * 8 / m_avr_bitrate; // #293
+                m_audioCurrentTime = ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8; // #293
             }
         }
     }
-    m_audioCurrentTime += (float) bd * 8 / m_avr_bitrate;
+    m_audioCurrentTime += ((float)bd / m_avr_bitrate) * 8;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
@@ -3954,7 +3954,7 @@ bool Audio::setFilePos(uint32_t pos) {
     if(m_codec == CODEC_FLAC) FLACDecoderReset();
     InBuff.resetBuffer();
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
-    if(m_avr_bitrate) m_audioCurrentTime = (pos-m_audioDataStart) * 8 / m_avr_bitrate; // #96
+    if(m_avr_bitrate) m_audioCurrentTime = ((pos-m_audioDataStart) / m_avr_bitrate) * 8; // #96
     return audiofile.seek(pos);
 }
 //---------------------------------------------------------------------------------------------------------------------
