@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 06,2022
+ *  Updated on: Apr 12,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2053,9 +2053,17 @@ uint32_t Audio::stopSong() {
     if(m_f_running) {
         m_f_running = false;
         if(m_f_localfile){
+            m_f_localfile = false;
             pos = getFilePos() - inBufferFilled();
             audiofile.close();
+            if(audio_info) audio_info("Closing audio file");
         }
+    }
+    if(audiofile){
+        // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
+        audiofile.close();
+        if(audio_info) audio_info("Closing audio file");
+        log_w("Closing audio file");  // for debug
     }
     memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
