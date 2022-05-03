@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: Apr 12,2022
+ *  Updated on: May 03,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -184,7 +184,7 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
         if(m_f_channelEnabled != I2S_DAC_CHANNEL_BOTH_EN) {
             m_f_forceMono = true;
         }
-    } 
+    }
     else {
         m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
 
@@ -211,7 +211,7 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
     if(InBuff.isInitialized()) {
-        ESP_LOGE(TAG, "Audio::setBufsize must not be called after audio is initialized");
+        log_e("Audio::setBufsize must not be called after audio is initialized");
         return;
     }
     InBuff.setBufsize(rambuf_sz, psrambuf_sz);
@@ -240,7 +240,7 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
     if(pin != 0 && pin != 1 && pin != 3) {
-        ESP_LOGE(TAG, "Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
+        log_e("Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
         return ESP_ERR_INVALID_ARG;
     }
     switch(pin){
@@ -387,6 +387,12 @@ void Audio::httpPrint(const char* url) {
     return;
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl){
+    if(timeout_ms)     m_timeout_ms     = timeout_ms;
+    if(timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
+}
+
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     // user and pwd for authentification only, can be empty
 
@@ -516,10 +522,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //    strcat(resp, "Accept-Encoding: gzip;q=0\r\n");  // otherwise the server assumes gzip compression
 //    strcat(resp, "Transfer-Encoding: \r\n");  // otherwise the server assumes gzip compression
     strcat(resp, "Connection: keep-alive\r\n\r\n");
-    const uint32_t TIMEOUT_MS{250};
-    const uint32_t TIMEOUT_MS_SSL{2700};
     uint32_t t = millis();
-    if(_client->connect(hostwoext, port, m_f_ssl ? TIMEOUT_MS_SSL : TIMEOUT_MS)) {
+    if(_client->connect(hostwoext, port, m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms)) {
         _client->setNoDelay(true);
         // if(audio_info) audio_info("SSL/TLS Connected to server");
         _client->print(resp);

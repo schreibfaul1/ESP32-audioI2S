@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Feb 19,2022
+ *  Updated on: May 03,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -32,7 +32,8 @@
 
 
 #ifdef SDFATFS_USED
-typedef File32 File;
+//typedef File32 File;
+typedef FsFile File;
 
 namespace fs {
     class FS : public SdFat {
@@ -162,6 +163,7 @@ public:
     bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
     bool connecttoSD(const char* path, uint32_t resumeFilePos = 0);
     bool setFileLoop(bool input);//TEST loop
+    void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
@@ -434,6 +436,8 @@ private:
     uint16_t        m_datamode = 0;                 // Statemaschine
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_streamUrlHash = 0;            // remember streamURL, ignore multiple occurence in metadata
+    uint16_t        m_timeout_ms = 250;
+    uint16_t        m_timeout_ms_ssl = 2700;
     uint8_t         m_flacBitsPerSample = 0;        // bps should be 16
     uint8_t         m_flacNumChannels = 0;          // can be read out in the FLAC file header
     uint32_t        m_flacSampleRate = 0;           // can be read out in the FLAC file header
