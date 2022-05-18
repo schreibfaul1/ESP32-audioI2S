@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 03,2022
+ *  Updated on: May 18,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -518,7 +518,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(resp, "Authorization: Basic ");
     strcat(resp, authorization);
     strcat(resp, "\r\n");
-    strcat(resp, "User-Agent: ESP32 audioI2S\r\n");
+    strcat(resp, "User-Agent: Mozilla/5.0\r\n");
 //    strcat(resp, "Accept-Encoding: gzip;q=0\r\n");  // otherwise the server assumes gzip compression
 //    strcat(resp, "Transfer-Encoding: \r\n");  // otherwise the server assumes gzip compression
     strcat(resp, "Connection: keep-alive\r\n\r\n");
