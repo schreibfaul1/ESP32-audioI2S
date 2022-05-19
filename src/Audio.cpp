@@ -154,7 +154,17 @@ uint32_t AudioBuffer::getReadPos() {
     return m_readPtr - m_buffer;
 }
 //---------------------------------------------------------------------------------------------------------------------
-Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = I2S_DAC_CHANNEL_LEFT_EN */ ) {
+Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC_CHANNEL_BOTH_EN */ ) {
+
+    //    build-in-DAC works only with ESP32 (ESP32-S3 has no build-in-DAC)
+    //    build-in-DAC last working Arduino Version: 2.0.0-RC2
+    //    possible values for channelEnabled are:
+    //    I2S_DAC_CHANNEL_DISABLE  = 0,     Disable I2S built-in DAC signals
+    //    I2S_DAC_CHANNEL_RIGHT_EN = 1,     Enable I2S built-in DAC right channel, maps to DAC channel 1 on GPIO25
+    //    I2S_DAC_CHANNEL_LEFT_EN  = 2,     Enable I2S built-in DAC left  channel, maps to DAC channel 2 on GPIO26
+    //    I2S_DAC_CHANNEL_BOTH_EN  = 0x3,   Enable both of the I2S built-in DAC channels.
+    //    I2S_DAC_CHANNEL_MAX      = 0x4,   I2S built-in DAC mode max index
+
     clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     m_f_channelEnabled = channelEnabled;
     m_f_internalDAC = internalDAC;
@@ -169,21 +179,29 @@ Audio::Audio(bool internalDAC /* = false */, i2s_dac_mode_t channelEnabled /* = 
     m_i2s_config.use_apll             = APLL_DISABLE; // must be disabled in V2.0.1-RC1
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
-    if (internalDAC)  {
-        log_i("internal DAC");
-        m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
 
-        #if ESP_ARDUINO_VERSION_MAJOR >= 2
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
-        #else
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+
+    if (internalDAC)  {
+
+        #ifdef CONFIG_IDF_TARGET_ESP32
+
+            log_i("internal DAC");
+            m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
+
+            #if ESP_ARDUINO_VERSION_MAJOR >= 2
+                m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+            #else
+                m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
+            #endif
+
+            i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
+            i2s_set_dac_mode((i2s_dac_mode_t)m_f_channelEnabled);
+            if(m_f_channelEnabled != I2S_DAC_CHANNEL_BOTH_EN) {
+                m_f_forceMono = true;
+            }
+
         #endif
 
-        i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
-        i2s_set_dac_mode(m_f_channelEnabled);
-        if(m_f_channelEnabled != I2S_DAC_CHANNEL_BOTH_EN) {
-            m_f_forceMono = true;
-        }
     }
     else {
         m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -243,22 +261,26 @@ esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
         log_e("Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
         return ESP_ERR_INVALID_ARG;
     }
-    switch(pin){
-        case 0:
-            PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
-            WRITE_PERI_REG(PIN_CTRL, 0xFFF0);
-            break;
-        case 1:
-            PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD_CLK_OUT3);
-            WRITE_PERI_REG(PIN_CTRL, 0xF0F0);
-            break;
-        case 3:
-            PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD_CLK_OUT2);
-            WRITE_PERI_REG(PIN_CTRL, 0xFF00);
-            break;
-        default:
-            break;
-    }
+
+    #ifdef CONFIG_IDF_TARGET_ESP32
+        switch(pin){
+            case 0:
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
+                WRITE_PERI_REG(PIN_CTRL, 0xFFF0);
+                break;
+            case 1:
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD_CLK_OUT3);
+                WRITE_PERI_REG(PIN_CTRL, 0xF0F0);
+                break;
+            case 3:
+                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD_CLK_OUT2);
+                WRITE_PERI_REG(PIN_CTRL, 0xFF00);
+                break;
+            default:
+                break;
+        }
+    #endif
+
     return ESP_OK;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -4022,44 +4044,6 @@ uint32_t Audio::getBitRate(bool avg){
     if (avg)
         return m_avr_bitrate;
     return m_bitRate;
-}
-//---------------------------------------------------------------------------------------------------------------------
-[[deprecated]]void Audio::setInternalDAC(bool internalDAC /* = true */, i2s_dac_mode_t channelEnabled /* = I2S_DAC_CHANNEL_LEFT_EN */  ) {
-// is deprecated, set internal DAC in constructor e.g. Audio audio(true, I2S_DAC_CHANNEL_BOTH_EN);
-    m_f_channelEnabled = channelEnabled;
-    m_f_internalDAC = internalDAC;
-    i2s_driver_uninstall((i2s_port_t)m_i2s_num);
-    if (internalDAC)  {
-        log_i("internal DAC");
-        m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
-
-        #if ESP_ARDUINO_VERSION_MAJOR >= 2
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
-        #else
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
-        #endif
-
-        i2s_driver_install((i2s_port_t) m_i2s_num, &m_i2s_config, 0, NULL);
-        // enable the DAC channels
-        i2s_set_dac_mode(m_f_channelEnabled);
-        if(m_f_channelEnabled != I2S_DAC_CHANNEL_BOTH_EN) {
-            m_f_forceMono = true;
-        }
-    }
-    else {  // external DAC
-        m_i2s_config.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
-
-        #if ESP_ARDUINO_VERSION_MAJOR >= 2
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
-        #else
-            m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB);
-        #endif
-
-        i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
-        i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
-    }
-    // clear the DMA buffers
-    i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setI2SCommFMT_LSB(bool commFMT) {

@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 03,2022
+ *  Updated on: May 19,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -155,7 +155,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(bool internalDAC = false, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN); // #99
+    Audio(bool internalDAC = false, uint8_t channelEnabled = 3); // #99
     ~Audio();
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
@@ -193,7 +193,6 @@ public:
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
-    [[deprecated]]void setInternalDAC(bool internalDAC = true, i2s_dac_mode_t channelEnabled = I2S_DAC_CHANNEL_LEFT_EN);
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
     const char *getCodecname() {return codecname[m_codec];}
@@ -472,7 +471,7 @@ private:
     bool            m_f_m3u8data = false;           // used in processM3U8entries
     bool            m_f_Log = true;                 // if m3u8: log is cancelled
     bool            m_f_continue = false;           // next m3u8 chunk is available
-    i2s_dac_mode_t  m_f_channelEnabled = I2S_DAC_CHANNEL_LEFT_EN;  // internal DAC on GPIO26 for M5StickC/Plus
+    uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     uint32_t        m_audioDataStart = 0;           // in bytes
