@@ -524,7 +524,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(resp, "Connection: keep-alive\r\n\r\n");
     uint32_t t = millis();
     if(_client->connect(hostwoext, port, m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms)) {
-        _client->setNoDelay(true);
+        if(!m_f_ssl) _client->setNoDelay(true);
         // if(audio_info) audio_info("SSL/TLS Connected to server");
         _client->print(resp);
         uint32_t dt = millis() - t;
