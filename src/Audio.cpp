@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 18,2022
+ *  Updated on: May 20,2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1333,6 +1333,9 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
             if(offset >= 0){
                 sprintf(chbuf, "%s: %s", fn[i], data + offset + strlen(fn[i]) + 1);
                 chbuf[strlen(chbuf) - 1] = 0;
+                for(int i=0; i<strlen(chbuf);i++){
+                    if(chbuf[i] == 255) chbuf[i] = 0;
+                }
                 if(audio_id3data) audio_id3data(chbuf);
             }
         }
@@ -3042,6 +3045,24 @@ void Audio::processWebStream() {
 
     availableBytes = _client->available();      // available from stream
 
+    if(ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_DEBUG){
+        // Here you can see how much data comes in, a summary is displayed in every 10 calls
+        static uint8_t  i = 0;
+        static uint32_t t = 0;
+        static uint32_t t0 = 0;
+        static uint16_t avb[10];
+        if(!i) t = millis();
+        avb[i] = availableBytes;
+        if(!avb[i]){if(!t0) t0 = millis();}
+        else{if(t0 && (millis() - t0) > 400) log_d("\033[31m%dms no data received", millis() - t0); t0 = 0;}
+        i++;
+        if(i == 10) i = 0;
+        if(!i){
+            log_d("bytes available, 10 polls in %dms  %d, %d, %d, %d, %d, %d, %d, %d, %d, %d", millis() - t,
+                   avb[0], avb[1], avb[2], avb[3], avb[4], avb[5], avb[6], avb[7], avb[8], avb[9]);
+        }
+    }
+
     // if we have chunked data transfer: get the chunksize- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && !m_chunkcount && availableBytes) { // Expecting a new chunkcount?
         int b;
@@ -3056,7 +3077,7 @@ void Audio::processWebStream() {
                 m_f_webfile = true;
                 m_f_chunked = false;
             }
-            return;        
+            return;
         }
         // We have received a hexadecimal character.  Decode it and add to the result.
         b = toupper(b) - '0';                       // Be sure we have uppercase
@@ -4120,9 +4141,9 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
 
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
 
-    /* 
+    /*
         This will cause a clicking sound when adjusting the EQ.
-        Because when the EQ is adjusted, the IIR filter will be cleared and played, 
+        Because when the EQ is adjusted, the IIR filter will be cleared and played,
         mixed in the audio data frame, and a click-like sound will be produced.
     */
     /*
@@ -4200,11 +4221,11 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    if(G0 < -40) G0 = -40;      // -40dB -> Vin*0.01  
+    if(G0 < -40) G0 = -40;      // -40dB -> Vin*0.01
     if(G0 > 6) G0 = 6;          // +6dB -> Vin*2
     if(G1 < -40) G1 = -40;
     if(G1 > 6) G1 = 6;
-    if(G2 < -40) G2 = -40; 
+    if(G2 < -40) G2 = -40;
     if(G2 > 6) G2 = 6;
 
     const float FcLS   =  500;  // Frequency LowShelf[Hz]
