@@ -155,7 +155,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(bool internalDAC = false, uint8_t channelEnabled = 3); // #99
+    Audio(bool internalDAC = false, uint8_t channelEnabled = 3, uint8_t i2sPort = I2S_NUM_0); // #99
     ~Audio();
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
@@ -177,6 +177,7 @@ public:
     void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
     uint8_t getVolume();
+	uint8_t getI2sPort();
 
     uint32_t getAudioDataStartPos();
     uint32_t getFileSize();

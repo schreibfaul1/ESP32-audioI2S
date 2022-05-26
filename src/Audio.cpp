@@ -154,7 +154,7 @@ uint32_t AudioBuffer::getReadPos() {
     return m_readPtr - m_buffer;
 }
 //---------------------------------------------------------------------------------------------------------------------
-Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC_CHANNEL_BOTH_EN */ ) {
+Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC_CHANNEL_BOTH_EN */, uint8_t i2sPort) {
 
     //    build-in-DAC works only with ESP32 (ESP32-S3 has no build-in-DAC)
     //    build-in-DAC last working Arduino Version: 2.0.0-RC2
@@ -169,7 +169,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_f_channelEnabled = channelEnabled;
     m_f_internalDAC = internalDAC;
     //i2s configuration
-    m_i2s_num = I2S_NUM_0; // i2s port number
+    m_i2s_num = i2sPort; // i2s port number
     m_i2s_config.sample_rate          = 16000;
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
     m_i2s_config.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
@@ -4176,6 +4176,10 @@ uint8_t Audio::getVolume() {
     }
     m_vol = 12; // if m_vol not found in table
     return m_vol;
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint8_t Audio::getI2sPort() {
+    return m_i2s_num;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t Audio::Gain(int16_t s[2]) {
