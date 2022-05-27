@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 10.09.2021
+ *  Updated on: 27.05.2022
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1655,20 +1655,28 @@ static const int8_t negMask[3] = {~0x03, ~0x07, ~0x0f};
  *
  **********************************************************************************************************************/
 
-/* the default is to allocate everything over 4k preferably in PSRAM, see components/heap/heap_caps.c in esp-idf */
-#define __malloc_heap_psram(size) \
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    // ESP32-S3: If there is PSRAM, prefer it
+    #define __malloc_heap_psram(size) \
+        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+#else
+    // ESP32, PSRAM is too slow, prefer SRAM
+    #define __malloc_heap_psram(size) \
         heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM)
+#endif
+
 bool AACDecoder_AllocateBuffers(void){
 
     /* here, sizes are: AACDecInfo_t:96 PSInfoBase_t:27364 ProgConfigElement_t*16:1312 PSInfoSBR_t:50788 */
 #ifdef AAC_ENABLE_SBR
-    /* first allocate PSInfoSBR, which *must* be in RAM */
-    // can't allocated in PSRAM, because PSRAM ist too slow
-    if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)heap_caps_malloc(sizeof(PSInfoSBR_t), MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);}
+    if(!m_PSInfoSBR) {m_PSInfoSBR   = (PSInfoSBR_t*)__malloc_heap_psram(sizeof(PSInfoSBR_t));}
 
     if(!m_PSInfoSBR) {
         log_e("OOM in SBR, can't allocate %d bytes\n", sizeof(PSInfoSBR_t));
         return false; // ERR_AAC_SBR_INIT;
+    }
+    else {
+        log_d("AAC Spectral Band Replication enabled, %d additional bytes allocated", sizeof(PSInfoSBR_t));
     }
 #endif
 

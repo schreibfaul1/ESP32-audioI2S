@@ -6,7 +6,10 @@
 #include "Arduino.h"
 
 #define AAC_ENABLE_MPEG4
-//#define AAC_ENABLE_SBR  // needs additional 60KB Heap,
+
+#if (defined CONFIG_IDF_TARGET_ESP32S3 && defined BOARD_HAS_PSRAM)
+    #define AAC_ENABLE_SBR  // needs additional 60KB DRAM,
+#endif
 
 #define ASSERT(x) /* do nothing */
 
