@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 03.01.2022
+ *  Updated on: 27.05.2022
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1527,12 +1527,18 @@ void MP3Decoder_ClearBuffer(void) {
  *                allocated before returning
  *
  **********************************************************************************************************************/
-/* the default is to allocate everything over 4k preferably in PSRAM, see components/heap/heap_caps.c in esp-idf
- * but we prefer internal RAM as it is faster */
-#define __malloc_heap_psram(size) \
-        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM)
-bool MP3Decoder_AllocateBuffers(void) {
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    // ESP32-S3: If there is PSRAM, prefer it
+    #define __malloc_heap_psram(size) \
+        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+#else
+    // ESP32, PSRAM is too slow, prefer SRAM
+    #define __malloc_heap_psram(size) \
+        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM)
+#endif
+
+bool MP3Decoder_AllocateBuffers(void) {
     if(!m_MP3DecInfo)       {m_MP3DecInfo    = (MP3DecInfo_t*)    __malloc_heap_psram(sizeof(MP3DecInfo_t)   );}
     if(!m_FrameHeader)      {m_FrameHeader   = (FrameHeader_t*)   __malloc_heap_psram(sizeof(FrameHeader_t)  );}
     if(!m_SideInfo)         {m_SideInfo      = (SideInfo_t*)      __malloc_heap_psram(sizeof(SideInfo_t)     );}
