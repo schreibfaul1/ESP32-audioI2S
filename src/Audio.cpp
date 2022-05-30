@@ -11,9 +11,11 @@
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
 
+#ifndef AUDIO_NO_SD_FS
 #ifdef SDFATFS_USED
 fs::SDFATFS SD_SDFAT;
 #endif
+#endif // AUDIO_NO_SD_FS
 
 /* wrapper for common pattern:
  *  if(audio_info) {
@@ -622,6 +624,7 @@ void Audio::UTF8toASCII(char* str){
     }
     str[j] = 0;
 }
+#ifndef AUDIO_NO_SD_FS
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoSD(const char* path, uint32_t resumeFilePos) {
     return connecttoFS(SD, path, resumeFilePos);
@@ -738,6 +741,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     if(afn) free(afn);
     return false;
 }
+#endif // AUDIO_NO_SD_FS
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
 
@@ -1605,11 +1609,13 @@ int Audio::read_MP3_Header(uint8_t *data, size_t len) {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_contentlength - m_audioDataStart;
             AUDIO_INFO(sprintf(chbuf, "Audio-Length: %u", m_audioDataSize);)
+#ifndef AUDIO_NO_SD_FS
             if(APIC_seen && audio_id3image){
                 size_t pos = audiofile.position();
                 audio_id3image(audiofile, APIC_pos, APIC_size);
                 audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
             }
+#endif // AUDIO_NO_SD_FS
             return 0;
         }
     }
@@ -2081,19 +2087,23 @@ uint32_t Audio::stopSong() {
     uint32_t pos = 0;
     if(m_f_running) {
         m_f_running = false;
+#ifndef AUDIO_NO_SD_FS
         if(m_f_localfile){
             m_f_localfile = false;
             pos = getFilePos() - inBufferFilled();
             audiofile.close();
             if(audio_info) audio_info("Closing audio file");
         }
+#endif // AUDIO_NO_SD_FS
     }
+#ifndef AUDIO_NO_SD_FS
     if(audiofile){
         // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
         audiofile.close();
         if(audio_info) audio_info("Closing audio file");
         log_w("Closing audio file");  // for debug
     }
+#endif                                           // AUDIO_NO_SD_FS
     memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
     return pos;
@@ -2209,11 +2219,12 @@ bool Audio::playChunk() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
-
+#ifndef AUDIO_NO_SD_FS
     // - localfile - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_localfile) {                                      // Playing file fron SPIFFS or SD?
         processLocalFile();
     }
+#endif // AUDIO_NO_SD_FS
     // - webstream - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_webstream) {                                      // Playing file from URL?
         if(!m_f_running) return;
@@ -2813,6 +2824,7 @@ bool Audio::STfromEXTINF(char* str){
 
     return true;
 }
+#ifndef AUDIO_NO_SD_FS
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {
 
@@ -2963,6 +2975,7 @@ void Audio::processLocalFile() {
         if(afn) free(afn);
     }
 }
+#endif // AUDIO_NO_SD_FS
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
 
@@ -3929,22 +3942,36 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getFileSize() {
+#ifdef AUDIO_NO_SD_FS
+    return 0;
+#else
     if(!audiofile) return 0;
     return audiofile.size();
+#endif // AUDIO_NO_SD_FS
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getFilePos() {
+#ifdef AUDIO_NO_SD_FS
+    return 0;
+#else
     if(!audiofile) return 0;
     return audiofile.position();
+#endif // AUDIO_NO_SD_FS
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioDataStartPos() {
+#ifdef AUDIO_NO_SD_FS
+    return 0;
+#else
     if(!audiofile) return 0;
     return m_audioDataStart;
+#endif // AUDIO_NO_SD_FS
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
+#ifndef AUDIO_NO_SD_FS
     if(m_f_localfile) {if(!audiofile) return 0;}
+#endif
     if(m_f_webfile)   {if(!m_contentlength) return 0;}
 
     if     (m_avr_bitrate && m_codec == CODEC_MP3)   m_audioFileDuration = 8 * (m_audioDataSize / m_avr_bitrate); // #289
@@ -3981,6 +4008,8 @@ bool Audio::setTimeOffset(int sec){
     // fast forward or rewind the current position in seconds
     // audiosource must be a mp3, aac or wav file
 
+#ifndef AUDIO_NO_SD_FS
+
     if(!audiofile || !m_avr_bitrate) return false;
 
     uint32_t oneSec  = m_avr_bitrate / 8;                   // bytes decoded in one sec
@@ -3996,10 +4025,14 @@ bool Audio::setTimeOffset(int sec){
         setFilePos(pos);
         return true;
     }
+#endif // AUDIO_NO_SD_FS
     return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
+#ifdef AUDIO_NO_SD_FS
+    return false;
+#else
     if(!audiofile) return false;
 //    if(!m_avr_bitrate) return false;
     if(m_codec == CODEC_M4A) return false;
@@ -4011,6 +4044,7 @@ bool Audio::setFilePos(uint32_t pos) {
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
     if(m_avr_bitrate) m_audioCurrentTime = ((pos-m_audioDataStart) / m_avr_bitrate) * 8; // #96
     return audiofile.seek(pos);
+#endif // AUDIO_NO_SD_FS
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::audioFileSeek(const float speed) {

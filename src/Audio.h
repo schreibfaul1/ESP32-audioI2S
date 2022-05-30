@@ -13,13 +13,14 @@
 #pragma GCC optimize ("Ofast")
 
 #include <Arduino.h>
-#include <libb64/cencode.h>
-#include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <libb64/cencode.h>
 
 #include <driver/i2s.h>
 
+#ifndef AUDIO_NO_SD_FS
+#include <SPI.h>
 #ifdef SDFATFS_USED
 #include <SdFat.h>  // https://github.com/greiman/SdFat
 #else
@@ -62,13 +63,13 @@ extern fs::SDFATFS SD_SDFAT;
 using namespace fs;
 #define SD SD_SDFAT
 #endif //SDFATFS_USED
-
-
-
+#endif // AUDIO_NO_SD_FS
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
+#ifndef AUDIO_NO_SD_FS
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
+#endif                                                                                             // AUDIO_NO_SD_FS
 extern __attribute__((weak)) void audio_eof_mp3(const char*); //end of mp3 file
 extern __attribute__((weak)) void audio_showstreamtitle(const char*);
 extern __attribute__((weak)) void audio_showstation(const char*);
@@ -160,8 +161,10 @@ public:
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
+#ifndef AUDIO_NO_SD_FS
     bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
     bool connecttoSD(const char* path, uint32_t resumeFilePos = 0);
+#endif                           // AUDIO_NO_SD_FS
     bool setFileLoop(bool input);//TEST loop
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
@@ -206,7 +209,9 @@ private:
     void httpPrint(const char* url);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
+#ifndef AUDIO_NO_SD_FS
     void processLocalFile();
+#endif // AUDIO_NO_SD_FS
     void processWebStream();
     void processPlayListData();
     void processM3U8entries(uint8_t nrOfEntries = 0, uint32_t seqNr = 0, uint8_t pos = 0, uint16_t targetDuration = 0);
@@ -397,7 +402,9 @@ private:
         float b2;
     } filter_t;
 
+#ifndef AUDIO_NO_SD_FS
     File              audiofile;    // @suppress("Abstract class cannot be instantiated")
+#endif                              // AUDIO_NO_SD_FS
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*       _client = nullptr;
