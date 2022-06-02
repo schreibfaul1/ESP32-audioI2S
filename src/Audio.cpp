@@ -1,8 +1,8 @@
 /*
  * Audio.cpp
  *
- *  Created on: Oct 26,2018
- *  Updated on: May 20,2022
+ *  Created on: Oct 26.2018
+ *  Updated on: Jun 02.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -788,6 +788,45 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttomarytts(const char* speech, const char* lang, const char* voice){
+
+    //lang:     fr, te, ru, en_US, en_GB, sv, lb, tr, de, it
+
+    //voice:    upmc-pierre-hsmm             fr male hmm
+    //          upmc-pierre                  fr male unitselection general
+    //          upmc-jessica-hsmm            fr female hmm
+    //          upmc-jessica                 fr female unitselection general
+    //          marylux                      lb female unitselection general
+    //          istc-lucia-hsmm              it female hmm
+    //          enst-dennys-hsmm             fr male hmm
+    //          enst-camille-hsmm            fr female hmm
+    //          enst-camille                 fr female unitselection general
+    //          dfki-spike-hsmm              en_GB male hmm
+    //          dfki-spike                   en_GB male unitselection general
+    //          dfki-prudence-hsmm           en_GB female hmm
+    //          dfki-prudence                en_GB female unitselection general
+    //          dfki-poppy-hsmm              en_GB female hmm
+    //          dfki-poppy                   en_GB female unitselection general
+    //          dfki-pavoque-styles          de male unitselection general
+    //          dfki-pavoque-neutral-hsmm    de male hmm
+    //          dfki-pavoque-neutral         de male unitselection general
+    //          dfki-ot-hsmm                 tr male hmm
+    //          dfki-ot                      tr male unitselection general
+    //          dfki-obadiah-hsmm            en_GB male hmm
+    //          dfki-obadiah                 en_GB male unitselection general
+    //          cmu-slt-hsmm                 en_US female hmm
+    //          cmu-slt                      en_US female unitselection general
+    //          cmu-rms-hsmm                 en_US male hmm
+    //          cmu-rms                      en_US male unitselection general
+    //          cmu-nk-hsmm                  te female hmm
+    //          cmu-bdl-hsmm                 en_US male hmm
+    //          cmu-bdl                      en_US male unitselection general
+    //          bits4                        de female unitselection general
+    //          bits3-hsmm                   de male hmm
+    //          bits3                        de male unitselection general
+    //          bits2                        de male unitselection general
+    //          bits1-hsmm                   de female hmm
+    //          bits1                        de female unitselection general
+
     setDefaults();
     char host[] = "mary.dfki.de";
     char path[] = "/process";
