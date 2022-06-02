@@ -160,6 +160,7 @@ public:
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
+    bool connecttomarytts(const char* speech, const char* lang, const char* voice);
     bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
     bool connecttoSD(const char* path, uint32_t resumeFilePos = 0);
     bool setFileLoop(bool input);//TEST loop

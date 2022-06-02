@@ -787,6 +787,59 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
+bool Audio::connecttomarytts(const char* speech, const char* lang, const char* voice){
+    setDefaults();
+    char host[] = "mary.dfki.de";
+    char path[] = "/process";
+    int port = 59125;
+
+    uint16_t speechLen = strlen(speech);
+    uint16_t speechBuffLen = speechLen + 300;
+    memcpy(m_lastHost, speech, 256);
+    char* speechBuff = (char*)malloc(speechBuffLen);
+    if(!speechBuff) {log_e("out of memory"); return false;}
+    memcpy(speechBuff, speech, speechLen);
+    speechBuff[speechLen] = '\0';
+    urlencode(speechBuff, speechBuffLen);
+
+    char resp[strlen(speechBuff) + 200] = "";
+    strcat(resp, "GET ");
+    strcat(resp, path);
+    strcat(resp, "?INPUT_TEXT=");
+    strcat(resp, speechBuff);
+    strcat(resp, "&INPUT_TYPE=TEXT");
+    strcat(resp, "&OUTPUT_TYPE=AUDIO");
+    strcat(resp, "&AUDIO=WAVE_FILE");
+    strcat(resp, "&LOCALE=");
+    strcat(resp, lang);
+    strcat(resp, "&VOICE=");
+    strcat(resp, voice);
+    strcat(resp, " HTTP/1.1\r\n");
+    strcat(resp, "Host: ");
+    strcat(resp, host);
+    strcat(resp, "\r\n");
+    strcat(resp, "User-Agent: Mozilla/5.0 \r\n");
+    strcat(resp, "Accept-Encoding: identity\r\n");
+    strcat(resp, "Accept: text/html\r\n");
+    strcat(resp, "Connection: close\r\n\r\n");
+
+    free(speechBuff);
+    _client = static_cast<WiFiClient*>(&client);
+    if(!_client->connect(host, port)) {
+        log_e("Connection failed");
+        return false;
+    }
+    _client->print(resp);
+
+    m_f_webstream = true;
+    m_f_running = true;
+    m_f_ssl = false;
+    m_f_tts = true;
+    setDatamode(AUDIO_HEADER);
+
+    return true;
+}
+//---------------------------------------------------------------------------------------------------------------------
 void Audio::urlencode(char* buff, uint16_t buffLen, bool spacesOnly) {
 
     uint16_t len = strlen(buff);
