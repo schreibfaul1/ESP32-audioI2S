@@ -2,7 +2,7 @@
  * Audio.cpp
  *
  *  Created on: Oct 26.2018
- *  Updated on: Jun 02.2022
+ *  Updated on: Jun 18.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1942,7 +1942,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == M4A_MDAT) {  // mdat
-        m_audioDataSize = bigEndian(data, 4); // length of this atom
+        m_audioDataSize = bigEndian(data, 4) -8; // length of this atom - strlen(M4A_MDAT)
         AUDIO_INFO(sprintf(chbuf, "Audio-Length: %u",m_audioDataSize);)
         retvalue = 8;
         headerSize += 8;
@@ -1952,7 +1952,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
 
     if(m_controlCounter == M4A_AMRDY){ // almost ready
         m_audioDataStart = headerSize;
-        m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
+//        m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
 //        log_i("begin mdat %i", headerSize);
         if(m_f_localfile){
             AUDIO_INFO(sprintf(chbuf, "Content-Length: %u", m_contentlength);)
@@ -3062,22 +3062,28 @@ void Audio::processWebStream() {
     int32_t         availableBytes;                             // available bytes in stream
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
+    static bool     f_webFileDataComplete;                      // all file data received
+    static bool     f_webFileAudioComplete;                     // all audio data received
     static int      bytesDecoded;
     static uint32_t byteCounter;                                // count received data
     static uint32_t chunksize;                                  // chunkcount read from stream
     static uint32_t tmr_1s;                                     // timer 1 sec
     static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
     static uint32_t metacount;                                  // counts down bytes between metadata
+    static size_t   audioDataCount;                             // counts the decoded audiodata only
 
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        f_webFileDataComplete = false;
+        f_webFileAudioComplete = false;
         f_stream = false;
         byteCounter = 0;
         chunksize = 0;
         bytesDecoded = 0;
         loopCnt = 0;
+        audioDataCount = 0;
         tmr_1s = millis();
         m_t0 = millis();
         metacount = m_metaint;
@@ -3089,45 +3095,12 @@ void Audio::processWebStream() {
         m_f_continue = false;
     }
 
-    // have we reached the end of the webfile?  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_webfile && byteCounter == m_contentlength){
-        if(InBuff.bufferFilled() < 10000){
-            if(m_datamode == AUDIO_DATA && m_f_m3u8data) {processM3U8entries(); return;} // we need the next audioChunk
-        }
-        if(InBuff.bufferFilled() > 0){
-            if(InBuff.bufferFilled() == 128){ // post tag? comes sometimes after podcasts
-                if(indexOf((const char*)InBuff.getReadPtr(), "TAG", 0) == 0){
-                     log_i("%s", InBuff.getReadPtr() + 3);
-                     InBuff.bytesWasRead(128);
-                    return;
-                }
-                else{
-                    log_v("%s", InBuff.getReadPtr());
-                    InBuff.bytesWasRead(InBuff.bufferFilled());
-                    return;
-                }
-            }
-            bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-            if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
-            if(bytesDecoded == 0) return; // syncword at pos0 found
-        }
-        if(m_f_m3u8data) return;
+    if(m_datamode != AUDIO_DATA) return;        // guard
 
-        playI2Sremains();
-        stopSong(); // Correct close when play known length sound #74 and before callback #112
+    if(m_f_webfile){
 
-        if(m_f_tts){
-            AUDIO_INFO(sprintf(chbuf, "End of speech: \"%s\"", m_lastHost);)
-            if(audio_eof_speech) audio_eof_speech(m_lastHost);
-        }
-        else{
-            AUDIO_INFO(sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost);)
-            if(audio_eof_stream) audio_eof_stream(m_lastHost);
-        }
-        return;
     }
-
-    if(m_datamode != AUDIO_DATA) return;
+    availableBytes = _client->available();      // available from stream
 
     // timer, triggers every second - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if((tmr_1s + 1000) < millis()) {
@@ -3135,12 +3108,10 @@ void Audio::processWebStream() {
         tmr_1s = millis();
     }
 
-    availableBytes = _client->available();      // available from stream
-
     if(ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_DEBUG){
         // Here you can see how much data comes in, a summary is displayed in every 10 calls
         static uint8_t  i = 0;
-        static uint32_t t = 0;
+        static uint32_t t = 0; (void)t;
         static uint32_t t0 = 0;
         static uint16_t avb[10];
         if(!i) t = millis();
@@ -3190,7 +3161,7 @@ void Audio::processWebStream() {
     }
 
     // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() < maxFrameSize && f_stream){
+    if(InBuff.bufferFilled() < maxFrameSize && f_stream && !f_webFileDataComplete){
         static uint8_t cnt_slow = 0;
         cnt_slow ++;
         if(f_tmr_1s) {
@@ -3201,12 +3172,13 @@ void Audio::processWebStream() {
     }
 
     // if the buffer can't filled for several seconds try a new connection  - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream && !availableBytes){
+    if(f_stream && !availableBytes && !f_webFileAudioComplete){
         loopCnt++;
         if(loopCnt > 200000) {              // wait several seconds
             loopCnt = 0;
             if(audio_info) audio_info("Stream lost -> try new connection");
             connecttohost(m_lastHost);
+            return;
         }
     }
     if(availableBytes) loopCnt = 0;
@@ -3219,7 +3191,17 @@ void Audio::processWebStream() {
 
         int16_t bytesAddedToBuffer = 0;
 
-        if(InBuff.havePSRAM()) if(bytesCanBeWritten > 4096) bytesCanBeWritten = 4096; // PSRAM throttle
+        // Audiobuffer throttle - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            if(m_codec == CODEC_AAC || m_codec == CODEC_MP3 || m_codec == CODEC_M4A){
+                if(bytesCanBeWritten > maxFrameSize) bytesCanBeWritten = maxFrameSize;
+            }
+            if(m_codec == CODEC_WAV){
+                if(bytesCanBeWritten > maxFrameSize - 500) bytesCanBeWritten = maxFrameSize - 600;
+            }
+            if(m_codec == CODEC_FLAC){
+                if(bytesCanBeWritten > maxFrameSize) bytesCanBeWritten = maxFrameSize;
+            }
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
         if(m_f_webfile){
             // normally there is nothing to do here, if byteCounter == contentLength
@@ -3278,32 +3260,75 @@ void Audio::processWebStream() {
        return;
     }
 
-    // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if((InBuff.bufferFilled() >= maxFrameSize) && (f_stream == true)) { // fill > framesize?
-        if(m_f_webfile){
-                bytesDecoded = sendBytes(InBuff.getReadPtr(), maxFrameSize);
+    // end of webfile reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+       if(f_webFileAudioComplete){
+       if(m_f_m3u8data) return
+        playI2Sremains();
+        stopSong(); // Correct close when play known length sound #74 and before callback #11
+        if(m_f_tts){
+            AUDIO_INFO(sprintf(chbuf, "End of speech: \"%s\"", m_lastHost);)
+            if(audio_eof_speech) audio_eof_speech(m_lastHost);
         }
-        else { // not a webfile
-            if(m_controlCounter != 100 && (m_codec == CODEC_OGG || m_codec == CODEC_OGG_FLAC)) {  //application/ogg
-                int res = read_OGG_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
-                if(res >= 0) bytesDecoded = res;
-                else { // error, skip header
-                    stopSong();
-                    m_controlCounter = 100;
-                }
+        else{
+            AUDIO_INFO(sprintf(chbuf, "End of webstream: \"%s\"", m_lastHost);)
+            if(audio_eof_stream) audio_eof_stream(m_lastHost);
+        }
+        return;
+    }
+
+    // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(!f_stream) return; // 1. guard
+    bool a = InBuff.bufferFilled() >= maxFrameSize;
+    bool b = (m_audioDataSize  > 0) && (m_audioDataSize <= audioDataCount + maxFrameSize);
+    if(!a && !b) return; // 2. guard   fill < frame && last frame(s)
+
+    size_t data2decode = InBuff.bufferFilled();
+
+    if(data2decode < maxFrameSize){
+        if(m_audioDataSize - audioDataCount < maxFrameSize){
+            data2decode = m_audioDataSize - audioDataCount;
+        }
+        else return;
+    }
+    else data2decode = maxFrameSize;
+
+    if(m_f_webfile){
+        bytesDecoded = sendBytes(InBuff.getReadPtr(), data2decode);
+        if(bytesDecoded > 0) audioDataCount += bytesDecoded;
+
+        if(byteCounter == m_contentlength){
+            if(InBuff.bufferFilled() < 10000){  // we need the next audioChunk
+                if(m_f_m3u8data) {processM3U8entries(); return;}
             }
-            else{
-                bytesDecoded = sendBytes(InBuff.getReadPtr(), maxFrameSize);
+            f_webFileDataComplete = true;
+        }
+        if(m_audioDataSize == audioDataCount &&  m_controlCounter == 100) f_webFileAudioComplete = true;
+    }
+    else { // not a webfile
+        if(m_controlCounter != 100 && (m_codec == CODEC_OGG || m_codec == CODEC_OGG_FLAC)) {  //application/ogg
+            int res = read_OGG_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
+            if(res >= 0) bytesDecoded = res;
+            else { // error, skip header
+                stopSong();
+                m_controlCounter = 100;
             }
         }
-        if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
-            InBuff.bytesWasRead(200); // try next chunk
-            m_bytesNotDecoded += 200;
-            return;
+        else{
+            bytesDecoded = sendBytes(InBuff.getReadPtr(), data2decode);
         }
-        else {
-            InBuff.bytesWasRead(bytesDecoded);
-        }
+    }
+
+    if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
+        uint8_t next = 200;
+        if(InBuff.bufferFilled() < next) next = InBuff.bufferFilled();
+        InBuff.bytesWasRead(next); // try next chunk
+        m_bytesNotDecoded += next;
+        if(m_f_webfile) audioDataCount += next;
+        return;
+    }
+    else {
+        if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
+        if(bytesDecoded == 0) return; // syncword at pos0 found
     }
     return;
 }
