@@ -2,7 +2,9 @@
  * Audio.cpp
  *
  *  Created on: Oct 26.2018
- *  Updated on: Jun 18.2022
+ * 
+ *  Version 2.0.3
+ *  Updated on: Jun 20.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -183,7 +185,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
 
     if (internalDAC)  {
 
-        #ifdef CONFIG_IDF_TARGET_ESP32
+        #ifdef CONFIG_IDF_TARGET_ESP32  // ESP32S3 has no DAC
 
             log_i("internal DAC");
             m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
@@ -257,6 +259,8 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
+    // IDF >= 4.4 use setPinout(BCLK, LRC, DOUT, DIN, MCK) only, i2s_mclk_pin_select() is no longer needed
+
     if(pin != 0 && pin != 1 && pin != 3) {
         log_e("Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
         return ESP_ERR_INVALID_ARG;
@@ -545,6 +549,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //    strcat(resp, "Transfer-Encoding: \r\n");  // otherwise the server assumes gzip compression
     strcat(resp, "Connection: keep-alive\r\n\r\n");
     uint32_t t = millis();
+
+    if(ESP_ARDUINO_VERSION_MAJOR == 2 && ESP_ARDUINO_VERSION_MINOR == 0 && ESP_ARDUINO_VERSION_PATCH == 3){
+        m_timeout_ms_ssl = UINT16_MAX;      // bug in v2.0.3 if hostwoext is a IPaddr not a name
+        m_timeout_ms = UINT16_MAX;          // [WiFiClient.cpp:253] connect(): select returned due to timeout 250 ms for fd 48
+    }
+
     if(_client->connect(hostwoext, port, m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms)) {
         if(!m_f_ssl) _client->setNoDelay(true);
         // if(audio_info) audio_info("SSL/TLS Connected to server");
@@ -4034,12 +4044,15 @@ void Audio::printDecodeError(int r) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN) {
+bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN, int8_t MCK) {
 
     m_pin_config.bck_io_num   = BCLK;
     m_pin_config.ws_io_num    = LRC; //  wclk
     m_pin_config.data_out_num = DOUT;
     m_pin_config.data_in_num  = DIN;
+#if(ESP_IDF_VERSION_MAJOR >= 4 && ESP_IDF_VERSION_MINOR >= 4)
+    m_pin_config.mck_io_num   = MCK;
+#endif
 
     const esp_err_t result = i2s_set_pin((i2s_port_t) m_i2s_num, &m_pin_config);
     return (result == ESP_OK);

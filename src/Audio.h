@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: May 19,2022
+ *  Updated on: Jun 20,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -169,7 +169,7 @@ public:
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
     bool setTimeOffset(int sec);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN=I2S_PIN_NO_CHANGE);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN = I2S_PIN_NO_CHANGE, int8_t MCK = I2S_PIN_NO_CHANGE);
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
@@ -202,6 +202,13 @@ public:
                  CODEC_OGG_FLAC, CODEC_OGG_OPUS};
 
 private:
+
+    #ifndef ESP_ARDUINO_VERSION_VAL
+        #define ESP_ARDUINO_VERSION_MAJOR = 0
+        #define ESP_ARDUINO_VERSION_MINOR = 0
+        #define ESP_ARDUINO_VERSION_PATCH = 0
+    #endif
+
     void UTF8toASCII(char* str);
     bool latinToUTF8(char* buff, size_t bufflen);
     void httpPrint(const char* url);
