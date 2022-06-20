@@ -204,9 +204,9 @@ public:
 private:
 
     #ifndef ESP_ARDUINO_VERSION_VAL
-        #define ESP_ARDUINO_VERSION_MAJOR = 0
-        #define ESP_ARDUINO_VERSION_MINOR = 0
-        #define ESP_ARDUINO_VERSION_PATCH = 0
+        #define ESP_ARDUINO_VERSION_MAJOR 0
+        #define ESP_ARDUINO_VERSION_MINOR 0
+        #define ESP_ARDUINO_VERSION_PATCH 0
     #endif
 
     void UTF8toASCII(char* str);
