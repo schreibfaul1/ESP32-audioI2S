@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jun 20,2022
+ *  Updated on: Jun 22,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -409,8 +409,8 @@ private:
     WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*       _client = nullptr;
-    i2s_config_t      m_i2s_config; // stores values for I2S driver
-    i2s_pin_config_t  m_pin_config;
+    i2s_config_t      m_i2s_config = {}; // stores values for I2S driver
+    i2s_pin_config_t  m_pin_config = {};
 
     const size_t    m_frameSizeWav  = 1600;
     const size_t    m_frameSizeMP3  = 1600;
