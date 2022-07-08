@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.4
+ *  Version 2.0.4a
  *  Updated on: Jul 07.2022
  *      Author: Wolle (schreibfaul1)
  *
@@ -2493,7 +2493,6 @@ const char* Audio::parsePlaylist_M3U8(){
             // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374038.aac
             // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
             // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
-            static uint32_t seqNr = 0;
             if(startsWith(m_playlistContent[i], "#EXT-X-MEDIA-SEQUENCE:")){
                 // do nothing, because MEDIA-SECUENCE is not set sometimes
             }
@@ -3437,7 +3436,7 @@ bool Audio::parseContentType(char* ct) {
             break;
         case CT_OGG:
             m_codec = CODEC_OGG;
-            if(m_f_Log) { AUDIO_INFO("ContentType %s, ContentType %s found", ct); }
+            if(m_f_Log) { AUDIO_INFO("ContentType %s found", ct); }
             break;
 
         case CT_PLS:
