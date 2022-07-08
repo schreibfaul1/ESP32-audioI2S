@@ -2251,7 +2251,6 @@ bool Audio::readPlayListData() {
     // m_contentlength is a table of pointers to the lines
     char pl[512]; // playlistLine
     uint32_t ctl  = 0;
-    uint16_t pos = 0;
     int lines = 0;
     // delete all memory in m_playlistContent
     if(!psramFound()){log_e("m3u8 playlists requires PSRAM enabled!");}
@@ -2262,7 +2261,7 @@ bool Audio::readPlayListData() {
         uint32_t timeout = 2000; // ms
 
         while(true) { // inner while
-            int pos = 0;
+            uint16_t pos = 0;
             while(_client->available()){ // super inner while :-))
                 pl[pos] = _client->read();
                 if(pl[pos] == '\n') {pl[pos] = '\0'; pos++; break;}
@@ -2430,19 +2429,13 @@ const char* Audio::parsePlaylist_ASX(){                             // Advanced 
 //----------------------------------------------------------------------------------------------------------------------
 const char* Audio::parsePlaylist_M3U8(){
     uint8_t lines = m_playlistContent.size();
-    bool f_entry = false;
-    bool f_ExtInf = false;
-    int pos = 0;
-    char* host = nullptr;
     bool f_begin = false;
-    bool f_StreamInf = false;
     uint8_t occurence = 0;
     if(lines){
         for(int i= 0; i < lines; i++){
             if(strlen(m_playlistContent[i]) == 0) continue;                    // empty line
             if(startsWith(m_playlistContent[i], "#EXTM3U")){                  // what we expected
                 f_begin      = true;
-                f_StreamInf  = false;
                 continue;
             }
             if(!f_begin) continue;
@@ -2462,7 +2455,6 @@ const char* Audio::parsePlaylist_M3U8(){
                     log_e("codec %s in m3u8 playlist not supported", m_playlistContent[i] + pos1);
                     goto exit;
                 }
-                f_StreamInf = true;
                 m_m3u8codec = CODEC_M4A;
                 i++;                                                    // next line
 
@@ -2502,7 +2494,6 @@ const char* Audio::parsePlaylist_M3U8(){
 //            log_e("m_m3u8_targetDuration %d", m_m3u8_targetDuration);
 
             if(startsWith(m_playlistContent[i],"#EXTINF")) {
-                f_ExtInf = true;
                 if(STfromEXTINF(m_playlistContent[i])) showstreamtitle(chbuf);
                 i++;
 
@@ -2534,7 +2525,6 @@ const char* Audio::parsePlaylist_M3U8(){
 
                 if(tmp){free(tmp); tmp = NULL;}
 
-                uint8_t size = m_playlistURL.size();
                 if(m_playlistURL.size() == 100){
                     ESP_LOGD("", "can't stuff anymore");
                     break;
