@@ -259,6 +259,10 @@ private:
     inline uint8_t getDatamode(){return m_datamode;}
     inline uint32_t streamavail(){ return _client ? _client->available() : 0;}
     void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
+    void ts_parsePAT(uint8_t *pat);
+    void ts_parsePMT(uint8_t *pat);
+    int ts_parsePES(uint8_t *pat, int posOfPacketStart, uint8_t *data);
+    int ts_parsePacket(uint8_t *packet, uint8_t *data);
 
     // implement several function with respect to the index of string
     void trim(char *s) {
@@ -423,6 +427,11 @@ private:
         float b2;
     } filter_t;
 
+    typedef struct _pis_array{
+        int number;
+        int pids[4];
+    } pid_array;
+
     File               audiofile;    // @suppress("Abstract class cannot be instantiated")
     WiFiClient         client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure   clientsecure; // @suppress("Abstract class cannot be instantiated")
@@ -436,6 +445,9 @@ private:
     const size_t    m_frameSizeMP3  = 1600;
     const size_t    m_frameSizeAAC  = 1600;
     const size_t    m_frameSizeFLAC = 4096 * 4;
+
+    static const uint8_t m_tsPacketSize  = 188;
+    static const uint8_t m_tsHeaderSize  = 4;
 
     char            chbuf[512 + 128];               // must be greater than m_lastHost #254
     char            m_lastHost[512];                // Store the last URL to a webstream
@@ -515,6 +527,11 @@ private:
     int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
     int8_t          m_gain1 = 0;
     int8_t          m_gain2 = 0;
+
+    pid_array       m_pidsOfPMT;
+    int16_t         m_pidOfAAC;
+    uint8_t         m_packetBuff[m_tsPacketSize];
+    int16_t         m_pesDataLength = 0;
 };
 
 //----------------------------------------------------------------------------------------------------------------------

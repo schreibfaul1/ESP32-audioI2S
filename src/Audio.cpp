@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.4a
- *  Updated on: Jul 07.2022
+ *  Version 2.0.4b
+ *  Updated on: Jul 08.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -407,7 +407,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(h_host, "/", 0);
-    pos_colon     = indexOf(h_host, ":", 0);
+    pos_colon     = indexOf(h_host, ":", 0); if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
     pos_ampersand = indexOf(h_host, "&", 0);
 
     char *hostwoext = NULL;                                  // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
@@ -2265,18 +2265,26 @@ bool Audio::readPlayListData() {
             while(_client->available()){ // super inner while :-))
                 pl[pos] = _client->read();
                 if(pl[pos] == '\n') {pl[pos] = '\0'; pos++; break;}
-                if(pl[pos] == '&' ) {pl[pos] = '\0'; pos++; break;}
+            //    if(pl[pos] == '&' ) {pl[pos] = '\0'; pos++; break;}
                 if(pl[pos] == '\r') {pl[pos] = '\0'; pos++; break;}
                 pos++;
                 if(pos == 510) {pl[pos] = '\0'; break;}
             }
             ctl += pos;
-            if(pos) break;
+            if(pos) {pl[pos] = '\0'; break;}
             if(ctime + timeout < millis()) {log_e("timeout"); break;}
         } // inner while
 
-        // we have one line only, terminate all crap
-        if(m_contentlength < strlen(pl)) {log_e("%i", m_contentlength); pl[m_contentlength] = '\0';}
+        if(m_contentlength > 0){
+            // we have one line only, terminate all crap
+            if(m_contentlength < strlen(pl)) {log_e("%i", m_contentlength); pl[m_contentlength] = '\0';}
+            // we have more line but no '\n' at the and -> terminate all crap
+            else if(m_contentlength < ctl){
+                int diff = ctl - m_contentlength;
+                int lastpos = strlen(pl) - diff;
+                pl[lastpos] = '\0';
+            }
+        }
 
         if(startsWith(pl, "<!DOCTYPE")) {AUDIO_INFO("url is a webpage!"); goto exit;}
         m_playlistContent.push_back(strdup((const char*)pl));
@@ -2447,20 +2455,23 @@ const char* Audio::parsePlaylist_M3U8(){
             if(startsWith(m_playlistContent[i],"#EXT-X-STREAM-INF:")){
                 if(occurence > 0) break; // no more than one #EXT-X-STREAM-INF: (can have different BANDWIDTH)
                 occurence++;
-                int pos = indexOf(m_playlistContent[i], "CODECS=\"mp4a", 18);
-                if(pos < 0){ // not found
-                    int pos1 = indexOf(m_playlistContent[i], "CODECS=", 18);
-                    if(pos1 < 0) pos1 = 0;
-                    m_m3u8codec  = CODEC_NONE;
-                    log_e("codec %s in m3u8 playlist not supported", m_playlistContent[i] + pos1);
-                    goto exit;
+                if(!endsWith(m_playlistContent[i+1], "m3u8")){ // we have a new m3u8 playlist, skip to next line
+                    int pos = indexOf(m_playlistContent[i], "CODECS=\"mp4a", 18);
+                    if(pos < 0){ // not found
+                        int pos1 = indexOf(m_playlistContent[i], "CODECS=", 18);
+                        if(pos1 < 0) pos1 = 0;
+                        m_m3u8codec  = CODEC_NONE;
+                        log_e("codec %s in m3u8 playlist not supported", m_playlistContent[i] + pos1);
+                        goto exit;
+                    }
+                    m_m3u8codec = CODEC_M4A;
                 }
-                m_m3u8codec = CODEC_M4A;
                 i++;                                                    // next line
 
                 char* tmp = nullptr;
                 if(!startsWith(m_playlistContent[i], "http")){
-                    //http://livees.com/prog_index.m3u8 and prog_index48347.aac --> http://livees.com/prog_index48347.aac
+                  //http://livees.com/prog_index.m3u8 and prog_index48347.aac --> http://livees.com/prog_index48347.aac
+                  //http://livees.com/prog_index.m3u8 and chunklist022.m3u8   --> http://livees.com/chunklist022.m3u8
                     tmp = (char*)malloc(strlen(m_lastHost)+ strlen(m_playlistContent[i]));
                     strcpy(tmp, m_lastHost);
                     int idx = lastIndexOf(tmp, "/");
@@ -4363,3 +4374,129 @@ int16_t* Audio::IIR_filterChain2(int16_t iir_in[2], bool clear){  // Infinite Im
 
     return iir_out;
 }
+//----------------------------------------------------------------------------------------------------------------------
+//    AAC - T R A N S P O R T S T R E A M
+//----------------------------------------------------------------------------------------------------------------------
+void Audio::ts_parsePAT(uint8_t *pat)
+{
+  int startOfProgramNums = 8;
+  int lengthOfPATValue = 4;
+  int sectionLength = ((pat[1] & 0x0F) << 8) | (pat[2] & 0xFF);
+  log_v("Section Length: %d", sectionLength);
+  int indexOfPids = 0;
+  for (int i = startOfProgramNums; i <= sectionLength; i += lengthOfPATValue)
+  {
+    //int program_number = ((pat[i] & 0xFF) << 8) | (pat[i + 1] & 0xFF);
+    //log_v("Program Num: 0x%04X(%d)", program_number, program_number);
+    int program_map_PID = ((pat[i + 2] & 0x1F) << 8) | (pat[i + 3] & 0xFF);
+    log_v("PMT PID: 0x%04X(%d)", program_map_PID, program_map_PID);
+    m_pidsOfPMT.pids[indexOfPids++] = program_map_PID;
+  }
+  m_pidsOfPMT.number = indexOfPids;
+}
+
+void Audio::ts_parsePMT(uint8_t *pat)
+{
+  int staticLengthOfPMT = 12;
+  int sectionLength = ((pat[1] & 0x0F) << 8) | (pat[2] & 0xFF);
+  log_v("Section Length: %d", sectionLength);
+  int programInfoLength = ((pat[10] & 0x0F) << 8) | (pat[11] & 0xFF);
+  log_v("Program Info Length: %d", programInfoLength);
+
+  int cursor = staticLengthOfPMT + programInfoLength;
+  while (cursor < sectionLength - 1)
+  {
+    int streamType = pat[cursor] & 0xFF;
+    int elementaryPID = ((pat[cursor + 1] & 0x1F) << 8) | (pat[cursor + 2] & 0xFF);
+    log_v("Stream Type: 0x%02X(%d) Elementary PID: 0x%04X(%d)",
+          streamType, streamType, elementaryPID, elementaryPID);
+
+    if (streamType == 0x0F || streamType == 0x11) m_pidOfAAC = elementaryPID;
+
+    int esInfoLength = ((pat[cursor + 3] & 0x0F) << 8) | (pat[cursor + 4] & 0xFF);
+    log_v("ES Info Length: 0x%04X(%d)", esInfoLength, esInfoLength);
+    cursor += 5 + esInfoLength;
+  }
+}
+
+int Audio::ts_parsePES(uint8_t *pat, int posOfPacketStart, uint8_t *data)
+{
+  size_t dataSize;
+  if (m_pesDataLength > 0)
+  {
+    dataSize = m_tsPacketSize - posOfPacketStart;
+    memcpy(data, pat, dataSize);
+    m_pesDataLength -= dataSize;
+    return dataSize;
+  }
+  else
+  {
+    uint8_t firstByte  = pat[0] & 0xFF;
+    uint8_t secondByte = pat[1] & 0xFF;
+    uint8_t thirdByte  = pat[2] & 0xFF;
+    if (firstByte == 0x00 && secondByte == 0x00 && thirdByte == 0x01)
+    {
+      uint8_t streamID = pat[3] & 0xFF;
+      if(streamID < 0xC0 || streamID > 0xDF){
+        Serial.printf("Stream ID:%02X ", streamID);
+        if(0xE0 <= streamID && streamID <= 0xEF){
+        Serial.println("This is a Stream ID for Video.");
+        }else{
+        Serial.println("Wrong Stream ID for Audio.");
+        }
+        exit(1);
+      }
+      const uint8_t posOfPacketLengthLatterHalf = 5;
+      uint16_t PESRemainingPacketLength = ((pat[4] & 0xFF) << 8) | (pat[5] & 0xFF);
+      log_v("PES Packet length: %d", PESRemainingPacketLength);
+      m_pesDataLength = PESRemainingPacketLength;
+      const uint8_t posOfHeaderLength = 8;
+      uint8_t PESRemainingHeaderLength = pat[posOfHeaderLength] & 0xFF;
+      log_v("PES Header length: %d", PESRemainingHeaderLength);
+      int startOfData = posOfHeaderLength + PESRemainingHeaderLength + 1;
+      dataSize = (m_tsPacketSize - posOfPacketStart) - startOfData;
+      memcpy(data, &pat[startOfData], dataSize);
+      m_pesDataLength -= (m_tsPacketSize - posOfPacketStart) - (posOfPacketLengthLatterHalf + 1);
+      return dataSize;
+    }
+  }
+  return 0;
+}
+
+int Audio::ts_parsePacket(uint8_t *packet, uint8_t *data)
+{
+  int read = 0;
+
+  int pid = ((packet[1] & 0x1F) << 8) | (packet[2] & 0xFF);
+  log_v("PID: 0x%04X(%d)", pid, pid);
+  int payloadUnitStartIndicator = (packet[1] & 0x40) >> 6;
+  log_v("Payload Unit Start Indicator: %d", payloadUnitStartIndicator);
+  int adaptionFieldControl = (packet[3] & 0x30) >> 4;
+  log_v("Adaption Field Control: %d", adaptionFieldControl);
+  int remainingAdaptationFieldLength = -1;
+  if ((adaptionFieldControl & 0b10) == 0b10)
+  {
+    remainingAdaptationFieldLength = packet[4] & 0xFF;
+    log_v("Adaptation Field Length: %d", remainingAdaptationFieldLength);
+  }
+
+  int payloadStart = payloadUnitStartIndicator ? 5 : 4;
+
+  if (pid == 0){
+    ts_parsePAT(&packet[payloadStart]);
+  } else if (pid == m_pidOfAAC){
+    int posOfPacketStart = 4;
+    if (remainingAdaptationFieldLength >= 0) posOfPacketStart = 5 + remainingAdaptationFieldLength;
+    read = ts_parsePES(&packet[posOfPacketStart], posOfPacketStart, data);
+  } else if (m_pidsOfPMT.number){
+    for (int i = 0; i < m_pidsOfPMT.number; i++){
+      if (pid == m_pidsOfPMT.pids[i]){
+        ts_parsePMT(&packet[payloadStart]);
+      }
+    }
+  }
+
+  return read;
+}
+//----------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
