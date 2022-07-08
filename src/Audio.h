@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jun 22,2022
+ *  Updated on: Jul 05,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -11,13 +11,15 @@
 
 #pragma once
 #pragma GCC optimize ("Ofast")
-
+#include <vector>
 #include <Arduino.h>
 #include <libb64/cencode.h>
+#include <esp32-hal-log.h>
+
 #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-
+#include <vector>
 #include <driver/i2s.h>
 
 #ifdef SDFATFS_USED
@@ -63,7 +65,7 @@ using namespace fs;
 #define SD SD_SDFAT
 #endif //SDFATFS_USED
 
-
+using namespace std;
 
 
 extern __attribute__((weak)) void audio_info(const char*);
@@ -80,6 +82,8 @@ extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_extern(int16_t* buff, uint16_t len, bool *continueI2S); // record audiodata or send via BT
+
+#define AUDIO_INFO(...) {char buff[512]; sprintf(buff,__VA_ARGS__); if(audio_info) audio_info(buff);}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -198,8 +202,6 @@ public:
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
     const char *getCodecname() {return codecname[m_codec];}
-    enum : int { CODEC_NONE, CODEC_WAV, CODEC_MP3, CODEC_AAC, CODEC_M4A, CODEC_FLAC, CODEC_OGG,
-                 CODEC_OGG_FLAC, CODEC_OGG_OPUS};
 
 private:
 
@@ -211,13 +213,15 @@ private:
 
     void UTF8toASCII(char* str);
     bool latinToUTF8(char* buff, size_t bufflen);
-    void httpPrint(const char* url);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
     void processLocalFile();
     void processWebStream();
-    void processPlayListData();
-    void processM3U8entries(uint8_t nrOfEntries = 0, uint32_t seqNr = 0, uint8_t pos = 0, uint16_t targetDuration = 0);
+    bool readPlayListData();
+    const char* parsePlaylist_M3U();
+    const char* parsePlaylist_PLS();
+    const char* parsePlaylist_ASX();
+    const char* parsePlaylist_M3U8();
     bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
@@ -241,8 +245,9 @@ private:
     int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
     void showstreamtitle(const char* ml);
-    bool parseContentType(const char* ct);
-    void processAudioHeaderData();
+    bool parseContentType(char* ct);
+    bool parseHttpResponseHeader();
+    bool initializeDecoder();
     bool readMetadata(uint8_t b, bool first = false);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
@@ -292,7 +297,7 @@ private:
         return (strncmp(p, str, slen) == 0);
     }
 
-    int indexOf (const char* base, const char* str, int startIndex) {
+    int indexOf (const char* base, const char* str, int startIndex = 0) {
     //fb
         const char *p = base;
         for (; startIndex > 0; startIndex--)
@@ -302,7 +307,7 @@ private:
         return pos - base;
     }
 
-    int indexOf (const char* base, char ch, int startIndex) {
+    int indexOf (const char* base, char ch, int startIndex = 0) {
     //fb
         const char *p = base;
         for (; startIndex > 0; startIndex--)
@@ -378,19 +383,32 @@ private:
         }
         return expectedLen;
     }
+    void vector_clear_and_shrink(vector<char*>&vec){
+        uint size = vec.size();
+        for (int i = 0; i < size; i++) {
+            if(vec[i]){
+                free(vec[i]);
+                vec[i] = NULL;
+            }
+        }
+        vec.clear();
+        vec.shrink_to_fit();
+    }
 
 private:
     const char *codecname[9] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "OGG", "OGG FLAC", "OPUS"};
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
-    enum : int { AUDIO_NONE, AUDIO_HEADER, AUDIO_DATA,
+    enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
     enum : int { OGG_BEGIN = 0, OGG_MAGIC = 1, OGG_HEADER = 2, OGG_FIRST = 3, OGG_AMRDY = 99, OGG_OKAY = 100};
+    enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
+                 CODEC_OGG = 6, CODEC_OGG_FLAC = 7, CODEC_OGG_OPUS = 8};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
@@ -405,12 +423,14 @@ private:
         float b2;
     } filter_t;
 
-    File              audiofile;    // @suppress("Abstract class cannot be instantiated")
-    WiFiClient        client;       // @suppress("Abstract class cannot be instantiated")
-    WiFiClientSecure  clientsecure; // @suppress("Abstract class cannot be instantiated")
-    WiFiClient*       _client = nullptr;
-    i2s_config_t      m_i2s_config = {}; // stores values for I2S driver
-    i2s_pin_config_t  m_pin_config = {};
+    File               audiofile;    // @suppress("Abstract class cannot be instantiated")
+    WiFiClient         client;       // @suppress("Abstract class cannot be instantiated")
+    WiFiClientSecure   clientsecure; // @suppress("Abstract class cannot be instantiated")
+    WiFiClient*        _client = nullptr;
+    i2s_config_t       m_i2s_config = {}; // stores values for I2S driver
+    i2s_pin_config_t   m_pin_config = {};
+    std::vector<char*> m_playlistContent; // m3u8 playlist buffer
+    std::vector<char*> m_playlistURL;     // m3u8 streamURLs buffer
 
     const size_t    m_frameSizeWav  = 1600;
     const size_t    m_frameSizeMP3  = 1600;
@@ -420,6 +440,7 @@ private:
     char            chbuf[512 + 128];               // must be greater than m_lastHost #254
     char            m_lastHost[512];                // Store the last URL to a webstream
     char*           m_playlistBuff = NULL;          // stores playlistdata
+    char*           m_m3u8_lastEntry = nullptr;     // compare sequencenumbers
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header
@@ -437,13 +458,14 @@ private:
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_m3u8codec = CODEC_NONE;       // M4A
     uint8_t         m_codec = CODEC_NONE;           //
+    uint8_t         m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
+    uint8_t         m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
     uint8_t         m_filterType[2];                // lowpass, highpass
     int16_t         m_outBuff[2048*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
     uint16_t        m_datamode = 0;                 // Statemaschine
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
-    uint16_t        m_streamUrlHash = 0;            // remember streamURL, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
     uint16_t        m_timeout_ms_ssl = 2700;
     uint8_t         m_flacBitsPerSample = 0;        // bps should be 16
@@ -459,6 +481,8 @@ private:
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
+    uint32_t        m_m3u8_timeStamp = 0;
+    uint16_t        m_m3u8_targetDuration = 10;     //
     bool            m_f_swm = true;                 // Stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -467,7 +491,6 @@ private:
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
-    bool            m_f_ctseen = false;             // First line of header seen or not
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
