@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.4b
- *  Updated on: Jul 08.2022
+ *  Version 2.0.4c
+ *  Updated on: Jul 09.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -407,7 +407,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(h_host, "/", 0);
-    pos_colon     = indexOf(h_host, ":", 0); if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_colon     = indexOf(h_host, ":", 0);
+        if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
     pos_ampersand = indexOf(h_host, "&", 0);
 
     char *hostwoext = NULL;                                  // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
@@ -450,7 +451,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(rqh, "Accept-Encoding: gzip;q=0\r\n");
     strcat(rqh, "User-Agent: Mozilla/5.0\r\n");
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
-    uint32_t t = millis();
 
     if(ESP_ARDUINO_VERSION_MAJOR == 2 && ESP_ARDUINO_VERSION_MINOR == 0 && ESP_ARDUINO_VERSION_PATCH == 3){
         m_timeout_ms_ssl = UINT16_MAX;  // bug in v2.0.3 if hostwoext is a IPaddr not a name
@@ -458,14 +458,15 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
     bool res = true; // no need to reconnect if connection exists
 
-    if(m_f_ssl){ _client = static_cast<WiFiClient*>(&clientsecure); port = 443;}
+    if(m_f_ssl){ _client = static_cast<WiFiClient*>(&clientsecure); if(port == 80) port = 443;}
     else       { _client = static_cast<WiFiClient*>(&client);}
 
     if(!_client->connected()) {
-        uint32_t dt = millis() - t;
-
+        uint32_t t = millis();
+        if(m_f_Log) AUDIO_INFO("connect to %s on port %d path %s", hostwoext, port, extension);
         res = _client->connect(hostwoext, port, m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
         if(res){
+            uint32_t dt = millis() - t;
             strcpy(m_lastHost, l_host);
             AUDIO_INFO("%s has been established in %u ms, free Heap: %u bytes",
                         m_f_ssl?"SSL":"Connection", dt, ESP.getFreeHeap());
@@ -2287,7 +2288,7 @@ bool Audio::readPlayListData() {
         }
 
         if(startsWith(pl, "<!DOCTYPE")) {AUDIO_INFO("url is a webpage!"); goto exit;}
-        m_playlistContent.push_back(strdup((const char*)pl));
+        if(strlen(pl) > 0) m_playlistContent.push_back(strdup((const char*)pl));
         if(m_playlistContent.size() == 100){
             ESP_LOGD("", "the maximum number of lines in the playlist has been reached");
             break;
@@ -3067,7 +3068,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     char rhl[512]; // responseHeaderline
     bool ct_seen = false;
     uint32_t ctime = millis();
-    uint32_t timeout = 2000; // ms
+    uint32_t timeout = 5000; // ms
 
     while(true){  // outer while
         uint16_t pos = 0;
@@ -3117,7 +3118,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(sc > 310 || sc == 301){ // e.g. HTTP/1.1 301 Moved Permanently
                 AUDIO_INFO(rhl);
                 if(audio_showstreamtitle) audio_showstreamtitle(rhl);
-                goto exit;
+            //    goto exit;
             }
         }
 
@@ -3369,7 +3370,8 @@ bool Audio::readMetadata(uint8_t b, bool first) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::parseContentType(char* ct) {
 
-    enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_OGG, CT_FLAC, CT_PLS, CT_M3U, CT_ASX, CT_M3U8, CT_TXT};
+    enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_OGG, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
+                CT_M3U8, CT_TXT, CT_AACP};
 
     strlwr(ct);
     trim(ct);
@@ -3385,7 +3387,7 @@ bool Audio::parseContentType(char* ct) {
 
     if(!strcmp(ct, "audio/aac"))        ct_val = CT_AAC;
     if(!strcmp(ct, "audio/x-aac"))      ct_val = CT_AAC;
-    if(!strcmp(ct, "audio/aacp"))       ct_val = CT_AAC;
+    if(!strcmp(ct, "audio/aacp"))       ct_val = CT_AACP;
     if(!strcmp(ct, "audio/mp4"))        ct_val = CT_M4A;
     if(!strcmp(ct, "audio/m4a"))        ct_val = CT_M4A;
 
@@ -3402,14 +3404,14 @@ bool Audio::parseContentType(char* ct) {
     if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
 
     if(!strcmp(ct, "application/ogg"))  ct_val = CT_OGG;
-    if(!strcmp(ct, "application/vnd.apple.mpegurl"))   ct_val = CT_M3U8;
+    if(!strcmp(ct, "application/vnd.apple.mpegurl")) ct_val = CT_M3U8;
     if(!strcmp(ct, "application/x-mpegurl")) ct_val =CT_M3U8;
 
     if(!strcmp(ct, "application/octet-stream")) ct_val = CT_TXT; // ??? listen.radionomy.com/1oldies before redirection
     if(!strcmp(ct, "text/html"))        ct_val = CT_TXT;
     if(!strcmp(ct, "text/plain"))       ct_val = CT_TXT;
 
-    if(ct_val == CT_NONE){
+    if(ct_val == CT_NONE || ct_val == CT_AACP){
         AUDIO_INFO("ContentType %s not supported", ct);
         return false; // nothing valid had been seen
     }
