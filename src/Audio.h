@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 08,2022
+ *  Updated on: Jul 11,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -232,7 +232,7 @@ private:
     void unicode2utf8(char* buff, uint32_t len);
     int  read_WAV_Header(uint8_t* data, size_t len);
     int  read_FLAC_Header(uint8_t *data, size_t len);
-    int  read_MP3_Header(uint8_t* data, size_t len);
+    int  read_ID3_Header(uint8_t* data, size_t len);
     int  read_M4A_Header(uint8_t* data, size_t len);
     int  read_OGG_Header(uint8_t *data, size_t len);
     bool setSampleRate(uint32_t hz);

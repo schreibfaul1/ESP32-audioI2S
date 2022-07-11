@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.4c
- *  Updated on: Jul 09.2022
+ *  Version 2.0.4d
+ *  Updated on: Jul 11.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1346,7 +1346,7 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int Audio::read_MP3_Header(uint8_t *data, size_t len) {
+int Audio::read_ID3_Header(uint8_t *data, size_t len) {
 
     static size_t id3Size;
     static size_t headerSize;
@@ -2661,7 +2661,7 @@ void Audio::processLocalFile() {
                 }
             }
             if(m_codec == CODEC_MP3){
-                int res = read_MP3_Header(InBuff.getReadPtr(), bytesCanBeRead);
+                int res = read_ID3_Header(InBuff.getReadPtr(), bytesCanBeRead);
                 if(res >= 0) bytesDecoded = res;
                 else{ // error, skip header
                     m_controlCounter = 100;
@@ -2957,7 +2957,7 @@ void Audio::processWebStream() {
     }
 
     // if we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_webfile && m_controlCounter != 100 && m_playlistFormat != FORMAT_M3U8){ // m3u8call, audiochunk has no header
+    if(m_f_webfile && m_controlCounter != 100 ){ // m3u8call, audiochunk has no header
         if(InBuff.bufferFilled() < maxFrameSize) return;
         if(m_codec == CODEC_WAV){
             int res = read_WAV_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -2965,7 +2965,7 @@ void Audio::processWebStream() {
             else{stopSong(); return;}
         }
         if(m_codec == CODEC_MP3){
-            int res = read_MP3_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
+            int res = read_ID3_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
             if(res >= 0) bytesDecoded = res;
             else{m_controlCounter = 100;} // error, skip header
         }
@@ -2977,11 +2977,17 @@ void Audio::processWebStream() {
         if(m_codec == CODEC_FLAC){
             int res = read_FLAC_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
             if(res >= 0) bytesDecoded = res;
-            else{stopSong(); return;} // error, skip header
+            else{stopSong(); return;}               // error, skip header
         }
-        if(m_codec == CODEC_AAC){ // aac has no header
-            m_controlCounter = 100;
-            return;
+        if(m_codec == CODEC_AAC){                   // aac has no header
+            if(m_playlistFormat == FORMAT_M3U8){    // except m3u8 stream
+                int res = read_ID3_Header(InBuff.getReadPtr(), InBuff.bufferFilled());
+                if(res >= 0) bytesDecoded = res;
+                else m_controlCounter = 100;
+            }
+            else{
+                m_controlCounter = 100;
+            }
         }
         InBuff.bytesWasRead(bytesDecoded);
         return;
@@ -3387,7 +3393,7 @@ bool Audio::parseContentType(char* ct) {
 
     if(!strcmp(ct, "audio/aac"))        ct_val = CT_AAC;
     if(!strcmp(ct, "audio/x-aac"))      ct_val = CT_AAC;
-    if(!strcmp(ct, "audio/aacp"))       ct_val = CT_AACP;
+    if(!strcmp(ct, "audio/aacp"))       ct_val = CT_AAC;
     if(!strcmp(ct, "audio/mp4"))        ct_val = CT_M4A;
     if(!strcmp(ct, "audio/m4a"))        ct_val = CT_M4A;
 
@@ -3411,7 +3417,7 @@ bool Audio::parseContentType(char* ct) {
     if(!strcmp(ct, "text/html"))        ct_val = CT_TXT;
     if(!strcmp(ct, "text/plain"))       ct_val = CT_TXT;
 
-    if(ct_val == CT_NONE || ct_val == CT_AACP){
+    if(ct_val == CT_NONE){
         AUDIO_INFO("ContentType %s not supported", ct);
         return false; // nothing valid had been seen
     }
