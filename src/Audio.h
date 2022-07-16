@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 11,2022
+ *  Updated on: Jul 16,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -248,7 +248,7 @@ private:
     bool parseContentType(char* ct);
     bool parseHttpResponseHeader();
     bool initializeDecoder();
-    bool readMetadata(uint8_t b, bool first = false);
+    uint16_t readMetadata(uint16_t b, bool first = false);
     esp_err_t I2Sstart(uint8_t i2s_num);
     esp_err_t I2Sstop(uint8_t i2s_num);
     void urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
@@ -459,13 +459,13 @@ private:
     uint32_t        m_sampleRate=16000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
-    int             m_readbytes=0;                  // bytes read
-    int             m_metalen=0;                    // Number of bytes in metadata
+    int             m_readbytes = 0;                // bytes read
+    uint32_t        m_metacount = 0;                // counts down bytes between metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint8_t         m_vol=64;                       // volume
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
-    uint8_t         m_channels=2;
+    uint8_t         m_channels = 2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_m3u8codec = CODEC_NONE;       // M4A

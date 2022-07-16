@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.4d
- *  Updated on: Jul 11.2022
+ *  Version 2.0.4e
+ *  Updated on: Jul 16.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -440,7 +440,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     strcat(rqh, "GET ");
     strcat(rqh, extension);
-    strcat(rqh, " HTTP/1.0\r\n");
+    strcat(rqh, " HTTP/1.1\r\n");
     strcat(rqh, "Host: ");
     strcat(rqh, hostwoext);
     strcat(rqh, "\r\n");
@@ -2338,7 +2338,7 @@ const char* Audio::parsePlaylist_M3U(){
         // AUDIO_INFO("Entry in playlist found: %s", pl);
         pos = indexOf(m_playlistContent[i], "http", 0);                 // Search for "http"
         if(pos >= 0) {                                                  // Does URL contain "http://"?
-        log_e("%s pos=%i", m_playlistContent[i], pos);
+    //    log_e("%s pos=%i", m_playlistContent[i], pos);
             host = m_playlistContent[i] + pos;                        // Yes, set new host
             break;
         }
@@ -2755,7 +2755,7 @@ void Audio::processLocalFile() {
 void Audio::processWebStream() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
-    int32_t         availableBytes;                             // available bytes in stream
+    uint32_t        availableBytes;                             // available bytes in stream
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
     static bool     f_webFileDataComplete;                      // all file data received
@@ -2765,7 +2765,6 @@ void Audio::processWebStream() {
     static uint32_t chunksize;                                  // chunkcount read from stream
     static uint32_t tmr_1s;                                     // timer 1 sec
     static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
-    static uint32_t metacount;                                  // counts down bytes between metadata
     static size_t   audioDataCount;                             // counts the decoded audiodata only
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2781,7 +2780,7 @@ void Audio::processWebStream() {
         audioDataCount = 0;
         tmr_1s = millis();
         m_t0 = millis();
-        metacount = m_metaint;
+        m_metacount = m_metaint;
         readMetadata(0, true); // reset all static vars
     }
 
@@ -2840,51 +2839,14 @@ void Audio::processWebStream() {
     }
 
     // if we have metadata: get them - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!metacount && !m_f_swm && availableBytes){
-        static uint16_t pos_ml = 0;                         // determines the current position in metaline
-        static uint16_t metalen = 0;
-
-        if(!metalen) {                                      // First byte of metadata?
-            int b = _client->read();
-            if(m_f_chunked) m_chunkcount--;
-            metalen = b * 16;                               // New count for metadata including length byte
-            if(metalen >512){
-                AUDIO_INFO("Metadata block to long! Skipping all Metadata from now on.");
-                m_f_swm = true;                             // expect stream without metadata
-            }
-            pos_ml = 0; chbuf[pos_ml] = 0;                  // Prepare for new line
-        }
-        int i = 0;
-        if(m_f_chunked) i = min((uint32_t)metalen, m_chunkcount);
-        else i = metalen;
-        int bytes = _client->readBytes(&chbuf[pos_ml], i);
-        if(m_f_chunked) m_chunkcount -= bytes;
-        pos_ml += bytes;
-
-        if(pos_ml == metalen) {
-            metalen = 0;
-            chbuf[pos_ml] = '\0';
-            pos_ml = 0;
-            metacount = m_metaint;
-            if(strlen(chbuf)) {                             // Any info present?
-                // metaline contains artist and song name.  For example:
-                // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
-                // Sometimes it is just other info like:
-                // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
-                // Isolate the StreamTitle, remove leading and trailing quotes if present.
-                // log_i("ST %s", metaline);
-
-                latinToUTF8(chbuf, sizeof(chbuf)); // convert to UTF-8 if necessary
-
-                int pos = indexOf(chbuf, "song_spot", 0);    // remove some irrelevant infos
-                if(pos > 3) {                                // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
-                    chbuf[pos] = 0;
-                }
-                log_e("%s", chbuf);
-                if(!m_f_localfile) showstreamtitle(chbuf);   // Show artist and title if present in metadata
-            }
-        }
-        return;
+    if(!m_metacount && !m_f_swm){
+        int bytes = 0;
+        int res = 0;
+        if(m_f_chunked) bytes = min(m_chunkcount, availableBytes);
+        else bytes = availableBytes;
+        res = readMetadata(bytes);
+        if(m_f_chunked) m_chunkcount -= res;
+        if(!m_metacount) return;
     }
 
     // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2913,7 +2875,7 @@ void Audio::processWebStream() {
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(true) { // statement has no effect
         uint32_t bytesCanBeWritten = InBuff.writeSpace();
-        if(!m_f_swm)    bytesCanBeWritten = min(metacount,  bytesCanBeWritten);
+        if(!m_f_swm)    bytesCanBeWritten = min(m_metacount,  bytesCanBeWritten);
         if(m_f_chunked) bytesCanBeWritten = min(m_chunkcount, bytesCanBeWritten);
 
         int16_t bytesAddedToBuffer = 0;
@@ -2942,7 +2904,7 @@ void Audio::processWebStream() {
 
         if(bytesAddedToBuffer > 0) {
             if(m_f_webfile)             byteCounter  += bytesAddedToBuffer;  // Pull request #42
-            if(!m_f_swm)                metacount    -= bytesAddedToBuffer;
+            if(!m_f_swm)                m_metacount  -= bytesAddedToBuffer;
             if(m_f_chunked)             m_chunkcount -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
@@ -3032,7 +2994,7 @@ void Audio::processWebStream() {
         if(byteCounter == m_contentlength){
             if(m_playlistFormat == FORMAT_M3U8){
                 byteCounter = 0;
-                metacount = m_metaint;
+                m_metacount = m_metaint;
                 m_f_continue = true;
                 return;
             }
@@ -3130,7 +3092,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         idx = indexOf(rhl, "content-type:", 0); // content-type: text/html; charset=UTF-8
         if(idx >= 0) {
-            AUDIO_INFO("%s", rhl);
+        //    AUDIO_INFO("%s", rhl);
             idx = indexOf(rhl + 13, ";");
             if(idx >0) rhl[13 + idx] = '\0';
             if(parseContentType(rhl + 13)) ct_seen = true;
@@ -3250,7 +3212,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     } // outer while
 
     exit:  // termination condition
-    log_e("exit");
         if(audio_showstation) audio_showstation("");
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
@@ -3325,34 +3286,39 @@ bool Audio:: initializeDecoder(){
         return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::readMetadata(uint8_t b, bool first) {
+uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 
     static uint16_t pos_ml = 0;                          // determines the current position in metaline
     static uint16_t metalen = 0;
+    uint16_t res = 0;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(first){
         pos_ml = 0;
         metalen = 0;
-        return true;
+        return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!metalen) {                                       // First byte of metadata?
-        int b = _client->read();
-        metalen = b * 16 + 1;                            // New count for metadata including length byte
-        if(metalen >512){
+    if(!maxBytes) return 0;  // guard
+
+    if(!metalen) {
+        int b = _client->read();   // First byte of metadata?
+        metalen = b * 16 ;                              // New count for metadata including length byte
+        if(metalen > 512){
             AUDIO_INFO("Metadata block to long! Skipping all Metadata from now on.");
             m_f_swm = true;                              // expect stream without metadata
         }
         pos_ml = 0; chbuf[pos_ml] = 0;                   // Prepare for new line
+        res = 1;
     }
-        chbuf[pos_ml] = (char) b;                        // Put new char in +++++
-        if(pos_ml < 510) pos_ml ++;
-        chbuf[pos_ml] = 0;
-        if(pos_ml == 509) { log_e("metaline overflow in AUDIO_METADATA! metaline=%s", chbuf); }
-        if(pos_ml == 510) { ; /* last current char in b */}
+    if(!metalen) {m_metacount = m_metaint; return res;}
 
-
-    if(--metalen == 0) {
+    uint16_t a = _client->readBytes(&chbuf[pos_ml], min(metalen, (uint16_t)(maxBytes -1)));
+    res += a;
+    pos_ml += a;
+    if(pos_ml == metalen) {
+        metalen = 0;
+        chbuf[pos_ml] = '\0';
+        m_metacount = m_metaint;
         if(strlen(chbuf)) {                             // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
@@ -3360,18 +3326,16 @@ bool Audio::readMetadata(uint8_t b, bool first) {
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
             // log_i("ST %s", metaline);
-
             latinToUTF8(chbuf, sizeof(chbuf)); // convert to UTF-8 if necessary
-
             int pos = indexOf(chbuf, "song_spot", 0);    // remove some irrelevant infos
             if(pos > 3) {                                // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
                 chbuf[pos] = 0;
             }
-            if(!m_f_localfile) showstreamtitle(chbuf);   // Show artist and title if present in metadata
+            showstreamtitle(chbuf);   // Show artist and title if present in metadata
         }
-        return true ;
+        pos_ml = 0;
     }
-    return false;// end_METADATA
+    return res;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::parseContentType(char* ct) {
