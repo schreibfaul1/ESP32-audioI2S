@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 26,2018
- *  Updated on: Jul 16,2022
+ *  Updated on: Jul 25,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -182,7 +182,7 @@ public:
     void setBalance(int8_t bal = 0);
     void setVolume(uint8_t vol);
     uint8_t getVolume();
-	uint8_t getI2sPort();
+    uint8_t getI2sPort();
 
     uint32_t getAudioDataStartPos();
     uint32_t getFileSize();
@@ -217,6 +217,7 @@ private:
     void initInBuff();
     void processLocalFile();
     void processWebStream();
+    void processWebStreamTS();
     bool readPlayListData();
     const char* parsePlaylist_M3U();
     const char* parsePlaylist_PLS();
@@ -259,10 +260,7 @@ private:
     inline uint8_t getDatamode(){return m_datamode;}
     inline uint32_t streamavail(){ return _client ? _client->available() : 0;}
     void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
-    void ts_parsePAT(uint8_t *pat);
-    void ts_parsePMT(uint8_t *pat);
-    int ts_parsePES(uint8_t *pat, int posOfPacketStart, uint8_t *data);
-    int ts_parsePacket(uint8_t *packet, uint8_t *data);
+    bool ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
 
     // implement several function with respect to the index of string
     void trim(char *s) {
@@ -404,7 +402,7 @@ private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
-    enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA,
+    enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
@@ -413,6 +411,7 @@ private:
     enum : int { OGG_BEGIN = 0, OGG_MAGIC = 1, OGG_HEADER = 2, OGG_FIRST = 3, OGG_AMRDY = 99, OGG_OKAY = 100};
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
                  CODEC_OGG = 6, CODEC_OGG_FLAC = 7, CODEC_OGG_OPUS = 8};
+    enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
@@ -473,6 +472,7 @@ private:
     uint8_t         m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
     uint8_t         m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
     uint8_t         m_filterType[2];                // lowpass, highpass
+    uint8_t         m_streamType = ST_NONE;
     int16_t         m_outBuff[2048*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
@@ -498,15 +498,12 @@ private:
     bool            m_f_swm = true;                 // Stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
-    bool            m_f_localfile = false ;         // Play from local mp3-file
-    bool            m_f_webstream = false ;         // Play from URL
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
-    bool            m_f_webfile = false;            // assume it's a radiostream, not a podcast
     bool            m_f_tts = false;                // text to speech
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
@@ -515,6 +512,7 @@ private:
     bool            m_f_m3u8data = false;           // used in processM3U8entries
     bool            m_f_Log = true;                 // if m3u8: log is cancelled
     bool            m_f_continue = false;           // next m3u8 chunk is available
+    bool            m_f_ts = true;                  // transport stream
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
