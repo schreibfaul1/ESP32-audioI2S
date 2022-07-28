@@ -511,7 +511,7 @@ private:
     bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
-    bool            m_f_Log = true;                 // if m3u8: log is cancelled
+    bool            m_f_Log = false;                // set in platformio.ini  -DAUDIO_LOG and -DCORE_DEBUG_LEVEL=3 or 4
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
