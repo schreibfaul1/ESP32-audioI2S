@@ -1,7 +1,7 @@
 /*
  * Audio.h
  *
- *  Created on: Oct 26,2018
+ *  Created on: Oct 28,2018
  *  Updated on: Jul 25,2022
  *      Author: Wolle (schreibfaul1)
  */
@@ -410,7 +410,7 @@ private:
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
     enum : int { OGG_BEGIN = 0, OGG_MAGIC = 1, OGG_HEADER = 2, OGG_FIRST = 3, OGG_AMRDY = 99, OGG_OKAY = 100};
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
-                 CODEC_OGG = 6, CODEC_OGG_FLAC = 7, CODEC_OGG_OPUS = 8};
+                 CODEC_OGG = 6, CODEC_OGG_FLAC = 7, CODEC_OGG_OPUS = 8, CODEC_AACP = 9};
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
@@ -473,6 +473,7 @@ private:
     uint8_t         m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
     uint8_t         m_filterType[2];                // lowpass, highpass
     uint8_t         m_streamType = ST_NONE;
+    uint8_t         m_ID3Size = 0;                  // lengt of ID3frame - ID3header
     int16_t         m_outBuff[2048*2];              // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
