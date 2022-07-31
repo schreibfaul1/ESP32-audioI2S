@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Jul 25,2022
+ *  Updated on: Jul 31,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -215,9 +215,12 @@ private:
     bool latinToUTF8(char* buff, size_t bufflen);
     void setDefaults(); // free buffers and set defaults
     void initInBuff();
+    bool httpPrint(const char* host);
     void processLocalFile();
     void processWebStream();
     void processWebStreamTS();
+    void processWebStreamHLS();
+    void playAudioData();
     bool readPlayListData();
     const char* parsePlaylist_M3U();
     const char* parsePlaylist_PLS();
@@ -467,7 +470,6 @@ private:
     uint8_t         m_channels = 2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
-    uint8_t         m_m3u8codec = CODEC_NONE;       // M4A
     uint8_t         m_codec = CODEC_NONE;           //
     uint8_t         m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
     uint8_t         m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
@@ -494,7 +496,6 @@ private:
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
-    uint32_t        m_m3u8_timeStamp = 0;
     uint16_t        m_m3u8_targetDuration = 10;     //
     bool            m_f_swm = true;                 // Stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
