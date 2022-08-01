@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5c
- *  Updated on: Jul 31.2022
+ *  Version 2.0.5d
+ *  Updated on: Aug 01.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -303,6 +303,7 @@ void Audio::setDefaults() {
     if(m_m3u8_lastEntry) {free(m_m3u8_lastEntry); m_m3u8_lastEntry = NULL;} // free if stream is not m3u8
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
+    m_hashQueue.clear(); m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
     client.flush(); // release memory
     clientsecure.stop();
@@ -582,6 +583,7 @@ bool Audio::httpPrint(const char* host) {
 
     setDatamode(HTTP_RESPONSE_HEADER);   // Handle header
     m_streamType = ST_WEBSTREAM;
+    m_contentlength = 0;
 
     if(hostwoext) {free(hostwoext); hostwoext = NULL;}
     if(extension) {free(extension); extension = NULL;}
@@ -2322,8 +2324,8 @@ void Audio::loop() {
                 }
                 break;
             case AUDIO_DATA:
-                if(m_f_ts) processWebStreamTS();
-                else processWebStreamHLS();
+                if(m_f_ts) processWebStreamTS();  // aac or aacp with ts packets
+                else       processWebStreamHLS(); // aac or aacp normal stream
                 if(f_noNewHost){
                     m_f_continue = false;
                     if(timestamp2 < millis()) {
@@ -2369,9 +2371,10 @@ bool Audio::readPlayListData() {
                 pl[pos] = _client->read();
                 if(pl[pos] == '\n') {pl[pos] = '\0'; pos++; break;}
             //    if(pl[pos] == '&' ) {pl[pos] = '\0'; pos++; break;}
-                if(pl[pos] == '\r') {pl[pos] = '\0'; pos++; break;}
+                if(pl[pos] == '\r') {pl[pos] = '\0'; pos++; continue;;}
                 pos++;
-                if(pos == 510) {pl[pos] = '\0'; break;}
+                if(pos == 511){ pos--; ctl++; continue;}
+                if(pos == 510) {pl[pos] = '\0';}
             }
             ctl += pos;
             if(pos) {pl[pos] = '\0'; break;}
@@ -2629,26 +2632,30 @@ const char* Audio::parsePlaylist_M3U8(){
                     tmp = strdup(m_playlistContent[i]);
                 }
 
-                if(!m_m3u8_lastEntry){  // first init
-                    m_playlistURL.insert(m_playlistURL.begin(), strdup((const char*)(tmp)));
-                    m_m3u8_lastEntry = strdup(tmp);
-                    if(m_f_Log) log_i("insert %s", tmp);
-                    continue;
-                }
-                if(strcmp(tmp, m_m3u8_lastEntry) > 0 || strlen(tmp) > strlen(m_m3u8_lastEntry)){ // next sequence?,
-                    //strcmp: '2.aac'>'1.aac' or strlen '10.aac'>'9.aac'
-                    m_playlistURL.insert(m_playlistURL.begin(), strdup((const char*)(tmp)));
-                    if(m_m3u8_lastEntry){free(m_m3u8_lastEntry); m_m3u8_lastEntry = strdup(tmp);}
-                    assert(m_m3u8_lastEntry != tmp); // no free space in task?
-                    if(m_f_Log) log_i("insert %s", tmp);
+                uint32_t hash = simpleHash(tmp);
+                if(m_hashQueue.size() == 0){
+                    m_hashQueue.insert(m_hashQueue.begin(), hash);
+                    m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
                 }
                 else{
-                    if(m_f_Log) log_i("file already known %s", m_playlistContent[i]);
+                    bool known = false;
+                    for(int i = 0; i< m_hashQueue.size(); i++){
+                        if(hash == m_hashQueue[i]){
+                            if(m_f_Log) log_i("file already known %s", tmp);
+                            known = true;
+                        }
+                    }
+                    if(!known){
+                        m_hashQueue.insert(m_hashQueue.begin(), hash);
+                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                    }
                 }
+
+                if(m_hashQueue.size() > 20)  m_hashQueue.pop_back();
 
                 if(tmp){free(tmp); tmp = NULL;}
 
-                if(m_playlistURL.size() == 100){
+                if(m_playlistURL.size() == 20){
                     ESP_LOGD("", "can't stuff anymore");
                     break;
                 }
@@ -3445,10 +3452,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(b < 0x20) continue;
             rhl[pos] = b;
             pos++;
+            if(pos == 511){pos = 510; continue;}
             if(pos == 510){
                 rhl[pos] = '\0';
                 if(m_f_Log) log_i("responseHeaderline overflow");
-                break;
             }
         } // inner while
 

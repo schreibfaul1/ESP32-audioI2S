@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Jul 31,2022
+ *  Updated on: Aug 01,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -399,6 +399,15 @@ private:
         vec.clear();
         vec.shrink_to_fit();
     }
+    uint32_t simpleHash(const char* str){
+        if(str == NULL) return 0;
+        uint32_t hash = 0;
+        for(int i=0; i<strlen(str); i++){
+		    if(str[i] < 32) continue; // ignore control sign
+		    hash += (str[i] - 31) * i * 32;
+        }
+        return hash;
+	}
 
 private:
     const char *codecname[9] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "OGG", "OGG FLAC", "OPUS"};
@@ -434,14 +443,15 @@ private:
         int pids[4];
     } pid_array;
 
-    File               audiofile;    // @suppress("Abstract class cannot be instantiated")
-    WiFiClient         client;       // @suppress("Abstract class cannot be instantiated")
-    WiFiClientSecure   clientsecure; // @suppress("Abstract class cannot be instantiated")
-    WiFiClient*        _client = nullptr;
-    i2s_config_t       m_i2s_config = {}; // stores values for I2S driver
-    i2s_pin_config_t   m_pin_config = {};
-    std::vector<char*> m_playlistContent; // m3u8 playlist buffer
-    std::vector<char*> m_playlistURL;     // m3u8 streamURLs buffer
+    File                  audiofile;    // @suppress("Abstract class cannot be instantiated")
+    WiFiClient            client;       // @suppress("Abstract class cannot be instantiated")
+    WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
+    WiFiClient*           _client = nullptr;
+    i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
+    i2s_pin_config_t      m_pin_config = {};
+    std::vector<char*>    m_playlistContent; // m3u8 playlist buffer
+    std::vector<char*>    m_playlistURL;     // m3u8 streamURLs buffer
+    std::vector<uint32_t> m_hashQueue;
 
     const size_t    m_frameSizeWav  = 1600;
     const size_t    m_frameSizeMP3  = 1600;
