@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5d
- *  Updated on: Aug 01.2022
+ *  Version 2.0.5e
+ *  Updated on: Aug 02.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -300,7 +300,6 @@ void Audio::setDefaults() {
     FLACDecoder_FreeBuffers();
     AACDecoder_FreeBuffers();
     if(m_playlistBuff)   {free(m_playlistBuff);     m_playlistBuff = NULL;} // free if stream is not m3u8
-    if(m_m3u8_lastEntry) {free(m_m3u8_lastEntry); m_m3u8_lastEntry = NULL;} // free if stream is not m3u8
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear(); m_hashQueue.shrink_to_fit(); // uint32_t vector
@@ -569,6 +568,14 @@ bool Audio::httpPrint(const char* host) {
     if(m_f_ssl){ _client = static_cast<WiFiClient*>(&clientsecure); if(port == 80) port = 443;}
     else       { _client = static_cast<WiFiClient*>(&client);}
 
+    if(!_client->connected()){
+        AUDIO_INFO("The host has disconnected, reconnecting");
+        if(!_client->connect(hostwoext, port)){
+            log_e("connection lost");
+            stopSong();
+            return false;
+        }
+    }
     _client->print(rqh);
 
     if(endsWith(extension, ".mp3"))   m_expectedCodec = CODEC_MP3;
@@ -584,6 +591,7 @@ bool Audio::httpPrint(const char* host) {
     setDatamode(HTTP_RESPONSE_HEADER);   // Handle header
     m_streamType = ST_WEBSTREAM;
     m_contentlength = 0;
+    m_f_chunked = false;
 
     if(hostwoext) {free(hostwoext); hostwoext = NULL;}
     if(extension) {free(extension); extension = NULL;}
@@ -2314,8 +2322,7 @@ void Audio::loop() {
                 if(host){
                     f_noNewHost = false;
                     timestamp1 = millis();
-                    if(_client->connected()) httpPrint(host);
-                    else connecttohost(host); // redirect from m3u8 or connection is broken
+                    httpPrint(host);
                 }
                 else {
                     f_noNewHost = true;
@@ -2329,8 +2336,7 @@ void Audio::loop() {
                 if(f_noNewHost){
                     m_f_continue = false;
                     if(timestamp2 < millis()) {
-                        if(_client->connected()) httpPrint(m_lastHost);
-                     else connecttohost(m_lastHost);
+                        httpPrint(m_lastHost);
                     }
                 }
                 else{
@@ -2351,6 +2357,22 @@ bool Audio::readPlayListData() {
 
     if(m_datamode != AUDIO_PLAYLISTINIT) return false;
     if(_client->available() == 0) return false;
+
+    uint32_t chunksize = 0;
+    if(m_f_chunked){
+        int b = 0;
+        while(true){
+            b = _client->read();
+            if(b < 0) break;
+            if(b == '\n') break;
+            if(b < '0') continue;
+            // We have received a hexadecimal character.  Decode it and add to the result.
+            b = toupper(b) - '0';                       // Be sure we have uppercase
+            if(b > 9) b = b - 7;                        // Translate A..F to 10..15
+            chunksize = (chunksize << 4) + b;
+        }
+        if(m_f_Log) log_i("chunksize %d", chunksize);
+    }
 
     // reads the content of the playlist and stores it in the vector m_contentlength
     // m_contentlength is a table of pointers to the lines
@@ -2381,16 +2403,16 @@ bool Audio::readPlayListData() {
             if(ctime + timeout < millis()) {log_e("timeout"); goto exit;}
         } // inner while
 
-        if(m_contentlength > 0){
-            // we have one line only, terminate all crap
-            if(m_contentlength < strlen(pl)) {log_e("%i", m_contentlength); pl[m_contentlength] = '\0';}
-            // we have more line but no '\n' at the and -> terminate all crap
-            else if(m_contentlength < ctl){
-                int diff = ctl - m_contentlength;
-                int lastpos = strlen(pl) - diff;
-                pl[lastpos] = '\0';
-            }
-        }
+        // if(m_contentlength > 0){
+        //     // we have one line only, terminate all crap
+        //     if(m_contentlength < strlen(pl)) {log_e("%i", m_contentlength); pl[m_contentlength] = '\0';}
+        //     // we have more line but no '\n' at the and -> terminate all crap
+        //     else if(m_contentlength < ctl){
+        //         int diff = ctl - m_contentlength;
+        //         int lastpos = strlen(pl) - diff;
+        //         pl[lastpos] = '\0';
+        //     }
+        // }
 
         if(startsWith(pl, "<!DOCTYPE")) {AUDIO_INFO("url is a webpage!"); goto exit;}
         if(strlen(pl) > 0) m_playlistContent.push_back(strdup((const char*)pl));
@@ -2398,8 +2420,8 @@ bool Audio::readPlayListData() {
             if(m_f_Log) log_i("the maximum number of lines in the playlist has been reached");
             break;
         }
-        if(ctl == m_contentlength){break;}
-        if(!m_contentlength && !_client->available()) break;
+        if(ctl == m_contentlength){while(_client->available()) _client->read(); break;} // read '\n\n' if exists
+        if(ctl == chunksize)      {while(_client->available()) _client->read(); break;}
 
     } // outer while6nUfOrsqhhT-331
     lines = m_playlistContent.size();
@@ -3265,7 +3287,7 @@ void Audio::processWebStreamTS() {
         if(loopCnt > 200000) {              // wait several seconds
             loopCnt = 0;
             AUDIO_INFO("Stream lost -> try new connection");
-            connecttohost(m_lastHost);
+            httpPrint(m_lastHost);
             return;
         }
     }
@@ -3366,7 +3388,7 @@ void Audio::processWebStreamHLS() {
         if(loopCnt > 200000) {              // wait several seconds
             loopCnt = 0;
             AUDIO_INFO("Stream lost -> try new connection");
-            connecttohost(m_lastHost);
+            httpPrint(m_lastHost);
             return;
         }
     }
@@ -3495,7 +3517,19 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(pos >= 0){
                 const char* c_host = (rhl + pos);
                 if(strcmp(c_host, m_lastHost) != 0) { // prevent a loop
-                    if(m_playlistFormat == FORMAT_M3U8) {strcpy(m_lastHost, c_host); m_f_m3u8data = true;} // extension has changed but host is the same?
+                    int pos_slash = indexOf(c_host, "/", 9);
+                    if(pos_slash > 9){
+                        if(!strncmp(c_host, m_lastHost, posColon)){
+                            AUDIO_INFO("redirect to new extension at existing host \"%s\"", c_host);
+                            if(m_playlistFormat == FORMAT_M3U8) {
+                                strcpy(m_lastHost, c_host);
+                                m_f_m3u8data = true;
+                            }
+                            httpPrint(c_host);
+                            while(_client->available()) _client->read(); // empty client buffer
+                            return true;
+                        }
+                    }
                     AUDIO_INFO("redirect to new host \"%s\"", c_host);
                     connecttohost(c_host);
                     return true;

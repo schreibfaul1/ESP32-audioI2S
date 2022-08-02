@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 01,2022
+ *  Updated on: Aug 02,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -464,7 +464,6 @@ private:
     char            chbuf[512 + 128];               // must be greater than m_lastHost #254
     char            m_lastHost[512];                // Store the last URL to a webstream
     char*           m_playlistBuff = NULL;          // stores playlistdata
-    char*           m_m3u8_lastEntry = nullptr;     // compare sequencenumbers
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header
