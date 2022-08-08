@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5e
- *  Updated on: Aug 02.2022
+ *  Version 2.0.5f
+ *  Updated on: Aug 08.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -171,9 +171,9 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_i2s_config.sample_rate          = 16000;
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
     m_i2s_config.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL3; // interrupt priority
-    m_i2s_config.dma_buf_count        = 8;
-    m_i2s_config.dma_buf_len          = 1024;
+    m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // interrupt priority
+    m_i2s_config.dma_buf_count        = 16;
+    m_i2s_config.dma_buf_len          = 512;
     m_i2s_config.use_apll             = APLL_DISABLE; // must be disabled in V2.0.1-RC1
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
@@ -2144,6 +2144,79 @@ int Audio::read_OGG_Header(uint8_t *data, size_t len){
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
+size_t Audio::process_m3u8_ID3_Header(uint8_t* packet){
+    uint8_t         ID3version;
+    size_t          id3Size;
+    bool            m_f_unsync = false, m_f_exthdr = false;
+    static uint64_t last_timestamp;  // remember the last timestamp
+    static uint32_t lastSampleRate;
+    uint64_t        current_timestamp = 0;
+    uint32_t        newSampleRate = 0;
+
+    if(specialIndexOf(packet, "ID3", 4) != 0) { // ID3 not found
+        if(m_f_Log) log_i("m3u8 file has no mp3 tag");
+        return 0; // error, no ID3 signature found
+    }
+    ID3version = *(packet + 3);
+    switch(ID3version){
+            case 2:
+                m_f_unsync = (*(packet + 5) & 0x80);
+                m_f_exthdr = false;
+                break;
+            case 3:
+            case 4:
+                m_f_unsync = (*(packet + 5) & 0x80); // bit7
+                m_f_exthdr = (*(packet + 5) & 0x40); // bit6 extended header
+                break;
+    };
+    id3Size = bigEndian(&packet[6], 4, 7); //  ID3v2 size  4 * %0xxxxxxx (shift left seven times!!)
+    id3Size += 10;
+    if(m_f_Log) log_i("ID3 framesSize: %i", id3Size);
+    if(m_f_Log) log_i("ID3 version: 2.%i", ID3version);
+
+    if(m_f_exthdr) {
+        log_e("ID3 extended header in m3u8 files not supported");
+        return 0;
+    }
+    if(m_f_Log) log_i("ID3 normal frames");
+
+    if(specialIndexOf(&packet[10], "PRIV", 5) != 0) { // tag PRIV not found
+        log_e("tag PRIV in m3u8 Id3 Header not found");
+        return 0;
+    }
+    // if tag PRIV exists assume content is "com.apple.streaming.transportStreamTimestamp"
+
+
+    // so, the m3u8 sequence contains an ID3 header. A time stamp is expected in the header. After we got two
+    // m3u8 sequences we can estimate the time difference. Usually the runtime (that's the time difference) is slightly
+    // less than the targetDuration. Without correction, the audio memory quickly runs out
+    // (measured about 14KBytes per minute).For example, for the targetDuration 10s the time difference is 9.75s and
+    // thus 0.25s are missing.
+
+    current_timestamp = bigEndian(&packet[69], 4);
+
+    double diff;
+    diff = current_timestamp - last_timestamp; // time difference in apple clock
+    diff /= 90000;                             // time difference in seconds (whole audiofile)
+   // log_i("diff %f,current_timestamp %lu  last_timestamp %lu", diff, current_timestamp, last_timestamp);
+    diff = ((double)m_m3u8_targetDuration - diff) / m_m3u8_targetDuration; // time difference (per second)
+    diff = diff * (double)AACGetSampRate();    // abbreviation in samples/second
+    diff += 250; // it doesn't work without it, no idea why this is necessary
+    newSampleRate = AACGetSampRate() - diff;
+    if(m_f_Log) log_i("newSampleRate %d", newSampleRate);
+    last_timestamp = current_timestamp;
+    uint32_t delta = abs((int32_t)(lastSampleRate - newSampleRate));
+    if(delta  > 1) {
+        if(newSampleRate && newSampleRate < 96001){
+            log_i("change lastSampleRate %d, newSampleRate %d", lastSampleRate, newSampleRate);
+            setSampleRate(newSampleRate);
+        }
+        if(m_f_Log) log_i("change lastSampleRate %d, newSampleRate %d", lastSampleRate, newSampleRate);
+        lastSampleRate = newSampleRate;
+    }
+    return id3Size;
+}
+//---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::stopSong() {
     uint32_t pos = 0;
     if(m_f_running) {
@@ -2252,6 +2325,7 @@ bool Audio::playChunk() {
             }
         }
         if(getChannels() == 2) {
+            m_curSample = 0;
             while(m_validSamples) {
                 if(!m_f_forceMono) { // stereo mode
                     sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
@@ -2262,10 +2336,7 @@ bool Audio::playChunk() {
                     sample[LEFTCHANNEL] = xy;
                     sample[RIGHTCHANNEL] = xy;
                 }
-                if(!playSample(sample)) {
-                    log_e("can't send");
-                    return false;
-                } // Can't send
+                playSample(sample);
                 m_validSamples--;
                 m_curSample++;
             }
@@ -2337,12 +2408,13 @@ void Audio::loop() {
                     m_f_continue = false;
                     if(timestamp2 < millis()) {
                         httpPrint(m_lastHost);
+                        remaintime = 1000;
                     }
                 }
                 else{
                     if(m_f_continue){ // processWebStream() needs more data
                         remaintime = (int32_t)(m_m3u8_targetDuration * 1000) - (millis() - timestamp1);
-                        if(m_m3u8_targetDuration < 10) remaintime += 1000;
+                    //    if(m_m3u8_targetDuration < 10) remaintime += 1000;
                         m_f_continue = false;
                         setDatamode(AUDIO_PLAYLISTDATA);
                     }
@@ -2371,7 +2443,7 @@ bool Audio::readPlayListData() {
             if(b > 9) b = b - 7;                        // Translate A..F to 10..15
             chunksize = (chunksize << 4) + b;
         }
-        if(m_f_Log) log_i("chunksize %d", chunksize);
+        if(m_f_Log) log_i("chunksize %d, contentLength %d", chunksize, m_contentlength);
     }
 
     // reads the content of the playlist and stores it in the vector m_contentlength
@@ -2391,39 +2463,42 @@ bool Audio::readPlayListData() {
             uint16_t pos = 0;
             while(_client->available()){ // super inner while :-))
                 pl[pos] = _client->read();
+                ctl++;
                 if(pl[pos] == '\n') {pl[pos] = '\0'; pos++; break;}
             //    if(pl[pos] == '&' ) {pl[pos] = '\0'; pos++; break;}
                 if(pl[pos] == '\r') {pl[pos] = '\0'; pos++; continue;;}
                 pos++;
-                if(pos == 511){ pos--; ctl++; continue;}
+                if(pos == 511){ pos--; continue;}
                 if(pos == 510) {pl[pos] = '\0';}
+                if(ctl == chunksize) {pl[pos] = '\0'; break;}
+                if(ctl == m_contentlength) {pl[pos] = '\0'; break;}
             }
-            ctl += pos;
+            if(ctl == chunksize) break;
+            if(ctl == m_contentlength) break;
             if(pos) {pl[pos] = '\0'; break;}
-            if(ctime + timeout < millis()) {log_e("timeout"); goto exit;}
+
+            if(ctime + timeout < millis()) {
+                log_e("timeout");
+                for(int i = 0; i<m_playlistContent.size(); i++) log_e("pl%i = %s", i, m_playlistContent[i]);
+                goto exit;}
         } // inner while
 
-        // if(m_contentlength > 0){
-        //     // we have one line only, terminate all crap
-        //     if(m_contentlength < strlen(pl)) {log_e("%i", m_contentlength); pl[m_contentlength] = '\0';}
-        //     // we have more line but no '\n' at the and -> terminate all crap
-        //     else if(m_contentlength < ctl){
-        //         int diff = ctl - m_contentlength;
-        //         int lastpos = strlen(pl) - diff;
-        //         pl[lastpos] = '\0';
-        //     }
-        // }
-
         if(startsWith(pl, "<!DOCTYPE")) {AUDIO_INFO("url is a webpage!"); goto exit;}
+        if(startsWith(pl, "<html"))     {AUDIO_INFO("url is a webpage!"); goto exit;}
         if(strlen(pl) > 0) m_playlistContent.push_back(strdup((const char*)pl));
         if(m_playlistContent.size() == 100){
             if(m_f_Log) log_i("the maximum number of lines in the playlist has been reached");
             break;
         }
+        // termination conditions
+        // 1. The http response header returns a value for contentLength -> read chars until contentLength is reached
+        // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
+        // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
         if(ctl == m_contentlength){while(_client->available()) _client->read(); break;} // read '\n\n' if exists
         if(ctl == chunksize)      {while(_client->available()) _client->read(); break;}
+        if(!_client->connected() && _client->available() == 0) break;
 
-    } // outer while6nUfOrsqhhT-331
+    } // outer while
     lines = m_playlistContent.size();
     for (int i = 0; i < lines ; i++) { // print all string in first vector of 'arr'
         if(m_f_Log) log_i("pl=%i \"%s\"", i, m_playlistContent[i]);
@@ -3184,6 +3259,7 @@ void Audio::processWebStreamTS() {
     uint32_t        availableBytes;                             // available bytes in stream
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
+    static bool     f_firstPacket;
     static int      bytesDecoded;
     static uint32_t byteCounter;                                // count received data
     static uint32_t tmr_1s;                                     // timer 1 sec
@@ -3197,6 +3273,7 @@ void Audio::processWebStreamTS() {
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         f_stream = false;
+        f_firstPacket = true;
         byteCounter = 0;
         bytesDecoded = 0;
         loopCnt = 0;
@@ -3204,38 +3281,36 @@ void Audio::processWebStreamTS() {
         m_t0 = millis();
         ts_packetPtr = 0;
         ts_parsePacket(0, 0, 0); // reset ts routine
-        if(m_contentlength % 188 != 0){
-            // For files without an ID3 header, the content length is always divided by 188 without a remainder
-            static size_t ID3frameSize = 0;
-            uint8_t       ID3headerLength = 10;
-            if(!ID3frameSize){
-                uint8_t ID3headerLength = 10;
-                if(_client->available() < ID3headerLength) return;
-                _client->read(ts_packet, ID3headerLength);
-                read_ID3_Header(ts_packet, ID3headerLength);
-                ID3frameSize = m_ID3Size;
-            }
-            if(ID3frameSize > 188) {log_e("ID3 Header too long"); stopSong(); return;}
-            if(_client->available() < ID3frameSize - ID3headerLength) return;
-            _client->read(ts_packet, ID3frameSize - ID3headerLength);
-            read_ID3_Header(ts_packet, ID3frameSize - ID3headerLength);
-            byteCounter += ID3frameSize;
-            ID3frameSize = 0;
-        }
+        m_controlCounter = 0;
         m_f_firstCall = false;
     }
 
     if(m_datamode != AUDIO_DATA) return;        // guard
-    int framesize = 0;
+
+    if(InBuff.freeSpace() < ts_packetsize && f_stream){playAudioData(); return;}
 
     availableBytes = _client->available();
-
-    while(InBuff.freeSpace() >= ts_packetsize && availableBytes){
-        int res = _client->read(ts_packet + ts_packetPtr, 188 - ts_packetPtr);
+    if(availableBytes){
+        int res = _client->read(ts_packet + ts_packetPtr, ts_packetsize - ts_packetPtr);
         if(res > 0){
             ts_packetPtr += res;
+            byteCounter += res;
             if(ts_packetPtr < ts_packetsize)  return;
             ts_packetPtr = 0;
+            if(f_firstPacket){  // search for ID3 Header in the first packet
+                f_firstPacket = false;
+                uint8_t ID3_HeaderSize = process_m3u8_ID3_Header(ts_packet);
+                if(ID3_HeaderSize > ts_packetsize){
+                    log_e("ID3 Header is too big");
+                    stopSong();
+                    return;
+                }
+                if(ID3_HeaderSize){
+                    memcpy(ts_packet, &ts_packet[ID3_HeaderSize], ts_packetsize - ID3_HeaderSize);
+                    ts_packetPtr = ts_packetsize - ID3_HeaderSize;
+                    return;
+                }
+            }
             ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength);
 
             if(ts_packetLength) {
@@ -3250,20 +3325,17 @@ void Audio::processWebStreamTS() {
                     memcpy(InBuff.getWritePtr(), &ts_packet[ws + ts_packetStart], ts_packetLength -ws);
                     InBuff.bytesWritten(ts_packetLength -ws);
                 }
+
             }
-            framesize += ts_packetLength;
-            byteCounter += ts_packetsize;
             if(byteCounter == m_contentlength){
                 byteCounter = 0;
                 m_f_continue = true;
-                break;
             }
             if(byteCounter > m_contentlength) log_e("byteCounter overflow");
-            availableBytes = _client->available();
-            if(framesize >= 512) break;
         }
-        else {availableBytes = 0; break;}
+
     }
+
     // timer, triggers every second - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if((tmr_1s + 1000) < millis()) {
         f_tmr_1s = true;                                        // flag will be set every second for one loop only
@@ -3275,7 +3347,7 @@ void Audio::processWebStreamTS() {
         static uint8_t cnt_slow = 0;
         cnt_slow ++;
         if(f_tmr_1s) {
-            if(cnt_slow > 25 && audio_info) audio_info("slow stream, dropouts are possible");
+            if(cnt_slow > 50 && audio_info) audio_info("slow stream, dropouts are possible");
             f_tmr_1s = false;
             cnt_slow = 0;
         }
@@ -3305,22 +3377,10 @@ void Audio::processWebStreamTS() {
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!f_stream) return; // 1. guard
-    if(InBuff.bufferFilled() < 1024) return; // 2. guard
-    size_t data2decode = InBuff.bufferFilled();
-    bytesDecoded = sendBytes(InBuff.getReadPtr(), data2decode);
-    if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
-        uint8_t next = 200;
-        if(InBuff.bufferFilled() < next) next = InBuff.bufferFilled();
-        InBuff.bytesWasRead(next); // try next chunk
-        m_bytesNotDecoded += next;
-        return;
+    if(f_stream){
+        if(!availableBytes) {playAudioData(); return;}
+        if(InBuff.freeSpace() < m_maxBlockSize)  playAudioData();
     }
-    else {
-        if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
-        if(bytesDecoded == 0) return; // syncword at pos0 found
-    }
-
     return;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -3430,8 +3490,9 @@ void Audio::playAudioData(){
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // guard
 
     int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
-//  log_i("bytesDecoded %i", bytesDecoded);
+ 
     if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
+        log_i("err bytesDecoded %i", bytesDecoded);
         uint8_t next = 200;
         if(InBuff.bufferFilled() < next) next = InBuff.bufferFilled();
         InBuff.bytesWasRead(next); // try next chunk
@@ -3519,7 +3580,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 if(strcmp(c_host, m_lastHost) != 0) { // prevent a loop
                     int pos_slash = indexOf(c_host, "/", 9);
                     if(pos_slash > 9){
-                        if(!strncmp(c_host, m_lastHost, posColon)){
+                        if(!strncmp(c_host, m_lastHost, pos_slash)){
                             AUDIO_INFO("redirect to new extension at existing host \"%s\"", c_host);
                             if(m_playlistFormat == FORMAT_M3U8) {
                                 strcpy(m_lastHost, c_host);
@@ -3660,6 +3721,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(m_f_Log) {log_i("now parse playlist");}
         }
         else{
+            AUDIO_INFO("unknown content found at: %s", m_lastHost);
             goto exit;
         }
         return true;
@@ -3797,6 +3859,7 @@ bool Audio::parseContentType(char* ct) {
 
     else if(!strcmp(ct, "audio/scpls"))      ct_val = CT_PLS;
     else if(!strcmp(ct, "audio/x-scpls"))    ct_val = CT_PLS;
+    else if(!strcmp(ct, "application/pls+xml")) ct_val = CT_PLS;
     else if(!strcmp(ct, "audio/mpegurl"))    ct_val = CT_M3U;
     else if(!strcmp(ct, "audio/x-mpegurl"))  ct_val = CT_M3U;
     else if(!strcmp(ct, "audio/ms-asf"))     ct_val = CT_ASX;
@@ -4447,8 +4510,8 @@ bool Audio::playSample(int16_t sample[2]) {
     if(m_f_internalDAC) {
         s32 += 0x80008000;
     }
-
-    esp_err_t err = i2s_write((i2s_port_t) m_i2s_num, (const char*) &s32, sizeof(uint32_t), &m_i2s_bytesWritten, 50);
+    m_i2s_bytesWritten = 0;
+    esp_err_t err = i2s_write((i2s_port_t) m_i2s_num, (const char*) &s32, sizeof(uint32_t), &m_i2s_bytesWritten, 100);
     if(err != ESP_OK) {
         log_e("ESP32 Errorcode %i", err);
         return false;

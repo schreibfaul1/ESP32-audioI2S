@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 02,2022
+ *  Updated on: Aug 08,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -239,6 +239,7 @@ private:
     int  read_ID3_Header(uint8_t* data, size_t len);
     int  read_M4A_Header(uint8_t* data, size_t len);
     int  read_OGG_Header(uint8_t *data, size_t len);
+    size_t process_m3u8_ID3_Header(uint8_t* packet);
     bool setSampleRate(uint32_t hz);
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
