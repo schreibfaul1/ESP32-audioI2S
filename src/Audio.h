@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 08,2022
+ *  Updated on: Aug 10,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -221,6 +221,7 @@ private:
     void processWebStreamTS();
     void processWebStreamHLS();
     void playAudioData();
+    size_t chunkedDataTransfer();
     bool readPlayListData();
     const char* parsePlaylist_M3U();
     const char* parsePlaylist_PLS();
