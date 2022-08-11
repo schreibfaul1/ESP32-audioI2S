@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5g
- *  Updated on: Aug 10.2022
+ *  Version 2.0.5h
+ *  Updated on: Aug 11.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1109,6 +1109,49 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen){
         }
     }
     return true;
+}
+//---------------------------------------------------------------------------------------------------------------------
+size_t Audio::readAudioHeader(uint32_t bytes){
+    size_t bytesReaded = 0;
+    if(m_codec == CODEC_WAV){
+        int res = read_WAV_Header(InBuff.getReadPtr(), bytes);
+        if(res >= 0) bytesReaded = res;
+        else{ // error, skip header
+            m_controlCounter = 100;
+        }
+    }
+    if(m_codec == CODEC_MP3){
+        int res = read_ID3_Header(InBuff.getReadPtr(), bytes);
+        if(res >= 0) bytesReaded = res;
+        else{ // error, skip header
+            m_controlCounter = 100;
+        }
+    }
+    if(m_codec == CODEC_M4A){
+        int res = read_M4A_Header(InBuff.getReadPtr(), bytes);
+        if(res >= 0) bytesReaded = res;
+        else{ // error, skip header
+            m_controlCounter = 100;
+        }
+    }
+    if(m_codec == CODEC_AAC){
+        // stream only, no header
+        m_audioDataSize = getFileSize();
+        m_controlCounter = 100;
+    }
+    if(m_codec == CODEC_FLAC){
+        int res = read_FLAC_Header(InBuff.getReadPtr(), bytes);
+        if(res >= 0) bytesReaded = res;
+        else{ // error, skip header
+            stopSong();
+            m_controlCounter = 100;
+        }
+    }
+    if(!isRunning()){
+        log_e("Processing stopped due to invalid audio header");
+        return 0;
+    }
+    return bytesReaded;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::read_WAV_Header(uint8_t* data, size_t len) {
@@ -2805,7 +2848,6 @@ bool Audio::STfromEXTINF(char* str){
 void Audio::processLocalFile() {
 
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return;
-
     int bytesDecoded = 0;
     uint32_t bytesCanBeWritten = 0;
     uint32_t bytesCanBeRead = 0;
@@ -2853,45 +2895,7 @@ void Audio::processLocalFile() {
     if(bytesCanBeRead == InBuff.getMaxBlockSize()) { // mp3 or aac frame complete?
 
         if(m_controlCounter != 100){
-            if(m_codec == CODEC_WAV){
-                int res = read_WAV_Header(InBuff.getReadPtr(), bytesCanBeRead);
-                if(res >= 0) bytesDecoded = res;
-                else{ // error, skip header
-                    m_controlCounter = 100;
-                }
-            }
-            if(m_codec == CODEC_MP3){
-                int res = read_ID3_Header(InBuff.getReadPtr(), bytesCanBeRead);
-                if(res >= 0) bytesDecoded = res;
-                else{ // error, skip header
-                    m_controlCounter = 100;
-                }
-            }
-            if(m_codec == CODEC_M4A){
-                int res = read_M4A_Header(InBuff.getReadPtr(), bytesCanBeRead);
-                if(res >= 0) bytesDecoded = res;
-                else{ // error, skip header
-                    m_controlCounter = 100;
-                }
-            }
-            if(m_codec == CODEC_AAC){
-                // stream only, no header
-                m_audioDataSize = getFileSize();
-                m_controlCounter = 100;
-            }
-
-            if(m_codec == CODEC_FLAC){
-                int res = read_FLAC_Header(InBuff.getReadPtr(), bytesCanBeRead);
-                if(res >= 0) bytesDecoded = res;
-                else{ // error, skip header
-                    stopSong();
-                    m_controlCounter = 100;
-                }
-            }
-            if(!isRunning()){
-                log_e("Processing stopped due to invalid audio header");
-                return;
-            }
+            bytesDecoded = readAudioHeader(bytesCanBeRead);
         }
         else {
             bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead);
@@ -3729,7 +3733,7 @@ bool Audio:: initializeDecoder(){
             InBuff.changeMaxBlockSize(m_frameSizeWav);
             break;
         case CODEC_OGG:
-            m_codec = CODEC_OGG;
+            m_codec = CODEC_OGG; log_e("!");
             AUDIO_INFO("ogg not supported");
             goto exit;
             break;
@@ -4063,13 +4067,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     bytesLeft = len;
     int ret = 0;
     int bytesDecoded = 0;
-    if(m_codec == CODEC_WAV){ //copy len data in outbuff and set validsamples and bytesdecoded=len
-        memmove(m_outBuff, data , len);
-        if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
-        if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
-        bytesLeft = 0;
-    }
+
     switch(m_codec){
+        case CODEC_WAV:      memmove(m_outBuff, data , len); //copy len data in outbuff and set validsamples and bytesdecoded=len
+                             if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
+                             if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
+                             bytesLeft = 0; break;
         case CODEC_MP3:      ret = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
         case CODEC_AAC:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_M4A:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;

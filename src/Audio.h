@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 10,2022
+ *  Updated on: Aug 11,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -235,6 +235,7 @@ private:
     void printDecodeError(int r);
     void showID3Tag(const char* tag, const char* val);
     void unicode2utf8(char* buff, uint32_t len);
+    size_t readAudioHeader(uint32_t bytes);
     int  read_WAV_Header(uint8_t* data, size_t len);
     int  read_FLAC_Header(uint8_t *data, size_t len);
     int  read_ID3_Header(uint8_t* data, size_t len);
