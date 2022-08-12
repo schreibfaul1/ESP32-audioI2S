@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5h
- *  Updated on: Aug 11.2022
+ *  Version 2.0.5g
+ *  Updated on: Aug 12.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2363,6 +2363,7 @@ bool Audio::playChunk() {
         return true;
     }
     log_e("BitsPer Sample must be 8 or 16!");
+    m_validSamples = 0;
     stopSong();
     return false;
 }
@@ -3733,7 +3734,7 @@ bool Audio:: initializeDecoder(){
             InBuff.changeMaxBlockSize(m_frameSizeWav);
             break;
         case CODEC_OGG:
-            m_codec = CODEC_OGG; log_e("!");
+            m_codec = CODEC_OGG;
             AUDIO_INFO("ogg not supported");
             goto exit;
             break;
@@ -3774,7 +3775,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     }
     if(!metalen) {m_metacount = m_metaint; return res;}
 
-    uint16_t a = _client->readBytes(&chbuf[pos_ml], min(metalen, (uint16_t)(maxBytes -1)));
+    uint16_t a = _client->readBytes(&chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes -1)));
     res += a;
     pos_ml += a;
     if(pos_ml == metalen) {
@@ -4078,7 +4079,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_M4A:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_FLAC:     ret = FLACDecode(data, &bytesLeft, m_outBuff);   break;
         case CODEC_OGG_FLAC: ret = FLACDecode(data, &bytesLeft, m_outBuff);   break; // FLAC webstream wrapped in OGG
-        default: {log_e("no valid codec found"); stopSong();}
+        default: {log_e("no valid codec found codec = %d", m_codec); stopSong();}
     }
 
     bytesDecoded = len - bytesLeft;
