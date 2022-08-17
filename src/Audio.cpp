@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5g
- *  Updated on: Aug 12.2022
+ *  Version 2.0.5h
+ *  Updated on: Aug 17.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -316,7 +316,7 @@ void Audio::setDefaults() {
     m_f_firstmetabyte = false;
     m_f_playing = false;
     m_f_ssl = false;
-    m_f_swm = true;                                         // Assume no metaint (stream without metadata)
+    m_f_metadata = false;
     m_f_tts = false;
     m_f_firstCall = true;                                   // InitSequence for processWebstream and processLokalFile
     m_f_running = false;
@@ -2389,7 +2389,8 @@ void Audio::loop() {
                 if(m_playlistFormat == FORMAT_ASX)  connecttohost(parsePlaylist_ASX());
                 break;
             case AUDIO_DATA:
-                processWebStream();
+                if(m_streamType == ST_WEBSTREAM) processWebStream();
+                if(m_streamType == ST_WEBFILE)   processWebFile();
                 break;
         }
     }
@@ -2444,12 +2445,20 @@ void Audio::loop() {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-size_t Audio::chunkedDataTransfer(){
+size_t Audio::chunkedDataTransfer(uint8_t* bytes){
     size_t chunksize = 0;
     int b = 0;
+    uint32_t ctime = millis();
+    uint32_t timeout = 2000; // ms
     while(true){
+        if(ctime + timeout < millis()) {
+            log_e("timeout");
+            stopSong();
+            return 0;
+        }
         b = _client->read();
-        if(b < 0) break;
+        *bytes++;
+        if(b < 0) continue;  // -1 no data available
         if(b == '\n') break;
         if(b < '0') continue;
         // We have received a hexadecimal character.  Decode it and add to the result.
@@ -2466,8 +2475,8 @@ bool Audio::readPlayListData() {
     if(getDatamode() != AUDIO_PLAYLISTINIT) return false;
     if(_client->available() == 0) return false;
 
-    uint32_t chunksize = 0;
-    if(m_f_chunked) chunksize = chunkedDataTransfer();
+    uint32_t chunksize = 0; uint8_t readedBytes = 0;
+    if(m_f_chunked) chunksize = chunkedDataTransfer(&readedBytes);
 
     // reads the content of the playlist and stores it in the vector m_contentlength
     // m_contentlength is a table of pointers to the lines
@@ -2956,8 +2965,89 @@ void Audio::processLocalFile() {
         if(afn) {free(afn); afn = NULL;}
     }
 }
-//---------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
+
+    const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
+    static bool     f_tmr_1s;
+    static bool     f_stream;                                   // first audio data received
+    static uint8_t  cnt_slow;
+    static uint32_t chunkSize;                                  // chunkcount read from stream
+    static uint32_t tmr_1s;                                     // timer 1 sec
+    static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
+
+    // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_f_firstCall) { // runs only ont time per connection, prepare for start
+        m_f_firstCall = false;
+        f_stream = false;
+        cnt_slow = 0;
+        chunkSize = 0;
+        loopCnt = 0;
+        tmr_1s = millis();
+        m_metacount = m_metaint;
+        readMetadata(0, true); // reset all static vars
+    }
+
+    if(getDatamode() != AUDIO_DATA) return;              // guard
+    uint32_t availableBytes = _client->available();      // available from stream
+    // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_f_chunked){
+        uint8_t readedBytes = 0;
+        if(!chunkSize) chunkSize = chunkedDataTransfer(&readedBytes);
+        availableBytes = min(availableBytes, chunkSize);
+    }
+    // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_f_metadata){
+        if(availableBytes) if(m_metacount == 0) {chunkSize -= readMetadata(availableBytes); return;}
+        availableBytes = min(availableBytes, m_metacount);
+    }
+    // timer, triggers every second  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if((tmr_1s + 1000) < millis()) {
+        f_tmr_1s = true;                                        // flag will be set every second for one loop only
+        tmr_1s = millis();
+    }
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(InBuff.bufferFilled() > maxFrameSize) {f_tmr_1s = false; cnt_slow = 0; loopCnt = 0;}
+    if(f_tmr_1s){
+        cnt_slow ++;
+        if(cnt_slow > 25){cnt_slow = 0; AUDIO_INFO("slow stream, dropouts are possible");}
+    }
+    // if the buffer can't filled for several seconds try a new connection - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_stream && !availableBytes){
+        loopCnt++;
+        if(loopCnt > 200000) {              // wait several seconds
+            AUDIO_INFO("Stream lost -> try new connection");
+            connecttohost(m_lastHost);
+            return;
+        }
+    }
+    // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(availableBytes) {
+        availableBytes = min(availableBytes, InBuff.writeSpace());
+        int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+
+        if(bytesAddedToBuffer > 0) {
+            if(m_f_metadata)            m_metacount  -= bytesAddedToBuffer;
+            if(m_f_chunked)             chunkSize    -= bytesAddedToBuffer;
+            InBuff.bytesWritten(bytesAddedToBuffer);
+        }
+
+        if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
+            f_stream = true;  // ready to play the audio data
+            AUDIO_INFO("stream ready");
+        }
+        if(!f_stream) return;
+    }
+
+    // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_stream){
+        static uint8_t cnt = 0;
+        cnt++;
+        if(cnt == 3){playAudioData(); cnt = 0;}
+    }
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::processWebFile() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     uint32_t        availableBytes;                             // available bytes in stream
@@ -3044,15 +3134,15 @@ void Audio::processWebStream() {
     }
 
     // if we have metadata: get them - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!m_metacount && !m_f_swm){
-        int bytes = 0;
-        int res = 0;
-        if(m_f_chunked) bytes = min(m_chunkcount, availableBytes);
-        else bytes = availableBytes;
-        res = readMetadata(bytes);
-        if(m_f_chunked) m_chunkcount -= res;
-        if(!m_metacount) return;
-    }
+    // if(!m_metacount && !m_f_swm){
+    //     int bytes = 0;
+    //     int res = 0;
+    //     if(m_f_chunked) bytes = min(m_chunkcount, availableBytes);
+    //     else bytes = availableBytes;
+    //     res = readMetadata(bytes);
+    //     if(m_f_chunked) m_chunkcount -= res;
+    //     if(!m_metacount) return;
+    // }
 
     // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(InBuff.bufferFilled() < maxFrameSize && f_stream && !f_webFileDataComplete){
@@ -3080,7 +3170,7 @@ void Audio::processWebStream() {
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(true) { // statement has no effect
         uint32_t bytesCanBeWritten = InBuff.writeSpace();
-        if(!m_f_swm)    bytesCanBeWritten = min(m_metacount,  bytesCanBeWritten);
+    //    if(!m_f_swm)    bytesCanBeWritten = min(m_metacount,  bytesCanBeWritten);
         if(m_f_chunked) bytesCanBeWritten = min(m_chunkcount, bytesCanBeWritten);
 
         int16_t bytesAddedToBuffer = 0;
@@ -3109,7 +3199,7 @@ void Audio::processWebStream() {
 
         if(bytesAddedToBuffer > 0) {
             if(m_streamType == ST_WEBFILE)             byteCounter  += bytesAddedToBuffer;  // Pull request #42
-            if(!m_f_swm)                m_metacount  -= bytesAddedToBuffer;
+        //    if(!m_f_swm)                m_metacount  -= bytesAddedToBuffer;
             if(m_f_chunked)             m_chunkcount -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
@@ -3279,7 +3369,8 @@ void Audio::processWebStreamTS() {
 
     availableBytes = _client->available();
     if(availableBytes){
-        if(m_f_chunked) chunkSize = chunkedDataTransfer();
+        uint8_t readedBytes = 0;
+        if(m_f_chunked) chunkSize = chunkedDataTransfer(&readedBytes);
         int res = _client->read(ts_packet + ts_packetPtr, ts_packetsize - ts_packetPtr);
         if(res > 0){
             ts_packetPtr += res;
@@ -3401,7 +3492,8 @@ void Audio::processWebStreamHLS() {
 
     availableBytes = _client->available();
     if(availableBytes){
-        if(m_f_chunked) chunkSize = chunkedDataTransfer();
+        uint8_t readedBytes = 0;
+        if(m_f_chunked) chunkSize = chunkedDataTransfer(&readedBytes);
         size_t bytesWasWritten = 0;
         if(InBuff.writeSpace() >= availableBytes){
             bytesWasWritten = _client->read(InBuff.getWritePtr(), availableBytes);
@@ -3623,7 +3715,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             const char* c_metaint = (rhl + 12);
             int32_t i_metaint = atoi(c_metaint);
             m_metaint = i_metaint;
-            if(m_metaint) m_f_swm = false     ;                            // Multimediastream
+            if(m_metaint) m_f_metadata = true;                       // Multimediastream
         }
 
         else if(startsWith(rhl, "icy-name:")) {
@@ -3768,20 +3860,18 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
         metalen = b * 16 ;                              // New count for metadata including length byte
         if(metalen > 512){
             AUDIO_INFO("Metadata block to long! Skipping all Metadata from now on.");
-            m_f_swm = true;                              // expect stream without metadata
+            m_f_metadata = false;                        // expect stream without metadata
+            return 1;
         }
         pos_ml = 0; chbuf[pos_ml] = 0;                   // Prepare for new line
         res = 1;
     }
-    if(!metalen) {m_metacount = m_metaint; return res;}
-
+    if(!metalen) {m_metacount = m_metaint; return res;} // metalen is 0
     uint16_t a = _client->readBytes(&chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes -1)));
     res += a;
     pos_ml += a;
     if(pos_ml == metalen) {
-        metalen = 0;
         chbuf[pos_ml] = '\0';
-        m_metacount = m_metaint;
         if(strlen(chbuf)) {                             // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
@@ -3796,6 +3886,8 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
             }
             showstreamtitle(chbuf);   // Show artist and title if present in metadata
         }
+        m_metacount = m_metaint;
+        metalen = 0;
         pos_ml = 0;
     }
     return res;

@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 12,2022
+ *  Updated on: Aug 17,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -218,10 +218,11 @@ private:
     bool httpPrint(const char* host);
     void processLocalFile();
     void processWebStream();
+    void processWebFile();
     void processWebStreamTS();
     void processWebStreamHLS();
     void playAudioData();
-    size_t chunkedDataTransfer();
+    size_t chunkedDataTransfer(uint8_t* bytes);
     bool readPlayListData();
     const char* parsePlaylist_M3U();
     const char* parsePlaylist_PLS();
@@ -509,7 +510,7 @@ private:
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
     uint16_t        m_m3u8_targetDuration = 10;     //
-    bool            m_f_swm = true;                 // Stream without metadata
+    bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_ssl = false;
