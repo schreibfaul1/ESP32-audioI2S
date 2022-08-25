@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.5k
- *  Updated on: Aug 23.2022
+ *  Version 2.0.6
+ *  Updated on: Aug 25.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -994,7 +994,7 @@ void Audio::showID3Tag(const char* tag, const char* value){
     if(!strcmp(tag, "TRCK")) sprintf(chbuf, "Track: %s", value);
     if(!strcmp(tag, "TSSE")) sprintf(chbuf, "SettingsForEncoding: %s", value);
     if(!strcmp(tag, "TRDA")) sprintf(chbuf, "RecordingDates: %s", value);
-    if(!strcmp(tag, "TXXX")) sprintf(chbuf, "UserDefinedText: %s", value);
+    if(!m_f_m3u8data) if(!strcmp(tag, "TXXX")) sprintf(chbuf, "UserDefinedText: %s", value);
     if(!strcmp(tag, "TYER")) sprintf(chbuf, "Year: %s", value);
     if(!strcmp(tag, "USER")) sprintf(chbuf, "TermsOfUse: %s", value);
     if(!strcmp(tag, "USLT")) sprintf(chbuf, "Lyrics: %s", value);
@@ -1503,9 +1503,9 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         headerSize = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
-            AUDIO_INFO("file has no mp3 tag, skip metadata");
+            if(!m_f_m3u8data) AUDIO_INFO("file has no mp3 tag, skip metadata");
             m_audioDataSize = m_contentlength;
-            AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
+            if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             return -1; // error, no ID3 signature found
         }
         ID3version = *(data + 3);
@@ -1524,9 +1524,8 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         id3Size += 10;
 
         // Every read from now may be unsync'd
-        AUDIO_INFO("ID3 framesSize: %i", id3Size);
-
-        AUDIO_INFO("ID3 version: 2.%i", ID3version);
+        if(!m_f_m3u8data) AUDIO_INFO("ID3 framesSize: %i", id3Size);
+        if(!m_f_m3u8data) AUDIO_INFO("ID3 version: 2.%i", ID3version);
 
         if(ID3version == 2){
             m_controlCounter = 10;
@@ -1548,7 +1547,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
             return 4;
         }
         else{
-            AUDIO_INFO("ID3 normal frames");
+            if(!m_f_m3u8data) AUDIO_INFO("ID3 normal frames");
             return 0;
         }
     }
@@ -1723,7 +1722,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         else {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_contentlength - m_audioDataStart;
-            AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
+            if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             if(APIC_seen && audio_id3image){
                 size_t pos = audiofile.position();
                 audio_id3image(audiofile, APIC_pos, APIC_size);
@@ -3263,14 +3262,19 @@ void Audio::processWebStreamTS() {
 void Audio::processWebStreamHLS() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
+    const uint16_t  ID3BuffSize = 1024;
     uint32_t        availableBytes;                             // available bytes in stream
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
     static int      bytesDecoded;
+    static bool     firstBytes;
     static uint32_t byteCounter;                                // count received data
     static size_t   chunkSize = 0;
     static uint32_t tmr_1s;                                     // timer 1 sec
     static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
+    static uint16_t ID3WritePtr;
+    static uint16_t ID3ReadPtr;
+    static uint8_t* ID3Buff;
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3279,17 +3283,54 @@ void Audio::processWebStreamHLS() {
         bytesDecoded = 0;
         chunkSize = 0;
         loopCnt = 0;
+        ID3WritePtr = 0;
+        ID3ReadPtr = 0;
         tmr_1s = millis();
         m_t0 = millis();
-         m_f_firstCall = false;
+        m_f_firstCall = false;
+        firstBytes = true;
+        ID3Buff = (uint8_t*)malloc(ID3BuffSize);
+        m_controlCounter = 0;
     }
 
     if(getDatamode() != AUDIO_DATA) return;        // guard
 
     availableBytes = _client->available();
-    if(availableBytes){
+    if(availableBytes){ // an ID3 header could come here
         uint8_t readedBytes = 0;
-        if(m_f_chunked) chunkSize = chunkedDataTransfer(&readedBytes);
+
+        if(m_f_chunked && !chunkSize) {chunkSize = chunkedDataTransfer(&readedBytes); byteCounter += readedBytes;}
+
+        if(firstBytes){
+            if(ID3WritePtr < ID3BuffSize){
+                ID3WritePtr += _client->readBytes(&ID3Buff[ID3WritePtr], ID3BuffSize - ID3WritePtr);
+                return;
+            }
+            if(m_controlCounter < 100){
+                int res = read_ID3_Header(&ID3Buff[ID3ReadPtr], ID3BuffSize - ID3ReadPtr);
+                if(res >= 0) ID3ReadPtr += res;
+                if(ID3ReadPtr > ID3BuffSize) {log_e("buffer overflow"); stopSong(); return;}
+                return;
+            }
+            if(m_controlCounter != 100) return;
+
+            size_t ws = InBuff.writeSpace();
+            if(ws >= ID3BuffSize - ID3ReadPtr){
+                memcpy(InBuff.getWritePtr(), &ID3Buff[ID3ReadPtr], ID3BuffSize - ID3ReadPtr);
+                InBuff.bytesWritten(ID3BuffSize - ID3ReadPtr);
+            }
+            else{
+                memcpy(InBuff.getWritePtr(), &ID3Buff[ID3ReadPtr], ws);
+                InBuff.bytesWritten(ws);
+                memcpy(InBuff.getWritePtr(), &ID3Buff[ws + ID3ReadPtr], ID3BuffSize - (ID3ReadPtr + ws));
+                InBuff.bytesWritten(ID3BuffSize - (ID3ReadPtr + ws));
+            }
+            if(ID3Buff) free(ID3Buff);
+            byteCounter += ID3BuffSize;
+            ID3Buff = NULL;
+            firstBytes = false;
+        }
+
         size_t bytesWasWritten = 0;
         if(InBuff.writeSpace() >= availableBytes){
             bytesWasWritten = _client->read(InBuff.getWritePtr(), availableBytes);
@@ -3298,6 +3339,7 @@ void Audio::processWebStreamHLS() {
             bytesWasWritten = _client->read(InBuff.getWritePtr(), InBuff.writeSpace());
         }
         InBuff.bytesWritten(bytesWasWritten);
+
         byteCounter += bytesWasWritten;
         if(byteCounter == m_contentlength || byteCounter == chunkSize){
             byteCounter = 0;
@@ -3342,7 +3384,11 @@ void Audio::processWebStreamHLS() {
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream) playAudioData();
+    if(f_stream){
+        static uint8_t cnt = 0;
+        cnt++;
+        if(cnt == 1){playAudioData(); cnt = 0;}
+    }
     return;
 }
 //---------------------------------------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Aug 23,2022
+ *  Updated on: Aug 25,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -163,6 +163,7 @@ public:
     ~Audio();
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
+    
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttomarytts(const char* speech, const char* lang, const char* voice);
     bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
