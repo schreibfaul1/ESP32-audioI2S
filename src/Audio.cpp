@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6
- *  Updated on: Aug 25.2022
+ *  Version 2.0.6a
+ *  Updated on: Aug 27.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1296,7 +1296,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
     static size_t headerSize;
-    static size_t retvalue;
+    static size_t retvalue = 0;
     static bool   f_lastMetaBlock;
 
     if(retvalue) {
@@ -2836,17 +2836,36 @@ bool Audio::STfromEXTINF(char* str){
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {
 
-    if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return;
-    int bytesDecoded = 0;
-    uint32_t bytesCanBeWritten = 0;
-    uint32_t bytesCanBeRead = 0;
-    int32_t bytesAddedToBuffer = 0;
+    if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
+
+    const uint32_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     static bool f_stream;
+    static bool f_fileDataComplete;
+    static uint32_t byteCounter;                                // count received data
 
     if(m_f_firstCall) {  // runs only one time per connection, prepare for start
         m_f_firstCall = false;
         f_stream = false;
+        f_fileDataComplete = false;
+        byteCounter = 0;
         return;
+    }
+
+    uint32_t availableBytes = maxFrameSize * 2;
+    availableBytes = min(availableBytes, InBuff.writeSpace());
+    availableBytes = min(availableBytes, audiofile.size() - byteCounter);
+    if(m_contentlength){
+        if(m_contentlength > getFilePos()) availableBytes = min(availableBytes, m_contentlength - getFilePos());
+    }
+    if(m_audioDataSize){
+        availableBytes = min(availableBytes, m_audioDataSize + m_audioDataStart - byteCounter);
+    }
+
+    int32_t bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
+
+    if(bytesAddedToBuffer > 0) {
+        byteCounter += bytesAddedToBuffer;  // Pull request #42
+        InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
     if(!f_stream && m_controlCounter == 100) {
@@ -2861,54 +2880,30 @@ void Audio::processLocalFile() {
         }
     }
 
-    bytesCanBeWritten = InBuff.writeSpace();
-    //----------------------------------------------------------------------------------------------------
-    // some files contain further data after the audio block (e.g. pictures).
-    // In that case, the end of the audio block is not the end of the file. An 'eof' has to be forced.
-    if((m_controlCounter == 100) && (m_contentlength > 0)) { // fileheader was read
-           if(bytesCanBeWritten + getFilePos() >= m_contentlength){
-               if(m_contentlength > getFilePos()) bytesCanBeWritten = m_contentlength - getFilePos();
-               else bytesCanBeWritten = 0;
-           }
-    }
-    //----------------------------------------------------------------------------------------------------
-
-    bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), bytesCanBeWritten);
-    if(bytesAddedToBuffer > 0) {
-        InBuff.bytesWritten(bytesAddedToBuffer);
-    }
-
-    if(bytesAddedToBuffer == -1) bytesAddedToBuffer = 0; // read error? eof?
-    bytesCanBeRead = InBuff.bufferFilled();
-    if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
-    if(bytesCanBeRead == InBuff.getMaxBlockSize()) { // mp3 or aac frame complete?
-
+    if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
+        // read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_controlCounter != 100){
-            bytesDecoded = readAudioHeader(bytesCanBeRead);
-        }
-        else {
-            bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead);
-        }
-        if(bytesDecoded > 0) {InBuff.bytesWasRead(bytesDecoded); return;}
-        if(bytesDecoded < 0) {  // no syncword found or decode error, try next chunk
-            InBuff.bytesWasRead(200); // try next chunk
-            m_bytesNotDecoded += 200;
+            InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
             return;
         }
-        return;
+        if(m_resumeFilePos){
+            if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+            if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
+            audiofile.seek(m_resumeFilePos);
+            InBuff.resetBuffer();
+            if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
+        }
+        f_stream = true;  // ready to play the audio data
     }
 
-    if(!bytesAddedToBuffer) {  // eof
-        bytesCanBeRead = InBuff.bufferFilled();
-        if(bytesCanBeRead > 200){
-            if(bytesCanBeRead > InBuff.getMaxBlockSize()) bytesCanBeRead = InBuff.getMaxBlockSize();
-            bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesCanBeRead); // play last chunk(s)
-            if(bytesDecoded > 0){
-                InBuff.bytesWasRead(bytesDecoded);
-                return;
+    // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()){
+        if(InBuff.bufferFilled()){
+            if(!readID3V1Tag()){
+                int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
+                if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
             }
         }
-        InBuff.resetBuffer();
         playI2Sremains();
 
         if(m_f_loop  && f_stream){  //eof
@@ -2924,8 +2919,6 @@ void Audio::processLocalFile() {
             m_audioCurrentTime = 0;
             return;
         } //TEST loop
-        f_stream = false;
-        m_streamType = ST_NONE;
 
 #ifdef SDFATFS_USED
         audiofile.getName(chbuf, sizeof(chbuf));
@@ -2942,7 +2935,23 @@ void Audio::processLocalFile() {
         AUDIO_INFO("End of file \"%s\"", afn);
         if(audio_eof_mp3) audio_eof_mp3(afn);
         if(afn) {free(afn); afn = NULL;}
+        return;
     }
+
+    if(byteCounter == audiofile.size())                  {f_fileDataComplete = true;}
+    if(byteCounter == m_audioDataSize + m_audioDataStart){f_fileDataComplete = true;}
+
+    // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_stream){
+        static uint8_t cnt = 0;
+        uint8_t compression;
+        if(m_codec == CODEC_WAV)  compression = 1;
+        if(m_codec == CODEC_FLAC) compression = 2;
+        else compression = 6;
+        cnt++;
+        if(cnt == compression){playAudioData(); cnt = 0;}
+    }
+    return;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
@@ -4730,7 +4739,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     //---------------------------------------------------------------------------------------------------------
     // 2. Byte           |PID|PID|PID|PID|PID|PID|PID|PID|
     //---------------------------------------------------------------------------------------------------------
-    // 3. Byte           |TSC|TSC|AFC|ADC|CC |CC |CC |CC |
+    // 3. Byte           |TSC|TSC|AFC|AFC|CC |CC |CC |CC |
     //---------------------------------------------------------------------------------------------------------
     // 4.-187. Byte      |Payload data if AFC==01 or 11  |
     //---------------------------------------------------------------------------------------------------------
