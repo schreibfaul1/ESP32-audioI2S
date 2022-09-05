@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6b
- *  Updated on: Sep 01.2022
+ *  Version 2.0.6c
+ *  Updated on: Sep 05.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -760,7 +760,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     }
     _client->print(resp);
 
-    m_streamType = ST_WEBSTREAM;
+    m_streamType = ST_WEBFILE;
     m_f_running = true;
     m_f_ssl = false;
     m_f_tts = true;
@@ -852,7 +852,7 @@ bool Audio::connecttomarytts(const char* speech, const char* lang, const char* v
     }
     _client->print(resp);
 
-    m_streamType = ST_WEBSTREAM;
+    m_streamType = ST_WEBFILE;
     m_f_running = true;
     m_f_ssl = false;
     m_f_tts = true;
@@ -3054,7 +3054,7 @@ void Audio::processWebFile() {
         audioDataCount = 0;
     }
 
-    if(!m_contentlength) {log_e("webfile without contentlength!"); stopSong(); return;} // guard
+    if(!m_contentlength && !m_f_tts) {log_e("webfile without contentlength!"); stopSong(); return;} // guard
 
     uint32_t availableBytes = _client->available(); // available from stream
 
@@ -3063,6 +3063,7 @@ void Audio::processWebFile() {
         uint8_t readedBytes = 0;
         if(!chunkSize) chunkSize = chunkedDataTransfer(&readedBytes);
         availableBytes = min(availableBytes, chunkSize);
+        if(m_f_tts) m_contentlength = chunkSize;
     }
 
     // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
