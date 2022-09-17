@@ -4371,6 +4371,15 @@ bool Audio::playSample(int16_t sample[2]) {
 
     uint32_t s32 = Gain(sample); // vosample2lume;
 
+    if(audio_process_i2s){
+		// process audio sample just before writing to i2s
+        bool continueI2S = false;
+        audio_process_i2s(&s32, &continueI2S);
+        if(!continueI2S){
+            return true;
+        }
+    }
+
     if(m_f_internalDAC) {
         s32 += 0x80008000;
     }
