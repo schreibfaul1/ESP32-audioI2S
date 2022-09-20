@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6c
- *  Updated on: Sep 05.2022
+ *  Version 2.0.6e
+ *  Updated on: Sep 20.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2267,10 +2267,11 @@ void Audio::playI2Sremains() { // returns true if all dma_buffs flushed
     if(getBitsPerSample() > 8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
     else                       memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
 
-    m_validSamples = m_i2s_config.dma_buf_len;
+    m_validSamples = m_i2s_config.dma_buf_len * m_i2s_config.dma_buf_count;
     while(m_validSamples) {
         playChunk();
     }
+    i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
     return;
 }
 //---------------------------------------------------------------------------------------------------------------------
