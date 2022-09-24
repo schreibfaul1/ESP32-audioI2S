@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Sep 20,2022
+ *  Updated on: Sep 24,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -371,7 +371,7 @@ private:
     // some other functions
     size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
         size_t result = 0;
-        if(numBytes < 1 or numBytes > 4) return 0;
+        if(numBytes < 1 || numBytes > 4) return 0;
         for (int i = 0; i < numBytes; i++) {
                 result += *(base + i) << (numBytes -i - 1) * shiftLeft;
         }
