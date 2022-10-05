@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6e
- *  Updated on: Sep 20.2022
+ *  Version 2.0.6f
+ *  Updated on: Oct 05.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2195,10 +2195,10 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet){
     uint8_t         ID3version;
     size_t          id3Size;
     bool            m_f_unsync = false, m_f_exthdr = false;
-    static uint64_t last_timestamp;  // remember the last timestamp
-    static uint32_t lastSampleRate;
     uint64_t        current_timestamp = 0;
-    uint32_t        newSampleRate = 0;
+
+    (void) m_f_unsync;         // suppress -Wunused-variable
+    (void) current_timestamp;  // suppress -Wunused-variable
 
     if(specialIndexOf(packet, "ID3", 4) != 0) { // ID3 not found
         if(m_f_Log) log_i("m3u8 file has no mp3 tag");
@@ -3143,7 +3143,6 @@ void Audio::processWebStreamTS() {
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
     static bool     f_firstPacket;
-    static int      bytesDecoded;
     static uint32_t byteCounter;                                // count received data
     static uint32_t tmr_1s;                                     // timer 1 sec
     static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
@@ -3159,7 +3158,6 @@ void Audio::processWebStreamTS() {
         f_stream = false;
         f_firstPacket = true;
         byteCounter = 0;
-        bytesDecoded = 0;
         chunkSize = 0;
         loopCnt = 0;
         tmr_1s = millis();
@@ -3277,7 +3275,6 @@ void Audio::processWebStreamHLS() {
     uint32_t        availableBytes;                             // available bytes in stream
     static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
-    static int      bytesDecoded;
     static bool     firstBytes;
     static uint32_t byteCounter;                                // count received data
     static size_t   chunkSize = 0;
@@ -3291,7 +3288,6 @@ void Audio::processWebStreamHLS() {
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         f_stream = false;
         byteCounter = 0;
-        bytesDecoded = 0;
         chunkSize = 0;
         loopCnt = 0;
         ID3WritePtr = 0;
@@ -4726,6 +4722,8 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     const uint8_t PAYLOAD_SIZE = 184;
     const uint8_t PID_ARRAY_LEN = 4;
 
+    (void) PAYLOAD_SIZE;  // suppress [-Wunused-variable]
+
     typedef struct{
         int number= 0;
         int pids[PID_ARRAY_LEN];
@@ -4941,6 +4939,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 size_t Audio::chunkedDataTransfer(uint8_t* bytes){
+    uint8_t byteCounter = 0;
     size_t chunksize = 0;
     int b = 0;
     uint32_t ctime = millis();
@@ -4952,7 +4951,7 @@ size_t Audio::chunkedDataTransfer(uint8_t* bytes){
             return 0;
         }
         b = _client->read();
-        *bytes++;
+        byteCounter++;
         if(b < 0) continue;  // -1 no data available
         if(b == '\n') break;
         if(b < '0') continue;
@@ -4962,6 +4961,7 @@ size_t Audio::chunkedDataTransfer(uint8_t* bytes){
         chunksize = (chunksize << 4) + b;
     }
     if(m_f_Log) log_i("chunksize %d", chunksize);
+    *bytes = byteCounter;
     return chunksize;
 }
 //----------------------------------------------------------------------------------------------------------------------
