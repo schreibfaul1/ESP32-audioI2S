@@ -33,7 +33,7 @@ String stations[] ={
         "www.antenne.de/webradio/antenne.m3u",
         "listen.rusongs.ru/ru-mp3-128",
         "edge.audio.3qsdn.com/senderkw-mp3",
-        "macslons-irish-pub-radio.com/media.asx",
+        "https://stream.srg-ssr.ch/rsp/aacp_48.asx", // SWISS POP
 };
 
 //some global variables
