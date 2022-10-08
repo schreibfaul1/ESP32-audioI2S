@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6f
- *  Updated on: Oct 05.2022
+ *  Version 2.0.6g
+ *  Updated on: Oct 08.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -187,7 +187,12 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
             m_i2s_config.mode             = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN );
 
             #if ESP_ARDUINO_VERSION_MAJOR >= 2
-                m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+                #if ESP_ARDUINO_VERSION_PATCH  == 0
+                    m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers == 2.0.0
+                #else
+                    // V2.0.1 ... V2.0.4 will not work
+                    m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB); // vers >= 2.0.5
+                #endif
             #else
                 m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_I2S_MSB);
             #endif
