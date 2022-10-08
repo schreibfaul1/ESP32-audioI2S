@@ -2469,7 +2469,7 @@ bool Audio::readPlayListData() {
     uint32_t ctl  = 0;
     int lines = 0;
     // delete all memory in m_playlistContent
-    if(!psramFound()){log_e("m3u8 playlists requires PSRAM enabled!");}
+    if(m_playlistFormat == FORMAT_M3U8 && !psramFound()){log_e("m3u8 playlists requires PSRAM enabled!");}
     vector_clear_and_shrink(m_playlistContent);
     while(true){  // outer while
 
