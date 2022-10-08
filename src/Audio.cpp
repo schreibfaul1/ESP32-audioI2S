@@ -4797,7 +4797,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         if(m_f_Log) log_i("Section Length: %d", sectionLength);
         int program_number, program_map_PID;
         int indexOfPids = 0;
-	(void) program_number; // [-Wunused-but-set-variable]
+        (void) program_number; // [-Wunused-but-set-variable]
         for(int i = startOfProgramNums; i <= sectionLength; i += lengthOfPATValue) {
             program_number = ((packet[PLS + i] & 0xFF) << 8) | (packet[PLS + i + 1] & 0xFF);
             program_map_PID = ((packet[PLS + i + 2] & 0x1F) << 8) | (packet[PLS + i + 3] & 0xFF);
