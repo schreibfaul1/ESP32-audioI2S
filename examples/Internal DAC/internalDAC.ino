@@ -15,11 +15,6 @@
 #include "WiFiMulti.h"
 #include "Audio.h"
 
-// Digital I/O used
-#define I2S_DOUT      26
-#define I2S_BCLK      27
-#define I2S_LRC       25
-
 Audio audio(true, I2S_DAC_CHANNEL_BOTH_EN);
 WiFiMulti wifiMulti;
 String ssid =     "xxxxx";
