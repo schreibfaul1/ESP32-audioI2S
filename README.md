@@ -40,7 +40,7 @@ void setup() {
 
 //    audio.connecttoFS(SD, "/320k_test.mp3");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
-//    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
+//    audio.connecttohost("https://stream.srg-ssr.ch/rsp/aacp_48.asx"); // SWISS POP
 //    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
       audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
 //    audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/sample1.m4a"); // m4a
