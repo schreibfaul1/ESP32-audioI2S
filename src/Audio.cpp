@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6h
+ *  Version 2.0.6i
  *  Updated on: Oct 19.2022
  *      Author: Wolle (schreibfaul1)
  *
@@ -417,7 +417,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         extension = strdup("/");
     }
 
-    if((pos_colon >= 0) && ((pos_ampersand == -1) or (pos_ampersand > pos_colon))){
+    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))){
         port = atoi(h_host + pos_colon + 1);// Get portnumber as integer
         hostwoext[pos_colon] = '\0';// Host without portnumber
     }
@@ -551,7 +551,7 @@ bool Audio::httpPrint(const char* host) {
         extension = strdup("/");
     }
 
-    if((pos_colon >= 0) && ((pos_ampersand == -1) or (pos_ampersand > pos_colon))){
+    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))){
         port = atoi(h_host + pos_colon + 1);// Get portnumber as integer
         hostwoext[pos_colon] = '\0';// Host without portnumber
     }
