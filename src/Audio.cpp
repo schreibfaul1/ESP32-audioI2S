@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6g
- *  Updated on: Oct 08.2022
+ *  Version 2.0.6h
+ *  Updated on: Oct 19.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4812,15 +4812,18 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     }
     else if(PID == pidOfAAC) {
+        static uint8_t fillData = 0;
         if(m_f_Log) log_i("AAC");
         uint8_t posOfPacketStart = 4;
         if(AFL >= 0) {posOfPacketStart = 5 + AFL;
         if(m_f_Log) log_i("posOfPacketStart: %d", posOfPacketStart);}
         // Packetized Elementary Stream (PES) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if(m_f_Log) log_i("PES_DataLength %i", PES_DataLength);
         if (PES_DataLength > 0) {
-            *packetStart    = posOfPacketStart;
-            *packetLength   = TS_PACKET_SIZE - posOfPacketStart;
-            PES_DataLength -= TS_PACKET_SIZE - posOfPacketStart;
+            *packetStart    = posOfPacketStart + fillData;
+            *packetLength   = TS_PACKET_SIZE - posOfPacketStart - fillData;
+            fillData = 0;
+            PES_DataLength -= (*packetLength);
             return true;
         }
         else{
@@ -4833,25 +4836,34 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 uint8_t StreamID = packet[posOfPacketStart + 3] & 0xFF;
                 if(StreamID >= 0xC0 && StreamID <= 0xDF) {;} // okay ist audio stream
                 if(StreamID >= 0xE0 && StreamID <= 0xEF) {log_e("video stream!"); return false;}
-                const uint8_t posOfPacketLengthLatterHalf = 5;
+                uint8_t PES_HeaderDataLength = packet[posOfPacketStart + 8] & 0xFF;
+                if(m_f_Log) log_i("PES_headerDataLength %d", PES_HeaderDataLength);
                 int PES_PacketLength =
                     ((packet[posOfPacketStart + 4] & 0xFF) << 8) + (packet[posOfPacketStart + 5] & 0xFF);
                 if(m_f_Log) log_i("PES Packet length: %d", PES_PacketLength);
                 PES_DataLength = PES_PacketLength;
-                int posOfHeaderLength = 8;
-                int PESRemainingHeaderLength = packet[posOfPacketStart + posOfHeaderLength] & 0xFF;
-                if(m_f_Log) log_i("PES Header length: %d", PESRemainingHeaderLength);
-                int startOfData = posOfHeaderLength + PESRemainingHeaderLength + 1;
+                int startOfData = PES_HeaderDataLength + 9;
+                if(posOfPacketStart + startOfData >= 188){ // only fillers in packet
+                    if(m_f_Log) log_e("posOfPacketStart + startOfData %i", posOfPacketStart + startOfData);
+                    *packetStart = 0;
+                    *packetLength = 0;
+                    PES_DataLength -= (PES_HeaderDataLength + 3);
+                    fillData = (posOfPacketStart + startOfData) - 188;
+                    if(m_f_Log) log_i("fillData %i", fillData);
+                    return true;
+                }
                 if(m_f_Log) log_i("First AAC data byte: %02X", packet[posOfPacketStart + startOfData]);
+                if(m_f_Log) log_i("Second AAC data byte: %02X", packet[posOfPacketStart + startOfData + 1]);
                 *packetStart = posOfPacketStart + startOfData;
                 *packetLength = TS_PACKET_SIZE - posOfPacketStart - startOfData;
-                PES_DataLength -= (TS_PACKET_SIZE - posOfPacketStart) - (posOfPacketLengthLatterHalf + 1);
+                PES_DataLength -= (*packetLength);
+                PES_DataLength -= (PES_HeaderDataLength + 3);
                 return true;
             }
         }
         *packetStart = 0;
         *packetLength = 0;
-        if(m_f_Log) log_e("PES not found");
+        log_e("PES not found");
         return false;
     }
     else if(pidsOfPMT.number) {
