@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6i
- *  Updated on: Oct 19.2022
+ *  Version 2.0.6j
+ *  Updated on: Oct 20.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2675,7 +2675,8 @@ const char* Audio::parsePlaylist_M3U8(){
             if(startsWith(m_playlistContent[i],"#EXT-X-STREAM-INF:")){
                 if(occurence > 0) break; // no more than one #EXT-X-STREAM-INF: (can have different BANDWIDTH)
                 occurence++;
-                if(!endsWith(m_playlistContent[i+1], "m3u8")){ // we have a new m3u8 playlist, skip to next line
+                if((!endsWith(m_playlistContent[i+1], "m3u8" ) && indexOf(m_playlistContent[i+1], "m3u8?") == -1)){
+                    // we have a new m3u8 playlist, skip to next line
                     int pos = indexOf(m_playlistContent[i], "CODECS=\"mp4a", 18);
                     // 'mp4a.40.01' AAC Main
                     // 'mp4a.40.02' AAC LC (Low Complexity)
@@ -3728,7 +3729,7 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "audio/scpls"))      ct_val = CT_PLS;
     else if(!strcmp(ct, "audio/x-scpls"))    ct_val = CT_PLS;
     else if(!strcmp(ct, "application/pls+xml")) ct_val = CT_PLS;
-    else if(!strcmp(ct, "audio/mpegurl"))    ct_val = CT_M3U;
+    else if(!strcmp(ct, "audio/mpegurl"))   {ct_val = CT_M3U; if(m_expectedPlsFmt == FORMAT_M3U8) ct_val = CT_M3U8;}
     else if(!strcmp(ct, "audio/x-mpegurl"))  ct_val = CT_M3U;
     else if(!strcmp(ct, "audio/ms-asf"))     ct_val = CT_ASX;
     else if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
