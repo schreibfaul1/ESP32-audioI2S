@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6j
- *  Updated on: Oct 20.2022
+ *  Version 2.0.6k
+ *  Updated on: Oct 22.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2858,7 +2858,7 @@ void Audio::processLocalFile() {
         return;
     }
 
-    uint32_t availableBytes = maxFrameSize * 2;
+    uint32_t availableBytes = maxFrameSize * 4;
     availableBytes = min(availableBytes, InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
     if(m_contentlength){
@@ -2950,13 +2950,14 @@ void Audio::processLocalFile() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream){
-        static uint8_t cnt = 0;
-        uint8_t compression;
-        if(m_codec == CODEC_WAV)  compression = 1;
-        if(m_codec == CODEC_FLAC) compression = 2;
-        else compression = 6;
-        cnt++;
-        if(cnt == compression){playAudioData(); cnt = 0;}
+        // static uint8_t cnt = 0;
+        // uint8_t compression;
+        // if(m_codec == CODEC_WAV)  compression = 1;
+        // if(m_codec == CODEC_FLAC) compression = 2;
+        // compression = 6;
+        // cnt++;
+        // if(cnt == compression){playAudioData(); cnt = 0;}
+        playAudioData();
     }
     return;
 }
