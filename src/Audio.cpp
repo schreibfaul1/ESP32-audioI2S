@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6k
- *  Updated on: Oct 22.2022
+ *  Version 2.0.6l
+ *  Updated on: Nov 02.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2849,6 +2849,7 @@ void Audio::processLocalFile() {
     static bool f_stream;
     static bool f_fileDataComplete;
     static uint32_t byteCounter;                                // count received data
+    uint32_t availableBytes = 0;
 
     if(m_f_firstCall) {  // runs only one time per connection, prepare for start
         m_f_firstCall = false;
@@ -2858,7 +2859,12 @@ void Audio::processLocalFile() {
         return;
     }
 
-    uint32_t availableBytes = maxFrameSize * 4;
+    #ifdef CONFIG_IDF_TARGET_ESP32S3
+        availableBytes = maxFrameSize * 4;
+    #else // Audiobuffer throttle - - -
+        availableBytes = maxFrameSize; // reduce blocksize because PSRAM is too slow
+    #endif
+
     availableBytes = min(availableBytes, InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
     if(m_contentlength){
@@ -2950,13 +2956,13 @@ void Audio::processLocalFile() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream){
-        // static uint8_t cnt = 0;
-        // uint8_t compression;
-        // if(m_codec == CODEC_WAV)  compression = 1;
-        // if(m_codec == CODEC_FLAC) compression = 2;
-        // compression = 6;
-        // cnt++;
-        // if(cnt == compression){playAudioData(); cnt = 0;}
+        static uint8_t cnt = 0;
+        uint8_t compression;
+        if(m_codec == CODEC_WAV)  compression = 1;
+        if(m_codec == CODEC_FLAC) compression = 2;
+        compression = 6;
+        cnt++;
+        if(cnt == compression){playAudioData(); cnt = 0;}
         playAudioData();
     }
     return;
