@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6l
- *  Updated on: Nov 02.2022
+ *  Version 2.0.6m
+ *  Updated on: Nov 03.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2889,6 +2889,7 @@ void Audio::processLocalFile() {
             if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
             audiofile.seek(m_resumeFilePos);
             InBuff.resetBuffer();
+            byteCounter = m_resumeFilePos;
             if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
         }
     }
@@ -2930,6 +2931,8 @@ void Audio::processLocalFile() {
                                 3:43        ====================>        3:33
             */
             m_audioCurrentTime = 0;
+            byteCounter = m_audioDataStart;
+            f_fileDataComplete = false;
             return;
         } //TEST loop
 
