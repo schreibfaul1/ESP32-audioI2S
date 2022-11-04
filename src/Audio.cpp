@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6m
- *  Updated on: Nov 03.2022
+ *  Version 2.0.6n
+ *  Updated on: Nov 04.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -606,6 +606,7 @@ bool Audio::httpPrint(const char* host) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFileLoop(bool input){
+    if(m_codec == CODEC_M4A) return 0;
     m_f_loop = input;
     return input;
 }
@@ -1744,7 +1745,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
        ftyp
          | - moov  -> trak -> ... -> mp4a contains raw block parameters
          |    L... -> ilst  contains artist, composer ....
-       free (optional)
+       free (optional) // jump to another atoms at the end of mdat
          |
        mdat contains the audio data                                                      */
 
@@ -2881,33 +2882,26 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
-    if(!f_stream && m_controlCounter == 100) {
-        f_stream = true;
-        AUDIO_INFO("stream ready");
-        if(m_resumeFilePos){
-            if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-            if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
-            audiofile.seek(m_resumeFilePos);
-            InBuff.resetBuffer();
-            byteCounter = m_resumeFilePos;
-            if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
-        }
-    }
-
-    if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
-        // read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if(m_controlCounter != 100){
-            InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
+    if(!f_stream){
+        if(m_controlCounter != 100) {
+              if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
+                InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
+            }
             return;
         }
-        if(m_resumeFilePos){
-            if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-            if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
-            audiofile.seek(m_resumeFilePos);
-            InBuff.resetBuffer();
-            if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
+        else{
+            f_stream = true;
+            AUDIO_INFO("stream ready");
+            log_i("m_audioDataStart %d", m_audioDataStart);
+            if(m_resumeFilePos){
+                if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+                if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
+                audiofile.seek(m_resumeFilePos);
+                InBuff.resetBuffer();
+                byteCounter = m_resumeFilePos;
+                if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
+            }
         }
-        f_stream = true;  // ready to play the audio data
     }
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4385,7 +4379,7 @@ bool Audio::playSample(int16_t sample[2]) {
     uint32_t s32 = Gain(sample); // vosample2lume;
 
     if(audio_process_i2s){
-		// process audio sample just before writing to i2s
+        // process audio sample just before writing to i2s
         bool continueI2S = false;
         audio_process_i2s(&s32, &continueI2S);
         if(!continueI2S){
