@@ -50,8 +50,7 @@ size_t AudioBuffer::init() {
     if(m_buffer == NULL) {
         // PSRAM not found, not configured or not enough available
         m_f_psram = false;
-        m_buffSize = m_buffSizeRAM;
-        m_buffer = (uint8_t*) calloc(m_buffSize, sizeof(uint8_t));
+        m_buffer = (uint8_t*) heap_caps_malloc(m_buffSizeRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
         m_buffSize = m_buffSizeRAM - m_resBuffSizeRAM;
     }
     if(!m_buffer)
