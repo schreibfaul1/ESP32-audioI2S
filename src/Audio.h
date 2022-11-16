@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 04,2022
+ *  Updated on: Nov 16,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -473,7 +473,8 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    char            chbuf[512 + 128];               // must be greater than m_lastHost #254
+    char*           m_chbuf = NULL;
+    uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
     char            m_lastHost[512];                // Store the last URL to a webstream
     char*           m_playlistBuff = NULL;          // stores playlistdata
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff

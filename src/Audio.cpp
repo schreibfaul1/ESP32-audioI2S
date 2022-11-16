@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6n
- *  Updated on: Nov 04.2022
+ *  Version 2.0.6o
+ *  Updated on: Nov 16.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -163,6 +163,9 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_f_Log = true;
 #endif
 
+    if(psramInit()) {m_chbufSize = 4096;     m_chbuf = (char*)ps_malloc(m_chbufSize);}
+    else            {m_chbufSize = 512 + 64; m_chbuf = (char*)malloc(m_chbufSize);}
+
     clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     m_f_channelEnabled = channelEnabled;
     m_f_internalDAC = internalDAC;
@@ -295,6 +298,7 @@ Audio::~Audio() {
     setDefaults();
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
+    if(m_chbuf) {free(m_chbuf); m_chbuf = NULL;}
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
@@ -700,8 +704,8 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     char* afn = NULL;  // audioFileName
 
 #ifdef SDFATFS_USED
-    audiofile.getName(chbuf, sizeof(chbuf));
-    afn = strdup(chbuf);
+    audiofile.getName(m_chbuf, sizeof(m_chbuf));
+    afn = strdup(m_chbuf);
 #else
     afn = strdup(audiofile.name());
 #endif
@@ -911,104 +915,104 @@ void Audio::urlencode(char* buff, uint16_t buffLen, bool spacesOnly) {
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::showID3Tag(const char* tag, const char* value){
 
-    chbuf[0] = 0;
+    m_chbuf[0] = 0;
     // V2.2
-    if(!strcmp(tag, "CNT")) sprintf(chbuf, "Play counter: %s", value);
-    // if(!strcmp(tag, "COM")) sprintf(chbuf, "Comments: %s", value);
-    if(!strcmp(tag, "CRA")) sprintf(chbuf, "Audio encryption: %s", value);
-    if(!strcmp(tag, "CRM")) sprintf(chbuf, "Encrypted meta frame: %s", value);
-    if(!strcmp(tag, "ETC")) sprintf(chbuf, "Event timing codes: %s", value);
-    if(!strcmp(tag, "EQU")) sprintf(chbuf, "Equalization: %s", value);
-    if(!strcmp(tag, "IPL")) sprintf(chbuf, "Involved people list: %s", value);
-    if(!strcmp(tag, "PIC")) sprintf(chbuf, "Attached picture: %s", value);
-    if(!strcmp(tag, "SLT")) sprintf(chbuf, "Synchronized lyric/text: %s", value);
-    // if(!strcmp(tag, "TAL")) sprintf(chbuf, "Album/Movie/Show title: %s", value);
-    if(!strcmp(tag, "TBP")) sprintf(chbuf, "BPM (Beats Per Minute): %s", value);
-    if(!strcmp(tag, "TCM")) sprintf(chbuf, "Composer: %s", value);
-    if(!strcmp(tag, "TCO")) sprintf(chbuf, "Content type: %s", value);
-    if(!strcmp(tag, "TCR")) sprintf(chbuf, "Copyright message: %s", value);
-    if(!strcmp(tag, "TDA")) sprintf(chbuf, "Date: %s", value);
-    if(!strcmp(tag, "TDY")) sprintf(chbuf, "Playlist delay: %s", value);
-    if(!strcmp(tag, "TEN")) sprintf(chbuf, "Encoded by: %s", value);
-    if(!strcmp(tag, "TFT")) sprintf(chbuf, "File type: %s", value);
-    if(!strcmp(tag, "TIM")) sprintf(chbuf, "Time: %s", value);
-    if(!strcmp(tag, "TKE")) sprintf(chbuf, "Initial key: %s", value);
-    if(!strcmp(tag, "TLA")) sprintf(chbuf, "Language(s): %s", value);
-    if(!strcmp(tag, "TLE")) sprintf(chbuf, "Length: %s", value);
-    if(!strcmp(tag, "TMT")) sprintf(chbuf, "Media type: %s", value);
-    if(!strcmp(tag, "TOA")) sprintf(chbuf, "Original artist(s)/performer(s): %s", value);
-    if(!strcmp(tag, "TOF")) sprintf(chbuf, "Original filename: %s", value);
-    if(!strcmp(tag, "TOL")) sprintf(chbuf, "Original Lyricist(s)/text writer(s): %s", value);
-    if(!strcmp(tag, "TOR")) sprintf(chbuf, "Original release year: %s", value);
-    if(!strcmp(tag, "TOT")) sprintf(chbuf, "Original album/Movie/Show title: %s", value);
-    if(!strcmp(tag, "TP1")) sprintf(chbuf, "Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: %s", value);
-    if(!strcmp(tag, "TP2")) sprintf(chbuf, "Band/Orchestra/Accompaniment: %s", value);
-    if(!strcmp(tag, "TP3")) sprintf(chbuf, "Conductor/Performer refinement: %s", value);
-    if(!strcmp(tag, "TP4")) sprintf(chbuf, "Interpreted, remixed, or otherwise modified by: %s", value);
-    if(!strcmp(tag, "TPA")) sprintf(chbuf, "Part of a set: %s", value);
-    if(!strcmp(tag, "TPB")) sprintf(chbuf, "Publisher: %s", value);
-    if(!strcmp(tag, "TRC")) sprintf(chbuf, "ISRC (International Standard Recording Code): %s", value);
-    if(!strcmp(tag, "TRD")) sprintf(chbuf, "Recording dates: %s", value);
-    if(!strcmp(tag, "TRK")) sprintf(chbuf, "Track number/Position in set: %s", value);
-    if(!strcmp(tag, "TSI")) sprintf(chbuf, "Size: %s", value);
-    if(!strcmp(tag, "TSS")) sprintf(chbuf, "Software/hardware and settings used for encoding: %s", value);
-    if(!strcmp(tag, "TT1")) sprintf(chbuf, "Content group description: %s", value);
-    if(!strcmp(tag, "TT2")) sprintf(chbuf, "Title/Songname/Content description: %s", value);
-    if(!strcmp(tag, "TT3")) sprintf(chbuf, "Subtitle/Description refinement: %s", value);
-    if(!strcmp(tag, "TXT")) sprintf(chbuf, "Lyricist/text writer: %s", value);
-    if(!strcmp(tag, "TXX")) sprintf(chbuf, "User defined text information frame: %s", value);
-    if(!strcmp(tag, "TYE")) sprintf(chbuf, "Year: %s", value);
-    if(!strcmp(tag, "UFI")) sprintf(chbuf, "Unique file identifier: %s", value);
-    if(!strcmp(tag, "ULT")) sprintf(chbuf, "Unsychronized lyric/text transcription: %s", value);
-    if(!strcmp(tag, "WAF")) sprintf(chbuf, "Official audio file webpage: %s", value);
-    if(!strcmp(tag, "WAR")) sprintf(chbuf, "Official artist/performer webpage: %s", value);
-    if(!strcmp(tag, "WAS")) sprintf(chbuf, "Official audio source webpage: %s", value);
-    if(!strcmp(tag, "WCM")) sprintf(chbuf, "Commercial information: %s", value);
-    if(!strcmp(tag, "WCP")) sprintf(chbuf, "Copyright/Legal information: %s", value);
-    if(!strcmp(tag, "WPB")) sprintf(chbuf, "Publishers official webpage: %s", value);
-    if(!strcmp(tag, "WXX")) sprintf(chbuf, "User defined URL link frame: %s", value);
+    if(!strcmp(tag, "CNT")) sprintf(m_chbuf, "Play counter: %s", value);
+    // if(!strcmp(tag, "COM")) sprintf(m_chbuf, "Comments: %s", value);
+    if(!strcmp(tag, "CRA")) sprintf(m_chbuf, "Audio encryption: %s", value);
+    if(!strcmp(tag, "CRM")) sprintf(m_chbuf, "Encrypted meta frame: %s", value);
+    if(!strcmp(tag, "ETC")) sprintf(m_chbuf, "Event timing codes: %s", value);
+    if(!strcmp(tag, "EQU")) sprintf(m_chbuf, "Equalization: %s", value);
+    if(!strcmp(tag, "IPL")) sprintf(m_chbuf, "Involved people list: %s", value);
+    if(!strcmp(tag, "PIC")) sprintf(m_chbuf, "Attached picture: %s", value);
+    if(!strcmp(tag, "SLT")) sprintf(m_chbuf, "Synchronized lyric/text: %s", value);
+    // if(!strcmp(tag, "TAL")) sprintf(m_chbuf, "Album/Movie/Show title: %s", value);
+    if(!strcmp(tag, "TBP")) sprintf(m_chbuf, "BPM (Beats Per Minute): %s", value);
+    if(!strcmp(tag, "TCM")) sprintf(m_chbuf, "Composer: %s", value);
+    if(!strcmp(tag, "TCO")) sprintf(m_chbuf, "Content type: %s", value);
+    if(!strcmp(tag, "TCR")) sprintf(m_chbuf, "Copyright message: %s", value);
+    if(!strcmp(tag, "TDA")) sprintf(m_chbuf, "Date: %s", value);
+    if(!strcmp(tag, "TDY")) sprintf(m_chbuf, "Playlist delay: %s", value);
+    if(!strcmp(tag, "TEN")) sprintf(m_chbuf, "Encoded by: %s", value);
+    if(!strcmp(tag, "TFT")) sprintf(m_chbuf, "File type: %s", value);
+    if(!strcmp(tag, "TIM")) sprintf(m_chbuf, "Time: %s", value);
+    if(!strcmp(tag, "TKE")) sprintf(m_chbuf, "Initial key: %s", value);
+    if(!strcmp(tag, "TLA")) sprintf(m_chbuf, "Language(s): %s", value);
+    if(!strcmp(tag, "TLE")) sprintf(m_chbuf, "Length: %s", value);
+    if(!strcmp(tag, "TMT")) sprintf(m_chbuf, "Media type: %s", value);
+    if(!strcmp(tag, "TOA")) sprintf(m_chbuf, "Original artist(s)/performer(s): %s", value);
+    if(!strcmp(tag, "TOF")) sprintf(m_chbuf, "Original filename: %s", value);
+    if(!strcmp(tag, "TOL")) sprintf(m_chbuf, "Original Lyricist(s)/text writer(s): %s", value);
+    if(!strcmp(tag, "TOR")) sprintf(m_chbuf, "Original release year: %s", value);
+    if(!strcmp(tag, "TOT")) sprintf(m_chbuf, "Original album/Movie/Show title: %s", value);
+    if(!strcmp(tag, "TP1")) sprintf(m_chbuf, "Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: %s", value);
+    if(!strcmp(tag, "TP2")) sprintf(m_chbuf, "Band/Orchestra/Accompaniment: %s", value);
+    if(!strcmp(tag, "TP3")) sprintf(m_chbuf, "Conductor/Performer refinement: %s", value);
+    if(!strcmp(tag, "TP4")) sprintf(m_chbuf, "Interpreted, remixed, or otherwise modified by: %s", value);
+    if(!strcmp(tag, "TPA")) sprintf(m_chbuf, "Part of a set: %s", value);
+    if(!strcmp(tag, "TPB")) sprintf(m_chbuf, "Publisher: %s", value);
+    if(!strcmp(tag, "TRC")) sprintf(m_chbuf, "ISRC (International Standard Recording Code): %s", value);
+    if(!strcmp(tag, "TRD")) sprintf(m_chbuf, "Recording dates: %s", value);
+    if(!strcmp(tag, "TRK")) sprintf(m_chbuf, "Track number/Position in set: %s", value);
+    if(!strcmp(tag, "TSI")) sprintf(m_chbuf, "Size: %s", value);
+    if(!strcmp(tag, "TSS")) sprintf(m_chbuf, "Software/hardware and settings used for encoding: %s", value);
+    if(!strcmp(tag, "TT1")) sprintf(m_chbuf, "Content group description: %s", value);
+    if(!strcmp(tag, "TT2")) sprintf(m_chbuf, "Title/Songname/Content description: %s", value);
+    if(!strcmp(tag, "TT3")) sprintf(m_chbuf, "Subtitle/Description refinement: %s", value);
+    if(!strcmp(tag, "TXT")) sprintf(m_chbuf, "Lyricist/text writer: %s", value);
+    if(!strcmp(tag, "TXX")) sprintf(m_chbuf, "User defined text information frame: %s", value);
+    if(!strcmp(tag, "TYE")) sprintf(m_chbuf, "Year: %s", value);
+    if(!strcmp(tag, "UFI")) sprintf(m_chbuf, "Unique file identifier: %s", value);
+    if(!strcmp(tag, "ULT")) sprintf(m_chbuf, "Unsychronized lyric/text transcription: %s", value);
+    if(!strcmp(tag, "WAF")) sprintf(m_chbuf, "Official audio file webpage: %s", value);
+    if(!strcmp(tag, "WAR")) sprintf(m_chbuf, "Official artist/performer webpage: %s", value);
+    if(!strcmp(tag, "WAS")) sprintf(m_chbuf, "Official audio source webpage: %s", value);
+    if(!strcmp(tag, "WCM")) sprintf(m_chbuf, "Commercial information: %s", value);
+    if(!strcmp(tag, "WCP")) sprintf(m_chbuf, "Copyright/Legal information: %s", value);
+    if(!strcmp(tag, "WPB")) sprintf(m_chbuf, "Publishers official webpage: %s", value);
+    if(!strcmp(tag, "WXX")) sprintf(m_chbuf, "User defined URL link frame: %s", value);
 
     // V2.3 V2.4 tags
-    // if(!strcmp(tag, "COMM")) sprintf(chbuf, "Comment: %s", value);
-    if(!strcmp(tag, "OWNE")) sprintf(chbuf, "Ownership: %s", value);
-    // if(!strcmp(tag, "PRIV")) sprintf(chbuf, "Private: %s", value);
-    if(!strcmp(tag, "SYLT")) sprintf(chbuf, "SynLyrics: %s", value);
-    if(!strcmp(tag, "TALB")) sprintf(chbuf, "Album: %s", value);
-    if(!strcmp(tag, "TBPM")) sprintf(chbuf, "BeatsPerMinute: %s", value);
-    if(!strcmp(tag, "TCMP")) sprintf(chbuf, "Compilation: %s", value);
-    if(!strcmp(tag, "TCOM")) sprintf(chbuf, "Composer: %s", value);
-    if(!strcmp(tag, "TCON")) sprintf(chbuf, "ContentType: %s", value);
-    if(!strcmp(tag, "TCOP")) sprintf(chbuf, "Copyright: %s", value);
-    if(!strcmp(tag, "TDAT")) sprintf(chbuf, "Date: %s", value);
-    if(!strcmp(tag, "TEXT")) sprintf(chbuf, "Lyricist: %s", value);
-    if(!strcmp(tag, "TIME")) sprintf(chbuf, "Time: %s", value);
-    if(!strcmp(tag, "TIT1")) sprintf(chbuf, "Grouping: %s", value);
-    if(!strcmp(tag, "TIT2")) sprintf(chbuf, "Title: %s", value);
-    if(!strcmp(tag, "TIT3")) sprintf(chbuf, "Subtitle: %s", value);
-    if(!strcmp(tag, "TLAN")) sprintf(chbuf, "Language: %s", value);
-    if(!strcmp(tag, "TLEN")) sprintf(chbuf, "Length (ms): %s", value);
-    if(!strcmp(tag, "TMED")) sprintf(chbuf, "Media: %s", value);
-    if(!strcmp(tag, "TOAL")) sprintf(chbuf, "OriginalAlbum: %s", value);
-    if(!strcmp(tag, "TOPE")) sprintf(chbuf, "OriginalArtist: %s", value);
-    if(!strcmp(tag, "TORY")) sprintf(chbuf, "OriginalReleaseYear: %s", value);
-    if(!strcmp(tag, "TPE1")) sprintf(chbuf, "Artist: %s", value);
-    if(!strcmp(tag, "TPE2")) sprintf(chbuf, "Band: %s", value);
-    if(!strcmp(tag, "TPE3")) sprintf(chbuf, "Conductor: %s", value);
-    if(!strcmp(tag, "TPE4")) sprintf(chbuf, "InterpretedBy: %s", value);
-    if(!strcmp(tag, "TPOS")) sprintf(chbuf, "PartOfSet: %s", value);
-    if(!strcmp(tag, "TPUB")) sprintf(chbuf, "Publisher: %s", value);
-    if(!strcmp(tag, "TRCK")) sprintf(chbuf, "Track: %s", value);
-    if(!strcmp(tag, "TSSE")) sprintf(chbuf, "SettingsForEncoding: %s", value);
-    if(!strcmp(tag, "TRDA")) sprintf(chbuf, "RecordingDates: %s", value);
-    if(!m_f_m3u8data) if(!strcmp(tag, "TXXX")) sprintf(chbuf, "UserDefinedText: %s", value);
-    if(!strcmp(tag, "TYER")) sprintf(chbuf, "Year: %s", value);
-    if(!strcmp(tag, "USER")) sprintf(chbuf, "TermsOfUse: %s", value);
-    if(!strcmp(tag, "USLT")) sprintf(chbuf, "Lyrics: %s", value);
-    if(!strcmp(tag, "WOAR")) sprintf(chbuf, "OfficialArtistWebpage: %s", value);
-    if(!strcmp(tag, "XDOR")) sprintf(chbuf, "OriginalReleaseTime: %s", value);
+    // if(!strcmp(tag, "COMM")) sprintf(m_chbuf, "Comment: %s", value);
+    if(!strcmp(tag, "OWNE")) sprintf(m_chbuf, "Ownership: %s", value);
+    // if(!strcmp(tag, "PRIV")) sprintf(m_chbuf, "Private: %s", value);
+    if(!strcmp(tag, "SYLT")) sprintf(m_chbuf, "SynLyrics: %s", value);
+    if(!strcmp(tag, "TALB")) sprintf(m_chbuf, "Album: %s", value);
+    if(!strcmp(tag, "TBPM")) sprintf(m_chbuf, "BeatsPerMinute: %s", value);
+    if(!strcmp(tag, "TCMP")) sprintf(m_chbuf, "Compilation: %s", value);
+    if(!strcmp(tag, "TCOM")) sprintf(m_chbuf, "Composer: %s", value);
+    if(!strcmp(tag, "TCON")) sprintf(m_chbuf, "ContentType: %s", value);
+    if(!strcmp(tag, "TCOP")) sprintf(m_chbuf, "Copyright: %s", value);
+    if(!strcmp(tag, "TDAT")) sprintf(m_chbuf, "Date: %s", value);
+    if(!strcmp(tag, "TEXT")) sprintf(m_chbuf, "Lyricist: %s", value);
+    if(!strcmp(tag, "TIME")) sprintf(m_chbuf, "Time: %s", value);
+    if(!strcmp(tag, "TIT1")) sprintf(m_chbuf, "Grouping: %s", value);
+    if(!strcmp(tag, "TIT2")) sprintf(m_chbuf, "Title: %s", value);
+    if(!strcmp(tag, "TIT3")) sprintf(m_chbuf, "Subtitle: %s", value);
+    if(!strcmp(tag, "TLAN")) sprintf(m_chbuf, "Language: %s", value);
+    if(!strcmp(tag, "TLEN")) sprintf(m_chbuf, "Length (ms): %s", value);
+    if(!strcmp(tag, "TMED")) sprintf(m_chbuf, "Media: %s", value);
+    if(!strcmp(tag, "TOAL")) sprintf(m_chbuf, "OriginalAlbum: %s", value);
+    if(!strcmp(tag, "TOPE")) sprintf(m_chbuf, "OriginalArtist: %s", value);
+    if(!strcmp(tag, "TORY")) sprintf(m_chbuf, "OriginalReleaseYear: %s", value);
+    if(!strcmp(tag, "TPE1")) sprintf(m_chbuf, "Artist: %s", value);
+    if(!strcmp(tag, "TPE2")) sprintf(m_chbuf, "Band: %s", value);
+    if(!strcmp(tag, "TPE3")) sprintf(m_chbuf, "Conductor: %s", value);
+    if(!strcmp(tag, "TPE4")) sprintf(m_chbuf, "InterpretedBy: %s", value);
+    if(!strcmp(tag, "TPOS")) sprintf(m_chbuf, "PartOfSet: %s", value);
+    if(!strcmp(tag, "TPUB")) sprintf(m_chbuf, "Publisher: %s", value);
+    if(!strcmp(tag, "TRCK")) sprintf(m_chbuf, "Track: %s", value);
+    if(!strcmp(tag, "TSSE")) sprintf(m_chbuf, "SettingsForEncoding: %s", value);
+    if(!strcmp(tag, "TRDA")) sprintf(m_chbuf, "RecordingDates: %s", value);
+    if(!m_f_m3u8data) if(!strcmp(tag, "TXXX")) sprintf(m_chbuf, "UserDefinedText: %s", value);
+    if(!strcmp(tag, "TYER")) sprintf(m_chbuf, "Year: %s", value);
+    if(!strcmp(tag, "USER")) sprintf(m_chbuf, "TermsOfUse: %s", value);
+    if(!strcmp(tag, "USLT")) sprintf(m_chbuf, "Lyrics: %s", value);
+    if(!strcmp(tag, "WOAR")) sprintf(m_chbuf, "OfficialArtistWebpage: %s", value);
+    if(!strcmp(tag, "XDOR")) sprintf(m_chbuf, "OriginalReleaseTime: %s", value);
 
-    latinToUTF8(chbuf, sizeof(chbuf));
-    if(chbuf[0] != 0) if(audio_id3data) audio_id3data(chbuf);
+    latinToUTF8(m_chbuf, sizeof(m_chbuf));
+    if(m_chbuf[0] != 0) if(audio_id3data) audio_id3data(m_chbuf);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::unicode2utf8(char* buff, uint32_t len){
@@ -1243,7 +1247,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             return -1;
         }
         if((nic != 1) && (nic != 2)){
-            AUDIO_INFO("num channels is %u,  must be 1 or 2" , nic); audio_info(chbuf);
+            AUDIO_INFO("num channels is %u,  must be 1 or 2" , nic); audio_info(m_chbuf);
             stopSong();
             return -1;
         }
@@ -1452,12 +1456,12 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         for(int i = 0; i < 7; i++){
             offset = specialIndexOf(data, fn[i], len);
             if(offset >= 0){
-                sprintf(chbuf, "%s: %s", fn[i], data + offset + strlen(fn[i]) + 1);
-                chbuf[strlen(chbuf) - 1] = 0;
-                for(int i=0; i<strlen(chbuf);i++){
-                    if(chbuf[i] == 255) chbuf[i] = 0;
+                sprintf(m_chbuf, "%s: %s", fn[i], data + offset + strlen(fn[i]) + 1);
+                m_chbuf[strlen(m_chbuf) - 1] = 0;
+                for(int i=0; i<strlen(m_chbuf);i++){
+                    if(m_chbuf[i] == 255) m_chbuf[i] = 0;
                 }
-                if(audio_id3data) audio_id3data(chbuf);
+                if(audio_id3data) audio_id3data(m_chbuf);
             }
         }
         m_controlCounter = FLAC_MBH;
@@ -1697,7 +1701,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         if(tmp > 254) tmp = 254;
         memcpy(value, (data + 7), tmp);
         value[tmp+1] = 0;
-        chbuf[0] = 0;
+        m_chbuf[0] = 0;
 
         showID3Tag(tag, value);
         if(len == 0) m_controlCounter = 98;
@@ -1948,21 +1952,21 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
                 if(tmp > 254) tmp = 254;
                 memcpy(value, (data + offset), tmp);
                 value[tmp] = 0;
-                chbuf[0] = 0;
-                if(i == 0)  sprintf(chbuf, "Title: %s", value);
-                if(i == 1)  sprintf(chbuf, "Artist: %s", value);
-                if(i == 2)  sprintf(chbuf, "Album: %s", value);
-                if(i == 3)  sprintf(chbuf, "Encoder: %s", value);
-                if(i == 4)  sprintf(chbuf, "Comment: %s", value);
-                if(i == 5)  sprintf(chbuf, "Composer: %s", value);
-                if(i == 6)  sprintf(chbuf, "BPM: %s", value);
-                if(i == 7)  sprintf(chbuf, "Track Number: %s", value);
-                if(i == 8)  sprintf(chbuf, "Year: %s", value);
-                if(i == 9)  sprintf(chbuf, "Compile: %s", value);
-                if(i == 10) sprintf(chbuf, "Album Artist: %s", value);
-                if(i == 11) sprintf(chbuf, "Types of: %s", value);
-                if(chbuf[0] != 0) {
-                    if(audio_id3data) audio_id3data(chbuf);
+                m_chbuf[0] = 0;
+                if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
+                if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
+                if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
+                if(i == 3)  sprintf(m_chbuf, "Encoder: %s", value);
+                if(i == 4)  sprintf(m_chbuf, "Comment: %s", value);
+                if(i == 5)  sprintf(m_chbuf, "Composer: %s", value);
+                if(i == 6)  sprintf(m_chbuf, "BPM: %s", value);
+                if(i == 7)  sprintf(m_chbuf, "Track Number: %s", value);
+                if(i == 8)  sprintf(m_chbuf, "Year: %s", value);
+                if(i == 9)  sprintf(m_chbuf, "Compile: %s", value);
+                if(i == 10) sprintf(m_chbuf, "Album Artist: %s", value);
+                if(i == 11) sprintf(m_chbuf, "Types of: %s", value);
+                if(m_chbuf[0] != 0) {
+                    if(audio_id3data) audio_id3data(m_chbuf);
                 }
             }
         }
@@ -2734,7 +2738,7 @@ const char* Audio::parsePlaylist_M3U8(){
             if(m_f_Log) log_i("m_m3u8_targetDuration %d", m_m3u8_targetDuration);
 
             if(startsWith(m_playlistContent[i],"#EXTINF")) {
-                if(STfromEXTINF(m_playlistContent[i])) showstreamtitle(chbuf);
+                if(STfromEXTINF(m_playlistContent[i])) showstreamtitle(m_chbuf);
                 i++;
                 if(i == lines) continue; // and exit for()
 
@@ -2816,7 +2820,7 @@ bool Audio::STfromEXTINF(char* str){
 
     t1 = indexOf(str, "title", 0);
     if(t1 > 0){
-        strcpy(chbuf, "StreamTitle="); n0 = 12;
+        strcpy(m_chbuf, "StreamTitle="); n0 = 12;
         t2 = t1 + 7; // title="
         t3 = indexOf(str, "\"", t2);
         while(str[t3 - 1] == '\\'){
@@ -2824,20 +2828,20 @@ bool Audio::STfromEXTINF(char* str){
         }
         if(t2 < 0 || t2 > t3) return false;
         n1 = t3 - t2;
-        strncpy(chbuf + n0, str + t2, n1);
-        chbuf[n1] = '\0';
+        strncpy(m_chbuf + n0, str + t2, n1);
+        m_chbuf[n1] = '\0';
     }
 
     t1 = indexOf(str, "artist", 0);
     if(t1 > 0){
-        strcpy(chbuf + n0 + n1, " - ");   n1 += 3;
+        strcpy(m_chbuf + n0 + n1, " - ");   n1 += 3;
         t2 = indexOf(str, "=\"", t1); t2 += 2;
         t3 = indexOf(str, "\"", t2);
         if(t2 < 0 || t2 > t3) return false;
         n2 = t3 - t2;
-        strncpy(chbuf + n0 + n1, str + t2, n2);
-        chbuf[n0 + n1 + n2] = '\0';
-        chbuf[n2] = '\0';
+        strncpy(m_chbuf + n0 + n1, str + t2, n2);
+        m_chbuf[n0 + n1 + n2] = '\0';
+        m_chbuf[n2] = '\0';
     }
     return true;
 }
@@ -2931,8 +2935,8 @@ void Audio::processLocalFile() {
         } //TEST loop
 
 #ifdef SDFATFS_USED
-        audiofile.getName(chbuf, sizeof(chbuf));
-        char *afn =strdup(chbuf);
+        audiofile.getName(m_chbuf, sizeof(m_chbuf));
+        char *afn =strdup(m_chbuf);
 #else
         char *afn =strdup(audiofile.name()); // store temporary the name
 #endif
@@ -3566,8 +3570,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             int32_t br = atoi(c_bitRate); // Found bitrate tag, read the bitrate in Kbit
             br = br * 1000;
             setBitrate(br);
-            sprintf(chbuf, "%d", getBitRate());
-            if(audio_bitrate) audio_bitrate(chbuf);
+            sprintf(m_chbuf, "%d", getBitRate());
+            if(audio_bitrate) audio_bitrate(m_chbuf);
         }
 
         else if(startsWith(rhl, "icy-metaint:")) {
@@ -3812,11 +3816,59 @@ void Audio::showstreamtitle(const char* ml) {
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
 
-    int16_t idx1, idx2;
+    int16_t idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
     uint16_t i = 0, hash = 0;
 
-    idx1 = indexOf(ml, "StreamTitle=", 0);
-    if(idx1 >= 0){                                                              // Streamtitle found
+    idx1 = indexOf(ml, "StreamTitle=", 0);  // Streamtitle found
+    if(idx1 >= 0){
+        if(indexOf(ml, "xml version=", 12) > 0){
+
+            /* e.g. xmlStreamTitle
+            StreamTitle='<?xml version="1.0" encoding="utf-8"?><RadioInfo><Table><DB_ALBUM_ID>37364</DB_ALBUM_ID>
+            <DB_ALBUM_IMAGE>00000037364.jpg</DB_ALBUM_IMAGE><DB_ALBUM_NAME>Boyfriend</DB_ALBUM_NAME>
+            <DB_ALBUM_TYPE>Single</DB_ALBUM_TYPE><DB_DALET_ARTIST_NAME>DOVE CAMERON</DB_DALET_ARTIST_NAME>
+            <DB_DALET_ITEM_CODE>CD4161</DB_DALET_ITEM_CODE><DB_DALET_TITLE_NAME>BOYFRIEND</DB_DALET_TITLE_NAME>
+            <DB_FK_SITE_ID>2</DB_FK_SITE_ID><DB_IS_MUSIC>1</DB_IS_MUSIC><DB_LEAD_ARTIST_ID>26303</DB_LEAD_ARTIST_ID>
+            <DB_LEAD_ARTIST_NAME>Dove Cameron</DB_LEAD_ARTIST_NAME><DB_RADIO_IMAGE>cidadefm.jpg</DB_RADIO_IMAGE>
+            <DB_RADIO_NAME>Cidade</DB_RADIO_NAME><DB_SONG_ID>120126</DB_SONG_ID><DB_SONG_LYRIC>60981</DB_SONG_LYRIC>
+            <DB_SONG_NAME>Boyfriend</DB_SONG_NAME></Table><AnimadorInfo><TITLE>Cidade</TITLE>
+            <START_TIME_UTC>2022-11-15T22:00:00+00:00</START_TIME_UTC><END_TIME_UTC>2022-11-16T06:59:59+00:00
+            </END_TIME_UTC><SHOW_NAME>Cidade</SHOW_NAME><SHOW_HOURS>22h às 07h</SHOW_HOURS><SHOW_PANEL>0</SHOW_PANEL>
+            </AnimadorInfo></RadioInfo>';StreamUrl='';
+            */
+
+            idx4 = indexOf(ml, "<DB_DALET_TITLE_NAME>");
+            idx5 = indexOf(ml, "</DB_DALET_TITLE_NAME>");
+
+            idx6 = indexOf(ml, "<DB_LEAD_ARTIST_NAME>");
+            idx7 = indexOf(ml, "</DB_LEAD_ARTIST_NAME>");
+
+            if(idx4 == -1 || idx5 == -1) return;
+            idx4 += 21; // <DB_DALET_TITLE_NAME>
+            titleLen = idx5 - idx4;
+
+            if(idx6 != -1 && idx7 != -1){
+                idx6 += 21; // <DB_LEAD_ARTIST_NAME>
+                artistLen = idx7 - idx6;
+            }
+
+            char *title = NULL;
+            title = (char*)malloc(titleLen + artistLen + 4);
+            memcpy(title, ml + idx4, titleLen); title[titleLen] = '\0';
+
+            char *artist = NULL;
+            if(artistLen){
+                memcpy(title + titleLen, " - ", 3);
+                memcpy(title + titleLen + 3, ml + idx6, artistLen); title[titleLen + 3 + artistLen] = '\0';
+            }
+
+
+            if(title) if(audio_showstreamtitle) audio_showstreamtitle(title);
+            if(title)  {free(title); title = NULL;}
+            if(artist) {free(artist); artist = NULL;}
+            return;
+        }
+
         idx2 = indexOf(ml, ";", idx1);
         char *sTit;
         if(idx2 >= 0){sTit = strndup(ml + idx1, idx2 + 1); sTit[idx2] = '\0';}
@@ -3881,17 +3933,17 @@ void Audio::showCodecParams(){
         uint8_t answ;
         if((answ = AACGetFormat()) < 4){
             const char hf[4][8] = {"unknown", "ADTS", "ADIF", "RAW"};
-            sprintf(chbuf, "AAC HeaderFormat: %s", hf[answ]);
-            audio_info(chbuf);
+            sprintf(m_chbuf, "AAC HeaderFormat: %s", hf[answ]);
+            audio_info(m_chbuf);
         }
         if(answ == 1){ // ADTS Header
             const char co[2][23] = {"MPEG-4", "MPEG-2"};
-            sprintf(chbuf, "AAC Codec: %s", co[AACGetID()]);
-            audio_info(chbuf);
+            sprintf(m_chbuf, "AAC Codec: %s", co[AACGetID()]);
+            audio_info(m_chbuf);
             if(AACGetProfile() <5){
                 const char pr[4][23] = {"Main", "LowComplexity", "Scalable Sampling Rate", "reserved"};
-                sprintf(chbuf, "AAC Profile: %s", pr[answ]);
-                audio_info(chbuf);
+                sprintf(m_chbuf, "AAC Profile: %s", pr[answ]);
+                audio_info(m_chbuf);
             }
         }
     }
@@ -3940,8 +3992,8 @@ int Audio::findNextSync(uint8_t* data, size_t len){
      }
      if (nextSync == 0){
          if(audio_info && swnf>0){
-             sprintf(chbuf, "syncword not found %i times", swnf);
-             audio_info(chbuf);
+             sprintf(m_chbuf, "syncword not found %i times", swnf);
+             audio_info(m_chbuf);
              swnf = 0;
          }
          else {
@@ -4925,34 +4977,43 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 
     if(!metalen) {
         int b = _client->read();   // First byte of metadata?
-        metalen = b * 16 ;                              // New count for metadata including length byte
-        if(metalen > 512){
-            AUDIO_INFO("Metadata block to long! Skipping all Metadata from now on.");
-            m_f_metadata = false;                        // expect stream without metadata
-            return 1;
-        }
-        pos_ml = 0; chbuf[pos_ml] = 0;                   // Prepare for new line
+        metalen = b * 16 ;                              // New count for metadata including length byte, max 4096
+        pos_ml = 0; m_chbuf[pos_ml] = 0;                // Prepare for new line
         res = 1;
     }
     if(!metalen) {m_metacount = m_metaint; return res;} // metalen is 0
-    uint16_t a = _client->readBytes(&chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes -1)));
-    res += a;
-    pos_ml += a;
+    if(metalen < m_chbufSize){
+        uint16_t a = _client->readBytes(&m_chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes -1)));
+        res += a;
+        pos_ml += a;
+    }
+    else{ // metadata doesn't fit in m_chbuf
+        uint8_t c = 0;
+        int8_t i = 0;
+        while(pos_ml != metalen){
+            i = _client->read(&c, 1); // fake read
+            if(i != -1) {pos_ml++; res++;}
+            else {return res;}
+        }
+        m_metacount = m_metaint;
+        metalen = 0;
+        pos_ml = 0;
+        return res;
+    }
     if(pos_ml == metalen) {
-        chbuf[pos_ml] = '\0';
-        if(strlen(chbuf)) {                             // Any info present?
+        m_chbuf[pos_ml] = '\0';
+        if(strlen(m_chbuf)) {                             // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
             // Sometimes it is just other info like:
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
-            if(m_f_Log) log_i("metaline %s", chbuf);
-            latinToUTF8(chbuf, sizeof(chbuf)); // convert to UTF-8 if necessary
-            int pos = indexOf(chbuf, "song_spot", 0);    // remove some irrelevant infos
+            latinToUTF8(m_chbuf, m_chbufSize); // convert to UTF-8 if necessary
+            int pos = indexOf(m_chbuf, "song_spot", 0);    // remove some irrelevant infos
             if(pos > 3) {                                // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
-                chbuf[pos] = 0;
+                m_chbuf[pos] = 0;
             }
-            showstreamtitle(chbuf);   // Show artist and title if present in metadata
+            showstreamtitle(m_chbuf);   // Show artist and title if present in metadata
         }
         m_metacount = m_metaint;
         metalen = 0;
@@ -5008,13 +5069,13 @@ bool Audio::readID3V1Tag(){
         uint8_t genre    = *(InBuff.getReadPtr() + 127);
         if(zeroByte) {AUDIO_INFO("ID3 version: 1");} //[2]
         else         {AUDIO_INFO("ID3 Version 1.1");}
-        if(strlen(title))  {sprintf(chbuf, "Title: %s",        title);   if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(artist)) {sprintf(chbuf, "Artist: %s",       artist);  if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(album))  {sprintf(chbuf, "Album: %s",        album);   if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(year))   {sprintf(chbuf, "Year: %s",         year);    if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(comment)){sprintf(chbuf, "Comment: %s",      comment); if(audio_id3data) audio_id3data(chbuf);}
-        if(zeroByte == 0)  {sprintf(chbuf, "Track Number: %d", track);   if(audio_id3data) audio_id3data(chbuf);}
-        if(genre < 192)    {sprintf(chbuf, "Genre: %d",        genre);   if(audio_id3data) audio_id3data(chbuf);} //[1]
+        if(strlen(title))  {sprintf(m_chbuf, "Title: %s",        title);   if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(artist)) {sprintf(m_chbuf, "Artist: %s",       artist);  if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(album))  {sprintf(m_chbuf, "Album: %s",        album);   if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(year))   {sprintf(m_chbuf, "Year: %s",         year);    if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(comment)){sprintf(m_chbuf, "Comment: %s",      comment); if(audio_id3data) audio_id3data(m_chbuf);}
+        if(zeroByte == 0)  {sprintf(m_chbuf, "Track Number: %d", track);   if(audio_id3data) audio_id3data(m_chbuf);}
+        if(genre < 192)    {sprintf(m_chbuf, "Genre: %d",        genre);   if(audio_id3data) audio_id3data(m_chbuf);} //[1]
         return true;
     }
     if(InBuff.bufferFilled() == 227 && startsWith((const char*)InBuff.getReadPtr(), "TAG+")){ // ID3V1EnhancedTAG
@@ -5030,10 +5091,10 @@ bool Audio::readID3V1Tag(){
         memcpy(genre,   InBuff.getReadPtr() + 5 + 180,  30);  genre[30] = '\0'; latinToUTF8(genre, sizeof(genre));
         // six bytes "start-time", the start of the music as mmm:ss
         // six bytes "end-time",   the end of the music as mmm:ss
-        if(strlen(title))  {sprintf(chbuf, "Title: %s",  title);  if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(artist)) {sprintf(chbuf, "Artist: %s", artist); if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(album))  {sprintf(chbuf, "Album: %s",  album);  if(audio_id3data) audio_id3data(chbuf);}
-        if(strlen(genre))  {sprintf(chbuf, "Genre: %s",  genre);  if(audio_id3data) audio_id3data(chbuf);}
+        if(strlen(title))  {sprintf(m_chbuf, "Title: %s",  title);  if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(artist)) {sprintf(m_chbuf, "Artist: %s", artist); if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(album))  {sprintf(m_chbuf, "Album: %s",  album);  if(audio_id3data) audio_id3data(m_chbuf);}
+        if(strlen(genre))  {sprintf(m_chbuf, "Genre: %s",  genre);  if(audio_id3data) audio_id3data(m_chbuf);}
         return true;
     }
     return false;
