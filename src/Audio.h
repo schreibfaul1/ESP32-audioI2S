@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 16,2022
+ *  Updated on: Nov 17,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -274,6 +274,7 @@ private:
     size_t   chunkedDataTransfer(uint8_t* bytes);
     bool     readID3V1Tag();
     void     slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize);
+    void     lostStreamDetection(uint32_t bytesAvail);
 
 //++++ implement several function with respect to the index of string ++++
     void trim(char *s) {

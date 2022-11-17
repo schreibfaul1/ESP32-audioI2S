@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6o
- *  Updated on: Nov 16.2022
+ *  Version 2.0.6p
+ *  Updated on: Nov 17.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2972,21 +2972,14 @@ void Audio::processLocalFile() {
 void Audio::processWebStream() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
-    static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
-    static uint8_t  cnt_slow;
     static uint32_t chunkSize;                                  // chunkcount read from stream
-    static uint32_t tmr_1s;                                     // timer 1 sec
-    static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         f_stream = false;
-        cnt_slow = 0;
         chunkSize = 0;
-        loopCnt = 0;
-        tmr_1s = millis();
         m_metacount = m_metaint;
         readMetadata(0, true); // reset all static vars
     }
@@ -3004,26 +2997,10 @@ void Audio::processWebStream() {
         if(m_metacount == 0) {chunkSize -= readMetadata(availableBytes); return;}
         availableBytes = min(availableBytes, m_metacount);
     }
-    // timer, triggers every second  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if((tmr_1s + 1000) < millis()) {
-        f_tmr_1s = true;                                        // flag will be set every second for one loop only
-        tmr_1s = millis();
-    }
-    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() > maxFrameSize) {f_tmr_1s = false; cnt_slow = 0; loopCnt = 0;}
-    if(f_tmr_1s){
-        cnt_slow ++;
-        if(cnt_slow > 50){cnt_slow = 0; AUDIO_INFO("slow stream, dropouts are possible");}
-    }
-    // if the buffer can't filled for several seconds try a new connection - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream && !availableBytes){
-        loopCnt++;
-        if(loopCnt > 200000) {              // wait several seconds
-            AUDIO_INFO("Stream lost -> try new connection");
-            connecttohost(m_lastHost);
-            return;
-        }
-    }
+
+    slowStreamDetection(InBuff.bufferFilled(), maxFrameSize);
+    if(f_stream) lostStreamDetection(availableBytes);
+
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(availableBytes) {
         availableBytes = min(availableBytes, InBuff.writeSpace());
@@ -5118,4 +5095,18 @@ void Audio::slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize){
         }
     }
     else cnt_slow = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------
+void Audio::lostStreamDetection(uint32_t bytesAvail){
+    static uint32_t loopCnt = 0;
+    if(!bytesAvail){
+        loopCnt++;
+        if(loopCnt > 200000) {              // wait several seconds
+            loopCnt = 0;
+            AUDIO_INFO("Stream lost -> try new connection");
+            connecttohost(m_lastHost);
+            return;
+        }
+    }
+    else loopCnt = 0;
 }
