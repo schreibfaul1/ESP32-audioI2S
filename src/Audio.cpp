@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6p
+ *  Version 2.0.6q
  *  Updated on: Nov 17.2022
  *      Author: Wolle (schreibfaul1)
  *
@@ -3718,6 +3718,7 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "audio/x-mpegurl"))  ct_val = CT_M3U;
     else if(!strcmp(ct, "audio/ms-asf"))     ct_val = CT_ASX;
     else if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
+    else if(!strcmp(ct, "audio/x-ms-asx"))   ct_val = CT_ASX; // #413
 
     else if(!strcmp(ct, "application/ogg"))  ct_val = CT_OGG;
     else if(!strcmp(ct, "application/vnd.apple.mpegurl")) ct_val = CT_M3U8;
