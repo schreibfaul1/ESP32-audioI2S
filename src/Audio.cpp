@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6q
- *  Updated on: Nov 17.2022
+ *  Version 2.0.6r
+ *  Updated on: Nov 18.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2851,9 +2851,11 @@ void Audio::processLocalFile() {
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
 
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
-    static bool f_stream;
-    static bool f_fileDataComplete;
+    static bool     f_stream;
+    static bool     f_fileDataComplete;
+    static uint32_t pos_stsz;
     static uint32_t byteCounter;                                // count received data
+    static uint32_t stszEntries = 0;
     uint32_t availableBytes = 0;
 
     if(m_f_firstCall) {  // runs only one time per connection, prepare for start
@@ -2861,8 +2863,12 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         byteCounter = 0;
+        pos_stsz = 0;
+        if(m_codec == CODEC_M4A) pos_stsz =  seek_m4a_stsz(&stszEntries); // returns the pos of atom stsz
+        log_i("pos_stsz %x, stszEntries %d", pos_stsz, stszEntries);
         return;
     }
+    (void) pos_stsz;
 
     #ifdef CONFIG_IDF_TARGET_ESP32S3
         availableBytes = maxFrameSize * 4;
@@ -2896,7 +2902,7 @@ void Audio::processLocalFile() {
         else{
             f_stream = true;
             AUDIO_INFO("stream ready");
-            log_i("m_audioDataStart %d", m_audioDataStart);
+            if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
             if(m_resumeFilePos){
                 if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
                 if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
@@ -4027,8 +4033,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
              ; // suppress errorcode MAINDATA_UNDERFLOW
         }
         else {
-            printDecodeError(ret);
-            m_f_playing = false; // seek for new syncword
+            if(m_codec == CODEC_MP3 && ret == -2){ ; } // do nothing (suppress MAINDATA_UNDERFLOW)
+            else{
+                printDecodeError(ret);
+                m_f_playing = false; // seek for new syncword
+            }
         }
         if(!bytesDecoded) bytesDecoded = 2;
         return bytesDecoded;
@@ -5110,4 +5119,75 @@ void Audio::lostStreamDetection(uint32_t bytesAvail){
         }
     }
     else loopCnt = 0;
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::seek_m4a_stsz(uint32_t* numEntries){
+    // stsz says what size each sample is in bytes. This is important for the decoder to be able to start at a chunk,
+    // and then go through each sample by its size. The stsz atom can be behind the audio block. Therefore, searching
+    // for the stsz atom is only applicable to local files.
+
+    /* atom hierarchy (example)_________________________________________________________________________________________
+
+    ftyp -> moov -> trak -> tkhd
+            free    udta    mdia -> mdhd
+            mdat            udta    hdlr
+            mvhd                    minf -> smhd
+                                            dinf
+                                            stbl -> stsd
+                                                    stts
+                                                    stsc
+                                                    stsz -> determine and return the position and number of entries
+                                                    stco
+    __________________________________________________________________________________________________________________*/
+
+    struct m4a_Atom{
+        int  pos;
+        int  size;
+        char name[5];
+    } atom, at, tmp;
+
+    // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
+    auto atomItems = [&](uint32_t startPos){    // lambda, inner function
+        char tmp[5];
+        audiofile.seek(startPos);
+        audiofile.readBytes(tmp, 4);
+        atom.size = bigEndian((uint8_t*)tmp, 4);
+        audiofile.readBytes(atom.name, 4);
+        atom.name[4] = '\0';
+        atom.pos = startPos;
+        return atom;
+    };
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    boolean found      = false;
+    uint32_t seekpos   = 0;
+    uint32_t filesize  = getFileSize();
+    char name[6][5]    = {"moov", "trak", "mdia", "minf", "stbl", "stsz"};
+
+    if(!audiofile) return 0; // guard
+
+    at.pos = 0;
+    at.size = filesize;
+    seekpos = 0;
+
+    for(int i = 0; i< 6; i++){
+        found = false;
+        while(seekpos < at.pos + at.size){
+            tmp = atomItems(seekpos);
+            seekpos += tmp.size;
+            if(strcmp(tmp.name, name[i]) == 0) {memcpy((void*)&at, (void*)&tmp, sizeof(tmp)); found = true;}
+            if(m_f_Log) log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
+        }
+        if(!found) goto noSuccess;
+        seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
+    }
+
+    audiofile.seek(0);
+    *numEntries = at.size / 4;
+    return at.pos;
+
+noSuccess:
+    log_e("error, returns 0");
+    audiofile.seek(0);
+    return 0;
 }

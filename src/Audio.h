@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 17,2022
+ *  Updated on: Nov 18,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -275,6 +275,7 @@ private:
     bool     readID3V1Tag();
     void     slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize);
     void     lostStreamDetection(uint32_t bytesAvail);
+    uint32_t seek_m4a_stsz(uint32_t* numEntries);
 
 //++++ implement several function with respect to the index of string ++++
     void trim(char *s) {
@@ -371,13 +372,15 @@ private:
 
     // some other functions
     size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
-        size_t result = 0;
-        if(numBytes < 1 || numBytes > 4) return 0;
+        uint64_t result = 0;
+        if(numBytes < 1 || numBytes > 8) return 0;
         for (int i = 0; i < numBytes; i++) {
                 result += *(base + i) << (numBytes -i - 1) * shiftLeft;
         }
-        return result;
+        if(result > SIZE_MAX) {log_e("range overflow"), result = 0;}; // overflow
+        return (size_t)result;
     }
+
     bool b64encode(const char* source, uint16_t sourceLength, char* dest){
         size_t size = base64_encode_expected_len(sourceLength) + 1;
         char * buffer = (char *) malloc(size);
