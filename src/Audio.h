@@ -377,7 +377,7 @@ private:
         for (int i = 0; i < numBytes; i++) {
                 result += *(base + i) << (numBytes -i - 1) * shiftLeft;
         }
-        if(result > SIZE_MAX) {log_e("range overflow"), result = 0;}; // overflow
+        if(result > SIZE_MAX) {log_e("range overflow"); result = 0;} // overflow
         return (size_t)result;
     }
 
