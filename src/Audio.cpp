@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6r
- *  Updated on: Nov 18.2022
+ *  Version 2.0.6s
+ *  Updated on: Nov 21.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2865,16 +2865,11 @@ void Audio::processLocalFile() {
         byteCounter = 0;
         pos_stsz = 0;
         if(m_codec == CODEC_M4A) pos_stsz =  seek_m4a_stsz(&stszEntries); // returns the pos of atom stsz
-        log_i("pos_stsz %x, stszEntries %d", pos_stsz, stszEntries);
         return;
     }
     (void) pos_stsz;
 
-    #ifdef CONFIG_IDF_TARGET_ESP32S3
-        availableBytes = maxFrameSize * 4;
-    #else // Audiobuffer throttle - - -
-        availableBytes = maxFrameSize; // reduce blocksize because PSRAM is too slow
-    #endif
+    availableBytes = 16 * 1024;
 
     availableBytes = min(availableBytes, InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
@@ -2891,14 +2886,16 @@ void Audio::processLocalFile() {
         byteCounter += bytesAddedToBuffer;  // Pull request #42
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
-
     if(!f_stream){
         if(m_controlCounter != 100) {
-              if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
+            if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
                 InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
             }
             return;
         }
+#       ifndef CONFIG_IDF_TARGET_ESP32S
+            if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize) return;
+#       endif
         else{
             f_stream = true;
             AUDIO_INFO("stream ready");
@@ -2966,11 +2963,10 @@ void Audio::processLocalFile() {
         static uint8_t cnt = 0;
         uint8_t compression;
         if(m_codec == CODEC_WAV)  compression = 1;
-        if(m_codec == CODEC_FLAC) compression = 2;
-        compression = 6;
+        else if(m_codec == CODEC_FLAC) compression = 2;
+        else compression = 3;
         cnt++;
         if(cnt == compression){playAudioData(); cnt = 0;}
-        playAudioData();
     }
     return;
 }
