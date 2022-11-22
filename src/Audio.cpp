@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.6s
- *  Updated on: Nov 21.2022
+ *  Version 2.0.7
+ *  Updated on: Nov 22.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2853,9 +2853,7 @@ void Audio::processLocalFile() {
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     static bool     f_stream;
     static bool     f_fileDataComplete;
-    static uint32_t pos_stsz;
     static uint32_t byteCounter;                                // count received data
-    static uint32_t stszEntries = 0;
     uint32_t availableBytes = 0;
 
     if(m_f_firstCall) {  // runs only one time per connection, prepare for start
@@ -2863,13 +2861,10 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         byteCounter = 0;
-        pos_stsz = 0;
-        if(m_codec == CODEC_M4A) pos_stsz =  seek_m4a_stsz(&stszEntries); // returns the pos of atom stsz
         return;
     }
-    (void) pos_stsz;
 
-    availableBytes = 16 * 1024;
+    availableBytes = 16 * 1024; // set some large value
 
     availableBytes = min(availableBytes, InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
@@ -2893,22 +2888,38 @@ void Audio::processLocalFile() {
             }
             return;
         }
-#       ifndef CONFIG_IDF_TARGET_ESP32S
-            if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize) return;
-#       endif
         else{
+            if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize){
+                // fill the buffer before playing
+                return;
+            }
+
             f_stream = true;
             AUDIO_INFO("stream ready");
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
-            if(m_resumeFilePos){
-                if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-                if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
-                audiofile.seek(m_resumeFilePos);
-                InBuff.resetBuffer();
-                byteCounter = m_resumeFilePos;
-                if(m_f_Log) log_i("m_resumeFilePos %i", m_resumeFilePos);
-            }
         }
+    }
+
+    if(m_resumeFilePos){
+        if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+        if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
+        if(m_codec == CODEC_M4A) m_resumeFilePos = m4a_correctResumeFilePos(m_resumeFilePos);
+        if(m_codec == CODEC_WAV) {while((m_resumeFilePos % 4) != 0) m_resumeFilePos++;} // must be divisible by four
+        if(m_codec == CODEC_FLAC) {m_resumeFilePos = flac_correctResumeFilePos(m_resumeFilePos); FLACDecoderReset();}
+        if(m_codec == CODEC_MP3) {m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos);}
+        if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
+        audiofile.seek(m_resumeFilePos);
+        InBuff.resetBuffer();
+        byteCounter = m_resumeFilePos;
+
+        if(m_f_Log){
+            log_i("m_resumeFilePos %d", m_resumeFilePos);
+            log_i("m_audioDataStart %d", m_audioDataStart);
+            log_i("m_audioCurrentTime %f", (double)m_audioCurrentTime);
+            log_i("m_file_size %d", m_file_size);
+        }
+        m_resumeFilePos = 0;
+        f_stream = false;
     }
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4299,16 +4310,10 @@ bool Audio::setTimeOffset(int sec){
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
-//    if(!m_avr_bitrate) return false;
-    if(m_codec == CODEC_M4A) return false;
-    m_f_playing = false;
-    if(m_codec == CODEC_MP3) MP3Decoder_ClearBuffer();
-    if(m_codec == CODEC_WAV) {while((pos % 4) != 0) pos++;} // must be divisible by four
-    if(m_codec == CODEC_FLAC) FLACDecoderReset();
-    InBuff.resetBuffer();
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
-    if(m_avr_bitrate) m_audioCurrentTime = ((pos-m_audioDataStart) / m_avr_bitrate) * 8; // #96
-    return audiofile.seek(pos);
+    if(pos > m_file_size) pos = m_file_size;
+    m_resumeFilePos = pos;
+    return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::audioFileSeek(const float speed) {
@@ -5117,7 +5122,7 @@ void Audio::lostStreamDetection(uint32_t bytesAvail){
     else loopCnt = 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::seek_m4a_stsz(uint32_t* numEntries){
+void Audio::seek_m4a_stsz(){
     // stsz says what size each sample is in bytes. This is important for the decoder to be able to start at a chunk,
     // and then go through each sample by its size. The stsz atom can be behind the audio block. Therefore, searching
     // for the stsz atom is only applicable to local files.
@@ -5159,8 +5164,9 @@ uint32_t Audio::seek_m4a_stsz(uint32_t* numEntries){
     uint32_t seekpos   = 0;
     uint32_t filesize  = getFileSize();
     char name[6][5]    = {"moov", "trak", "mdia", "minf", "stbl", "stsz"};
+    char noe[4];
 
-    if(!audiofile) return 0; // guard
+    if(!audiofile) return; // guard
 
     at.pos = 0;
     at.size = filesize;
@@ -5178,12 +5184,91 @@ uint32_t Audio::seek_m4a_stsz(uint32_t* numEntries){
         seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
     }
 
+    seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
+    audiofile.seek(seekpos);
+    audiofile.readBytes(noe, 4); //number of entries
+    m_stsz_numEntries = bigEndian((uint8_t*)noe, 4);
+    if(m_f_Log) log_i("number of entries in stsz: %d", m_stsz_numEntries);
+    m_stsz_position = seekpos + 4;
     audiofile.seek(0);
-    *numEntries = at.size / 4;
-    return at.pos;
+    return;
 
 noSuccess:
-    log_e("error, returns 0");
+    m_stsz_numEntries= 0;
+    m_stsz_position = 0;
+    log_e("m4a atom stsz not found");
     audiofile.seek(0);
-    return 0;
+    return;
 }
+//----------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos){
+    // In order to jump within an m4a file, the exact beginning of an aac block must be found. Since m4a cannot be
+    // streamed, i.e. there is no syncword, an imprecise jump can lead to a crash.
+
+    if(!m_stsz_position) return m_audioDataStart; // guard
+
+    typedef union{
+        uint8_t     u8[4];
+        uint32_t    u32;
+    } tu;
+    tu uu;
+
+    uint32_t i = 0, pos = m_audioDataStart;
+    audiofile.seek(m_stsz_position);
+
+    while(i < m_stsz_numEntries){
+        i++;
+        uu.u8[3] =  audiofile.read();
+        uu.u8[2] =  audiofile.read();
+        uu.u8[1] =  audiofile.read();
+        uu.u8[0] =  audiofile.read();
+        pos += uu.u32;
+        if(pos >= resumeFilePos) break;
+    }
+    return pos;
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos){
+    // The starting point is the next FLAC syncword
+    uint8_t p1, p2;
+    boolean found = false;
+    uint32_t pos = resumeFilePos;
+    audiofile.seek(pos);
+
+    p1 = audiofile.read();
+    p2 = audiofile.read();
+    pos+=2;
+    while(!found || pos == m_file_size){
+        if(p1 == 0xFF && p2 == 0xF8){found = true; log_i("found"); break;}
+        p1 = p2;
+        p2 = audiofile.read();
+        pos++;
+    }
+
+    if(found) return (pos - 2);
+    return m_audioDataStart;
+}
+//----------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::mp3_correctResumeFilePos(uint32_t resumeFilePos){
+    // The starting point is the next MP3 syncword
+    uint8_t p1, p2;
+    boolean found = false;
+    uint32_t pos = resumeFilePos;
+    audiofile.seek(pos);
+
+    p1 = audiofile.read();
+    p2 = audiofile.read();
+    pos+=2;
+    while(!found || pos == m_file_size){
+        if(p1 == 0xFF && (p2 & 0xF0) == 0xF0){found = true; break;}
+        p1 = p2;
+        p2 = audiofile.read();
+        pos++;
+    }
+
+    if(found) return (pos - 2);
+    return m_audioDataStart;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+

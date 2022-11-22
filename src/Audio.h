@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 21,2022
+ *  Updated on: Nov 22,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -275,7 +275,11 @@ private:
     bool     readID3V1Tag();
     void     slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize);
     void     lostStreamDetection(uint32_t bytesAvail);
-    uint32_t seek_m4a_stsz(uint32_t* numEntries);
+    void     seek_m4a_stsz();
+    uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
+    uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
+    uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
+
 
 //++++ implement several function with respect to the index of string ++++
     void trim(char *s) {
@@ -523,6 +527,8 @@ private:
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
     uint16_t        m_m3u8_targetDuration = 10;     //
+    uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
+    uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
