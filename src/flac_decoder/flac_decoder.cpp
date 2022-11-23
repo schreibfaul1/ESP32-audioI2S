@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Jul 03,2021
+ * Updated on: Nov 23,2022
  *
  * Author: Wolle
  *
@@ -126,9 +126,9 @@ void FLACDecoderReset(){ // set var to default
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
     int i;
 
-    /* find byte-aligned syncword - need 13 matching bits */
+     /* find byte-aligned sync code - need 14 matching bits */
     for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xF8) == 0xF8) {
+        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
             FLACDecoderReset();
             return i;
         }
@@ -139,9 +139,9 @@ int FLACFindSyncWord(unsigned char *buf, int nBytes) {
 int FLACFindOggSyncWord(unsigned char *buf, int nBytes){
     int i;
 
-    /* find byte-aligned syncword - need 13 matching bits */
+    /* find byte-aligned sync code - need 14 matching bits */
     for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xF8) == 0xF8) {
+        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) {
             FLACDecoderReset();
             log_i("FLAC sync found");
             return i;
@@ -229,7 +229,8 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         uint32_t temp = readUint(8);
         uint16_t sync = temp << 6 |readUint(6);
         if (sync != 0x3FFE){
-            log_i("Sync code expected 0x3FFE but received %X", sync);
+            log_i("inbuf[0] %x, inbuf[1] %x", inbuf[0], inbuf[1]);
+            log_i("Sync code expected 0x3FE but received %X", (sync >> 2));
             return ERR_FLAC_SYNC_CODE_NOT_FOUND;
         }
 
