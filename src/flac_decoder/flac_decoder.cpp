@@ -229,7 +229,6 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         uint32_t temp = readUint(8);
         uint16_t sync = temp << 6 |readUint(6);
         if (sync != 0x3FFE){
-            log_i("inbuf[0] %x, inbuf[1] %x", inbuf[0], inbuf[1]);
             log_i("Sync code expected 0x3FE but received %X", (sync >> 2));
             return ERR_FLAC_SYNC_CODE_NOT_FOUND;
         }
