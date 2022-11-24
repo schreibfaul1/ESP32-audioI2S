@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7
- *  Updated on: Nov 22.2022
+ *  Version 2.0.7a
+ *  Updated on: Nov 24.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1997,210 +1997,6 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int Audio::read_OGG_Header(uint8_t *data, size_t len){
-    static size_t retvalue = 0;
-    static size_t pageLen = 0;
-    static bool   f_firstPacket = false;
-
-    if(retvalue) {
-        if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
-            retvalue -= len; // and wait for more bufferdata
-            return len;
-        }
-        else {
-            size_t tmp = retvalue;
-            retvalue = 0;
-            return tmp;
-        }
-        return 0;
-    }
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == OGG_BEGIN) {  // init
-        retvalue = 0;
-        m_audioDataStart = 0;
-        f_firstPacket = true;
-        m_controlCounter = OGG_MAGIC;
-        if(getDatamode() == AUDIO_LOCALFILE){
-            m_contentlength = getFileSize();
-            AUDIO_INFO("Content-Length: %u", m_contentlength);
-        }
-        return 0;
-    }
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == OGG_MAGIC) { /* check MAGIC STRING */
-        if(specialIndexOf(data, "OggS", 10) != 0) {
-            log_e("Magic String 'OggS' not found in header");
-            stopSong();
-            return -1;
-        }
-        m_controlCounter = OGG_HEADER;
-        retvalue = 4;
-        return 0;
-    }
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == OGG_HEADER) { /* check OGG PAGE HEADER */
-        uint8_t i = 0;
-        uint8_t ssv = *(data + i);                  // stream_structure_version
-        (void)ssv;
-        i++;
-        uint8_t htf = *(data + i);                  // header_type_flag
-        (void)htf;
-        i++;
-        uint32_t tmp = bigEndian(data + i, 4);      // absolute granule position
-        uint64_t agp = (uint64_t) tmp << 32;
-        i += 4;
-        agp += bigEndian(data + i, 4);
-        i += 4;
-        uint32_t ssnr = bigEndian(data + i, 4);     // stream serial number
-        (void)ssnr;
-        i += 4;
-        uint32_t psnr = bigEndian(data + i, 4);     // page sequence no
-        (void)psnr;
-        i += 4;
-        uint32_t pchk = bigEndian(data + i, 4);     // page checksum
-        (void)pchk;
-        i += 4;
-        uint8_t psegm = *(data + i);
-        i++;
-        uint8_t psegmBuff[256];
-        pageLen = 0;
-        for(uint8_t j = 0; j < psegm; j++){
-            psegmBuff[j] = *(data + i);
-            pageLen += psegmBuff[j];
-            i++;
-        }
-        retvalue = i;
-        if(agp == 0){
-            if(f_firstPacket == true){
-                f_firstPacket = false;
-                m_controlCounter = OGG_FIRST; // ogg first pages
-            }
-            else{
-                retvalue += pageLen;
-                m_controlCounter = OGG_MAGIC;
-            }
-        }
-        else{
-            if(m_codec == CODEC_OGG_FLAC){
-                m_controlCounter = OGG_AMRDY;
-            }
-            else {
-                AUDIO_INFO("unknown format");
-                stopSong();
-                return -1;
-            }
-        }
-        return 0;
-    }
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == OGG_FIRST) { /* check OGG FIRST PAGES (has no streaming content) */
-        uint8_t i = 0;
-        uint8_t obp = *(data + i);                  // oneBytePacket shold be 0x7F
-        (void)obp;
-        i++;
-        if(specialIndexOf(data + i, "FLAC", 10) == 0){
-        }
-        else{
-            log_e("ogg/flac support only"); // ogg/vorbis or ogg//opus not supported yet
-            stopSong();
-            return -1;
-        }
-        i += 4;
-        uint8_t major_vers = *(data + i);
-        (void)major_vers;
-        i++;
-        uint8_t minor_vers = *(data + i);
-        (void)minor_vers;
-        i++;
-        uint16_t nonah = bigEndian(data + i, 2); // number of non audio headers (0x00 = unknown)
-        (void)nonah;
-        i += 2;
-        if(specialIndexOf(data + i, "fLaC", 10) == 0){
-            m_codec = CODEC_OGG_FLAC;
-        }
-        i += 4;
-        // STREAMINFO metadata block begins
-        uint32_t mblen = bigEndian(data + i, 4);
-        (void)mblen;
-        i += 4; // skip metadata block header + length
-        i += 2; // skip minimun block size
-        m_flacMaxBlockSize = bigEndian(data + i, 2);
-        i += 2;
-        vTaskDelay(2);
-        AUDIO_INFO("FLAC maxBlockSize: %u", m_flacMaxBlockSize);
-        i += 3; // skip minimun frame size
-        vTaskDelay(2);
-        m_flacMaxFrameSize = bigEndian(data + i, 3);
-        i += 3;
-        if(m_flacMaxFrameSize){
-            AUDIO_INFO("FLAC maxFrameSize: %u", m_flacMaxFrameSize);
-        }
-        else {
-            AUDIO_INFO("FLAC maxFrameSize: N/A");
-        }
-        if(m_flacMaxFrameSize > InBuff.getMaxBlockSize()) {
-            log_e("FLAC maxFrameSize too large!");
-            stopSong();
-            return -1;
-        }
-        vTaskDelay(2);
-        uint32_t nextval = bigEndian(data + i, 3);
-        i += 3;
-        m_flacSampleRate = nextval >> 4;
-        AUDIO_INFO("FLAC sampleRate: %u", m_flacSampleRate);
-        vTaskDelay(2);
-        m_flacNumChannels = ((nextval & 0x06) >> 1) + 1;
-        AUDIO_INFO("FLAC numChannels: %u", m_flacNumChannels);
-        if(m_flacNumChannels != 1 && m_flacNumChannels != 2){
-            vTaskDelay(2);
-            AUDIO_INFO("numChannels must be 1 or 2");
-            stopSong();
-            return -1;
-        }
-        vTaskDelay(2);
-        uint8_t bps = (nextval & 0x01) << 4;
-        bps += (*(data +i) >> 4) + 1;
-        i++;
-        m_flacBitsPerSample = bps;
-        if((bps != 8) && (bps != 16)){
-            log_e("bits per sample must be 8 or 16, is %i", bps);
-            stopSong();
-            return -1;
-        }
-        AUDIO_INFO("FLAC bitsPerSample: %u", m_flacBitsPerSample);
-        m_flacTotalSamplesInStream = bigEndian(data + i, 4);
-        i++;
-        if(m_flacTotalSamplesInStream) {
-            AUDIO_INFO("total samples in stream: %u", m_flacTotalSamplesInStream);
-        }
-        else {
-            AUDIO_INFO("total samples in stream: N/A");
-        }
-        if(bps != 0 && m_flacTotalSamplesInStream) {
-            AUDIO_INFO("audio file duration: %u seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
-        }
-        m_controlCounter = OGG_MAGIC;
-        retvalue = pageLen;
-        return 0;
-    }
-    if(m_controlCounter == OGG_AMRDY){ // ogg almost ready
-        if(!psramFound()){
-            AUDIO_INFO("FLAC works only with PSRAM!");
-            m_f_running = false; stopSong();
-            return -1;
-        }
-        if(!FLACDecoder_AllocateBuffers()) {m_f_running = false; stopSong(); return -1;}
-        InBuff.changeMaxBlockSize(m_frameSizeFLAC);
-        AUDIO_INFO("FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
-
-        m_controlCounter = OGG_OKAY; // 100
-        retvalue = 0;
-        return 0;
-    }
-    return 0;
-}
-//---------------------------------------------------------------------------------------------------------------------
 size_t Audio::process_m3u8_ID3_Header(uint8_t* packet){
     uint8_t         ID3version;
     size_t          id3Size;
@@ -3678,11 +3474,6 @@ bool Audio:: initializeDecoder(){
         case CODEC_WAV:
             InBuff.changeMaxBlockSize(m_frameSizeWav);
             break;
-        case CODEC_OGG:
-            m_codec = CODEC_OGG;
-            AUDIO_INFO("ogg not supported");
-            goto exit;
-            break;
         default:
             goto exit;
             break;
@@ -3696,7 +3487,7 @@ bool Audio:: initializeDecoder(){
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::parseContentType(char* ct) {
 
-    enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_OGG, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
+    enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
                 CT_M3U8, CT_TXT, CT_AACP};
 
     strlwr(ct);
@@ -3733,7 +3524,9 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
     else if(!strcmp(ct, "audio/x-ms-asx"))   ct_val = CT_ASX; // #413
 
-    else if(!strcmp(ct, "application/ogg"))  ct_val = CT_OGG;
+    else if(!strcmp(ct, "application/ogg"))  ct_val = CT_FLAC; // assume ogg wrapper
+    else if(!strcmp(ct, "audio/ogg"))        ct_val = CT_FLAC; // auusme ogg wrapper
+
     else if(!strcmp(ct, "application/vnd.apple.mpegurl")) ct_val = CT_M3U8;
     else if(!strcmp(ct, "application/x-mpegurl")) ct_val =CT_M3U8;
 
@@ -3768,11 +3561,6 @@ bool Audio::parseContentType(char* ct) {
             m_codec = CODEC_WAV;
             if(m_f_Log) { log_i("ContentType %s, format is wav", ct); }
             break;
-        case CT_OGG:
-            m_codec = CODEC_OGG;
-            if(m_f_Log) { log_i("ContentType %s found", ct); }
-            break;
-
         case CT_PLS:
             m_playlistFormat = FORMAT_PLS;
             break;
@@ -3967,34 +3755,26 @@ int Audio::findNextSync(uint8_t* data, size_t len){
                               m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         nextSync = FLACFindSyncWord(data, len);
     }
-    if(m_codec == CODEC_OGG_FLAC) {
-        FLACSetRawBlockParams(m_flacNumChannels,   m_flacSampleRate,
-                              m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
-        nextSync = FLACFindSyncWord(data, len);
-    }
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
-         if(m_codec == CODEC_OGG_FLAC){
-             nextSync = len;
-         }
          else {
              swnf++; // syncword not found counter, can be multimediadata
          }
-     }
-     if (nextSync == 0){
-         if(audio_info && swnf>0){
-             sprintf(m_chbuf, "syncword not found %i times", swnf);
-             audio_info(m_chbuf);
-             swnf = 0;
-         }
-         else {
-             if(audio_info) audio_info("syncword found at pos 0");
-         }
-     }
-     if(nextSync > 0){
-         AUDIO_INFO("syncword found at pos %i", nextSync);
-     }
-     return nextSync;
+    }
+    if (nextSync == 0){
+        if(audio_info && swnf>0){
+            sprintf(m_chbuf, "syncword not found %i times", swnf);
+            audio_info(m_chbuf);
+            swnf = 0;
+        }
+        else {
+            if(audio_info) audio_info("syncword found at pos 0");
+        }
+    }
+    if(nextSync > 0){
+        AUDIO_INFO("syncword found at pos %i", nextSync);
+    }
+    return nextSync;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
@@ -4021,7 +3801,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_AAC:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_M4A:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_FLAC:     ret = FLACDecode(data, &bytesLeft, m_outBuff);   break;
-        case CODEC_OGG_FLAC: ret = FLACDecode(data, &bytesLeft, m_outBuff);   break; // FLAC webstream wrapped in OGG
         default: {log_e("no valid codec found codec = %d", m_codec); stopSong();}
     }
 
@@ -4066,7 +3845,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 setBitsPerSample(AACGetBitsPerSample());
                 setBitrate(AACGetBitrate());
             }
-            if(m_codec == CODEC_FLAC || m_codec == CODEC_OGG_FLAC){
+            if(m_codec == CODEC_FLAC){
                 setChannels(FLACGetChannels());
                 setSampleRate(FLACGetSampRate());
                 setBitsPerSample(FLACGetBitsPerSample());
@@ -4080,8 +3859,13 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if((m_codec == CODEC_AAC) || (m_codec == CODEC_M4A)){
             m_validSamples = AACGetOutputSamps() / getChannels();
         }
-        if((m_codec == CODEC_FLAC) || (m_codec == CODEC_OGG_FLAC)){
+        if(m_codec == CODEC_FLAC){
             m_validSamples = FLACGetOutputSamps() / getChannels();
+            char* st = FLACgetStreanTitle();
+            if(st){
+                AUDIO_INFO(st);
+                if(audio_showstreamtitle) audio_showstreamtitle(st);
+            }
         }
     }
     compute_audioCurrentTime(bytesDecoded);
