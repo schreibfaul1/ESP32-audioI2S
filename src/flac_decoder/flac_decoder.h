@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 27,2021
+ * Updated on: Nov 24,2022
  *
  *      Author: wolle
  *
@@ -146,7 +146,9 @@ typedef struct FLACFrameHeader_t {
 }FLACFrameHeader_t;
 
 int      FLACFindSyncWord(unsigned char *buf, int nBytes);
-int      FLACFindOggSyncWord(unsigned char *buf, int nBytes);
+boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
+boolean  FLACFindStreamTitle(unsigned char* buf, int nBytes);
+char*    FLACgetStreanTitle();
 int      FLACparseOggHeader(unsigned char *buf);
 bool     FLACDecoder_AllocateBuffers(void);
 void     FLACDecoder_ClearBuffer();
@@ -171,5 +173,5 @@ int8_t   decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, u
 int8_t   decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch);
 int8_t   decodeResiduals(uint8_t warmup, uint8_t ch);
 void     restoreLinearPrediction(uint8_t ch, uint8_t shift);
-
+int      specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
 

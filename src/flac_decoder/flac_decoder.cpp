@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Nov 23,2022
+ * Updated on: Nov 24,2022
  *
  * Author: Wolle
  *
@@ -33,6 +33,10 @@ uint16_t m_rIndex=0;
 uint64_t m_bitBuffer = 0;
 uint8_t  m_bitBufferLen = 0;
 bool     m_f_OggS_found = false;
+uint8_t  m_psegm = 0;
+uint8_t  m_page0_len = 0;
+char     m_streamTitle[256];
+boolean  m_newSt = false;
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -136,28 +140,35 @@ int FLACFindSyncWord(unsigned char *buf, int nBytes) {
     return -1;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int FLACFindOggSyncWord(unsigned char *buf, int nBytes){
-    int i;
-
-    /* find byte-aligned sync code - need 14 matching bits */
-    for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) {
-            FLACDecoderReset();
-            log_i("FLAC sync found");
-            return i;
-        }
-    }
-    /* find byte-aligned OGG Magic - OggS */
-    for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] == 'O') && (buf[i + 1] == 'g') && (buf[i + 2] == 'g') && (buf[i + 3] == 'S')) {
-            FLACDecoderReset();
-            log_i("OggS found");
-            m_f_OggS_found = true;
-            return i;
-        }
-    }
-    return -1;
+boolean FLACFindMagicWord(unsigned char* buf, int nBytes){
+    int idx = specialIndexOf(buf, "fLaC", nBytes);
+    if(idx >0) return true;
+    return false;
 }
+//----------------------------------------------------------------------------------------------------------------------
+boolean FLACFindStreamTitle(unsigned char* buf, int nBytes){
+    int idx = specialIndexOf(buf, "title=", nBytes);
+    if(idx >0){
+        idx += 6;
+        int len = nBytes - idx;
+        if(len > 255) return false;
+        m_newSt = true;
+        memcpy(m_streamTitle, buf + idx, len + 1);
+        m_streamTitle[len] = '\0';
+    //    log_i("%s", m_streamTitle);
+        return true;
+    }
+    return false;
+}
+//----------------------------------------------------------------------------------------------------------------------
+char* FLACgetStreanTitle(){
+    if(m_newSt){
+        m_newSt = false;
+        return m_streamTitle;
+    }
+    return NULL;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 int FLACparseOggHeader(unsigned char *buf){
     uint8_t i = 0;
@@ -192,11 +203,12 @@ int FLACparseOggHeader(unsigned char *buf){
         pchk += *(buf + j + i) << (4 -j - 1) * 8;
     }
     i += 4;
-    uint8_t psegm = *(buf + i);
+    m_psegm = *(buf + i);
     i++;
     uint8_t psegmBuff[256];
     uint32_t pageLen = 0;
-    for(uint8_t j = 0; j < psegm; j++){
+    for(uint8_t j = 0; j < m_psegm; j++){
+        if(j == 0) m_page0_len = *(buf + i);;
         psegmBuff[j] = *(buf + i);
         pageLen += psegmBuff[j];
         i++;
@@ -226,14 +238,20 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             return ERR_FLAC_NONE;
         }
 
-        uint32_t temp = readUint(8);
-        uint16_t sync = temp << 6 |readUint(6);
-        if (sync != 0x3FFE){
-            log_i("Sync code expected 0x3FE but received %X", (sync >> 2));
+        if(!((inbuf[0] & 0xFF) == 0xFF  && (inbuf[1] & 0xFC) == 0xF8)){
+            // log_i("m_psegm  %d m_page0_len %d", m_psegm, m_page0_len);
+            if(m_psegm == 1){
+                if(!FLACFindMagicWord(inbuf, m_page0_len)){
+                    FLACFindStreamTitle(inbuf, m_page0_len);
+                }
+                *bytesLeft -= m_page0_len;  // can be FLAC or title
+                return ERR_FLAC_NONE;
+            }
+            log_i("sync code not found");
             return ERR_FLAC_SYNC_CODE_NOT_FOUND;
         }
 
-        readUint(1);
+        readUint(14 + 1); // synccode + reserved bit
         FLACFrameHeader->blockingStrategy = readUint(1);
         FLACFrameHeader->blockSizeCode = readUint(4);
         FLACFrameHeader->sampleRateCode = readUint(4);
@@ -272,7 +290,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         }
 
         readUint(1);
-        temp = (readUint(8) << 24);
+        uint32_t temp = (readUint(8) << 24);
         temp = ~temp;
 
         uint32_t shift = 0x80000000; // Number of leading zeros
@@ -553,4 +571,18 @@ void restoreLinearPrediction(uint8_t ch, uint8_t shift) {
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
-
+int specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
+    int result;  // seek for str in buffer or in header up to baselen, not nullterninated
+    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
+    for (int i = 0; i < baselen - strlen(str); i++){
+        result = i;
+        for (int j = 0; j < strlen(str) + exact; j++){
+            if (*(base + i + j) != *(str + j)){
+                result = -1;
+                break;
+            }
+        }
+        if (result >= 0) break;
+    }
+    return result;
+}
