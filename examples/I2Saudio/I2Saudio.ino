@@ -54,7 +54,7 @@ void setup() {
 //    audio.connecttoFS(SD, "/320k_test.mp3");
 //    audio.connecttoFS(SD, "test.wav");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
-//    audio.connecttohost("http://macslons-irish-pub-radio.com/media.asx");
+//    audio.connecttohost("http://somafm.com/wma128/missioncontrol.asx"); //  asx
 //    audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.aac"); //  128k aac
       audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
 }
