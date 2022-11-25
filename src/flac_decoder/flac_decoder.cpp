@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Nov 24,2022
+ * Updated on: Nov 25,2022
  *
  * Author: Wolle
  *
@@ -35,7 +35,7 @@ uint8_t  m_bitBufferLen = 0;
 bool     m_f_OggS_found = false;
 uint8_t  m_psegm = 0;
 uint8_t  m_page0_len = 0;
-char     m_streamTitle[256];
+char     *m_streamTitle= NULL;
 boolean  m_newSt = false;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -47,13 +47,15 @@ bool FLACDecoder_AllocateBuffers(void){
         if(!FLACFrameHeader)    {FLACFrameHeader   = (FLACFrameHeader_t*)    ps_malloc(sizeof(FLACFrameHeader_t));}
         if(!FLACMetadataBlock)  {FLACMetadataBlock = (FLACMetadataBlock_t*)  ps_malloc(sizeof(FLACMetadataBlock_t));}
         if(!FLACsubFramesBuff)  {FLACsubFramesBuff = (FLACsubFramesBuff_t*)  ps_malloc(sizeof(FLACsubFramesBuff_t));}
+        if(!m_streamTitle)      {m_streamTitle     = (char*)                 ps_malloc(256);}
     }
     else {
         if(!FLACFrameHeader)    {FLACFrameHeader   = (FLACFrameHeader_t*)    malloc(sizeof(FLACFrameHeader_t));}
         if(!FLACMetadataBlock)  {FLACMetadataBlock = (FLACMetadataBlock_t*)  malloc(sizeof(FLACMetadataBlock_t));}
         if(!FLACsubFramesBuff)  {FLACsubFramesBuff = (FLACsubFramesBuff_t*)  malloc(sizeof(FLACsubFramesBuff_t));}
+        if(!m_streamTitle)      {m_streamTitle     = (char*)                 malloc(256);}
     }
-    if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff ){
+    if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff || !m_streamTitle){
         log_e("not enough memory to allocate flacdecoder buffers");
         return false;
     }
@@ -73,6 +75,7 @@ void FLACDecoder_FreeBuffers(){
     if(FLACFrameHeader)    {free(FLACFrameHeader);   FLACFrameHeader   = NULL;}
     if(FLACMetadataBlock)  {free(FLACMetadataBlock); FLACMetadataBlock = NULL;}
     if(FLACsubFramesBuff)  {free(FLACsubFramesBuff); FLACsubFramesBuff = NULL;}
+    if(m_streamTitle)      {free(m_streamTitle);     m_streamTitle     = NULL;}
 }
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
@@ -142,7 +145,18 @@ int FLACFindSyncWord(unsigned char *buf, int nBytes) {
 //----------------------------------------------------------------------------------------------------------------------
 boolean FLACFindMagicWord(unsigned char* buf, int nBytes){
     int idx = specialIndexOf(buf, "fLaC", nBytes);
-    if(idx >0) return true;
+    if(idx >0){ // Metadatablock follows
+        idx += 4;
+        boolean lmdbf = ((buf[idx + 1] & 0x80) == 0x80); // Last-metadata-block flag
+        uint8_t bt = (buf[idx + 1] & 0x7F); // block type
+        uint32_t lomd = (buf[idx + 2] << 16) + (buf[idx + 3] << 8) + buf[idx + 4]; // Length of metadata to follow
+
+        // TODO - parse metadata block data
+        // log_i("Last-metadata-block flag: %d", lmdbf);
+        // log_i("block type: %d", bt);
+        // log_i("Length (in bytes) of metadata to follow: %d", lomd);
+        return true;
+    }
     return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
