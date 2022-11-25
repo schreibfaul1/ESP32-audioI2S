@@ -432,16 +432,17 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(startsWith(l_host, "https")) m_f_ssl = true;
     else                            m_f_ssl = false;
 
-    // authentification
-    uint8_t auth = strlen(user) + strlen(pwd);
-    char toEncode[auth + 4];
-    toEncode[0] = '\0';
-    strcat(toEncode, user);
-    strcat(toEncode, ":");
-    strcat(toEncode, pwd);
-    char authorization[base64_encode_expected_len(strlen(toEncode)) + 1];
+    // optional basic authorization 
+    uint16_t auth = strlen(user) + strlen(pwd);
+    char authorization[base64_encode_expected_len(auth + 1) + 1];
     authorization[0] = '\0';
-    b64encode((const char*)toEncode, strlen(toEncode), authorization);
+    if (auth > 0) {
+        char toEncode[auth + 4];
+        strcpy(toEncode, user);
+        strcat(toEncode, ":");
+        strcat(toEncode, pwd);
+        b64encode((const char*)toEncode, strlen(toEncode), authorization);
+    }
 
     //  AUDIO_INFO("Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
 
@@ -455,9 +456,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(rqh, hostwoext);
     strcat(rqh, "\r\n");
     strcat(rqh, "Icy-MetaData:1\r\n");
-    strcat(rqh, "Authorization: Basic ");
-    strcat(rqh, authorization);
-    strcat(rqh, "\r\n");
+
+    if (auth > 0) {
+        strcat(rqh, "Authorization: Basic ");
+        strcat(rqh, authorization);
+        strcat(rqh, "\r\n");
+    }
+
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
 //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
