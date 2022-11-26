@@ -4883,7 +4883,7 @@ void Audio::slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize){
     static uint32_t tmr_1s   = millis(); // timer 1 sec
     static bool     f_tmr_1s = false;
     static uint8_t  cnt_slow = 0;
-    if(tmr_1s + 1000 < millis()) {f_tmr_1s = true; tmr_1s = millis();}
+    if(tmr_1s + 1000 < millis()) {f_tmr_1s = true; tmr_1s = millis() + 1000;}
     if(m_codec == CODEC_WAV)  maxFrameSize /= 4;
     if(m_codec == CODEC_FLAC) maxFrameSize /= 2;
     if(inBuffFilled < maxFrameSize){
