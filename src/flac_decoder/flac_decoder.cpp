@@ -152,6 +152,7 @@ boolean FLACFindMagicWord(unsigned char* buf, int nBytes){
         uint32_t lomd = (buf[idx + 2] << 16) + (buf[idx + 3] << 8) + buf[idx + 4]; // Length of metadata to follow
 
         // TODO - parse metadata block data
+        (void)lmdbf; (void)bt; (void)lomd;
         // log_i("Last-metadata-block flag: %d", lmdbf);
         // log_i("block type: %d", bt);
         // log_i("Length (in bytes) of metadata to follow: %d", lomd);
