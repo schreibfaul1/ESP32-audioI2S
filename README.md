@@ -38,15 +38,14 @@ void setup() {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(21); // 0...21
 
-//  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Pink-Panther.wav");        // wav
-//  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Santiano-Wellerman.flac"); // flac
     audio.connecttohost("http://iskatel.hostingradio.ru:8015/iskatel-320.aac");  // aac
 //  audio.connecttohost("http://mcrscast.mcr.iol.pt/cidadefm");                  // mp3
 //  audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");         // m3u
-//  audio.connecttohost("http://somafm.com/wma128/missioncontrol.asx");          // asx
+//  audio.connecttohost("https://stream.srg-ssr.ch/rsp/aacp_48.asx");            // asx
 //  audio.connecttohost("http://tuner.classical102.com/listen.pls");             // pls
+//  audio.connecttohost("http://stream.radioparadise.com/flac");                 // flac
 //  audio.connecttohost("http://stream.sing-sing-bis.org:8000/singsingFlac");    // flac (ogg)
-//  audio.connecttohost("http://26373.live.streamtheworld.com:3690/XHQQ_FMAAC/HLSTS/playlist.m3u8"); // HLS
+//  audio.connecttohost("http://26373.live.streamtheworld.com:3690/XHQQ_FMAAC/HLSTS/playlist.m3u8");  // HLS
 //  audio.connecttohost("http://eldoradolive02.akamaized.net/hls/live/2043453/eldorado/master.m3u8"); // HLS (ts)
 //  audio.connecttoFS(SD, "/test.wav");     // SD
 //  audio.connecttoFS(SD_MMC, "/test.wav"); // SD_MMC
