@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 24,2022
+ *  Updated on: Nov 28,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -272,8 +272,7 @@ private:
     uint16_t readMetadata(uint16_t b, bool first = false);
     size_t   chunkedDataTransfer(uint8_t* bytes);
     bool     readID3V1Tag();
-    void     slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize);
-    void     lostStreamDetection(uint32_t bytesAvail);
+    boolean  streamDetection(uint32_t bytesAvail);
     void     seek_m4a_stsz();
     uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
     uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);

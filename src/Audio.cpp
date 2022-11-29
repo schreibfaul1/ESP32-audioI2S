@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7a
- *  Updated on: Nov 24.2022
+ *  Version 2.0.7b
+ *  Updated on: Nov 28.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -432,7 +432,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(startsWith(l_host, "https")) m_f_ssl = true;
     else                            m_f_ssl = false;
 
-    // optional basic authorization 
+    // optional basic authorization
     uint16_t auth = strlen(user) + strlen(pwd);
     char authorization[base64_encode_expected_len(auth + 1) + 1];
     authorization[0] = '\0';
@@ -2775,12 +2775,11 @@ void Audio::processLocalFile() {
         static uint8_t cnt = 0;
         uint8_t compression;
         if(m_codec == CODEC_WAV)  compression = 1;
-        else if(m_codec == CODEC_FLAC) compression = 2;
+        if(m_codec == CODEC_FLAC) compression = 2;
         else compression = 3;
         cnt++;
         if(cnt == compression){playAudioData(); cnt = 0;}
     }
-    return;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
@@ -2812,8 +2811,10 @@ void Audio::processWebStream() {
         availableBytes = min(availableBytes, m_metacount);
     }
 
-    slowStreamDetection(InBuff.bufferFilled(), maxFrameSize);
-    if(f_stream) lostStreamDetection(availableBytes);
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_stream){
+        if(streamDetection(availableBytes)) return;
+    }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(availableBytes) {
@@ -2836,8 +2837,12 @@ void Audio::processWebStream() {
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream){
         static uint8_t cnt = 0;
+        uint8_t compression;
+        if(m_codec == CODEC_WAV)  compression = 1;
+        if(m_codec == CODEC_FLAC) compression = 2;
+        else compression = 3;
         cnt++;
-        if(cnt == 3){playAudioData(); cnt = 0;}
+        if(cnt == compression){playAudioData(); cnt = 0;}
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2872,9 +2877,9 @@ void Audio::processWebFile() {
         if(m_f_tts) m_contentlength = chunkSize;
     }
 
-    // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(!f_webFileDataComplete && f_stream){
-        slowStreamDetection(InBuff.bufferFilled(), maxFrameSize);
+        if(streamDetection(availableBytes)) return;
     }
 
     availableBytes = min(InBuff.writeSpace(), availableBytes);
@@ -2934,7 +2939,7 @@ void Audio::processWebFile() {
         uint8_t compression;
         if(m_codec == CODEC_WAV)  compression = 1;
         if(m_codec == CODEC_FLAC) compression = 2;
-        else compression = 6;
+        else compression = 3;
         cnt++;
         if(cnt == compression){playAudioData(); cnt = 0;}
     }
@@ -4879,36 +4884,34 @@ bool Audio::readID3V1Tag(){
     // [2] https://en.wikipedia.org/wiki/ID3#ID3v1_and_ID3v1.1[5]
 }
 //----------------------------------------------------------------------------------------------------------------------
-void Audio::slowStreamDetection(uint32_t inBuffFilled, uint32_t maxFrameSize){
-    static uint32_t tmr_1s   = millis(); // timer 1 sec
-    static bool     f_tmr_1s = false;
+boolean Audio::streamDetection(uint32_t bytesAvail){
+    static uint32_t tmr_slow = millis();
+    static uint32_t tmr_lost = millis();
     static uint8_t  cnt_slow = 0;
-    if(tmr_1s + 1000 < millis()) {f_tmr_1s = true; tmr_1s = millis() + 1000;}
-    if(m_codec == CODEC_WAV)  maxFrameSize /= 4;
-    if(m_codec == CODEC_FLAC) maxFrameSize /= 2;
-    if(inBuffFilled < maxFrameSize){
-        cnt_slow ++;
-        if(f_tmr_1s) {
-            if(cnt_slow > 50) AUDIO_INFO("slow stream, dropouts are possible");
-            f_tmr_1s = false;
-            cnt_slow = 0;
-        }
+    static uint8_t  cnt_lost = 0;
+
+    // if within one second the content of the audio buffer falls below the size of an audio frame 50 times,
+    // issue a message
+    if(tmr_slow + 1000 < millis()){
+        tmr_slow = millis();
+        if(cnt_slow > 50) AUDIO_INFO("slow stream, dropouts are possible");
+        cnt_slow = 0;
     }
-    else cnt_slow = 0;
-}
-//----------------------------------------------------------------------------------------------------------------------
-void Audio::lostStreamDetection(uint32_t bytesAvail){
-    static uint32_t loopCnt = 0;
-    if(!bytesAvail){
-        loopCnt++;
-        if(loopCnt > 200000) {              // wait several seconds
-            loopCnt = 0;
+    if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) cnt_slow++;
+
+    // if no audio data is received within three seconds, a new connection attempt is started.
+    if(bytesAvail) {tmr_lost = millis() + 1000; cnt_lost = 0;}
+    if(tmr_lost < millis()){  // 3s no data?
+        cnt_lost++;
+        tmr_lost = millis() + 1000;
+        if(cnt_lost == 3){
+            cnt_lost = 0;
             AUDIO_INFO("Stream lost -> try new connection");
             connecttohost(m_lastHost);
-            return;
+            return true;
         }
     }
-    else loopCnt = 0;
+    return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void Audio::seek_m4a_stsz(){
