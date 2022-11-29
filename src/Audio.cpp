@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7b
- *  Updated on: Nov 28.2022
+ *  Version 2.0.7c
+ *  Updated on: Nov 29.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2950,12 +2950,9 @@ void Audio::processWebStreamTS() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     uint32_t        availableBytes;                             // available bytes in stream
-    static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
     static bool     f_firstPacket;
     static uint32_t byteCounter;                                // count received data
-    static uint32_t tmr_1s;                                     // timer 1 sec
-    static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
     static uint8_t  ts_packet[188];                             // m3u8 transport stream is 188 bytes long
     uint8_t         ts_packetStart = 0;
     uint8_t         ts_packetLength = 0;
@@ -2969,8 +2966,6 @@ void Audio::processWebStreamTS() {
         f_firstPacket = true;
         byteCounter = 0;
         chunkSize = 0;
-        loopCnt = 0;
-        tmr_1s = millis();
         m_t0 = millis();
         ts_packetPtr = 0;
         m_controlCounter = 0;
@@ -3029,34 +3024,10 @@ void Audio::processWebStreamTS() {
 
     }
 
-    // timer, triggers every second - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if((tmr_1s + 1000) < millis()) {
-        f_tmr_1s = true;                                        // flag will be set every second for one loop only
-        tmr_1s = millis();
+    // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_stream){
+        if(streamDetection(availableBytes)) return;
     }
-
-    // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() < maxFrameSize && f_stream){
-        static uint8_t cnt_slow = 0;
-        cnt_slow ++;
-        if(f_tmr_1s) {
-            if(cnt_slow > 50 && audio_info) audio_info("slow stream, dropouts are possible");
-            f_tmr_1s = false;
-            cnt_slow = 0;
-        }
-    }
-
-    // if the buffer can't filled for several seconds try a new connection  - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream && !availableBytes){
-        loopCnt++;
-        if(loopCnt > 200000) {              // wait several seconds
-            loopCnt = 0;
-            AUDIO_INFO("Stream lost -> try new connection");
-            httpPrint(m_lastHost);
-            return;
-        }
-    }
-    if(availableBytes) loopCnt = 0;
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(true) { // statement has no effect
@@ -3073,7 +3044,7 @@ void Audio::processWebStreamTS() {
     if(f_stream){
         static uint8_t cnt = 0;
         cnt++;
-        if(cnt == 6){playAudioData(); cnt = 0;}
+        if(cnt == 3){playAudioData(); cnt = 0;} // aac only
     }
     return;
 }
@@ -3083,13 +3054,10 @@ void Audio::processWebStreamHLS() {
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     const uint16_t  ID3BuffSize = 1024;
     uint32_t        availableBytes;                             // available bytes in stream
-    static bool     f_tmr_1s;
     static bool     f_stream;                                   // first audio data received
     static bool     firstBytes;
     static uint32_t byteCounter;                                // count received data
     static size_t   chunkSize = 0;
-    static uint32_t tmr_1s;                                     // timer 1 sec
-    static uint32_t loopCnt;                                    // count loops if clientbuffer is empty
     static uint16_t ID3WritePtr;
     static uint16_t ID3ReadPtr;
     static uint8_t* ID3Buff;
@@ -3099,10 +3067,8 @@ void Audio::processWebStreamHLS() {
         f_stream = false;
         byteCounter = 0;
         chunkSize = 0;
-        loopCnt = 0;
         ID3WritePtr = 0;
         ID3ReadPtr = 0;
-        tmr_1s = millis();
         m_t0 = millis();
         m_f_firstCall = false;
         firstBytes = true;
@@ -3164,34 +3130,10 @@ void Audio::processWebStreamHLS() {
         }
     }
 
-    // timer, triggers every second - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if((tmr_1s + 1000) < millis()) {
-        f_tmr_1s = true;                                        // flag will be set every second for one loop only
-        tmr_1s = millis();
+    // if the buffer is often almost empty issue a warning or try a new connection - - - - - - - - - - - - - - - - - - -
+    if(f_stream){
+        if(streamDetection(availableBytes)) return;
     }
-
-    // if the buffer is often almost empty issue a warning  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() < maxFrameSize && f_stream){
-        static uint8_t cnt_slow = 0;
-        cnt_slow ++;
-        if(f_tmr_1s) {
-            if(cnt_slow > 25 && audio_info) audio_info("slow stream, dropouts are possible");
-            f_tmr_1s = false;
-            cnt_slow = 0;
-        }
-    }
-
-    // if the buffer can't filled for several seconds try a new connection  - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream && !availableBytes){
-        loopCnt++;
-        if(loopCnt > 200000) {              // wait several seconds
-            loopCnt = 0;
-            AUDIO_INFO("Stream lost -> try new connection");
-            httpPrint(m_lastHost);
-            return;
-        }
-    }
-    if(availableBytes) loopCnt = 0;
 
     if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
         f_stream = true;  // ready to play the audio data
@@ -3204,7 +3146,7 @@ void Audio::processWebStreamHLS() {
     if(f_stream){
         static uint8_t cnt = 0;
         cnt++;
-        if(cnt == 1){playAudioData(); cnt = 0;}
+        if(cnt == 3){playAudioData(); cnt = 0;} // aac only
     }
     return;
 }
@@ -4898,13 +4840,14 @@ boolean Audio::streamDetection(uint32_t bytesAvail){
         cnt_slow = 0;
     }
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) cnt_slow++;
+    if(InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return false; // enough data available to play
 
     // if no audio data is received within three seconds, a new connection attempt is started.
     if(bytesAvail) {tmr_lost = millis() + 1000; cnt_lost = 0;}
-    if(tmr_lost < millis()){  // 3s no data?
+    if(tmr_lost < millis()){
         cnt_lost++;
         tmr_lost = millis() + 1000;
-        if(cnt_lost == 3){
+        if(cnt_lost == 5){ // 5s no data?
             cnt_lost = 0;
             AUDIO_INFO("Stream lost -> try new connection");
             connecttohost(m_lastHost);
