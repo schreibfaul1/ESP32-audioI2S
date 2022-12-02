@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Nov 29,2022
+ *  Updated on: Dec 02,2022
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -249,7 +249,6 @@ private:
     bool setBitrate(int br);
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
-    void playI2Sremains();
     int32_t Gain(int16_t s[2]);
     bool fill_InputBuf();
     void showstreamtitle(const char* ml);

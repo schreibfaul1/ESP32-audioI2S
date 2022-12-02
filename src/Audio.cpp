@@ -1,10 +1,10 @@
-/*
+/*7d
  * Audio.cpp
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7c
- *  Updated on: Nov 29.2022
+ *  Version 2.0.7d
+ *  Updated on: Dec 02.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -302,7 +302,6 @@ Audio::~Audio() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
-    stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
@@ -317,7 +316,6 @@ void Audio::setDefaults() {
     clientsecure.stop();
     clientsecure.flush();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
-    playI2Sremains();
     ts_parsePacket(0, 0, 0); // reset ts routine
 
     AUDIO_INFO("buffers freed, free Heap: %u bytes", ESP.getFreeHeap());
@@ -2072,20 +2070,6 @@ uint32_t Audio::stopSong() {
     return pos;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::playI2Sremains() { // returns true if all dma_buffs flushed
-    if(!getSampleRate()) setSampleRate(96000);
-    if(!getChannels()) setChannels(2);
-    if(getBitsPerSample() > 8) memset(m_outBuff,   0, sizeof(m_outBuff));     //Clear OutputBuffer (signed)
-    else                       memset(m_outBuff, 128, sizeof(m_outBuff));     //Clear OutputBuffer (unsigned, PCM 8u)
-
-    m_validSamples = m_i2s_config.dma_buf_len * m_i2s_config.dma_buf_count;
-    while(m_validSamples) {
-        playChunk();
-    }
-    i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
-    return;
-}
-//---------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
     bool retVal = false;
     if(getDatamode() == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM) {
@@ -2731,7 +2715,6 @@ void Audio::processLocalFile() {
                 if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
             }
         }
-        playI2Sremains();
 
         if(m_f_loop  && f_stream){  //eof
             AUDIO_INFO("loop from: %u to: %u", getFilePos(), m_audioDataStart); //TEST loop
@@ -2756,7 +2739,11 @@ void Audio::processLocalFile() {
         char *afn =strdup(audiofile.name()); // store temporary the name
 #endif
 
-        stopSong();
+        m_f_running = false;
+        m_streamType = ST_NONE;
+        audiofile.close();
+        AUDIO_INFO("Closing audio file");
+
         if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
@@ -2917,7 +2904,6 @@ void Audio::processWebFile() {
                 if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
             }
         }
-        playI2Sremains();
         stopSong(); // Correct close when play known length sound #74 and before callback #11
         if(m_f_tts){
             AUDIO_INFO("End of speech: \"%s\"", m_lastHost);
