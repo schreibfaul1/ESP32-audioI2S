@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7d
- *  Updated on: Dec 02.2022
+ *  Version 2.0.7e
+ *  Updated on: Dec 04.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -707,7 +707,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     char* afn = NULL;  // audioFileName
 
 #ifdef SDFATFS_USED
-    audiofile.getName(m_chbuf, sizeof(m_chbuf));
+    audiofile.getName(m_chbuf, m_chbufSize); // #426
     afn = strdup(m_chbuf);
 #else
     afn = strdup(audiofile.name());
@@ -2733,7 +2733,7 @@ void Audio::processLocalFile() {
         } //TEST loop
 
 #ifdef SDFATFS_USED
-        audiofile.getName(m_chbuf, sizeof(m_chbuf));
+        audiofile.getName(m_chbuf, m_chbufSize); // #426
         char *afn =strdup(m_chbuf);
 #else
         char *afn =strdup(audiofile.name()); // store temporary the name
@@ -4826,10 +4826,10 @@ boolean Audio::streamDetection(uint32_t bytesAvail){
         cnt_slow = 0;
     }
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) cnt_slow++;
+    if(bytesAvail) {tmr_lost = millis() + 1000; cnt_lost = 0;}
     if(InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return false; // enough data available to play
 
     // if no audio data is received within three seconds, a new connection attempt is started.
-    if(bytesAvail) {tmr_lost = millis() + 1000; cnt_lost = 0;}
     if(tmr_lost < millis()){
         cnt_lost++;
         tmr_lost = millis() + 1000;
