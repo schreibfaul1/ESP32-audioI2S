@@ -74,6 +74,9 @@ void audioTask(void *parameter) {
             }
         }
         audio.loop();
+        if (!audio.isRunning()) {
+          sleep(1);
+        }
     }
 }
 
