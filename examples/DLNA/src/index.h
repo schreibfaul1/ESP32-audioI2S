@@ -2,7 +2,7 @@
  *  index.h
  *
  *  Created on: 13.12.2022
- *  Updated on:
+ *  Updated on: 20.12.2022
  *      Author: Wolle
  *
  *  ESP32 - DLNA
@@ -107,7 +107,7 @@ function connect() {
         if (n >= 0) {
             var msg  = socketMsg.substring(0, n)
             var val  = socketMsg.substring(n + 1)
-//          console.log("para ",msg, " val ",val)
+        // console.log("para ",msg, " val ",val)
         }
         else {
           msg = socketMsg
@@ -118,13 +118,15 @@ function connect() {
                                     break
             case "DLNA_Names":      showServer(val)
                                     break
-            case "Level0":          show_DLNA_Content(val, 0)
-                                    break
             case "Level1":          show_DLNA_Content(val, 1)
                                     break
             case "Level2":          show_DLNA_Content(val, 2)
                                     break
             case "Level3":          show_DLNA_Content(val, 3)
+                                    break
+            case "Level4":          show_DLNA_Content(val, 4)
+                                    break
+            case "Level5":          show_DLNA_Content(val, 5)
                                     break
             default:                console.log('unknown message', msg, val)
         }
@@ -167,10 +169,11 @@ function showServer(val){
 
 function show_DLNA_Content(val, level){
     var select
-    if(level == 0) select = document.getElementById('level1')
-    if(level == 1) select = document.getElementById('level2')
-    if(level == 2) select = document.getElementById('level3')
-    if(level == 3) select = document.getElementById('level4')
+    if(level == 1) select = document.getElementById('level1')
+    if(level == 2) select = document.getElementById('level2')
+    if(level == 3) select = document.getElementById('level3')
+    if(level == 4) select = document.getElementById('level4')
+    if(level == 5) select = document.getElementById('level5')
     content =JSON.parse(val)
     //console.log(ct[1].name)
     select.options.length = 0;
@@ -184,11 +187,11 @@ function show_DLNA_Content(val, level){
             var n
             var c
             if(content[i].isDir == true){
-                n = content[i].name + ' <DIR>';
+                n = content[i].name.concat('\xa0\xa0', '<DIR>'); // more than one space
                 c = 'D=' + content[i].id // is directory
             }
             else{
-                n = content[i].name + ' ' + content[i].size;
+                n = content[i].name + '\xa0\xa0' + content[i].size;
                 c = 'F=' + content[i].id // is file
             }
             opt.value = c
@@ -198,39 +201,49 @@ function show_DLNA_Content(val, level){
     }
 }
 
-function selectserver (presctrl) { // preset, select a server
+function selectserver (presctrl) { // preset, select a server, root, level0
     socket.send('DLNA_getContent0=' + presctrl.value)
     select = document.getElementById('level1'); select.options.length = 0; // clear next level
     select = document.getElementById('level2'); select.options.length = 0;
     select = document.getElementById('level3'); select.options.length = 0;
     select = document.getElementById('level4'); select.options.length = 0;
+    select = document.getElementById('level5'); select.options.length = 0;
     console.log('DLNA_getContent0=' + presctrl.value)
 }
 
-function select_l0 (presctrl) { // preset, select root
+function select_l1 (presctrl) { // preset, select root
     socket.send('DLNA_getContent1=' + presctrl.value)
     select = document.getElementById('level2'); select.options.length = 0; // clear next level
     select = document.getElementById('level3'); select.options.length = 0;
     select = document.getElementById('level4'); select.options.length = 0;
+    select = document.getElementById('level5'); select.options.length = 0;
     console.log('DLNA_getContent1=' + presctrl.value)
 }
 
-function select_l1 (presctrl) { // preset, select level 1
+function select_l2 (presctrl) { // preset, select level 1
     socket.send('DLNA_getContent2=' + presctrl.value)
     select = document.getElementById('level3'); select.options.length = 0;
     select = document.getElementById('level4'); select.options.length = 0;
+    select = document.getElementById('level5'); select.options.length = 0;
     console.log('DLNA_getContent2=' + presctrl.value)
 }
 
-function select_l2 (presctrl) { // preset, select level 2
+function select_l3 (presctrl) { // preset, select level 2
     socket.send('DLNA_getContent3=' + presctrl.value)
     select = document.getElementById('level4'); select.options.length = 0;
+    select = document.getElementById('level5'); select.options.length = 0;
     console.log('DLNA_getContent3=' + presctrl.value)
  }
 
- function select_l3 (presctrl) { // preset, select level 3
+ function select_l4 (presctrl) { // preset, select level 3
     socket.send('DLNA_getContent4=' + presctrl.value)
+    select = document.getElementById('level5'); select.options.length = 0;
     console.log('DLNA_getContent4=' + presctrl.value)
+ }
+
+ function select_l5 (presctrl) { // preset, select level 4
+    socket.send('DLNA_getContent5=' + presctrl.value)
+    console.log('DLNA_getContent5=' + presctrl.value)
  }
 
 </script>
@@ -246,16 +259,19 @@ function select_l2 (presctrl) { // preset, select level 2
             <select class="boxstyle" style="width: 100%;" onchange="selectserver(this)" id="server">
                 <option value="-1">Select a DLNA Server here</option>
             </select>
-            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l0(this)" id="level1">
+            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l1(this)" id="level1">
                  <option value="-1"> </option>
             </select>
-            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l1(this)" id="level2">
+            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l2(this)" id="level2">
                 <option value="-1"> </option>
             </select>
-            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l2(this)" id="level3">
+            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l3(this)" id="level3">
                 <option value="-1"> </option>
             </select>
-            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l3(this)" id="level4">
+            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l4(this)" id="level4">
+                <option value="-1"> </option>
+            </select>
+            <select class="boxstyle" style="width: 100%; margin-top: 5px;" onchange="select_l5(this)" id="level5">
                 <option value="-1"> </option>
             </select>
         </div>

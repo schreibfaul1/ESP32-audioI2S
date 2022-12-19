@@ -14,8 +14,8 @@ using namespace std;
 #define I2S_LRC       26
 
 
-char SSID[] = "*****";
-char PASS[] = "*****";
+char SSID[] = "Wolles-FRITZBOX";
+char PASS[] = "40441061073895958449";
 
 
 
@@ -51,6 +51,7 @@ void DLNA_showServer(){ // Show connection details of all discovered, usable med
         if(i < numServers - 1) msg += ',';
         names.push_back(srv.friendlyName);
     }
+    log_i("msg %s", msg.c_str());
     webSrv.send(msg);
 }
 void DLNA_browseServer(String objectId, uint8_t level){
@@ -69,7 +70,7 @@ void DLNA_browseServer(String objectId, uint8_t level){
         log_i("no content!"); // then the directory is empty
         return;
     }
-    log_i("objectID: %s", objectId.c_str());
+    log_v("objectID: %s", objectId.c_str());
     for (int i = 0; i < browseResult.size(); i++){
         object = browseResult[i];
         myObject[i]["name"]= object.name;
@@ -84,12 +85,13 @@ void DLNA_browseServer(String objectId, uint8_t level){
         }
         myObject[i]["size"] = (uint32_t)object.size;
         myObject[i]["uri"]  = object.id;
-        log_i("objectName %s", browseResult[i].name.c_str());
-        log_i("objectId %s", browseResult[i].artist.c_str());
+        log_v("objectName %s", browseResult[i].name.c_str());
+        log_v("objectId %s", browseResult[i].artist.c_str());
     }
+    level++;
     String msg = "Level" + String(level,10) + "=" + JSON.stringify(myObject);
 
-    log_i("msg = %s", msg.c_str());
+    log_v("msg = %s", msg.c_str());
     webSrv.send(msg);
     browseResult.clear();
 }
@@ -97,15 +99,15 @@ void DLNA_browseServer(String objectId, uint8_t level){
 void DLNA_getFileItems(String uri){
     soapObjectVect_t browseResult;
 
-    log_i("uri: %s", uri.c_str());
-    log_w("downloadIP: %s", media_downloadIP.c_str());
-    log_w("downloadport: %d", media_downloadPort);
+    log_v("uri: %s", uri.c_str());
+    log_v("downloadIP: %s", media_downloadIP.c_str());
+    log_v("downloadport: %d", media_downloadPort);
     String URL = "http://" + media_downloadIP + ":" + media_downloadPort + "/" + uri;
     log_i("URL=%s", URL.c_str());
     audio.connecttohost(URL.c_str());
 }
 void DLNA_showContent(String objectId, uint8_t level){
-    log_i("obkId=%s", objectId.c_str());
+    log_v("obkId=%s", objectId.c_str());
     if(level == 0){
         DLNA_browseServer(objectId, level);
     }
@@ -157,6 +159,7 @@ void WEBSRV_onCommand(const String cmd, const String param, const String arg){  
     if(cmd == "DLNA_getContent2"){DLNA_showContent(param, 2); return;} // search for level 2 content
     if(cmd == "DLNA_getContent3"){DLNA_showContent(param, 3); return;} // search for level 3 content
     if(cmd == "DLNA_getContent4"){DLNA_showContent(param, 4); return;} // search for level 4 content
+    if(cmd == "DLNA_getContent5"){DLNA_showContent(param, 5); return;} // search for level 5 content
     log_e("unknown HTMLcommand %s, param=%s", cmd.c_str(), param.c_str());
 }
 void WEBSRV_onRequest(const String request, uint32_t contentLength){
