@@ -4021,7 +4021,7 @@ bool Audio::setTimeOffset(int sec){
     uint32_t endAB   = m_audioDataStart + m_audioDataSize;  // audioblock end
 
     if(m_codec == CODEC_MP3 || m_codec == CODEC_AAC || m_codec == CODEC_WAV || m_codec == CODEC_FLAC){
-        int32_t pos = getFilePos();
+        int32_t pos = getFilePos() - inBufferFilled();
         pos += offset;
         if(pos <  (int32_t)startAB) pos = startAB;
         if(pos >= (int32_t)endAB)   pos = endAB;
