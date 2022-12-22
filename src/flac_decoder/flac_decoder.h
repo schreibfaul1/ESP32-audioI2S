@@ -20,9 +20,6 @@
 
 #define MAX_CHANNELS 2
 #define MAX_BLOCKSIZE 8192
-#define APLL_DISABLE 0
-#define EXTERNAL_I2S  0
-
 
 typedef struct FLACsubFramesBuff_t{
     int32_t samplesBuffer[MAX_CHANNELS][MAX_BLOCKSIZE];
