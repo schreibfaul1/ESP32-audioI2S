@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.05.2022
+ *  Updated on: 22.12.2022
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -98,11 +98,11 @@ inline int CLZ(int x){
     int numZeros;
     if(!x) return 32; /* count leading zeros with binary search (function should be 17 ARM instructions total) */
     numZeros = 1;
-    if (!((unsigned int)x >> 16))    { numZeros += 16; x <<= 16; }
-    if (!((unsigned int)x >> 24))    { numZeros +=  8; x <<=  8; }
-    if (!((unsigned int)x >> 28))    { numZeros +=  4; x <<=  4; }
-    if (!((unsigned int)x >> 30))    { numZeros +=  2; x <<=  2; }
-    numZeros -= ((unsigned int)x >> 31);
+    if (!((uint32_t)x >> 16))    { numZeros += 16; x <<= 16; }
+    if (!((uint32_t)x >> 24))    { numZeros +=  8; x <<=  8; }
+    if (!((uint32_t)x >> 28))    { numZeros +=  4; x <<=  4; }
+    if (!((uint32_t)x >> 30))    { numZeros +=  2; x <<=  2; }
+    numZeros -= ((uint32_t)x >> 31);
     return numZeros;
 #endif
 }
@@ -2498,7 +2498,7 @@ int DecodeProgramConfigElement(uint8_t idx)
  **********************************************************************************************************************/
 int DecodeFillElement()
 {
-    unsigned int fillCount;
+    uint32_t fillCount;
     uint8_t *fillBuf;
 
     fillCount = GetBits(4);
@@ -3279,7 +3279,7 @@ void UnpackZeros(int nVals, int *coef)
  **********************************************************************************************************************/
 void UnpackQuads(int cb, int nVals, int *coef)
 {
-    int w, x, y, z, maxBits, nCodeBits, nSignBits, val;
+    int32_t w, x, y, z, maxBits, nCodeBits, nSignBits, val;
     uint32_t bitBuf;
 
     maxBits = huffTabSpecInfo[cb - HUFFTAB_SPEC_OFFSET].maxBits + 4;
@@ -3326,7 +3326,7 @@ void UnpackQuads(int cb, int nVals, int *coef)
  **********************************************************************************************************************/
 void UnpackPairsNoEsc(int cb, int nVals, int *coef)
 {
-    int y, z, maxBits, nCodeBits, nSignBits, val;
+    int32_t y, z, maxBits, nCodeBits, nSignBits, val;
     uint32_t bitBuf;
 
     maxBits = huffTabSpecInfo[cb - HUFFTAB_SPEC_OFFSET].maxBits + 2;
@@ -3368,7 +3368,7 @@ void UnpackPairsNoEsc(int cb, int nVals, int *coef)
  **********************************************************************************************************************/
 void UnpackPairsEsc(int cb, int nVals, int *coef)
 {
-    int y, z, maxBits, nCodeBits, nSignBits, n, val;
+    int32_t y, z, maxBits, nCodeBits, nSignBits, n, val;
     uint32_t bitBuf;
 
     maxBits = huffTabSpecInfo[cb - HUFFTAB_SPEC_OFFSET].maxBits + 2;
@@ -4171,7 +4171,7 @@ void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbC
  **********************************************************************************************************************/
 int DecodeOneScaleFactor()
 {
-    int nBits, val;
+    int32_t nBits, val;
     uint32_t bitBuf;
 
     /* decode next scalefactor from bitstream */
@@ -5143,7 +5143,7 @@ int DeinterleaveShortBlocks(int ch)
  *
  * Notes:       uses simple linear congruential generator
  **********************************************************************************************************************/
-unsigned int Get32BitVal(unsigned int *last)
+uint32_t Get32BitVal(uint32_t *last)
 {
     uint32_t r = *last;
 
@@ -6302,7 +6302,7 @@ inline void RefillBitstreamCache()
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
  **********************************************************************************************************************/
-unsigned int GetBits(int nBits)
+uint32_t GetBits(int nBits)
 {
     uint32_t data, lowBits;
 
@@ -6341,7 +6341,7 @@ unsigned int GetBits(int nBits)
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
  **********************************************************************************************************************/
-unsigned int GetBitsNoAdvance(int nBits)
+uint32_t GetBitsNoAdvance(int nBits)
 {
     uint8_t *buf;
     uint32_t data, iCache;
@@ -6494,7 +6494,7 @@ int DecodeSBRBitstream(int chBase) {
         return ERR_AAC_NONE;
 
     SetBitstreamPointer(m_AACDecInfo->fillCount, m_AACDecInfo->fillBuf);
-    if(GetBits(4) != (unsigned int) m_AACDecInfo->fillExtType) return ERR_AAC_SBR_BITSTREAM;
+    if(GetBits(4) != (uint32_t) m_AACDecInfo->fillExtType) return ERR_AAC_SBR_BITSTREAM;
 
     if(m_AACDecInfo->fillExtType == EXT_SBR_DATA_CRC) m_PSInfoSBR->crcCheckWord = GetBits(10);
 
@@ -8500,10 +8500,10 @@ void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int 
  *                if there are no codes at nBits, then we just keep << 1 each time
  *                  (since count[nBits] = 0)
  **********************************************************************************************************************/
-int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, unsigned int bitBuf,
+int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf,
         signed int *val) {
 
-    unsigned int count, start, shift, t;
+    uint32_t count, start, shift, t;
     const uint8_t *countPtr;
     const signed int /*short*/*map;
 
@@ -8539,8 +8539,8 @@ int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo
  **********************************************************************************************************************/
 int DecodeOneSymbol(int huffTabIndex) {
 
-    int nBits, val;
-    unsigned int bitBuf;
+    int32_t nBits, val;
+    uint32_t bitBuf;
     const HuffInfo_t *hi;
 
     hi = &(huffTabSBRInfo[huffTabIndex]);

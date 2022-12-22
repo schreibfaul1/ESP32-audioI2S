@@ -122,7 +122,7 @@ typedef struct _AACDecInfo_t {
 
 typedef struct _aac_BitStreamInfo_t {
     uint8_t *bytePtr;
-    unsigned int iCache;
+    uint32_t iCache;
     int cachedBits;
     int nBytes;
 } aac_BitStreamInfo_t;
@@ -130,7 +130,7 @@ typedef struct _aac_BitStreamInfo_t {
 typedef union _U64 {
     int64_t w64;
     struct {
-        unsigned int lo32;
+        uint32_t lo32;
         signed int  hi32;
     } r;
 } U64;
@@ -487,7 +487,7 @@ void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef);
 void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi);
 void DecodeICS(int ch);
 int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch);
-int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabInfo, unsigned int bitBuf, int32_t *val);
+int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val);
 int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail);
 int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail);
 int GetNumChannelsADIF(int nPCE);
@@ -498,7 +498,7 @@ int PrepareRawBlock();
 int DequantBlock(int *inbuf, int nSamps, int scale);
 int AACDequantize(int ch);
 int DeinterleaveShortBlocks(int ch);
-unsigned int Get32BitVal(unsigned int *last);
+uint32_t Get32BitVal(uint32_t *last);
 int InvRootR(int r);
 int ScaleNoiseVector(int *coef, int nVals, int sf);
 void GenerateNoiseVector(int *coef, int *last, int nVals);
@@ -519,8 +519,8 @@ void CVKernel1(int *XBuf, int *accBuf);
 void CVKernel2(int *XBuf, int *accBuf);
 void SetBitstreamPointer(int nBytes, uint8_t *buf);
 inline void RefillBitstreamCache();
-unsigned int GetBits(int nBits);
-unsigned int GetBitsNoAdvance(int nBits);
+uint32_t GetBits(int nBits);
+uint32_t GetBitsNoAdvance(int nBits);
 void AdvanceBitstream(int nBits);
 int CalcBitsUsed(uint8_t *startBuf, int startOffset);
 void ByteAlignBitstream();
@@ -557,7 +557,7 @@ int CalcCovariance1(int *XBuf, int *p01reN, int *p01imN, int *p12reN, int *p12im
 int CalcCovariance2(int *XBuf, int *p02reN, int *p02imN);
 void CalcLPCoefs(int *XBuf, int *a0re, int *a0im, int *a1re, int *a1im, int gb);
 void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch);
-int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, unsigned int bitBuf, signed int *val);
+int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, signed int *val);
 int DecodeOneSymbol(int huffTabIndex);
 int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant);
 void DequantizeNoise(int nBands, int8_t *noiseQuant, int *noiseDequant);
