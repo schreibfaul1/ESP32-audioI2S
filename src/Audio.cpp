@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 2.0.7f
- *  Updated on: Dec 16.2022
+ *  Updated on: Dec 22.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2651,7 +2651,7 @@ void Audio::processLocalFile() {
 
     availableBytes = 16 * 1024; // set some large value
 
-    availableBytes = min(availableBytes, InBuff.writeSpace());
+    availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
     if(m_contentlength){
         if(m_contentlength > getFilePos()) availableBytes = min(availableBytes, m_contentlength - getFilePos());
@@ -2805,7 +2805,7 @@ void Audio::processWebStream() {
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(availableBytes) {
-        availableBytes = min(availableBytes, InBuff.writeSpace());
+        availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
         int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
 
         if(bytesAddedToBuffer > 0) {
@@ -2869,7 +2869,7 @@ void Audio::processWebFile() {
         if(streamDetection(availableBytes)) return;
     }
 
-    availableBytes = min(InBuff.writeSpace(), availableBytes);
+    availableBytes = min((uint32_t)InBuff.writeSpace(), availableBytes);
     availableBytes = min(m_contentlength - byteCounter, availableBytes);
     if(m_audioDataSize) availableBytes = min(m_audioDataSize - (byteCounter - m_audioDataStart), availableBytes);
 
