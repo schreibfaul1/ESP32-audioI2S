@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7f
- *  Updated on: Dec 22.2022
+ *  Version 2.0.7h
+ *  Updated on: Dec 27.2022
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4002,6 +4002,21 @@ bool Audio::setAudioPlayPosition(uint16_t sec){
     return setFilePos(filepos);
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setVolumeSteps(uint8_t steps) {
+    m_vol_steps = steps;
+    if (steps < 1)
+        m_vol_step_div = 64; /* avoid div-by-zero :-) */
+    else
+        m_vol_step_div = steps * steps;
+    log_i("m_vol_step_div: %d", m_vol_step_div);
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint8_t Audio::maxVolume() {
+    if (m_vol_steps)
+        return m_vol_steps;
+    return 21;
+};
+//---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getTotalPlayingTime() {
     // Is set to zero by a connectToXXX() and starts as soon as the first audio data is available,
     // the time counting is not interrupted by a 'pause / resume' and is not reset by a fileloop
@@ -4200,11 +4215,20 @@ void Audio::setBalance(int8_t bal){ // bal -16...16
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setVolume(uint8_t vol) { // vol 22 steps, 0...21
+    if (m_vol_steps) {
+        if (vol > m_vol_steps) vol = m_vol_steps;
+        m_vol = vol * vol;
+        return;
+    }
     if(vol > 21) vol = 21;
     m_vol = volumetable[vol];
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getVolume() {
+    if (m_vol_steps) {
+        uint8_t vol = sqrt(m_vol);
+        return vol;
+    }
     for(uint8_t i = 0; i < 22; i++) {
         if(volumetable[i] == m_vol) return i;
     }
@@ -4218,20 +4242,19 @@ uint8_t Audio::getI2sPort() {
 //---------------------------------------------------------------------------------------------------------------------
 int32_t Audio::Gain(int16_t s[2]) {
     int32_t v[2];
-    float step = (float)m_vol /64;
-    uint8_t l = 0, r = 0;
+    int32_t l = m_vol, r = m_vol;
 
+    /* balance is left -16...+16 right */
+    /* TODO: logarithmic scaling of balance, too? */
     if(m_balance < 0){
-        step = step * (float)(abs(m_balance) * 4);
-        l = (uint8_t)(step);
-    }
-    if(m_balance > 0){
-        step = step * m_balance * 4;
-        r = (uint8_t)(step);
+        r -= (int32_t)m_vol * abs(m_balance) / 16;
+    } else if(m_balance > 0){
+        l -= (int32_t)m_vol * abs(m_balance) / 16;
     }
 
-    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * (m_vol - l)) >> 6;
-    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * (m_vol - r)) >> 6;
+    /* important: these multiplications must all be signed ints, or the result will be invalid */
+    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div;
+    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div;
 
     return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
 }
