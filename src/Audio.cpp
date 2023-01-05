@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7h
- *  Updated on: Dec 27.2022
+ *  Version 2.0.7i
+ *  Updated on: Jan 05.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -5009,7 +5009,7 @@ uint32_t Audio::mp3_correctResumeFilePos(uint32_t resumeFilePos){
         p2 = audiofile.read();
         pos++;
     }
-
+    MP3Decoder_ClearBuffer();
     if(found) return (pos - 2);
     return m_audioDataStart;
 }
