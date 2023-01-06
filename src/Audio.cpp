@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7i
- *  Updated on: Jan 05.2023
+ *  Version 2.0.7j
+ *  Updated on: Jan 06.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3994,11 +3994,8 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
 bool Audio::setAudioPlayPosition(uint16_t sec){
     // Jump to an absolute position in time within an audio file
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
-    // works only with format mp3 or wav
-    if(m_codec == CODEC_M4A)  return false;
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
     uint32_t filepos = m_audioDataStart + (m_avr_bitrate * sec / 8);
-
     return setFilePos(filepos);
 }
 //---------------------------------------------------------------------------------------------------------------------
