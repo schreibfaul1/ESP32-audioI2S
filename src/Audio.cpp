@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7j
- *  Updated on: Jan 06.2023
+ *  Version 2.0.7k
+ *  Updated on: Jan 08.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -301,6 +301,7 @@ Audio::~Audio() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
+    stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
@@ -3799,7 +3800,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         if(m_codec == CODEC_FLAC){
             m_validSamples = FLACGetOutputSamps() / getChannels();
-            char* st = FLACgetStreanTitle();
+            char* st = FLACgetStreamTitle();
             if(st){
                 AUDIO_INFO(st);
                 if(audio_showstreamtitle) audio_showstreamtitle(st);
