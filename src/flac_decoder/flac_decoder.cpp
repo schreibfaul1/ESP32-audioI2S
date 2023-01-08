@@ -176,7 +176,7 @@ boolean FLACFindStreamTitle(unsigned char* buf, int nBytes){
     return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
-char* FLACgetStreanTitle(){
+char* FLACgetStreamTitle(){
     if(m_newSt){
         m_newSt = false;
         return m_streamTitle;
