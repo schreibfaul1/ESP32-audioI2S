@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Jan 08,2023
+ *  Updated on: Jan 09,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -164,7 +164,6 @@ public:
     ~Audio();
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
-
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttomarytts(const char* speech, const char* lang, const char* voice);
     bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
@@ -465,6 +464,7 @@ private:
     WiFiClient            client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
+    SemaphoreHandle_t     mutex_audio;
     i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
     i2s_pin_config_t      m_pin_config = {};
     std::vector<char*>    m_playlistContent; // m3u8 playlist buffer

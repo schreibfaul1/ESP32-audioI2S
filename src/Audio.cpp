@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.7k
- *  Updated on: Jan 08.2023
+ *  Version 2.0.8
+ *  Updated on: Jan 09.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -149,6 +149,8 @@ uint32_t AudioBuffer::getReadPos() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC_CHANNEL_BOTH_EN */, uint8_t i2sPort) {
+
+    mutex_audio = xSemaphoreCreateMutex();
 
     //    build-in-DAC works only with ESP32 (ESP32-S3 has no build-in-DAC)
     //    build-in-DAC last working Arduino Version: 2.0.0-RC2
@@ -298,6 +300,7 @@ Audio::~Audio() {
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
     if(m_chbuf) {free(m_chbuf); m_chbuf = NULL;}
+    vSemaphoreDelete(mutex_audio);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
@@ -369,8 +372,11 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl){
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     // user and pwd for authentification only, can be empty
 
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
+
     if(host == NULL) {
         AUDIO_INFO("Hostaddress is empty");
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -378,6 +384,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(lenHost >= 512 - 10) {
         AUDIO_INFO("Hostaddress is too long");
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -515,6 +522,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(extension) {free(extension); extension = NULL;}
     if(l_host   ) {free(l_host);    l_host    = NULL;}
     if(h_host   ) {free(h_host);    h_host    = NULL;}
+    xSemaphoreGiveRecursive(mutex_audio);
     return res;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -671,7 +679,12 @@ bool Audio::connecttoSD(const char* path, uint32_t resumeFilePos) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
-    if(strlen(path)>255) return false;
+    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+
+    if(strlen(path)>255){
+        xSemaphoreGive(mutex_audio);
+        return false;
+    }
 
     m_resumeFilePos = resumeFilePos;
     char audioName[256];
@@ -698,6 +711,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
     if(!audiofile) {
         if(audio_info) {vTaskDelay(2); audio_info("Failed to open file for reading");}
+        xSemaphoreGive(mutex_audio);
         return false;
     }
 
@@ -731,10 +745,13 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     bool ret = initializeDecoder();
     if(ret) m_f_running = true;
     else audiofile.close();
+    xSemaphoreGive(mutex_audio);
     return ret;
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
+
+    xSemaphoreTake(mutex_audio, portMAX_DELAY);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
@@ -744,7 +761,11 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     uint16_t speechBuffLen = speechLen + 300;
     memcpy(m_lastHost, speech, 256);
     char* speechBuff = (char*)malloc(speechBuffLen);
-    if(!speechBuff) {log_e("out of memory"); return false;}
+    if(!speechBuff) {
+        log_e("out of memory");
+        xSemaphoreGive(mutex_audio);
+        return false;
+    }
     memcpy(speechBuff, speech, speechLen);
     speechBuff[speechLen] = '\0';
     urlencode(speechBuff, speechBuffLen);
@@ -769,6 +790,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     _client = static_cast<WiFiClient*>(&client);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
+        xSemaphoreGive(mutex_audio);
         return false;
     }
     _client->print(resp);
@@ -778,7 +800,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     m_f_ssl = false;
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
-
+    xSemaphoreGive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -822,6 +844,8 @@ bool Audio::connecttomarytts(const char* speech, const char* lang, const char* v
     //          bits1-hsmm                   de female hmm
     //          bits1                        de female unitselection general
 
+    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+
     setDefaults();
     char host[] = "mary.dfki.de";
     char path[] = "/process";
@@ -831,7 +855,10 @@ bool Audio::connecttomarytts(const char* speech, const char* lang, const char* v
     uint16_t speechBuffLen = speechLen + 300;
     memcpy(m_lastHost, speech, 256);
     char* speechBuff = (char*)malloc(speechBuffLen);
-    if(!speechBuff) {log_e("out of memory"); return false;}
+    if(!speechBuff) {log_e("out of memory");
+        xSemaphoreGive(mutex_audio);
+        return false;
+    }
     memcpy(speechBuff, speech, speechLen);
     speechBuff[speechLen] = '\0';
     urlencode(speechBuff, speechBuffLen);
@@ -861,6 +888,7 @@ bool Audio::connecttomarytts(const char* speech, const char* lang, const char* v
     _client = static_cast<WiFiClient*>(&client);
     if(!_client->connect(host, port)) {
         log_e("Connection failed");
+        xSemaphoreGive(mutex_audio);
         return false;
     }
     _client->print(resp);
@@ -871,6 +899,7 @@ bool Audio::connecttomarytts(const char* speech, const char* lang, const char* v
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
 
+    xSemaphoreGive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2071,6 +2100,7 @@ uint32_t Audio::stopSong() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
+    xSemaphoreTake(mutex_audio, portMAX_DELAY);
     bool retVal = false;
     if(getDatamode() == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM) {
         m_f_running = !m_f_running;
@@ -2080,6 +2110,7 @@ bool Audio::pauseResume() {
             i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
         }
     }
+    xSemaphoreGive(mutex_audio);
     return retVal;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2172,6 +2203,8 @@ void Audio::loop() {
 
     if(!m_f_running) return;
 
+    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+
     if(m_playlistFormat != FORMAT_M3U8){ // normal process
         switch(getDatamode()){
             case AUDIO_LOCALFILE:
@@ -2243,6 +2276,7 @@ void Audio::loop() {
                 break;
         }
     }
+    xSemaphoreGive(mutex_audio);
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::readPlayListData() {
@@ -4044,10 +4078,12 @@ bool Audio::setTimeOffset(int sec){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
     if(!audiofile) return false;
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
     if(pos > m_file_size) pos = m_file_size;
     m_resumeFilePos = pos;
+    xSemaphoreGiveRecursive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
