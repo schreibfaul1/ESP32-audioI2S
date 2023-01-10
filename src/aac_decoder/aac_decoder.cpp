@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 22.12.2022
+ *  Updated on: 09.01.2023
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -1978,6 +1978,7 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
 
     do {
         /* parse next syntactic element */
+        if(bitsAvail < 0) return ERR_AAC_INDATA_UNDERFLOW;
         err = DecodeNextElement(&inptr, &bitOffset, &bitsAvail);
         if (err)
             return err;

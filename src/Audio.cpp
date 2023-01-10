@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.8
- *  Updated on: Jan 09.2023
+ *  Version 2.0.8b
+ *  Updated on: Jan 10.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -338,6 +338,7 @@ void Audio::setDefaults() {
     m_f_m3u8data = false;                                   // set again in processM3U8entries() if necessary
     m_f_continue = false;
     m_f_ts = false;
+    m_f_m4aID3dataAreRead = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -1823,9 +1824,10 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
         }
         int m4a  = specialIndexOf(data, "M4A ", 20);
         int isom = specialIndexOf(data, "isom", 20);
+        int mp42 = specialIndexOf(data, "mp42", 20);
 
-        if((m4a !=8) && (isom != 8)){
-            log_e("subtype 'MA4 ' or 'isom' expected, but found '%s '", (data + 8));
+        if((m4a !=8) && (isom != 8) && (mp42 != 8)){
+            log_e("subtype 'MA4 ', 'isom' or 'mp42' expected, but found '%s '", (data + 8));
             stopSong();
             return -1;
         }
@@ -1975,30 +1977,34 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
         const char info[12][6] = { "nam\0", "ART\0", "alb\0", "too\0",  "cmt\0",  "wrt\0",
                                    "tmpo\0", "trkn\0","day\0", "cpil\0", "aART\0", "gen\0"};
         int offset;
-        for(int i=0; i < 12; i++){
-            offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
-            if(offset>0) {
-                offset += 19; if(*(data + offset) == 0) offset ++;
-                char value[256];
-                size_t tmp = strlen((const char*)data + offset);
-                if(tmp > 254) tmp = 254;
-                memcpy(value, (data + offset), tmp);
-                value[tmp] = 0;
-                m_chbuf[0] = 0;
-                if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
-                if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
-                if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
-                if(i == 3)  sprintf(m_chbuf, "Encoder: %s", value);
-                if(i == 4)  sprintf(m_chbuf, "Comment: %s", value);
-                if(i == 5)  sprintf(m_chbuf, "Composer: %s", value);
-                if(i == 6)  sprintf(m_chbuf, "BPM: %s", value);
-                if(i == 7)  sprintf(m_chbuf, "Track Number: %s", value);
-                if(i == 8)  sprintf(m_chbuf, "Year: %s", value);
-                if(i == 9)  sprintf(m_chbuf, "Compile: %s", value);
-                if(i == 10) sprintf(m_chbuf, "Album Artist: %s", value);
-                if(i == 11) sprintf(m_chbuf, "Types of: %s", value);
-                if(m_chbuf[0] != 0) {
-                    if(audio_id3data) audio_id3data(m_chbuf);
+        // If it's a local file, the metadata has already been read, even if it comes after the audio block.
+        // In the event that they are in front of the audio block in a web stream, read them now
+        if(!m_f_m4aID3dataAreRead){
+            for(int i=0; i < 12; i++){
+                offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
+                if(offset>0) {
+                    offset += 19; if(*(data + offset) == 0) offset ++;
+                    char value[256];
+                    size_t tmp = strlen((const char*)data + offset);
+                    if(tmp > 254) tmp = 254;
+                    memcpy(value, (data + offset), tmp);
+                    value[tmp] = 0;
+                    m_chbuf[0] = 0;
+                    if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
+                    if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
+                    if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
+                    if(i == 3)  sprintf(m_chbuf, "Encoder: %s", value);
+                    if(i == 4)  sprintf(m_chbuf, "Comment: %s", value);
+                    if(i == 5)  sprintf(m_chbuf, "Composer: %s", value);
+                    if(i == 6)  sprintf(m_chbuf, "BPM: %s", value);
+                    if(i == 7)  sprintf(m_chbuf, "Track Number: %s", value);
+                    if(i == 8)  sprintf(m_chbuf, "Year: %s", value);
+                    if(i == 9)  sprintf(m_chbuf, "Compile: %s", value);
+                    if(i == 10) sprintf(m_chbuf, "Album Artist: %s", value);
+                    if(i == 11) sprintf(m_chbuf, "Types of: %s", value);
+                    if(m_chbuf[0] != 0) {
+                        if(audio_id3data) audio_id3data(m_chbuf);
+                    }
                 }
             }
         }
@@ -2680,6 +2686,8 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         byteCounter = 0;
+        if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
+        if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         return;
     }
 
@@ -4900,6 +4908,111 @@ boolean Audio::streamDetection(uint32_t bytesAvail){
     return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void Audio::seek_m4a_ilst(){
+    // ilist - item list atom, contains the metadata
+
+    /* atom hierarchy (example)_________________________________________________________________________________________
+
+    ftyp -> moov -> udta -> meta -> ilst -> data
+
+    __________________________________________________________________________________________________________________*/
+
+    struct m4a_Atom{
+        int  pos;
+        int  size;
+        char name[5];
+    } atom, at, tmp;
+
+    // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
+    auto atomItems = [&](uint32_t startPos){    // lambda, inner function
+        char tmp[5];
+        audiofile.seek(startPos);
+        audiofile.readBytes(tmp, 4);
+        atom.size = bigEndian((uint8_t*)tmp, 4);
+        if(!atom.size) atom.size = 4; // has no data, length is 0
+        audiofile.readBytes(atom.name, 4);
+        atom.name[4] = '\0';
+        atom.pos = startPos;
+        return atom;
+    };
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    boolean found      = false;
+    uint32_t seekpos   = 0;
+    uint32_t filesize  = getFileSize();
+    char name[6][5]    = {"moov", "udta", "meta", "ilst"};
+    const char info[12][6] = { "nam\0", "ART\0", "alb\0", "too\0",  "cmt\0",  "wrt\0",
+                               "tmpo\0", "trkn\0","day\0", "cpil\0", "aART\0", "gen\0"};
+
+    if(!audiofile) return; // guard
+
+    at.pos = 0;
+    at.size = filesize;
+    seekpos = 0;
+
+    for(int i = 0; i < 4; i++){
+        found = false;
+        while(seekpos < at.pos + at.size){
+            tmp = atomItems(seekpos);
+            seekpos += tmp.size;
+            if(strcmp(tmp.name, name[i]) == 0) {memcpy((void*)&at, (void*)&tmp, sizeof(tmp)); found = true;}
+            log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
+        }
+        if(!found){
+            log_w("m4a atom ilst not found");
+            audiofile.seek(0);
+            return;
+        }
+        seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
+    }
+
+    int len = tmp.size - 8;
+    if(len >1024) len = 1024;
+    log_i("found at pos %i, len %i", seekpos, len);
+
+    uint8_t* data = (uint8_t*)malloc(len);
+    if(!data){
+        log_e("out od memory");
+        audiofile.seek(0);
+        return;
+    }
+    audiofile.seek(seekpos);
+    audiofile.read(data, len);
+
+    int offset;
+    for(int i=0; i < 12; i++){
+        offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
+        if(offset>0) {
+            offset += 19; if(*(data + offset) == 0) offset ++;
+            char value[256];
+            size_t tmp = strlen((const char*)data + offset);
+            if(tmp > 254) tmp = 254;
+            memcpy(value, (data + offset), tmp);
+            value[tmp] = 0;
+            m_chbuf[0] = 0;
+            if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
+            if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
+            if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
+            if(i == 3)  sprintf(m_chbuf, "Encoder: %s", value);
+            if(i == 4)  sprintf(m_chbuf, "Comment: %s", value);
+            if(i == 5)  sprintf(m_chbuf, "Composer: %s", value);
+            if(i == 6)  sprintf(m_chbuf, "BPM: %s", value);
+            if(i == 7)  sprintf(m_chbuf, "Track Number: %s", value);
+            if(i == 8)  sprintf(m_chbuf, "Year: %s", value);
+            if(i == 9)  sprintf(m_chbuf, "Compile: %s", value);
+            if(i == 10) sprintf(m_chbuf, "Album Artist: %s", value);
+            if(i == 11) sprintf(m_chbuf, "Types of: %s", value);
+            if(m_chbuf[0] != 0) {
+                if(audio_id3data) audio_id3data(m_chbuf);
+            }
+        }
+    }
+    m_f_m4aID3dataAreRead = true;
+    if(data) free(data);
+    audiofile.seek(0);
+    return;
+}
+//----------------------------------------------------------------------------------------------------------------------
 void Audio::seek_m4a_stsz(){
     // stsz says what size each sample is in bytes. This is important for the decoder to be able to start at a chunk,
     // and then go through each sample by its size. The stsz atom can be behind the audio block. Therefore, searching
@@ -4909,7 +5022,7 @@ void Audio::seek_m4a_stsz(){
 
     ftyp -> moov -> trak -> tkhd
             free    udta    mdia -> mdhd
-            mdat            udta    hdlr
+            mdat                    hdlr
             mvhd                    minf -> smhd
                                             dinf
                                             stbl -> stsd
@@ -4931,6 +5044,7 @@ void Audio::seek_m4a_stsz(){
         audiofile.seek(startPos);
         audiofile.readBytes(tmp, 4);
         atom.size = bigEndian((uint8_t*)tmp, 4);
+        if(!atom.size) atom.size = 4; // has no data, length is 0
         audiofile.readBytes(atom.name, 4);
         atom.name[4] = '\0';
         atom.pos = startPos;
