@@ -2,7 +2,7 @@
  * Audio.h
  *
  *  Created on: Oct 28,2018
- *  Updated on: Jan 09,2023
+ *  Updated on: Jan 10,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -274,6 +274,7 @@ private:
     bool     readID3V1Tag();
     boolean  streamDetection(uint32_t bytesAvail);
     void     seek_m4a_stsz();
+    void     seek_m4a_ilst();
     uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
     uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
     uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
@@ -547,6 +548,7 @@ private:
     bool            m_f_Log = false;                // set in platformio.ini  -DAUDIO_LOG and -DCORE_DEBUG_LEVEL=3 or 4
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
+    bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
