@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.8
- *  Updated on: Jan 09.2023
+ *  Version 2.0.8a
+ *  Updated on: Jan 10.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2680,6 +2680,7 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         byteCounter = 0;
+        if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         return;
     }
 
