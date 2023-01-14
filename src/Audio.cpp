@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.8c
- *  Updated on: Jan 11.2023
+ *  Version 2.0.8d
+ *  Updated on: Jan 13.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2560,6 +2560,7 @@ const char* Audio::parsePlaylist_M3U8(){
                 strcpy(m_lastHost, tmp);
                 if(tmp){free(tmp); tmp = NULL;}
                 if(m_f_Log) log_i("redirect %s", m_playlistContent[i]);
+                _client->stop();
                 return m_playlistContent[i];                            // it's a redirection, a new m3u8 playlist
             }
 
@@ -4637,12 +4638,14 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         if(m_f_Log) log_i("Adaptation Field Length: %d", AFL);
     }
     int PLS = PUSI ? 5 : 4;     // PayLoadStart, Payload Unit Start Indicator
+    if(AFL > 0) PLS += AFL + 1; // skip adaption field
 
     if(PID == 0) {
         // Program Association Table (PAT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(m_f_Log)  log_i("PAT");
         pidsOfPMT.number = 0;
         pidOfAAC = 0;
+
         int startOfProgramNums = 8;
         int lengthOfPATValue = 4;
         int sectionLength = ((packet[PLS + 1] & 0x0F) << 8) | (packet[PLS + 2] & 0xFF);
