@@ -4,6 +4,9 @@
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
 #include "Arduino.h"
+#include <vector>
+
+
 
 enum : int8_t  {ERR_OPUS_NONE = 0,
                 ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED = -1,
@@ -26,8 +29,8 @@ uint16_t OPUSGetOutputSamps();
 char    *OPUSgetStreamTitle();
 int      OPUSFindSyncWord(unsigned char *buf, int nBytes);
 int      OPUSparseOGG(uint8_t *inbuf, int *bytesLeft);
-int      parseOpusHead(uint8_t *inbuf, int *bytesLeft);
-int      parseOpusComment(uint8_t *inbuf, int *bytesLeft);
+int      parseOpusHead(uint8_t *inbuf, int nBytes);
+int      parseOpusComment(uint8_t *inbuf, int nBytes);
 int      parseOpusFramePacket(uint8_t *inbuf, int *bytesLeft);
 
 // some helper functions

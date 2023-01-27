@@ -3,21 +3,24 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on:
+ *  Updated on: 27.01.2023
  ************************************************************************************/
 
 #include "opus_decoder.h"
 
 // global vars
-bool    f_m_magicWordFound = false;
-bool    f_m_firstPage = false;
-bool    f_m_commentHeader = false;
-bool    f_m_opusHeadWasRead = false;
-bool    f_m_nextPage = false;
-bool    f_m_newSt = false; // streamTitle
-bool    f_m_opusFramePacket = false;
-uint8_t m_channels = 0;
-char*   m_chbuf = NULL;
+bool     f_m_parseOgg = false;
+bool     f_m_subsequentPage = false;
+// bool     f_m_commentHeader = false;
+// bool     f_m_opusHeadWasRead = false;
+// bool     f_m_nextPage = false;
+bool     f_m_newSt = false; // streamTitle
+bool     f_m_opusFramePacket = false;
+uint8_t  m_channels = 0;
+uint16_t m_samplerate = 0;
+char*    m_chbuf = NULL;
+
+std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
 
 
 bool OPUSDecoder_AllocateBuffers(){
@@ -32,18 +35,14 @@ void OPUSDecoder_FreeBuffers(){
 //----------------------------------------------------------------------------------------------------------------------
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
-    if(f_m_magicWordFound  || f_m_nextPage || f_m_opusHeadWasRead){
+    log_w("f_m_parseOgg %i", f_m_parseOgg);
+    if(f_m_parseOgg == true){
+        log_i("parseogg");
         int ret = OPUSparseOGG(inbuf, bytesLeft);
+        f_m_parseOgg = false;
         return ret;
     }
-    if(f_m_firstPage){
-        int ret = parseOpusHead(inbuf, bytesLeft);
-        return ret;
-    }
-    if(f_m_commentHeader){
-        int ret = parseOpusComment(inbuf, bytesLeft);
-        return ret;
-    }
+
     if(f_m_opusFramePacket){
         int ret = parseOpusFramePacket(inbuf, bytesLeft);
 
@@ -58,7 +57,7 @@ uint8_t OPUSGetChannels(){
     return m_channels;
 }
 uint32_t OPUSGetSampRate(){
-    return 48000;
+    return m_samplerate;
 }
 uint8_t OPUSGetBitsPerSample(){
     return 16;
@@ -116,34 +115,30 @@ int parseOpusFramePacket(uint8_t *inbuf, int *bytesLeft){  // https://www.rfc-ed
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusComment(uint8_t *inbuf, int *bytesLeft){  // reference https://exiftool.org/TagNames/Vorbis.html#Comments
+int parseOpusComment(uint8_t *inbuf, int nBytes){  // reference https://exiftool.org/TagNames/Vorbis.html#Comments
                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
     int idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
-    if(idx != 0) return 0; //ERR_OPUS_DECODER_ASYNC;
+     if(idx != 0) return 0; // is not OpusTags
     char* artist = NULL;
     char* title  = NULL;
 
     uint16_t pos = 8;
-    *bytesLeft -= 8;
     uint32_t vendorLength       = *(inbuf + 11) << 24; // lengt of vendor string, e.g. Lavf58.65.101
              vendorLength      += *(inbuf + 10) << 16;
              vendorLength      += *(inbuf +  9) << 8;
              vendorLength      += *(inbuf +  8);
     pos += vendorLength + 4;
-    *bytesLeft -= (vendorLength + 4);
     uint32_t commentListLength  = *(inbuf + 3 + pos) << 24; // nr. of comment entries
              commentListLength += *(inbuf + 2 + pos) << 16;
              commentListLength += *(inbuf + 1 + pos) << 8;
              commentListLength += *(inbuf + 0 + pos);
     pos += 4;
-    *bytesLeft -= 4;
     for(int i = 0; i < commentListLength; i++){
         uint32_t commentStringLen   = *(inbuf + 3 + pos) << 24;
                  commentStringLen  += *(inbuf + 2 + pos) << 16;
                  commentStringLen  += *(inbuf + 1 + pos) << 8;
                  commentStringLen  += *(inbuf + 0 + pos);
         pos += 4;
-        *bytesLeft -= 4;
         idx = OPUS_specialIndexOf(inbuf + pos, "artist=", 10);
         if(idx == 0){ artist = strndup((const char*)(inbuf + pos + 7), commentStringLen - 7);
         }
@@ -151,7 +146,6 @@ int parseOpusComment(uint8_t *inbuf, int *bytesLeft){  // reference https://exif
         if(idx == 0){ title = strndup((const char*)(inbuf + pos + 6), commentStringLen - 6);
         }
         pos += commentStringLen;
-        *bytesLeft -= commentStringLen;
     }
     if(artist && title){
         strcpy(m_chbuf, artist);
@@ -170,17 +164,13 @@ int parseOpusComment(uint8_t *inbuf, int *bytesLeft){  // reference https://exif
     if(artist){free(artist); artist = NULL;}
     if(title) {free(title);  title = NULL;}
 
-    f_m_commentHeader = false;
-    f_m_nextPage = true;
-
-    return 0;
+    return 1;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusHead(uint8_t *inbuf, int *bytesLeft){  // reference https://wiki.xiph.org/OggOpus
+int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.org/OggOpus
 
     int idx = OPUS_specialIndexOf(inbuf, "OpusHead", 10);
-    if(idx != 0) return 0; //ERR_OPUS_DECODER_ASYNC;
-
+     if(idx != 0) return 0; //is not OpusHead
     uint8_t  version            = *(inbuf +  8); (void) version;
     uint8_t  channelCount       = *(inbuf +  9); // nr of channels
     uint16_t preSkip            = *(inbuf + 11) << 8;
@@ -199,18 +189,14 @@ int parseOpusHead(uint8_t *inbuf, int *bytesLeft){  // reference https://wiki.xi
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 
     (void)outputGain;
-    f_m_opusHeadWasRead = true; // The next Opus packet MUST contain the comment header.
 
-    f_m_firstPage = false;
-    f_m_nextPage = true;
-
-    *bytesLeft -= 19;
-    return 0;
+    return 1;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
+    int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     log_i("idx %i", idx);
     if(idx != 0) return 0; //ERR_OPUS_DECODER_ASYNC;
@@ -238,14 +224,37 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
              CRCchecksum       += *(inbuf + 23) << 8;
              CRCchecksum       += *(inbuf + 22); (void) CRCchecksum;
     uint8_t  pageSegments       = *(inbuf + 26);        // giving the number of segment entries
-    uint8_t  segmentTable       = *(inbuf + 27);        // number_page_segments
+
+    // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
+    // 255: A second byte is needed.  The total length is first_byte + second byte
+    m_segmentTable.clear();
+    for(int i = 0; i < pageSegments; i++){
+        if(*(inbuf + 27 + i) < 255) m_segmentTable.push_back(*(inbuf + 27 + i));
+        else{
+            m_segmentTable.push_back(*(inbuf + 27 + i) + (*(inbuf + 27 + i + 1)));
+            i++;
+        }
+    }
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
-    uint16_t headerSize    = pageSegments + 27;
 
-    (void)segmentTable; (void)continuedPage; (void)lastPage;
+    uint16_t headerSize    = pageSegments + 27;
+    (void)continuedPage; (void)lastPage;
+    *bytesLeft -= headerSize;
+
+    if(firstPage || f_m_subsequentPage){ // OpusHead or OggComment may follows
+        ret = parseOpusHead(inbuf + headerSize, m_segmentTable[0]);
+        if(ret == 1) *bytesLeft -= m_segmentTable[0];
+        if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
+        ret = parseOpusComment(inbuf + headerSize, m_segmentTable[0]);
+        if(ret == 1) *bytesLeft -= m_segmentTable[0];
+        if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
+        f_m_parseOgg = true; // goto next page
+    log_i("hier2");
+    }
+    if(firstPage) f_m_subsequentPage = true; else f_m_subsequentPage = false;
 
     log_i("headerType %i", headerType);
     log_i("firstPage %i", firstPage);
@@ -253,16 +262,18 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     log_i("lastPage %i", lastPage);
     log_i("headerSize %i", headerSize);
     log_i("granulePosition %u", granulePosition);
-    if(firstPage) f_m_firstPage = true; // OpusHead follows
-    if(f_m_opusHeadWasRead) f_m_commentHeader = true; // OpusComment follows
+    log_i("bitstreamSerialNr %u", bitstreamSerialNr);
+    log_i("pageSequenceNr %u", pageSequenceNr);
+    log_i("pageSegments %i", pageSegments);
 
-    if(!f_m_firstPage && !f_m_commentHeader) f_m_opusFramePacket = true; // await opus frame packet
 
-    f_m_magicWordFound = false;
-    f_m_nextPage = false;
-    f_m_opusHeadWasRead = false;
-
-    *bytesLeft -= headerSize;
+    int sum = 0;
+    for(int i = 0; i < m_segmentTable.size(); i++){
+        log_w("segTable %i, sum %i", m_segmentTable[i], sum);
+        sum += m_segmentTable[i];
+    }
+    log_w("sum = %i", sum);
+    log_w("f_m_parseOgg %i", f_m_parseOgg);
     return 0; // no error
 }
 
@@ -272,10 +283,10 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     int idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
         log_i("OggS found at %i", idx);
-        f_m_magicWordFound = true;
+        f_m_parseOgg = true;
         return idx;
     }
-    f_m_magicWordFound = false;
+    f_m_parseOgg = false;
     return -1;
 }
 //----------------------------------------------------------------------------------------------------------------------
