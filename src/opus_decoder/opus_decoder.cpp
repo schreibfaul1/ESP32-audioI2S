@@ -7,6 +7,7 @@
  ************************************************************************************/
 
 #include "opus_decoder.h"
+#include "celt.h"
 
 // global vars
 bool     f_m_subsequentPage = false;
