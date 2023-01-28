@@ -3,21 +3,19 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 27.01.2023
+ *  Updated on: 28.01.2023
  ************************************************************************************/
 
 #include "opus_decoder.h"
 
 // global vars
-bool     f_m_parseOgg = false;
 bool     f_m_subsequentPage = false;
-// bool     f_m_commentHeader = false;
-// bool     f_m_opusHeadWasRead = false;
-// bool     f_m_nextPage = false;
+bool     f_m_parseOgg = false;
 bool     f_m_newSt = false; // streamTitle
 bool     f_m_opusFramePacket = false;
 uint8_t  m_channels = 0;
 uint16_t m_samplerate = 0;
+uint32_t m_segmentLength = 0;
 char*    m_chbuf = NULL;
 
 std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
@@ -35,20 +33,29 @@ void OPUSDecoder_FreeBuffers(){
 //----------------------------------------------------------------------------------------------------------------------
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
-    log_w("f_m_parseOgg %i", f_m_parseOgg);
-    if(f_m_parseOgg == true){
+
+    if(f_m_parseOgg){
         log_i("parseogg");
         int ret = OPUSparseOGG(inbuf, bytesLeft);
-        f_m_parseOgg = false;
         return ret;
     }
 
     if(f_m_opusFramePacket){
-        int ret = parseOpusFramePacket(inbuf, bytesLeft);
+        //int ret = parseOpusFramePacket(inbuf, bytesLeft);
+        if(m_segmentTable.size() > 0){
+            int len = m_segmentTable[m_segmentTable.size()-1];
+            *bytesLeft -= len;
+            m_segmentTable.pop_back();
+           // log_i("decode %i", len);
+            if(m_segmentTable.size() == 0){
+                f_m_opusFramePacket = false;
+                f_m_parseOgg = true;
+            }
+        }
+
+
 
     }
-
-    *bytesLeft = 0;
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,7 +73,7 @@ uint32_t OPUSGetBitRate(){
     return 1;
 }
 uint16_t OPUSGetOutputSamps(){
-    return 1024;
+    return 10; // 1024
 }
 char* OPUSgetStreamTitle(){
     if(f_m_newSt){
@@ -76,23 +83,27 @@ char* OPUSgetStreamTitle(){
     return NULL;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusFramePacket(uint8_t *inbuf, int *bytesLeft){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
+int parseOpusFramePacket(){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
     uint8_t configNr = 0;
     uint8_t s = 0;
     uint8_t c = 0;
     //
-    uint8_t    TOC_Byte  = *(inbuf);
+    uint8_t    TOC_Byte  = m_segmentTable[0];
 
     configNr = (TOC_Byte & 0b11111000) >> 3;
     s        = (TOC_Byte & 0b00000100) >> 2;
     c        = (TOC_Byte & 0b00000011);
 
-    /*  Configuration       Mode  Bandwidth  FrameSizes
-        configNr 16 ... 19  CELT     NB      2.5, 5, 10, 20ms
-        configNr 20 ... 23  CELT     WB      2.5, 5, 10, 20ms
-        configNr 24 ... 27  CELT     SWB     2.5, 5, 10, 20ms
-        configNr 28 ... 31  CELT     FB      2.5, 5, 10, 20ms
+    /*  Configuration       Mode  Bandwidth            FrameSizes         Audio Bandwidth   Sample Rate (Effective)
+        configNr 16 ... 19  CELT  NB (narrowband)      2.5, 5, 10, 20ms   4 kHz             8 kHz
+        configNr 20 ... 23  CELT  WB (wideband)        2.5, 5, 10, 20ms   8 kHz             16 kHz
+        configNr 24 ... 27  CELT  SWB(super wideband)  2.5, 5, 10, 20ms   12 kHz            24 kHz
+        configNr 28 ... 31  CELT  FB (fullband)        2.5, 5, 10, 20ms   20 kHz (*)        48 kHz     <-------
+
+        (*) Although the sampling theorem allows a bandwidth as large as half the sampling rate, Opus never codes
+        audio above 20 kHz, as that is the generally accepted upper limit of human hearing.
+
 
         s = 0: mono 1: stereo
 
@@ -101,8 +112,6 @@ int parseOpusFramePacket(uint8_t *inbuf, int *bytesLeft){  // https://www.rfc-ed
         c = 2: 2 frames in the packet, with different compressed sizes
         c = 3: an arbitrary number of frames in the packet
     */
-
-
 
     log_i("configNr %i", configNr);
     log_i("s %i", s);
@@ -115,7 +124,7 @@ int parseOpusFramePacket(uint8_t *inbuf, int *bytesLeft){  // https://www.rfc-ed
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusComment(uint8_t *inbuf, int nBytes){  // reference https://exiftool.org/TagNames/Vorbis.html#Comments
+int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
     int idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
      if(idx != 0) return 0; // is not OpusTags
@@ -186,6 +195,7 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
     if(channelCount == 0 or channelCount >2) return ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED;
     m_channels = channelCount;
     if(sampleRate != 48000) return ERR_OPUS_INVALID_SAMPLERATE;
+    m_samplerate = sampleRate;
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 
     (void)outputGain;
@@ -196,6 +206,7 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
 //----------------------------------------------------------------------------------------------------------------------
 int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
+    f_m_parseOgg = false;
     int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     log_i("idx %i", idx);
@@ -227,13 +238,16 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
 
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
+    m_segmentLength = 0;
     m_segmentTable.clear();
     for(int i = 0; i < pageSegments; i++){
-        if(*(inbuf + 27 + i) < 255) m_segmentTable.push_back(*(inbuf + 27 + i));
-        else{
-            m_segmentTable.push_back(*(inbuf + 27 + i) + (*(inbuf + 27 + i + 1)));
+        int n = *(inbuf + 27 + i);
+        while(*(inbuf + 27 + i) == 255){
             i++;
+            n+= *(inbuf + 27 + i);
         }
+        m_segmentTable.insert(m_segmentTable.begin(), n); // use vector as a queue
+        m_segmentLength += n;
     }
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
@@ -251,29 +265,39 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
         ret = parseOpusComment(inbuf + headerSize, m_segmentTable[0]);
         if(ret == 1) *bytesLeft -= m_segmentTable[0];
         if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
-        f_m_parseOgg = true; // goto next page
-    log_i("hier2");
+        f_m_parseOgg = true;// goto next page
+    }
+    else if(m_segmentTable.size() > 0){
+        if(m_segmentLength /m_segmentTable.size() == 3){
+            //parseOpusFramePacket();
+            log_i("special");
+            *bytesLeft -= m_segmentLength;
+            f_m_parseOgg = true;
+        }
+        else{
+            f_m_opusFramePacket = true;
+        }
     }
     if(firstPage) f_m_subsequentPage = true; else f_m_subsequentPage = false;
 
-    log_i("headerType %i", headerType);
-    log_i("firstPage %i", firstPage);
-    log_i("continuedPage %i", continuedPage);
-    log_i("lastPage %i", lastPage);
-    log_i("headerSize %i", headerSize);
-    log_i("granulePosition %u", granulePosition);
-    log_i("bitstreamSerialNr %u", bitstreamSerialNr);
+
+    // log_i("headerType %i", headerType);
+    // log_i("firstPage %i", firstPage);
+    // log_i("continuedPage %i", continuedPage);
+    // log_i("lastPage %i", lastPage);
+    // log_i("headerSize %i", headerSize);
+    // log_i("granulePosition %u", granulePosition);
+    // log_i("bitstreamSerialNr %u", bitstreamSerialNr);
     log_i("pageSequenceNr %u", pageSequenceNr);
-    log_i("pageSegments %i", pageSegments);
+    // log_i("pageSegments %i", pageSegments);
+    // log_i("m_segmentLength %i", m_segmentLength);
 
-
-    int sum = 0;
-    for(int i = 0; i < m_segmentTable.size(); i++){
-        log_w("segTable %i, sum %i", m_segmentTable[i], sum);
-        sum += m_segmentTable[i];
-    }
-    log_w("sum = %i", sum);
-    log_w("f_m_parseOgg %i", f_m_parseOgg);
+    //int sum = 0;
+    // for(int i = 0; i < m_segmentTable.size(); i++){
+    //     log_w("segTable %i, sum %i", m_segmentTable[i], sum);
+    //     sum += m_segmentTable[i];
+    // }
+    // log_w("sum = %i", sum);
     return 0; // no error
 }
 
@@ -286,6 +310,7 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
         f_m_parseOgg = true;
         return idx;
     }
+    log_i("find sync");
     f_m_parseOgg = false;
     return -1;
 }
