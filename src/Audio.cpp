@@ -684,7 +684,7 @@ bool Audio::connecttoSD(const char* path, uint32_t resumeFilePos) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
-    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
     if(strlen(path)>255){
         xSemaphoreGive(mutex_audio);
@@ -757,7 +757,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
 
-    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
