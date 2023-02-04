@@ -31,7 +31,8 @@ int      OPUSFindSyncWord(unsigned char *buf, int nBytes);
 int      OPUSparseOGG(uint8_t *inbuf, int *bytesLeft);
 int      parseOpusHead(uint8_t *inbuf, int nBytes);
 int      parseOpusComment(uint8_t *inbuf, int nBytes);
-int      parseOpusFramePacket();
+int      parseOpusTOC(uint8_t TOC_Byte);
+int32_t  opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs);
 
 // some helper functions
 int OPUS_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);

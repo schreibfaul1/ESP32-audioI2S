@@ -42,22 +42,42 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     }
 
     if(f_m_opusFramePacket){
-        //int ret = parseOpusFramePacket(inbuf, bytesLeft);
         if(m_segmentTable.size() > 0){
             int len = m_segmentTable[m_segmentTable.size()-1];
             *bytesLeft -= len;
             m_segmentTable.pop_back();
-           // log_i("decode %i", len);
+            int ret = parseOpusTOC(inbuf[0]);
+            if(ret < 0) return ret;
+            int frame_size = opus_packet_get_samples_per_frame(inbuf, 48000);
+            inbuf++;
+            len--;
+            //int32_t validSamples = celt_decode_with_ec(inbuf, len, outbuf, frame_size);
+            log_i("len %i, frame_size %i", len, frame_size);
             if(m_segmentTable.size() == 0){
                 f_m_opusFramePacket = false;
                 f_m_parseOgg = true;
             }
         }
-
-
-
     }
     return 0;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+int32_t opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
+    int32_t audiosize;
+    if (data[0] & 0x80) {
+        audiosize = ((data[0] >> 3) & 0x3);
+        audiosize = (Fs << audiosize) / 400;
+    } else if ((data[0] & 0x60) == 0x60) {
+        audiosize = (data[0] & 0x08) ? Fs / 50 : Fs / 100;
+    } else {
+        audiosize = ((data[0] >> 3) & 0x3);
+        if (audiosize == 3)
+            audiosize = Fs * 60 / 1000;
+        else
+            audiosize = (Fs << audiosize) / 100;
+    }
+    return audiosize;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -84,13 +104,11 @@ char* OPUSgetStreamTitle(){
     return NULL;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusFramePacket(){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
+int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
     uint8_t configNr = 0;
     uint8_t s = 0;
-    uint8_t c = 0;
-    //
-    uint8_t    TOC_Byte  = m_segmentTable[0];
+    uint8_t c = 0; (void)c;
 
     configNr = (TOC_Byte & 0b11111000) >> 3;
     s        = (TOC_Byte & 0b00000100) >> 2;
@@ -105,7 +123,6 @@ int parseOpusFramePacket(){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 
         (*) Although the sampling theorem allows a bandwidth as large as half the sampling rate, Opus never codes
         audio above 20 kHz, as that is the generally accepted upper limit of human hearing.
 
-
         s = 0: mono 1: stereo
 
         c = 0: 1 frame in the packet
@@ -114,15 +131,12 @@ int parseOpusFramePacket(){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 
         c = 3: an arbitrary number of frames in the packet
     */
 
-    log_i("configNr %i", configNr);
-    log_i("s %i", s);
-    log_i("c %i", c);
+    // log_i("configNr %i, s %i, c %i", configNr, s, c);
 
     if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
     if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
 
-    f_m_opusFramePacket = false;
-    return 0;
+    return s;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
@@ -210,7 +224,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     f_m_parseOgg = false;
     int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
-    log_i("idx %i", idx);
+    // log_i("idx %i", idx);
     if(idx != 0) return 0; //ERR_OPUS_DECODER_ASYNC;
 
     uint8_t  version            = *(inbuf +  4); (void) version;
@@ -270,7 +284,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     }
     else if(m_segmentTable.size() > 0){
         if(m_segmentLength /m_segmentTable.size() == 3){
-            //parseOpusFramePacket();
+            //parseOpusTOC();
             log_i("special");
             *bytesLeft -= m_segmentLength;
             f_m_parseOgg = true;
@@ -289,7 +303,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     // log_i("headerSize %i", headerSize);
     // log_i("granulePosition %u", granulePosition);
     // log_i("bitstreamSerialNr %u", bitstreamSerialNr);
-    log_i("pageSequenceNr %u", pageSequenceNr);
+    // log_i("pageSequenceNr %u", pageSequenceNr);
     // log_i("pageSegments %i", pageSegments);
     // log_i("m_segmentLength %i", m_segmentLength);
 
