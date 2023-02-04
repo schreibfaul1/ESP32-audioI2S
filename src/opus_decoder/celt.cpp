@@ -2022,13 +2022,13 @@ int32_t celt_decoder_get_size(int32_t channels){
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t celt_decoder_init(int32_t channels){
+
     // allocate buffers first
     if (channels < 0 || channels > 2)
         return OPUS_BAD_ARG;
 
     if (cdec == NULL)
         return OPUS_ALLOC_FAIL;
-
     int n = celt_decoder_get_size(channels);
     memset(cdec, 0, n * sizeof(char));
 
@@ -2243,10 +2243,10 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, int32_t frame_size) {
+
     int32_t  c, i, N;
     int32_t  spread_decision;
     int32_t  bits;
-    ec_ctx_t _dec;
     int32_t *decode_mem[2];
     int32_t *out_syn[2];
     int16_t *lpc;
@@ -2280,7 +2280,6 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     const int16_t *eBands;
 
     VALIDATE_CELT_DECODER(st);
-
     nbEBands = m_CELTMode.nbEBands;
     overlap = m_CELTMode.overlap;
     eBands = eband5ms;
@@ -2317,7 +2316,6 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
 
 
     //    ec_dec_init((uint8_t *)inbuf, len);
-
 
     if(C == 1) {
         for(i = 0; i < nbEBands; i++) oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);

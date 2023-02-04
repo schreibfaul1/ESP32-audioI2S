@@ -18,6 +18,7 @@ uint8_t  m_channels = 0;
 uint16_t m_samplerate = 0;
 uint32_t m_segmentLength = 0;
 char*    m_chbuf = NULL;
+int32_t  s_validSamples = 0;
 
 std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
 
@@ -25,6 +26,7 @@ std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
 bool OPUSDecoder_AllocateBuffers(){
     m_chbuf = (char*)malloc(512);
     log_i("Allocate Buffers");
+    CELTDecoder_AllocateBuffers();
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
@@ -36,10 +38,12 @@ void OPUSDecoder_FreeBuffers(){
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(f_m_parseOgg){
-        log_i("parseogg");
+        // log_i("parseogg");
+        log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
         int ret = OPUSparseOGG(inbuf, bytesLeft);
         return ret;
     }
+
 
     if(f_m_opusFramePacket){
         if(m_segmentTable.size() > 0){
@@ -51,8 +55,10 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             int frame_size = opus_packet_get_samples_per_frame(inbuf, 48000);
             inbuf++;
             len--;
-            //int32_t validSamples = celt_decode_with_ec(inbuf, len, outbuf, frame_size);
-            log_i("len %i, frame_size %i", len, frame_size);
+            ec_dec_init((uint8_t *)inbuf, len);
+            celt_decoder_init(2);
+            s_validSamples = celt_decode_with_ec(inbuf, len, outbuf, frame_size);
+
             if(m_segmentTable.size() == 0){
                 f_m_opusFramePacket = false;
                 f_m_parseOgg = true;
@@ -94,7 +100,7 @@ uint32_t OPUSGetBitRate(){
     return 1;
 }
 uint16_t OPUSGetOutputSamps(){
-    return 10; // 1024
+    return s_validSamples; // 1024
 }
 char* OPUSgetStreamTitle(){
     if(f_m_newSt){
@@ -106,6 +112,8 @@ char* OPUSgetStreamTitle(){
 //----------------------------------------------------------------------------------------------------------------------
 int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
+    uint8_t mode = 0;
+    static uint8_t oldmode = 0;
     uint8_t configNr = 0;
     uint8_t s = 0;
     uint8_t c = 0; (void)c;
@@ -113,6 +121,12 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
     configNr = (TOC_Byte & 0b11111000) >> 3;
     s        = (TOC_Byte & 0b00000100) >> 2;
     c        = (TOC_Byte & 0b00000011);
+    if(TOC_Byte & 0x80) mode = 2; else mode = 1;
+
+    if(oldmode != mode) {
+        oldmode = mode;
+        if(mode == 2) log_i("opus mode is MODE_CELT_ONLY");
+    }
 
     /*  Configuration       Mode  Bandwidth            FrameSizes         Audio Bandwidth   Sample Rate (Effective)
         configNr 16 ... 19  CELT  NB (narrowband)      2.5, 5, 10, 20ms   4 kHz             8 kHz
