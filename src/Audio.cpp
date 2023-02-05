@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.8d
- *  Updated on: Jan 27.2023
+ *  Version 3.0.0
+ *  Updated on: Feb 05.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3794,6 +3794,7 @@ int Audio::findNextSync(uint8_t* data, size_t len){
     }
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
+        if(nextSync == -1) return len; // OggS not found, search next block
     }
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
@@ -4063,6 +4064,23 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
     }
+    if(m_codec == CODEC_OPUS){
+        switch(r){
+            case ERR_OPUS_NONE:                             e = "NONE";                             break;
+            case ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED:       e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
+            case ERR_OPUS_INVALID_SAMPLERATE:               e = "SAMPLERATE IS NOT 48000Hz";        break;
+            case ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED:       e = "EXTRA CHANNELS UNSUPPORTED";       break;
+            case ERR_OPUS_SILK_MODE_UNSUPPORTED:            e = "SILK MODE UNSUPPORTED";            break;
+            case ERR_OPUS_HYBRID_MODE_UNSUPPORTED:          e = "HYBRID MODE UMSUPPORTED";          break;
+            case ERR_OPUS_CELT_BAD_ARG:                     e = "CELT_DECODER_BAD_ARG";             break;
+            case ERR_OPUS_CELT_INTERNAL_ERROR:              e = "CELT DECODER INTERNAL ERROR";      break;
+            case ERR_OPUS_CELT_UNIMPLEMENTED:               e = "CELT DECODER UNIMPLEMENTED ARG";   break;
+            case ERR_OPUS_CELT_ALLOC_FAIL:                  e = "CELT DECODER INIT ALLOC FAIL";     break;
+            default: e = "ERR_UNKNOWN";
+        }
+        AUDIO_INFO("FLAC decode error %d : %s", r, e);
+
+        }
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN, int8_t MCK) {
