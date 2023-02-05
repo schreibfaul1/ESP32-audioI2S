@@ -97,7 +97,6 @@ typedef struct _band_ctx{
     int32_t spread;
     int32_t tf_change;
     int32_t remaining_bits;
-    const int32_t *bandE;
     uint32_t seed;
     int32_t theta_round;
     int32_t disable_inv;
@@ -212,8 +211,6 @@ inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 
 #define COMBFILTER_MAXPERIOD 1024
 #define COMBFILTER_MINPERIOD 15
-
-#define VALIDATE_CELT_DECODER(st)
 
 #define EPSILON 1
 #define VERY_SMALL 0
@@ -522,10 +519,10 @@ void     init_caps(int32_t *cap, int32_t LM, int32_t C);
 uint32_t celt_lcg_rand(uint32_t seed);
 int16_t  bitexact_cos(int16_t x);
 int32_t  bitexact_log2tan(int32_t isin, int32_t icos);
-void denormalise_bands(const int16_t *X, int32_t *freq, const int16_t *bandLogE, int32_t start, int32_t end, int32_t M,
+void denormalise_bands(const int16_t *X, int32_t *freq, const int16_t *bandLogE, int32_t end, int32_t M,
                        int32_t silence);
-void anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size, int32_t start,
-                   int32_t end, const int16_t *logE, const int16_t *prev1logE, const int16_t *prev2logE,
+void anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size, int32_t end,
+                   const int16_t *logE, const int16_t *prev1logE, const int16_t *prev2logE,
                    const int32_t *pulses, uint32_t seed);
 void compute_channel_weights(int32_t Ex, int32_t Ey, int16_t w[2]);
 void stereo_split(int16_t *X, int16_t *Y, int32_t N);
@@ -543,18 +540,18 @@ uint32_t quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowban
                     int16_t gain, int16_t *lowband_scratch, int32_t fill);
 uint32_t quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
                            int16_t *lowband_out, int16_t *lowband_scratch, int32_t fill);
-void     special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t start, int32_t M, int32_t dual_stereo);
-void     quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_masks,
-                         const int32_t *bandE, int32_t *pulses, int32_t shortBlocks, int32_t spread, int32_t dual_stereo,
+void     special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t M, int32_t dual_stereo);
+void     quant_all_bands(int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_masks,
+                         int32_t *pulses, int32_t shortBlocks, int32_t spread, int32_t dual_stereo,
                          int32_t intensity, int32_t *tf_res, int32_t total_bits, int32_t balance, int32_t LM,
-                         int32_t codedBands, uint32_t *seed, int32_t complexity, int32_t disable_inv);
+                         int32_t codedBands, int32_t disable_inv);
 int32_t  celt_decoder_get_size(int32_t channels);
 int32_t  celt_decoder_init(int32_t channels);
 void     deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int16_t coef0, int32_t *mem);
-void     deemphasis(int32_t *in[], int16_t *pcm, int32_t N, int32_t C, const int16_t *coef, int32_t *mem);
-void     celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t start, int32_t effEnd, int32_t C,
-                        int32_t CC, int32_t isTransient, int32_t LM, int32_t silence);
-void     tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res, int32_t LM);
+void     deemphasis(int32_t *in[], int16_t *pcm, int32_t N, const int16_t *coef, int32_t *mem);
+void     celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t effEnd, int32_t C,
+                        int32_t isTransient, int32_t LM, int32_t silence);
+void     tf_decode(int32_t end, int32_t isTransient, int32_t *tf_res, int32_t LM);
 int32_t  celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, int32_t frame_size);
 int32_t  celt_decoder_ctl(int32_t request, ...);
 int32_t  cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y);
@@ -590,18 +587,18 @@ void     normalise_residual(int32_t *iy, int16_t *X, int32_t N, int32_t Ryy, int
 uint32_t extract_collapse_mask(int32_t *iy, int32_t N, int32_t B);
 uint32_t alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B, int16_t gain);
 void     renormalise_vector(int16_t *X, int32_t N, int16_t gain);
-int32_t  interp_bits2pulses(int32_t start, int32_t end, int32_t skip_start, const int32_t *bits1, const int32_t *bits2,
+int32_t  interp_bits2pulses(int32_t end, int32_t skip_start, const int32_t *bits1, const int32_t *bits2,
                             const int32_t *thresh, const int32_t *cap, int32_t total, int32_t *_balance,
                             int32_t skip_rsv, int32_t *intensity, int32_t intensity_rsv, int32_t *dual_stereo,
                             int32_t dual_stereo_rsv, int32_t *bits, int32_t *ebits, int32_t *fine_priority, int32_t C,
-                            int32_t LM, int32_t prev, int32_t signalBandwidth);
-int32_t  clt_compute_allocation(int32_t start, int32_t end, const int32_t *offsets, const int32_t *cap,
+                            int32_t LM);
+int32_t  clt_compute_allocation(int32_t end, const int32_t *offsets, const int32_t *cap,
                                 int32_t alloc_trim, int32_t *intensity, int32_t *dual_stereo, int32_t total,
                                 int32_t *balance, int32_t *pulses, int32_t *ebits, int32_t *fine_priority, int32_t C,
-                                int32_t LM, int32_t prev, int32_t signalBandwidth);
-void     unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM);
-void     unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant, int32_t C);
-void     unquant_energy_finalise(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant,
+                                int32_t LM);
+void     unquant_coarse_energy(int32_t end, int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM);
+void     unquant_fine_energy(int32_t end, int16_t *oldEBands, int32_t *fine_quant, int32_t C);
+void     unquant_energy_finalise(int32_t end, int16_t *oldEBands, int32_t *fine_quant,
                                  int32_t *fine_priority, int32_t bits_left, int32_t C);
 uint32_t celt_pvq_u_row(uint32_t row, uint32_t data);
 

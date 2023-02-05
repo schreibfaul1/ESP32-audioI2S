@@ -51,7 +51,6 @@ void OPUSDecoder_ClearBuffers(){
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(f_m_parseOgg){
-        log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
         int ret = OPUSparseOGG(inbuf, bytesLeft);
         if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
         else return ret;  // error
