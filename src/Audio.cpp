@@ -3916,7 +3916,9 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             }
         }
         if(m_codec == CODEC_OPUS){
-            m_validSamples = OPUSGetOutputSamps() / getChannels();
+            const uint8_t OPUS_PARSE_OGG_DONE = 100;
+            if(ret == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+            m_validSamples = OPUSGetOutputSamps();
             char* st = OPUSgetStreamTitle();
             if(st){
                 AUDIO_INFO(st);
