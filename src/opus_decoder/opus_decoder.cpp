@@ -10,40 +10,41 @@
 #include "celt.h"
 
 // global vars
-bool     f_m_subsequentPage = false;
-bool     f_m_parseOgg = false;
-bool     f_m_newSt = false; // streamTitle
-bool     f_m_opusFramePacket = false;
-uint8_t  m_channels = 0;
-uint16_t m_samplerate = 0;
-uint32_t m_segmentLength = 0;
-char*    m_chbuf = NULL;
-int32_t  s_validSamples = 0;
+bool      f_m_subsequentPage = false;
+bool      f_m_parseOgg = false;
+bool      f_m_newSt = false;  // streamTitle
+bool      f_m_opusFramePacket = false;
+uint8_t   m_channels = 0;
+uint16_t  m_samplerate = 0;
+uint32_t  m_segmentLength = 0;
+char     *m_chbuf = NULL;
+int32_t   s_validSamples = 0;
 
-std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
-
+uint16_t *m_segmentTable;
+uint8_t   m_segmentTableSize = 0;
+int8_t    error = 0;
 
 bool OPUSDecoder_AllocateBuffers(){
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
     const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
     m_chbuf = (char*)malloc(512);
     if(!CELTDecoder_AllocateBuffers()) return false;
-//    m_segmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
-//    if(!m_segmentTable) return false;
+    m_segmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
+    if(!m_segmentTable) return false;
     CELTDecoder_ClearBuffer();
-//    OPUSDecoder_ClearBuffers();
-    celt_decoder_init(2);
-    celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0);
-    celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21);
+    OPUSDecoder_ClearBuffers();
+    error = celt_decoder_init(2); if(error < 0) return false;
+    error = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(error < 0) return false;
+    error = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(error < 0) return false;
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
-    if(m_chbuf)        {free(m_chbuf);       m_chbuf = NULL;}
-//    if(m_segmentTable) {free(m_segmentTable); m_segmentTable = NULL;}
+    if(m_chbuf)        {free(m_chbuf);        m_chbuf = NULL;}
+    if(m_segmentTable) {free(m_segmentTable); m_segmentTable = NULL;}
 }
 void OPUSDecoder_ClearBuffers(){
     if(m_chbuf)        memset(m_chbuf, 0, 512);
-//    if(m_segmentTable) memset(m_segmentTable, 0, 256);
+    if(m_segmentTable) memset(m_segmentTable, 0, 256);
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -56,27 +57,33 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         else return ret;  // error
     }
 
+    static int16_t segmentTableRdPtr = -1;
 
     if(f_m_opusFramePacket){
-        if(m_segmentTable.size() > 0){
-            int len = m_segmentTable[m_segmentTable.size()-1];
+        if(m_segmentTableSize > 0){
+            segmentTableRdPtr++;
+            m_segmentTableSize--;
+            int len = m_segmentTable[segmentTableRdPtr];
             *bytesLeft -= len;
-            m_segmentTable.pop_back();
-            int ret = parseOpusTOC(inbuf[0]);
+            int32_t ret = parseOpusTOC(inbuf[0]);
             if(ret < 0) return ret;
             int frame_size = opus_packet_get_samples_per_frame(inbuf, 48000);
-            inbuf++;
             len--;
-            ec_dec_init((uint8_t *)inbuf, len);
-            s_validSamples = celt_decode_with_ec(inbuf, len, outbuf, frame_size);
+            inbuf++;
 
-            if(m_segmentTable.size() == 0){
+            ec_dec_init((uint8_t *)inbuf, len);
+            ret = celt_decode_with_ec(inbuf, len, (int16_t*)outbuf, frame_size);
+            if(ret < 0) return ret; // celt error
+            s_validSamples = ret;
+
+            if(m_segmentTableSize== 0){
+                segmentTableRdPtr = -1; // back to the parking position
                 f_m_opusFramePacket = false;
                 f_m_parseOgg = true;
             }
         }
     }
-    return 0;
+    return ERR_OPUS_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -249,8 +256,9 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     f_m_parseOgg = false;
     int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
-    // log_i("idx %i", idx);
-    if(idx != 0) return 0; //ERR_OPUS_DECODER_ASYNC;
+    if(idx != 0) return ERR_OPUS_DECODER_ASYNC;
+
+    static int16_t segmentTableWrPtr = -1;
 
     uint8_t  version            = *(inbuf +  4); (void) version;
     uint8_t  headerType         = *(inbuf +  5); (void) headerType;
@@ -279,16 +287,19 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
     m_segmentLength = 0;
-    m_segmentTable.clear();
+    segmentTableWrPtr = -1;
+
     for(int i = 0; i < pageSegments; i++){
         int n = *(inbuf + 27 + i);
         while(*(inbuf + 27 + i) == 255){
             i++;
             n+= *(inbuf + 27 + i);
         }
-        m_segmentTable.insert(m_segmentTable.begin(), n); // use vector as a queue
+        segmentTableWrPtr++;
+        m_segmentTable[segmentTableWrPtr] = n;
         m_segmentLength += n;
     }
+    m_segmentTableSize = segmentTableWrPtr + 1;
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
@@ -307,38 +318,11 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
         if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
         f_m_parseOgg = true;// goto next page
     }
-    else if(m_segmentTable.size() > 0){
-        if(m_segmentLength /m_segmentTable.size() == 3){
-            //parseOpusTOC();
-            log_i("special");
-            *bytesLeft -= m_segmentLength;
-            f_m_parseOgg = true;
-        }
-        else{
-            f_m_opusFramePacket = true;
-        }
-    }
+
+    f_m_opusFramePacket = true;
     if(firstPage) f_m_subsequentPage = true; else f_m_subsequentPage = false;
 
-
-    // log_i("headerType %i", headerType);
-    // log_i("firstPage %i", firstPage);
-    // log_i("continuedPage %i", continuedPage);
-    // log_i("lastPage %i", lastPage);
-    // log_i("headerSize %i", headerSize);
-    // log_i("granulePosition %u", granulePosition);
-    // log_i("bitstreamSerialNr %u", bitstreamSerialNr);
-    // log_i("pageSequenceNr %u", pageSequenceNr);
-    // log_i("pageSegments %i", pageSegments);
-    // log_i("m_segmentLength %i", m_segmentLength);
-
-    //int sum = 0;
-    // for(int i = 0; i < m_segmentTable.size(); i++){
-    //     log_w("segTable %i, sum %i", m_segmentTable[i], sum);
-    //     sum += m_segmentTable[i];
-    // }
-    // log_w("sum = %i", sum);
-    return 0; // no error
+    return ERR_OPUS_NONE; // no error
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -352,7 +336,7 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     }
     log_i("find sync");
     f_m_parseOgg = false;
-    return -1;
+    return ERR_OPUS_OGG_SYNC_NOT_FOUND;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

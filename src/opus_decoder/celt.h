@@ -38,13 +38,10 @@
 //#include "opus_decoder.h"
 
 #define OPUS_OK                0
-#define OPUS_BAD_ARG          -1
-#define OPUS_BUFFER_TOO_SMALL -2
-#define OPUS_INTERNAL_ERROR   -3
-#define OPUS_INVALID_PACKET   -4
-#define OPUS_UNIMPLEMENTED    -5
-#define OPUS_INVALID_STATE    -6
-#define OPUS_ALLOC_FAIL       -7
+#define OPUS_BAD_ARG          -18
+#define OPUS_INTERNAL_ERROR   -19
+#define OPUS_UNIMPLEMENTED    -20
+#define OPUS_ALLOC_FAIL       -21
 
 #define OPUS_RESET_STATE 4028
 #define OPUS_GET_SAMPLE_RATE_REQUEST 4029

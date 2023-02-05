@@ -14,13 +14,19 @@ enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_INVALID_SAMPLERATE = -2,
                 ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED = -3,
                 ERR_OPUS_DECODER_ASYNC = -4,
-                ERR_OPUS_SILK_MODE_UNSUPPORTED,
-                ERR_OPUS_HYBRID_MODE_UNSUPPORTED};
+                ERR_OPUS_SILK_MODE_UNSUPPORTED = -5,
+                ERR_OPUS_HYBRID_MODE_UNSUPPORTED = -6,
+                ERR_OPUS_OGG_SYNC_NOT_FOUND = - 7,
+                ERR_OPUS_CELT_BAD_ARG = -18,
+                ERR_OPUS_CELT_INTERNAL_ERROR = -19,
+                ERR_OPUS_CELT_UNIMPLEMENTED = -20,
+                ERR_OPUS_CELT_ALLOC_FAIL = -21};
 
 
 
 bool     OPUSDecoder_AllocateBuffers();
 void     OPUSDecoder_FreeBuffers();
+void     OPUSDecoder_ClearBuffers();
 int      OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 uint8_t  OPUSGetChannels();
 uint32_t OPUSGetSampRate();
