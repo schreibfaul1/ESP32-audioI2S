@@ -24,24 +24,36 @@ std::vector<uint16_t> m_segmentTable; // contains segment frame lengths
 
 
 bool OPUSDecoder_AllocateBuffers(){
+    const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
+    const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
     m_chbuf = (char*)malloc(512);
-    log_i("Allocate Buffers");
-    CELTDecoder_AllocateBuffers();
+    if(!CELTDecoder_AllocateBuffers()) return false;
+//    m_segmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
+//    if(!m_segmentTable) return false;
+    CELTDecoder_ClearBuffer();
+//    OPUSDecoder_ClearBuffers();
+    celt_decoder_init(2);
+    celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0);
+    celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21);
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
-    if(m_chbuf) {free(m_chbuf); m_chbuf = NULL;}
-    log_i("free Buffers");
+    if(m_chbuf)        {free(m_chbuf);       m_chbuf = NULL;}
+//    if(m_segmentTable) {free(m_segmentTable); m_segmentTable = NULL;}
+}
+void OPUSDecoder_ClearBuffers(){
+    if(m_chbuf)        memset(m_chbuf, 0, 512);
+//    if(m_segmentTable) memset(m_segmentTable, 0, 256);
 }
 //----------------------------------------------------------------------------------------------------------------------
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(f_m_parseOgg){
-        // log_i("parseogg");
         log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
         int ret = OPUSparseOGG(inbuf, bytesLeft);
-        return ret;
+        if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
+        else return ret;  // error
     }
 
 
@@ -56,7 +68,6 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             inbuf++;
             len--;
             ec_dec_init((uint8_t *)inbuf, len);
-            celt_decoder_init(2);
             s_validSamples = celt_decode_with_ec(inbuf, len, outbuf, frame_size);
 
             if(m_segmentTable.size() == 0){

@@ -8,7 +8,8 @@
 
 
 
-enum : int8_t  {ERR_OPUS_NONE = 0,
+enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
+                ERR_OPUS_NONE = 0,
                 ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED = -1,
                 ERR_OPUS_INVALID_SAMPLERATE = -2,
                 ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED = -3,
