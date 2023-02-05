@@ -209,17 +209,10 @@ inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 #define  C_SUB( res, a,b) do {(res).r=SUB32_ovflw((a).r,(b).r);  (res).i=SUB32_ovflw((a).i,(b).i); }while(0)
 #define C_ADDTO( res , a) do {(res).r = ADD32_ovflw((res).r, (a).r);  (res).i = ADD32_ovflw((res).i,(a).i); }while(0)
 
-#define COMBFILTER_MAXPERIOD 1024
-#define COMBFILTER_MINPERIOD 15
-
-#define EPSILON 1
-#define VERY_SMALL 0
 #define VERY_LARGE16 ((int16_t)32767)
 #define Q15_ONE ((int16_t)32767)
 
-#define EC_WINDOW_SIZE ((int32_t)sizeof(uint32_t)*CHAR_BIT)
-#define EC_UINT_BITS   (8)
-#define BITRES 3
+
 #define EC_MINI(_a,_b)      ((_a)+(((_b)-(_a))&-((_b)<(_a))))
 #define EC_CLZ0    ((int32_t)sizeof(uint32_t)*CHAR_BIT)
 #define EC_CLZ(_x) (__builtin_clz(_x))

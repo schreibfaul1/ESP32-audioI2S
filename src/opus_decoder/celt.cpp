@@ -51,15 +51,18 @@ const uint32_t CELT_SET_ANALYSIS_REQUEST        = 10022;
 const uint32_t OPUS_SET_LFE_REQUEST             = 10024;
 const uint32_t OPUS_SET_ENERGY_MASK_REQUEST     = 10026;
 
+const uint8_t  EPSILON           = 1;
+const uint8_t  BITRES            = 3;
 const uint32_t PLC_PITCH_LAG_MAX = 720;
-const uint32_t PLC_PITCH_LAG_MIN = 100;
+const uint8_t  PLC_PITCH_LAG_MIN = 100;
 const uint32_t EC_SYM_BITS       = 8;
-const uint32_t EC_CODE_BITS      = 32;
-const uint32_t EC_SYM_MAX        = (1U << EC_SYM_BITS) - 1;
-const uint32_t EC_CODE_SHIFT     = EC_CODE_BITS - EC_SYM_BITS -1;
-const uint32_t EC_CODE_TOP       = 1U << (EC_CODE_BITS - 1);
-const uint32_t EC_CODE_BOT       = EC_CODE_TOP >> EC_SYM_BITS;
-const uint32_t EC_CODE_EXTRA     = (EC_CODE_BITS-2) % EC_SYM_BITS + 1;
+const uint8_t  EC_UINT_BITS      = 8;
+const uint8_t  EC_WINDOW_SIZE    = 32;
+const uint8_t  EC_CODE_BITS      = 32;
+const uint8_t  EC_SYM_MAX        = 255;        // (1U << EC_SYM_BITS) - 1;
+const uint32_t EC_CODE_TOP       = 2147483648; // 1U << (EC_CODE_BITS - 1);
+const uint32_t EC_CODE_BOT       = 8388608;    // EC_CODE_TOP >> EC_SYM_BITS;
+const uint8_t  EC_CODE_EXTRA     = 7;          // (EC_CODE_BITS-2) % EC_SYM_BITS + 1;
 
 /*For each V(N,K) supported, we will access element U(min(N,K+1),max(N,K+1)). Thus, the number of entries in row I is
   the larger of the maximum number of pulses we will ever allocate for a given N=I (K=128, or however many fit in
@@ -813,6 +816,7 @@ void comb_filter_const(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g10
 void comb_filter(int32_t *y, int32_t *x, int32_t T0, int32_t T1, int32_t N, int16_t g0, int16_t g1, int32_t tapset0,
                  int32_t tapset1, int32_t overlap) {
     int32_t i;
+    const uint8_t COMBFILTER_MINPERIOD = 15;
     /* printf ("%d %d %f %f\n", T0, T1, g0, g1); */
     int16_t              g00, g01, g02, g10, g11, g12;
     int32_t              x0, x1, x2, x3, x4;
@@ -2017,9 +2021,8 @@ void deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int1
     m1 = mem[1];
     for (j = 0; j < N; j++) {
         int32_t tmp0, tmp1;
-        /* Add VERY_SMALL to x[] first to reduce dependency chain. */
-        tmp0 = x0[j] + VERY_SMALL + m0;
-        tmp1 = x1[j] + VERY_SMALL + m1;
+        tmp0 = x0[j] + m0;
+        tmp1 = x1[j] + m1;
         m0 = MULT16_32_Q15(coef0, tmp0);
         m1 = MULT16_32_Q15(coef0, tmp1);
         pcm[2 * j] = sig2word16(tmp0);
@@ -2056,7 +2059,7 @@ void deemphasis(int32_t *in[], int16_t *pcm, int32_t N, const int16_t *coef, int
         y = pcm + c;
 
         for(j = 0; j < N; j++) {
-            int32_t tmp = x[j] + VERY_SMALL + m;
+            int32_t tmp = x[j] +  m;
             m = MULT16_32_Q15(coef0, tmp);
             y[j * CC] = sig2word16(tmp);
         }
@@ -2363,6 +2366,7 @@ log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
     celt_synthesis(X, out_syn, oldBandE, effEnd, C, isTransient, LM, silence);
 
     c = 0;
+    const uint8_t COMBFILTER_MINPERIOD = 15;
     do {
         cdec->postfilter_period = max(cdec->postfilter_period, COMBFILTER_MINPERIOD);
         cdec->postfilter_period_old = max(cdec->postfilter_period_old, COMBFILTER_MINPERIOD);
