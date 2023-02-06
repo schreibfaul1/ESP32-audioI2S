@@ -33,6 +33,7 @@
 
 #include <Arduino.h>
 #include "celt.h"
+#include "opus_decoder.h"
 
 CELTDecoder  *cdec;
 band_ctx_t    s_band_ctx;
@@ -768,7 +769,7 @@ uint32_t alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B
     if(K <= 0) log_e("alg_unquant() needs at least one pulse");
     if(N <= 1) log_e("alg_unquant() needs at least two dimensions");
 
-    int32_t* iy = s_iyBuff; assert(N <= 96);
+    int32_t* iy = s_iyBuff; assert(N <= 176);
     Ryy = decode_pulses(iy, N, K);
     normalise_residual(iy, X, N, Ryy, gain);
     exp_rotation(X, N, -1, B, K, spread);
@@ -1971,15 +1972,12 @@ int32_t celt_decoder_get_size(int32_t channels){
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t celt_decoder_init(int32_t channels){
-    log_e("hier");
     // allocate buffers first
     if (channels < 0 || channels > 2){
-        log_e("OPUS_BAD_ARG");
-        return OPUS_BAD_ARG;
+        return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
     }
     if (cdec == NULL){
-        log_e("cdec is NULL");
-        return OPUS_ALLOC_FAIL;
+        return ERR_OPUS_CELT_ALLOC_FAIL;
     }
 
     int n = celt_decoder_get_size(channels);
@@ -2007,11 +2005,9 @@ int32_t celt_decoder_init(int32_t channels){
     cdec->_decode_mem[0] = 0;
     cdec->end = cdec->mode->effEBands; // 21
 
-    log_e("hier1");
     int ret = celt_decoder_ctl(OPUS_RESET_STATE);
-    log_i("ret %i", ret);
-    log_e("ok");
-    return OPUS_OK;
+    if(ret < 0) return ret;
+    return ERR_OPUS_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2026,7 +2022,7 @@ bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
     if(!cdec)                   {cdec = (CELTDecoder*)            __heap_caps_malloc(omd);}
     if(!s_freqBuff)             {s_freqBuff = (int32_t*)          __heap_caps_malloc(960  * sizeof(int32_t));}
-    if(!s_iyBuff)               {s_iyBuff = (int32_t*)            __heap_caps_malloc(96   * sizeof(int32_t));}
+    if(!s_iyBuff)               {s_iyBuff = (int32_t*)            __heap_caps_malloc(176  * sizeof(int32_t));}
     if(!s_normBuff)             {s_normBuff = (int16_t*)          __heap_caps_malloc(1248 * sizeof(int16_t));}
     if(!s_XBuff)                {s_XBuff = (int16_t*)             __heap_caps_malloc(1920 * sizeof(int16_t));}
     if(!s_bits1Buff)            {s_bits1Buff = (int32_t*)         __heap_caps_malloc(21   * sizeof(int32_t));}
@@ -2280,12 +2276,12 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     {
         for(LM = 0; LM <= m_CELTMode.maxLM; LM++)                     // m_CELTMode.maxLM == 3
             if(m_CELTMode.shortMdctSize << LM == frame_size) break;   // frame_size == 960
-        if(LM > m_CELTMode.maxLM) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
+        if(LM > m_CELTMode.maxLM) {log_e("OPUS_BAD_ARG"); return ERR_OPUS_CELT_BAD_ARG;}
     }
 
     M = 1 << LM; // LM=3 -> M = 8
 
-    if(len < 0 || len > 1275 || outbuf == NULL) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
+    if(len < 0 || len > 1275 || outbuf == NULL) {log_e("OPUS_BAD_ARG"); return ERR_OPUS_CELT_BAD_ARG;}
 
     N = M * m_CELTMode.shortMdctSize; // const m_CELTMode.shortMdctSize == 120, M == 8 -> N = 960
 
@@ -2295,7 +2291,7 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while(++c < CC);
 
-    if(len <= 1) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
+    if(len <= 1) {log_e("OPUS_BAD_ARG"); return ERR_OPUS_CELT_BAD_ARG;}
 
     if(C == 1) {
         for(i = 0; i < nbEBands; i++) oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);
@@ -2477,7 +2473,7 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
 
     deemphasis(out_syn, outbuf, N);
 
-    if(ec_tell() > 8 * len) return OPUS_INTERNAL_ERROR;
+    if(ec_tell() > 8 * len) return ERR_CELT_OPUS_INTERNAL_ERROR;
     if(s_ec.error) cdec->error = 1;
 
     return frame_size;
@@ -2491,17 +2487,17 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
     switch (request) {
         case CELT_SET_END_BAND_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
-            if (value < 1 || value > cdec->mode->nbEBands) goto bad_arg;
+            if (value < 1 || value > cdec->mode->nbEBands) {va_end(ap); return ERR_OPUS_CELT_END_BAND;}
             cdec->end = value;
         } break;
         case CELT_SET_CHANNELS_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
-            if (value < 1 || value > 2) goto bad_arg;
+            if (value < 1 || value > 2) {va_end(ap); return ERR_OPUS_CELT_SET_CHANNELS;}
             cdec->stream_channels = value;
         } break;
         case CELT_GET_AND_CLEAR_ERROR_REQUEST: {
             int32_t *value = va_arg(ap, int32_t *);
-            if (value == NULL) goto bad_arg;
+            if (value == NULL)  {va_end(ap); return ERR_OPUS_CELT_CLEAR_REQUEST;}
             *value = cdec->error;
             cdec->error = 0;
         } break;
@@ -2522,7 +2518,7 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
         } break;
         case CELT_GET_MODE_REQUEST: {
             const CELTMode **value = va_arg(ap, const CELTMode **);
-            if (value == 0) goto bad_arg;
+            if (value == 0){va_end(ap); return ERR_OPUS_CELT_GET_MODE_REQUEST;}
             *value = cdec->mode;
         } break;
         case CELT_SET_SIGNALLING_REQUEST: {
@@ -2530,17 +2526,12 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
             cdec->signalling = value;
         } break;
         default:
-            goto bad_request;
+            va_end(ap);
+            return ERR_OPUS_CELT_UNKNOWN_REQUEST;
+            break;
     }
     va_end(ap);
-    return OPUS_OK;
-bad_arg:
-    va_end(ap);
-    log_e("OPUS_BAD_ARG");
-    return  OPUS_BAD_ARG;
-bad_request:
-    va_end(ap);
-    return OPUS_UNIMPLEMENTED;
+    return ERR_OPUS_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

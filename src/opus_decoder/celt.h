@@ -37,12 +37,6 @@
 
 #include "Arduino.h"
 
-#define OPUS_OK                 0
-#define OPUS_BAD_ARG          -18
-#define OPUS_INTERNAL_ERROR   -19
-#define OPUS_UNIMPLEMENTED    -20
-#define OPUS_ALLOC_FAIL       -21
-
 #define OPUS_RESET_STATE             4028
 #define OPUS_GET_SAMPLE_RATE_REQUEST 4029
 

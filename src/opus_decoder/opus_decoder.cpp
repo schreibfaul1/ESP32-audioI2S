@@ -27,6 +27,7 @@ uint16_t *m_segmentTable;
 uint8_t   m_segmentTableSize = 0;
 int16_t   s_segmentTableRdPtr = -1;
 int8_t    error = 0;
+float     m_CompressionRatio = 0;
 
 bool OPUSDecoder_AllocateBuffers(){
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
@@ -64,6 +65,7 @@ void OPUSsetDefaults(){
     m_segmentTableSize = 0;
     s_oldmode = 0xFF;
     s_segmentTableRdPtr = -1;
+
     error = 0;
 }
 
@@ -76,8 +78,6 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
         else return ret;  // error
     }
-
-
 
     if(f_m_opusFramePacket){
         if(m_segmentTableSize > 0){
@@ -135,7 +135,10 @@ uint8_t OPUSGetBitsPerSample(){
     return 16;
 }
 uint32_t OPUSGetBitRate(){
-    return 1;
+    if(m_CompressionRatio != 0){
+        return (16 * 2 * 48000) / m_CompressionRatio;  //bitsPerSample * channel* SampleRate/CompressionRatio
+    }
+    else return 0;
 }
 uint16_t OPUSGetOutputSamps(){
     return s_validSamples; // 1024
@@ -258,7 +261,7 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
              outputGain        += *(inbuf + 16);
     uint8_t  channelMap         = *(inbuf + 18);
 
-    if(channelCount == 0 or channelCount >2) return ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED;
+    if(channelCount == 0 or channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
     m_channels = channelCount;
     if(sampleRate != 48000) return ERR_OPUS_INVALID_SAMPLERATE;
     m_samplerate = sampleRate;
@@ -319,6 +322,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
         m_segmentLength += n;
     }
     m_segmentTableSize = segmentTableWrPtr + 1;
+    m_CompressionRatio = (float)(960 * 2 * pageSegments)/m_segmentLength;  // const 960 validBytes out
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
