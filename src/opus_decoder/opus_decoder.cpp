@@ -21,33 +21,52 @@ uint16_t  m_samplerate = 0;
 uint32_t  m_segmentLength = 0;
 char     *m_chbuf = NULL;
 int32_t   s_validSamples = 0;
+uint8_t   s_oldmode = 0;
 
 uint16_t *m_segmentTable;
 uint8_t   m_segmentTableSize = 0;
+int16_t   s_segmentTableRdPtr = -1;
 int8_t    error = 0;
 
 bool OPUSDecoder_AllocateBuffers(){
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
     const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
     m_chbuf = (char*)malloc(512);
-    if(!CELTDecoder_AllocateBuffers()) return false;
+    if(!CELTDecoder_AllocateBuffers()) {log_e("CELT not init"); return false;}
     m_segmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
-    if(!m_segmentTable) return false;
+    if(!m_segmentTable) {log_e("CELT not init"); return false;}
     CELTDecoder_ClearBuffer();
     OPUSDecoder_ClearBuffers();
-    error = celt_decoder_init(2); if(error < 0) return false;
-    error = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(error < 0) return false;
-    error = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(error < 0) return false;
+    error = celt_decoder_init(2); if(error < 0) {log_e("CELT not init"); return false;}
+    error = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(error < 0) {log_e("CELT not init"); return false;}
+    error = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(error < 0) {log_e("CELT not init"); return false;}
+    OPUSsetDefaults();
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
     if(m_chbuf)        {free(m_chbuf);        m_chbuf = NULL;}
     if(m_segmentTable) {free(m_segmentTable); m_segmentTable = NULL;}
+    CELTDecoder_FreeBuffers();
 }
 void OPUSDecoder_ClearBuffers(){
     if(m_chbuf)        memset(m_chbuf, 0, 512);
-    if(m_segmentTable) memset(m_segmentTable, 0, 256);
+    if(m_segmentTable) memset(m_segmentTable, 0, 256 * sizeof(int16_t));
 }
+void OPUSsetDefaults(){
+    f_m_subsequentPage = false;
+    f_m_parseOgg = false;
+    f_m_newSt = false;  // streamTitle
+    f_m_opusFramePacket = false;
+    m_channels = 0;
+    m_samplerate = 0;
+    m_segmentLength = 0;
+    s_validSamples = 0;
+    m_segmentTableSize = 0;
+    s_oldmode = 0xFF;
+    s_segmentTableRdPtr = -1;
+    error = 0;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
@@ -58,13 +77,13 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         else return ret;  // error
     }
 
-    static int16_t segmentTableRdPtr = -1;
+
 
     if(f_m_opusFramePacket){
         if(m_segmentTableSize > 0){
-            segmentTableRdPtr++;
+            s_segmentTableRdPtr++;
             m_segmentTableSize--;
-            int len = m_segmentTable[segmentTableRdPtr];
+            int len = m_segmentTable[s_segmentTableRdPtr];
             *bytesLeft -= len;
             int32_t ret = parseOpusTOC(inbuf[0]);
             if(ret < 0) return ret;
@@ -78,7 +97,7 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             s_validSamples = ret;
 
             if(m_segmentTableSize== 0){
-                segmentTableRdPtr = -1; // back to the parking position
+                s_segmentTableRdPtr = -1; // back to the parking position
                 f_m_opusFramePacket = false;
                 f_m_parseOgg = true;
             }
@@ -132,7 +151,6 @@ char* OPUSgetStreamTitle(){
 int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
     uint8_t mode = 0;
-    static uint8_t oldmode = 0;
     uint8_t configNr = 0;
     uint8_t s = 0;
     uint8_t c = 0; (void)c;
@@ -142,8 +160,8 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
     c        = (TOC_Byte & 0b00000011);
     if(TOC_Byte & 0x80) mode = 2; else mode = 1;
 
-    if(oldmode != mode) {
-        oldmode = mode;
+    if(s_oldmode != mode) {
+        s_oldmode = mode;
         if(mode == 2) log_i("opus mode is MODE_CELT_ONLY");
     }
 
@@ -259,7 +277,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if(idx != 0) return ERR_OPUS_DECODER_ASYNC;
 
-    static int16_t segmentTableWrPtr = -1;
+    int16_t segmentTableWrPtr = -1;
 
     uint8_t  version            = *(inbuf +  4); (void) version;
     uint8_t  headerType         = *(inbuf +  5); (void) headerType;

@@ -22,6 +22,7 @@ enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
 bool     OPUSDecoder_AllocateBuffers();
 void     OPUSDecoder_FreeBuffers();
 void     OPUSDecoder_ClearBuffers();
+void     OPUSsetDefaults();
 int      OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 uint8_t  OPUSGetChannels();
 uint32_t OPUSGetSampRate();

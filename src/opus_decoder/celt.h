@@ -124,8 +124,6 @@ struct CELTDecoder {
 
     uint32_t rng;
     int32_t error;
-    int32_t last_pitch_index;
-    int32_t loss_count;
     int32_t postfilter_period;
     int32_t postfilter_period_old;
     int16_t postfilter_gain;

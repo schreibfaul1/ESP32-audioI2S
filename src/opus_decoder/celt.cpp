@@ -1971,29 +1971,46 @@ int32_t celt_decoder_get_size(int32_t channels){
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t celt_decoder_init(int32_t channels){
-
+    log_e("hier");
     // allocate buffers first
-    if (channels < 0 || channels > 2)
+    if (channels < 0 || channels > 2){
+        log_e("OPUS_BAD_ARG");
         return OPUS_BAD_ARG;
-
-    if (cdec == NULL)
+    }
+    if (cdec == NULL){
+        log_e("cdec is NULL");
         return OPUS_ALLOC_FAIL;
+    }
+
     int n = celt_decoder_get_size(channels);
     memset(cdec, 0, n * sizeof(char));
 
+    cdec->channels = channels;
+    if(channels == 1) cdec->disable_inv = 1; else cdec->disable_inv = 0; // 1 mono ,  0 stereo
+    cdec->end = cdec->mode->effEBands; // 21
+    cdec->error = 0;
     cdec->mode = &m_CELTMode;
     cdec->overlap = m_CELTMode.overlap;
-    cdec->stream_channels = channels;
-    cdec->channels = channels;
 
-    cdec->start = 0;
-    cdec->end = cdec->mode->effEBands; // 21
+    cdec->postfilter_gain = 0;
+    cdec->postfilter_gain_old = 0;
+
+    cdec->postfilter_period = 0;
+    cdec->postfilter_tapset = 0;
+    cdec->postfilter_tapset_old = 0;
+    cdec->preemph_memD[0] = 0;
+    cdec->preemph_memD[1] = 0;
+    cdec->rng = 0;
     cdec->signalling = 1;
+    cdec->start = 0;
+    cdec->stream_channels = channels;
+    cdec->_decode_mem[0] = 0;
+    cdec->end = cdec->mode->effEBands; // 21
 
-    if(channels == 1) cdec->disable_inv = 1; else cdec->disable_inv = 0; // 1 mono ,  0 stereo
-
-    celt_decoder_ctl(OPUS_RESET_STATE);
-
+    log_e("hier1");
+    int ret = celt_decoder_ctl(OPUS_RESET_STATE);
+    log_i("ret %i", ret);
+    log_e("ok");
     return OPUS_OK;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -2263,12 +2280,12 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     {
         for(LM = 0; LM <= m_CELTMode.maxLM; LM++)                     // m_CELTMode.maxLM == 3
             if(m_CELTMode.shortMdctSize << LM == frame_size) break;   // frame_size == 960
-        if(LM > m_CELTMode.maxLM) return OPUS_BAD_ARG;
+        if(LM > m_CELTMode.maxLM) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
     }
 
     M = 1 << LM; // LM=3 -> M = 8
 
-    if(len < 0 || len > 1275 || outbuf == NULL) return OPUS_BAD_ARG;
+    if(len < 0 || len > 1275 || outbuf == NULL) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
 
     N = M * m_CELTMode.shortMdctSize; // const m_CELTMode.shortMdctSize == 120, M == 8 -> N = 960
 
@@ -2278,7 +2295,7 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while(++c < CC);
 
-    if(len <= 1) { return OPUS_BAD_ARG; }
+    if(len <= 1) {log_e("OPUS_BAD_ARG"); return OPUS_BAD_ARG;}
 
     if(C == 1) {
         for(i = 0; i < nbEBands; i++) oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);
@@ -2519,7 +2536,8 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
     return OPUS_OK;
 bad_arg:
     va_end(ap);
-    return OPUS_BAD_ARG;
+    log_e("OPUS_BAD_ARG");
+    return  OPUS_BAD_ARG;
 bad_request:
     va_end(ap);
     return OPUS_UNIMPLEMENTED;
