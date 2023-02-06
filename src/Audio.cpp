@@ -505,6 +505,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(endsWith(extension, ".wav"))   m_expectedCodec = CODEC_WAV;
         if(endsWith(extension, ".m4a"))   m_expectedCodec = CODEC_M4A;
         if(endsWith(extension, ".flac"))  m_expectedCodec = CODEC_FLAC;
+        if(endsWith(extension, "-flac"))  m_expectedCodec = CODEC_FLAC;
         if(endsWith(extension, ".opus"))  m_expectedCodec = CODEC_OPUS;
         if(endsWith(extension, "/opus"))  m_expectedCodec = CODEC_OPUS;
         if(endsWith(extension, ".asx"))  m_expectedPlsFmt = FORMAT_ASX;
@@ -2891,6 +2892,13 @@ void Audio::processWebStream() {
             AUDIO_INFO("stream ready");
         }
         if(!f_stream) return;
+        if(m_codec == CODEC_OGG){ log_i("determine correct codec here");
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            if(codec == CODEC_FLAC) {m_codec = CODEC_FLAC; initializeDecoder(); return;}
+            if(codec == CODEC_OPUS) {m_codec = CODEC_OPUS; initializeDecoder(); return;}
+            stopSong();
+            return;
+        }
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3399,6 +3407,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             const char* c_idesc = (rhl + 16);
             while(c_idesc[0] == ' ') c_idesc++;
             latinToUTF8(rhl, sizeof(rhl)); // if already UTF-0 do nothing, otherwise convert to UTF-8
+            if(specialIndexOf((uint8_t*)c_idesc, "24bit", strlen(c_idesc)) >= 0){
+                AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
+                stopSong();
+            }
             if(audio_icydescription) audio_icydescription(c_idesc);
         }
 
@@ -3506,6 +3518,8 @@ bool Audio:: initializeDecoder(){
         case CODEC_WAV:
             InBuff.changeMaxBlockSize(m_frameSizeWav);
             break;
+        case CODEC_OGG: // the decoder will be determined later (vorbis, flac, opus?)
+            break;
         default:
             goto exit;
             break;
@@ -3520,7 +3534,7 @@ bool Audio:: initializeDecoder(){
 bool Audio::parseContentType(char* ct) {
 
     enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
-                CT_M3U8, CT_TXT, CT_AACP, CT_OPUS};
+                CT_M3U8, CT_TXT, CT_AACP, CT_OPUS, CT_OGG};
 
     strlwr(ct);
     trim(ct);
@@ -3557,8 +3571,8 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
     else if(!strcmp(ct, "audio/x-ms-asx"))   ct_val = CT_ASX; // #413
 
-    else if(!strcmp(ct, "application/ogg")) {ct_val = CT_FLAC; if(m_expectedCodec == CODEC_OPUS) ct_val = CT_OPUS;}
-    else if(!strcmp(ct, "audio/ogg"))       {ct_val = CT_FLAC; if(m_expectedCodec == CODEC_OPUS) ct_val = CT_OPUS;}
+    else if(!strcmp(ct, "application/ogg"))  ct_val = CT_OGG;
+    else if(!strcmp(ct, "audio/ogg"))        ct_val = CT_OGG;
 
     else if(!strcmp(ct, "application/vnd.apple.mpegurl")) ct_val = CT_M3U8;
     else if(!strcmp(ct, "application/x-mpegurl")) ct_val =CT_M3U8;
@@ -3597,6 +3611,11 @@ bool Audio::parseContentType(char* ct) {
         case CT_WAV:
             m_codec = CODEC_WAV;
             if(m_f_Log) { log_i("ContentType %s, format is wav", ct); }
+            break;
+        case CT_OGG:
+            if     (m_expectedCodec == CODEC_OPUS) m_codec = CODEC_OPUS;
+            else if(m_expectedCodec == CODEC_FLAC) m_codec = CODEC_FLAC;
+            else m_codec = CODEC_OGG; // determine in first OGG packet -OPUS, VORBIS, FLAC
             break;
         case CT_PLS:
             m_playlistFormat = FORMAT_PLS;
@@ -4067,7 +4086,7 @@ void Audio::printDecodeError(int r) {
     if(m_codec == CODEC_OPUS){
         switch(r){
             case ERR_OPUS_NONE:                             e = "NONE";                             break;
-            case ERR_OPUS_NR_OF_CHANNELS_UNSUPPORTED:       e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
+            case ERR_OPUS_CHANNELS_OUT_OF_RANGE:            e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
             case ERR_OPUS_INVALID_SAMPLERATE:               e = "SAMPLERATE IS NOT 48000Hz";        break;
             case ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED:       e = "EXTRA CHANNELS UNSUPPORTED";       break;
             case ERR_OPUS_SILK_MODE_UNSUPPORTED:            e = "SILK MODE UNSUPPORTED";            break;
@@ -4076,6 +4095,12 @@ void Audio::printDecodeError(int r) {
             case ERR_OPUS_CELT_INTERNAL_ERROR:              e = "CELT DECODER INTERNAL ERROR";      break;
             case ERR_OPUS_CELT_UNIMPLEMENTED:               e = "CELT DECODER UNIMPLEMENTED ARG";   break;
             case ERR_OPUS_CELT_ALLOC_FAIL:                  e = "CELT DECODER INIT ALLOC FAIL";     break;
+            case ERR_OPUS_CELT_UNKNOWN_REQUEST:             e = "CELT_UNKNOWN_REQUEST FAIL";        break;
+            case ERR_OPUS_CELT_GET_MODE_REQUEST:            e = "CELT_GET_MODE_REQUEST FAIL";       break;
+            case ERR_OPUS_CELT_CLEAR_REQUEST:               e = "CELT_CLEAR_REAUEST_FAIL";          break;
+            case ERR_OPUS_CELT_SET_CHANNELS:                e = "CELT_SET_CHANNELS_FAIL";           break;
+            case ERR_OPUS_CELT_END_BAND:                    e = "CELT_END_BAND_REQUEST_FAIL";       break;
+            case ERR_CELT_OPUS_INTERNAL_ERROR:              e = "CELT_INTERNAL_ERROR";              break;
             default: e = "ERR_UNKNOWN";
         }
         AUDIO_INFO("OPUS decode error %d : %s", r, e);
@@ -5259,5 +5284,22 @@ uint32_t Audio::mp3_correctResumeFilePos(uint32_t resumeFilePos){
     return m_audioDataStart;
 }
 //----------------------------------------------------------------------------------------------------------------------
-
+uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len){
+    // if we have contentType == application/ogg; codec cn be OPUS, FLAC or VORBIS
+    // let's have a look, what it is
+    int idx = specialIndexOf(data, "OggS", 6);
+    if(idx != 0){
+        if(specialIndexOf(data, "fLaC", 6)) return CODEC_FLAC;
+        return CODEC_NONE;
+    }
+    data += 27;
+    idx = specialIndexOf(data, "OpusHead", 20);
+    if(idx >= 0) return CODEC_OPUS;
+    idx = specialIndexOf(data, "FLAC", 20);
+    if(idx >= 0) return CODEC_FLAC;
+    idx = specialIndexOf(data, "vorbis", 20);
+    if(idx >= 0) return CODEC_NONE; // CODEC_VORBIS
+    return CODEC_NONE;
+}
+//----------------------------------------------------------------------------------------------------------------------
 
