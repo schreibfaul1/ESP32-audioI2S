@@ -33,18 +33,17 @@
 */
 
 #pragma once
-#pragma GCC optimize ("Oz")
+#pragma GCC optimize ("Os")
 
 #include "Arduino.h"
-//#include "opus_decoder.h"
 
-#define OPUS_OK                0
+#define OPUS_OK                 0
 #define OPUS_BAD_ARG          -18
 #define OPUS_INTERNAL_ERROR   -19
 #define OPUS_UNIMPLEMENTED    -20
 #define OPUS_ALLOC_FAIL       -21
 
-#define OPUS_RESET_STATE 4028
+#define OPUS_RESET_STATE             4028
 #define OPUS_GET_SAMPLE_RATE_REQUEST 4029
 
 #define LEAK_BANDS 19
@@ -205,9 +204,9 @@ inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 
 #define C_FIXDIV(c,div) do {    DIVSCALAR( (c).r , div); DIVSCALAR( (c).i  , div); }while (0)
 
-#define  C_ADD( res, a,b) do {(res).r=ADD32_ovflw((a).r,(b).r);  (res).i=ADD32_ovflw((a).i,(b).i); }while(0)
+#define C_ADD( res, a,b) do {(res).r=ADD32_ovflw((a).r,(b).r);  (res).i=ADD32_ovflw((a).i,(b).i); }while(0)
 
-#define  C_SUB( res, a,b) do {(res).r=SUB32_ovflw((a).r,(b).r);  (res).i=SUB32_ovflw((a).i,(b).i); }while(0)
+#define C_SUB( res, a,b) do {(res).r=SUB32_ovflw((a).r,(b).r);  (res).i=SUB32_ovflw((a).i,(b).i); }while(0)
 #define C_ADDTO( res , a) do {(res).r = ADD32_ovflw((res).r, (a).r);  (res).i = ADD32_ovflw((res).i,(a).i); }while(0)
 
 #define VERY_LARGE16 ((int16_t)32767)
@@ -228,14 +227,11 @@ inline int32_t MULT16_32_Q16(int64_t a, int64_t b){return (int32_t) (a * b) >> 1
 /** 16x32 multiplication, followed by a 16-bit shift right (round-to-nearest). Results fits in 32 bits */
 #define MULT16_32_P16(a,b) ((int32_t)PSHR((int64_t)((int16_t)(a))*(b),16))
 
-
 /** 16x32 multiplication, followed by a 15-bit shift right. Results fits in 32 bits */
 inline int32_t MULT16_32_Q15(int16_t a, int32_t b){return (int64_t)a * b >> 15;}
 
-
 /** 32x32 multiplication, followed by a 31-bit shift right. Results fits in 32 bits */
 #define MULT32_32_Q31(a,b) ((int32_t)((int64_t)(a)*(int64_t)(b) >> 31))
-
 
 /** Compile-time conversion of float constant to 16-bit value */
 #define QCONST16(x,bits) ((int16_t)(0.5L+(x)*(((int32_t)1)<<(bits))))
@@ -518,11 +514,11 @@ void     denormalise_bands(const int16_t *X, int32_t *freq, const int16_t *bandL
 void     anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size, const int16_t *logE,
                        const int16_t *prev1logE, const int16_t *prev2logE, const int32_t *pulses, uint32_t seed);
 void     compute_channel_weights(int32_t Ex, int32_t Ey, int16_t w[2]);
-void stereo_split(int16_t *X, int16_t *Y, int32_t N);
-void stereo_merge(int16_t *X, int16_t *Y, int16_t mid, int32_t N);
-void deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard);
-void interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard);
-void haar1(int16_t *X, int32_t N0, int32_t stride);
+void     stereo_split(int16_t *X, int16_t *Y, int32_t N);
+void     stereo_merge(int16_t *X, int16_t *Y, int16_t mid, int32_t N);
+void     deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard);
+void     interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard);
+void     haar1(int16_t *X, int32_t N0, int32_t stride);
 int32_t  compute_qn(int32_t N, int32_t b, int32_t offset, int32_t pulse_cap, int32_t stereo);
 void     compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, int32_t *b, int32_t B, int32_t __B0,
                        int32_t LM, int32_t stereo, int32_t *fill);
@@ -534,16 +530,15 @@ uint32_t quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowban
 uint32_t quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
                            int16_t *lowband_out, int16_t *lowband_scratch, int32_t fill);
 void     special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t M, int32_t dual_stereo);
-void     quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks,
-                         int32_t *pulses, int32_t shortBlocks, int32_t spread, int32_t dual_stereo,
-                         int32_t intensity, int32_t *tf_res, int32_t total_bits, int32_t balance, int32_t LM,
-                         int32_t codedBands);
+void     quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t *pulses, int32_t shortBlocks,
+                         int32_t spread, int32_t dual_stereo, int32_t intensity, int32_t *tf_res, int32_t total_bits,
+                         int32_t balance, int32_t LM, int32_t codedBands);
 int32_t  celt_decoder_get_size(int32_t channels);
 int32_t  celt_decoder_init(int32_t channels);
 void     deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int16_t coef0, int32_t *mem);
 void     deemphasis(int32_t *in[], int16_t *pcm, int32_t N);
-void     celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C,
-                        int32_t isTransient, int32_t LM, int32_t silence);
+void     celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C, int32_t isTransient, int32_t LM,
+                        int32_t silence);
 void     tf_decode(int32_t isTransient, int32_t *tf_res, int32_t LM);
 int32_t  celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, int32_t frame_size);
 int32_t  celt_decoder_ctl(int32_t request, ...);
@@ -585,16 +580,15 @@ int32_t  interp_bits2pulses(int32_t end, int32_t skip_start, const int32_t *bits
                             int32_t skip_rsv, int32_t *intensity, int32_t intensity_rsv, int32_t *dual_stereo,
                             int32_t dual_stereo_rsv, int32_t *bits, int32_t *ebits, int32_t *fine_priority, int32_t C,
                             int32_t LM);
-int32_t  clt_compute_allocation(const int32_t *offsets, const int32_t *cap,
-                                int32_t alloc_trim, int32_t *intensity, int32_t *dual_stereo, int32_t total,
-                                int32_t *balance, int32_t *pulses, int32_t *ebits, int32_t *fine_priority, int32_t C,
-                                int32_t LM);
+int32_t  clt_compute_allocation(const int32_t *offsets, const int32_t *cap, int32_t alloc_trim, int32_t *intensity,
+                                int32_t *dual_stereo, int32_t total, int32_t *balance, int32_t *pulses, int32_t *ebits,
+                                int32_t *fine_priority, int32_t C, int32_t LM);
 void     unquant_coarse_energy(int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM);
 void     unquant_fine_energy(int16_t *oldEBands, int32_t *fine_quant, int32_t C);
 void     unquant_energy_finalise(int16_t *oldEBands, int32_t *fine_quant, int32_t *fine_priority, int32_t bits_left,
-                                  int32_t C);
+                                 int32_t C);
 uint32_t celt_pvq_u_row(uint32_t row, uint32_t data);
 
-bool CELTDecoder_AllocateBuffers(void);
-void CELTDecoder_FreeBuffers();
-void CELTDecoder_ClearBuffer(void);
+bool     CELTDecoder_AllocateBuffers(void);
+void     CELTDecoder_FreeBuffers();
+void     CELTDecoder_ClearBuffer(void);

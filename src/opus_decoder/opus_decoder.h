@@ -4,9 +4,6 @@
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
 #include "Arduino.h"
-#include <vector>
-
-
 
 enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_NONE = 0,
@@ -21,8 +18,6 @@ enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_CELT_INTERNAL_ERROR = -19,
                 ERR_OPUS_CELT_UNIMPLEMENTED = -20,
                 ERR_OPUS_CELT_ALLOC_FAIL = -21};
-
-
 
 bool     OPUSDecoder_AllocateBuffers();
 void     OPUSDecoder_FreeBuffers();

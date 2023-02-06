@@ -3,9 +3,11 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 28.01.2023
- ************************************************************************************/
-
+ *  Updated on: 06.02.2023
+ */
+//----------------------------------------------------------------------------------------------------------------------
+//                                     O G G / O P U S     I M P L.
+//----------------------------------------------------------------------------------------------------------------------
 #include "opus_decoder.h"
 #include "celt.h"
 
@@ -337,19 +339,6 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     f_m_parseOgg = false;
     return ERR_OPUS_OGG_SYNC_NOT_FOUND;
 }
-//----------------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
 //----------------------------------------------------------------------------------------------------------------------
 int OPUS_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
     int result;  // seek for str in buffer or in header up to baselen, not nullterninated

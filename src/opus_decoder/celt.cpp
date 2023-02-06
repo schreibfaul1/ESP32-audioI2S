@@ -5,7 +5,7 @@
  *
  *  Created on: Sep 01.2022
  *
- *  Updated on: Feb 05.2023
+ *  Updated on: Feb 06.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -31,14 +31,22 @@
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------------------------------------------------------------*/
 
-#define CELT_C
-
 #include <Arduino.h>
 #include "celt.h"
 
 CELTDecoder  *cdec;
 band_ctx_t    s_band_ctx;
 ec_ctx_t      s_ec;
+int32_t*      s_freqBuff;           // mem in celt_synthesis
+int32_t*      s_iyBuff;             // mem in alg_unquant
+int16_t*      s_normBuff;           // mem in quant_all_bands
+int16_t*      s_XBuff;              // mem in celt_decode_with_ec
+int32_t*      s_bits1Buff;          // mem in clt_compute_allocation
+int32_t*      s_bits2Buff;          // mem in clt_compute_allocation
+int32_t*      s_threshBuff;         // mem in clt_compute_allocation
+int32_t*      s_trim_offsetBuff;    // mem in clt_compute_allocation
+uint8_t*      s_collapse_masksBuff; // mem n celt_decode_with_ec
+int16_t*      s_tmpBuff;            // mem in deinterleave_hadamard and interleave_hadamard
 
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
@@ -759,12 +767,12 @@ uint32_t alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B
     uint32_t collapse_mask;
     if(K <= 0) log_e("alg_unquant() needs at least one pulse");
     if(N <= 1) log_e("alg_unquant() needs at least two dimensions");
-    int32_t iy[N];
+
+    int32_t* iy = s_iyBuff; assert(N <= 96);
     Ryy = decode_pulses(iy, N, K);
     normalise_residual(iy, X, N, Ryy, gain);
     exp_rotation(X, N, -1, B, K, spread);
     collapse_mask = extract_collapse_mask(iy, N, B);
-
     return collapse_mask;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -929,22 +937,23 @@ int32_t bitexact_log2tan(int32_t isin, int32_t icos) {
 /* De-normalise the energy to produce the synthesis from the unit-energy bands */
 void denormalise_bands(const int16_t * X, int32_t * freq,
                        const int16_t *bandLogE, int32_t end, int32_t M, int32_t silence) {
+    int32_t start = 0;
     int32_t i, N;
     int32_t bound;
     int32_t * f;
     const int16_t * x;
     const int16_t *eBands = eband5ms;
-    N = M * m_CELTMode.shortMdctSize; // const m_CELTMode.shortMdctSize = 120
+    N = M * m_CELTMode.shortMdctSize;
     bound = M * eBands[end];
     if (silence) {
         bound = 0;
-        end = 0;
+        start = end = 0;
     }
     f = freq;
-    x = X + M * eBands[0];
-    for (i = 0; i < M * eBands[0]; i++)
+    x = X + M * eBands[start];
+    for (i = 0; i < M * eBands[start]; i++)
         *f++ = 0;
-    for (i = 0; i < end; i++) {
+    for (i = start; i < end; i++) {
         int32_t j, band_end;
         int16_t g;
         int16_t lg;
@@ -985,7 +994,7 @@ void denormalise_bands(const int16_t * X, int32_t * freq,
                 *f++ = MULT16_16(*x++, g) >> shift;
             } while (++j < band_end);
     }
-    assert(0 <= end);
+    assert(start <= end);
     memset(&freq[bound], 0, (N - bound) * sizeof(*freq));
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -1164,7 +1173,10 @@ void deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadam
     int32_t i, j;
     int32_t N;
     N = N0 * stride;
-    int16_t tmp[N];
+
+    assert(N <= 176);
+    int16_t* tmp = s_tmpBuff;
+
     assert(stride > 0);
     if (hadamard) {
         const int32_t *ordery = ordery_table + stride - 2;
@@ -1186,7 +1198,10 @@ void interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamar
     int32_t i, j;
     int32_t N;
     N = N0 * stride;
-    int16_t tmp[N];
+
+    assert(N <= 176);
+    int16_t* tmp = s_tmpBuff;
+
     if (hadamard) {
         const int32_t *ordery = ordery_table + stride - 2;
         for (i = 0; i < stride; i++)
@@ -1529,7 +1544,6 @@ uint32_t quant_partition(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *l
             }
         }
     }
-
     return cm;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -1799,8 +1813,10 @@ void quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t 
     norm_offset = M * eBands[0];
     /* No need to allocate norm for the last band because we don't need an
        output in that band. */
-    int16_t _norm[C * (M * eBands[m_CELTMode.nbEBands - 1] - norm_offset)];
-    norm = _norm;
+
+    assert(C * (M * eBands[m_CELTMode.nbEBands - 1] - norm_offset) >= 1248);
+    norm = s_normBuff;
+
     norm2 = norm + M * eBands[m_CELTMode.nbEBands - 1] - norm_offset;
 
     /* For decoding, we can use the last band as scratch space because we don't need that
@@ -1942,7 +1958,7 @@ void quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t 
            have folding. */
         s_band_ctx.avoid_split_noise = 0;
     }
-    //*seed = s_band_ctx.seed;
+
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -1981,19 +1997,28 @@ int32_t celt_decoder_init(int32_t channels){
     return OPUS_OK;
 }
 //----------------------------------------------------------------------------------------------------------------------
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    // ESP32-S3: If there is PSRAM, prefer it
-    #define __malloc_heap_psram(size) \
-        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+
+// save stack arrays in heap, prefer PSRAM
+#ifdef BOARD_HAS_PSRAM
+    #define __heap_caps_malloc(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
 #else
-    // ESP32, PSRAM is too slow, prefer SRAM
-    #define __malloc_heap_psram(size) \
-        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM)
+    #define __heap_caps_malloc(size) heap_caps_malloc(size, MALLOC_CAP_DEFAULT)
 #endif
 
 bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
-    if(!cdec)       {cdec = (CELTDecoder*) __malloc_heap_psram(omd);}
+    if(!cdec)                   {cdec = (CELTDecoder*)            __heap_caps_malloc(omd);}
+    if(!s_freqBuff)             {s_freqBuff = (int32_t*)          __heap_caps_malloc(960  * sizeof(int32_t));}
+    if(!s_iyBuff)               {s_iyBuff = (int32_t*)            __heap_caps_malloc(96   * sizeof(int32_t));}
+    if(!s_normBuff)             {s_normBuff = (int16_t*)          __heap_caps_malloc(1248 * sizeof(int16_t));}
+    if(!s_XBuff)                {s_XBuff = (int16_t*)             __heap_caps_malloc(1920 * sizeof(int16_t));}
+    if(!s_bits1Buff)            {s_bits1Buff = (int32_t*)         __heap_caps_malloc(21   * sizeof(int32_t));}
+    if(!s_bits2Buff)            {s_bits2Buff = (int32_t*)         __heap_caps_malloc(21   * sizeof(int32_t));}
+    if(!s_threshBuff)           {s_threshBuff = (int32_t*)        __heap_caps_malloc(21   * sizeof(int32_t));}
+    if(!s_trim_offsetBuff)      {s_trim_offsetBuff = (int32_t*)   __heap_caps_malloc(21   * sizeof(int32_t));}
+    if(!s_collapse_masksBuff)   {s_collapse_masksBuff = (uint8_t*)__heap_caps_malloc(42   * sizeof(uint8_t));}
+    if(!s_tmpBuff)              {s_tmpBuff = (int16_t*)           __heap_caps_malloc(176  * sizeof(int16_t));}
+
     if(!cdec) {
         CELTDecoder_FreeBuffers();
         log_e("not enough memory to allocate celtdecoder buffers");
@@ -2004,11 +2029,22 @@ bool CELTDecoder_AllocateBuffers(void) {
 //----------------------------------------------------------------------------------------------------------------------
 void CELTDecoder_FreeBuffers(){
     if(cdec){free(cdec); cdec = NULL;}
+    if(!s_freqBuff) { free(s_freqBuff), s_freqBuff = NULL; }
+    if(!s_iyBuff) { free(s_iyBuff), s_iyBuff = NULL; }
+    if(!s_normBuff) { free(s_normBuff), s_normBuff = NULL; }
+    if(!s_XBuff) { free(s_XBuff), s_XBuff = NULL; }
+    if(!s_bits1Buff) { free(s_bits1Buff), s_bits1Buff = NULL; }
+    if(!s_bits2Buff) { free(s_bits2Buff), s_bits2Buff = NULL; }
+    if(!s_threshBuff) { free(s_threshBuff), s_threshBuff = NULL; }
+    if(!s_trim_offsetBuff) { free(s_trim_offsetBuff), s_trim_offsetBuff = NULL; }
+    if(!s_collapse_masksBuff) { free(s_collapse_masksBuff), s_collapse_masksBuff = NULL; }
+    if(!s_tmpBuff) { free(s_tmpBuff), s_tmpBuff = NULL; }
 }
 //----------------------------------------------------------------------------------------------------------------------
 void CELTDecoder_ClearBuffer(void){
     size_t omd = celt_decoder_get_size(2);
     memset(cdec, 0, omd * sizeof(char));
+
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2045,7 +2081,6 @@ void deemphasis(int32_t *in[], int16_t *pcm, int32_t N) {
     const int32_t  CC = cdec->channels;
     const int16_t *coef = m_CELTMode.preemph;
     int32_t       *mem = cdec->preemph_memD;
-
 
     /* Short version for common case. */
     if(CC == 2) {
@@ -2098,7 +2133,7 @@ void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C
     overlap = m_CELTMode.overlap;
     nbEBands = m_CELTMode.nbEBands;
     N = m_CELTMode.shortMdctSize << LM;
-    int32_t freq[N]; /**< Interleaved signal MDCTs */
+    int32_t* freq = s_freqBuff; assert(N <= 960); /**< Interleaved signal MDCTs */
     M = 1 << LM;
 
     if(isTransient) {
@@ -2143,6 +2178,8 @@ void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C
     do {
         for(i = 0; i < N; i++) out_syn[c][i] = SATURATE(out_syn[c][i], (300000000));
     } while(++c < CC);
+
+    return;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -2299,7 +2336,6 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     if(tell + 4 <= total_bits) spread_decision = ec_dec_icdf(spread_icdf, 5);
 
     int32_t cap[nbEBands];
-
     init_caps(cap, LM, C);
 
     int32_t offsets[nbEBands];
@@ -2349,19 +2385,20 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     do { OPUS_MOVE(decode_mem[c], decode_mem[c] + N, DECODE_BUFFER_SIZE - N + overlap / 2); } while(++c < CC);
 
     /* Decode fixed codebook */
-    uint8_t collapse_masks[C * nbEBands];
-    int16_t X[C * N];
+    assert(C * nbEBands <= 42);
+    uint8_t* collapse_masks = s_collapse_masksBuff;
 
-log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
+    assert(C * N <= 1920);
+    int16_t* X = s_XBuff;
+
     quant_all_bands(X, C == 2 ? X + N : NULL, collapse_masks, pulses, shortBlocks, spread_decision,
                     dual_stereo, intensity, tf_res, len * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands);
-log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
+
     if(anti_collapse_rsv > 0) { anti_collapse_on = ec_dec_bits(1); }
 
     unquant_energy_finalise(oldBandE, fine_quant, fine_priority, len * 8 - ec_tell(), C);
 
-    if(anti_collapse_on)
-        anti_collapse(X, collapse_masks, LM, C, N, oldBandE, oldLogE, oldLogE2, pulses, cdec->rng);
+    if(anti_collapse_on) anti_collapse(X, collapse_masks, LM, C, N, oldBandE, oldLogE, oldLogE2, pulses, cdec->rng);
 
     if(silence) {
         for(i = 0; i < C * nbEBands; i++) oldBandE[i] = -QCONST16(28.f, 10);
@@ -2425,6 +2462,7 @@ log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
 
     if(ec_tell() > 8 * len) return OPUS_INTERNAL_ERROR;
     if(s_ec.error) cdec->error = 1;
+
     return frame_size;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -3530,10 +3568,12 @@ int32_t clt_compute_allocation(const int32_t *offsets, const int32_t *cap, int32
             total -= dual_stereo_rsv;
         }
     }
-    int32_t bits1[len];
-    int32_t bits2[len];
-    int32_t thresh[len];
-    int32_t trim_offset[len];
+
+    assert(len <= 21);
+    int32_t* bits1       = s_bits1Buff;
+    int32_t* bits2       = s_bits2Buff;
+    int32_t* thresh      = s_threshBuff;
+    int32_t* trim_offset = s_trim_offsetBuff;
 
     for (j = 0; j < end; j++) {
         /* Below this threshold, we're sure not to allocate any PVQ bits */
