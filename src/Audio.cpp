@@ -4078,7 +4078,7 @@ void Audio::printDecodeError(int r) {
             case ERR_OPUS_CELT_ALLOC_FAIL:                  e = "CELT DECODER INIT ALLOC FAIL";     break;
             default: e = "ERR_UNKNOWN";
         }
-        AUDIO_INFO("FLAC decode error %d : %s", r, e);
+        AUDIO_INFO("OPUS decode error %d : %s", r, e);
 
         }
 }
