@@ -814,9 +814,10 @@ void comb_filter_const(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g10
 //----------------------------------------------------------------------------------------------------------------------
 
 void comb_filter(int32_t *y, int32_t *x, int32_t T0, int32_t T1, int32_t N, int16_t g0, int16_t g1, int32_t tapset0,
-                 int32_t tapset1, int32_t overlap) {
+                 int32_t tapset1) {
     int32_t i;
     const uint8_t COMBFILTER_MINPERIOD = 15;
+    uint8_t  overlap = m_CELTMode.overlap; // =120
     /* printf ("%d %d %f %f\n", T0, T1, g0, g1); */
     int16_t              g00, g01, g02, g10, g11, g12;
     int32_t              x0, x1, x2, x3, x4;
@@ -991,9 +992,10 @@ void denormalise_bands(const int16_t * X, int32_t * freq,
 
 /* This prevents energy collapse for transients with multiple short MDCTs */
 void anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size,
-                   int32_t end, const int16_t *logE, const int16_t *prev1logE, const int16_t *prev2logE, const int32_t *pulses,
+                   const int16_t *logE, const int16_t *prev1logE, const int16_t *prev2logE, const int32_t *pulses,
                    uint32_t seed){
     int32_t c, i, j, k;
+    const uint8_t  end = cdec->end;  // 21
     for (i = 0; i < end; i++) {
         int32_t N0;
         int16_t thresh, sqrt_1;
@@ -1772,10 +1774,10 @@ void special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t M, int32_t du
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void quant_all_bands(int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t *pulses,
+void quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t *pulses,
                      int32_t shortBlocks, int32_t spread,
                      int32_t dual_stereo, int32_t intensity, int32_t *tf_res, int32_t total_bits, int32_t balance,
-                     int32_t LM, int32_t codedBands, int32_t disable_inv){
+                     int32_t LM, int32_t codedBands){
 
     int32_t i;
     int32_t remaining_bits;
@@ -1789,6 +1791,8 @@ void quant_all_bands(int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_ma
     int32_t C = Y_ != NULL ? 2 : 1;
     int32_t norm_offset;
     int32_t resynth = 1;
+    const uint8_t end = cdec->end;  // 21
+    uint8_t disable_inv = cdec->disable_inv; // 1- mono, 0- stereo
 
     M = 1 << LM;
     B = shortBlocks ? M : 1;
@@ -2033,12 +2037,15 @@ void deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int1
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void deemphasis(int32_t *in[], int16_t *pcm, int32_t N, const int16_t *coef, int32_t *mem) {
-    int32_t c;
-    int32_t Nd;
-    int32_t apply_downsampling = 0;
-    int16_t coef0;
+void deemphasis(int32_t *in[], int16_t *pcm, int32_t N) {
+    int32_t        c;
+    int32_t        Nd;
+    int32_t        apply_downsampling = 0;
+    int16_t        coef0;
     const int32_t  CC = cdec->channels;
+    const int16_t *coef = m_CELTMode.preemph;
+    int32_t       *mem = cdec->preemph_memD;
+
 
     /* Short version for common case. */
     if(CC == 2) {
@@ -2075,7 +2082,7 @@ void deemphasis(int32_t *in[], int16_t *pcm, int32_t N, const int16_t *coef, int
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t effEnd, int32_t C,
+void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C,
                     int32_t isTransient, int32_t LM, int32_t silence) {
     int32_t c, i;
     int32_t M;
@@ -2086,6 +2093,7 @@ void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t e
     int32_t nbEBands;
     int32_t overlap;
     const int32_t  CC = cdec->channels;
+    const uint8_t effEnd = cdec->end;  // 21
 
     overlap = m_CELTMode.overlap;
     nbEBands = m_CELTMode.nbEBands;
@@ -2138,13 +2146,14 @@ void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t e
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void tf_decode(int32_t end, int32_t isTransient, int32_t *tf_res, int32_t LM){
+void tf_decode(int32_t isTransient, int32_t *tf_res, int32_t LM){
     int32_t i, curr, tf_select;
     int32_t tf_select_rsv;
     int32_t tf_changed;
     int32_t logp;
     uint32_t budget;
     uint32_t tell;
+    const uint8_t end = cdec->end;
 
     budget = s_ec.storage * 8;
     tell = ec_tell();
@@ -2186,10 +2195,9 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     int32_t        shortBlocks;
     int32_t        isTransient;
     int32_t        intra_ener;
-    const int32_t  CC = cdec->channels;
+    const uint8_t  CC = cdec->channels;
     int32_t        LM, M;
-    int32_t        end = cdec->end;  // 21
-    int32_t        effEnd;
+    const uint8_t  end = cdec->end;  // 21
     int32_t        codedBands;
     int32_t        alloc_trim;
     int32_t        postfilter_pitch;
@@ -2204,9 +2212,9 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     int32_t        anti_collapse_rsv;
     int32_t        anti_collapse_on = 0;
     int32_t        silence;
-    int32_t        C = cdec->stream_channels; // =channels=2
-    int32_t        nbEBands = m_CELTMode.nbEBands;
-    int32_t        overlap = m_CELTMode.overlap;
+    const uint8_t  C = cdec->stream_channels; // =channels=2
+    const uint8_t  nbEBands = m_CELTMode.nbEBands; // =21
+    const uint8_t  overlap = m_CELTMode.overlap; // =120
     const int16_t *eBands = eband5ms;
 
     lpc = (int16_t *)(cdec->_decode_mem + (DECODE_BUFFER_SIZE + overlap) * CC);
@@ -2232,9 +2240,6 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
         decode_mem[c] = cdec->_decode_mem + c * (DECODE_BUFFER_SIZE + overlap);
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while(++c < CC);
-
-    effEnd = end;
-    if(effEnd > m_CELTMode.effEBands) effEnd = m_CELTMode.effEBands;
 
     if(len <= 1) { return OPUS_BAD_ARG; }
 
@@ -2284,10 +2289,10 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     /* Decode the global flags (first symbols in the stream) */
     intra_ener = tell + 3 <= total_bits ? ec_dec_bit_logp(3) : 0;
     /* Get band energies */
-    unquant_coarse_energy(end, oldBandE, intra_ener, C, LM);
+    unquant_coarse_energy(oldBandE, intra_ener, C, LM);
 
     int32_t tf_res[nbEBands];
-    tf_decode(end, isTransient, tf_res, LM);
+    tf_decode(isTransient, tf_res, LM);
 
     tell = ec_tell();
     spread_decision = 2;  // SPREAD_NORMAL
@@ -2335,10 +2340,10 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     int32_t pulses[nbEBands];
     int32_t fine_priority[nbEBands];
 
-    codedBands = clt_compute_allocation(end, offsets, cap, alloc_trim, &intensity, &dual_stereo, bits, &balance,
+    codedBands = clt_compute_allocation(offsets, cap, alloc_trim, &intensity, &dual_stereo, bits, &balance,
                                         pulses, fine_quant, fine_priority, C, LM);
 
-    unquant_fine_energy(end, oldBandE, fine_quant, C);
+    unquant_fine_energy(oldBandE, fine_quant, C);
 
     c = 0;
     do { OPUS_MOVE(decode_mem[c], decode_mem[c] + N, DECODE_BUFFER_SIZE - N + overlap / 2); } while(++c < CC);
@@ -2348,22 +2353,21 @@ int32_t celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, 
     int16_t X[C * N];
 
 log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
-    quant_all_bands(end, X, C == 2 ? X + N : NULL, collapse_masks, pulses, shortBlocks, spread_decision,
-                    dual_stereo, intensity, tf_res, len * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands,
-                    cdec->disable_inv);
+    quant_all_bands(X, C == 2 ? X + N : NULL, collapse_masks, pulses, shortBlocks, spread_decision,
+                    dual_stereo, intensity, tf_res, len * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands);
 log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
     if(anti_collapse_rsv > 0) { anti_collapse_on = ec_dec_bits(1); }
 
-    unquant_energy_finalise(end, oldBandE, fine_quant, fine_priority, len * 8 - ec_tell(), C);
+    unquant_energy_finalise(oldBandE, fine_quant, fine_priority, len * 8 - ec_tell(), C);
 
     if(anti_collapse_on)
-        anti_collapse(X, collapse_masks, LM, C, N, end, oldBandE, oldLogE, oldLogE2, pulses, cdec->rng);
+        anti_collapse(X, collapse_masks, LM, C, N, oldBandE, oldLogE, oldLogE2, pulses, cdec->rng);
 
     if(silence) {
         for(i = 0; i < C * nbEBands; i++) oldBandE[i] = -QCONST16(28.f, 10);
     }
 
-    celt_synthesis(X, out_syn, oldBandE, effEnd, C, isTransient, LM, silence);
+    celt_synthesis(X, out_syn, oldBandE, C, isTransient, LM, silence);
 
     c = 0;
     const uint8_t COMBFILTER_MINPERIOD = 15;
@@ -2372,11 +2376,11 @@ log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
         cdec->postfilter_period_old = max(cdec->postfilter_period_old, COMBFILTER_MINPERIOD);
         comb_filter(out_syn[c], out_syn[c], cdec->postfilter_period_old, cdec->postfilter_period,
                     m_CELTMode.shortMdctSize, cdec->postfilter_gain_old, cdec->postfilter_gain,
-                    cdec->postfilter_tapset_old, cdec->postfilter_tapset, overlap);
+                    cdec->postfilter_tapset_old, cdec->postfilter_tapset);
         if(LM != 0)
             comb_filter(out_syn[c] + m_CELTMode.shortMdctSize, out_syn[c] + m_CELTMode.shortMdctSize,
                         cdec->postfilter_period, postfilter_pitch, N - m_CELTMode.shortMdctSize, cdec->postfilter_gain,
-                        postfilter_gain, cdec->postfilter_tapset, postfilter_tapset, overlap);
+                        postfilter_gain, cdec->postfilter_tapset, postfilter_tapset);
 
     } while(++c < CC);
     cdec->postfilter_period_old = cdec->postfilter_period;
@@ -2417,7 +2421,7 @@ log_i("highWatermark %i", uxTaskGetStackHighWaterMark(NULL));
     } while(++c < 2);
     cdec->rng = 0; //dec->rng;
 
-    deemphasis(out_syn, outbuf, N, m_CELTMode.preemph, cdec->preemph_memD);
+    deemphasis(out_syn, outbuf, N);
 
     if(ec_tell() > 8 * len) return OPUS_INTERNAL_ERROR;
     if(s_ec.error) cdec->error = 1;
@@ -3498,7 +3502,7 @@ int32_t interp_bits2pulses(int32_t end, int32_t skip_start, const int32_t *bits1
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-int32_t clt_compute_allocation(int32_t end, const int32_t *offsets, const int32_t *cap, int32_t alloc_trim,
+int32_t clt_compute_allocation(const int32_t *offsets, const int32_t *cap, int32_t alloc_trim,
                            int32_t *intensity, int32_t *dual_stereo, int32_t total, int32_t *balance, int32_t *pulses, int32_t *ebits,
                            int32_t *fine_priority, int32_t C, int32_t LM) {
     int32_t lo, hi, len, j;
@@ -3507,9 +3511,10 @@ int32_t clt_compute_allocation(int32_t end, const int32_t *offsets, const int32_
     int32_t skip_rsv;
     int32_t intensity_rsv;
     int32_t dual_stereo_rsv;
+    const uint8_t end = cdec->end;  // 21
 
     total = max(total, 0);
-    len = m_CELTMode.nbEBands;
+    len = m_CELTMode.nbEBands; // =21
     /* Reserve a bit to signal the end of manually skipped bands. */
     skip_rsv = total >= 1 << BITRES ? 1 << BITRES : 0;
     total -= skip_rsv;
@@ -3590,7 +3595,7 @@ int32_t clt_compute_allocation(int32_t end, const int32_t *offsets, const int32_
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void unquant_coarse_energy(int32_t end, int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM) {
+void unquant_coarse_energy(int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM) {
     const uint8_t *prob_model = e_prob_model[LM][intra];
     int32_t i, c;
     int32_t prev[2] = {0, 0};
@@ -3598,6 +3603,7 @@ void unquant_coarse_energy(int32_t end, int16_t *oldEBands, int32_t intra, int32
     int16_t beta;
     int32_t budget;
     int32_t tell;
+    const uint8_t end = cdec->end;  // 21
 
     if (intra) {
         coef = 0;
@@ -3644,8 +3650,9 @@ void unquant_coarse_energy(int32_t end, int16_t *oldEBands, int32_t intra, int32
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void unquant_fine_energy(int32_t end, int16_t *oldEBands, int32_t *fine_quant, int32_t C) {
+void unquant_fine_energy(int16_t *oldEBands, int32_t *fine_quant, int32_t C) {
     int32_t i, c;
+    const uint8_t end = cdec->end;  // 21
     /* Decode finer resolution */
     for (i = 0; i < end; i++) {
         if (fine_quant[i] <= 0) continue;
@@ -3662,9 +3669,10 @@ void unquant_fine_energy(int32_t end, int16_t *oldEBands, int32_t *fine_quant, i
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void unquant_energy_finalise(int32_t end, int16_t *oldEBands, int32_t *fine_quant,
+void unquant_energy_finalise(int16_t *oldEBands, int32_t *fine_quant,
                              int32_t *fine_priority, int32_t bits_left, int32_t C) {
     int32_t i, prio, c;
+    const uint8_t  end = cdec->end;  // 21
 
     /* Use up the remaining bits */
     for (prio = 0; prio < 2; prio++) {
