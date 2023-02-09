@@ -3949,6 +3949,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             m_validSamples = AACGetOutputSamps() / getChannels();
         }
         if(m_codec == CODEC_FLAC || m_codec == CODEC_OGG_FLAC){
+            const uint8_t FLAC_PARSE_OGG_DONE = 100;
+            if(ret == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
             m_validSamples = FLACGetOutputSamps() / getChannels();
             char* st = FLACgetStreamTitle();
             if(st){
