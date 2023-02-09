@@ -1379,12 +1379,18 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_MAGIC) { /* check MAGIC STRING */
+        if(specialIndexOf(data, "OggS", 10) == 0) {  // is ogg
+            headerSize = 0;
+            retvalue = 0;
+            m_controlCounter = FLAC_OKAY;
+            return 0;
+        }
         if(specialIndexOf(data, "fLaC", 10) != 0) {
             log_e("Magic String 'fLaC' not found in header");
             stopSong();
             return -1;
         }
-        m_controlCounter = FLAC_MBH;
+        m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         headerSize = 4;
         retvalue = 4;
         return 0;
@@ -3836,6 +3842,34 @@ int Audio::findNextSync(uint8_t* data, size_t len){
     return nextSync;
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::setDecoderItems(){
+    if(m_codec == CODEC_MP3){
+        setChannels(MP3GetChannels());
+        setSampleRate(MP3GetSampRate());
+        setBitsPerSample(MP3GetBitsPerSample());
+        setBitrate(MP3GetBitrate());
+    }
+    if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
+        setChannels(AACGetChannels());
+        setSampleRate(AACGetSampRate());
+        setBitsPerSample(AACGetBitsPerSample());
+        setBitrate(AACGetBitrate());
+    }
+    if(m_codec == CODEC_FLAC){
+        setChannels(FLACGetChannels());
+        setSampleRate(FLACGetSampRate());
+        setBitsPerSample(FLACGetBitsPerSample());
+        setBitrate(FLACGetBitRate());
+    }
+    if(m_codec == CODEC_OPUS){
+        setChannels(OPUSGetChannels());
+        setSampleRate(OPUSGetSampRate());
+        setBitsPerSample(OPUSGetBitsPerSample());
+        setBitrate(OPUSGetBitRate());
+    }
+    showCodecParams();
+}
+//---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
     int bytesLeft;
     static bool f_setDecodeParamsOnce = true;
@@ -3889,37 +3923,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return bytesDecoded;
     }
     else{  // ret>=0
-        if(f_setDecodeParamsOnce){
-            f_setDecodeParamsOnce = false;
-            m_PlayingStartTime = millis();
-
-            if(m_codec == CODEC_MP3){
-                setChannels(MP3GetChannels());
-                setSampleRate(MP3GetSampRate());
-                setBitsPerSample(MP3GetBitsPerSample());
-                setBitrate(MP3GetBitrate());
-            }
-            if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
-                setChannels(AACGetChannels());
-                setSampleRate(AACGetSampRate());
-                setBitsPerSample(AACGetBitsPerSample());
-                setBitrate(AACGetBitrate());
-            }
-            if(m_codec == CODEC_FLAC){
-                setChannels(FLACGetChannels());
-                setSampleRate(FLACGetSampRate());
-                setBitsPerSample(FLACGetBitsPerSample());
-                setBitrate(FLACGetBitRate());
-            }
-            if(m_codec == CODEC_OPUS){
-                setChannels(OPUSGetChannels());
-                setSampleRate(OPUSGetSampRate());
-                setBitsPerSample(OPUSGetBitsPerSample());
-                setBitrate(OPUSGetBitRate());
-            }
-
-            showCodecParams();
-        }
         if(m_codec == CODEC_MP3){
             m_validSamples = MP3GetOutputSamps() / getChannels();
         }
@@ -3945,6 +3948,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 AUDIO_INFO(st);
                 if(audio_showstreamtitle) audio_showstreamtitle(st);
             }
+        }
+        if(f_setDecodeParamsOnce){
+            f_setDecodeParamsOnce = false;
+            setDecoderItems();
+            m_PlayingStartTime = millis();
         }
     }
     compute_audioCurrentTime(bytesDecoded);
@@ -4156,6 +4164,7 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayPosition(uint16_t sec){
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     // Jump to an absolute position in time within an audio file
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
@@ -4185,6 +4194,7 @@ uint32_t Audio::getTotalPlayingTime() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec){
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     // fast forward or rewind the current position in seconds
     // audiosource must be a mp3, aac or wav file
 
@@ -4207,6 +4217,7 @@ bool Audio::setTimeOffset(int sec){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
     if(!audiofile) return false;
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
