@@ -12,78 +12,78 @@
 #include "celt.h"
 
 // global vars
-bool      f_m_subsequentPage = false;
-bool      f_m_parseOgg = false;
-bool      f_m_newSt = false;  // streamTitle
-bool      f_m_opusFramePacket = false;
-uint8_t   m_channels = 0;
-uint16_t  m_samplerate = 0;
-uint32_t  m_segmentLength = 0;
-char     *m_chbuf = NULL;
-int32_t   s_validSamples = 0;
-uint8_t   s_oldmode = 0;
+bool      s_f_opusSubsequentPage = false;
+bool      s_f_opusParseOgg = false;
+bool      s_f_newSteamTitle = false;  // streamTitle
+bool      s_f_opusFramePacket = false;
+uint8_t   s_opusChannels = 0;
+uint16_t  s_opusSamplerate = 0;
+uint32_t  s_opusSegmentLength = 0;
+char     *s_opusChbuf = NULL;
+int32_t   s_opusValidSamples = 0;
+uint8_t   s_opusOldMode = 0;
 
-uint16_t *m_segmentTable;
-uint8_t   m_segmentTableSize = 0;
-int16_t   s_segmentTableRdPtr = -1;
-int8_t    error = 0;
-float     m_CompressionRatio = 0;
+uint16_t *s_opusSegmentTable;
+uint8_t   s_opusSegmentTableSize = 0;
+int16_t   s_opusSegmentTableRdPtr = -1;
+int8_t    s_opusError = 0;
+float     s_opusCompressionRatio = 0;
 
 bool OPUSDecoder_AllocateBuffers(){
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
     const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
-    m_chbuf = (char*)malloc(512);
+    s_opusChbuf = (char*)malloc(512);
     if(!CELTDecoder_AllocateBuffers()) {log_e("CELT not init"); return false;}
-    m_segmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
-    if(!m_segmentTable) {log_e("CELT not init"); return false;}
+    s_opusSegmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
+    if(!s_opusSegmentTable) {log_e("CELT not init"); return false;}
     CELTDecoder_ClearBuffer();
     OPUSDecoder_ClearBuffers();
-    error = celt_decoder_init(2); if(error < 0) {log_e("CELT not init"); return false;}
-    error = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(error < 0) {log_e("CELT not init"); return false;}
-    error = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(error < 0) {log_e("CELT not init"); return false;}
+    s_opusError = celt_decoder_init(2); if(s_opusError < 0) {log_e("CELT not init"); return false;}
+    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {log_e("CELT not init"); return false;}
+    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {log_e("CELT not init"); return false;}
     OPUSsetDefaults();
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
-    if(m_chbuf)        {free(m_chbuf);        m_chbuf = NULL;}
-    if(m_segmentTable) {free(m_segmentTable); m_segmentTable = NULL;}
+    if(s_opusChbuf)        {free(s_opusChbuf);        s_opusChbuf = NULL;}
+    if(s_opusSegmentTable) {free(s_opusSegmentTable); s_opusSegmentTable = NULL;}
     CELTDecoder_FreeBuffers();
 }
 void OPUSDecoder_ClearBuffers(){
-    if(m_chbuf)        memset(m_chbuf, 0, 512);
-    if(m_segmentTable) memset(m_segmentTable, 0, 256 * sizeof(int16_t));
+    if(s_opusChbuf)        memset(s_opusChbuf, 0, 512);
+    if(s_opusSegmentTable) memset(s_opusSegmentTable, 0, 256 * sizeof(int16_t));
 }
 void OPUSsetDefaults(){
-    f_m_subsequentPage = false;
-    f_m_parseOgg = false;
-    f_m_newSt = false;  // streamTitle
-    f_m_opusFramePacket = false;
-    m_channels = 0;
-    m_samplerate = 0;
-    m_segmentLength = 0;
-    s_validSamples = 0;
-    m_segmentTableSize = 0;
-    s_oldmode = 0xFF;
-    s_segmentTableRdPtr = -1;
+    s_f_opusSubsequentPage = false;
+    s_f_opusParseOgg = false;
+    s_f_newSteamTitle = false;  // streamTitle
+    s_f_opusFramePacket = false;
+    s_opusChannels = 0;
+    s_opusSamplerate = 0;
+    s_opusSegmentLength = 0;
+    s_opusValidSamples = 0;
+    s_opusSegmentTableSize = 0;
+    s_opusOldMode = 0xFF;
+    s_opusSegmentTableRdPtr = -1;
 
-    error = 0;
+    s_opusError = 0;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
-    if(f_m_parseOgg){
+    if(s_f_opusParseOgg){
         int ret = OPUSparseOGG(inbuf, bytesLeft);
         if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
         else return ret;  // error
     }
 
-    if(f_m_opusFramePacket){
-        if(m_segmentTableSize > 0){
-            s_segmentTableRdPtr++;
-            m_segmentTableSize--;
-            int len = m_segmentTable[s_segmentTableRdPtr];
+    if(s_f_opusFramePacket){
+        if(s_opusSegmentTableSize > 0){
+            s_opusSegmentTableRdPtr++;
+            s_opusSegmentTableSize--;
+            int len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
             *bytesLeft -= len;
             int32_t ret = parseOpusTOC(inbuf[0]);
             if(ret < 0) return ret;
@@ -94,12 +94,12 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             ec_dec_init((uint8_t *)inbuf, len);
             ret = celt_decode_with_ec(inbuf, len, (int16_t*)outbuf, frame_size);
             if(ret < 0) return ret; // celt error
-            s_validSamples = ret;
+            s_opusValidSamples = ret;
 
-            if(m_segmentTableSize== 0){
-                s_segmentTableRdPtr = -1; // back to the parking position
-                f_m_opusFramePacket = false;
-                f_m_parseOgg = true;
+            if(s_opusSegmentTableSize== 0){
+                s_opusSegmentTableRdPtr = -1; // back to the parking position
+                s_f_opusFramePacket = false;
+                s_f_opusParseOgg = true;
             }
         }
     }
@@ -126,27 +126,27 @@ int32_t opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
 //----------------------------------------------------------------------------------------------------------------------
 
 uint8_t OPUSGetChannels(){
-    return m_channels;
+    return s_opusChannels;
 }
 uint32_t OPUSGetSampRate(){
-    return m_samplerate;
+    return s_opusSamplerate;
 }
 uint8_t OPUSGetBitsPerSample(){
     return 16;
 }
 uint32_t OPUSGetBitRate(){
-    if(m_CompressionRatio != 0){
-        return (16 * 2 * 48000) / m_CompressionRatio;  //bitsPerSample * channel* SampleRate/CompressionRatio
+    if(s_opusCompressionRatio != 0){
+        return (16 * 2 * 48000) / s_opusCompressionRatio;  //bitsPerSample * channel* SampleRate/CompressionRatio
     }
     else return 0;
 }
 uint16_t OPUSGetOutputSamps(){
-    return s_validSamples; // 1024
+    return s_opusValidSamples; // 1024
 }
 char* OPUSgetStreamTitle(){
-    if(f_m_newSt){
-        f_m_newSt = false;
-        return m_chbuf;
+    if(s_f_newSteamTitle){
+        s_f_newSteamTitle = false;
+        return s_opusChbuf;
     }
     return NULL;
 }
@@ -163,8 +163,8 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
     c        = (TOC_Byte & 0b00000011);
     if(TOC_Byte & 0x80) mode = 2; else mode = 1;
 
-    if(s_oldmode != mode) {
-        s_oldmode = mode;
+    if(s_opusOldMode != mode) {
+        s_opusOldMode = mode;
         if(mode == 2) log_i("opus mode is MODE_CELT_ONLY");
     }
 
@@ -226,18 +226,18 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
         pos += commentStringLen;
     }
     if(artist && title){
-        strcpy(m_chbuf, artist);
-        strcat(m_chbuf, " - ");
-        strcat(m_chbuf, title);
-        f_m_newSt = true;
+        strcpy(s_opusChbuf, artist);
+        strcat(s_opusChbuf, " - ");
+        strcat(s_opusChbuf, title);
+        s_f_newSteamTitle = true;
     }
     else if(artist){
-        strcpy(m_chbuf, artist);
-        f_m_newSt = true;
+        strcpy(s_opusChbuf, artist);
+        s_f_newSteamTitle = true;
     }
     else if(title){
-        strcpy(m_chbuf, title);
-        f_m_newSt = true;
+        strcpy(s_opusChbuf, title);
+        s_f_newSteamTitle = true;
     }
     if(artist){free(artist); artist = NULL;}
     if(title) {free(title);  title = NULL;}
@@ -262,9 +262,9 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
     uint8_t  channelMap         = *(inbuf + 18);
 
     if(channelCount == 0 or channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
-    m_channels = channelCount;
+    s_opusChannels = channelCount;
     if(sampleRate != 48000) return ERR_OPUS_INVALID_SAMPLERATE;
-    m_samplerate = sampleRate;
+    s_opusSamplerate = sampleRate;
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 
     (void)outputGain;
@@ -275,7 +275,7 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
 //----------------------------------------------------------------------------------------------------------------------
 int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    f_m_parseOgg = false;
+    s_f_opusParseOgg = false;
     int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if(idx != 0) return ERR_OPUS_DECODER_ASYNC;
@@ -308,7 +308,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
 
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
-    m_segmentLength = 0;
+    s_opusSegmentLength = 0;
     segmentTableWrPtr = -1;
 
     for(int i = 0; i < pageSegments; i++){
@@ -318,11 +318,11 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
             n+= *(inbuf + 27 + i);
         }
         segmentTableWrPtr++;
-        m_segmentTable[segmentTableWrPtr] = n;
-        m_segmentLength += n;
+        s_opusSegmentTable[segmentTableWrPtr] = n;
+        s_opusSegmentLength += n;
     }
-    m_segmentTableSize = segmentTableWrPtr + 1;
-    m_CompressionRatio = (float)(960 * 2 * pageSegments)/m_segmentLength;  // const 960 validBytes out
+    s_opusSegmentTableSize = segmentTableWrPtr + 1;
+    s_opusCompressionRatio = (float)(960 * 2 * pageSegments)/s_opusSegmentLength;  // const 960 validBytes out
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
@@ -332,18 +332,18 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     (void)continuedPage; (void)lastPage;
     *bytesLeft -= headerSize;
 
-    if(firstPage || f_m_subsequentPage){ // OpusHead or OggComment may follows
-        ret = parseOpusHead(inbuf + headerSize, m_segmentTable[0]);
-        if(ret == 1) *bytesLeft -= m_segmentTable[0];
-        if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
-        ret = parseOpusComment(inbuf + headerSize, m_segmentTable[0]);
-        if(ret == 1) *bytesLeft -= m_segmentTable[0];
-        if(ret < 0){ *bytesLeft -= m_segmentTable[0]; return ret;}
-        f_m_parseOgg = true;// goto next page
+    if(firstPage || s_f_opusSubsequentPage){ // OpusHead or OggComment may follows
+        ret = parseOpusHead(inbuf + headerSize, s_opusSegmentTable[0]);
+        if(ret == 1) *bytesLeft -= s_opusSegmentTable[0];
+        if(ret < 0){ *bytesLeft -= s_opusSegmentTable[0]; return ret;}
+        ret = parseOpusComment(inbuf + headerSize, s_opusSegmentTable[0]);
+        if(ret == 1) *bytesLeft -= s_opusSegmentTable[0];
+        if(ret < 0){ *bytesLeft -= s_opusSegmentTable[0]; return ret;}
+        s_f_opusParseOgg = true;// goto next page
     }
 
-    f_m_opusFramePacket = true;
-    if(firstPage) f_m_subsequentPage = true; else f_m_subsequentPage = false;
+    s_f_opusFramePacket = true;
+    if(firstPage) s_f_opusSubsequentPage = true; else s_f_opusSubsequentPage = false;
 
     return ERR_OPUS_NONE; // no error
 }
@@ -354,11 +354,11 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     int idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
         log_i("OggS found at %i", idx);
-        f_m_parseOgg = true;
+        s_f_opusParseOgg = true;
         return idx;
     }
     log_i("find sync");
-    f_m_parseOgg = false;
+    s_f_opusParseOgg = false;
     return ERR_OPUS_OGG_SYNC_NOT_FOUND;
 }
 //----------------------------------------------------------------------------------------------------------------------
