@@ -2978,7 +2978,9 @@ void Audio::processWebFile() {
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100){
-        InBuff.bytesWasRead(readAudioHeader(availableBytes));
+        if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
+            InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
+        }
         return;
     }
 
