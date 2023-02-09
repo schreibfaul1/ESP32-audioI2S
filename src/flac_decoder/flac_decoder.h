@@ -147,7 +147,7 @@ int      FLACFindSyncWord(unsigned char *buf, int nBytes);
 boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
 boolean  FLACFindStreamTitle(unsigned char* buf, int nBytes);
 char*    FLACgetStreamTitle();
-int      FLACparseOggHeader(unsigned char *buf);
+int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
 bool     FLACDecoder_AllocateBuffers(void);
 void     FLACDecoder_ClearBuffer();
 void     FLACDecoder_FreeBuffers();
@@ -172,5 +172,5 @@ int8_t   decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, u
 int8_t   decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch);
 int8_t   decodeResiduals(uint8_t warmup, uint8_t ch);
 void     restoreLinearPrediction(uint8_t ch, uint8_t shift);
-int      specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
+int      FLAC_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
 

@@ -32,8 +32,8 @@ float    m_compressionRatio = 0;
 uint16_t m_rIndex=0;
 uint64_t m_bitBuffer = 0;
 uint8_t  m_bitBufferLen = 0;
-bool     m_f_OggS_found = false;
-uint8_t  m_psegm = 0;
+bool     s_f_flacParseOgg = false;
+uint8_t  m_flacPageSegments = 0;
 uint8_t  m_page0_len = 0;
 char     *m_streamTitle= NULL;
 boolean  m_newSt = false;
@@ -132,7 +132,11 @@ void FLACDecoderReset(){ // set var to default
 //----------------------------------------------------------------------------------------------------------------------
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
     int i;
-
+    i = FLAC_specialIndexOf(buf, "OggS", nBytes);
+    if(i == 0){
+        // flag has ogg wrapper
+        return 0;
+    }
      /* find byte-aligned sync code - need 14 matching bits */
     for (i = 0; i < nBytes - 1; i++) {
         if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
@@ -144,7 +148,7 @@ int FLACFindSyncWord(unsigned char *buf, int nBytes) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 boolean FLACFindMagicWord(unsigned char* buf, int nBytes){
-    int idx = specialIndexOf(buf, "fLaC", nBytes);
+    int idx = FLAC_specialIndexOf(buf, "fLaC", nBytes);
     if(idx >0){ // Metadatablock follows
         idx += 4;
         boolean lmdbf = ((buf[idx + 1] & 0x80) == 0x80); // Last-metadata-block flag
@@ -162,7 +166,7 @@ boolean FLACFindMagicWord(unsigned char* buf, int nBytes){
 }
 //----------------------------------------------------------------------------------------------------------------------
 boolean FLACFindStreamTitle(unsigned char* buf, int nBytes){
-    int idx = specialIndexOf(buf, "title=", nBytes);
+    int idx = FLAC_specialIndexOf(buf, "title=", nBytes);
     if(idx >0){
         idx += 6;
         int len = nBytes - idx;
@@ -183,60 +187,70 @@ char* FLACgetStreamTitle(){
     }
     return NULL;
 }
-
 //----------------------------------------------------------------------------------------------------------------------
-int FLACparseOggHeader(unsigned char *buf){
-    uint16_t i = 0;
-    uint8_t ssv = *(buf + i);                  // stream_structure_version
-    (void)ssv;
-    i++;
-    uint8_t htf = *(buf + i);                  // header_type_flag
-    (void)htf;
-    i++;
-    uint32_t tmp = 0;                         // absolute granule position
-    for (int j = 0; j < 4; j++) {
-        tmp += *(buf + j + i) << (4 -j - 1) * 8;
-    }
-    i += 4;
-    uint64_t agp = (uint64_t) tmp << 32;
-    for (int j = 0; j < 4; j++) {
-        agp += *(buf + j + i) << (4 -j - 1) * 8;
-    }
-    i += 4;
-    uint32_t ssnr = 0;                        // stream serial number
-    for (int j = 0; j < 4; j++) {
-        ssnr += *(buf + j + i) << (4 -j - 1) * 8;
-    }
-    i += 4;
-    uint32_t psnr = 0;                        // page sequence no
-    for (int j = 0; j < 4; j++) {
-        psnr += *(buf + j + i) << (4 -j - 1) * 8;
-    }
-    i += 4;
-    uint32_t pchk = 0;                        // page checksum
-    for (int j = 0; j < 4; j++) {
-        pchk += *(buf + j + i) << (4 -j - 1) * 8;
-    }
-    i += 4;
-    m_psegm = *(buf + i);
-    i++;
+int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+
+    s_f_flacParseOgg = false;
+    int ret = 0;
+    int idx = FLAC_specialIndexOf(inbuf, "OggS", 6);
+
+//    if(idx != 0) return -1; //ERR_OPUS_DECODER_ASYNC;
+
+    uint8_t  version            = *(inbuf +  4); (void) version;
+    uint8_t  headerType         = *(inbuf +  5); (void) headerType;
+    uint64_t granulePosition    = (uint64_t)*(inbuf + 13) << 56;  // granule_position: an 8 Byte field containing -
+             granulePosition   += (uint64_t)*(inbuf + 12) << 48;  // position information. For an audio stream, it MAY
+             granulePosition   += (uint64_t)*(inbuf + 11) << 40;  // contain the total number of PCM samples encoded
+             granulePosition   += (uint64_t)*(inbuf + 10) << 32;  // after including all frames finished on this page.
+             granulePosition   += *(inbuf +  9) << 24;  // This is a hint for the decoder and gives it some timing
+             granulePosition   += *(inbuf +  8) << 16;  // and position information. A special value of -1 (in two's
+             granulePosition   += *(inbuf +  7) << 8;   // complement) indicates that no packets finish on this page.
+             granulePosition   += *(inbuf +  6); (void) granulePosition;
+    uint32_t bitstreamSerialNr  = *(inbuf + 17) << 24;  // bitstream_serial_number: a 4 Byte field containing the
+             bitstreamSerialNr += *(inbuf + 16) << 16;  // unique serial number by which the logical bitstream
+             bitstreamSerialNr += *(inbuf + 15) << 8;   // is identified.
+             bitstreamSerialNr += *(inbuf + 14); (void) bitstreamSerialNr;
+    uint32_t pageSequenceNr     = *(inbuf + 21) << 24;  // page_sequence_number: a 4 Byte field containing the sequence
+             pageSequenceNr    += *(inbuf + 20) << 16;  // number of the page so the decoder can identify page loss
+             pageSequenceNr    += *(inbuf + 19) << 8;   // This sequence number is increasing on each logical bitstream
+             pageSequenceNr    += *(inbuf + 18); (void) pageSequenceNr;
+    uint32_t CRCchecksum        = *(inbuf + 25) << 24;
+             CRCchecksum       += *(inbuf + 24) << 16;
+             CRCchecksum       += *(inbuf + 23) << 8;
+             CRCchecksum       += *(inbuf + 22); (void) CRCchecksum;
+    uint8_t  pageSegments       = *(inbuf + 26);        // giving the number of segment entries
+
+    // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
+    // 255: A second byte is needed.  The total length is first_byte + second byte
     uint8_t psegmBuff[256];
-    uint32_t pageLen = 0;
-    for(uint8_t j = 0; j < m_psegm; j++){
-        if(j == 0) m_page0_len = *(buf + i);;
-        psegmBuff[j] = *(buf + i);
-        pageLen += psegmBuff[j];
-        i++;
+
+    int16_t segmentTableWrPtr = 0;
+
+    for(int i = 0; i < pageSegments; i++){
+        int n = *(inbuf + 27 + i);
+        while(*(inbuf + 27 + i) == 255){
+            i++;
+            n+= *(inbuf + 27 + i);
+        }
+        psegmBuff[segmentTableWrPtr] = n;
+        segmentTableWrPtr++;
+    //    s_flacSegmentLength += n;
     }
-    return i;
+    m_page0_len = psegmBuff[0];
+
+    uint16_t headerSize = pageSegments + 27;
+    if(pageSegments == 1) headerSize = pageSegments + psegmBuff[0] +27;
+    *bytesLeft -= headerSize;
+
+    return ERR_FLAC_NONE; // no error
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
-    if(m_f_OggS_found == true){
-        m_f_OggS_found = false;
-        *bytesLeft -= FLACparseOggHeader(inbuf);
-        return FLAC_PARSE_OGG_DONE;
+    if(s_f_flacParseOgg == true){
+        int ret = FLACparseOGG(inbuf, bytesLeft);
+        if(ret == ERR_FLAC_NONE) return FLAC_PARSE_OGG_DONE; // ok
+        else return ret;  // error
     }
 
     if(m_status != OUT_SAMPLES){
@@ -248,23 +262,10 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     if(m_status == DECODE_FRAME){  // Read a ton of header fields, and ignore most of them
 
         if ((inbuf[0] == 'O') && (inbuf[1] == 'g') && (inbuf[2] == 'g') && (inbuf[3] == 'S')){
-            *bytesLeft -= 4;
-            m_f_OggS_found = true;
-            return ERR_FLAC_NONE;
+            s_f_flacParseOgg = true;
+            return FLAC_PARSE_OGG_DONE;
         }
 
-        if(!((inbuf[0] & 0xFF) == 0xFF  && (inbuf[1] & 0xFC) == 0xF8)){
-            // log_i("m_psegm  %d m_page0_len %d", m_psegm, m_page0_len);
-            if(m_psegm == 1){
-                if(!FLACFindMagicWord(inbuf, m_page0_len)){
-                    FLACFindStreamTitle(inbuf, m_page0_len);
-                }
-                *bytesLeft -= m_page0_len;  // can be FLAC or title
-                return FLAC_PARSE_OGG_DONE;
-            }
-            log_i("sync code not found");
-            return ERR_FLAC_SYNC_CODE_NOT_FOUND;
-        }
         return flacDecodeFrame(inbuf, bytesLeft, outbuf);
     }
 
@@ -580,7 +581,7 @@ void restoreLinearPrediction(uint8_t ch, uint8_t shift) {
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
-int specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
+int FLAC_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
     int result;  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
     for (int i = 0; i < baselen - strlen(str); i++){
