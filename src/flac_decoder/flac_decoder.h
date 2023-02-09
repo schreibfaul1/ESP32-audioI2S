@@ -40,7 +40,8 @@ enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                 ERR_FLAC_RESERVED_RESIDUAL_CODING = -8,
                 ERR_FLAC_WRONG_RICE_PARTITION_NR = -9,
                 ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG = -10,
-                ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN = 11};
+                ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN = -11,
+                ERR_FLAC_DECODER_ASYNC = -12};
 
 typedef struct FLACMetadataBlock_t{
                               // METADATA_BLOCK_STREAMINFO
@@ -145,7 +146,6 @@ typedef struct FLACFrameHeader_t {
 
 int      FLACFindSyncWord(unsigned char *buf, int nBytes);
 boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
-boolean  FLACFindStreamTitle(unsigned char* buf, int nBytes);
 char*    FLACgetStreamTitle();
 int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
 bool     FLACDecoder_AllocateBuffers(void);

@@ -165,7 +165,7 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 
     if(s_opusOldMode != mode) {
         s_opusOldMode = mode;
-        if(mode == 2) log_i("opus mode is MODE_CELT_ONLY");
+    //    if(mode == 2) log_i("opus mode is MODE_CELT_ONLY");
     }
 
     /*  Configuration       Mode  Bandwidth            FrameSizes         Audio Bandwidth   Sample Rate (Effective)
@@ -353,7 +353,7 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     // assume we have a ogg wrapper
     int idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
-        log_i("OggS found at %i", idx);
+    //    log_i("OggS found at %i", idx);
         s_f_opusParseOgg = true;
         return idx;
     }

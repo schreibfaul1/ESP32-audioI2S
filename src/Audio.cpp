@@ -2898,7 +2898,7 @@ void Audio::processWebStream() {
             AUDIO_INFO("stream ready");
         }
         if(!f_stream) return;
-        if(m_codec == CODEC_OGG){ log_i("determine correct codec here");
+        if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
             if(codec == CODEC_FLAC) {m_codec = CODEC_FLAC; initializeDecoder(); return;}
             if(codec == CODEC_OPUS) {m_codec = CODEC_OPUS; initializeDecoder(); return;}
