@@ -36,8 +36,11 @@ void setup() {
     WiFi.begin(ssid.c_str(), password.c_str());
     while (WiFi.status() != WL_CONNECTED) delay(1500);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-    audio.setVolume(21); // 0...21
-
+    audio.setVolume(21); // default 0...21
+//  or alternative
+//  audio.setVolumeSteps(64); // max 255
+//  audio.setVolume(63);    
+//
     audio.connecttohost("http://iskatel.hostingradio.ru:8015/iskatel-320.aac");  // aac
 //  audio.connecttohost("http://mcrscast.mcr.iol.pt/cidadefm");                  // mp3
 //  audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");         // m3u
@@ -45,6 +48,7 @@ void setup() {
 //  audio.connecttohost("http://tuner.classical102.com/listen.pls");             // pls
 //  audio.connecttohost("http://stream.radioparadise.com/flac");                 // flac
 //  audio.connecttohost("http://stream.sing-sing-bis.org:8000/singsingFlac");    // flac (ogg)
+//  audio.connecttohost("http://s1.knixx.fm:5347/dein_webradio_vbr.opus");       // opus (ogg)
 //  audio.connecttohost("http://26373.live.streamtheworld.com:3690/XHQQ_FMAAC/HLSTS/playlist.m3u8");  // HLS
 //  audio.connecttohost("http://eldoradolive02.akamaized.net/hls/live/2043453/eldorado/master.m3u8"); // HLS (ts)
 //  audio.connecttoFS(SD, "/test.wav");     // SD

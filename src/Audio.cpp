@@ -4318,8 +4318,9 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
 
-    // sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  * 0.8; // half Vin so we can boost up to 6dB in filters
-    // sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] * 0.8; // todo compute a correction factor if filter have positive amplification
+    // sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  >> 1; // half Vin so we can boost up to 6dB in filters
+    // sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] >> 1; // todo compute a correction factor if filter have positive amplification
+
 
     // Filterchain, can commented out if not used
     sample = IIR_filterChain0(sample);
