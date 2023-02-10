@@ -28,6 +28,7 @@ typedef struct FLACsubFramesBuff_t{
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
 enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
+                FLAC_DECODE_FRAMES_LOOP = 100,
                 GIVE_NEXT_LOOP = +1,
                 ERR_FLAC_NONE = 0,
                 ERR_FLAC_BLOCKSIZE_TOO_BIG = -1,
@@ -154,6 +155,7 @@ void     FLACDecoder_FreeBuffers();
 void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength);
 void     FLACDecoderReset();
 int8_t   FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
+int8_t   FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 int8_t   flacDecodeFrame(uint8_t *inbuf, int *bytesLeft);
 uint16_t FLACGetOutputSamps();
 uint64_t FLACGetTotoalSamplesInStream();

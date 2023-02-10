@@ -40,23 +40,19 @@ boolean         s_f_newSt = false;
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
 //----------------------------------------------------------------------------------------------------------------------
-bool FLACDecoder_AllocateBuffers(void){
-    if(psramFound()) {
-        // PSRAM found, Buffer will be allocated in PSRAM
-        if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    ps_malloc(sizeof(FLACFrameHeader_t));}
-        if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  ps_malloc(sizeof(FLACMetadataBlock_t));}
-        if(!FLACsubFramesBuff)  {FLACsubFramesBuff  = (FLACsubFramesBuff_t*)  ps_malloc(sizeof(FLACsubFramesBuff_t));}
-        if(!m_streamTitle)      {m_streamTitle      = (char*)                 ps_malloc(256);}
-        if(!s_flacSegmentTable) {s_flacSegmentTable = (uint16_t*)             ps_malloc(256 * sizeof(uint16_t));}
-    }
-    else {
-        if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    malloc(sizeof(FLACFrameHeader_t));}
-        if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  malloc(sizeof(FLACMetadataBlock_t));}
-        if(!FLACsubFramesBuff)  {FLACsubFramesBuff  = (FLACsubFramesBuff_t*)  malloc(sizeof(FLACsubFramesBuff_t));}
-        if(!m_streamTitle)      {m_streamTitle      = (char*)                 malloc(256);}
-        if(!s_flacSegmentTable) {s_flacSegmentTable = (uint16_t*)             malloc(256 * sizeof(uint16_t));}
 
-    }
+// prefer PSRAM
+#define __malloc_heap_psram(size) \
+    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+
+bool FLACDecoder_AllocateBuffers(void){
+
+    if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    __malloc_heap_psram(sizeof(FLACFrameHeader_t));}
+    if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  __malloc_heap_psram(sizeof(FLACMetadataBlock_t));}
+    if(!FLACsubFramesBuff)  {FLACsubFramesBuff  = (FLACsubFramesBuff_t*)  __malloc_heap_psram(sizeof(FLACsubFramesBuff_t));}
+    if(!m_streamTitle)      {m_streamTitle      = (char*)                 __malloc_heap_psram(256);}
+    if(!s_flacSegmentTable) {s_flacSegmentTable = (uint16_t*)             __malloc_heap_psram(256 * sizeof(uint16_t));}
+
     if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff || !m_streamTitle || !s_flacSegmentTable){
         log_e("not enough memory to allocate flacdecoder buffers");
         return false;
@@ -265,7 +261,7 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     return ERR_FLAC_NONE; // no error
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
+int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
 
     if(s_f_flacParseOgg == true){
         int ret = FLACparseOGG(inbuf, bytesLeft);
@@ -273,18 +269,26 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         else return ret;  // error
     }
 
+    if ((inbuf[0] == 'O') && (inbuf[1] == 'g') && (inbuf[2] == 'g') && (inbuf[3] == 'S')){
+        s_f_flacParseOgg = true;
+        return FLAC_PARSE_OGG_DONE;
+    }
+
+    int ret = FLACDecodeNative(inbuf, bytesLeft, outbuf);
+    return ret;
+}
+//----------------------------------------------------------------------------------------------------------------------
+int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
+
     if(m_status != OUT_SAMPLES){
         m_rIndex = 0;
         m_inptr = inbuf;
     }
 
-    if(m_status == DECODE_FRAME){  // Read a ton of header fields, and ignore most of them
-
-        if ((inbuf[0] == 'O') && (inbuf[1] == 'g') && (inbuf[2] == 'g') && (inbuf[3] == 'S')){
-            s_f_flacParseOgg = true;
-            return FLAC_PARSE_OGG_DONE;
-        }
-        return flacDecodeFrame (inbuf, bytesLeft);
+    while(m_status == DECODE_FRAME){// Read a ton of header fields, and ignore most of them
+        int ret = flacDecodeFrame (inbuf, bytesLeft);
+        if(ret != 0) return ret;
+        if(*bytesLeft < MAX_BLOCKSIZE) return FLAC_DECODE_FRAMES_LOOP; // need more data
     }
 
     if(m_status == DECODE_SUBFRAMES){
@@ -302,7 +306,6 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         static uint16_t offset = 0;
         if(m_blockSize < outBuffSize + offset) blockSize = m_blockSize - offset;
         else blockSize = outBuffSize;
-
 
         for (int i = 0; i < blockSize; i++) {
             for (int j = 0; j < FLACMetadataBlock->numChannels; j++) {
@@ -322,7 +325,6 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     alignToByte();
     readUint(16, bytesLeft);
-//    log_i("m_bytesDecoded %i", m_bytesDecoded);
 //    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("m_compressionRatio % f", m_compressionRatio);
     m_status = DECODE_FRAME;
