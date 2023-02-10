@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 2.0.8d
- *  Updated on: Jan 13.2023
+ *  Version 3.0.0
+ *  Updated on: Feb 09.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -12,6 +12,7 @@
 #include "mp3_decoder/mp3_decoder.h"
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
+#include "opus_decoder/opus_decoder.h"
 
 #ifdef SDFATFS_USED
 fs::SDFATFS SD_SDFAT;
@@ -310,6 +311,7 @@ void Audio::setDefaults() {
     MP3Decoder_FreeBuffers();
     FLACDecoder_FreeBuffers();
     AACDecoder_FreeBuffers();
+    OPUSDecoder_FreeBuffers();
     if(m_playlistBuff)   {free(m_playlistBuff);     m_playlistBuff = NULL;} // free if stream is not m3u8
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
@@ -503,6 +505,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(endsWith(extension, ".wav"))   m_expectedCodec = CODEC_WAV;
         if(endsWith(extension, ".m4a"))   m_expectedCodec = CODEC_M4A;
         if(endsWith(extension, ".flac"))  m_expectedCodec = CODEC_FLAC;
+        if(endsWith(extension, "-flac"))  m_expectedCodec = CODEC_FLAC;
+        if(endsWith(extension, ".opus"))  m_expectedCodec = CODEC_OPUS;
+        if(endsWith(extension, "/opus"))  m_expectedCodec = CODEC_OPUS;
         if(endsWith(extension, ".asx"))  m_expectedPlsFmt = FORMAT_ASX;
         if(endsWith(extension, ".m3u"))  m_expectedPlsFmt = FORMAT_M3U;
         if(endsWith(extension, ".m3u8")) m_expectedPlsFmt = FORMAT_M3U8;
@@ -738,6 +743,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     if(endsWith(afn, ".aac"))  m_codec = CODEC_AAC;
     if(endsWith(afn, ".wav"))  m_codec = CODEC_WAV;
     if(endsWith(afn, ".flac")) m_codec = CODEC_FLAC;
+    if(endsWith(afn, ".opus")) m_codec = CODEC_OPUS;
 
     if(m_codec == CODEC_NONE) AUDIO_INFO("The %s format is not supported", afn + dotPos);
 
@@ -752,7 +758,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang){
 
-    xSemaphoreTake(mutex_audio, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
@@ -1191,6 +1197,9 @@ size_t Audio::readAudioHeader(uint32_t bytes){
             m_controlCounter = 100;
         }
     }
+    if(m_codec == CODEC_OPUS){
+        m_controlCounter = 100;
+    }
     if(!isRunning()){
         log_e("Processing stopped due to invalid audio header");
         return 0;
@@ -1370,12 +1379,18 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_MAGIC) { /* check MAGIC STRING */
+        if(specialIndexOf(data, "OggS", 10) == 0) {  // is ogg
+            headerSize = 0;
+            retvalue = 0;
+            m_controlCounter = FLAC_OKAY;
+            return 0;
+        }
         if(specialIndexOf(data, "fLaC", 10) != 0) {
             log_e("Magic String 'fLaC' not found in header");
             stopSong();
             return -1;
         }
-        m_controlCounter = FLAC_MBH;
+        m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         headerSize = 4;
         retvalue = 4;
         return 0;
@@ -1838,7 +1853,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_FTYP) { /* check_m4a_file */
         atomsize = bigEndian(data, 4); // length of first atom
         if(specialIndexOf(data, "ftyp", 10) != 4) {
-            log_e("atom 'type' not found in header");
+            log_e("atom 'ftyp' not found in header");
             stopSong();
             return -1;
         }
@@ -2810,7 +2825,8 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_MP3)   MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC)   AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A)   AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
+        if(m_codec == CODEC_FLAC)  FLACDecoder_FreeBuffers();
+        if(m_codec == CODEC_OPUS)  OPUSDecoder_FreeBuffers();
         AUDIO_INFO("End of file \"%s\"", afn);
         if(audio_eof_mp3) audio_eof_mp3(afn);
         if(afn) {free(afn); afn = NULL;}
@@ -2882,6 +2898,13 @@ void Audio::processWebStream() {
             AUDIO_INFO("stream ready");
         }
         if(!f_stream) return;
+        if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            if(codec == CODEC_FLAC) {m_codec = CODEC_FLAC; initializeDecoder(); return;}
+            if(codec == CODEC_OPUS) {m_codec = CODEC_OPUS; initializeDecoder(); return;}
+            stopSong();
+            return;
+        }
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2957,7 +2980,7 @@ void Audio::processWebFile() {
     if(m_controlCounter != 100){
         if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
             InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled())); // #480
-        }
+      }
         return;
     }
 
@@ -3284,6 +3307,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(startsWith(rhl, "content-type:")){ // content-type: text/html; charset=UTF-8
+            log_i("cT: %s", rhl);
             int idx = indexOf(rhl + 13, ";");
             if(idx >0) rhl[13 + idx] = '\0';
             if(parseContentType(rhl + 13)) ct_seen = true;
@@ -3391,6 +3415,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             const char* c_idesc = (rhl + 16);
             while(c_idesc[0] == ' ') c_idesc++;
             latinToUTF8(rhl, sizeof(rhl)); // if already UTF-0 do nothing, otherwise convert to UTF-8
+            if(specialIndexOf((uint8_t*)c_idesc, "24bit", strlen(c_idesc)) >= 0){
+                AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
+                stopSong();
+            }
             if(audio_icydescription) audio_icydescription(c_idesc);
         }
 
@@ -3447,20 +3475,29 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 bool Audio:: initializeDecoder(){
     switch(m_codec){
         case CODEC_MP3:
-            if(!MP3Decoder_AllocateBuffers()) goto exit;
+            if(!MP3Decoder_AllocateBuffers()){
+                AUDIO_INFO("The MP3Decoder could not be initialized");
+                goto exit;
+            }
             AUDIO_INFO("MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             InBuff.changeMaxBlockSize(m_frameSizeMP3);
             break;
         case CODEC_AAC:
             if(!AACDecoder_IsInit()){
-                if(!AACDecoder_AllocateBuffers()) goto exit;
+                if(!AACDecoder_AllocateBuffers()){
+                    AUDIO_INFO("The AACDecoder could not be initialized");
+                    goto exit;
+                }
                 AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
         case CODEC_M4A:
             if(!AACDecoder_IsInit()){
-                if(!AACDecoder_AllocateBuffers()) goto exit;
+                if(!AACDecoder_AllocateBuffers()){
+                    AUDIO_INFO("The AACDecoder could not be initialized");
+                    goto exit;
+                }
                 AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
@@ -3470,12 +3507,25 @@ bool Audio:: initializeDecoder(){
                 AUDIO_INFO("FLAC works only with PSRAM!");
                 goto exit;
             }
-            if(!FLACDecoder_AllocateBuffers()) goto exit;
+            if(!FLACDecoder_AllocateBuffers()){
+                AUDIO_INFO("The FLACDecoder could not be initialized");
+                goto exit;
+            }
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
             AUDIO_INFO("FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
             break;
+        case CODEC_OPUS:
+            if(!OPUSDecoder_AllocateBuffers()){
+                AUDIO_INFO("The OPUSDecoder could not be initialized");
+                goto exit;
+            }
+            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            InBuff.changeMaxBlockSize(m_frameSizeOPUS);
+            break;
         case CODEC_WAV:
             InBuff.changeMaxBlockSize(m_frameSizeWav);
+            break;
+        case CODEC_OGG: // the decoder will be determined later (vorbis, flac, opus?)
             break;
         default:
             goto exit;
@@ -3491,7 +3541,7 @@ bool Audio:: initializeDecoder(){
 bool Audio::parseContentType(char* ct) {
 
     enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
-                CT_M3U8, CT_TXT, CT_AACP};
+                CT_M3U8, CT_TXT, CT_AACP, CT_OPUS, CT_OGG};
 
     strlwr(ct);
     trim(ct);
@@ -3528,8 +3578,8 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "video/x-ms-asf"))   ct_val = CT_ASX;
     else if(!strcmp(ct, "audio/x-ms-asx"))   ct_val = CT_ASX; // #413
 
-    else if(!strcmp(ct, "application/ogg"))  ct_val = CT_FLAC; // assume ogg wrapper
-    else if(!strcmp(ct, "audio/ogg"))        ct_val = CT_FLAC; // auusme ogg wrapper
+    else if(!strcmp(ct, "application/ogg"))  ct_val = CT_OGG;
+    else if(!strcmp(ct, "audio/ogg"))        ct_val = CT_OGG;
 
     else if(!strcmp(ct, "application/vnd.apple.mpegurl")) ct_val = CT_M3U8;
     else if(!strcmp(ct, "application/x-mpegurl")) ct_val =CT_M3U8;
@@ -3561,9 +3611,18 @@ bool Audio::parseContentType(char* ct) {
             m_codec = CODEC_FLAC;
             if(m_f_Log) { log_i("ContentType %s, format is flac", ct); }
             break;
+        case CT_OPUS:
+            m_codec = CODEC_OPUS;
+            if(m_f_Log) { log_i("ContentType %s, format is opus", ct); }
+            break;
         case CT_WAV:
             m_codec = CODEC_WAV;
             if(m_f_Log) { log_i("ContentType %s, format is wav", ct); }
+            break;
+        case CT_OGG:
+            if     (m_expectedCodec == CODEC_OPUS) m_codec = CODEC_OPUS;
+            else if(m_expectedCodec == CODEC_FLAC) m_codec = CODEC_FLAC;
+            else m_codec = CODEC_OGG; // determine in first OGG packet -OPUS, VORBIS, FLAC
             break;
         case CT_PLS:
             m_playlistFormat = FORMAT_PLS;
@@ -3759,6 +3818,10 @@ int Audio::findNextSync(uint8_t* data, size_t len){
                               m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         nextSync = FLACFindSyncWord(data, len);
     }
+    if(m_codec == CODEC_OPUS) {
+        nextSync = OPUSFindSyncWord(data, len);
+        if(nextSync == -1) return len; // OggS not found, search next block
+    }
     if(nextSync == -1) {
          if(audio_info && swnf == 0) audio_info("syncword not found");
          else {
@@ -3779,6 +3842,34 @@ int Audio::findNextSync(uint8_t* data, size_t len){
         AUDIO_INFO("syncword found at pos %i", nextSync);
     }
     return nextSync;
+}
+//---------------------------------------------------------------------------------------------------------------------
+void Audio::setDecoderItems(){
+    if(m_codec == CODEC_MP3){
+        setChannels(MP3GetChannels());
+        setSampleRate(MP3GetSampRate());
+        setBitsPerSample(MP3GetBitsPerSample());
+        setBitrate(MP3GetBitrate());
+    }
+    if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
+        setChannels(AACGetChannels());
+        setSampleRate(AACGetSampRate());
+        setBitsPerSample(AACGetBitsPerSample());
+        setBitrate(AACGetBitrate());
+    }
+    if(m_codec == CODEC_FLAC){
+        setChannels(FLACGetChannels());
+        setSampleRate(FLACGetSampRate());
+        setBitsPerSample(FLACGetBitsPerSample());
+        setBitrate(FLACGetBitRate());
+    }
+    if(m_codec == CODEC_OPUS){
+        setChannels(OPUSGetChannels());
+        setSampleRate(OPUSGetSampRate());
+        setBitsPerSample(OPUSGetBitsPerSample());
+        setBitrate(OPUSGetBitRate());
+    }
+    showCodecParams();
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
@@ -3805,6 +3896,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_AAC:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_M4A:      ret = AACDecode(data, &bytesLeft, m_outBuff);    break;
         case CODEC_FLAC:     ret = FLACDecode(data, &bytesLeft, m_outBuff);   break;
+        case CODEC_OPUS:     ret = OPUSDecode(data, &bytesLeft, m_outBuff);   break;
         default: {log_e("no valid codec found codec = %d", m_codec); stopSong();}
     }
 
@@ -3833,30 +3925,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return bytesDecoded;
     }
     else{  // ret>=0
-        if(f_setDecodeParamsOnce){
-            f_setDecodeParamsOnce = false;
-            m_PlayingStartTime = millis();
-
-            if(m_codec == CODEC_MP3){
-                setChannels(MP3GetChannels());
-                setSampleRate(MP3GetSampRate());
-                setBitsPerSample(MP3GetBitsPerSample());
-                setBitrate(MP3GetBitrate());
-            }
-            if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
-                setChannels(AACGetChannels());
-                setSampleRate(AACGetSampRate());
-                setBitsPerSample(AACGetBitsPerSample());
-                setBitrate(AACGetBitrate());
-            }
-            if(m_codec == CODEC_FLAC){
-                setChannels(FLACGetChannels());
-                setSampleRate(FLACGetSampRate());
-                setBitsPerSample(FLACGetBitsPerSample());
-                setBitrate(FLACGetBitRate());
-            }
-            showCodecParams();
-        }
         if(m_codec == CODEC_MP3){
             m_validSamples = MP3GetOutputSamps() / getChannels();
         }
@@ -3864,12 +3932,29 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             m_validSamples = AACGetOutputSamps() / getChannels();
         }
         if(m_codec == CODEC_FLAC){
+            const uint8_t FLAC_PARSE_OGG_DONE = 100;
+            if(ret == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
             m_validSamples = FLACGetOutputSamps() / getChannels();
             char* st = FLACgetStreamTitle();
             if(st){
                 AUDIO_INFO(st);
                 if(audio_showstreamtitle) audio_showstreamtitle(st);
             }
+        }
+        if(m_codec == CODEC_OPUS){
+            const uint8_t OPUS_PARSE_OGG_DONE = 100;
+            if(ret == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+            m_validSamples = OPUSGetOutputSamps();
+            char* st = OPUSgetStreamTitle();
+            if(st){
+                AUDIO_INFO(st);
+                if(audio_showstreamtitle) audio_showstreamtitle(st);
+            }
+        }
+        if(f_setDecodeParamsOnce){
+            f_setDecodeParamsOnce = false;
+            setDecoderItems();
+            m_PlayingStartTime = millis();
         }
     }
     compute_audioCurrentTime(bytesDecoded);
@@ -4009,6 +4094,29 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
     }
+    if(m_codec == CODEC_OPUS){
+        switch(r){
+            case ERR_OPUS_NONE:                             e = "NONE";                             break;
+            case ERR_OPUS_CHANNELS_OUT_OF_RANGE:            e = "UNKNOWN CHANNEL ASSIGNMENT";       break;
+            case ERR_OPUS_INVALID_SAMPLERATE:               e = "SAMPLERATE IS NOT 48000Hz";        break;
+            case ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED:       e = "EXTRA CHANNELS UNSUPPORTED";       break;
+            case ERR_OPUS_SILK_MODE_UNSUPPORTED:            e = "SILK MODE UNSUPPORTED";            break;
+            case ERR_OPUS_HYBRID_MODE_UNSUPPORTED:          e = "HYBRID MODE UMSUPPORTED";          break;
+            case ERR_OPUS_CELT_BAD_ARG:                     e = "CELT_DECODER_BAD_ARG";             break;
+            case ERR_OPUS_CELT_INTERNAL_ERROR:              e = "CELT DECODER INTERNAL ERROR";      break;
+            case ERR_OPUS_CELT_UNIMPLEMENTED:               e = "CELT DECODER UNIMPLEMENTED ARG";   break;
+            case ERR_OPUS_CELT_ALLOC_FAIL:                  e = "CELT DECODER INIT ALLOC FAIL";     break;
+            case ERR_OPUS_CELT_UNKNOWN_REQUEST:             e = "CELT_UNKNOWN_REQUEST FAIL";        break;
+            case ERR_OPUS_CELT_GET_MODE_REQUEST:            e = "CELT_GET_MODE_REQUEST FAIL";       break;
+            case ERR_OPUS_CELT_CLEAR_REQUEST:               e = "CELT_CLEAR_REAUEST_FAIL";          break;
+            case ERR_OPUS_CELT_SET_CHANNELS:                e = "CELT_SET_CHANNELS_FAIL";           break;
+            case ERR_OPUS_CELT_END_BAND:                    e = "CELT_END_BAND_REQUEST_FAIL";       break;
+            case ERR_CELT_OPUS_INTERNAL_ERROR:              e = "CELT_INTERNAL_ERROR";              break;
+            default: e = "ERR_UNKNOWN";
+        }
+        AUDIO_INFO("OPUS decode error %d : %s", r, e);
+
+        }
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN, int8_t MCK) {
@@ -4058,6 +4166,7 @@ uint32_t Audio::getAudioCurrentTime() {  // return current time in seconds
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayPosition(uint16_t sec){
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     // Jump to an absolute position in time within an audio file
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
@@ -4087,6 +4196,7 @@ uint32_t Audio::getTotalPlayingTime() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec){
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     // fast forward or rewind the current position in seconds
     // audiosource must be a mp3, aac or wav file
 
@@ -4109,6 +4219,7 @@ bool Audio::setTimeOffset(int sec){
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
+    if(m_codec == CODEC_OPUS) return false; // not impl. yet
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
     if(!audiofile) return false;
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
@@ -5187,5 +5298,22 @@ uint32_t Audio::mp3_correctResumeFilePos(uint32_t resumeFilePos){
     return m_audioDataStart;
 }
 //----------------------------------------------------------------------------------------------------------------------
-
+uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len){
+    // if we have contentType == application/ogg; codec cn be OPUS, FLAC or VORBIS
+    // let's have a look, what it is
+    int idx = specialIndexOf(data, "OggS", 6);
+    if(idx != 0){
+        if(specialIndexOf(data, "fLaC", 6)) return CODEC_FLAC;
+        return CODEC_NONE;
+    }
+    data += 27;
+    idx = specialIndexOf(data, "OpusHead", 20);
+    if(idx >= 0) return CODEC_OPUS;
+    idx = specialIndexOf(data, "FLAC", 20);
+    if(idx >= 0) return CODEC_FLAC;
+    idx = specialIndexOf(data, "vorbis", 20);
+    if(idx >= 0) return CODEC_NONE; // CODEC_VORBIS
+    return CODEC_NONE;
+}
+//----------------------------------------------------------------------------------------------------------------------
 

@@ -236,6 +236,7 @@ private:
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
     int  sendBytes(uint8_t* data, size_t len);
+    void setDecoderItems();
     void compute_audioCurrentTime(int bd);
     void printDecodeError(int r);
     void showID3Tag(const char* tag, const char* val);
@@ -253,7 +254,6 @@ private:
     bool playChunk();
     bool playSample(int16_t sample[2]) ;
     int32_t Gain(int16_t s[2]);
-    bool fill_InputBuf();
     void showstreamtitle(const char* ml);
     bool parseContentType(char* ct);
     bool parseHttpResponseHeader();
@@ -280,6 +280,7 @@ private:
     uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
     uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
     uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
+    uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
 
 //++++ implement several function with respect to the index of string ++++
@@ -442,7 +443,7 @@ private:
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_AMRDY = 99, M4A_OKAY = 100};
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
-                 CODEC_AACP = 6};
+                 CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8};
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2};
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
@@ -478,6 +479,7 @@ private:
     const size_t    m_frameSizeMP3  = 1600;
     const size_t    m_frameSizeAAC  = 1600;
     const size_t    m_frameSizeFLAC = 4096 * 4;
+    const size_t    m_frameSizeOPUS = 1024;
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
