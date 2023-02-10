@@ -1853,7 +1853,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_FTYP) { /* check_m4a_file */
         atomsize = bigEndian(data, 4); // length of first atom
         if(specialIndexOf(data, "ftyp", 10) != 4) {
-            log_e("atom 'type' not found in header");
+            log_e("atom 'ftyp' not found in header");
             stopSong();
             return -1;
         }

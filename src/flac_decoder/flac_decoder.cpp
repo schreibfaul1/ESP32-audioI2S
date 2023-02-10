@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Jan 08,2023
+ * Updated on: Feb 10,2023
  *
  * Author: Wolle
  *
@@ -91,6 +91,22 @@ uint32_t readUint(uint8_t nBits){
         m_rIndex++;
         m_bytesAvail--;
         if(m_bytesAvail < 0) { log_i("error in bitreader"); }
+        m_bitBuffer = (m_bitBuffer << 8) | temp;
+        m_bitBufferLen += 8;
+    }
+    m_bitBufferLen -= nBits;
+    uint32_t result = m_bitBuffer >> m_bitBufferLen;
+    if (nBits < 32)
+        result &= (1 << nBits) - 1;
+    return result;
+}
+
+uint32_t readUint(uint8_t nBits, int *bytesLeft){
+    while (m_bitBufferLen < nBits){
+        uint8_t temp = *(m_inptr + m_rIndex);
+        m_rIndex++;
+        (*bytesLeft)--;
+        if(*bytesLeft < 0) { log_i("error in bitreader"); }
         m_bitBuffer = (m_bitBuffer << 8) | temp;
         m_bitBufferLen += 8;
     }
@@ -225,6 +241,11 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     }
     m_page0_len = s_flacSegmentTable[0];
 
+    // for(int i = 0; i<pageSegments; i++){
+    //     log_i("%i %i", i, s_flacSegmentTable[i]);
+    // }
+
+
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
@@ -282,8 +303,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             s_f_flacParseOgg = true;
             return FLAC_PARSE_OGG_DONE;
         }
-
-        return flacDecodeFrame(inbuf, bytesLeft, outbuf);
+        return flacDecodeFrame (inbuf, bytesLeft);
     }
 
     if(m_status == DECODE_SUBFRAMES){
@@ -330,13 +350,13 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft, short *outbuf){
-    readUint(14 + 1); // synccode + reserved bit
-    FLACFrameHeader->blockingStrategy = readUint(1);
-    FLACFrameHeader->blockSizeCode = readUint(4);
-    FLACFrameHeader->sampleRateCode = readUint(4);
-    FLACFrameHeader->chanAsgn = readUint(4);
-    FLACFrameHeader->sampleSizeCode = readUint(3);
+int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft){
+    readUint(14 + 1, bytesLeft); // synccode + reserved bit
+    FLACFrameHeader->blockingStrategy = readUint(1, bytesLeft);
+    FLACFrameHeader->blockSizeCode = readUint(4, bytesLeft);
+    FLACFrameHeader->sampleRateCode = readUint(4, bytesLeft);
+    FLACFrameHeader->chanAsgn = readUint(4, bytesLeft);
+    FLACFrameHeader->sampleSizeCode = readUint(3, bytesLeft);
     if(!FLACMetadataBlock->numChannels){
         if(FLACFrameHeader->chanAsgn == 0) FLACMetadataBlock->numChannels = 1;
         if(FLACFrameHeader->chanAsgn == 1) FLACMetadataBlock->numChannels = 2;
@@ -365,8 +385,8 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         if(FLACFrameHeader->sampleRateCode == 10) FLACMetadataBlock->sampleRate =  48000;
         if(FLACFrameHeader->sampleRateCode == 11) FLACMetadataBlock->sampleRate =  96000;
     }
-    readUint(1);
-    uint32_t temp = (readUint(8) << 24);
+    readUint(1, bytesLeft);
+    uint32_t temp = (readUint(8, bytesLeft) << 24);
     temp = ~temp;
     uint32_t shift = 0x80000000; // Number of leading zeros
     int8_t count = 0;
@@ -375,33 +395,32 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         else break;
     }
     count--;
-    for (int i = 0; i < count; i++) readUint(8);
+    for (int i = 0; i < count; i++) readUint(8, bytesLeft);
     m_blockSize = 0;
     if (FLACFrameHeader->blockSizeCode == 1)
         m_blockSize = 192;
     else if (2 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 5)
         m_blockSize = 576 << (FLACFrameHeader->blockSizeCode - 2);
     else if (FLACFrameHeader->blockSizeCode == 6)
-        m_blockSize = readUint(8) + 1;
+        m_blockSize = readUint(8, bytesLeft) + 1;
     else if (FLACFrameHeader->blockSizeCode == 7)
-        m_blockSize = readUint(16) + 1;
+        m_blockSize = readUint(16, bytesLeft) + 1;
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
         m_blockSize = 256 << (FLACFrameHeader->blockSizeCode - 8);
     else{
         return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
     }
     if(m_blockSize > 8192){
-        log_e("Error: blockSize too big");
+        log_e("Error: blockSize too big ,%i bytes", m_blockSize);
         return ERR_FLAC_BLOCKSIZE_TOO_BIG;
     }
     if(FLACFrameHeader->sampleRateCode == 12)
-        readUint(8);
+        readUint(8, bytesLeft);
     else if (FLACFrameHeader->sampleRateCode == 13 || FLACFrameHeader->sampleRateCode == 14){
-        readUint(16);
+        readUint(16, bytesLeft);
     }
-    readUint(8);
+    readUint(8, bytesLeft);
     m_status = DECODE_SUBFRAMES;
-    *bytesLeft = m_bytesAvail;
     m_blockSizeLeft = m_blockSize;
     return ERR_FLAC_NONE;
 }
@@ -471,12 +490,12 @@ int8_t decodeSubframes(){
             }
         }
         else {
-            log_e("unknown channel assignment");
+            log_e("unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
             return ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT;
         }
     }
     else{
-        log_e("Reserved channel assignment");
+        log_e("Reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
         return ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT;
     }
     return ERR_FLAC_NONE;
