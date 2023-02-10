@@ -78,7 +78,7 @@ const uint8_t  cos4sin4tabOffset[2] = {0, 128};
 
 PSInfoBase_t        *m_PSInfoBase;
 AACDecInfo_t        *m_AACDecInfo;
-AACFrameInfo_t       m_AACFrameInfo;
+// AACFrameInfo_t       m_AACFrameInfo;
 ADTSHeader_t         m_fhADTS;
 ADIFHeader_t         m_fhADIF;
 ProgConfigElement_t *m_pce[16];
@@ -1694,7 +1694,7 @@ bool AACDecoder_AllocateBuffers(void){
     // Clear Buffer
     memset( m_AACDecInfo,        0, sizeof(AACDecInfo_t));              //Clear AACDecInfo
     memset( m_PSInfoBase,        0, sizeof(PSInfoBase_t));              //Clear PSInfoBase
-    memset(&m_AACFrameInfo,      0, sizeof(AACFrameInfo_t));            //Clear AACFrameInfo
+//    memset(&m_AACFrameInfo,      0, sizeof(AACFrameInfo_t));            //Clear AACFrameInfo
     memset(&m_fhADTS,            0, sizeof(ADTSHeader_t));              //Clear fhADTS
     memset(&m_fhADIF,            0, sizeof(ADIFHeader_t));              //Clear fhADIS
     memset( m_pce[0],            0, sizeof(ProgConfigElement_t) * 16);  //Clear ProgConfigElement
@@ -1902,8 +1902,8 @@ int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile
  *                successfully decoded, so if ERR_AAC_INDATA_UNDERFLOW is returned
  *                just call AACDecode again with more data in inbuf
  **********************************************************************************************************************/
-int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
-{
+int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
+
     int err, offset, bitOffset, bitsAvail;
     int ch, baseChan, elementChans;
     uint8_t *inptr;

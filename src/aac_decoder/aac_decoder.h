@@ -135,17 +135,17 @@ typedef union _U64 {
     } r;
 } U64;
 
-typedef struct _AACFrameInfo_t {
-    int bitRate;
-    int nChans;
-    int sampRateCore;
-    int sampRateOut;
-    int bitsPerSample;
-    int outputSamps;
-    int profile;
-    int tnsUsed;
-    int pnsUsed;
-} AACFrameInfo_t;
+// typedef struct _AACFrameInfo_t {
+//     int bitRate;
+//     int nChans;
+//     int sampRateCore;
+//     int sampRateOut;
+//     int bitsPerSample;
+//     int outputSamps;
+//     int profile;
+//     int tnsUsed;
+//     int pnsUsed;
+// } AACFrameInfo_t;
 
 typedef struct _HuffInfo_t {
     int maxBits;              /* number of bits in longest codeword */
