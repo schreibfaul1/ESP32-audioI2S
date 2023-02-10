@@ -36,8 +36,11 @@ void setup() {
     WiFi.begin(ssid.c_str(), password.c_str());
     while (WiFi.status() != WL_CONNECTED) delay(1500);
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-    audio.setVolume(21); // 0...21
-
+    audio.setVolume(21); // default 0...21
+//  or alternative
+//  audio.setVolumeSteps(64); // max 255
+//  audio.setVolume(63);    
+//
     audio.connecttohost("http://iskatel.hostingradio.ru:8015/iskatel-320.aac");  // aac
 //  audio.connecttohost("http://mcrscast.mcr.iol.pt/cidadefm");                  // mp3
 //  audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");         // m3u
