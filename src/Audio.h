@@ -448,9 +448,6 @@ private:
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
-    const uint8_t volumetable[22]={   0,  1,  2,  3,  4 , 6 , 8, 10, 12, 14, 17,
-                                     20, 23, 27, 30 ,34, 38, 43 ,48, 52, 58, 64}; //22 elements
-
     typedef struct _filter{
         float a0;
         float a1;
@@ -499,8 +496,8 @@ private:
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint16_t        m_vol=64;                       // volume
-    uint8_t         m_vol_steps = 0;                // 0 == legacy 21 steps, > 0: number of volume steps
-    int32_t         m_vol_step_div = 64;            // max of volumetable[]
+    uint8_t         m_vol_steps = 21;               // default
+    int32_t         m_vol_step_div = 21 * 21;       //
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels = 2;
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1

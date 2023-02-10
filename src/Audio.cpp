@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 3.0.0
- *  Updated on: Feb 09.2023
+ *  Updated on: Feb 10.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4184,9 +4184,7 @@ void Audio::setVolumeSteps(uint8_t steps) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::maxVolume() {
-    if (m_vol_steps)
         return m_vol_steps;
-    return 21;
 };
 //---------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getTotalPlayingTime() {
@@ -4320,8 +4318,8 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
 
-    // sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  >> 1; // half Vin so we can boost up to 6dB in filters
-    // sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] >> 1; // todo compute a correction factor if filter have positive amplification
+    // sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  * 0.8; // half Vin so we can boost up to 6dB in filters
+    // sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] * 0.8; // todo compute a correction factor if filter have positive amplification
 
     // Filterchain, can commented out if not used
     sample = IIR_filterChain0(sample);
@@ -4390,26 +4388,15 @@ void Audio::setBalance(int8_t bal){ // bal -16...16
     m_balance = bal;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::setVolume(uint8_t vol) { // vol 22 steps, 0...21
-    if (m_vol_steps) {
-        if (vol > m_vol_steps) vol = m_vol_steps;
-        m_vol = vol * vol;
-        return;
-    }
-    if(vol > 21) vol = 21;
-    m_vol = volumetable[vol];
+void Audio::setVolume(uint8_t vol) {
+    if (vol > m_vol_steps) vol = m_vol_steps;
+    m_vol = vol * vol;
+    return;
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getVolume() {
-    if (m_vol_steps) {
-        uint8_t vol = sqrt(m_vol);
+    uint8_t vol = sqrt(m_vol);
         return vol;
-    }
-    for(uint8_t i = 0; i < 22; i++) {
-        if(volumetable[i] == m_vol) return i;
-    }
-    m_vol = 12; // if m_vol not found in table
-    return m_vol;
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getI2sPort() {
@@ -4429,8 +4416,8 @@ int32_t Audio::Gain(int16_t s[2]) {
     }
 
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div;
-    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div;
+    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div * 1;
+    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div * 1;
 
     return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
 }
