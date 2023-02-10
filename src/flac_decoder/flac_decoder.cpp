@@ -26,8 +26,6 @@ uint16_t        m_blockSizeLeft = 0;
 uint16_t        m_validSamples = 0;
 uint8_t         m_status = 0;
 uint8_t        *m_inptr;
-int16_t         m_bytesAvail;
-int16_t         m_bytesDecoded = 0;
 uint16_t       *s_flacSegmentTable = NULL;
 float           m_compressionRatio = 0;
 uint16_t        m_rIndex = 0;
@@ -85,22 +83,6 @@ void FLACDecoder_FreeBuffers(){
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
 //----------------------------------------------------------------------------------------------------------------------
-uint32_t readUint(uint8_t nBits){
-    while (m_bitBufferLen < nBits){
-        uint8_t temp = *(m_inptr + m_rIndex);
-        m_rIndex++;
-        m_bytesAvail--;
-        if(m_bytesAvail < 0) { log_i("error in bitreader"); }
-        m_bitBuffer = (m_bitBuffer << 8) | temp;
-        m_bitBufferLen += 8;
-    }
-    m_bitBufferLen -= nBits;
-    uint32_t result = m_bitBuffer >> m_bitBufferLen;
-    if (nBits < 32)
-        result &= (1 << nBits) - 1;
-    return result;
-}
-
 uint32_t readUint(uint8_t nBits, int *bytesLeft){
     while (m_bitBufferLen < nBits){
         uint8_t temp = *(m_inptr + m_rIndex);
@@ -117,17 +99,17 @@ uint32_t readUint(uint8_t nBits, int *bytesLeft){
     return result;
 }
 
-int32_t readSignedInt(int nBits){
-    int32_t temp = readUint(nBits) << (32 - nBits);
+int32_t readSignedInt(int nBits, int* bytesLeft){
+    int32_t temp = readUint(nBits, bytesLeft) << (32 - nBits);
     temp = temp >> (32 - nBits); // The C++ compiler uses the sign bit to fill vacated bit positions
     return temp;
 }
 
-int64_t readRiceSignedInt(uint8_t param){
+int64_t readRiceSignedInt(uint8_t param, int* bytesLeft){
     long val = 0;
-    while (readUint(1) == 0)
+    while (readUint(1, bytesLeft) == 0)
         val++;
-    val = (val << param) | readUint(param);
+    val = (val << param) | readUint(param, bytesLeft);
     return (val >> 1) ^ -(val & 1);
 }
 
@@ -293,7 +275,6 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(m_status != OUT_SAMPLES){
         m_rIndex = 0;
-        m_bytesAvail = (*bytesLeft);
         m_inptr = inbuf;
     }
 
@@ -309,7 +290,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     if(m_status == DECODE_SUBFRAMES){
 
         // Decode each channel's subframe, then skip footer
-        int ret = decodeSubframes();
+        int ret = decodeSubframes(bytesLeft);
         if(ret != 0) return ret;
         m_status = OUT_SAMPLES;
     }
@@ -340,12 +321,10 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     }
 
     alignToByte();
-    readUint(16);
-    m_bytesDecoded = *bytesLeft - m_bytesAvail;
+    readUint(16, bytesLeft);
 //    log_i("m_bytesDecoded %i", m_bytesDecoded);
 //    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("m_compressionRatio % f", m_compressionRatio);
-    *bytesLeft = m_bytesAvail;
     m_status = DECODE_FRAME;
     return ERR_FLAC_NONE;
 }
@@ -463,14 +442,14 @@ uint32_t FLACGetAudioFileDuration() {
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t decodeSubframes(){
+int8_t decodeSubframes(int* bytesLeft){
     if(FLACFrameHeader->chanAsgn <= 7) {
         for (int ch = 0; ch < FLACMetadataBlock->numChannels; ch++)
-            decodeSubframe(FLACMetadataBlock->bitsPerSample, ch);
+            decodeSubframe(FLACMetadataBlock->bitsPerSample, ch, bytesLeft);
     }
     else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
-        decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0);
-        decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1);
+        decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
+        decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
         if(FLACFrameHeader->chanAsgn == 8) {
             for (int i = 0; i < m_blockSize; i++)
                 FLACsubFramesBuff->samplesBuffer[1][i] = (
@@ -501,33 +480,33 @@ int8_t decodeSubframes(){
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch) {
+int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     int8_t ret = 0;
-    readUint(1);
-    uint8_t type = readUint(6);
-    int shift = readUint(1);
+    readUint(1, bytesLeft);
+    uint8_t type = readUint(6, bytesLeft);
+    int shift = readUint(1, bytesLeft);
     if (shift == 1) {
-        while (readUint(1) == 0)
+        while (readUint(1, bytesLeft) == 0)
             shift++;
     }
     sampleDepth -= shift;
 
     if(type == 0){  // Constant coding
-        int16_t s= readSignedInt(sampleDepth);
+        int16_t s= readSignedInt(sampleDepth, bytesLeft);
         for(int i=0; i < m_blockSize; i++){
             FLACsubFramesBuff->samplesBuffer[ch][i] = s;
         }
     }
     else if (type == 1) {  // Verbatim coding
         for (int i = 0; i < m_blockSize; i++)
-            FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth);
+            FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
     }
     else if (8 <= type && type <= 12){
-        ret = decodeFixedPredictionSubframe(type - 8, sampleDepth, ch);
+        ret = decodeFixedPredictionSubframe(type - 8, sampleDepth, ch, bytesLeft);
         if(ret) return ret;
     }
     else if (32 <= type && type <= 63){
-        ret = decodeLinearPredictiveCodingSubframe(type - 31, sampleDepth, ch);
+        ret = decodeLinearPredictiveCodingSubframe(type - 31, sampleDepth, ch, bytesLeft);
         if(ret) return ret;
     }
     else{
@@ -541,11 +520,11 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch) {
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch) {
+int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     uint8_t ret = 0;
     for(uint8_t i = 0; i < predOrder; i++)
-        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth);
-    ret = decodeResiduals(predOrder, ch);
+        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+    ret = decodeResiduals(predOrder, ch, bytesLeft);
     if(ret) return ret;
     coefs.clear();
     if(predOrder == 0) coefs.resize(0);
@@ -558,29 +537,29 @@ int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uin
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch){
+int8_t decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch, int* bytesLeft){
     int8_t ret = 0;
     for (int i = 0; i < lpcOrder; i++)
-        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth);
-    int precision = readUint(4) + 1;
-    int shift = readSignedInt(5);
+        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+    int precision = readUint(4, bytesLeft) + 1;
+    int shift = readSignedInt(5, bytesLeft);
     coefs.resize(0);
     for (uint8_t i = 0; i < lpcOrder; i++)
-        coefs.push_back(readSignedInt(precision));
-    ret = decodeResiduals(lpcOrder, ch);
+        coefs.push_back(readSignedInt(precision, bytesLeft));
+    ret = decodeResiduals(lpcOrder, ch, bytesLeft);
     if(ret) return ret;
     restoreLinearPrediction(ch, shift);
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int8_t decodeResiduals(uint8_t warmup, uint8_t ch) {
+int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
 
-    int method = readUint(2);
+    int method = readUint(2, bytesLeft);
     if (method >= 2)
         return ERR_FLAC_RESERVED_RESIDUAL_CODING; // Reserved residual coding method
     uint8_t paramBits = method == 0 ? 4 : 5;
     int escapeParam = (method == 0 ? 0xF : 0x1F);
-    int partitionOrder = readUint(4);
+    int partitionOrder = readUint(4, bytesLeft);
 
     int numPartitions = 1 << partitionOrder;
     if (m_blockSize % numPartitions != 0)
@@ -591,15 +570,15 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch) {
         int start = i * partitionSize + (i == 0 ? warmup : 0);
         int end = (i + 1) * partitionSize;
 
-        int param = readUint(paramBits);
+        int param = readUint(paramBits, bytesLeft);
         if (param < escapeParam) {
             for (int j = start; j < end; j++){
-                FLACsubFramesBuff->samplesBuffer[ch][j] = readRiceSignedInt(param);
+                FLACsubFramesBuff->samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
             }
         } else {
-            int numBits = readUint(5);
+            int numBits = readUint(5, bytesLeft);
             for (int j = start; j < end; j++){
-                FLACsubFramesBuff->samplesBuffer[ch][j] = readSignedInt(numBits);
+                FLACsubFramesBuff->samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
             }
         }
     }
