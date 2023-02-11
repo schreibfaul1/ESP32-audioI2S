@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.0
- *  Updated on: Feb 10.2023
+ *  Version 3.0.1
+ *  Updated on: Feb 11.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -688,7 +688,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
     if(strlen(path)>255){
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -717,7 +717,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
     if(!audiofile) {
         if(audio_info) {vTaskDelay(2); audio_info("Failed to open file for reading");}
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -752,7 +752,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     bool ret = initializeDecoder();
     if(ret) m_f_running = true;
     else audiofile.close();
-    xSemaphoreGive(mutex_audio);
+    xSemaphoreGiveRecursive(mutex_audio);
     return ret;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -770,7 +770,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     char* speechBuff = (char*)malloc(speechBuffLen);
     if(!speechBuff) {
         log_e("out of memory");
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
     memcpy(speechBuff, speech, speechLen);
@@ -797,7 +797,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     _client = static_cast<WiFiClient*>(&client);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
     _client->print(resp);
@@ -807,7 +807,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     m_f_ssl = false;
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
-    xSemaphoreGive(mutex_audio);
+    xSemaphoreGiveRecursive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -4318,8 +4318,11 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) -128) << 8;
     }
 
-    // sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  * 0.8; // half Vin so we can boost up to 6dB in filters
-    // sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] * 0.8; // todo compute a correction factor if filter have positive amplification
+    // set a correction factor if filter have positive amplification
+    if(m_corr > 1){
+    	sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  / m_corr;
+    	sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
+    }
 
     // Filterchain, can commented out if not used
     sample = IIR_filterChain0(sample);
@@ -4361,6 +4364,12 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
     m_gain0 = gainLowPass;
     m_gain1 = gainBandPass;
     m_gain2 = gainHighPass;
+
+    // gain, attenuation (set in digital filters)
+    int db =  max(m_gain0, max(m_gain1, m_gain2));
+    m_corr =  pow10f((float)db/20);
+
+    // log_i("m_corr = %f", m_corr);
 
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
 
@@ -4416,8 +4425,8 @@ int32_t Audio::Gain(int16_t s[2]) {
     }
 
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div * 1;
-    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div * 1;
+    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div;
+    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div;
 
     return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
 }

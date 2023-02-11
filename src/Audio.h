@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 2.0.8c
- *  Updated on: Jan 13,2023
+ *  Version 3.0.1
+ *  Updated on: Feb 11,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -432,7 +432,7 @@ private:
 	}
 
 private:
-    const char *codecname[9] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC"};
+    const char *codecname[9] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS" };
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
@@ -556,6 +556,7 @@ private:
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
+    float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
     size_t          m_file_size = 0;                // size of the file
     uint16_t        m_filterFrequency[2];
