@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.0
- *  Updated on: Feb 10,2023
+ *  Version 3.0.1
+ *  Updated on: Feb 11,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -556,6 +556,7 @@ private:
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
+    float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
     size_t          m_file_size = 0;                // size of the file
     uint16_t        m_filterFrequency[2];
