@@ -28,6 +28,7 @@ uint8_t         m_status = 0;
 uint8_t        *m_inptr;
 uint16_t       *s_flacSegmentTable = NULL;
 float           m_compressionRatio = 0;
+uint32_t        m_bitrate = 0;
 uint16_t        m_rIndex = 0;
 uint64_t        m_bitBuffer = 0;
 uint8_t         m_bitBufferLen = 0;
@@ -273,12 +274,14 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
         s_f_flacParseOgg = true;
         return FLAC_PARSE_OGG_DONE;
     }
-
     int ret = FLACDecodeNative(inbuf, bytesLeft, outbuf);
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
+
+    int bl = *bytesLeft;
+    static int sbl = 0;
 
     if(m_status != OUT_SAMPLES){
         m_rIndex = 0;
@@ -295,6 +298,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
         // Decode each channel's subframe, then skip footer
         int ret = decodeSubframes(bytesLeft);
+        sbl = bl - *bytesLeft;
         if(ret != 0) return ret;
         m_status = OUT_SAMPLES;
     }
@@ -317,6 +321,9 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
         m_validSamples = blockSize * FLACMetadataBlock->numChannels;
         offset += blockSize;
+        m_compressionRatio = (float)sbl / (m_validSamples * FLACMetadataBlock->numChannels);
+        m_bitrate = FLACMetadataBlock->sampleRate * FLACMetadataBlock->bitsPerSample * FLACMetadataBlock->numChannels;
+        m_bitrate /= m_compressionRatio;
 
         if(offset != m_blockSize) return GIVE_NEXT_LOOP;
         offset = 0;
@@ -325,6 +332,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     alignToByte();
     readUint(16, bytesLeft);
+
 //    m_compressionRatio = (float)m_bytesDecoded / (float)m_blockSize * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("m_compressionRatio % f", m_compressionRatio);
     m_status = DECODE_FRAME;
@@ -429,11 +437,7 @@ uint32_t FLACGetSampRate(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetBitRate(){
-    if(FLACMetadataBlock->totalSamples){
-        float BitsPerSamp = (float)FLACMetadataBlock->audioDataLength / (float)FLACMetadataBlock->totalSamples * 8;
-        return ((uint32_t)BitsPerSamp * FLACMetadataBlock->sampleRate);
-    }
-    return 0;
+    return m_bitrate;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetAudioFileDuration() {
