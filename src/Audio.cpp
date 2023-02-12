@@ -688,7 +688,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
     if(strlen(path)>255){
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -717,7 +717,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
 
     if(!audiofile) {
         if(audio_info) {vTaskDelay(2); audio_info("Failed to open file for reading");}
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
 
@@ -752,7 +752,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
     bool ret = initializeDecoder();
     if(ret) m_f_running = true;
     else audiofile.close();
-    xSemaphoreGive(mutex_audio);
+    xSemaphoreGiveRecursive(mutex_audio);
     return ret;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -770,7 +770,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     char* speechBuff = (char*)malloc(speechBuffLen);
     if(!speechBuff) {
         log_e("out of memory");
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
     memcpy(speechBuff, speech, speechLen);
@@ -797,7 +797,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     _client = static_cast<WiFiClient*>(&client);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
-        xSemaphoreGive(mutex_audio);
+        xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
     _client->print(resp);
@@ -807,7 +807,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     m_f_ssl = false;
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
-    xSemaphoreGive(mutex_audio);
+    xSemaphoreGiveRecursive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -4369,7 +4369,7 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
     int db =  max(m_gain0, max(m_gain1, m_gain2));
     m_corr =  pow10f((float)db/20);
 
-    log_i("m_corr = %f", m_corr);
+    // log_i("m_corr = %f", m_corr);
 
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
 
