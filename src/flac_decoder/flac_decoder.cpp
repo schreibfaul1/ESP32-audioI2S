@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Feb 10,2023
+ * Updated on: Feb 13,2023
  *
  * Author: Wolle
  *
@@ -17,7 +17,7 @@ using namespace std;
 FLACFrameHeader_t   *FLACFrameHeader;
 FLACMetadataBlock_t *FLACMetadataBlock;
 
-int16_t        *m_samplesBuffer;
+int32_t        *m_samplesBuffer;
 vector<int32_t> coefs;
 const uint16_t  outBuffSize = 2048;
 uint16_t        m_blockSize = 0;
@@ -50,7 +50,7 @@ bool FLACDecoder_AllocateBuffers(void){
     if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    __malloc_heap_psram(sizeof(FLACFrameHeader_t));}
     if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  __malloc_heap_psram(sizeof(FLACMetadataBlock_t));}
 
-    if(!m_samplesBuffer) {m_samplesBuffer = (int16_t*) __malloc_heap_psram(sizeof(int16_t) * MAX_CHANNELS * MAX_BLOCKSIZE);}
+    if(!m_samplesBuffer) {m_samplesBuffer = (int32_t*) __malloc_heap_psram(sizeof(int32_t) * MAX_CHANNELS * MAX_BLOCKSIZE);}
 
     if(!m_streamTitle)      {m_streamTitle      = (char*)                 __malloc_heap_psram(256);}
     if(!s_flacSegmentTable) {s_flacSegmentTable = (uint16_t*)             __malloc_heap_psram(256 * sizeof(uint16_t));}
@@ -66,7 +66,7 @@ bool FLACDecoder_AllocateBuffers(void){
 void FLACDecoder_ClearBuffer(){
     memset(FLACFrameHeader,   0, sizeof(FLACFrameHeader_t));
     memset(FLACMetadataBlock, 0, sizeof(FLACMetadataBlock_t));
-    memset(m_samplesBuffer,   0, sizeof(int16_t) * MAX_CHANNELS * MAX_BLOCKSIZE);
+    memset(m_samplesBuffer,   0, sizeof(int32_t) * MAX_CHANNELS * MAX_BLOCKSIZE);
     m_status = DECODE_FRAME;
     return;
 }
@@ -104,7 +104,7 @@ int32_t readSignedInt(int nBits, int* bytesLeft){
 }
 
 int64_t readRiceSignedInt(uint8_t param, int* bytesLeft){
-    long val = 0;
+    int32_t val = 0;
     while (readUint(1, bytesLeft) == 0)
         val++;
     val = (val << param) | readUint(param, bytesLeft);
@@ -131,7 +131,7 @@ void FLACDecoderReset(){ // set var to default
     m_bitBufferLen = 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int FLACFindSyncWord(unsigned char *inbuf, int nBytes) {
+int FLACFindSyncWord(unsigned char *inbuf, int16_t nBytes) {
     int i;
     i = FLAC_specialIndexOf(inbuf, "OggS", nBytes);
     if(i == 0){
@@ -148,7 +148,7 @@ int FLACFindSyncWord(unsigned char *inbuf, int nBytes) {
     return -1;
 }
 //----------------------------------------------------------------------------------------------------------------------
-boolean FLACFindMagicWord(unsigned char* inbuf, int nBytes){
+boolean FLACFindMagicWord(unsigned char* inbuf, int16_t nBytes){
     int idx = FLAC_specialIndexOf(inbuf, "fLaC", nBytes);
     if(idx >0){ // Metadatablock follows
         idx += 4;
@@ -467,8 +467,8 @@ int8_t decodeSubframes(int* bytesLeft){
         }
         else if (FLACFrameHeader->chanAsgn == 10) {
             for (int i = 0; i < m_blockSize; i++) {
-                long side =  m_samplesBuffer[1 * MAX_BLOCKSIZE + i];
-                long right = m_samplesBuffer[0 * MAX_BLOCKSIZE + i] - (side >> 1);
+                int32_t side =  m_samplesBuffer[1 * MAX_BLOCKSIZE + i];
+                int32_t right = m_samplesBuffer[0 * MAX_BLOCKSIZE + i] - (side >> 1);
                 m_samplesBuffer[1 * MAX_BLOCKSIZE + i] = right;
                 m_samplesBuffer[0 * MAX_BLOCKSIZE + i] = right + side;
             }

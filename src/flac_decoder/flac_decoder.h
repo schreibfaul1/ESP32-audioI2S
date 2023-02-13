@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Jan 08,2023
+ * Updated on: Feb 13,2023
  *
  *      Author: wolle
  *
@@ -141,8 +141,8 @@ typedef struct FLACFrameHeader_t {
 
 }FLACFrameHeader_t;
 
-int      FLACFindSyncWord(unsigned char *buf, int nBytes);
-boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
+int      FLACFindSyncWord(unsigned char *inbuf, int16_t nBytes);
+boolean  FLACFindMagicWord(unsigned char* inbuf, int16_t nBytes);
 char*    FLACgetStreamTitle();
 int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
 bool     FLACDecoder_AllocateBuffers(void);
