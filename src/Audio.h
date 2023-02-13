@@ -483,7 +483,7 @@ private:
 
     char*           m_chbuf = NULL;
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
-    char            m_lastHost[512];                // Store the last URL to a webstream
+    char*           m_lastHost = NULL;              // Store the last URL to a webstream
     char*           m_playlistBuff = NULL;          // stores playlistdata
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
@@ -508,7 +508,7 @@ private:
     uint8_t         m_filterType[2];                // lowpass, highpass
     uint8_t         m_streamType = ST_NONE;
     uint8_t         m_ID3Size = 0;                  // lengt of ID3frame - ID3header
-    int16_t         m_outBuff[2048*2];              // Interleaved L/R
+    int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
     uint16_t        m_datamode = 0;                 // Statemaschine
