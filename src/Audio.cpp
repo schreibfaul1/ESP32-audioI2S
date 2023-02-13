@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 3.0.1
- *  Updated on: Feb 11.2023
+ *  Updated on: Feb 13.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -165,8 +165,19 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_f_Log = true;
 #endif
 
-    if(psramInit()) {m_chbufSize = 4096;     m_chbuf = (char*)ps_malloc(m_chbufSize);}
-    else            {m_chbufSize = 512 + 64; m_chbuf = (char*)malloc(m_chbufSize);}
+    if(psramInit()){
+        m_chbufSize = 4096;
+        m_chbuf = (char*)      ps_malloc(m_chbufSize);
+        m_lastHost = (char*)   ps_malloc(512);
+        m_outBuff = (int16_t*) ps_malloc(2048 * 2 * sizeof(int16_t));
+    }
+    else{
+        m_chbufSize = 512 + 64;
+        m_chbuf = (char*)      malloc(m_chbufSize);
+        m_lastHost = (char*)   malloc(512);
+        m_outBuff = (int16_t*) malloc(2048 * 2 * sizeof(int16_t));
+    }
+    if(!m_chbuf || !m_lastHost || !m_outBuff) log_e("oom");
 
     clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     m_f_channelEnabled = channelEnabled;
@@ -300,7 +311,9 @@ Audio::~Audio() {
     setDefaults();
     if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
-    if(m_chbuf) {free(m_chbuf); m_chbuf = NULL;}
+    if(m_chbuf)    {free(m_chbuf);    m_chbuf    = NULL;}
+    if(m_lastHost) {free(m_lastHost); m_lastHost = NULL;}
+    if(m_outBuff)  {free(m_outBuff);  m_outBuff  = NULL;}
     vSemaphoreDelete(mutex_audio);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2135,7 +2148,7 @@ uint32_t Audio::stopSong() {
         AUDIO_INFO("Closing audio file");
         log_w("Closing audio file");  // for debug
     }
-    memset(m_outBuff, 0, sizeof(m_outBuff));     //Clear OutputBuffer
+    memset(m_outBuff, 0, 2048 * 2 *sizeof(uint16_t));     //Clear OutputBuffer
     i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
     return pos;
 }
@@ -2147,7 +2160,7 @@ bool Audio::pauseResume() {
         m_f_running = !m_f_running;
         retVal = true;
         if(!m_f_running) {
-            memset(m_outBuff, 0, sizeof(m_outBuff));               //Clear OutputBuffer
+            memset(m_outBuff, 0, 2048 * 2 * sizeof(uint16_t));               //Clear OutputBuffer
             i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
         }
     }
@@ -4180,7 +4193,7 @@ void Audio::setVolumeSteps(uint8_t steps) {
         m_vol_step_div = 64; /* avoid div-by-zero :-) */
     else
         m_vol_step_div = steps * steps;
-    log_i("m_vol_step_div: %d", m_vol_step_div);
+    // log_i("m_vol_step_div: %d", m_vol_step_div);
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::maxVolume() {
@@ -4368,8 +4381,6 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
     // gain, attenuation (set in digital filters)
     int db =  max(m_gain0, max(m_gain1, m_gain2));
     m_corr =  pow10f((float)db/20);
-
-    // log_i("m_corr = %f", m_corr);
 
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
 
