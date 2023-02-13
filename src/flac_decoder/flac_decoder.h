@@ -21,10 +21,6 @@
 #define MAX_CHANNELS 2
 #define MAX_BLOCKSIZE 8192
 
-typedef struct FLACsubFramesBuff_t{
-    int32_t samplesBuffer[MAX_CHANNELS][MAX_BLOCKSIZE];
-}FLACsubframesBuffer_t;
-
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
 enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
