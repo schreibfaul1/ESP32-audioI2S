@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1
- *  Updated on: Feb 13.2023
+ *  Version 3.0.1a
+ *  Updated on: Feb 15.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4231,12 +4231,12 @@ bool Audio::setTimeOffset(int sec){
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(m_codec == CODEC_OPUS) return false; // not impl. yet
-    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
+    // xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); //#497
     if(!audiofile) return false;
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
     if(pos > m_file_size) pos = m_file_size;
     m_resumeFilePos = pos;
-    xSemaphoreGiveRecursive(mutex_audio);
+    // xSemaphoreGiveRecursive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
