@@ -3,7 +3,7 @@
 // thanks to Cellie - issue #35     25.Apr.2020
 // M5Stack board with Node base also need a MCLK signal on GPIO0.
 
-#include <wm8978.h> /* https://github.com/CelliesProjects/wm8978-esp32 */
+#include <WM8978.h> /* https://github.com/CelliesProjects/wm8978-esp32 */
 #include <Audio.h> /* https://github.com/schreibfaul1/ESP32-audioI2S */
 
 /* M5Stack Node WM8978 I2C pins */
@@ -25,27 +25,23 @@ Audio audio;
 void setup() {
   /* Setup wm8978 I2C interface */
   if (!dac.begin(I2C_SDA, I2C_SCL)) {
-    ESP_LOGE(TAG, "Error setting up dac. System halted");
+    log_e("Error setting up dac. System halted");
     while (1) delay(100);
   }
 
-  /* Setup wm8978 I2S interface */
-  audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_DIN);
+  dac.setSPKvol(40); /* max 63 */
+  dac.setHPvol(32, 32);
 
-  /* Setup wm8978 MCLK - for example M5Stack Node needs MCLK on GPIO 0 */
-  audio.i2s_mclk_pin_select(I2S_MCLKPIN);
+  /* Setup wm8978 I2S interface */
+  audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_DIN, I2S_MCLKPIN);
 
   WiFi.begin("xxx", "xxx");
   while (!WiFi.isConnected()) {
     delay(10);
   }
-  ESP_LOGI(TAG, "Connected");
 
-  ESP_LOGI(TAG, "Starting MP3...\n");
+  log_i("Connected\nStarting MP3...\n");
   audio.connecttohost("http://icecast.omroep.nl/3fm-bb-mp3");
-
-  dac.setSPKvol(40); /* max 63 */
-  dac.setHPvol(32, 32);
 }
 
 void loop() {
