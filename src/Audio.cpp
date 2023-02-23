@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1a
- *  Updated on: Feb 15.2023
+ *  Version 3.0.1b
+ *  Updated on: Feb 23.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1302,7 +1302,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             return -1;
         }
         if((nic != 1) && (nic != 2)){
-            AUDIO_INFO("num channels is %u,  must be 1 or 2" , nic); audio_info(m_chbuf);
+            AUDIO_INFO("num channels is %u,  must be 1 or 2" , nic);
             stopSong();
             return -1;
         }
@@ -3784,21 +3784,19 @@ void Audio::showCodecParams(){
     if(getBitRate()) {AUDIO_INFO("BitRate: %i", getBitRate());}
     else             {AUDIO_INFO("BitRate: N/A");}
 
-    if(m_codec == CODEC_AAC || m_codec == CODEC_M4A){
-        uint8_t answ;
-        if((answ = AACGetFormat()) < 4){
+    if(m_codec == CODEC_AAC){
+        uint8_t answ = AACGetFormat();
+        if(answ < 4){
             const char hf[4][8] = {"unknown", "ADTS", "ADIF", "RAW"};
-            sprintf(m_chbuf, "AAC HeaderFormat: %s", hf[answ]);
-            audio_info(m_chbuf);
+            AUDIO_INFO("AAC HeaderFormat: %s", hf[answ])
         }
         if(answ == 1){ // ADTS Header
-            const char co[2][23] = {"MPEG-4", "MPEG-2"};
-            sprintf(m_chbuf, "AAC Codec: %s", co[AACGetID()]);
-            audio_info(m_chbuf);
-            if(AACGetProfile() <5){
+            uint8_t aacId = AACGetID();
+            uint8_t aacPr = AACGetProfile();
+            if(aacId <2 && aacPr < 4){
+                const char co[2][7] = {"MPEG-4", "MPEG-2"};
                 const char pr[4][23] = {"Main", "LowComplexity", "Scalable Sampling Rate", "reserved"};
-                sprintf(m_chbuf, "AAC Profile: %s", pr[answ]);
-                audio_info(m_chbuf);
+                AUDIO_INFO("AAC Codec: %s %s", co[aacId], pr[answ]);
             }
         }
     }
@@ -5099,7 +5097,7 @@ void Audio::seek_m4a_ilst(){
             tmp = atomItems(seekpos);
             seekpos += tmp.size;
             if(strcmp(tmp.name, name[i]) == 0) {memcpy((void*)&at, (void*)&tmp, sizeof(tmp)); found = true;}
-            log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
+ //           log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
         }
         if(!found){
             log_w("m4a atom ilst not found");
@@ -5111,7 +5109,7 @@ void Audio::seek_m4a_ilst(){
 
     int len = tmp.size - 8;
     if(len >1024) len = 1024;
-    log_i("found at pos %i, len %i", seekpos, len);
+//    log_i("found at pos %i, len %i", seekpos, len);
 
     uint8_t* data = (uint8_t*)malloc(len);
     if(!data){
