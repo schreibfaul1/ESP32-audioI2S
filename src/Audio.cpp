@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1b
+ *  Version 3.0.1c
  *  Updated on: Feb 23.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -165,19 +165,18 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_f_Log = true;
 #endif
 
-    if(psramInit()){
-        m_chbufSize = 4096;
-        m_chbuf = (char*)      ps_malloc(m_chbufSize);
-        m_lastHost = (char*)   ps_malloc(512);
-        m_outBuff = (int16_t*) ps_malloc(2048 * 2 * sizeof(int16_t));
-    }
-    else{
-        m_chbufSize = 512 + 64;
-        m_chbuf = (char*)      malloc(m_chbufSize);
-        m_lastHost = (char*)   malloc(512);
-        m_outBuff = (int16_t*) malloc(2048 * 2 * sizeof(int16_t));
-    }
-    if(!m_chbuf || !m_lastHost || !m_outBuff) log_e("oom");
+    #define __malloc_heap_psram(size) \
+        heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+
+    if(psramInit()) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
+    m_ibuff    = (char*)    __malloc_heap_psram(512 + 64);
+    m_lastHost = (char*)    __malloc_heap_psram(512);
+    m_outBuff  = (int16_t*) __malloc_heap_psram(2048 * 2 * sizeof(int16_t));
+    m_chbuf    = (char*)    __malloc_heap_psram(m_chbufSize);
+
+    if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
+
+    #define AUDIO_INFO(...) {sprintf(m_ibuff, __VA_ARGS__); if(audio_info) audio_info(m_ibuff);}
 
     clientsecure.setInsecure();  // if that can't be resolved update to ESP32 Arduino version 1.0.5-rc05 or higher
     m_f_channelEnabled = channelEnabled;
@@ -314,6 +313,7 @@ Audio::~Audio() {
     if(m_chbuf)    {free(m_chbuf);    m_chbuf    = NULL;}
     if(m_lastHost) {free(m_lastHost); m_lastHost = NULL;}
     if(m_outBuff)  {free(m_outBuff);  m_outBuff  = NULL;}
+    if(m_ibuff)    {free(m_ibuff);    m_ibuff    = NULL;}
     vSemaphoreDelete(mutex_audio);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -3486,13 +3486,17 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio:: initializeDecoder(){
+    uint32_t gfH = 0;
+    uint32_t hWM = 0;
     switch(m_codec){
         case CODEC_MP3:
             if(!MP3Decoder_AllocateBuffers()){
                 AUDIO_INFO("The MP3Decoder could not be initialized");
                 goto exit;
             }
-            AUDIO_INFO("MP3Decoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            gfH = ESP.getFreeHeap();
+            hWM = uxTaskGetStackHighWaterMark(NULL);
+            AUDIO_INFO("MP3Decoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
             InBuff.changeMaxBlockSize(m_frameSizeMP3);
             break;
         case CODEC_AAC:
@@ -3501,7 +3505,9 @@ bool Audio:: initializeDecoder(){
                     AUDIO_INFO("The AACDecoder could not be initialized");
                     goto exit;
                 }
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+                gfH = ESP.getFreeHeap();
+                hWM = uxTaskGetStackHighWaterMark(NULL);
+                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -3511,7 +3517,9 @@ bool Audio:: initializeDecoder(){
                     AUDIO_INFO("The AACDecoder could not be initialized");
                     goto exit;
                 }
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+                gfH = ESP.getFreeHeap();
+                hWM = uxTaskGetStackHighWaterMark(NULL);
+                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -3524,15 +3532,19 @@ bool Audio:: initializeDecoder(){
                 AUDIO_INFO("The FLACDecoder could not be initialized");
                 goto exit;
             }
+            gfH = ESP.getFreeHeap();
+            hWM = uxTaskGetStackHighWaterMark(NULL);
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
-            AUDIO_INFO("FLACDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            AUDIO_INFO("FLACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
             break;
         case CODEC_OPUS:
             if(!OPUSDecoder_AllocateBuffers()){
                 AUDIO_INFO("The OPUSDecoder could not be initialized");
                 goto exit;
             }
-            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %u bytes", ESP.getFreeHeap());
+            gfH = ESP.getFreeHeap();
+            hWM = uxTaskGetStackHighWaterMark(NULL);
+            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_WAV:

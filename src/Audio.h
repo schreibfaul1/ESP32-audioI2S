@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.1
+ *  Version 3.0.1c
  *  Updated on: Feb 23,2023
  *      Author: Wolle (schreibfaul1)
  */
@@ -86,7 +86,7 @@ extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstrea
 extern __attribute__((weak)) void audio_process_extern(int16_t* buff, uint16_t len, bool *continueI2S); // record audiodata or send via BT
 extern __attribute__((weak)) void audio_process_i2s(uint32_t* sample, bool *continueI2S); // record audiodata or send via BT
 
-#define AUDIO_INFO(...) {char buff[512 + 64]; sprintf(buff,__VA_ARGS__); if(audio_info) audio_info(buff);}
+
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -481,6 +481,7 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
+    char*           m_ibuff = nullptr;              // used in audio_info()
     char*           m_chbuf = NULL;
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
