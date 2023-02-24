@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Feb 13,2023
+ * Updated on: Jan 08,2023
  *
  *      Author: wolle
  *
@@ -20,6 +20,10 @@
 
 #define MAX_CHANNELS 2
 #define MAX_BLOCKSIZE 8192
+
+typedef struct FLACsubFramesBuff_t{
+    int32_t samplesBuffer[MAX_CHANNELS][MAX_BLOCKSIZE];
+}FLACsubframesBuffer_t;
 
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
@@ -141,8 +145,8 @@ typedef struct FLACFrameHeader_t {
 
 }FLACFrameHeader_t;
 
-int      FLACFindSyncWord(unsigned char *inbuf, int16_t nBytes);
-boolean  FLACFindMagicWord(unsigned char* inbuf, int16_t nBytes);
+int      FLACFindSyncWord(unsigned char *buf, int nBytes);
+boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
 char*    FLACgetStreamTitle();
 int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
 bool     FLACDecoder_AllocateBuffers(void);
