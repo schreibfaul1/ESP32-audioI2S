@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1e
+ *  Version 3.0.1f
  *  Updated on: Mar 07.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -2725,7 +2725,7 @@ void Audio::processLocalFile() {
 
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
 
-    static uint32_t ctime = millis();
+    static uint32_t ctime = 0;
     const  uint32_t timeout = 2500; // ms
     const  uint32_t maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     static bool     f_stream;
@@ -2738,6 +2738,7 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         byteCounter = 0;
+        ctime = millis();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         return;
