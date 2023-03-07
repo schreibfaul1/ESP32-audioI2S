@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1d
- *  Updated on: Mar 04.2023
+ *  Version 3.0.1e
+ *  Updated on: Mar 07.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2725,7 +2725,9 @@ void Audio::processLocalFile() {
 
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
 
-    const uint32_t  maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
+    static uint32_t ctime = millis();
+    const  uint32_t timeout = 2500; // ms
+    const  uint32_t maxFrameSize = InBuff.getMaxBlockSize();    // every mp3/aac frame is not bigger
     static bool     f_stream;
     static bool     f_fileDataComplete;
     static uint32_t byteCounter;                                // count received data
@@ -2759,6 +2761,11 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
     if(!f_stream){
+        if((millis() - ctime) > timeout) {
+            log_e("audioHeader reading timeout");
+            m_f_running = false;
+            return;
+        }
         if(m_controlCounter != 100) {
             if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
                 InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
