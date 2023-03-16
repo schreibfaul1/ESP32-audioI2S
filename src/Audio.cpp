@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1f
- *  Updated on: Mar 07.2023
+ *  Version 3.0.1g
+ *  Updated on: Mar 16.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2812,7 +2812,10 @@ void Audio::processLocalFile() {
         if(InBuff.bufferFilled()){
             if(!readID3V1Tag()){
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-                if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
+                if(m_f_playing){
+                    if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
+                }
+                AUDIO_INFO("audio file is corrupt --> send EOF"); // no return, fall through
             }
         }
 
