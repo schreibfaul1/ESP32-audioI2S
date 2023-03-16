@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.1d
+ *  Version 3.0.1h
  *  Updated on: Mar 16,2023
  *      Author: Wolle (schreibfaul1)
  */
@@ -284,6 +284,15 @@ private:
 
 
 //++++ implement several function with respect to the index of string ++++
+    void strlower(char *str){
+        unsigned char *p = (unsigned char *)str;
+        while (*p) {
+           *p = tolower((unsigned char)*p);
+            p++;
+        }
+    }
+
+
     void trim(char *s) {
     //fb   trim in place
         char *pe;

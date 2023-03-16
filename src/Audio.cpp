@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1g
+ *  Version 3.0.1h
  *  Updated on: Mar 16.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -3580,7 +3580,9 @@ bool Audio::parseContentType(char* ct) {
     enum : int {CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX,
                 CT_M3U8, CT_TXT, CT_AACP, CT_OPUS, CT_OGG};
 
-    strlwr(ct);
+    log_i("ct %s", ct);
+    strlower(ct);
+    log_i("ct %s", ct);
     trim(ct);
 
     m_codec = CODEC_NONE;
