@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1h
- *  Updated on: Mar 16.2023
+ *  Version 3.0.1i
+ *  Updated on: Mar 24.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2956,6 +2956,7 @@ void Audio::processWebFile() {
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        m_t0 = millis();
         f_webFileDataComplete = false;
         f_stream = false;
         byteCounter = 0;
@@ -2996,7 +2997,8 @@ void Audio::processWebFile() {
     if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
         f_stream = true;  // ready to play the audio data
         uint16_t filltime = millis() - m_t0;
-        AUDIO_INFO("stream ready\nbuffer filled in %d ms", filltime);
+        if(m_f_Log) AUDIO_INFO("stream ready");
+        if(m_f_Log) AUDIO_INFO("buffer filled in %d ms", filltime);
     }
 
     if(!f_stream) return;
@@ -3332,7 +3334,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(startsWith(rhl, "content-type:")){ // content-type: text/html; charset=UTF-8
-            log_i("cT: %s", rhl);
+            // log_i("cT: %s", rhl);
             int idx = indexOf(rhl + 13, ";");
             if(idx >0) rhl[13 + idx] = '\0';
             if(parseContentType(rhl + 13)) ct_seen = true;
