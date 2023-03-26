@@ -1563,6 +1563,9 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
     static bool APIC_seen = false;
     static size_t APIC_size = 0;
     static uint32_t APIC_pos = 0;
+    static bool SYLT_seen = false;
+    static size_t SYLT_size = 0;
+    static uint32_t SYLT_pos = 0;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0){      /* read ID3 tag and ID3 header size */
         if(getDatamode() == AUDIO_LOCALFILE){
@@ -1572,6 +1575,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         }
         m_controlCounter ++;
         APIC_seen = false;
+        SYLT_seen = false;
         remainingHeaderBytes = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
@@ -1716,6 +1720,18 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
             return 0;
         }
 
+        if(// any lyrics embedded in file, passing it to external function
+            startsWith(tag, "SYLT")
+            || startsWith(tag, "USLT")
+        ) {
+            if(getDatamode() == AUDIO_LOCALFILE){
+                SYLT_seen = true;
+                SYLT_pos = id3Size - remainingHeaderBytes;
+                SYLT_size = framesize;
+            }
+            return 0;
+        }
+
         size_t fs = framesize;
         if(fs >512) fs = 512;
         for(int i=0; i<fs; i++){
@@ -1779,6 +1795,14 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
                 if(m_f_Log) log_i("Attached picture seen at pos %d length %d", APIC_pos, APIC_size);
             }
         }
+        else if(startsWith(tag, "SLT")) { // lyrics embedded in header
+            if(getDatamode() == AUDIO_LOCALFILE){
+                SYLT_seen = true;                       // #460
+                SYLT_pos = id3Size - remainingHeaderBytes;
+                SYLT_size = universal_tmp;
+                if(m_f_Log) log_i("Attached lyrics seen at pos %d length %d", SYLT_pos, SYLT_size);
+            }
+        }
         else{
             showID3Tag(tag, value);
         }
@@ -1818,6 +1842,11 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
             if(APIC_seen && audio_id3image){
                 size_t pos = audiofile.position();
                 audio_id3image(audiofile, APIC_pos, APIC_size);
+                audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
+            }
+            if(SYLT_seen && audio_id3lyrics){
+                size_t pos = audiofile.position();
+                audio_id3lyrics(audiofile, SYLT_pos, SYLT_size);
                 audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
             }
             return 0;
