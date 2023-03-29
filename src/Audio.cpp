@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1i
- *  Updated on: Mar 24.2023
+ *  Version 3.0.1j
+ *  Updated on: Mar 29.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4527,8 +4527,14 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
 
     const float FcLS   =  500;  // Frequency LowShelf[Hz]
     const float FcPKEQ = 3000;  // Frequency PeakEQ[Hz]
-    const float FcHS   = 6000;  // Frequency HighShelf[Hz]
+          float FcHS   = 6000;  // Frequency HighShelf[Hz]
 
+    if(getSampleRate() < FcHS * 2 - 100){ // Prevent HighShelf filter from clogging
+        FcHS = getSampleRate() /2 - 100;
+        // according to the sampling theorem, the sample rate must be at least 2 * 6000 >= 12000Hz for a filter
+        // frequency of 6000Hz. If this is not the case, the filter frequency (plus a reserve of 100Hz) is lowered
+        AUDIO_INFO("Highshelf frequency lowered, from 6000Hz to %dHz", (uint32_t)FcHS);
+    }
     float K, norm, Q, Fc, V ;
 
     // LOWSHELF
