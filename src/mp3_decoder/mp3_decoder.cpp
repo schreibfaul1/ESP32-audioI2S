@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.05.2022
+ *  Updated on: 29.03.2023
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -24,7 +24,7 @@
 #endif
 
 const uint8_t  m_SYNCWORDH              =0xff;
-const uint8_t  m_SYNCWORDL              =0xf0;
+const uint8_t  m_SYNCWORDL              =0xe0;
 const uint8_t  m_DQ_FRACBITS_OUT        =25;  // number of fraction bits in output of dequant
 const uint8_t  m_CSHIFT                 =12;  // coefficients have 12 leading sign bits for early-terminating mulitplies
 const uint8_t  m_SIBYTES_MPEG1_MONO     =17;
