@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1j
- *  Updated on: Mar 29.2023
+ *  Version 3.0.1k
+ *  Updated on: Mar 30.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2791,12 +2791,12 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
     if(!f_stream){
-        if((millis() - ctime) > timeout) {
-            log_e("audioHeader reading timeout");
-            m_f_running = false;
-            return;
-        }
         if(m_controlCounter != 100) {
+        	if((millis() - ctime) > timeout) {
+        		log_e("audioHeader reading timeout");
+        		m_f_running = false;
+        		return;
+        	}
             if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
                 InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
             }
