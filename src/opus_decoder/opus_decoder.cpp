@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 06.02.2023
+ *  Updated on: 07.04.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -247,8 +247,11 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
 //----------------------------------------------------------------------------------------------------------------------
 int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.org/OggOpus
 
+
     int idx = OPUS_specialIndexOf(inbuf, "OpusHead", 10);
-     if(idx != 0) return 0; //is not OpusHead
+     if(idx != 0) {
+        return 0; //is not OpusHead
+     }
     uint8_t  version            = *(inbuf +  8); (void) version;
     uint8_t  channelCount       = *(inbuf +  9); // nr of channels
     uint16_t preSkip            = *(inbuf + 11) << 8;
