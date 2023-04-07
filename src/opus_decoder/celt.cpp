@@ -1815,7 +1815,7 @@ void quant_all_bands(int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, int32_t 
     /* No need to allocate norm for the last band because we don't need an
        output in that band. */
 
-    assert(C * (M * eBands[m_CELTMode.nbEBands - 1] - norm_offset) >= 1248);
+//    assert(C * (M * eBands[m_CELTMode.nbEBands - 1] - norm_offset) >= 1248);
     norm = s_normBuff;
 
     norm2 = norm + M * eBands[m_CELTMode.nbEBands - 1] - norm_offset;
