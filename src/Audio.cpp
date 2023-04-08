@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1m
+ *  Version 3.0.1n
  *  Updated on: Apr 07.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -519,6 +519,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(endsWith(extension, ".aac"))   m_expectedCodec = CODEC_AAC;
         if(endsWith(extension, ".wav"))   m_expectedCodec = CODEC_WAV;
         if(endsWith(extension, ".m4a"))   m_expectedCodec = CODEC_M4A;
+        if(endsWith(extension, ".ogg"))   m_expectedCodec = CODEC_OGG;
         if(endsWith(extension, ".flac"))  m_expectedCodec = CODEC_FLAC;
         if(endsWith(extension, "-flac"))  m_expectedCodec = CODEC_FLAC;
         if(endsWith(extension, ".opus"))  m_expectedCodec = CODEC_OPUS;
@@ -3038,6 +3039,14 @@ void Audio::processWebFile() {
     }
 
     if(!f_stream) return;
+    if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
+       uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+       if(codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
+       if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
+       if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+       stopSong();
+       return;
+    }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100){
@@ -5437,12 +5446,12 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len){
         return CODEC_NONE;
     }
     data += 27;
-    idx = specialIndexOf(data, "OpusHead", 20);
+    idx = specialIndexOf(data, "OpusHead", 40);
     if(idx >= 0) return CODEC_OPUS;
-    idx = specialIndexOf(data, "FLAC", 20);
+    idx = specialIndexOf(data, "fLaC", 40);
     if(idx >= 0) return CODEC_FLAC;
-    idx = specialIndexOf(data, "vorbis", 20);
-    if(idx >= 0) return CODEC_VORBIS;
+    idx = specialIndexOf(data, "vorbis", 40);
+    if(idx >= 0){log_i("vorbis"); return CODEC_VORBIS;}
     return CODEC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
