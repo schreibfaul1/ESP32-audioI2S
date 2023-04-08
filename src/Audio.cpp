@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1n
+ *  Version 3.0.1o
  *  Updated on: Apr 07.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -2709,6 +2709,7 @@ const char* Audio::parsePlaylist_M3U8(){
                 m_playlistURL.shrink_to_fit();
         }
         if(m_f_Log) log_i("now playing %s", m_playlistBuff);
+        if(endsWith(m_playlistBuff, "ts")) m_f_ts = true;
         return m_playlistBuff;
     }
     else{
@@ -3655,8 +3656,8 @@ bool Audio::parseContentType(char* ct) {
 
     else if(!strcmp(ct, "audio/aac"))        ct_val = CT_AAC;
     else if(!strcmp(ct, "audio/x-aac"))      ct_val = CT_AAC;
-    else if(!strcmp(ct, "audio/aacp")){      ct_val = CT_AAC; if(m_playlistFormat == FORMAT_M3U8) m_f_ts = true;}
-    else if(!strcmp(ct, "video/mp2t")){      ct_val = CT_AAC; m_f_ts = true;} // assume AAC transport stream
+    else if(!strcmp(ct, "audio/aacp"))       ct_val = CT_AAC;
+    else if(!strcmp(ct, "video/mp2t"))       ct_val = CT_AAC;
     else if(!strcmp(ct, "audio/mp4"))        ct_val = CT_M4A;
     else if(!strcmp(ct, "audio/m4a"))        ct_val = CT_M4A;
     else if(!strcmp(ct, "audio/x-m4a"))      ct_val = CT_M4A;
