@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1l
- *  Updated on: Apr 06.2023
+ *  Version 3.0.1m
+ *  Updated on: Apr 07.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3598,6 +3598,10 @@ bool Audio:: initializeDecoder(){
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
+            if(!psramFound()){
+                AUDIO_INFO("VORBIS works only with PSRAM!");
+                goto exit;
+            }
             if(!VORBISDecoder_AllocateBuffers()){
                 AUDIO_INFO("The VORBISDecoder could not be initialized");
                 goto exit;
@@ -3961,7 +3965,7 @@ void Audio::setDecoderItems(){
         setBitrate(OPUSGetBitRate());
     }
     if(m_codec == CODEC_VORBIS){
-        setChannels(2);
+        setChannels(VORBISGetChannels());
         setSampleRate(VORBISGetSampRate());
         setBitsPerSample(VORBISGetBitsPerSample());
         setBitrate(VORBISGetBitRate());
@@ -5128,11 +5132,11 @@ boolean Audio::streamDetection(uint32_t bytesAvail){
     static uint8_t  cnt_slow = 0;
     static uint8_t  cnt_lost = 0;
 
-    // if within one second the content of the audio buffer falls below the size of an audio frame 50 times,
+    // if within one second the content of the audio buffer falls below the size of an audio frame 100 times,
     // issue a message
     if(tmr_slow + 1000 < millis()){
         tmr_slow = millis();
-        if(cnt_slow > 50) AUDIO_INFO("slow stream, dropouts are possible");
+        if(cnt_slow > 100) AUDIO_INFO("slow stream, dropouts are possible");
         cnt_slow = 0;
     }
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) cnt_slow++;
