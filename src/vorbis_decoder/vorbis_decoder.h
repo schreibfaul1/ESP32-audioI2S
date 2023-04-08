@@ -38,7 +38,11 @@ enum : int8_t  {VORBIS_PARSE_OGG_DONE = 100,
                 ERR_VORBIS_INVALID_SAMPLERATE = -2,
                 ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED = -3,
                 ERR_VORBIS_DECODER_ASYNC = -4,
-                ERR_VORBIS_OGG_SYNC_NOT_FOUND = - 5};
+                ERR_VORBIS_OGG_SYNC_NOT_FOUND = - 5,
+                ERR_VORBIS_BAD_HEADER = -6,
+                ERR_VORBIS_NOT_AUDIO = -7,
+                ERR_VORBIS_BAD_PACKET = -8
+            };
 
 typedef struct _codebook{
     uint8_t  dim;          /* codebook dimensions (elements per vector) */
