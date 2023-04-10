@@ -51,7 +51,6 @@ void setup() {
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(12); // 0...21
 
-//    audio.connecttoFS(SD, "/320k_test.mp3");
 //    audio.connecttoFS(SD, "test.wav");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
 //    audio.connecttohost("http://somafm.com/wma128/missioncontrol.asx"); //  asx
