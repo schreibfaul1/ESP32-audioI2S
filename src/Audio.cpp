@@ -1729,6 +1729,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
 
         if(// any lyrics embedded in file, passing it to external function
             startsWith(tag, "SYLT")
+            || startsWith(tag, "TXXX")
             || startsWith(tag, "USLT")
         ) {
             if(getDatamode() == AUDIO_LOCALFILE){
