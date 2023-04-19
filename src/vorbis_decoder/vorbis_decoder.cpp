@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 07.04.2023
+ *  Updated on: 19.04.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -923,17 +923,21 @@ int32_t bitReader_look(uint16_t nBits){
 /* bits <= 32 */
 int32_t bitReader(uint16_t nBits) {
     int32_t ret = bitReader_look(nBits);
-    bitReader_adv(nBits);
+    if(bitReader_adv(nBits) < 0) return -1;
     return (ret);
 }
 
 /* limited to 32 at a time */
-void bitReader_adv(uint16_t nBits) {
+int8_t bitReader_adv(uint16_t nBits) {
     nBits += s_bitReader.headbit;
     s_bitReader.headbit = nBits & 7;
     s_bitReader.headend -= (nBits >> 3);
     s_bitReader.headptr += (nBits >> 3);
-    if(s_bitReader.headend < 1){log_e("error in bitreader");}
+    if(s_bitReader.headend < 1){
+        return -1;
+        log_e("error in bitreader");
+    }
+    return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int ilog(uint32_t v) {
@@ -1866,6 +1870,10 @@ int32_t *floor1_inverse1(vorbis_info_floor_t *in, int32_t *fit_value) {
 
         return (fit_value);
     }
+    else{
+        // log_i("err in br");
+        ;
+    }
 eop:
     return (NULL);
 }
@@ -1876,7 +1884,7 @@ int32_t vorbis_book_decode(codebook_t* book) {
     return decode_packed_entry_number(book);
 }
 //---------------------------------------------------------------------------------------------------------------------
-uint32_t decode_packed_entry_number(codebook_t *book) {
+int32_t decode_packed_entry_number(codebook_t *book) {
     uint32_t chase = 0;
     int      read = book->dec_maxlength;
     int32_t  lok = bitReader_look(read), i;
