@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.1n
- *  Updated on: Apr 07,2023
+ *  Version 3.0.1p
+ *  Updated on: Apr 19,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -523,6 +523,7 @@ private:
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
+    int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_datamode = 0;                 // Statemaschine
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;

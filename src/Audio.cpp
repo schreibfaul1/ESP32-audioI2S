@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1o
- *  Updated on: Apr 07.2023
+ *  Version 3.0.1p
+ *  Updated on: Apr 19.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2847,31 +2847,28 @@ void Audio::processLocalFile() {
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()){
+
         if(InBuff.bufferFilled()){
             if(!readID3V1Tag()){
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-                if(m_f_playing){
-                    if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
+                if(bytesDecoded <= InBuff.bufferFilled()){ // avoid InBuff overrun (can be if file is corrupt)
+                    if(m_f_playing){
+                        if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
+                    }
                 }
                 AUDIO_INFO("audio file is corrupt --> send EOF"); // no return, fall through
             }
         }
 
         if(m_f_loop  && f_stream){  //eof
-            AUDIO_INFO("loop from: %u to: %u", getFilePos(), m_audioDataStart); //TEST loop
+            AUDIO_INFO("loop from: %u to: %u", getFilePos(), m_audioDataStart); // loop
             setFilePos(m_audioDataStart);
             if(m_codec == CODEC_FLAC) FLACDecoderReset();
-            /*
-                The current time of the loop mode is not reset,
-                which will cause the total audio duration to be exceeded.
-                For example: current time   ====progress bar====>  total audio duration
-                                3:43        ====================>        3:33
-            */
             m_audioCurrentTime = 0;
             byteCounter = m_audioDataStart;
             f_fileDataComplete = false;
             return;
-        } //TEST loop
+        } //loop
 
 #ifdef SDFATFS_USED
         audiofile.getName(m_chbuf, m_chbufSize); // #426
@@ -3996,7 +3993,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     // m_f_playing is true at this pos
     bytesLeft = len;
-    int ret = 0;
+    m_decodeError= 0;
     int bytesDecoded = 0;
 
     switch(m_codec){
@@ -4004,40 +4001,41 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                              if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
                              if(getBitsPerSample() == 8 ) m_validSamples = len / 2;
                              bytesLeft = 0; break;
-        case CODEC_MP3:      ret = MP3Decode(   data, &bytesLeft, m_outBuff, 0); break;
-        case CODEC_AAC:      ret = AACDecode(   data, &bytesLeft, m_outBuff);    break;
-        case CODEC_M4A:      ret = AACDecode(   data, &bytesLeft, m_outBuff);    break;
-        case CODEC_FLAC:     ret = FLACDecode(  data, &bytesLeft, m_outBuff);    break;
-        case CODEC_OPUS:     ret = OPUSDecode(  data, &bytesLeft, m_outBuff);    break;
-        case CODEC_VORBIS:   ret = VORBISDecode(data, &bytesLeft, m_outBuff);    break;
+        case CODEC_MP3:      m_decodeError = MP3Decode(   data, &bytesLeft, m_outBuff, 0); break;
+        case CODEC_AAC:      m_decodeError = AACDecode(   data, &bytesLeft, m_outBuff);    break;
+        case CODEC_M4A:      m_decodeError = AACDecode(   data, &bytesLeft, m_outBuff);    break;
+        case CODEC_FLAC:     m_decodeError = FLACDecode(  data, &bytesLeft, m_outBuff);    break;
+        case CODEC_OPUS:     m_decodeError = OPUSDecode(  data, &bytesLeft, m_outBuff);    break;
+        case CODEC_VORBIS:   m_decodeError = VORBISDecode(data, &bytesLeft, m_outBuff);    break;
         default: {log_e("no valid codec found codec = %d", m_codec); stopSong();}
     }
 
-    bytesDecoded = len - bytesLeft;
-    if(bytesDecoded == 0 && ret == 0){ // unlikely framesize
-            if(audio_info) audio_info("framesize is 0, start decoding again");
-            m_f_playing = false; // seek for new syncword
-        // we're here because there was a wrong sync word
-        // so skip two sync bytes and seek for next
-        return 1;
-    }
-    if(ret < 0) { // Error, skip the frame...
-        if(m_f_Log) if(m_codec == CODEC_M4A){log_i("begin not found"); return 1;}
+    // m_decodeError - possible values are:
+    //                   0: okay, no error
+    //                 100: the decoder needs more data
+    //                 < 0: there has been an error
+
+    if(m_decodeError < 0){ // Error, skip the frame...
         i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-        if(!getChannels() && (ret == -2)) {
-             ; // suppress errorcode MAINDATA_UNDERFLOW
+        if(!getChannels() && m_codec == CODEC_MP3 && (m_decodeError == -2)) {
+             ; // at the beginning this doesn't have to be a mistake, suppress errorcode MAINDATA_UNDERFLOW
         }
         else {
-            if(m_codec == CODEC_MP3 && ret == -2){ ; } // do nothing (suppress MAINDATA_UNDERFLOW)
-            else{
-                printDecodeError(ret);
-                m_f_playing = false; // seek for new syncword
-            }
+            printDecodeError(m_decodeError);
+            m_f_playing = false; // seek for new syncword
         }
-        if(!bytesDecoded) bytesDecoded = 2;
-        return bytesDecoded;
+        return 1; // skip one byte and seek for the next sync word
     }
-    else{  // ret>=0
+    bytesDecoded = len - bytesLeft;
+
+    if(bytesDecoded == 0 && m_decodeError == 0){ // unlikely framesize
+        if(audio_info) audio_info("framesize is 0, start decoding again");
+        m_f_playing = false; // seek for new syncword
+        // we're here because there was a wrong sync word so skip one byte and seek for the next
+        return 1;
+    }
+    // status: bytesDecoded > 0 and m_decodeError >= 0
+    {
         if(m_codec == CODEC_MP3){
             m_validSamples = MP3GetOutputSamps() / getChannels();
         }
@@ -4046,7 +4044,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         if(m_codec == CODEC_FLAC){
             const uint8_t FLAC_PARSE_OGG_DONE = 100;
-            if(ret == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+            if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
             m_validSamples = FLACGetOutputSamps() / getChannels();
             char* st = FLACgetStreamTitle();
             if(st){
@@ -4056,7 +4054,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         if(m_codec == CODEC_OPUS){
             const uint8_t OPUS_PARSE_OGG_DONE = 100;
-            if(ret == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+            if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
             m_validSamples = OPUSGetOutputSamps();
             char* st = OPUSgetStreamTitle();
             if(st){
@@ -4066,7 +4064,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         if(m_codec == CODEC_VORBIS){
             const uint8_t VORBIS_PARSE_OGG_DONE = 100;
-            if(ret == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+            if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
             m_validSamples = VORBISGetOutputSamps();
             char* st = VORBISgetStreamTitle();
             if(st){
