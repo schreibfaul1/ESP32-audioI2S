@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1p
- *  Updated on: Apr 19.2023
+ *  Version 3.0.1q
+ *  Updated on: May 02.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2478,7 +2478,7 @@ const char* Audio::parsePlaylist_M3U(){
             break;
         }
     }
-    vector_clear_and_shrink(m_playlistContent);
+//    vector_clear_and_shrink(m_playlistContent);
     return host;
 }
 //----------------------------------------------------------------------------------------------------------------------
