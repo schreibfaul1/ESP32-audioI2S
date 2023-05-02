@@ -1,6 +1,6 @@
 # ESP32-audioI2S, better WiFi speed
-bei hoher Bitrate oder geringer Kompressionsrate kann der Datendurchsatz über WiFi nicht ausreichen um den Audiobuffer ausreichend zu füllen. In diesem Fall kommt periodisch die Meldung "slow stream, dropouts are possible".   Abhilfe schaffen bessere TCP Einstellungen. Das kann über menuconfig erreicht werden mit anschließender Arduino Kompilierung. 
-Hier ist ein komplettes Beispiel, welches einfach in PlatformIO geklont erden kann.
+with a high bit rate or low compression rate, the data throughput via WiFi may not be sufficient to fill the audio buffer sufficiently. In this case, the message 'slow stream, dropouts are possible' appears periodically. Better TCP settings can help. This can be achieved via menuconfig followed by Arduino compilation.
+Here is a complete example that can be easily cloned in PlatformIO.
 
 
 ````c++
@@ -42,6 +42,6 @@ void audio_info(const char *info){
 
 
 
-Das sind die wesentlichen Einstellungen:
-
+These are the main settings:
+![menuconfig](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/examples/Better_WiFi_throughput/better_WiFi_throughput.jpeg)
 
