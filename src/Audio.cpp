@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1q
- *  Updated on: May 02.2023
+ *  Version 3.0.1r
+ *  Updated on: May 03.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2070,7 +2070,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
                 offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
                 if(offset>0) {
                     offset += 19; if(*(data + offset) == 0) offset ++;
-                    char value[256];
+                    char value[256] = {0};
                     size_t tmp = strlen((const char*)data + offset);
                     if(tmp > 254) tmp = 254;
                     memcpy(value, (data + offset), tmp);
@@ -2381,7 +2381,7 @@ bool Audio::readPlayListData() {
 
     // reads the content of the playlist and stores it in the vector m_contentlength
     // m_contentlength is a table of pointers to the lines
-    char pl[512]; // playlistLine
+    char pl[512] = {0}; // playlistLine
     uint32_t ctl  = 0;
     int lines = 0;
     // delete all memory in m_playlistContent
@@ -3322,7 +3322,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if(getDatamode() != HTTP_RESPONSE_HEADER) return false;
     if(_client->available() == 0) return false;
 
-    char rhl[512]; // responseHeaderline
+    char rhl[512] = {0}; // responseHeaderline
     bool ct_seen = false;
     uint32_t ctime = millis();
     uint32_t timeout = 2500; // ms
@@ -5195,15 +5195,15 @@ void Audio::seek_m4a_ilst(){
     struct m4a_Atom{
         int  pos;
         int  size;
-        char name[5];
+        char name[5] = {0};
     } atom, at, tmp;
 
     // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
     auto atomItems = [&](uint32_t startPos){    // lambda, inner function
-        char tmp[5];
+        char temp[5] = {0};
         audiofile.seek(startPos);
-        audiofile.readBytes(tmp, 4);
-        atom.size = bigEndian((uint8_t*)tmp, 4);
+        audiofile.readBytes(temp, 4);
+        atom.size = bigEndian((uint8_t*)temp, 4);
         if(!atom.size) atom.size = 4; // has no data, length is 0
         audiofile.readBytes(atom.name, 4);
         atom.name[4] = '\0';
@@ -5254,17 +5254,18 @@ void Audio::seek_m4a_ilst(){
     audiofile.seek(seekpos);
     audiofile.read(data, len);
 
-    int offset;
+    int offset = 0;
     for(int i=0; i < 12; i++){
         offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
-        if(offset>0) {
+        if(offset > 0) {
             offset += 19; if(*(data + offset) == 0) offset ++;
-            char value[256];
-            size_t tmp = strlen((const char*)data + offset);
-            if(tmp > 254) tmp = 254;
-            memcpy(value, (data + offset), tmp);
-            value[tmp] = 0;
-            m_chbuf[0] = 0;
+            char value[256] = {0};
+            size_t temp = strlen((const char*)data + offset);
+            if(temp > 254) temp = 254;
+            memcpy(value, (data + offset), temp);
+            log_w("value %s, temp %i", value, temp);
+            value[temp] = '\0';
+            m_chbuf[0] = '\0';
             if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
             if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
             if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
@@ -5310,15 +5311,16 @@ void Audio::seek_m4a_stsz(){
     struct m4a_Atom{
         int  pos;
         int  size;
-        char name[5];
+        char name[5] = {0};
     } atom, at, tmp;
 
     // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
     auto atomItems = [&](uint32_t startPos){    // lambda, inner function
-        char tmp[5];
+        char temp[5] = {0};
         audiofile.seek(startPos);
-        audiofile.readBytes(tmp, 4);
-        atom.size = bigEndian((uint8_t*)tmp, 4);
+        audiofile.readBytes(temp, 4);
+        log_w("be1");
+        atom.size = bigEndian((uint8_t*)temp, 4);
         if(!atom.size) atom.size = 4; // has no data, length is 0
         audiofile.readBytes(atom.name, 4);
         atom.name[4] = '\0';
@@ -5331,7 +5333,7 @@ void Audio::seek_m4a_stsz(){
     uint32_t seekpos   = 0;
     uint32_t filesize  = getFileSize();
     char name[6][5]    = {"moov", "trak", "mdia", "minf", "stbl", "stsz"};
-    char noe[4];
+    char noe[4] = {0};
 
     if(!audiofile) return; // guard
 
@@ -5354,6 +5356,7 @@ void Audio::seek_m4a_stsz(){
     seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
     audiofile.seek(seekpos);
     audiofile.readBytes(noe, 4); //number of entries
+    log_w("be1");
     m_stsz_numEntries = bigEndian((uint8_t*)noe, 4);
     if(m_f_Log) log_i("number of entries in stsz: %d", m_stsz_numEntries);
     m_stsz_position = seekpos + 4;
