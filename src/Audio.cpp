@@ -5263,7 +5263,6 @@ void Audio::seek_m4a_ilst(){
             size_t temp = strlen((const char*)data + offset);
             if(temp > 254) temp = 254;
             memcpy(value, (data + offset), temp);
-            log_w("value %s, temp %i", value, temp);
             value[temp] = '\0';
             m_chbuf[0] = '\0';
             if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
