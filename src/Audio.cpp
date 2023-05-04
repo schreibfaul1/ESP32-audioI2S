@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1r
+ *  Version 3.0.1s
  *  Updated on: May 03.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -1879,8 +1879,8 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     static size_t audioDataPos = 0;
 
     if(retvalue) {
+        if(len > InBuff.getMaxBlockSize())  len = InBuff.getMaxBlockSize();
         if(retvalue > len) { // if returnvalue > bufferfillsize
-            if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
             retvalue -= len; // and wait for more bufferdata
             return len;
         }
@@ -1940,7 +1940,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
             return 0;
         }
         else {
-            char atomName[5];
+            char atomName[5] = {0};
             (void)atomName;
             atomName[0] = *data;
             atomName[1] = *(data + 1);
@@ -2062,11 +2062,11 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     if(m_controlCounter == M4A_ILST) {  // ilst
         const char info[12][6] = { "nam\0", "ART\0", "alb\0", "too\0",  "cmt\0",  "wrt\0",
                                    "tmpo\0", "trkn\0","day\0", "cpil\0", "aART\0", "gen\0"};
-        int offset;
+        int offset = 0;
         // If it's a local file, the metadata has already been read, even if it comes after the audio block.
         // In the event that they are in front of the audio block in a web stream, read them now
         if(!m_f_m4aID3dataAreRead){
-            for(int i=0; i < 12; i++){
+            for(int i = 0; i < 12; i++){
                 offset = specialIndexOf(data, info[i], len, true);  // seek info[] with '\0'
                 if(offset>0) {
                     offset += 19; if(*(data + offset) == 0) offset ++;
@@ -2074,8 +2074,8 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
                     size_t tmp = strlen((const char*)data + offset);
                     if(tmp > 254) tmp = 254;
                     memcpy(value, (data + offset), tmp);
-                    value[tmp] = 0;
-                    m_chbuf[0] = 0;
+                    value[tmp] = '\0';
+                    m_chbuf[0] = '\0';
                     if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
                     if(i == 1)  sprintf(m_chbuf, "Artist: %s", value);
                     if(i == 2)  sprintf(m_chbuf, "Album: %s", value);
@@ -5245,7 +5245,7 @@ void Audio::seek_m4a_ilst(){
     if(len >1024) len = 1024;
 //    log_i("found at pos %i, len %i", seekpos, len);
 
-    uint8_t* data = (uint8_t*)malloc(len);
+    uint8_t* data = (uint8_t*)calloc(len, sizeof(uint8_t));
     if(!data){
         log_e("out od memory");
         audiofile.seek(0);
@@ -5263,6 +5263,7 @@ void Audio::seek_m4a_ilst(){
             size_t temp = strlen((const char*)data + offset);
             if(temp > 254) temp = 254;
             memcpy(value, (data + offset), temp);
+            log_w("value %s, temp %i", value, temp);
             value[temp] = '\0';
             m_chbuf[0] = '\0';
             if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
