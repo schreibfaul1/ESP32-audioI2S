@@ -1877,6 +1877,8 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     static size_t retvalue = 0;
     static size_t atomsize = 0;
     static size_t audioDataPos = 0;
+    
+    if(m_controlCounter == M4A_BEGIN) retvalue = 0;
 
     if(retvalue) {
         if(len > InBuff.getMaxBlockSize())  len = InBuff.getMaxBlockSize();
