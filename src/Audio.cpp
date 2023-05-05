@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.1s
- *  Updated on: May 03.2023
+ *  Version 3.0.2
+ *  Updated on: May 05.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1877,18 +1877,21 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
     static size_t retvalue = 0;
     static size_t atomsize = 0;
     static size_t audioDataPos = 0;
-    
-    if(m_controlCounter == M4A_BEGIN) retvalue = 0;
 
+    if(m_controlCounter == M4A_BEGIN) retvalue = 0;
+    static size_t cnt = 0;
     if(retvalue) {
         if(len > InBuff.getMaxBlockSize())  len = InBuff.getMaxBlockSize();
         if(retvalue > len) { // if returnvalue > bufferfillsize
             retvalue -= len; // and wait for more bufferdata
+            cnt += len;
             return len;
         }
         else {
             size_t tmp = retvalue;
             retvalue = 0;
+            cnt += tmp;
+            cnt = 0;
             return tmp;
         }
         return 0;
@@ -1977,8 +1980,9 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
             return 0;
 
         }
-        if (atomsize > len -10){atomsize -= (len -10); headerSize += (len -10); retvalue = (len -10);}
-        else {m_controlCounter = M4A_CHK; retvalue = atomsize; headerSize += atomsize;}
+        m_controlCounter = M4A_CHK;
+        headerSize += atomsize;
+        retvalue = atomsize;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3026,7 +3030,7 @@ void Audio::processWebFile() {
 
     int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
 
-    if(bytesAddedToBuffer > 0) {
+     if(bytesAddedToBuffer > 0) {
         byteCounter  += bytesAddedToBuffer;  // Pull request #42
         if(m_f_chunked)             m_chunkcount   -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
@@ -3052,8 +3056,9 @@ void Audio::processWebFile() {
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100){
         if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
-            InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled())); // #480
-      }
+            int32_t bytesRead = readAudioHeader(maxFrameSize);
+            if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
+        }
         return;
     }
 

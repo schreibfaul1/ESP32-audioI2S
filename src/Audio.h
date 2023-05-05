@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.1r
- *  Updated on: May 03,2023
+ *  Version 3.0.2
+ *  Updated on: May 05,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -139,7 +139,7 @@ public:
     bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    size_t   m_buffSizePSRAM    = 300000;   // most webstreams limit the advance to 100...300Kbytes
+    size_t   m_buffSizePSRAM    = UINT16_MAX;   // most webstreams limit the advance to 100...300Kbytes
     size_t   m_buffSizeRAM      = 1600 * 5;
     size_t   m_buffSize         = 0;
     size_t   m_freeSpace        = 0;
