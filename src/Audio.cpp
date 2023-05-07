@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2
- *  Updated on: May 05.2023
+ *  Version 3.0.2a
+ *  Updated on: May 07.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3985,6 +3985,14 @@ void Audio::setDecoderItems(){
         setBitsPerSample(VORBISGetBitsPerSample());
         setBitrate(VORBISGetBitRate());
     }
+    if(getBitsPerSample() !=8 && getBitsPerSample() != 16){
+        AUDIO_INFO("Bits per sample must be 8 or 16, found %i", getBitsPerSample());
+        stopSong();
+    }
+    if(getChannels() !=1 && getChannels() != 2){
+        AUDIO_INFO("Num of channels must be 1 or 2, found %i", getChannels());
+        stopSong();
+    }
     showCodecParams();
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -4030,6 +4038,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         else {
             printDecodeError(m_decodeError);
             m_f_playing = false; // seek for new syncword
+            if(m_codec == CODEC_FLAC){
+                if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
+                if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
+            }
         }
         return 1; // skip one byte and seek for the next sync word
     }
