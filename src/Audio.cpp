@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2a
+ *  Version 3.0.2b
  *  Updated on: May 07.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -2748,9 +2748,8 @@ bool Audio::STfromEXTINF(char* str){
         if(t2 < 0 || t2 > t3) return false;
         n1 = t3 - t2;
         strncpy(m_chbuf + n0, str + t2, n1);
-        m_chbuf[n1] = '\0';
+        m_chbuf[n0 + n1] = '\0';
     }
-
     t1 = indexOf(str, "artist", 0);
     if(t1 > 0){
         strcpy(m_chbuf + n0 + n1, " - ");   n1 += 3;
@@ -2760,7 +2759,6 @@ bool Audio::STfromEXTINF(char* str){
         n2 = t3 - t2;
         strncpy(m_chbuf + n0 + n1, str + t2, n2);
         m_chbuf[n0 + n1 + n2] = '\0';
-        m_chbuf[n2] = '\0';
     }
     return true;
 }
