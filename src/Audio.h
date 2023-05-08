@@ -139,7 +139,7 @@ public:
     bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    size_t   m_buffSizePSRAM    = UINT16_MAX;   // most webstreams limit the advance to 100...300Kbytes
+    size_t   m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
     size_t   m_buffSizeRAM      = 1600 * 5;
     size_t   m_buffSize         = 0;
     size_t   m_freeSpace        = 0;
