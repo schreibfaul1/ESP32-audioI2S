@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.2b
- *  Updated on: May 07,2023
+ *  Version 3.0.2c
+ *  Updated on: May 18,2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -140,7 +140,7 @@ public:
 
 protected:
     size_t   m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
-    size_t   m_buffSizeRAM      = 1600 * 5;
+    size_t   m_buffSizeRAM      = 1600 * 10;
     size_t   m_buffSize         = 0;
     size_t   m_freeSpace        = 0;
     size_t   m_writeSpace       = 0;
