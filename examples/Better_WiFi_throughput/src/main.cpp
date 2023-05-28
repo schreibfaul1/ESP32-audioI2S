@@ -19,6 +19,7 @@ void setup() {
     wifiMulti.run();
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, -1, -1);
     audio.setVolume(20); // 0...21
+    audio.setConnectionTimeout(500, 2700);
     audio.connecttohost("http://us3.internet-radio.com:8342/stream");
 }
 
