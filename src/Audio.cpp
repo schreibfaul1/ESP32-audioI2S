@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2c
- *  Updated on: May 28.2023
+ *  Version 3.0.2d
+ *  Updated on: Jun 02.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -494,7 +494,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //        m_timeout_ms_ssl = UINT16_MAX;  // bug in v2.0.3 if hostwoext is a IPaddr not a name
 //        m_timeout_ms = UINT16_MAX;  // [WiFiClient.cpp:253] connect(): select returned due to timeout 250 ms for fd 48
 //    } fix in V2.0.8
-    
+
     bool res = true; // no need to reconnect if connection exists
 
     if(m_f_ssl){ _client = static_cast<WiFiClient*>(&clientsecure); if(port == 80) port = 443;}
@@ -696,11 +696,11 @@ void Audio::UTF8toASCII(char* str){
     str[j] = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoSD(const char* path, uint32_t resumeFilePos) {
+bool Audio::connecttoSD(const char* path, int32_t resumeFilePos) {
     return connecttoFS(SD, path, resumeFilePos);
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos) {
+bool Audio::connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos) {
 
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
@@ -2828,7 +2828,7 @@ void Audio::processLocalFile() {
         }
     }
 
-    if(m_resumeFilePos){
+    if(m_resumeFilePos >= 0){
         if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
         if(m_codec == CODEC_M4A) m_resumeFilePos = m4a_correctResumeFilePos(m_resumeFilePos);
@@ -2841,12 +2841,12 @@ void Audio::processLocalFile() {
         byteCounter = m_resumeFilePos;
 
         if(m_f_Log){
-            log_i("m_resumeFilePos %d", m_resumeFilePos);
+            log_i("m_resumeFilePos %i", m_resumeFilePos);
             log_i("m_audioDataStart %d", m_audioDataStart);
             log_i("m_audioCurrentTime %f", (double)m_audioCurrentTime);
             log_i("m_file_size %d", m_file_size);
         }
-        m_resumeFilePos = 0;
+        m_resumeFilePos = -1;
         f_stream = false;
     }
 
@@ -4148,7 +4148,7 @@ void Audio::compute_audioCurrentTime(int bd) {
             // if VBR: m_avr_bitrate is average of the first values of m_bitrate
             sum_bitrate += getBitRate();
             m_avr_bitrate = sum_bitrate / (loop_counter - 20);
-            if(loop_counter == 199 && m_resumeFilePos){
+            if(loop_counter == 199 && m_resumeFilePos >= 0){
                 m_audioCurrentTime = ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8; // #293
             }
         }
@@ -4156,7 +4156,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     else {
         if(loop_counter == 2){
             m_avr_bitrate = getBitRate();
-            if(m_resumeFilePos){  // if connecttoFS() is called with resumeFilePos != 0
+            if(m_resumeFilePos >= 0){  // if connecttoFS() is called with resumeFilePos != 0
                 m_audioCurrentTime = ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8; // #293
             }
         }

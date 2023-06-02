@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.2c
- *  Updated on: May 19,2023
+ *  Version 3.0.2d
+ *  Updated on: Jun 02.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -169,8 +169,8 @@ public:
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttomarytts(const char* speech, const char* lang, const char* voice);
-    bool connecttoFS(fs::FS &fs, const char* path, uint32_t resumeFilePos = 0);
-    bool connecttoSD(const char* path, uint32_t resumeFilePos = 0);
+    bool connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos = -1);
+    bool connecttoSD(const char* path, int32_t resumeFilePos = -1);
     bool setFileLoop(bool input);//TEST loop
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
@@ -540,7 +540,7 @@ private:
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
-    uint32_t        m_resumeFilePos = 0;            // the return value from stopSong() can be entered here
+    int32_t         m_resumeFilePos = -1;           // the return value from stopSong() can be entered here, (-1) is idle
     uint16_t        m_m3u8_targetDuration = 10;     //
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
