@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2d
- *  Updated on: Jun 02.2023
+ *  Version 3.0.2e
+ *  Updated on: Jun 17.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -558,6 +558,10 @@ bool Audio::httpPrint(const char* host) {
     }
 
     char* h_host = NULL; // pointer of l_host without http:// or https://
+
+    if(startsWith(host, "https")) m_f_ssl = true;
+    else                          m_f_ssl = false;
+
     if(m_f_ssl) h_host = strdup(host + 8);
     else        h_host = strdup(host + 7);
 
@@ -2806,11 +2810,11 @@ void Audio::processLocalFile() {
     }
     if(!f_stream){
         if(m_controlCounter != 100) {
-        	if((millis() - ctime) > timeout) {
-        		log_e("audioHeader reading timeout");
-        		m_f_running = false;
-        		return;
-        	}
+            if((millis() - ctime) > timeout) {
+                log_e("audioHeader reading timeout");
+                m_f_running = false;
+                return;
+            }
             if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
                 InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
             }
@@ -4477,8 +4481,8 @@ bool Audio::playSample(int16_t sample[2]) {
 
     // set a correction factor if filter have positive amplification
     if(m_corr > 1){
-    	sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  / m_corr;
-    	sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
+        sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  / m_corr;
+        sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
     }
 
     // Filterchain, can commented out if not used
