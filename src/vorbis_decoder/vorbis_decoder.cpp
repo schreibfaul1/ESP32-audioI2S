@@ -34,6 +34,7 @@
 bool      s_f_vorbisParseOgg = false;
 bool      s_f_vorbisNewSteamTitle = false;  // streamTitle
 bool      s_f_vorbisFramePacket = false;
+bool      s_f_oggFirstPage = false;
 bool      s_f_oggContinuedPage = false;
 bool      s_f_oggLastPage = false;
 bool      s_f_parseOggDone = true;
@@ -80,7 +81,7 @@ vorbis_dsp_state_t    *s_dsp_state = NULL;
 bool VORBISDecoder_AllocateBuffers(){
     s_vorbisSegmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
     s_vorbisChbuf = (char*)malloc(256);
-    s_lastSegmentTable = (uint8_t*)malloc(512);
+    s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(1024);
     VORBISsetDefaults();
     return true;
 }
@@ -127,6 +128,9 @@ void VORBISsetDefaults(){
     s_f_vorbisFramePacket = false;
     s_f_lastSegmentTable = false;
     s_f_parseOggDone = false;
+    s_f_oggFirstPage = false;
+    s_f_oggContinuedPage = false;
+    s_f_oggLastPage = false;
     s_vorbisChannels = 0;
     s_vorbisSamplerate = 0;
     s_vorbisBitRate = 0;
@@ -223,8 +227,8 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             else{ // page >= 4
                 if(s_f_parseOggDone){  // first loop after VORBISparseOGG()
                     if(s_f_oggContinuedPage){
-                        log_i("continuedPage  s_lastSegmentTableLen %i, len %i", s_lastSegmentTableLen, len);
                         if(s_lastSegmentTableLen > 0 || len > 0){
+                            if(s_lastSegmentTableLen +len > 1024) log_e("continued page too big");
                             memcpy(s_lastSegmentTable + s_lastSegmentTableLen, inbuf, len);
                             bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen + len);
                             ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen + len, outbuf);
@@ -250,7 +254,7 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                 }
                 else {  // not s_f_parseOggDone
                     if(s_vorbisSegmentTableSize || s_f_lastSegmentTable){
-                        if(s_f_oggLastPage) log_i("last page");
+                        //if(s_f_oggLastPage) log_i("last page");
                         bitReader_setData(inbuf, len);
                         ret = vorbis_dsp_synthesis(inbuf, len, outbuf);
                         uint16_t outBuffSize = 2048 * 2;
@@ -270,8 +274,10 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                             ret = VORBIS_PARSE_OGG_DONE;
                         }
                     }
+                    s_f_oggFirstPage = false;
                 }
                 s_f_parseOggDone = false;
+                if(s_f_oggLastPage && !s_vorbisSegmentTableSize) {VORBISsetDefaults();}
             }
             if(s_vorbisSegmentTableSize == 0){
                 s_vorbisSegmentTableRdPtr = -1; // back to the parking position
@@ -608,15 +614,15 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
 
     uint16_t headerSize    = pageSegments + 27;
 
-    log_i("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
+    // log_i("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
     if(firstPage || continuedPage || lastPage){
-        log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
-
+    //    log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
     }
 
     *bytesLeft -= headerSize;
     if(s_pageNr < 4 && !continuedPage) s_pageNr++;
 
+    s_f_oggFirstPage = firstPage;
     s_f_oggContinuedPage = continuedPage;
     s_f_oggLastPage = lastPage;
     s_oggHeaderSize = headerSize;
