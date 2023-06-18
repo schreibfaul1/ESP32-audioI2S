@@ -32,7 +32,8 @@
 #define cPI2_8 (0x5a82799a)
 #define cPI1_8 (0x7641af3d)
 
-enum : int8_t  {VORBIS_PARSE_OGG_DONE = 100,
+enum : int8_t  {VORBIS_CONTINUE = 110,
+                VORBIS_PARSE_OGG_DONE = 100,
                 ERR_VORBIS_NONE = 0,
                 ERR_VORBIS_CHANNELS_OUT_OF_RANGE = -1,
                 ERR_VORBIS_INVALID_SAMPLERATE = -2,
