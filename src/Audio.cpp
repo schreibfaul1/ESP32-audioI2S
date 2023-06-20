@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2e
- *  Updated on: Jun 17.2023
+ *  Version 3.0.2f
+ *  Updated on: Jun 20.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4472,6 +4472,62 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
     i2s_driver_install  ((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 }
 //---------------------------------------------------------------------------------------------------------------------
+void Audio::computeVUlevel(int16_t sample[2]){
+    static uint8_t sampleArray[2][4][8] = {0};
+    static uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+    static bool f_vu = false;
+
+    auto avg = [&](uint8_t* sampArr) {  // lambda, inner function, compute the average of 8 samples
+        uint16_t av = 0;
+        for(int i = 0; i < 8; i++){
+            av += sampArr[i];
+        }
+        return av >> 3;
+    };
+
+    auto largest = [&](uint8_t* sampArr) {  // lambda, inner function, compute the largest of 8 samples
+        uint16_t maxValue = 0;
+        for(int i = 0; i < 8; i++){
+            if(maxValue < sampArr[i]) maxValue = sampArr[i];
+        }
+        return maxValue;
+    };
+
+    if(cnt0 == 64){cnt0 = 0; cnt1++;}
+    if(cnt1 == 8) {cnt1 = 0; cnt2++;}
+    if(cnt2 == 8) {cnt2 = 0; cnt3++;}
+    if(cnt3 == 8) {cnt3 = 0; cnt4++; f_vu = true;}
+    if(cnt4 == 8) {cnt4 = 0;}
+
+    if(!cnt0){ // store every 64th sample in the array[0]
+        sampleArray[LEFTCHANNEL][0][cnt1]  = abs(sample[LEFTCHANNEL] >> 7);
+        sampleArray[RIGHTCHANNEL][0][cnt1] = abs(sample[RIGHTCHANNEL] >> 7);
+    }
+    if(!cnt1){// store argest from 64 * 8 samples in the array[1]
+        sampleArray[LEFTCHANNEL][1][cnt2] = largest(sampleArray[LEFTCHANNEL][0]);
+        sampleArray[RIGHTCHANNEL][1][cnt2] = largest(sampleArray[RIGHTCHANNEL][0]);
+    }
+    if(!cnt2){ // store avg from 64 * 8 * 8 samples in the array[2]
+        sampleArray[LEFTCHANNEL][2][cnt3] = largest(sampleArray[LEFTCHANNEL][1]);
+        sampleArray[RIGHTCHANNEL][2][cnt3] = largest(sampleArray[RIGHTCHANNEL][1]);
+    }
+    if(!cnt3){ // store avg from 64 * 8 * 8 * 8 samples in the array[3]
+        sampleArray[LEFTCHANNEL][3][cnt4] = avg(sampleArray[LEFTCHANNEL][2]);
+        sampleArray[RIGHTCHANNEL][3][cnt4] = avg(sampleArray[RIGHTCHANNEL][2]);
+    }
+    if(f_vu){
+        f_vu = false;
+        m_vuLeft  = avg(sampleArray[LEFTCHANNEL][3]);
+        m_vuRight = avg(sampleArray[RIGHTCHANNEL][3]);
+    }
+    cnt1++;
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint16_t Audio::getVUlevel() {
+    // avg 0 ... 127
+    return (m_vuLeft << 8) + m_vuRight;
+}
+//---------------------------------------------------------------------------------------------------------------------
 bool Audio::playSample(int16_t sample[2]) {
 
     if (getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
@@ -4484,6 +4540,8 @@ bool Audio::playSample(int16_t sample[2]) {
         sample[LEFTCHANNEL]  = sample[LEFTCHANNEL]  / m_corr;
         sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
     }
+
+    computeVUlevel(sample);
 
     // Filterchain, can commented out if not used
     sample = IIR_filterChain0(sample);

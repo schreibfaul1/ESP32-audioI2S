@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.2d
- *  Updated on: Jun 02.2023
+ *  Version 3.0.2f
+ *  Updated on: Jun 20.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -200,6 +200,7 @@ public:
     uint32_t getAudioFileDuration();
     uint32_t getAudioCurrentTime();
     uint32_t getTotalPlayingTime();
+    uint16_t getVUlevel();
 
     esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
@@ -253,7 +254,8 @@ private:
     bool setChannels(int channels);
     bool setBitrate(int br);
     bool playChunk();
-    bool playSample(int16_t sample[2]) ;
+    bool playSample(int16_t sample[2]);
+    void computeVUlevel(int16_t sample[2]);
     int32_t Gain(int16_t s[2]);
     void showstreamtitle(const char* ml);
     bool parseContentType(char* ct);
@@ -520,6 +522,8 @@ private:
     uint8_t         m_filterType[2];                // lowpass, highpass
     uint8_t         m_streamType = ST_NONE;
     uint8_t         m_ID3Size = 0;                  // lengt of ID3frame - ID3header
+    uint8_t         m_vuLeft = 0;                   // average value of samples, left channel
+    uint8_t         m_vuRight = 0;                  // average value of samples, right channel
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = 0;
     int16_t         m_curSample = 0;
