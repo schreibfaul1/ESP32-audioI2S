@@ -5331,6 +5331,7 @@ void Audio::seek_m4a_ilst(){
         audiofile.seek(0);
         return;
     }
+    len -= 4;
     audiofile.seek(seekpos);
     audiofile.read(data, len);
 
