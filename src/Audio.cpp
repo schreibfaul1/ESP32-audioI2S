@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2f
- *  Updated on: Jun 20.2023
+ *  Version 3.0.2g
+ *  Updated on: Jun 23.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3040,13 +3040,14 @@ void Audio::processWebFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
-    if(InBuff.bufferFilled() > maxFrameSize && !f_stream) {  // waiting for buffer filled
+    if(!f_stream){
+        if((InBuff.freeSpace() > maxFrameSize) && (byteCounter < m_contentlength)) return;
         f_stream = true;  // ready to play the audio data
         uint16_t filltime = millis() - m_t0;
-        if(m_f_Log) AUDIO_INFO("stream ready\nbuffer filled in %d ms", filltime);
+        AUDIO_INFO("stream ready, buffer filled in %d ms", filltime);
+        return;
     }
 
-    if(!f_stream) return;
     if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
        uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
        if(codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
