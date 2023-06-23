@@ -5346,7 +5346,6 @@ void Audio::seek_m4a_ilst(){
             size_t temp = strlen((const char*)data + offset);
             if(temp > 254) temp = 254;
             memcpy(value, (data + offset), temp);
-            log_w("value %s, temp %i", value, temp);
             value[temp] = '\0';
             m_chbuf[0] = '\0';
             if(i == 0)  sprintf(m_chbuf, "Title: %s", value);
@@ -5402,7 +5401,6 @@ void Audio::seek_m4a_stsz(){
         char temp[5] = {0};
         audiofile.seek(startPos);
         audiofile.readBytes(temp, 4);
-        log_w("be1");
         atom.size = bigEndian((uint8_t*)temp, 4);
         if(!atom.size) atom.size = 4; // has no data, length is 0
         audiofile.readBytes(atom.name, 4);
@@ -5412,6 +5410,8 @@ void Audio::seek_m4a_stsz(){
     };
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    uint32_t stsdPos   = 0;
+    uint16_t stsdSize  = 0;
     boolean found      = false;
     uint32_t seekpos   = 0;
     uint32_t filesize  = getFileSize();
@@ -5431,6 +5431,10 @@ void Audio::seek_m4a_stsz(){
             seekpos += tmp.size;
             if(strcmp(tmp.name, name[i]) == 0) {memcpy((void*)&at, (void*)&tmp, sizeof(tmp)); found = true;}
             if(m_f_Log) log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
+            if(strcmp(tmp.name, "stsd") == 0){ // in stsd we can found mp4a atom that contains the audioitems
+                stsdPos  = tmp.pos;
+                stsdSize = tmp.size;
+            }
         }
         if(!found) goto noSuccess;
         seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
@@ -5439,10 +5443,25 @@ void Audio::seek_m4a_stsz(){
     seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
     audiofile.seek(seekpos);
     audiofile.readBytes(noe, 4); //number of entries
-    log_w("be1");
     m_stsz_numEntries = bigEndian((uint8_t*)noe, 4);
     if(m_f_Log) log_i("number of entries in stsz: %d", m_stsz_numEntries);
     m_stsz_position = seekpos + 4;
+    if(stsdSize){
+        audiofile.seek(stsdPos);
+        uint8_t data[stsdSize];
+        audiofile.readBytes((char*)data, stsdSize);
+        int offset = specialIndexOf(data, "mp4a", stsdSize);
+        if(offset >0){
+            int channel = bigEndian(data + offset + 20, 2); // audio parameter must be set before starting
+            int bps     = bigEndian(data + offset + 22, 2); // the aac decoder. There are RAW blocks only in m4a
+            int srate   = bigEndian(data + offset + 26, 4); //
+            setBitsPerSample(bps);
+            setChannels(channel);
+            setSampleRate(srate);
+            setBitrate(bps * channel * srate);
+            AUDIO_INFO("ch; %i, bps: %i, sr: %i", channel, bps, srate);
+        }
+    }
     audiofile.seek(0);
     return;
 
