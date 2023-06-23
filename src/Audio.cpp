@@ -2821,7 +2821,7 @@ void Audio::processLocalFile() {
             return;
         }
         else{
-            if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize){
+            if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize && availableBytes){
                 // fill the buffer before playing
                 return;
             }
