@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 18.06.2023
+ *  Updated on: 02.07.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -560,8 +560,12 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
     s_f_vorbisParseOgg = false;
     int ret = 0; (void)ret;
 
-    int idx = VORBIS_specialIndexOf(inbuf, "OggS", 6);
-    if(idx != 0) return ERR_VORBIS_DECODER_ASYNC;
+    int idx = VORBIS_specialIndexOf(inbuf, "OggS", 1024);
+    if(idx != 0){
+        if(s_f_oggContinuedPage) return ERR_VORBIS_DECODER_ASYNC;
+        inbuf += idx;
+        *bytesLeft -= idx;
+    }
 
     int16_t segmentTableWrPtr = -1;
 
@@ -616,7 +620,7 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
 
     // log_i("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
     if(firstPage || continuedPage || lastPage){
-    //    log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
+    // log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
     }
 
     *bytesLeft -= headerSize;
