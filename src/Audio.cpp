@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.2g
- *  Updated on: Jun 23.2023
+ *  Version 3.0.3
+ *  Updated on: Jul 03.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1150,7 +1150,7 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen){
     uint16_t len = strlen(buff);
     uint8_t  c;
 
-    while(pos < len){
+    while(pos < len - 2){
         c = buff[pos];
         if(c >= 0xC2) {    // is UTF8 char
             pos++;
@@ -3496,7 +3496,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(startsWith(rhl, "icy-description:")) {
             const char* c_idesc = (rhl + 16);
             while(c_idesc[0] == ' ') c_idesc++;
-            latinToUTF8(rhl, sizeof(rhl)); // if already UTF-0 do nothing, otherwise convert to UTF-8
+            latinToUTF8(rhl, sizeof(rhl)); // if already UTF-8 do nothing, otherwise convert to UTF-8
             if(specialIndexOf((uint8_t*)c_idesc, "24bit", strlen(c_idesc)) >= 0){
                 AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
                 stopSong();
