@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.3
- *  Updated on: Jul 03.2023
+ *  Version 3.0.3a
+ *  Updated on: Jul 04.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2225,13 +2225,13 @@ bool Audio::playChunk() {
             while(m_validSamples) {
                 uint8_t x =  m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
-                sample[LEFTCHANNEL]  = x;
-                sample[RIGHTCHANNEL] = x;
+                sample[RIGHTCHANNEL]  = x;
+                sample[LEFTCHANNEL] = x;
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
-                sample[LEFTCHANNEL]  = y;
-                sample[RIGHTCHANNEL] = y;
+                sample[RIGHTCHANNEL]  = y;
+                sample[LEFTCHANNEL] = y;
                 while(1) {
                     if(playSample(sample)) break;
                 } // Can't send?
@@ -2244,13 +2244,13 @@ bool Audio::playChunk() {
                 uint8_t x =  m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 if(!m_f_forceMono) { // stereo mode
-                    sample[LEFTCHANNEL]  = x;
-                    sample[RIGHTCHANNEL] = y;
+                    sample[RIGHTCHANNEL] = x;
+                    sample[LEFTCHANNEL]  = y;
                 }
                 else { // force mono
                     uint8_t xy = (x + y) / 2;
-                    sample[LEFTCHANNEL]  = xy;
                     sample[RIGHTCHANNEL] = xy;
+                    sample[LEFTCHANNEL]  = xy;
                 }
 
                 while(1) {
@@ -2266,8 +2266,8 @@ bool Audio::playChunk() {
     if(getBitsPerSample() == 16) {
         if(getChannels() == 1) {
             while(m_validSamples) {
-                sample[LEFTCHANNEL]  = m_outBuff[m_curSample];
                 sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
+                sample[LEFTCHANNEL]  = m_outBuff[m_curSample];
                 if(!playSample(sample)) {
                     log_e("can't send");
                     return false;
@@ -2280,13 +2280,13 @@ bool Audio::playChunk() {
             m_curSample = 0;
             while(m_validSamples) {
                 if(!m_f_forceMono) { // stereo mode
-                    sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2];
-                    sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+                    sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
+                    sample[LEFTCHANNEL]  = m_outBuff[m_curSample * 2 + 1];
                 }
                 else { // mono mode, #100
                     int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2;
-                    sample[LEFTCHANNEL] = xy;
                     sample[RIGHTCHANNEL] = xy;
+                    sample[LEFTCHANNEL] = xy;
                 }
                 playSample(sample);
                 m_validSamples--;
