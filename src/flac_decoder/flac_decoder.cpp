@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 10,2023
+ * Updated on: Jul 23,2023
  *
  * Author: Wolle
  *
@@ -405,7 +405,9 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft){
     else{
         return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
     }
-    if(m_blockSize > 8192){
+    uint16_t maxBS = 8192;
+    if(psramFound()) maxBS = 8192 * 4;
+    if(m_blockSize > maxBS){
         log_e("Error: blockSize too big ,%i bytes", m_blockSize);
         return ERR_FLAC_BLOCKSIZE_TOO_BIG;
     }

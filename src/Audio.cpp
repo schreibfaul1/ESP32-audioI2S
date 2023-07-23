@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.3b
- *  Updated on: Jul 20.2023
+ *  Version 3.0.4
+ *  Updated on: Jul 23.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -764,7 +764,8 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos) {
     if(endsWith(afn, ".wav"))  m_codec = CODEC_WAV;
     if(endsWith(afn, ".flac")) m_codec = CODEC_FLAC;
     if(endsWith(afn, ".opus")) m_codec = CODEC_OPUS;
-    if(endsWith(afn, ".ogg"))  m_codec = CODEC_VORBIS;
+    if(endsWith(afn, ".ogg"))  m_codec = CODEC_OGG;
+    if(endsWith(afn, ".oga"))  m_codec = CODEC_OGG;
 
     if(m_codec == CODEC_NONE) AUDIO_INFO("The %s format is not supported", afn + dotPos);
 
@@ -2808,6 +2809,14 @@ void Audio::processLocalFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
     if(!f_stream){
+        if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            if(codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
+            if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
+            if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+            stopSong();
+            return;
+        }
         if(m_controlCounter != 100) {
             if((millis() - ctime) > timeout) {
                 log_e("audioHeader reading timeout");
@@ -3047,14 +3056,7 @@ void Audio::processWebFile() {
         return;
     }
 
-    if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
-       uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-       if(codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
-       if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
-       if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
-       stopSong();
-       return;
-    }
+
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100){
@@ -3063,6 +3065,15 @@ void Audio::processWebFile() {
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
         return;
+    }
+
+    if(m_codec == CODEC_OGG){ // log_i("determine correct codec here");
+       uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+       if(codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
+       if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
+       if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+       stopSong();
+       return;
     }
 
     // end of webfile reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
