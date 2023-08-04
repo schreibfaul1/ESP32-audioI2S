@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.4
- *  Updated on: Jul 23.2023
+ *  Version 3.0.5
+ *  Updated on: Aug 04.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3084,7 +3084,16 @@ void Audio::processWebFile() {
                 if(bytesDecoded > 2){InBuff.bytesWasRead(bytesDecoded); return;}
             }
         }
-        stopSong(); // Correct close when play known length sound #74 and before callback #11
+
+        m_f_running = false;
+        m_streamType = ST_NONE;
+        if(m_codec == CODEC_MP3)    MP3Decoder_FreeBuffers();
+        if(m_codec == CODEC_AAC)    AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_M4A)    AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_FLAC)   FLACDecoder_FreeBuffers();
+        if(m_codec == CODEC_OPUS)   OPUSDecoder_FreeBuffers();
+        if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
+
         if(m_f_tts){
             AUDIO_INFO("End of speech: \"%s\"", m_lastHost);
             if(audio_eof_speech) audio_eof_speech(m_lastHost);
