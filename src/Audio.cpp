@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.5
- *  Updated on: Aug 04.2023
+ *  Version 3.0.6
+ *  Updated on: Aug 05.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -244,6 +244,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
         m_filter[i].b1  = 0;
         m_filter[i].b2  = 0;
     }
+
+    computeLimit(); // first init, vol = 21, vol_steps = 21
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
@@ -4357,11 +4359,7 @@ bool Audio::setAudioPlayPosition(uint16_t sec){
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setVolumeSteps(uint8_t steps) {
     m_vol_steps = steps;
-    if (steps < 1)
-        m_vol_step_div = 64; /* avoid div-by-zero :-) */
-    else
-        m_vol_step_div = steps * steps;
-    // log_i("m_vol_step_div: %d", m_vol_step_div);
+    if (steps < 1)  m_vol_steps = 64; /* avoid div-by-zero :-) */
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::maxVolume() {
@@ -4633,38 +4631,67 @@ void Audio::setBalance(int8_t bal){ // bal -16...16
     if(bal < -16) bal = -16;
     if(bal >  16) bal =  16;
     m_balance = bal;
+
+    computeLimit();
 }
 //---------------------------------------------------------------------------------------------------------------------
-void Audio::setVolume(uint8_t vol) {
-    if (vol > m_vol_steps) vol = m_vol_steps;
-    m_vol = vol * vol;
-    return;
+void Audio::setVolume(uint8_t vol, uint8_t curve) { // curve 0: default, curve 1: flat at the beginning
+    if (vol > m_vol_steps) m_vol = m_vol_steps;
+    else m_vol = vol;
+
+    if (curve > 1) m_curve = 1;
+    else m_curve = curve;
+
+    computeLimit();
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getVolume() {
-    uint8_t vol = sqrt(m_vol);
-        return vol;
+    return m_vol;
 }
 //---------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::getI2sPort() {
     return m_i2s_num;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t Audio::Gain(int16_t s[2]) {
-    int32_t v[2];
-    int32_t l = m_vol, r = m_vol;
+void Audio::computeLimit(){    // is calculated when the volume or balance changes
+    double l = 1, r = 1, v = 1; // assume 100%
 
     /* balance is left -16...+16 right */
     /* TODO: logarithmic scaling of balance, too? */
     if(m_balance < 0){
-        r -= (int32_t)m_vol * abs(m_balance) / 16;
+        r -= (double)abs(m_balance) / 16;
     } else if(m_balance > 0){
-        l -= (int32_t)m_vol * abs(m_balance) / 16;
+        l -= (double)abs(m_balance) / 16;
     }
 
+    switch(m_curve){
+        case 0:
+            v = (double)pow(m_vol, 2) / pow(m_vol_steps, 2); // square (default)
+            break;
+        case 1:                                              // logarithmic
+            double log1 = log(1);
+            if (m_vol>0) {
+                v = m_vol * ((std::exp( log1 + (m_vol-1) * (std::log(m_vol_steps)-log1) / (m_vol_steps-1)))/m_vol_steps) / m_vol_steps;
+            }
+            else {
+                v = 0;
+            }
+            break;
+    }
+
+    m_limit_left = l * v;
+    m_limit_right = r * v;
+
+    // log_i("m_limit_left %f,  m_limit_right %f ",m_limit_left, m_limit_right);
+}
+//---------------------------------------------------------------------------------------------------------------------
+
+int32_t Audio::Gain(int16_t s[2]) {
+    int32_t v[2];
+
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    v[LEFTCHANNEL] = (s[LEFTCHANNEL]  * l) / m_vol_step_div;
-    v[RIGHTCHANNEL]= (s[RIGHTCHANNEL] * r) / m_vol_step_div;
+    v[LEFTCHANNEL] = s[LEFTCHANNEL] * m_limit_left;
+    v[RIGHTCHANNEL]= s[RIGHTCHANNEL] * m_limit_right;
 
     return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
 }
