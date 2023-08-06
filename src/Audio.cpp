@@ -4664,14 +4664,27 @@ void Audio::computeLimit(){    // is calculated when the volume or balance chang
         l -= (double)abs(m_balance) / 16;
     }
 
-    v = (double)pow(m_vol, m_curve + 2) / pow(m_vol_steps, m_curve + 2);
+    switch(m_curve){
+        case 0:
+            v = (double)pow(m_vol, 2) / pow(m_vol_steps, 2); // square (default)
+            break;
+        case 1:                                              // logarithmic
+            double log1 = log(1);
+            if (m_vol>0) {
+                v = m_vol * ((std::exp( log1 + (m_vol-1) * (std::log(m_vol_steps)-log1) / (m_vol_steps-1)))/m_vol_steps) / m_vol_steps;
+            }
+            else {
+                v = 0;
+            }
+            break;
+    }
 
     m_limit_left = l * v;
     m_limit_right = r * v;
 
     // log_i("m_limit_left %f,  m_limit_right %f ",m_limit_left, m_limit_right);
 }
-
+//---------------------------------------------------------------------------------------------------------------------
 
 int32_t Audio::Gain(int16_t s[2]) {
     int32_t v[2];
