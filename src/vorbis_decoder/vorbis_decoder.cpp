@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 23.08.2023
+ *  Updated on: 28.08.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -79,8 +79,8 @@ vorbis_info_mode_t    *s_mode_param = NULL;
 vorbis_dsp_state_t    *s_dsp_state = NULL;
 
 bool VORBISDecoder_AllocateBuffers(){
-    s_vorbisSegmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
-    s_vorbisChbuf = (char*)malloc(256);
+    s_vorbisSegmentTable = (uint16_t*)__calloc_heap_psram(256, sizeof(uint16_t));
+    s_vorbisChbuf = (char*)__calloc_heap_psram(256, sizeof(char));
     s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(1024);
     VORBISsetDefaults();
     return true;
@@ -200,7 +200,7 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                 int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
                 s_oggPage3Len = len;
                 if(idx == 1){
-                    log_i("third packet (setup len) %i", len);
+                    // log_i("third packet (setup len) %i", len);
                     s_setupHeaderLength = len;
 
                     bitReader_setData(inbuf, len);
@@ -247,12 +247,21 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                         s_f_oggContinuedPage = false;
                     }
                     else{ // last segment without continued Page
-                        bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen);
-                        ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen, outbuf);
-                        uint16_t outBuffSize = 2048 * 2;
-                        s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
-                        s_lastSegmentTableLen = 0;
-                        if(ret == OV_ENOTAUDIO || ret == 0 ) ret = VORBIS_CONTINUE; // if no error send continue
+                        if(s_lastSegmentTableLen){
+                            bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen);
+                            ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen, outbuf);
+                            uint16_t outBuffSize = 2048 * 2;
+                            s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
+                            s_lastSegmentTableLen = 0;
+                            if(ret == OV_ENOTAUDIO || ret == 0 ) ret = VORBIS_CONTINUE; // if no error send continue
+                        }
+                        else{
+                            bitReader_setData(inbuf, len);
+                            ret = vorbis_dsp_synthesis(inbuf, len, outbuf);
+                            uint16_t outBuffSize = 2048 * 2;
+                            s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
+                            ret = 0;
+                        }
                     }
                 }
                 else {  // not s_f_parseOggDone
@@ -464,7 +473,6 @@ int parseVorbisCodebook(){
     int ret = 0;
 
     s_nrOfCodebooks = bitReader(8) +1;
-
     s_codebooks = (codebook_t*) __calloc_heap_psram(s_nrOfCodebooks, sizeof(*s_codebooks));
 
     for(i = 0; i < s_nrOfCodebooks; i++){
