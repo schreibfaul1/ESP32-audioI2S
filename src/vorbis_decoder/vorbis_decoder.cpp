@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 02.07.2023
+ *  Updated on: 23.08.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -191,13 +191,16 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                 else{
                     log_e("no \"vorbis\" something went wrong %i", len);
                 }
-                s_pageNr = 3;
+                // log_w("s_vorbisSegmentTableSize %d", s_vorbisSegmentTableSize);
+                // Normally the segment table has two entries, the first for comments and the second for the codebooks
+                if(!s_vorbisSegmentTableSize) {;}//there is no further segment for codebooks -> skip it
+                else s_pageNr = 3;
             }
             else if(s_pageNr == 3){ // setup header
                 int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
                 s_oggPage3Len = len;
                 if(idx == 1){
-                    // log_i("third packet (setup len) %i", len);
+                    log_i("third packet (setup len) %i", len);
                     s_setupHeaderLength = len;
 
                     bitReader_setData(inbuf, len);

@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.6
- *  Updated on: Aug 05.2023
+ *  Version 3.0.6a
+ *  Updated on: Aug 28.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1225,6 +1225,9 @@ size_t Audio::readAudioHeader(uint32_t bytes){
         m_controlCounter = 100;
     }
     if(m_codec == CODEC_VORBIS){
+        m_controlCounter = 100;
+    }
+    if(m_codec == CODEC_OGG){
         m_controlCounter = 100;
     }
     if(!isRunning()){
