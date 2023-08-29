@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 28.08.2023
+ *  Updated on: 29.08.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -3067,7 +3067,7 @@ int32_t *_vorbis_window(int left) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void mdct_unroll_lap(int n0, int n1, int lW, int W, int *in, int *right, const int *w0, const int *w1, short int *out,
+void mdct_unroll_lap(int n0, int n1, int lW, int W, int32_t *in, int32_t *right, const int32_t *w0, const int32_t *w1, short int *out,
                      int step, int start, /* samples, this frame */
                      int end /* samples, this frame */) {
     int32_t       *l = in + (W && lW ? n1 >> 1 : n0 >> 1);
