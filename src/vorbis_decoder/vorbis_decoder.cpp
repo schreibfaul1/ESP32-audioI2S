@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 29.08.2023
+ *  Updated on: 05.09.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -724,7 +724,7 @@ int vorbis_book_unpack(codebook_t *s) {
     switch(bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist = (char *)malloc(sizeof(*lengthlist) * s->entries);
+            lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
 
             /* allocated but unused entries? */
             if(bitReader(1)) {
@@ -760,7 +760,7 @@ int vorbis_book_unpack(codebook_t *s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist = (char *)malloc(sizeof(*lengthlist) * s->entries);
+                lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
 
                 for(i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
