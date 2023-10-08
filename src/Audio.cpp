@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.6b
- *  Updated on: Sep 25.2023
+ *  Version 3.0.7
+ *  Updated on: Oct 08.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -14,10 +14,6 @@
 #include "flac_decoder/flac_decoder.h"
 #include "opus_decoder/opus_decoder.h"
 #include "vorbis_decoder/vorbis_decoder.h"
-
-#ifdef SDFATFS_USED
-fs::SDFATFS SD_SDFAT;
-#endif
 
 //---------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
@@ -654,19 +650,6 @@ bool Audio::setFileLoop(bool input){
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::UTF8toASCII(char* str){
 
-#ifdef SDFATFS_USED
-    //UTF8->UTF16 (lowbyte)
-    const uint8_t ascii[60] = {
-    //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
-    //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
-      000, 000, 000, 0xC4, 143, 0xC6,0xC7, 000,0xC9,000, 000, 000, 000, 000, 000, 000, 0xD1, 000, 000, 000, // ASCII (Latin1)
-    //149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168
-    //      Ö                             Ü              ß    à                   ä    å    æ         è
-      000, 0xD6,000, 000, 000, 000, 000, 0xDC, 000, 000, 0xDF,0xE0, 000, 000, 000,0xE4,0xE5,0xE6, 000,0xE8,
-    //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
-    //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
-      000, 0xEA, 0xEB,0xEC, 000,0xEE,0xEB, 000,0xF1,0xF2, 000,0xF4, 000,0xF6, 000, 000,0xF9, 000,0xFB,0xFC};
-#else
     const uint8_t ascii[60] = {
     //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
     //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
@@ -677,7 +660,6 @@ void Audio::UTF8toASCII(char* str){
     //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
     //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
       000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
-#endif
 
     uint16_t i = 0, j=0, s = 0;
     bool f_C3_seen = false;
@@ -745,13 +727,7 @@ bool Audio::connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos) {
     m_file_size = audiofile.size();//TEST loop
 
     char* afn = NULL;  // audioFileName
-
-#ifdef SDFATFS_USED
-    audiofile.getName(m_chbuf, m_chbufSize); // #426
-    afn = strdup(m_chbuf);
-#else
     afn = strdup(audiofile.name());
-#endif
 
     uint8_t dotPos = lastIndexOf(afn, ".");
     for(uint8_t i = dotPos + 1; i < strlen(afn); i++){
@@ -830,105 +806,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang){
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
     xSemaphoreGiveRecursive(mutex_audio);
-    return true;
-}
-//---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttomarytts(const char* speech, const char* lang, const char* voice){
-
-    //lang:     fr, te, ru, en_US, en_GB, sv, lb, tr, de, it
-
-    //voice:    upmc-pierre-hsmm             fr male hmm
-    //          upmc-pierre                  fr male unitselection general
-    //          upmc-jessica-hsmm            fr female hmm
-    //          upmc-jessica                 fr female unitselection general
-    //          marylux                      lb female unitselection general
-    //          istc-lucia-hsmm              it female hmm
-    //          enst-dennys-hsmm             fr male hmm
-    //          enst-camille-hsmm            fr female hmm
-    //          enst-camille                 fr female unitselection general
-    //          dfki-spike-hsmm              en_GB male hmm
-    //          dfki-spike                   en_GB male unitselection general
-    //          dfki-prudence-hsmm           en_GB female hmm
-    //          dfki-prudence                en_GB female unitselection general
-    //          dfki-poppy-hsmm              en_GB female hmm
-    //          dfki-poppy                   en_GB female unitselection general
-    //          dfki-pavoque-styles          de male unitselection general
-    //          dfki-pavoque-neutral-hsmm    de male hmm
-    //          dfki-pavoque-neutral         de male unitselection general
-    //          dfki-ot-hsmm                 tr male hmm
-    //          dfki-ot                      tr male unitselection general
-    //          dfki-obadiah-hsmm            en_GB male hmm
-    //          dfki-obadiah                 en_GB male unitselection general
-    //          cmu-slt-hsmm                 en_US female hmm
-    //          cmu-slt                      en_US female unitselection general
-    //          cmu-rms-hsmm                 en_US male hmm
-    //          cmu-rms                      en_US male unitselection general
-    //          cmu-nk-hsmm                  te female hmm
-    //          cmu-bdl-hsmm                 en_US male hmm
-    //          cmu-bdl                      en_US male unitselection general
-    //          bits4                        de female unitselection general
-    //          bits3-hsmm                   de male hmm
-    //          bits3                        de male unitselection general
-    //          bits2                        de male unitselection general
-    //          bits1-hsmm                   de female hmm
-    //          bits1                        de female unitselection general
-
-    xSemaphoreTake(mutex_audio, portMAX_DELAY);
-
-    setDefaults();
-    char host[] = "mary.dfki.de";
-    char path[] = "/process";
-    int port = 59125;
-
-    uint16_t speechLen = strlen(speech);
-    uint16_t speechBuffLen = speechLen + 300;
-    memcpy(m_lastHost, speech, 256);
-    char* speechBuff = (char*)malloc(speechBuffLen);
-    if(!speechBuff) {log_e("out of memory");
-        xSemaphoreGive(mutex_audio);
-        return false;
-    }
-    memcpy(speechBuff, speech, speechLen);
-    speechBuff[speechLen] = '\0';
-    urlencode(speechBuff, speechBuffLen);
-
-    char resp[strlen(speechBuff) + 200] = "";
-    strcat(resp, "GET ");
-    strcat(resp, path);
-    strcat(resp, "?INPUT_TEXT=");
-    strcat(resp, speechBuff);
-    strcat(resp, "&INPUT_TYPE=TEXT");
-    strcat(resp, "&OUTPUT_TYPE=AUDIO");
-    strcat(resp, "&AUDIO=WAVE_FILE");
-    strcat(resp, "&LOCALE=");
-    strcat(resp, lang);
-    strcat(resp, "&VOICE=");
-    strcat(resp, voice);
-    strcat(resp, " HTTP/1.1\r\n");
-    strcat(resp, "Host: ");
-    strcat(resp, host);
-    strcat(resp, "\r\n");
-    strcat(resp, "User-Agent: Mozilla/5.0 \r\n");
-    strcat(resp, "Accept-Encoding: identity\r\n");
-    strcat(resp, "Accept: text/html\r\n");
-    strcat(resp, "Connection: close\r\n\r\n");
-
-    if(speechBuff){free(speechBuff); speechBuff = NULL;}
-    _client = static_cast<WiFiClient*>(&client);
-    if(!_client->connect(host, port)) {
-        log_e("Connection failed");
-        xSemaphoreGive(mutex_audio);
-        return false;
-    }
-    _client->print(resp);
-
-    m_streamType = ST_WEBFILE;
-    m_f_running = true;
-    m_f_ssl = false;
-    m_f_tts = true;
-    setDatamode(HTTP_RESPONSE_HEADER);
-
-    xSemaphoreGive(mutex_audio);
     return true;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2890,13 +2767,7 @@ void Audio::processLocalFile() {
             return;
         } //loop
 
-#ifdef SDFATFS_USED
-        audiofile.getName(m_chbuf, m_chbufSize); // #426
-        char *afn =strdup(m_chbuf);
-#else
         char *afn =strdup(audiofile.name()); // store temporary the name
-#endif
-
         m_f_running = false;
         m_streamType = ST_NONE;
         audiofile.close();
