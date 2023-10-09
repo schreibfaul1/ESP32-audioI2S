@@ -3,6 +3,29 @@
 //#pragma GCC optimize ("O3")
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
+/********************************************************************
+ *                                                                  *
+ * THIS FILE IS PART OF THE OggVorbis SOFTWARE CODEC SOURCE CODE.   *
+ * USE, DISTRIBUTION AND REPRODUCTION OF THIS LIBRARY SOURCE IS     *
+ * GOVERNED BY A BSD-STYLE SOURCE LICENSE INCLUDED WITH THIS SOURCE *
+ * IN 'COPYING'. PLEASE READ THESE TERMS BEFORE DISTRIBUTING.       *
+ *                                                                  *
+ * THE OggVorbis SOURCE CODE IS (C) COPYRIGHT 1994-2007             *
+ * by the Xiph.Org Foundation https://xiph.org/                     *
+ *                                                                  *
+ ********************************************************************/
+/*
+ * vorbis_decoder.h
+ * based on Xiph.Org Foundation vorbis decoder
+ * adapted for the ESP32 by schreibfaul1
+ *
+ *  Created on: 13.02.2023
+ *  Updated on: 09.10.2023
+ */
+
+
+
+
 #include "Arduino.h"
 
 #define VI_FLOORB       2
@@ -261,7 +284,7 @@ void     mdct_step7(int32_t *x, int n, int step);
 void     mdct_step8(int32_t *x, int n, int step);
 int32_t  vorbis_book_decodevv_add(codebook_t *book, int32_t **a, int32_t offset, uint8_t ch, int n, int point);
 int      vorbis_dsp_pcmout(int16_t *outBuff, int outBuffSize);
-void     mdct_unroll_lap(int n0, int n1, int lW, int W, int *in, int *right, const int *w0, const int *w1, short int *out,
+void     mdct_unroll_lap(int n0, int n1, int lW, int W, int32_t *in, int32_t *right, const int32_t *w0, const int32_t *w1, short int *out,
                      int step, int start, /* samples, this frame */
                      int end /* samples, this frame */);
 
