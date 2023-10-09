@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7
- *  Updated on: Oct 08.2023
+ *  Version 3.0.7a
+ *  Updated on: Oct 09.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -184,8 +184,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_DAC
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
     m_i2s_config.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
     m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // interrupt priority
-    m_i2s_config.dma_buf_count        = 16;
-    m_i2s_config.dma_buf_len          = 512;
+    m_i2s_config.dma_desc_num         = 16;
+    m_i2s_config.dma_frame_num        = 512;
     m_i2s_config.use_apll             = APLL_DISABLE; // must be disabled in V2.0.1-RC1
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
     m_i2s_config.fixed_mclk           = I2S_PIN_NO_CHANGE;
@@ -273,36 +273,6 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
     return i2s_stop((i2s_port_t) i2s_num);
 }
 //---------------------------------------------------------------------------------------------------------------------
-esp_err_t Audio::i2s_mclk_pin_select(const uint8_t pin) {
-    // IDF >= 4.4 use setPinout(BCLK, LRC, DOUT, DIN, MCK) only, i2s_mclk_pin_select() is no longer needed
-
-    if(pin != 0 && pin != 1 && pin != 3) {
-        log_e("Only support GPIO0/GPIO1/GPIO3, gpio_num:%d", pin);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    #ifdef CONFIG_IDF_TARGET_ESP32
-        switch(pin){
-            case 0:
-                PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO0_U, FUNC_GPIO0_CLK_OUT1);
-                WRITE_PERI_REG(PIN_CTRL, 0xFFF0);
-                break;
-            case 1:
-                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0TXD_U, FUNC_U0TXD_CLK_OUT3);
-                WRITE_PERI_REG(PIN_CTRL, 0xF0F0);
-                break;
-            case 3:
-                PIN_FUNC_SELECT(PERIPHS_IO_MUX_U0RXD_U, FUNC_U0RXD_CLK_OUT2);
-                WRITE_PERI_REG(PIN_CTRL, 0xFF00);
-                break;
-            default:
-                break;
-        }
-    #endif
-
-    return ESP_OK;
-}
-//---------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
     //I2Sstop(m_i2s_num);
     //InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
@@ -334,7 +304,7 @@ void Audio::setDefaults() {
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0); // reset ts routine
 
-    AUDIO_INFO("buffers freed, free Heap: %u bytes", ESP.getFreeHeap());
+    AUDIO_INFO("buffers freed, free Heap: %lu bytes", ESP.getFreeHeap());
 
     m_f_chunked = false;                                    // Assume not chunked
     m_f_firstmetabyte = false;
@@ -502,7 +472,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(res){
         uint32_t dt = millis() - t;
         strcpy(m_lastHost, l_host);
-        AUDIO_INFO("%s has been established in %u ms, free Heap: %u bytes",
+        AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes",
                     m_f_ssl?"SSL":"Connection", dt, ESP.getFreeHeap());
         m_f_running = true;
     }
@@ -1184,7 +1154,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         AUDIO_INFO("FormatCode: %u", fc);
         // AUDIO_INFO("Channel: %u", nic);
         // AUDIO_INFO("SampleRate: %u", sr);
-        AUDIO_INFO("DataRate: %u", dr);
+        AUDIO_INFO("DataRate: %lu", dr);
         AUDIO_INFO("DataBlockSize: %u", dbs);
         AUDIO_INFO("BitsPerSample: %u", bps);
 
@@ -1278,7 +1248,7 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         m_controlCounter = FLAC_MAGIC;
         if(getDatamode() == AUDIO_LOCALFILE){
             m_contentlength = getFileSize();
-            AUDIO_INFO("Content-Length: %u", m_contentlength);
+            AUDIO_INFO("Content-Length: %lu", m_contentlength);
         }
         return 0;
     }
@@ -1347,7 +1317,7 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
         m_flacSampleRate = nextval >> 4;
-        AUDIO_INFO("FLAC sampleRate: %u", m_flacSampleRate);
+        AUDIO_INFO("FLAC sampleRate: %lu", m_flacSampleRate);
         vTaskDelay(2);
         m_flacNumChannels = ((nextval & 0x06) >> 1) + 1;
         AUDIO_INFO("FLAC numChannels: %u", m_flacNumChannels);
@@ -1363,13 +1333,13 @@ int Audio::read_FLAC_Header(uint8_t *data, size_t len) {
         AUDIO_INFO("FLAC bitsPerSample: %u", m_flacBitsPerSample);
         m_flacTotalSamplesInStream = bigEndian(data + 17, 4);
         if(m_flacTotalSamplesInStream){
-            AUDIO_INFO("total samples in stream: %u", m_flacTotalSamplesInStream);
+            AUDIO_INFO("total samples in stream: %lu", m_flacTotalSamplesInStream);
         }
         else{
             AUDIO_INFO("total samples in stream: N/A");
         }
         if(bps != 0 && m_flacTotalSamplesInStream) {
-            AUDIO_INFO("audio file duration: %u seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
+            AUDIO_INFO("audio file duration: %lu seconds", m_flacTotalSamplesInStream / m_flacSampleRate);
         }
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         retvalue = l + 3;
@@ -1463,7 +1433,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         if(getDatamode() == AUDIO_LOCALFILE){
             ID3version = 0;
             m_contentlength = getFileSize();
-            AUDIO_INFO("Content-Length: %u", m_contentlength);
+            AUDIO_INFO("Content-Length: %lu", m_contentlength);
         }
         m_controlCounter ++;
         APIC_seen = false;
@@ -1892,10 +1862,10 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
             if(streamType!= 5) { log_e("Streamtype is not audio!"); }
 
             uint32_t maxBr = bigEndian(pos + 26, 4); // max bitrate
-            AUDIO_INFO("max bitrate: %i", maxBr);
+            AUDIO_INFO("max bitrate: %lu", maxBr);
 
             uint32_t avrBr = bigEndian(pos + 30, 4); // avg bitrate
-            AUDIO_INFO("avr bitrate: %i", avrBr);
+            AUDIO_INFO("avr bitrate: %lu", avrBr);
 
             uint16_t ASC   = bigEndian(pos + 39, 2);
 
@@ -1913,7 +1883,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
                     96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350
             };
             uint8_t sRate = (ASC & 0x0600) >> 7; // next 4 bits Sampling Frequencies
-            AUDIO_INFO("Sampling Frequency: %u",samplingFrequencies[sRate]);
+            AUDIO_INFO("Sampling Frequency: %lu",samplingFrequencies[sRate]);
 
             uint8_t chConfig = (ASC & 0x78) >> 3;  // next 4 bits
             if(chConfig == 0) AUDIO_INFO("Channel Configurations: AOT Specifc Config");
@@ -2002,7 +1972,7 @@ int Audio::read_M4A_Header(uint8_t *data, size_t len) {
         m_audioDataStart = headerSize;
 //        m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
         if(getDatamode() == AUDIO_LOCALFILE){
-            AUDIO_INFO("Content-Length: %u", m_contentlength);
+            AUDIO_INFO("Content-Length: %lu", m_contentlength);
         }
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
@@ -2758,7 +2728,7 @@ void Audio::processLocalFile() {
         }
 
         if(m_f_loop  && f_stream){  //eof
-            AUDIO_INFO("loop from: %u to: %u", getFilePos(), m_audioDataStart); // loop
+            AUDIO_INFO("loop from: %lu to: %lu", getFilePos(), m_audioDataStart); // loop
             setFilePos(m_audioDataStart);
             if(m_codec == CODEC_FLAC) FLACDecoderReset();
             m_audioCurrentTime = 0;
@@ -3188,7 +3158,7 @@ void Audio::processWebStreamHLS() {
         f_stream = true;  // ready to play the audio data
         uint16_t filltime = millis() - m_t0;
         if(m_f_Log) AUDIO_INFO("stream ready");
-        if(m_f_Log) AUDIO_INFO("buffer filled in %d ms", filltime);
+        if(m_f_Log) AUDIO_INFO("buffer filled in %u ms", filltime);
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3358,7 +3328,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             int32_t br = atoi(c_bitRate); // Found bitrate tag, read the bitrate in Kbit
             br = br * 1000;
             setBitrate(br);
-            sprintf(m_chbuf, "%d", getBitRate());
+            sprintf(m_chbuf, "%lu", getBitRate());
             if(audio_bitrate) audio_bitrate(m_chbuf);
         }
 
@@ -3383,14 +3353,14 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             int32_t i_cl = atoi(c_cl);
             m_contentlength = i_cl;
             m_streamType = ST_WEBFILE; // Stream comes from a fileserver
-            if(m_f_Log) AUDIO_INFO("content-length: %i", m_contentlength);
+            if(m_f_Log) AUDIO_INFO("content-length: %lu", m_contentlength);
         }
 
         else if(startsWith(rhl, "icy-description:")) {
             const char* c_idesc = (rhl + 16);
             while(c_idesc[0] == ' ') c_idesc++;
             latinToUTF8(rhl, sizeof(rhl)); // if already UTF-8 do nothing, otherwise convert to UTF-8
-            if(specialIndexOf((uint8_t*)c_idesc, "24bit", strlen(c_idesc)) >= 0){
+            if(strlen(c_idesc) > 0 && specialIndexOf((uint8_t*)c_idesc, "24bit", 0) > 0){
                 AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
                 stopSong();
             }
@@ -3458,7 +3428,7 @@ bool Audio:: initializeDecoder(){
             }
             gfH = ESP.getFreeHeap();
             hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("MP3Decoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
+            AUDIO_INFO("MP3Decoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", gfH, hWM);
             InBuff.changeMaxBlockSize(m_frameSizeMP3);
             break;
         case CODEC_AAC:
@@ -3469,7 +3439,7 @@ bool Audio:: initializeDecoder(){
                 }
                 gfH = ESP.getFreeHeap();
                 hWM = uxTaskGetStackHighWaterMark(NULL);
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
+                AUDIO_INFO("AACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", gfH, hWM);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -3481,7 +3451,7 @@ bool Audio:: initializeDecoder(){
                 }
                 gfH = ESP.getFreeHeap();
                 hWM = uxTaskGetStackHighWaterMark(NULL);
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
+                AUDIO_INFO("AACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", gfH, hWM);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -3497,7 +3467,7 @@ bool Audio:: initializeDecoder(){
             gfH = ESP.getFreeHeap();
             hWM = uxTaskGetStackHighWaterMark(NULL);
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
-            AUDIO_INFO("FLACDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
+            AUDIO_INFO("FLACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", gfH, hWM);
             break;
         case CODEC_OPUS:
             if(!OPUSDecoder_AllocateBuffers()){
@@ -3506,7 +3476,7 @@ bool Audio:: initializeDecoder(){
             }
             gfH = ESP.getFreeHeap();
             hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %u bytes , free stack %u DWORDs", gfH, hWM);
+            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", gfH, hWM);
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
@@ -3520,7 +3490,7 @@ bool Audio:: initializeDecoder(){
             }
             gfH = ESP.getFreeHeap();
             hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("VORBISDecoder has been initialized, free Heap: %u bytes,  free stack %u DWORDs", gfH, hWM);
+            AUDIO_INFO("VORBISDecoder has been initialized, free Heap: %lu bytes,  free stack %lu DWORDs", gfH, hWM);
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
         case CODEC_WAV:
@@ -3770,10 +3740,10 @@ void Audio::showstreamtitle(const char* ml) {
 void Audio::showCodecParams(){
     // print Codec Parameter (mp3, aac) in audio_info()
 
-    AUDIO_INFO("Channels: %i", getChannels());
-    AUDIO_INFO("SampleRate: %i", getSampleRate());
-    AUDIO_INFO("BitsPerSample: %i", getBitsPerSample());
-    if(getBitRate()) {AUDIO_INFO("BitRate: %i", getBitRate());}
+    AUDIO_INFO("Channels: %u", getChannels());
+    AUDIO_INFO("SampleRate: %lu", getSampleRate());
+    AUDIO_INFO("BitsPerSample: %u", getBitsPerSample());
+    if(getBitRate()) {AUDIO_INFO("BitRate: %lu", getBitRate());}
     else             {AUDIO_INFO("BitRate: N/A");}
 
     if(m_codec == CODEC_AAC){
@@ -3837,7 +3807,7 @@ int Audio::findNextSync(uint8_t* data, size_t len){
     }
     if (nextSync == 0){
         if(audio_info && swnf>0){
-            sprintf(m_chbuf, "syncword not found %i times", swnf);
+            sprintf(m_chbuf, "syncword not found %lu times", swnf);
             audio_info(m_chbuf);
             swnf = 0;
         }
@@ -4606,7 +4576,7 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2){  // Infi
         FcHS = getSampleRate() /2 - 100;
         // according to the sampling theorem, the sample rate must be at least 2 * 6000 >= 12000Hz for a filter
         // frequency of 6000Hz. If this is not the case, the filter frequency (plus a reserve of 100Hz) is lowered
-        AUDIO_INFO("Highshelf frequency lowered, from 6000Hz to %dHz", (uint32_t)FcHS);
+        AUDIO_INFO("Highshelf frequency lowered, from 6000Hz to %luHz", (uint32_t)FcHS);
     }
     float K, norm, Q, Fc, V ;
 

@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7
- *  Updated on: Oct 08.2023
+ *  Version 3.0.7a
+ *  Updated on: Oct 09.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -158,7 +158,6 @@ public:
     uint32_t getTotalPlayingTime();
     uint16_t getVUlevel();
 
-    esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
