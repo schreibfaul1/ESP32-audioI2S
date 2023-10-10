@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7a
- *  Updated on: Oct 09.2023
+ *  Version 3.0.7b
+ *  Updated on: Oct 10.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -17,14 +17,21 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <vector>
-#include <driver/i2s.h>
 #include <SD.h>
 #include <SD_MMC.h>
 #include <SPIFFS.h>
 #include <FS.h>
 #include <FFat.h>
 
+#if ESP_IDF_VERSION_MAJOR == 5
+#include <driver/i2s_std.h>
+#else
+#include <driver/i2s.h>
+#endif
+
+#ifndef I2S_GPIO_UNUSED
+  #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
+#endif
 using namespace std;
 
 extern __attribute__((weak)) void audio_info(const char*);
@@ -133,7 +140,7 @@ public:
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
     bool setTimeOffset(int sec);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN = I2S_PIN_NO_CHANGE, int8_t MCK = I2S_PIN_NO_CHANGE);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCK = I2S_GPIO_UNUSED);
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
@@ -434,10 +441,16 @@ private:
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
     SemaphoreHandle_t     mutex_audio;
+#if ESP_IDF_VERSION_MAJOR == 5
+    i2s_chan_handle_t     m_i2s_tx_handle = {};
+    i2s_chan_config_t     m_i2s_chan_cfg = {}; // stores I2S channel values
+    i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values 
+#else
     i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
     i2s_pin_config_t      m_pin_config = {};
-    std::vector<char*>    m_playlistContent; // m3u8 playlist buffer
-    std::vector<char*>    m_playlistURL;     // m3u8 streamURLs buffer
+#endif
+    std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
+    std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
     std::vector<uint32_t> m_hashQueue;
 
     const size_t    m_frameSizeWav    = 1024;
