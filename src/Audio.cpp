@@ -5,7 +5,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7c
+ *  Version 3.0.7d
  *  Updated on: Oct 11.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -624,7 +624,7 @@ bool Audio::httpPrint(const char* host) {
         if(port == 80) port = 443;
     }
     else { _client = static_cast<WiFiClient*>(&client); }
-
+    
     if(!_client->connected()) {
         AUDIO_INFO("The host has disconnected, reconnecting");
         if(!_client->connect(hostwoext, port)) {
@@ -2511,61 +2511,17 @@ const char* Audio::parsePlaylist_M3U8() {
     if(lines) {
         for(int i = 0; i < lines; i++) {
             if(strlen(m_playlistContent[i]) == 0) continue;    // empty line
-            if(startsWith(m_playlistContent[i], "#EXTM3U")) {  // what we expected
-                f_begin = true;
-                continue;
-            }
+            if(startsWith(m_playlistContent[i], "#EXTM3U")) {f_begin = true;  continue;} // what we expected
             if(!f_begin) continue;
 
-            // example: redirection
-            // #EXTM3U
-            // #EXT-X-STREAM-INF:BANDWIDTH=22050,CODECS="mp4a.40.2"
-            // http://ample.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/playlist.m3u8
+            if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")){
+                return m3u8redirection(i);
+            }
+
             if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")) {
                 if(occurence > 0) break;  // no more than one #EXT-X-STREAM-INF: (can have different BANDWIDTH)
                 occurence++;
-                if((!endsWith(m_playlistContent[i + 1], "m3u8") && indexOf(m_playlistContent[i + 1], "m3u8?") == -1)) {
-                    // we have a new m3u8 playlist, skip to next line
-                    int pos = indexOf(m_playlistContent[i], "CODECS=\"mp4a", 18);
-                    // 'mp4a.40.01' AAC Main
-                    // 'mp4a.40.02' AAC LC (Low Complexity)
-                    // 'mp4a.40.03' AAC SSR (Scalable Sampling Rate) ??
-                    // 'mp4a.40.03' AAC LTP (Long Term Prediction) ??
-                    // 'mp4a.40.03' SBR (Spectral Band Replication)
-                    if(pos < 0) {  // not found
-                        int pos1 = indexOf(m_playlistContent[i], "CODECS=", 18);
-                        if(pos1 < 0) pos1 = 0;
-                        log_e("codec %s in m3u8 playlist not supported", m_playlistContent[i] + pos1);
-                        goto exit;
-                    }
-                }
-                i++;                      // next line
-                if(i == lines) continue;  // and exit for()
 
-                char* tmp = nullptr;
-                if(!startsWith(m_playlistContent[i], "http")) {
-                    // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
-                    // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
-                    // http://livees.com/chunklist022.m3u8
-                    tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]));
-                    strcpy(tmp, m_lastHost);
-                    int idx = lastIndexOf(tmp, "/");
-                    strcpy(tmp + idx + 1, m_playlistContent[i]);
-                }
-                else { tmp = strdup(m_playlistContent[i]); }
-                if(m_playlistContent[i]) {
-                    free(m_playlistContent[i]);
-                    m_playlistContent[i] = NULL;
-                }
-                m_playlistContent[i] = strdup(tmp);
-                strcpy(m_lastHost, tmp);
-                if(tmp) {
-                    free(tmp);
-                    tmp = NULL;
-                }
-                if(m_f_Log) log_i("redirect %s", m_playlistContent[i]);
-                _client->stop();
-                return m_playlistContent[i];  // it's a redirection, a new m3u8 playlist
             }
 
             // example: audio chunks
@@ -2579,6 +2535,10 @@ const char* Audio::parsePlaylist_M3U8() {
             // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
             if(startsWith(m_playlistContent[i], "#EXT-X-MEDIA-SEQUENCE:")) {
                 // do nothing, because MEDIA-SECUENCE is not set sometimes
+            }
+            if(startsWith(m_playlistContent[i], "#EXT-X-DISCONTINUITY-SEQUENCE:0")) {
+                // seek for continuity numbers
+                log_e("EXT-X-DISCONTINUITY-SEQUENCE:0");
             }
             static uint16_t targetDuration = 0;
             if(startsWith(m_playlistContent[i], "#EXT-X-TARGETDURATION:")) {
@@ -2657,6 +2617,57 @@ const char* Audio::parsePlaylist_M3U8() {
         return m_playlistBuff;
     }
     else { return NULL; }
+
+    stopSong();
+    return NULL;
+}
+//---------------------------------------------------------------------------------------------------------------------
+const char* Audio::m3u8redirection(uint16_t idx){
+    // example: redirection
+    // #EXTM3U
+    // #EXT-X-STREAM-INF:BANDWIDTH=22050,CODECS="mp4a.40.2"
+    // http://ample.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/playlist.m3u8
+
+    char* tmp = nullptr;
+    if((!endsWith(m_playlistContent[idx + 1], "m3u8") && indexOf(m_playlistContent[idx + 1], "m3u8?") == -1)) {
+        // we have a new m3u8 playlist, skip to next line
+        int pos = indexOf(m_playlistContent[idx], "CODECS=\"mp4a", 18);
+        // 'mp4a.40.01' AAC Main
+        // 'mp4a.40.02' AAC LC (Low Complexity)
+        // 'mp4a.40.03' AAC SSR (Scalable Sampling Rate) ??
+        // 'mp4a.40.03' AAC LTP (Long Term Prediction) ??
+        // 'mp4a.40.03' SBR (Spectral Band Replication)
+        if(pos < 0) {  // not found
+            int pos1 = indexOf(m_playlistContent[idx], "CODECS=", 18);
+            if(pos1 < 0) pos1 = 0;
+            log_e("codec %s in m3u8 playlist not supported", m_playlistContent[idx] + pos1);
+            goto exit;
+        }
+    }
+
+    if(!startsWith(m_playlistContent[idx], "http")) {
+        // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
+        // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
+        // http://livees.com/chunklist022.m3u8
+        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[idx]));
+        strcpy(tmp, m_lastHost);
+        int idx = lastIndexOf(tmp, "/");
+        strcpy(tmp + idx + 1, m_playlistContent[idx]);
+    }
+    else { tmp = strdup(m_playlistContent[idx]); }
+    if(m_playlistContent[idx]) {
+        free(m_playlistContent[idx]);
+        m_playlistContent[idx] = NULL;
+    }
+    m_playlistContent[idx] = strdup(tmp);
+    strcpy(m_lastHost, tmp);
+    if(tmp) {
+        free(tmp);
+        tmp = NULL;
+    }
+    if(m_f_Log) log_i("redirect %s", m_playlistContent[idx]);
+    _client->stop();
+    return m_playlistContent[idx];  // it's a redirection, a new m3u8 playlist
 exit:
     stopSong();
     return NULL;

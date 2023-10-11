@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7c
+ *  Version 3.0.7d
  *  Updated on: Oct 11.2023
  *      Author: Wolle (schreibfaul1)
  */
@@ -197,6 +197,7 @@ private:
     const char* parsePlaylist_PLS();
     const char* parsePlaylist_ASX();
     const char* parsePlaylist_M3U8();
+    const char* m3u8redirection(uint16_t idx);
     bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
@@ -454,7 +455,7 @@ private:
 #if ESP_IDF_VERSION_MAJOR == 5
     i2s_chan_handle_t     m_i2s_tx_handle = {};
     i2s_chan_config_t     m_i2s_chan_cfg = {}; // stores I2S channel values
-    i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values 
+    i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values
 #else
     i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
     i2s_pin_config_t      m_pin_config = {};
@@ -536,6 +537,7 @@ private:
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
+    bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
@@ -549,7 +551,7 @@ private:
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
     bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
-    bool            m_f_psramFound = false;         // set in constructor, result of psramInit() 
+    bool            m_f_psramFound = false;         // set in constructor, result of psramInit()
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
