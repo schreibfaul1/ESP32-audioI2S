@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7b
- *  Updated on: Oct 10.2023
+ *  Version 3.0.7c
+ *  Updated on: Oct 11.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -137,12 +137,13 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 #define __malloc_heap_psram(size) \
     heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
 
-    if(psramInit()) m_chbufSize = 4096;
-    else{m_chbufSize = 512 + 64;}
-    m_ibuff = (char*)__malloc_heap_psram(512 + 64);
+    m_f_psramFound = psramInit();
+    if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
+    if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
     m_lastHost = (char*)__malloc_heap_psram(512);
     m_outBuff = (int16_t*)__malloc_heap_psram(2048 * 2 * sizeof(int16_t));
     m_chbuf = (char*)__malloc_heap_psram(m_chbufSize);
+    m_ibuff = (char*)__malloc_heap_psram(m_ibuffSize);
 
     if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
 
@@ -973,8 +974,8 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "XDOR")) sprintf(m_chbuf, "OriginalReleaseTime: %s", value);
 
     latinToUTF8(m_chbuf, sizeof(m_chbuf));
-    if(m_chbuf[0] != 0)
-        if(audio_id3data) audio_id3data(m_chbuf);
+    if(indexOf(m_chbuf, "?xml", 0) > 0) {showstreamtitle(m_chbuf); return;}
+    if(m_chbuf[0] != 0){if(audio_id3data) audio_id3data(m_chbuf);}
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::unicode2utf8(char* buff, uint32_t len) {
@@ -2321,11 +2322,8 @@ bool Audio::readPlayListData() {
                     ;
                 }
                 pos++;
-                if(pos == 511) {
-                    pos--;
-                    continue;
-                }
-                if(pos == 510) { pl[pos] = '\0'; }
+                if(pos == 510) {pos--; continue;}
+                if(pos == 509) { pl[pos] = '\0'; }
                 if(ctl == chunksize) {
                     pl[pos] = '\0';
                     break;
@@ -2349,15 +2347,9 @@ bool Audio::readPlayListData() {
             }
         }  // inner while
 
-        if(startsWith(pl, "<!DOCTYPE")) {
-            AUDIO_INFO("url is a webpage!");
-            goto exit;
-        }
-        if(startsWith(pl, "<html")) {
-            AUDIO_INFO("url is a webpage!");
-            goto exit;
-        }
-        if(strlen(pl) > 0) m_playlistContent.push_back(strdup((const char*)pl));
+        if(startsWith(pl, "<!DOCTYPE")) {AUDIO_INFO("url is a webpage!"); goto exit;}
+        if(startsWith(pl, "<html"))     {AUDIO_INFO("url is a webpage!"); goto exit;}
+        if(strlen(pl) > 0) m_playlistContent.push_back(x_strdup(pl));
         if(m_playlistContent.size() == 100) {
             if(m_f_Log) log_i("the maximum number of lines in the playlist has been reached");
             break;
@@ -3224,7 +3216,7 @@ void Audio::processWebStreamTS() {
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStreamHLS() {
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize();  // every mp3/aac frame is not bigger
-    const uint16_t  ID3BuffSize = 1024;
+    uint16_t  ID3BuffSize = 1024; if(m_f_psramFound) ID3BuffSize = 4096;
     uint32_t        availableBytes;  // available bytes in stream
     static bool     f_stream;        // first audio data received
     static bool     firstBytes;
@@ -3815,9 +3807,11 @@ void Audio::showstreamtitle(const char* ml) {
     int16_t  idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
     uint16_t i = 0, hash = 0;
 
-    idx1 = indexOf(ml, "StreamTitle=", 0);  // Streamtitle found
+    idx1 = indexOf(ml, "StreamTitle=", 0);         // Streamtitle found
+    if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0);  // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
+
     if(idx1 >= 0) {
-        if(indexOf(ml, "xml version=", 12) > 0) {
+        if(indexOf(ml, "xml version=", 7) > 0) {
             /* e.g. xmlStreamTitle
                   StreamTitle='<?xml version="1.0" encoding="utf-8"?><RadioInfo><Table><DB_ALBUM_ID>37364</DB_ALBUM_ID>
                   <DB_ALBUM_IMAGE>00000037364.jpg</DB_ALBUM_IMAGE><DB_ALBUM_NAME>Boyfriend</DB_ALBUM_NAME>
@@ -3859,9 +3853,15 @@ void Audio::showstreamtitle(const char* ml) {
                 title[titleLen + 3 + artistLen] = '\0';
             }
 
-            if(title)
-                if(audio_showstreamtitle) audio_showstreamtitle(title);
-            if(title) {
+            if(title){
+                while(i < strlen(title)) {
+                    hash += title[i] * i + 1;
+                    i++;
+                }              
+                if(m_streamTitleHash != hash) {
+                    m_streamTitleHash = hash;
+                    if(audio_showstreamtitle) audio_showstreamtitle(title);
+                }
                 free(title);
                 title = NULL;
             }
