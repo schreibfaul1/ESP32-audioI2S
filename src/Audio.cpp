@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7d
- *  Updated on: Oct 11.2023
+ *  Version 3.0.7e
+ *  Updated on: Oct 12.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2505,9 +2505,20 @@ const char* Audio::parsePlaylist_ASX() {  // Advanced Stream Redirector
 }
 //----------------------------------------------------------------------------------------------------------------------
 const char* Audio::parsePlaylist_M3U8() {
+
+    // example: audio chunks
+    // #EXTM3U
+    // #EXT-X-TARGETDURATION:10
+    // #EXT-X-MEDIA-SEQUENCE:163374040
+    // #EXT-X-DISCONTINUITY
+    // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
+    // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374038.aac
+    // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
+    // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
+
     uint8_t lines = m_playlistContent.size();
     bool    f_begin = false;
-    uint8_t occurence = 0;
+    const char* ret;
     if(lines) {
         for(int i = 0; i < lines; i++) {
             if(strlen(m_playlistContent[i]) == 0) continue;    // empty line
@@ -2515,30 +2526,16 @@ const char* Audio::parsePlaylist_M3U8() {
             if(!f_begin) continue;
 
             if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")){
-                return m3u8redirection(i);
+                ret = m3u8redirection();
+                if(ret) return ret;
             }
 
-            if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")) {
-                if(occurence > 0) break;  // no more than one #EXT-X-STREAM-INF: (can have different BANDWIDTH)
-                occurence++;
-
-            }
-
-            // example: audio chunks
-            // #EXTM3U
-            // #EXT-X-TARGETDURATION:10
-            // #EXT-X-MEDIA-SEQUENCE:163374040
-            // #EXT-X-DISCONTINUITY
-            // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
-            // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374038.aac
-            // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
-            // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
             if(startsWith(m_playlistContent[i], "#EXT-X-MEDIA-SEQUENCE:")) {
                 // do nothing, because MEDIA-SECUENCE is not set sometimes
             }
             if(startsWith(m_playlistContent[i], "#EXT-X-DISCONTINUITY-SEQUENCE:0")) {
-                // seek for continuity numbers
-                log_e("EXT-X-DISCONTINUITY-SEQUENCE:0");
+                // seek for continuity numbers, is sometimes not set
+                // log_i("EXT-X-DISCONTINUITY-SEQUENCE:0");
             }
             static uint16_t targetDuration = 0;
             if(startsWith(m_playlistContent[i], "#EXT-X-TARGETDURATION:")) {
@@ -2622,52 +2619,80 @@ const char* Audio::parsePlaylist_M3U8() {
     return NULL;
 }
 //---------------------------------------------------------------------------------------------------------------------
-const char* Audio::m3u8redirection(uint16_t idx){
+const char* Audio::m3u8redirection(){
     // example: redirection
     // #EXTM3U
-    // #EXT-X-STREAM-INF:BANDWIDTH=22050,CODECS="mp4a.40.2"
-    // http://ample.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/playlist.m3u8
+    // #EXT-X-STREAM-INF:BANDWIDTH=117500,AVERAGE-BANDWIDTH=117000,CODECS="mp4a.40.2"
+    // 112/playlist.m3u8?hlssid=7562d0e101b84aeea0fa35f8b963a174
+    // #EXT-X-STREAM-INF:BANDWIDTH=69500,AVERAGE-BANDWIDTH=69000,CODECS="mp4a.40.5"
+    // 64/playlist.m3u8?hlssid=7562d0e101b84aeea0fa35f8b963a174
+    // #EXT-X-STREAM-INF:BANDWIDTH=37500,AVERAGE-BANDWIDTH=37000,CODECS="mp4a.40.29"
+    // 32/playlist.m3u8?hlssid=7562d0e101b84aeea0fa35f8b963a174
+
+    uint32_t bw[20] = {0};
+    uint32_t finalBW = 0;
+    uint16_t choosenLine = 0;
+    uint16_t plcSize = m_playlistContent.size();
+    if(plcSize > 20) plcSize = 20;
+    uint8_t posBW = 0, posC = 0;
+    // looking for best (highest) bandwidth
+    for(uint16_t i = 0; i < plcSize; i++){
+        posBW = indexOf(m_playlistContent[i], "BANDWIDTH=");
+        if(posBW > 0){
+            posC = indexOf(m_playlistContent[i], ",");
+            if(posC > posBW && posC - posBW < 18){ // valid BW
+                bw[i] = atoi(m_playlistContent[i] + posBW + 10); // read until comma
+            }
+        }
+    }
+    for(uint16_t i = 0; i < plcSize; i++){
+        if(bw[i] > finalBW) {finalBW = bw[i], choosenLine = i + 1;}
+    }
+    if(m_f_Log) log_i("choosenBW: %i at line: %i", finalBW, choosenLine);
 
     char* tmp = nullptr;
-    if((!endsWith(m_playlistContent[idx + 1], "m3u8") && indexOf(m_playlistContent[idx + 1], "m3u8?") == -1)) {
+    if((!endsWith(m_playlistContent[choosenLine], "m3u8") && indexOf(m_playlistContent[choosenLine], "m3u8?") == -1)) {
         // we have a new m3u8 playlist, skip to next line
-        int pos = indexOf(m_playlistContent[idx], "CODECS=\"mp4a", 18);
+        int pos = indexOf(m_playlistContent[choosenLine - 1], "CODECS=\"mp4a", 18);
         // 'mp4a.40.01' AAC Main
         // 'mp4a.40.02' AAC LC (Low Complexity)
         // 'mp4a.40.03' AAC SSR (Scalable Sampling Rate) ??
         // 'mp4a.40.03' AAC LTP (Long Term Prediction) ??
         // 'mp4a.40.03' SBR (Spectral Band Replication)
         if(pos < 0) {  // not found
-            int pos1 = indexOf(m_playlistContent[idx], "CODECS=", 18);
+            int pos1 = indexOf(m_playlistContent[choosenLine - 1], "CODECS=", 18);
             if(pos1 < 0) pos1 = 0;
-            log_e("codec %s in m3u8 playlist not supported", m_playlistContent[idx] + pos1);
+            log_e("codec %s in m3u8 playlist not supported", m_playlistContent[choosenLine - 1] + pos1);
             goto exit;
         }
     }
+    if(!startsWith(m_playlistContent[choosenLine], "http")) {
 
-    if(!startsWith(m_playlistContent[idx], "http")) {
         // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
         // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
         // http://livees.com/chunklist022.m3u8
-        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[idx]));
+
+
+        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
         strcpy(tmp, m_lastHost);
-        int idx = lastIndexOf(tmp, "/");
-        strcpy(tmp + idx + 1, m_playlistContent[idx]);
+        int idx1 = lastIndexOf(tmp, "/");
+        strcpy(tmp + idx1 + 1, m_playlistContent[choosenLine]);
     }
-    else { tmp = strdup(m_playlistContent[idx]); }
-    if(m_playlistContent[idx]) {
-        free(m_playlistContent[idx]);
-        m_playlistContent[idx] = NULL;
+    else { tmp = strdup(m_playlistContent[choosenLine]); }
+
+    if(m_playlistContent[choosenLine]) {
+        free(m_playlistContent[choosenLine]);
+        m_playlistContent[choosenLine] = NULL;
     }
-    m_playlistContent[idx] = strdup(tmp);
+    m_playlistContent[choosenLine] = strdup(tmp);
     strcpy(m_lastHost, tmp);
     if(tmp) {
         free(tmp);
         tmp = NULL;
     }
-    if(m_f_Log) log_i("redirect %s", m_playlistContent[idx]);
+    if(m_f_Log) log_i("redirect %s", m_playlistContent[choosenLine]);
     _client->stop();
-    return m_playlistContent[idx];  // it's a redirection, a new m3u8 playlist
+    return m_playlistContent[choosenLine];  // it's a redirection, a new m3u8 playlist
 exit:
     stopSong();
     return NULL;

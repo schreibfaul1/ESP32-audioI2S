@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7d
- *  Updated on: Oct 11.2023
+ *  Version 3.0.7e
+ *  Updated on: Oct 12.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -197,7 +197,7 @@ private:
     const char* parsePlaylist_PLS();
     const char* parsePlaylist_ASX();
     const char* parsePlaylist_M3U8();
-    const char* m3u8redirection(uint16_t idx);
+    const char* m3u8redirection();
     bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
