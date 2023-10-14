@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7e
- *  Updated on: Oct 12.2023
+ *  Version 3.0.7f
+ *  Updated on: Oct 14.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -328,7 +328,8 @@ void Audio::setDefaults() {
     m_f_ssl = false;
     m_f_metadata = false;
     m_f_tts = false;
-    m_f_firstCall = true;  // InitSequence for processWebstream and processLokalFile
+    m_f_firstCall = true;     // InitSequence for processWebstream and processLokalFile
+    m_f_firstM3U8call = true; // InitSequence for parsePlaylist_M3U8
     m_f_running = false;
     m_f_loop = false;      // Set if audio file should loop
     m_f_unsync = false;    // set within ID3 tag but not used
@@ -624,7 +625,7 @@ bool Audio::httpPrint(const char* host) {
         if(port == 80) port = 443;
     }
     else { _client = static_cast<WiFiClient*>(&client); }
-    
+
     if(!_client->connected()) {
         AUDIO_INFO("The host has disconnected, reconnecting");
         if(!_client->connect(hostwoext, port)) {
@@ -2516,6 +2517,16 @@ const char* Audio::parsePlaylist_M3U8() {
     // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
     // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
 
+    static int16_t xMedPos = 0;
+    static uint64_t xMedSeq = 0;
+    static boolean f_medSeq_found = false;
+    if(m_f_firstM3U8call){
+        m_f_firstM3U8call = false;
+        xMedPos = 0;
+        xMedSeq = 0;
+        f_medSeq_found = false;
+    }
+
     uint8_t lines = m_playlistContent.size();
     bool    f_begin = false;
     const char* ret;
@@ -2530,13 +2541,31 @@ const char* Audio::parsePlaylist_M3U8() {
                 if(ret) return ret;
             }
 
-            if(startsWith(m_playlistContent[i], "#EXT-X-MEDIA-SEQUENCE:")) {
-                // do nothing, because MEDIA-SECUENCE is not set sometimes
+            //if(startsWith(m_playlistContent[i], "#EXT-X-DISCONTINUITY-SEQUENCE:0")) {  // not used
+            //     seek for continuity numbers, is sometimes not set
+            //     log_i("EXT-X-DISCONTINUITY-SEQUENCE:0");
+            //}
+
+            if(!f_medSeq_found && startsWith(m_playlistContent[i], "#EXT-X-MEDIA-SEQUENCE:")) { // if xMedSeq exists, convert xMedSeq to an uint64
+                char* pEnd;                                                                     // and look for the position in m_playlistContent
+                char llasc[21]; // uint64_t max = 18,446,744,073,709,551,615
+                xMedSeq = strtoull(m_playlistContent[i] + 22, &pEnd, 10);
+                if(xMedSeq > 0){
+                    lltoa(xMedSeq, llasc, 10);
+                    for(uint8_t j = i + 1; j < lines; j++){
+                        if(startsWith(m_playlistContent[j], "#EXTINF:")) {
+                            xMedPos = (indexOf(m_playlistContent[j + 1], llasc, 0));
+                            if(xMedPos > 0){
+                                log_e("found at pos %u, %s", xMedPos, m_playlistContent[j + 1]);
+                                f_medSeq_found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
-            if(startsWith(m_playlistContent[i], "#EXT-X-DISCONTINUITY-SEQUENCE:0")) {
-                // seek for continuity numbers, is sometimes not set
-                // log_i("EXT-X-DISCONTINUITY-SEQUENCE:0");
-            }
+
+
             static uint16_t targetDuration = 0;
             if(startsWith(m_playlistContent[i], "#EXT-X-TARGETDURATION:")) {
                 targetDuration = atoi(m_playlistContent[i] + 22);
