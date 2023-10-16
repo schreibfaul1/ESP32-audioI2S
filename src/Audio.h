@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7f
- *  Updated on: Oct 14.2023
+ *  Version 3.0.7h
+ *  Updated on: Oct 16.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -198,6 +198,7 @@ private:
     const char* parsePlaylist_ASX();
     const char* parsePlaylist_M3U8();
     const char* m3u8redirection();
+    uint64_t m3u8_findMediaSeqInURL();
     bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
@@ -462,7 +463,6 @@ private:
 #endif
     std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
     std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
-    std::vector<uint32_t> m_hashQueue;
 
     const size_t    m_frameSizeWav    = 1024;
     const size_t    m_frameSizeMP3    = 1600;
