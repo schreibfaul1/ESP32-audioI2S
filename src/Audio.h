@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7h
- *  Updated on: Oct 16.2023
+ *  Version 3.0.7k
+ *  Updated on: Oct 19.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -552,6 +552,7 @@ private:
     bool            m_f_ts = true;                  // transport stream
     bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
     bool            m_f_psramFound = false;         // set in constructor, result of psramInit()
+    bool            m_f_timeout = false;            //
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;

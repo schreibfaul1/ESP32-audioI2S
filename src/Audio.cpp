@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7h
- *  Updated on: Oct 16.2023
+ *  Version 3.0.7k
+ *  Updated on: Oct 19.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -320,6 +320,7 @@ void Audio::setDefaults() {
 
     AUDIO_INFO("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
+    m_f_timeout = false;
     m_f_chunked = false;  // Assume not chunked
     m_f_firstmetabyte = false;
     m_f_playing = false;
@@ -2229,7 +2230,9 @@ void Audio::loop() {
         switch(getDatamode()) {
         case HTTP_RESPONSE_HEADER:
             playAudioData(); // fill I2S DMA buffer
-            parseHttpResponseHeader();
+            if(!parseHttpResponseHeader()){
+                if(m_f_timeout) connecttohost(m_lastHost);
+            }
             m_codec = CODEC_AAC;
             break;
         case AUDIO_PLAYLISTINIT:
@@ -2501,6 +2504,7 @@ const char* Audio::parsePlaylist_M3U8() {
 
     static uint64_t xMedSeq = 0;
     static boolean f_medSeq_found = false;
+    boolean f_EXTINF_found = false;
     char llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
     if(m_f_firstM3U8call){
         m_f_firstM3U8call = false;
@@ -2528,14 +2532,14 @@ const char* Audio::parsePlaylist_M3U8() {
             if (startsWith(m_playlistContent[i], "#EXT-X-ALLOW-CACHE:")) continue;
             if (startsWith(m_playlistContent[i], "##")) continue;
             if (startsWith(m_playlistContent[i], "#EXT-X-INDEPENDENT-SEGMENTS")) continue;
+            // (startsWith(m_playlistContent[i],#EXT-X-PROGRAM-DATE-TIME:)) continue;
 
             if(!f_medSeq_found){
                 xMedSeq = m3u8_findMediaSeqInURL();
                 if(xMedSeq > 0) f_medSeq_found = true;
                 if(xMedSeq == 0){
-                    log_e("MEDIA SEQUENCE not found");
-                    stopSong();
-                    return 0;
+                    log_e("X MEDIA SEQUENCE NUMBER not found");
+                    return NULL;
                 }
             }
 
@@ -2545,6 +2549,7 @@ const char* Audio::parsePlaylist_M3U8() {
             // }
 
             if(startsWith(m_playlistContent[i], "#EXTINF")) {
+                f_EXTINF_found = true;
                 if(STfromEXTINF(m_playlistContent[i])) {showstreamtitle(m_chbuf);}
                 i++;
                 if(i == lines) continue;  // and exit for()
@@ -2598,9 +2603,39 @@ const char* Audio::parsePlaylist_M3U8() {
         if(endsWith(m_playlistBuff, "ts")) m_f_ts = true;
         return m_playlistBuff;
     }
-    else { return NULL; }
+    else {
+        if(f_EXTINF_found){
+            uint64_t mediaSeq = m3u8_findMediaSeqInURL();
+            if(xMedSeq == 0) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
+            if(mediaSeq < xMedSeq){
+                uint64_t diff = xMedSeq - mediaSeq;
+                if(diff < 10) {;}
+                else {
+                    if(m_playlistContent.size() > 0){
+                        for(int j = 0; j < lines; j++){
+                            log_w("lines %i, %s",lines, m_playlistContent[j]);
+                        }
+                    }
+                    else{;}
 
-    stopSong();
+                    if(m_playlistURL.size() > 0){
+                        for(int j = 0; j < m_playlistURL.size(); j++){
+                            log_w("m_playlistURL lines %i, %s",j, m_playlistURL[j]);
+                        }
+                    }
+                    else{;}
+
+                    if(m_playlistURL.size() == 0) connecttohost(m_lastHost);
+                }
+            }
+            else{
+                log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq);
+                xMedSeq = mediaSeq;
+            }
+        }
+        return NULL;
+    }
+
     return NULL;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -3460,6 +3495,7 @@ bool Audio::parseHttpResponseHeader() {  // this is the response to a GET / requ
         uint16_t pos = 0;
         if((millis() - ctime) > timeout) {
             log_e("timeout");
+            m_f_timeout = true; 
             goto exit;
         }
         while(_client->available()) {
@@ -3653,7 +3689,7 @@ exit:  // termination condition
     if(audio_showstation) audio_showstation("");
     if(audio_icydescription) audio_icydescription("");
     if(audio_icyurl) audio_icyurl("");
-    m_lastHost[0] = '\0';
+//    m_lastHost[0] = '\0';
     setDatamode(AUDIO_NONE);
     stopSong();
     return false;
