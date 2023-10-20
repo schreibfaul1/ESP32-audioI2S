@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7l
+ *  Version 3.0.7m
  *  Updated on: Oct 20.2023
  *      Author: Wolle (schreibfaul1)
  */
@@ -22,6 +22,7 @@
 #include <SPIFFS.h>
 #include <FS.h>
 #include <FFat.h>
+#include <atomic>
 
 #if ESP_IDF_VERSION_MAJOR == 5
 #include <driver/i2s_std.h>
@@ -479,7 +480,7 @@ private:
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
     uint16_t        m_ibuffSize = 0;                // will set in constructor (depending on PSRAM)
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
-    char*           m_lastM3U8host = NULL;  
+    char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
@@ -509,10 +510,10 @@ private:
     uint8_t         m_vuLeft = 0;                   // average value of samples, left channel
     uint8_t         m_vuRight = 0;                  // average value of samples, right channel
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
-    int16_t         m_validSamples = 0;
-    int16_t         m_curSample = 0;
+    std::atomic<int16_t>  m_validSamples = {0};     // #144
+    std::atomic<int16_t>  m_curSample{0};
+    std::atomic<uint16_t> m_datamode{0};            // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
-    uint16_t        m_datamode = 0;                 // Statemaschine
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
     uint16_t        m_timeout_ms_ssl = 2700;
