@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7k
- *  Updated on: Oct 19.2023
+ *  Version 3.0.7l
+ *  Updated on: Oct 20.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -479,6 +479,7 @@ private:
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
     uint16_t        m_ibuffSize = 0;                // will set in constructor (depending on PSRAM)
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
+    char*           m_lastM3U8host = NULL;  
     char*           m_playlistBuff = NULL;          // stores playlistdata
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters

@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7k
- *  Updated on: Oct 19.2023
+ *  Version 3.0.7l
+ *  Updated on: Oct 20.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -279,22 +279,12 @@ Audio::~Audio() {
 #else
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
 #endif
-    if(m_chbuf) {
-        free(m_chbuf);
-        m_chbuf = NULL;
-    }
-    if(m_lastHost) {
-        free(m_lastHost);
-        m_lastHost = NULL;
-    }
-    if(m_outBuff) {
-        free(m_outBuff);
-        m_outBuff = NULL;
-    }
-    if(m_ibuff) {
-        free(m_ibuff);
-        m_ibuff = NULL;
-    }
+    if(m_chbuf)       {free(m_chbuf);        m_chbuf        = NULL;}
+    if(m_lastHost)    {free(m_lastHost);     m_lastHost     = NULL;}
+    if(m_outBuff)     {free(m_outBuff);      m_outBuff      = NULL; }
+    if(m_ibuff)       {free(m_ibuff);        m_ibuff        = NULL;}
+    if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
+
     vSemaphoreDelete(mutex_audio);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -376,6 +366,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(host == NULL) {
         AUDIO_INFO("Hostaddress is empty");
+        stopSong();
         xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
@@ -384,6 +375,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(lenHost >= 512 - 10) {
         AUDIO_INFO("Hostaddress is too long");
+        stopSong();
         xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
@@ -558,6 +550,7 @@ bool Audio::httpPrint(const char* host) {
 
     if(host == NULL) {
         AUDIO_INFO("Hostaddress is empty");
+        stopSong();
         return false;
     }
 
@@ -635,15 +628,15 @@ bool Audio::httpPrint(const char* host) {
     }
     _client->print(rqh);
 
-    if(endsWith(extension, ".mp3"))  m_expectedCodec  = CODEC_MP3;
-    if(endsWith(extension, ".aac"))  m_expectedCodec  = CODEC_AAC;
-    if(endsWith(extension, ".wav"))  m_expectedCodec  = CODEC_WAV;
-    if(endsWith(extension, ".m4a"))  m_expectedCodec  = CODEC_M4A;
-    if(endsWith(extension, ".flac")) m_expectedCodec  = CODEC_FLAC;
-    if(endsWith(extension, ".asx"))  m_expectedPlsFmt = FORMAT_ASX;
-    if(endsWith(extension, ".m3u"))  m_expectedPlsFmt = FORMAT_M3U;
-    if(endsWith(extension, ".m3u8")) m_expectedPlsFmt = FORMAT_M3U8;
-    if(endsWith(extension, ".pls"))  m_expectedPlsFmt = FORMAT_PLS;
+    if(endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
+    if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
+    if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
+    if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
+    if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
+    if(endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
 
     setDatamode(HTTP_RESPONSE_HEADER);  // Handle header
     m_streamType = ST_WEBSTREAM;
@@ -2247,7 +2240,7 @@ void Audio::loop() {
                 httpPrint(host);
             }
             else { // host == NULL means connect to m3u8 URL
-                httpPrint(m_lastHost);
+                httpPrint(m_lastM3U8host);
                 setDatamode(HTTP_RESPONSE_HEADER); // we have a new playlist now
             }
 
@@ -2558,8 +2551,12 @@ const char* Audio::parsePlaylist_M3U8() {
                 if(!startsWith(m_playlistContent[i], "http")) {
                     // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
                     // http://livees.com/prog_index48347.aac
-                    tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]));
-                    strcpy(tmp, m_lastHost);
+                    if(m_lastM3U8host != 0){
+                        tmp = strdup(m_lastM3U8host);
+                    }
+                    else{
+                        tmp = strdup(m_lastHost);
+                    }
                     int idx = lastIndexOf(tmp, "/");
                     strcpy(tmp + idx + 1, m_playlistContent[i]);
                 }
@@ -2625,7 +2622,7 @@ const char* Audio::parsePlaylist_M3U8() {
                     }
                     else{;}
 
-                    if(m_playlistURL.size() == 0) connecttohost(m_lastHost);
+                    if(m_playlistURL.size() == 0) {connecttohost(m_lastHost);}
                 }
             }
             else{
@@ -2703,12 +2700,13 @@ const char* Audio::m3u8redirection(){
         m_playlistContent[choosenLine] = NULL;
     }
     m_playlistContent[choosenLine] = strdup(tmp);
-    strcpy(m_lastHost, tmp);
+    if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
+    m_lastM3U8host = strdup(tmp);
     if(tmp) {
         free(tmp);
         tmp = NULL;
     }
-    if(m_f_Log) log_i("redirect %s", m_playlistContent[choosenLine]);
+    if(m_f_Log) log_i("redirect to %s", m_playlistContent[choosenLine]);
     _client->stop();
     return m_playlistContent[choosenLine];  // it's a redirection, a new m3u8 playlist
 exit:
@@ -3495,7 +3493,7 @@ bool Audio::parseHttpResponseHeader() {  // this is the response to a GET / requ
         uint16_t pos = 0;
         if((millis() - ctime) > timeout) {
             log_e("timeout");
-            m_f_timeout = true; 
+            m_f_timeout = true;
             goto exit;
         }
         while(_client->available()) {
@@ -3689,7 +3687,8 @@ exit:  // termination condition
     if(audio_showstation) audio_showstation("");
     if(audio_icydescription) audio_icydescription("");
     if(audio_icyurl) audio_icyurl("");
-//    m_lastHost[0] = '\0';
+    if(m_playlistFormat == FORMAT_M3U8) return false;
+    m_lastHost[0] = '\0';
     setDatamode(AUDIO_NONE);
     stopSong();
     return false;
