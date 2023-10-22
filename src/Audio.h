@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7n
- *  Updated on: Oct 21.2023
+ *  Version 3.0.7o
+ *  Updated on: Oct 22.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -464,6 +464,7 @@ private:
 #endif
     std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
     std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
+    std::vector<uint32_t> m_hashQueue;
 
     const size_t    m_frameSizeWav    = 1024;
     const size_t    m_frameSizeMP3    = 1600;

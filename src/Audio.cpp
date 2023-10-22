@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7n
- *  Updated on: Oct 21.2023
+ *  Version 3.0.7o
+ *  Updated on: Oct 22.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -303,6 +303,7 @@ void Audio::setDefaults() {
     }  // free if stream is not m3u8
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
+    m_hashQueue.clear(); m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
     clientsecure.stop();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
@@ -2529,10 +2530,14 @@ const char* Audio::parsePlaylist_M3U8() {
 
             if(!f_mediaSeq_found){
                 xMedSeq = m3u8_findMediaSeqInURL();
-                if(xMedSeq > 0) f_mediaSeq_found = true;
-                if(xMedSeq == 0){
+                if(xMedSeq == UINT64_MAX) {
                     log_e("X MEDIA SEQUENCE NUMBER not found");
+                    stopSong();
                     return NULL;
+                }
+                if(xMedSeq > 0) f_mediaSeq_found = true;
+                if(xMedSeq == 0){ // mo mediaSeqNr but min 3 times #EXTINF found
+                    ;
                 }
             }
 
@@ -2566,6 +2571,27 @@ const char* Audio::parsePlaylist_M3U8() {
                         xMedSeq++;
                     }
                 }
+                else{ // without mediaSeqNr, with hash
+                    uint32_t hash = simpleHash(tmp);
+                    if(m_hashQueue.size() == 0){
+                        m_hashQueue.insert(m_hashQueue.begin(), hash);
+                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                    }
+                    else{
+                        bool known = false;
+                        for(int i = 0; i< m_hashQueue.size(); i++){
+                            if(hash == m_hashQueue[i]){
+                                if(m_f_Log) log_i("file already known %s", tmp);
+                                known = true;
+                            }
+                        }
+                        if(!known){
+                            m_hashQueue.insert(m_hashQueue.begin(), hash);
+                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                        }
+                    }
+                    if(m_hashQueue.size() > 20)  m_hashQueue.pop_back();
+                }
 
                 if(tmp) {free(tmp); tmp = NULL;}
 
@@ -2576,10 +2602,7 @@ const char* Audio::parsePlaylist_M3U8() {
     }
 
     if(m_playlistURL.size() > 0) {
-        if(m_playlistBuff) {
-            free(m_playlistBuff);
-            m_playlistBuff = NULL;
-        }
+        if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
 
         if(m_playlistURL[m_playlistURL.size() - 1]) {
             m_playlistBuff = strdup(m_playlistURL[m_playlistURL.size() - 1]);
@@ -2597,21 +2620,21 @@ const char* Audio::parsePlaylist_M3U8() {
         if(f_EXTINF_found){
             if(f_mediaSeq_found){
                 uint64_t mediaSeq = m3u8_findMediaSeqInURL();
-                if(xMedSeq == 0) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
+                if(xMedSeq == 0 || xMedSeq == UINT64_MAX) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
                 if(mediaSeq < xMedSeq){
                     uint64_t diff = xMedSeq - mediaSeq;
                     if(diff < 10) {;}
                     else {
                         if(m_playlistContent.size() > 0){
                             for(int j = 0; j < lines; j++){
-                                log_w("lines %i, %s",lines, m_playlistContent[j]);
+                                if(m_f_Log) log_i("lines %i, %s",lines, m_playlistContent[j]);
                             }
                         }
                         else{;}
 
                         if(m_playlistURL.size() > 0){
                             for(int j = 0; j < m_playlistURL.size(); j++){
-                                log_w("m_playlistURL lines %i, %s",j, m_playlistURL[j]);
+                                if(m_f_Log) log_i("m_playlistURL lines %i, %s",j, m_playlistURL[j]);
                             }
                         }
                         else{;}
@@ -2724,7 +2747,7 @@ uint64_t Audio::m3u8_findMediaSeqInURL(){ // We have no clue what the media sequ
     }
     if(idx < 3){
         log_e("not enough lines with \"#EXTINF:\" found");
-        return 0;
+        return UINT64_MAX;
     }
 
     // Look for differences from right:                                                    ∨
