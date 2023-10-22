@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7m
- *  Updated on: Oct 20.2023
+ *  Version 3.0.7n
+ *  Updated on: Oct 21.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2496,13 +2496,13 @@ const char* Audio::parsePlaylist_M3U8() {
     // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
 
     static uint64_t xMedSeq = 0;
-    static boolean f_medSeq_found = false;
+    static boolean f_mediaSeq_found = false;
     boolean f_EXTINF_found = false;
     char llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
     if(m_f_firstM3U8call){
         m_f_firstM3U8call = false;
         xMedSeq = 0;
-        f_medSeq_found = false;
+        f_mediaSeq_found = false;
     }
 
     uint8_t lines = m_playlistContent.size();
@@ -2525,21 +2525,16 @@ const char* Audio::parsePlaylist_M3U8() {
             if (startsWith(m_playlistContent[i], "#EXT-X-ALLOW-CACHE:")) continue;
             if (startsWith(m_playlistContent[i], "##")) continue;
             if (startsWith(m_playlistContent[i], "#EXT-X-INDEPENDENT-SEGMENTS")) continue;
-            // (startsWith(m_playlistContent[i],#EXT-X-PROGRAM-DATE-TIME:)) continue;
+            if (startsWith(m_playlistContent[i], "#EXT-X-PROGRAM-DATE-TIME:")) continue;
 
-            if(!f_medSeq_found){
+            if(!f_mediaSeq_found){
                 xMedSeq = m3u8_findMediaSeqInURL();
-                if(xMedSeq > 0) f_medSeq_found = true;
+                if(xMedSeq > 0) f_mediaSeq_found = true;
                 if(xMedSeq == 0){
                     log_e("X MEDIA SEQUENCE NUMBER not found");
                     return NULL;
                 }
             }
-
-            // if(startsWith(m_playlistContent[i], "#EXT-X-TARGETDURATION:")) {
-            //     m_m3u8_targetDuration = atoi(m_playlistContent[i] + 22);
-            //     if(m_f_Log) log_i("m_m3u8_targetDuration %d", m_m3u8_targetDuration);
-            // }
 
             if(startsWith(m_playlistContent[i], "#EXTINF")) {
                 f_EXTINF_found = true;
@@ -2552,31 +2547,28 @@ const char* Audio::parsePlaylist_M3U8() {
                     // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
                     // http://livees.com/prog_index48347.aac
                     if(m_lastM3U8host != 0){
-                        tmp = strdup(m_lastM3U8host);
+                        tmp = (char*) malloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1);
+                        strcpy(tmp, m_lastM3U8host);
                     }
                     else{
-                        tmp = strdup(m_lastHost);
+                        tmp = (char*) malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1);
+                        strcpy(tmp, m_lastHost);
                     }
                     int idx = lastIndexOf(tmp, "/");
                     strcpy(tmp + idx + 1, m_playlistContent[i]);
                 }
                 else { tmp = strdup(m_playlistContent[i]); }
 
-                lltoa(xMedSeq, llasc, 10);
-                if(indexOf(tmp, llasc) > 0){
-                    m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
-                    xMedSeq++;
+                if(f_mediaSeq_found){
+                    lltoa(xMedSeq, llasc, 10);
+                    if(indexOf(tmp, llasc) > 0){
+                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                        xMedSeq++;
+                    }
                 }
 
-                if(tmp) {
-                    free(tmp);
-                    tmp = NULL;
-                }
+                if(tmp) {free(tmp); tmp = NULL;}
 
-                // if(m_playlistURL.size() == 20) {
-                //     ESP_LOGD("", "can't stuff anymore");
-                //     break;
-                // }
                 continue;
             }
         }
@@ -2598,41 +2590,42 @@ const char* Audio::parsePlaylist_M3U8() {
         }
         if(m_f_Log) log_i("now playing %s", m_playlistBuff);
         if(endsWith(m_playlistBuff, "ts")) m_f_ts = true;
+        if(indexOf(m_playlistBuff, ".ts?") > 0) m_f_ts = true;
         return m_playlistBuff;
     }
     else {
         if(f_EXTINF_found){
-            uint64_t mediaSeq = m3u8_findMediaSeqInURL();
-            if(xMedSeq == 0) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
-            if(mediaSeq < xMedSeq){
-                uint64_t diff = xMedSeq - mediaSeq;
-                if(diff < 10) {;}
-                else {
-                    if(m_playlistContent.size() > 0){
-                        for(int j = 0; j < lines; j++){
-                            log_w("lines %i, %s",lines, m_playlistContent[j]);
+            if(f_mediaSeq_found){
+                uint64_t mediaSeq = m3u8_findMediaSeqInURL();
+                if(xMedSeq == 0) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
+                if(mediaSeq < xMedSeq){
+                    uint64_t diff = xMedSeq - mediaSeq;
+                    if(diff < 10) {;}
+                    else {
+                        if(m_playlistContent.size() > 0){
+                            for(int j = 0; j < lines; j++){
+                                log_w("lines %i, %s",lines, m_playlistContent[j]);
+                            }
                         }
-                    }
-                    else{;}
+                        else{;}
 
-                    if(m_playlistURL.size() > 0){
-                        for(int j = 0; j < m_playlistURL.size(); j++){
-                            log_w("m_playlistURL lines %i, %s",j, m_playlistURL[j]);
+                        if(m_playlistURL.size() > 0){
+                            for(int j = 0; j < m_playlistURL.size(); j++){
+                                log_w("m_playlistURL lines %i, %s",j, m_playlistURL[j]);
+                            }
                         }
-                    }
-                    else{;}
+                        else{;}
 
-                    if(m_playlistURL.size() == 0) {connecttohost(m_lastHost);}
+                        if(m_playlistURL.size() == 0) {connecttohost(m_lastHost);}
+                    }
                 }
-            }
-            else{
-                log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq);
-                xMedSeq = mediaSeq;
-            }
+                else{
+                    log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq);
+                    xMedSeq = mediaSeq;
+                }
+            } // f_medSeq_found
         }
-        return NULL;
     }
-
     return NULL;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -2756,10 +2749,10 @@ uint64_t Audio::m3u8_findMediaSeqInURL(){ // We have no clue what the media sequ
             b = a + 1;
             c = b + 1;
             lltoa(b, llasc, 10);
-            int16_t idx_b = indexOf(m_playlistContent[linesWithURL[1]], llasc);
+            int16_t idx_b = indexOf(m_playlistContent[linesWithURL[1]], llasc, pos - 1);
             lltoa(c, llasc, 10);
-            int16_t idx_c = indexOf(m_playlistContent[linesWithURL[2]], llasc);
-            if(idx_b > 0 && idx_c > 0){
+            int16_t idx_c = indexOf(m_playlistContent[linesWithURL[2]], llasc, pos - 1);
+            if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3){ // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;
                 AUDIO_INFO("media sequence number: %llu", MediaSeq);
                 break;
