@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7
- *  Updated on: Oct 08.2023
+ *  Version 3.0.7a
+ *  Updated on: Nov 11.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1042,14 +1042,16 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen){
     pos = 0;
 
     while(buff[pos] != 0){
-        len = strlen(buff);
-        if(buff[pos] >= 0x80 && buff[pos+1] < 0x80){       // is not UTF8, is latin?
-            for(int i = len+1; i > pos; i--){
+        if ((buff[pos] & 0x80) == 0) {pos++; continue;}
+        else{
+            len = strlen(buff);
+            for(int i = len + 1; i > pos; i--){
                 buff[i+1] = buff[i];
             }
             uint8_t c = buff[pos];
-            buff[pos++] = 0xc0 | ((c >> 6) & 0x1f);      // 2+1+5 bits
-            buff[pos++] = 0x80 | ((char)c & 0x3f);       // 1+1+6 bits
+            buff[pos] = 0xc0 | ((c >> 6)& 0x1f);      // 2+1+5 bits
+            pos++;
+            buff[pos] = 0x80 | ((char)c & 0x3f);      // 1+1+6 bits
         }
         pos++;
         if(pos > bufflen -3){
@@ -1640,17 +1642,15 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
 
         if(!isUnicode){
             uint16_t j = 0, k = 0;
-            j = 0;
-            k = 0;
             while(j < fs) {
-                if(m_ibuff[j] == 0x0A) m_ibuff[j] = 0x20; // replace LF by space
                 if(m_ibuff[j] > 0x1F) {
-                    m_ibuff[k] = m_ibuff[j];
+                    m_ibuff[k] = m_ibuff[j]; //remove non printables
                     k++;
                 }
                 j++;
-            } //remove non printables
-            if(k>0) m_ibuff[k] = 0; else m_ibuff[0] = 0; // new termination
+            }
+            m_ibuff[k] = '\0';  // new termination
+            latinToUTF8(m_ibuff, k - 1);
         }
         showID3Tag(tag, m_ibuff);
         return fs;
