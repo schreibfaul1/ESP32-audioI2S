@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7o
- *  Updated on: Oct 22.2023
+ *  Version 3.0.7p
+ *  Updated on: Nov 12.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -460,7 +460,7 @@ private:
     i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values
 #else
     i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
-    i2s_pin_config_t      m_pin_config = {};
+    i2s_pin_config_t      m_pin_config = {0};
 #endif
     std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
     std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer

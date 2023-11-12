@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7o
- *  Updated on: Oct 22.2023
+ *  Version 3.0.7p
+ *  Updated on: Nov 12.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -185,7 +185,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
     m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
-    m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_256;      // mclk = sample_rate * 256
+    m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(0);
 #else
@@ -197,7 +197,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_config.dma_buf_len          = 512;
     m_i2s_config.use_apll             = APLL_DISABLE; // must be disabled in V2.0.1-RC1
     m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
-    m_i2s_config.fixed_mclk           = I2S_GPIO_UNUSED;
+    m_i2s_config.fixed_mclk           = true;
+    m_i2s_config.mclk_multiple        = I2S_MCLK_MULTIPLE_128;
 
     if (internalDAC)  {
         #ifdef CONFIG_IDF_TARGET_ESP32  // ESP32S3 has no DAC
@@ -4523,6 +4524,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_pin_config.ws_io_num = LRC;  //  wclk = lrc
     m_pin_config.data_out_num = DOUT;
     m_pin_config.data_in_num = I2S_GPIO_UNUSED;
+    m_pin_config.mck_io_num = MCLK;
     result = i2s_set_pin((i2s_port_t)m_i2s_num, &m_pin_config);
 #endif
     return (result == ESP_OK);
