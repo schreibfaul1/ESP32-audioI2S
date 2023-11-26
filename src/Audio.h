@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7p
- *  Updated on: Nov 12.2023
+ *  Version 3.0.7q
+ *  Updated on: Nov 26.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -288,14 +288,14 @@ private:
         return true;
     }
 
-    bool endsWith (const char* base, const char* str) {
-    //fb
-        int slen = strlen(str) - 1;
-        const char *p = base + strlen(base) - 1;
-        while(p > base && isspace(*p)) p--;  // rtrim
+    bool endsWith(const char *base, const char *searchString) {
+        int32_t slen = strlen(searchString);
+        if(slen == 0) return false;
+        const char *p = base + strlen(base);
+    //  while(p > base && isspace(*p)) p--;  // rtrim
         p -= slen;
-        if (p < base) return false;
-        return (strncmp(p, str, slen) == 0);
+        if(p < base) return false;
+        return (strncmp(p, searchString, slen) == 0);
     }
 
     int indexOf (const char* base, const char* str, int startIndex = 0) {
