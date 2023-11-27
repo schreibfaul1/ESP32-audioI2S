@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7a
- *  Updated on: Nov 11.2023
+ *  Version 3.0.7b
+ *  Updated on: Nov 27.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1583,10 +1583,10 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 5){      // If the frame is larger than 512 bytes, skip the rest
-        if(framesize > 512){
-            framesize -= 512;
-            remainingHeaderBytes -= 512;
-            return 512;
+        if(framesize > 1024){
+            framesize -= 1024;
+            remainingHeaderBytes -= 1024;
+            return 1024;
         }
         else {
             m_controlCounter = 3; // check next frame
@@ -1628,7 +1628,7 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         }
 
         size_t fs = framesize;
-        if(fs >512) fs = 512;
+        if(fs >1024) fs = 1024;
         for(int i=0; i<fs; i++){
             m_ibuff[i] = *(data + i);
         }
