@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7c
- *  Updated on: Nov 29.2023
+ *  Version 3.0.7q
+ *  Updated on: Nov 26.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -17,14 +17,22 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <vector>
-#include <driver/i2s.h>
 #include <SD.h>
 #include <SD_MMC.h>
 #include <SPIFFS.h>
 #include <FS.h>
 #include <FFat.h>
+#include <atomic>
 
+#if ESP_IDF_VERSION_MAJOR == 5
+#include <driver/i2s_std.h>
+#else
+#include <driver/i2s.h>
+#endif
+
+#ifndef I2S_GPIO_UNUSED
+  #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
+#endif
 using namespace std;
 
 extern __attribute__((weak)) void audio_info(const char*);
@@ -134,7 +142,7 @@ public:
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
     bool setTimeOffset(int sec);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t DIN = I2S_PIN_NO_CHANGE, int8_t MCK = I2S_PIN_NO_CHANGE);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCK = I2S_GPIO_UNUSED);
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
@@ -159,7 +167,6 @@ public:
     uint32_t getTotalPlayingTime();
     uint16_t getVUlevel();
 
-    esp_err_t i2s_mclk_pin_select(const uint8_t pin);
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
@@ -192,6 +199,8 @@ private:
     const char* parsePlaylist_PLS();
     const char* parsePlaylist_ASX();
     const char* parsePlaylist_M3U8();
+    const char* m3u8redirection();
+    uint64_t m3u8_findMediaSeqInURL();
     bool STfromEXTINF(char* str);
     void showCodecParams();
     int  findNextSync(uint8_t* data, size_t len);
@@ -280,14 +289,14 @@ private:
         return true;
     }
 
-    bool endsWith (const char* base, const char* str) {
-    //fb
-        int slen = strlen(str) - 1;
-        const char *p = base + strlen(base) - 1;
-        while(p > base && isspace(*p)) p--;  // rtrim
+    bool endsWith(const char *base, const char *searchString) {
+        int32_t slen = strlen(searchString);
+        if(slen == 0) return false;
+        const char *p = base + strlen(base);
+    //  while(p > base && isspace(*p)) p--;  // rtrim
         p -= slen;
-        if (p < base) return false;
-        return (strncmp(p, str, slen) == 0);
+        if(p < base) return false;
+        return (strncmp(p, searchString, slen) == 0);
     }
 
     int indexOf (const char* base, const char* str, int startIndex = 0) {
@@ -399,7 +408,17 @@ private:
 		    hash += (str[i] - 31) * i * 32;
         }
         return hash;
-	}
+	  }
+    char* x_strdup(const char* str){
+        if(m_f_psramFound){
+            char* s = (char*)ps_malloc(strlen(str) + 1);
+            strcpy(s, str);
+            return s;
+        }
+        else{
+            return strdup(str);
+        }
+    }
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
@@ -436,10 +455,16 @@ private:
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
     SemaphoreHandle_t     mutex_audio;
+#if ESP_IDF_VERSION_MAJOR == 5
+    i2s_chan_handle_t     m_i2s_tx_handle = {};
+    i2s_chan_config_t     m_i2s_chan_cfg = {}; // stores I2S channel values
+    i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values
+#else
     i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
-    i2s_pin_config_t      m_pin_config = {};
-    std::vector<char*>    m_playlistContent; // m3u8 playlist buffer
-    std::vector<char*>    m_playlistURL;     // m3u8 streamURLs buffer
+    i2s_pin_config_t      m_pin_config = {0};
+#endif
+    std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
+    std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
     std::vector<uint32_t> m_hashQueue;
 
     const size_t    m_frameSizeWav    = 1024;
@@ -455,7 +480,9 @@ private:
     char*           m_ibuff = nullptr;              // used in audio_info()
     char*           m_chbuf = NULL;
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
+    uint16_t        m_ibuffSize = 0;                // will set in constructor (depending on PSRAM)
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
+    char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
@@ -485,10 +512,10 @@ private:
     uint8_t         m_vuLeft = 0;                   // average value of samples, left channel
     uint8_t         m_vuRight = 0;                  // average value of samples, right channel
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
-    int16_t         m_validSamples = 0;
-    int16_t         m_curSample = 0;
+    std::atomic<int16_t>  m_validSamples = {0};     // #144
+    std::atomic<int16_t>  m_curSample{0};
+    std::atomic<uint16_t> m_datamode{0};            // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
-    uint16_t        m_datamode = 0;                 // Statemaschine
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
     uint16_t        m_timeout_ms_ssl = 2700;
@@ -514,6 +541,7 @@ private:
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
+    bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
@@ -527,6 +555,8 @@ private:
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
     bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
+    bool            m_f_psramFound = false;         // set in constructor, result of psramInit()
+    bool            m_f_timeout = false;            //
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
