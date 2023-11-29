@@ -2715,7 +2715,6 @@ void Audio::processLocalFile() {
             return;
         }
         else{
-            log_e("%i", millis() - ctime);
             if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize && availableBytes){
                 // fill the buffer before playing
                 return;
