@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7b
- *  Updated on: Nov 27.2023
+ *  Version 3.0.7c
+ *  Updated on: Nov 29.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -98,6 +98,12 @@ size_t AudioBuffer::bufferFilled() {
     } else {
         m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer);
     }
+    return m_dataLength;
+}
+
+size_t AudioBuffer::getMaxAvailableBytes() {
+    if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr); }
+    else { m_dataLength = (m_endPtr - m_readPtr);}
     return m_dataLength;
 }
 
@@ -1523,10 +1529,10 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 2){      // skip extended header if exists
-        if(ehsz > 256) {
-            ehsz -=256;
-            remainingHeaderBytes -= 256;
-            return 256;} // Throw it away
+        if(ehsz > len) {
+            ehsz -=len;
+            remainingHeaderBytes -= len;
+            return len;} // Throw it away
         else           {
             m_controlCounter ++;
             remainingHeaderBytes -= ehsz;
@@ -1583,10 +1589,10 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 5){      // If the frame is larger than 512 bytes, skip the rest
-        if(framesize > 1024){
-            framesize -= 1024;
-            remainingHeaderBytes -= 1024;
-            return 1024;
+        if(framesize > len){
+            framesize -= len;
+            remainingHeaderBytes -= len;
+            return len;
         }
         else {
             m_controlCounter = 3; // check next frame
@@ -1672,13 +1678,13 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
         frameid[3] = 0;
         for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
         remainingHeaderBytes -= 3;
-        size_t len = bigEndian(data + 3, 3);
-        universal_tmp = len;
+        size_t dataLen = bigEndian(data + 3, 3);
+        universal_tmp = dataLen;
         remainingHeaderBytes -= 3;
         char value[256];
-        if(len > 249) {len = 249;   }
-        memcpy(value, (data + 7), len);
-        value[len + 1] = 0;
+        if(dataLen > 249) {dataLen = 249;   }
+        memcpy(value, (data + 7), dataLen);
+        value[dataLen + 1] = 0;
         m_chbuf[0] = 0;
         if(startsWith(tag, "PIC")) { // image embedded in header
             if(getDatamode() == AUDIO_LOCALFILE){
@@ -1700,20 +1706,20 @@ int Audio::read_ID3_Header(uint8_t *data, size_t len) {
             showID3Tag(tag, value);
         }
         remainingHeaderBytes -= universal_tmp;
-        universal_tmp -= len;
+        universal_tmp -= dataLen;
 
-        if(len == 0) m_controlCounter = 98;
+        if(dataLen == 0) m_controlCounter = 98;
         if(remainingHeaderBytes == 0) m_controlCounter = 98;
 
-        return 3 + 3 + len;
+        return 3 + 3 + dataLen;
     }
     // -- end section V2.2 -----------
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 98){ // skip all ID3 metadata (mostly spaces)
-        if(remainingHeaderBytes > 256) {
-            remainingHeaderBytes -=256;
-            return 256;
+        if(remainingHeaderBytes > len) {
+            remainingHeaderBytes -=len;
+            return len;
         } // Throw it away
         else           {
             m_controlCounter = 99;
@@ -2704,11 +2710,12 @@ void Audio::processLocalFile() {
                 return;
             }
             if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
-                InBuff.bytesWasRead(readAudioHeader(InBuff.bufferFilled()));
+                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
             }
             return;
         }
         else{
+            log_e("%i", millis() - ctime);
             if((InBuff.freeSpace() > maxFrameSize) && (m_file_size - byteCounter) > maxFrameSize && availableBytes){
                 // fill the buffer before playing
                 return;
@@ -2935,7 +2942,7 @@ void Audio::processWebFile() {
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100){
         if(InBuff.bufferFilled() > maxFrameSize){ // read the file header first
-            int32_t bytesRead = readAudioHeader(maxFrameSize);
+            int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
         return;
@@ -5429,7 +5436,7 @@ uint32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos){
     p2 = audiofile.read();
     pos+=2;
     while(!found || pos == m_file_size){
-        if(p1 == 0xFF && p2 == 0xF8){found = true; log_i("found"); break;}
+        if(p1 == 0xFF && p2 == 0xF8){found = true; break;}
         p1 = p2;
         p2 = audiofile.read();
         pos++;

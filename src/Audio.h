@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7a
- *  Updated on: Nov 11.2023
+ *  Version 3.0.7c
+ *  Updated on: Nov 29.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -86,6 +86,7 @@ public:
     size_t   freeSpace();                       // number of free bytes to overwrite
     size_t   writeSpace();                      // space fom writepointer to bufferend
     size_t   bufferFilled();                    // returns the number of filled bytes
+    size_t   getMaxAvailableBytes();            // max readable bytes in one block
     void     bytesWritten(size_t bw);           // update writepointer
     void     bytesWasRead(size_t br);           // update readpointer
     uint8_t* getWritePtr();                     // returns the current writepointer
