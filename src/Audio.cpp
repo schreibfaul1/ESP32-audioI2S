@@ -1249,7 +1249,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 7) {
         if((*(data + 0) == 'd') && (*(data + 1) == 'a') && (*(data + 2) == 't') && (*(data + 3) == 'a')) {
             m_controlCounter++;
-            vTaskDelay(30);
+        //    vTaskDelay(30);
             headerSize += 4;
             return 4;
         }
@@ -1742,7 +1742,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 99) {  //  exist another ID3tag?
         m_audioDataStart += id3Size;
-        vTaskDelay(30);
+    //    vTaskDelay(30);
         if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
             m_controlCounter = 0;
             return 0;
@@ -2224,20 +2224,16 @@ void Audio::loop() {
 
         switch(getDatamode()) {
         case HTTP_RESPONSE_HEADER:
-            playAudioData(); // fill I2S DMA buffer
             if(!parseHttpResponseHeader()){
                 if(m_f_timeout) connecttohost(m_lastHost);
             }
             m_codec = CODEC_AAC;
             break;
         case AUDIO_PLAYLISTINIT:
-            playAudioData(); // fill I2S DMA buffer
             readPlayListData();
             break;
         case AUDIO_PLAYLISTDATA:
-            playAudioData(); // fill I2S DMA buffer
             host = parsePlaylist_M3U8();
-            playAudioData(); // fill I2S DMA buffer
             if(host) { // host contains the next playlist URL
                 httpPrint(host);
             }
@@ -2620,6 +2616,7 @@ const char* Audio::parsePlaylist_M3U8() {
     else {
         if(f_EXTINF_found){
             if(f_mediaSeq_found){
+                if(m_playlistContent.size() == 0) return NULL;
                 uint64_t mediaSeq = m3u8_findMediaSeqInURL();
                 if(xMedSeq == 0 || xMedSeq == UINT64_MAX) {log_e("xMediaSequence not found"); connecttohost(m_lastHost);}
                 if(mediaSeq < xMedSeq){
@@ -2644,7 +2641,9 @@ const char* Audio::parsePlaylist_M3U8() {
                     }
                 }
                 else{
-                    log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq);
+                    if(mediaSeq != UINT64_MAX){
+                        log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq);
+                    }
                     xMedSeq = mediaSeq;
                 }
             } // f_medSeq_found
@@ -3441,7 +3440,7 @@ void Audio::processWebStreamHLS() {
 
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {f_chunkFinished = false; m_f_continue = true;}
+            if(InBuff.bufferFilled() < 40000) {f_chunkFinished = false; m_f_continue = true;}
         }
         else {
             f_chunkFinished = false;
@@ -3538,7 +3537,7 @@ bool Audio::parseHttpResponseHeader() {  // this is the response to a GET / requ
         }  // inner while
 
         if(!pos) {
-            vTaskDelay(3);
+            vTaskDelay(5);
             continue;
         }
 
