@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7q
- *  Updated on: Nov 26.2023
+ *  Version 3.0.7r
+ *  Updated on: Dec 01.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -89,6 +89,7 @@ public:
     size_t   init();                            // set default values
     bool     isInitialized() { return m_f_init; };
     void     setBufsize(int ram, int psram);
+    int32_t  getBufsize();
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     uint16_t getMaxBlockSize();                 // returns maxBlockSize
     size_t   freeSpace();                       // number of free bytes to overwrite
@@ -169,6 +170,7 @@ public:
 
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
+    uint32_t inBufferSize();   // returns the size of the inputbuffer in bytes
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
@@ -455,14 +457,19 @@ private:
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
     SemaphoreHandle_t     mutex_audio;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #if ESP_IDF_VERSION_MAJOR == 5
     i2s_chan_handle_t     m_i2s_tx_handle = {};
     i2s_chan_config_t     m_i2s_chan_cfg = {}; // stores I2S channel values
     i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values
 #else
-    i2s_config_t          m_i2s_config = {}; // stores values for I2S driver
-    i2s_pin_config_t      m_pin_config = {0};
+    i2s_config_t          m_i2s_config = {};
+    i2s_pin_config_t      m_pin_config = {};
 #endif
+#pragma GCC diagnostic pop
+
     std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
     std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
     std::vector<uint32_t> m_hashQueue;

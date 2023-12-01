@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7q
- *  Updated on: Nov 26.2023
+ *  Version 3.0.7r
+ *  Updated on: Dec 01.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -33,6 +33,10 @@ void AudioBuffer::setBufsize(int ram, int psram) {
     if(ram > -1)  // -1 == default / no change
         m_buffSizeRAM = ram;
     if(psram > -1) m_buffSizePSRAM = psram;
+}
+
+int32_t AudioBuffer::getBufsize(){
+    return m_buffSize;
 }
 
 size_t AudioBuffer::init() {
@@ -4515,6 +4519,15 @@ void Audio::printDecodeError(int r) {
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     esp_err_t result = ESP_OK;
+
+#if(ESP_ARDUINO_VERSION_MAJOR < 2)
+    log_e("Arduino Version too old!");
+#endif
+#if(ESP_ARDUINO_VERSION_MAJOR == 2 && ESP_ARDUINO_VERSION_PATCH < 8)
+    log_e("Arduino Version must be 2.0.8 or higher!");
+#endif
+
+
 #if(ESP_IDF_VERSION_MAJOR == 5)
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
@@ -4941,6 +4954,11 @@ uint32_t Audio::inBufferFilled() {
 uint32_t Audio::inBufferFree() {
     // current audio input buffer free space in bytes
     return InBuff.freeSpace();
+}
+//---------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::inBufferSize() {
+    // current audio input buffer size in bytes
+    return InBuff.getBufsize();
 }
 //---------------------------------------------------------------------------------------------------------------------
 //            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***
