@@ -5,7 +5,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7r
+ *  Version 3.0.7s
  *  Updated on: Dec 01.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -1475,6 +1475,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     static size_t   id3Size;
+    static size_t   totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
     static size_t   remainingHeaderBytes;
     static size_t   universal_tmp = 0;
     static uint8_t  ID3version;
@@ -1483,12 +1484,12 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     static char     frameid[5];
     static size_t   framesize = 0;
     static bool     compressed = false;
-    static bool     APIC_seen = false;
-    static size_t   APIC_size = 0;
-    static uint32_t APIC_pos = 0;
+    static size_t   APIC_size[3] = {0};
+    static uint32_t APIC_pos[3] = {0};
     static bool     SYLT_seen = false;
     static size_t   SYLT_size = 0;
     static uint32_t SYLT_pos = 0;
+    static uint8_t  numID3Header = 0;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0) { /* read ID3 tag and ID3 header size */
         if(getDatamode() == AUDIO_LOCALFILE) {
@@ -1497,7 +1498,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
         }
         m_controlCounter++;
-        APIC_seen = false;
         SYLT_seen = false;
         remainingHeaderBytes = 0;
         ehsz = 0;
@@ -1635,9 +1635,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(startsWith(tag, "APIC")) {  // a image embedded in file, passing it to external function
             isUnicode = false;
             if(getDatamode() == AUDIO_LOCALFILE) {
-                APIC_seen = true;
-                APIC_pos = id3Size - remainingHeaderBytes;
-                APIC_size = framesize;
+                APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
+                APIC_size[numID3Header] = framesize;
+                log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
             }
             return 0;
         }
@@ -1714,10 +1714,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_chbuf[0] = 0;
         if(startsWith(tag, "PIC")) {  // image embedded in header
             if(getDatamode() == AUDIO_LOCALFILE) {
-                APIC_seen = true;  // #460
-                APIC_pos = id3Size - remainingHeaderBytes;
-                APIC_size = universal_tmp;
-                if(m_f_Log) log_i("Attached picture seen at pos %d length %d", APIC_pos, APIC_size);
+                APIC_pos[numID3Header] = id3Size - remainingHeaderBytes;
+                APIC_size[numID3Header] = universal_tmp;
+                if(m_f_Log) log_i("Attached picture seen at pos %d length %d", APIC_pos[0], APIC_size[0]);
             }
         }
         else if(startsWith(tag, "SLT")) {  // lyrics embedded in header
@@ -1756,15 +1755,17 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     //    vTaskDelay(30);
         if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
             m_controlCounter = 0;
+            numID3Header ++;
+            totalId3Size += id3Size;
             return 0;
         }
         else {
             m_controlCounter = 100;  // ok
             m_audioDataSize = m_contentlength - m_audioDataStart;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
-            if(APIC_seen && audio_id3image) {
+            if(APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
                 size_t pos = audiofile.position();
-                audio_id3image(audiofile, APIC_pos, APIC_size);
+                audio_id3image(audiofile, APIC_pos[0], APIC_size[0]);
                 audiofile.seek(pos);  // the filepointer could have been changed by the user, set it back
             }
             if(SYLT_seen && audio_id3lyrics) {
@@ -1772,6 +1773,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 audio_id3lyrics(audiofile, SYLT_pos, SYLT_size);
                 audiofile.seek(pos);  // the filepointer could have been changed by the user, set it back
             }
+            numID3Header = 0;
+            for(int i = 0; i< 3; i++) APIC_pos[i] = 0; // delete all
+            for(int i = 0; i< 3; i++) APIC_size[i] = 0; // delete all
             return 0;
         }
     }
