@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 05.09.2023
+ *  Updated on: 02.12.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -111,8 +111,24 @@ void VORBISDecoder_FreeBuffers(){
 
     if(s_nrOfCodebooks) {
         for(int i = 0; i < s_nrOfCodebooks; i++)
-            vorbis_book_clear(s_codebooks);
+            vorbis_book_clear(s_codebooks + i);
         s_nrOfCodebooks = 0;
+    }
+
+    if(s_floor_type) {
+        if(s_floor_type){free(s_floor_type); s_floor_type = NULL;}
+    }
+
+    if(s_residue_param) {
+        if(s_residue_param){free(s_residue_param); s_residue_param = NULL;}
+    }
+
+    if(s_map_param) {
+        if(s_map_param){free(s_map_param); s_map_param = NULL;}
+    }
+
+    if(s_mode_param) {
+        if(s_mode_param){free(s_mode_param); s_mode_param = NULL;}
     }
 
     if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
@@ -833,7 +849,7 @@ int vorbis_book_unpack(codebook_t *s) {
                         goto _errout;
                     }
 
-                    s->q_val = 0; /* about to go out of scope; _make_decode_table was using it */
+                    if(s->q_val) {free(s->q_val), s->q_val = NULL;} /* about to go out of scope; _make_decode_table was using it */
                 }
                 else {
                     /* use dec_type 2: packed vector of column offsets */
