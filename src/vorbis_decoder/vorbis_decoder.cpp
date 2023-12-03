@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 02.12.2023
+ *  Updated on: 03.12.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -115,6 +115,10 @@ void VORBISDecoder_FreeBuffers(){
         s_nrOfCodebooks = 0;
     }
 
+    if(s_codebooks) {
+        if(s_mode_param){free(s_codebooks); s_codebooks = NULL;}
+    }
+
     if(s_floor_type) {
         if(s_floor_type){free(s_floor_type); s_floor_type = NULL;}
     }
@@ -130,6 +134,8 @@ void VORBISDecoder_FreeBuffers(){
     if(s_mode_param) {
         if(s_mode_param){free(s_mode_param); s_mode_param = NULL;}
     }
+
+
 
     if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
 }
