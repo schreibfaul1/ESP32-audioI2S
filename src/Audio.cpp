@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7s
- *  Updated on: Dec 01.2023
+ *  Version 3.0.7t
+ *  Updated on: Dec 04.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1637,7 +1637,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             if(getDatamode() == AUDIO_LOCALFILE) {
                 APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
                 APIC_size[numID3Header] = framesize;
-                log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
+            //    log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
             }
             return 0;
         }
@@ -1774,6 +1774,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 audiofile.seek(pos);  // the filepointer could have been changed by the user, set it back
             }
             numID3Header = 0;
+            totalId3Size = 0;
             for(int i = 0; i< 3; i++) APIC_pos[i] = 0; // delete all
             for(int i = 0; i< 3; i++) APIC_size[i] = 0; // delete all
             return 0;
