@@ -5,7 +5,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7t
+ *  Version 3.0.7u
  *  Updated on: Dec 04.2023
  *      Author: Wolle (schreibfaul1)
  *
@@ -95,7 +95,7 @@ size_t AudioBuffer::bufferFilled() {
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
-    if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr); }
+    if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr - 1); }
     else { m_dataLength = (m_endPtr - m_readPtr);}
     return m_dataLength;
 }
