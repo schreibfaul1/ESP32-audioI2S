@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7v
- *  Updated on: Dec 04.2023
+ *  Version 3.0.7w
+ *  Updated on: Dec 07.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -45,14 +45,13 @@ extern __attribute__((weak)) void audio_showstation(const char*);
 extern __attribute__((weak)) void audio_bitrate(const char*);
 extern __attribute__((weak)) void audio_commercial(const char*);
 extern __attribute__((weak)) void audio_icyurl(const char*);
+extern __attribute__((weak)) void audio_icylogo(const char*);
 extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_extern(int16_t* buff, uint16_t len, bool *continueI2S); // record audiodata or send via BT
 extern __attribute__((weak)) void audio_process_i2s(uint32_t* sample, bool *continueI2S); // record audiodata or send via BT
-
-
 
 //----------------------------------------------------------------------------------------------------------------------
 
