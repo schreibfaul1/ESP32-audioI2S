@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 12.12.2023
+ *  Updated on: 13.12.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -142,7 +142,7 @@ void VORBISsetDefaults(){
     s_f_oggContinuedPage = false;
     s_f_oggLastPage = false;
     if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
-    // s_vorbisChannels = 0;
+    s_vorbisChannels = 0;
     s_vorbisSamplerate = 0;
     s_vorbisBitRate = 0;
     s_vorbisSegmentLength = 0;
@@ -1665,6 +1665,7 @@ void vorbis_dsp_destroy(vorbis_dsp_state_t *v) {
             }
             if(v->mdctright){free(v->mdctright); v->mdctright = NULL;}
         }
+        free(v);
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
