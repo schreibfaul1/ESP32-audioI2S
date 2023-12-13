@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7w
- *  Updated on: Dec 07.2023
+ *  Version 3.0.7x
+ *  Updated on: Dec 13.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -184,7 +184,9 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.slot_cfg.ws_width       = I2S_DATA_BIT_WIDTH_16BIT;  // WS signal width (i.e. the number of bclk ticks that ws signal is high)
     m_i2s_std_cfg.slot_cfg.ws_pol         = false;                     // WS signal polarity, set true to enable high lever first
     m_i2s_std_cfg.slot_cfg.bit_shift      = false;                     // Set to enable bit shift in Philips mode
+#ifdef CONFIG_IDF_TARGET_ESP32
     m_i2s_std_cfg.slot_cfg.msb_right      = true;                      // Set to place right channel data at the MSB in the FIFO
+#endif
     m_i2s_std_cfg.gpio_cfg.bclk           = I2S_GPIO_UNUSED;           // BCLK, Assignment in setPinout()
     m_i2s_std_cfg.gpio_cfg.din            = I2S_GPIO_UNUSED;           // not used
     m_i2s_std_cfg.gpio_cfg.dout           = I2S_GPIO_UNUSED;           // DOUT, Assignment in setPinout()
