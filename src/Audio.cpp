@@ -5,8 +5,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7x
- *  Updated on: Dec 13.2023
+ *  Version 3.0.7y
+ *  Updated on: Dec 15.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -230,7 +230,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
         i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
         m_f_forceMono = false;
     }
-    i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
+
 #endif // ESP_IDF_VERSION_MAJOR == 5
     for(int i = 0; i < 3; i++) {
         m_filter[i].a0 = 1;
@@ -240,6 +240,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
         m_filter[i].b2 = 0;
     }
     computeLimit();  // first init, vol = 21, vol_steps = 21
+    i2s_zero_dma_buffer((i2s_port_t) m_i2s_num);
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
