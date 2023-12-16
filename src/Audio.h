@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7y
- *  Updated on: Dec 15.2023
+ *  Version 3.0.7z
+ *  Updated on: Dec 16.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -142,7 +142,7 @@ public:
     bool setFilePos(uint32_t pos);
     bool audioFileSeek(const float speed);
     bool setTimeOffset(int sec);
-    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCK = I2S_GPIO_UNUSED);
+    bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
     bool pauseResume();
     bool isRunning() {return m_f_running;}
     void loop();
