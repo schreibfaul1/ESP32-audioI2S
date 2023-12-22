@@ -187,6 +187,11 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 
     // log_i("configNr %i, s %i, c %i", configNr, s, c);
 
+    if(c == 3) {
+        log_e("an arbitrary number of frames in the packet is unsupported yet");
+        vTaskDelay(1000);
+    }
+
     if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
     if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
 
