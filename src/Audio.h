@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.7z
- *  Updated on: Dec 16.2023
+ *  Version 3.0.8
+ *  Updated on: Dec 22.2023
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -220,7 +220,7 @@ private:
     bool setBitsPerSample(int bits);
     bool setChannels(int channels);
     bool setBitrate(int br);
-    bool playChunk();
+    void playChunk();
     bool playSample(int16_t sample[2]);
     void computeVUlevel(int16_t sample[2]);
     void computeLimit();

@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.7z
- *  Updated on: Dec 16.2023
+ *  Version 3.0.8
+ *  Updated on: Dec 22.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2130,30 +2130,33 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //---------------------------------------------------------------------------------------------------------------------
-bool Audio::playChunk() {
-    // If we've got data, try and pump it out..
+void Audio::playChunk() {
+
     int16_t sample[2];
-    if(getBitsPerSample() == 8) {
-        if(getChannels() == 1) {
-            while(m_validSamples) {
+
+    auto pc = [&](int16_t *s16) {  // lambda, inner function
+        if(playSample(s16)){
+            m_validSamples--;
+            m_curSample++;
+            return true;
+        }
+        return false;
+    };
+
+    // If we've got data, try and pump it out..
+    while(m_validSamples){
+        if(getBitsPerSample() == 8) {
+            if(getChannels() == 1) {
                 uint8_t x = m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 sample[RIGHTCHANNEL] = x;
                 sample[LEFTCHANNEL] = x;
-                while(1) {
-                    if(playSample(sample)) break;
-                }  // Can't send?
+                if(!pc(sample)){ break;} // playSample in lambda
                 sample[RIGHTCHANNEL] = y;
                 sample[LEFTCHANNEL] = y;
-                while(1) {
-                    if(playSample(sample)) break;
-                }  // Can't send?
-                m_validSamples--;
-                m_curSample++;
+                if(!pc(sample)){ break;} // playSample in lambda
             }
-        }
-        if(getChannels() == 2) {
-            while(m_validSamples) {
+            if(getChannels() == 2) {
                 uint8_t x = m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 if(!m_f_forceMono) {  // stereo mode
@@ -2165,54 +2168,29 @@ bool Audio::playChunk() {
                     sample[RIGHTCHANNEL] = xy;
                     sample[LEFTCHANNEL] = xy;
                 }
-
-                while(1) {
-                    if(playSample(sample)) break;
-                }  // Can't send?
-                m_validSamples--;
-                m_curSample++;
+                if(!pc(sample)){ break;} // playSample in lambda
             }
         }
-        m_curSample = 0;
-        return true;
-    }
-    if(getBitsPerSample() == 16) {
-        if(getChannels() == 1) {
-            while(m_validSamples) {
+
+        if(getBitsPerSample() == 16) {
+            if(getChannels() == 1) {
                 sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
                 sample[LEFTCHANNEL] = m_outBuff[m_curSample];
-                if(!playSample(sample)) {
-                    log_e("can't send");
-                    return false;
-                }  // Can't send
-                m_validSamples--;
-                m_curSample++;
+            }
+            if(getChannels() == 2) {
+                    if(!m_f_forceMono) {  // stereo mode
+                        sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
+                        sample[LEFTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+                    }
+                    else {  // mono mode, #100
+                        int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2;
+                        sample[RIGHTCHANNEL] = xy;
+                        sample[LEFTCHANNEL] = xy;
+                    }
             }
         }
-        if(getChannels() == 2) {
-            m_curSample = 0;
-            while(m_validSamples) {
-                if(!m_f_forceMono) {  // stereo mode
-                    sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
-                    sample[LEFTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
-                }
-                else {  // mono mode, #100
-                    int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2;
-                    sample[RIGHTCHANNEL] = xy;
-                    sample[LEFTCHANNEL] = xy;
-                }
-                playSample(sample);
-                m_validSamples--;
-                m_curSample++;
-            }
-        }
-        m_curSample = 0;
-        return true;
+        if(!pc(sample)){ break;} // playSample in lambda
     }
-    log_e("BitsPer Sample must be 8 or 16!");
-    m_validSamples = 0;
-    stopSong();
-    return false;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
@@ -2952,6 +2930,7 @@ void Audio::processLocalFile() {
     if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
+                if(m_validSamples) {playChunk(); return;} // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
                 if(bytesDecoded <= InBuff.bufferFilled()) {  // avoid InBuff overrun (can be if file is corrupt)
                     if(m_f_playing) {
@@ -3001,17 +2980,7 @@ void Audio::processLocalFile() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) {
-        static uint8_t cnt = 0;
-        uint8_t        compression;
-        if(m_codec == CODEC_WAV) compression = 1;
-        if(m_codec == CODEC_FLAC) compression = 2;
-        else
-            compression = 3;
-        cnt++;
-        if(cnt == compression) {
-            playAudioData();
-            cnt = 0;
-        }
+        playAudioData();
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -3091,17 +3060,7 @@ void Audio::processWebStream() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) {
-        static uint8_t cnt = 0;
-        uint8_t        compression;
-        if(m_codec == CODEC_WAV) compression = 1;
-        if(m_codec == CODEC_FLAC) compression = 2;
-        else
-            compression = 3;
-        cnt++;
-        if(cnt == compression) {
-            playAudioData();
-            cnt = 0;
-        }
+        playAudioData();
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -3200,6 +3159,7 @@ void Audio::processWebFile() {
     if(f_webFileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
+                if(m_validSamples) {playChunk(); return;} // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
                 if(bytesDecoded > 2) {
                     InBuff.bytesWasRead(bytesDecoded);
@@ -3233,17 +3193,7 @@ void Audio::processWebFile() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) {
-        static uint8_t cnt = 0;
-        uint8_t        compression;
-        if(m_codec == CODEC_WAV) compression = 1;
-        if(m_codec == CODEC_FLAC) compression = 2;
-        else
-            compression = 3;
-        cnt++;
-        if(cnt == compression) {
-            playAudioData();
-            cnt = 0;
-        }
+        playAudioData();
     }
     return;
 }
@@ -3356,12 +3306,7 @@ void Audio::processWebStreamTS() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) {
-        static uint8_t cnt = 0;
-        cnt++;
-        if(cnt == 3) {
-            playAudioData();
-            cnt = 0;
-        }  // aac only
+        playAudioData();
     }
     return;
 }
@@ -3479,17 +3424,14 @@ void Audio::processWebStreamHLS() {
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) {
-        static uint8_t cnt = 0;
-        cnt++;
-        if(cnt == 2) {
-            playAudioData();
-            cnt = 0;
-        }  // aac only
+        playAudioData();
     }
     return;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::playAudioData() {
+    if(m_validSamples) {playChunk(); return;} // play samples first
+
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return;  // guard
 
     int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
@@ -3506,7 +3448,7 @@ void Audio::playAudioData() {
             InBuff.bytesWasRead(bytesDecoded);
             return;
         }
-        if(bytesDecoded == 0) return;  // syncword at pos0 found
+        if(bytesDecoded == 0) return;  // syncword at pos0
     }
 
     return;
@@ -4245,6 +4187,7 @@ void Audio::setDecoderItems() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
+
     int         bytesLeft;
     static bool f_setDecodeParamsOnce = true;
     int         nextSync = 0;
@@ -4365,7 +4308,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         audio_process_extern(m_outBuff, m_validSamples, &continueI2S);
         if(!continueI2S) { return bytesDecoded; }
     }
-    while(m_validSamples) { playChunk(); }
+    m_curSample = 0;
+    playChunk();
     return bytesDecoded;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -4835,7 +4779,7 @@ bool Audio::playSample(int16_t sample[2]) {
     sample = IIR_filterChain2(sample);
     //-------------------------------------------
 
-    uint32_t s32 = Gain(sample);  // vosample2lume;
+    uint32_t s32 = Gain(sample);  // sample2volume;
 
     if(audio_process_i2s) {
         // process audio sample just before writing to i2s
@@ -4847,16 +4791,15 @@ bool Audio::playSample(int16_t sample[2]) {
     if(m_f_internalDAC) { s32 += 0x80008000; }
     m_i2s_bytesWritten = 0;
     #if(ESP_IDF_VERSION_MAJOR == 5)
-    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 100);
+    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 0);
     #else
-    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 100);
+    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 0); // no wait
     #endif
     if(err != ESP_OK) {
         log_e("ESP32 Errorcode %i", err);
         return false;
     }
-    if(m_i2s_bytesWritten < 4) {
-        log_e("Can't stuff any more in I2S...");  // increase waitingtime or outputbuffer
+    if(m_i2s_bytesWritten < 4) { // no more space in dma buffer  --> break and try it later
         return false;
     }
     return true;
