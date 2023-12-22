@@ -187,7 +187,7 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 
     // log_i("configNr %i, s %i, c %i", configNr, s, c);
 
-    if(c == 3) {
+    if(c == 3) { // todo https://www.rfc-editor.org/rfc/rfc6716#page-16 3.2.3. at page 17
         log_e("an arbitrary number of frames in the packet is unsupported yet");
         vTaskDelay(1000);
     }
