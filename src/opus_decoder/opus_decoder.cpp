@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 07.04.2023
+ *  Updated on: 23.12.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -16,7 +16,9 @@ bool      s_f_opusSubsequentPage = false;
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
 bool      s_f_opusFramePacket = false;
+bool      s_f_opusStereoFlag = false;
 uint8_t   s_opusChannels = 0;
+uint8_t   s_opusCountCode =  0;
 uint16_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
 char     *s_opusChbuf = NULL;
@@ -58,6 +60,7 @@ void OPUSsetDefaults(){
     s_f_opusParseOgg = false;
     s_f_newSteamTitle = false;  // streamTitle
     s_f_opusFramePacket = false;
+    s_f_opusStereoFlag = false;
     s_opusChannels = 0;
     s_opusSamplerate = 0;
     s_opusSegmentLength = 0;
@@ -65,6 +68,7 @@ void OPUSsetDefaults(){
     s_opusSegmentTableSize = 0;
     s_opusOldMode = 0xFF;
     s_opusSegmentTableRdPtr = -1;
+    s_opusCountCode = 0;
 
     s_opusError = 0;
 }
@@ -73,38 +77,100 @@ void OPUSsetDefaults(){
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
+    static uint16_t fs = 0;
+    static uint8_t M = 0;
+    static uint16_t paddingBytes = 0;
+    static uint16_t samplesPerFrame = 0;
+    int ret = ERR_OPUS_NONE;
+    int len = 0;
+
     if(s_f_opusParseOgg){
-        int ret = OPUSparseOGG(inbuf, bytesLeft);
+        fs = 0;
+        M = 0;
+        paddingBytes = 0;
+        s_opusCountCode = 0;
+        ret = OPUSparseOGG(inbuf, bytesLeft);
         if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
         else return ret;  // error
     }
+
+    if(s_opusCountCode == 3) goto FramePacking;
 
     if(s_f_opusFramePacket){
         if(s_opusSegmentTableSize > 0){
             s_opusSegmentTableRdPtr++;
             s_opusSegmentTableSize--;
-            int len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
+            len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
+        }
+
+        ret = parseOpusTOC(inbuf[0]);
+        samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, 48000);
+        if(ret < 0) goto exit; // error
+
+FramePacking:
+
+        // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
+        if(s_opusCountCode == 0){ // Code 0: One Frame in the Packet
             *bytesLeft -= len;
-            int32_t ret = parseOpusTOC(inbuf[0]);
-            if(ret < 0) return ret;
-            int frame_size = opus_packet_get_samples_per_frame(inbuf, 48000);
+            ret = parseOpusTOC(inbuf[0]);
+            if(ret < 0) goto exit; // error
             len--;
             inbuf++;
-
             ec_dec_init((uint8_t *)inbuf, len);
-            ret = celt_decode_with_ec(inbuf, len, (int16_t*)outbuf, frame_size);
-            if(ret < 0) return ret; // celt error
+            ret = celt_decode_with_ec(inbuf, len, (int16_t*)outbuf, samplesPerFrame);
+            if(ret < 0) goto exit; // celt error
             s_opusValidSamples = ret;
+            ret = ERR_OPUS_NONE;
+        }
+        if(s_opusCountCode == 1){ // Code 1: Two Frames in the Packet, Each with Equal Compressed Size
+            log_e("OPUS countCode 1 not supported yet"); vTaskDelay(1000); // todo
+        }
+        if(s_opusCountCode == 2){ // Code 2: Two Frames in the Packet, with Different Compressed Sizes
+            log_e("OPUS countCode 2 not supported yet"); vTaskDelay(1000); // todo
+        }
+        if(s_opusCountCode == 3){ // Code 3: A Signaled Number of Frames in the Packet
 
-            if(s_opusSegmentTableSize== 0){
-                s_opusSegmentTableRdPtr = -1; // back to the parking position
-                s_f_opusFramePacket = false;
-                s_f_opusParseOgg = true;
+            if(M == 0){
+                bool v = ((inbuf[1] & 0x80) == 0x80);  // VBR indicator
+                (void)v;
+                bool p = ((inbuf[1] & 0x40) == 0x40);  // padding bit
+                M = inbuf[1] & 0x3F;           // max framecount
+            //    log_i("v %i, p %i, M %i", v, p, M);
+                paddingBytes = 0;
+                if(p){
+                    int i = 0;
+                    while(inbuf[2 + i] == 255){
+                        paddingBytes += inbuf[2 + i];
+                        i++;
+                    }
+                    paddingBytes += inbuf[2 + i];
+                    fs = (len - 3 - i - paddingBytes) / M;
+                    *bytesLeft -= 3 + i;
+                    inbuf += 3 + i;
+                }
             }
+            *bytesLeft -= fs;
+            ec_dec_init((uint8_t *)inbuf, fs);
+            ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
+            if(ret < 0) goto exit; // celt error
+            s_opusValidSamples = ret;
+            M--;
+         //   log_i("M %i fs %i spf %i", M, fs, samplesPerFrame);
+            ret = ERR_OPUS_NONE;
+            if(M == 0) {s_opusCountCode = 0; *bytesLeft -= paddingBytes; goto exit;}
+            return ret;
         }
     }
-    return ERR_OPUS_NONE;
+
+exit:
+    if(s_opusSegmentTableSize== 0){
+        s_opusSegmentTableRdPtr = -1; // back to the parking position
+        s_f_opusFramePacket = false;
+        s_f_opusParseOgg = true;
+    }
+    return ret;
 }
+
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
@@ -155,8 +221,8 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 
     uint8_t mode = 0;
     uint8_t configNr = 0;
-    uint8_t s = 0;
-    uint8_t c = 0; (void)c;
+    uint8_t s = 0;              // stereo flag
+    uint8_t c = 0; (void)c;     // count code
 
     configNr = (TOC_Byte & 0b11111000) >> 3;
     s        = (TOC_Byte & 0b00000100) >> 2;
@@ -184,13 +250,13 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
         c = 2: 2 frames in the packet, with different compressed sizes
         c = 3: an arbitrary number of frames in the packet
     */
-
-    // log_i("configNr %i, s %i, c %i", configNr, s, c);
+    s_opusCountCode = c;
+    s_f_opusStereoFlag = s;
 
     if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
     if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
 
-    return s;
+    return configNr;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
