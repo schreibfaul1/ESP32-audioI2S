@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 3.0.8a
- *  Updated on: Dec 25.2023
+ *  Updated on: Dec 29.2023
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2228,6 +2228,7 @@ void Audio::loop() {
             host = parsePlaylist_M3U8();
             if(host) { // host contains the next playlist URL
                 httpPrint(host);
+                setDatamode(HTTP_RESPONSE_HEADER);
             }
             else { // host == NULL means connect to m3u8 URL
                 httpPrint(m_lastM3U8host);
@@ -3454,12 +3455,28 @@ void Audio::playAudioData() {
 bool Audio::parseHttpResponseHeader() {  // this is the response to a GET / request
 
     if(getDatamode() != HTTP_RESPONSE_HEADER) return false;
-    if(_client->available() == 0) return false;
+
+    uint32_t ctime = millis();
+    uint32_t timeout = 2500;  // ms
+
+    static uint32_t stime;
+    static bool f_time = false;
+    if(_client->available() == 0){
+        if(!f_time){
+            stime = millis();
+            f_time = true;
+        }
+        if((millis() - stime) > timeout) {
+            log_e("timeout");
+            f_time = false;
+            return false;
+        }
+    }
+    f_time = false;
 
     char     rhl[512] = {0};  // responseHeaderline
     bool     ct_seen = false;
-    uint32_t ctime = millis();
-    uint32_t timeout = 2500;  // ms
+
 
     while(true) {  // outer while
         uint16_t pos = 0;
