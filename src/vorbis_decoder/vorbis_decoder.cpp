@@ -207,6 +207,9 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                     ret = parseVorbisComment(inbuf, len);
                 }
                 else{
+                    uint16_t blockLen = len;
+                    // log_i("blockPicLen %i blockLen %i", s_blockPicLen, blockLen);
+                    s_blockPicLen -= blockLen;
                     ; // commentlength is greater than (one or more) OggS frame(s)
                 }
                 // log_w("s_vorbisSegmentTableSize %d", s_vorbisSegmentTableSize);
@@ -464,11 +467,13 @@ int parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference https:
         if(idx == 0){ title = strndup((const char*)(s_vorbisChbuf + 6), commentLength - 6); s_commentLength = 0;}
 
         idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "metadata_block_picture=", 25);
-        if(idx == 0){ s_blockPicLen = commentLength;
-                      s_blockPicPos += pos + 23;
-                      uint16_t blockPicLenUntilFrameEnd = s_commentHeaderLength - (4 + 23);
-                      log_w("metadata block picture found at pos %i, length %i, first blockLength %i", s_blockPicPos, s_blockPicLen, blockPicLenUntilFrameEnd);}
-
+        if(idx == 0){
+                    s_blockPicLen = commentLength - 23;
+                    s_blockPicPos += pos + 23;
+                    uint16_t blockPicLenUntilFrameEnd = s_commentHeaderLength - 4 - 23;
+                    log_i("metadata block picture found at pos %i, length %i, first blockLength %i", s_blockPicPos, s_blockPicLen, blockPicLenUntilFrameEnd);
+                    s_blockPicLen -= blockPicLenUntilFrameEnd;
+                    }
         pos += commentLength + 4;
         s_commentHeaderLength -= (4 + commentLength);
     }
