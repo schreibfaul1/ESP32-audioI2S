@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8b
+ *  Version 3.0.8c
  *  Updated on: Jan 02.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2231,7 +2231,8 @@ void Audio::loop() {
                 setDatamode(HTTP_RESPONSE_HEADER);
             }
             else { // host == NULL means connect to m3u8 URL
-                httpPrint(m_lastM3U8host);
+                if(host) httpPrint(m_lastM3U8host);
+                else httpPrint(m_lastHost); // if url has no first redirection
                 setDatamode(HTTP_RESPONSE_HEADER); // we have a new playlist now
             }
 
