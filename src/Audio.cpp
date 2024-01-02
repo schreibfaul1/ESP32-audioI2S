@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8a
- *  Updated on: Dec 29.2023
+ *  Version 3.0.8b
+ *  Updated on: Jan 02.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2909,10 +2909,11 @@ void Audio::processLocalFile() {
             FLACDecoderReset();
         }
         if(m_codec == CODEC_MP3) { m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos); }
-        if(m_avr_bitrate) m_audioCurrentTime = ((m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
+        if(m_avr_bitrate) m_audioCurrentTime = ((double)(m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
         byteCounter = m_resumeFilePos;
+        f_fileDataComplete = false;  // #570 
 
         if(m_f_Log) {
             log_i("m_resumeFilePos %i", m_resumeFilePos);
@@ -4810,7 +4811,7 @@ bool Audio::playSample(int16_t sample[2]) {
     esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 0); // no wait
     #endif
     if(err != ESP_OK) {
-        log_e("ESP32 Errorcode %i", err);
+        if(err /home/wolle/Arduino/AudioI2S/src/Audio.h!= 263) {log_e("ESP32 Errorcode: %i", err);}
         return false;
     }
     if(m_i2s_bytesWritten < 4) { // no more space in dma buffer  --> break and try it later
