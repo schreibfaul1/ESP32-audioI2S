@@ -318,7 +318,7 @@ void Audio::setDefaults() {
     clientsecure.stop();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
-
+    if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
     AUDIO_INFO("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
     m_f_timeout = false;
