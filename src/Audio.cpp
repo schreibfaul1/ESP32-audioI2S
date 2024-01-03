@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8d
+ *  Version 3.0.8d1
  *  Updated on: Jan 03.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2910,6 +2910,7 @@ void Audio::processLocalFile() {
             FLACDecoderReset();
         }
         if(m_codec == CODEC_MP3) { m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos); }
+        if(m_avr_bitrate) m_audioCurrentTime = ((double)(m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
         byteCounter = m_resumeFilePos;
@@ -4333,6 +4334,7 @@ void Audio::compute_audioCurrentTime(int bd) {
     static int      old_bitrate = 0;
     static uint64_t sum_bitrate = 0;
     static boolean  f_CBR = true;  // constant bitrate
+    static uint8_t  cnt = 0;
 
     if(m_codec == CODEC_MP3) { setBitrate(MP3GetBitrate()); }    // if not CBR, bitrate can be changed
     if(m_codec == CODEC_M4A) { setBitrate(AACGetBitrate()); }    // if not CBR, bitrate can be changed
@@ -4347,6 +4349,7 @@ void Audio::compute_audioCurrentTime(int bd) {
         f_CBR = true;
         m_avr_bitrate = getBitRate();
         old_bitrate = getBitRate();
+        cnt = 0;
     }
     if(!getBitRate()) return;
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4364,10 +4367,13 @@ void Audio::compute_audioCurrentTime(int bd) {
     }
 
     m_audioCurrentTime += ((float)bd / m_avr_bitrate) * 8;
-    
-    if(loop_counter % 100 == 0){
+
+
+    if(cnt == 1){
         m_audioCurrentTime = ((float)(getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8;  // #293
     }
+    cnt++;
+    if(cnt == 100) cnt = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
