@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8c
- *  Updated on: Jan 02.2024
+ *  Version 3.0.8d
+ *  Updated on: Jan 03.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2910,7 +2910,6 @@ void Audio::processLocalFile() {
             FLACDecoderReset();
         }
         if(m_codec == CODEC_MP3) { m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos); }
-        if(m_avr_bitrate) m_audioCurrentTime = ((double)(m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
         byteCounter = m_resumeFilePos;
@@ -4339,21 +4338,18 @@ void Audio::compute_audioCurrentTime(int bd) {
     if(m_codec == CODEC_M4A) { setBitrate(AACGetBitrate()); }    // if not CBR, bitrate can be changed
     if(m_codec == CODEC_AAC) { setBitrate(AACGetBitrate()); }    // if not CBR, bitrate can be changed
     if(m_codec == CODEC_FLAC) { setBitrate(FLACGetBitRate()); }  // if not CBR, bitrate can be changed
-    if(!getBitRate()) return;
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_avr_bitrate == 0) {  // first time
-        loop_counter = 0;
+        loop_counter = 1;
         old_bitrate = 0;
         sum_bitrate = 0;
         f_CBR = true;
         m_avr_bitrate = getBitRate();
         old_bitrate = getBitRate();
     }
-    if(!m_avr_bitrate) return;
+    if(!getBitRate()) return;
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    if(loop_counter < 1000) loop_counter++;
 
     if((old_bitrate != getBitRate()) && f_CBR) {
         if(audio_info) audio_info("VBR recognized, audioFileDuration is estimated");
@@ -4361,27 +4357,17 @@ void Audio::compute_audioCurrentTime(int bd) {
     }
     old_bitrate = getBitRate();
 
-    if(!f_CBR) {
-        if(loop_counter > 20 && loop_counter < 200) {
-            // if VBR: m_avr_bitrate is average of the first values of m_bitrate
-            sum_bitrate += getBitRate();
-            m_avr_bitrate = sum_bitrate / (loop_counter - 20);
-            if(loop_counter == 199 && m_resumeFilePos >= 0) {
-                m_audioCurrentTime =
-                    ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8;  // #293
-            }
-        }
+    if(loop_counter < 10000){ // then the bit rate is determined with sufficient precision
+        sum_bitrate += getBitRate();
+        m_avr_bitrate = sum_bitrate / loop_counter;
+        loop_counter++;  
     }
-    else {
-        if(loop_counter == 2) {
-            m_avr_bitrate = getBitRate();
-            if(m_resumeFilePos >= 0) {  // if connecttoFS() is called with resumeFilePos != 0
-                m_audioCurrentTime =
-                    ((getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8;  // #293
-            }
-        }
-    }
+
     m_audioCurrentTime += ((float)bd / m_avr_bitrate) * 8;
+    
+    if(loop_counter % 100 == 0){
+        m_audioCurrentTime = ((float)(getFilePos() - m_audioDataStart - inBufferFilled()) / m_avr_bitrate) * 8;  // #293
+    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
