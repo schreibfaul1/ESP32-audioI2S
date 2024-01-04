@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.8d
- *  Updated on: Jan 03.2024
+ *  Version 3.0.8e
+ *  Updated on: Jan 04.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -14,14 +14,9 @@
 #include <Arduino.h>
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
-#include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <SD.h>
-#include <SD_MMC.h>
-#include <SPIFFS.h>
 #include <FS.h>
-#include <FFat.h>
 #include <atomic>
 
 #if ESP_IDF_VERSION_MAJOR == 5
@@ -135,7 +130,6 @@ public:
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos = -1);
-    bool connecttoSD(const char* path, int32_t resumeFilePos = -1);
     bool setFileLoop(bool input);//TEST loop
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);

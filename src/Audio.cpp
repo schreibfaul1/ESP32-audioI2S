@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8d1
- *  Updated on: Jan 03.2024
+ *  Version 3.0.8e
+ *  Updated on: Jan 04.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -236,7 +236,6 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
         m_filter[i].b2 = 0;
     }
     computeLimit();  // first init, vol = 21, vol_steps = 21
-    
 }
 //---------------------------------------------------------------------------------------------------------------------
 void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
@@ -707,8 +706,6 @@ void Audio::UTF8toASCII(char* str){
     }
     str[j] = 0;
 }
-//---------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoSD(const char* path, int32_t resumeFilePos) { return connecttoFS(SD, path, resumeFilePos); }
 //---------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);  // #3
