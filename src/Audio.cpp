@@ -259,6 +259,7 @@ Audio::~Audio() {
 }
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
     if(InBuff.isInitialized()) {
         log_e("Audio::setBufsize must not be called after audio is initialized");
         return;
