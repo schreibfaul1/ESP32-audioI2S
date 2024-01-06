@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 29.12.2023
+ *  Updated on: 06.01.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -93,42 +93,7 @@ void VORBISDecoder_FreeBuffers(){
     if(s_vorbisChbuf){free(s_vorbisChbuf); s_vorbisChbuf = NULL;}
     if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
 
-    if(s_nrOfMaps) {
-        for(int i = 0; i < s_nrOfMaps; i++) /* unpack does the range checking */
-            mapping_clear_info(s_map_param + i);
-        s_nrOfMaps = 0;
-    }
-
-    if(s_nrOfFloors) {
-        for(int i = 0; i < s_nrOfFloors; i++) /* unpack does the range checking */
-            floor_free_info(s_floor_param[i]);
-        free(s_floor_param);
-        s_nrOfFloors = 0;
-    }
-
-    if(s_nrOfResidues) {
-        for(int i = 0; i < s_nrOfResidues; i++) /* unpack does the range checking */
-            res_clear_info(s_residue_param + i);
-        s_nrOfResidues = 0;
-    }
-
-    if(s_nrOfCodebooks) {
-        for(int i = 0; i < s_nrOfCodebooks; i++)
-            vorbis_book_clear(s_codebooks + i);
-        s_nrOfCodebooks = 0;
-    }
-
-    if(s_codebooks) {free(s_codebooks); s_codebooks = NULL;}
-
-    if(s_floor_type){free(s_floor_type); s_floor_type = NULL;}
-
-    if(s_residue_param){free(s_residue_param); s_residue_param = NULL;}
-
-    if(s_map_param){free(s_map_param); s_map_param = NULL;}
-
-    if(s_mode_param) {free(s_mode_param); s_mode_param = NULL;}
-
-    if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
+    clearGlobalConfigurations();
 }
 void VORBISDecoder_ClearBuffers(){
     if(s_vorbisChbuf) memset(s_vorbisChbuf, 0, 256);
@@ -161,6 +126,50 @@ void VORBISsetDefaults(){
     VORBISDecoder_ClearBuffers();
 }
 
+void clearGlobalConfigurations() { // mode, mapping, floor etc
+    if(s_nrOfCodebooks) {  // if we have a stream with changing codebooks, delete the old one
+        for(int i = 0; i < s_nrOfCodebooks; i++) { vorbis_book_clear(s_codebooks + i); }
+        s_nrOfCodebooks = 0;
+    }
+    if(s_codebooks) {
+        free(s_codebooks);
+        s_codebooks = NULL;
+    }
+    if(s_dsp_state) {
+        vorbis_dsp_destroy(s_dsp_state);
+        s_dsp_state = NULL;
+    }
+    if(s_nrOfFloors) {
+        for(int i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param[i]);
+        free(s_floor_param);
+        s_nrOfFloors = 0;
+    }
+    if(s_nrOfResidues) {
+        for(int i = 0; i < s_nrOfResidues; i++) res_clear_info(s_residue_param + i);
+        s_nrOfResidues = 0;
+    }
+    if(s_nrOfMaps) {
+        for(int i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param + i); }
+        s_nrOfMaps = 0;
+    }
+    if(s_floor_type) {
+        free(s_floor_type);
+        s_floor_type = NULL;
+    }
+    if(s_residue_param) {
+        free(s_residue_param);
+        s_residue_param = NULL;
+    }
+    if(s_map_param) {
+        free(s_map_param);
+        s_map_param = NULL;
+    }
+    if(s_mode_param) {
+        free(s_mode_param);
+        s_mode_param = NULL;
+    }
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 
 int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
@@ -190,7 +199,8 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             }
 
             if(s_pageNr == 1){ // identificaton header
-              int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
+                clearGlobalConfigurations(); // if a new codebook is required, delete the old one
+                int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
                 if(idx == 1){
                     // log_i("first packet (identification len) %i", len);
                     s_identificatonHeaderLength = len;
@@ -936,12 +946,14 @@ int vorbis_book_unpack(codebook_t *s) {
             goto _errout;
     }
     if(oggpack_eop()) goto _eofout;
-    if(lengthlist) free(lengthlist);
+    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
+    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
     return 0; // ok
 _errout:
 _eofout:
     vorbis_book_clear(s);
-    if(lengthlist) free(lengthlist);
+    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
+    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
     return -1; // error
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1690,6 +1702,7 @@ void vorbis_dsp_destroy(vorbis_dsp_state_t *v) {
             if(v->mdctright){free(v->mdctright); v->mdctright = NULL;}
         }
         free(v);
+        v = NULL;
     }
 }
 //---------------------------------------------------------------------------------------------------------------------

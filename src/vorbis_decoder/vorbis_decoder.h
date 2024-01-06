@@ -20,7 +20,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 03.12.2023
+ *  Updated on: 06.01.2023
  */
 
 
@@ -220,6 +220,7 @@ bool     VORBISDecoder_AllocateBuffers();
 void     VORBISDecoder_FreeBuffers();
 void     VORBISDecoder_ClearBuffers();
 void     VORBISsetDefaults();
+void     clearGlobalConfigurations();
 int      VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
 uint8_t  VORBISGetChannels();
 uint32_t VORBISGetSampRate();
