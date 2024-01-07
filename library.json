@@ -1,0 +1,20 @@
+{
+  "name": "ESP32-audioI2S",
+  "version": "2.0.0",
+  "description": "With this library You can easily build a WebRadio with a ESP32 board and a I2S-module",
+  "keywords": "audio, i2s, esp32",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/schreibfaul1/ESP32-audioI2S.git"
+  },
+  "authors": [
+    {
+      "name": "schreibfaul1"
+    }
+  ],
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/schreibfaul1/ESP32-audioI2S",
+  "dependencies": {},
+  "frameworks": ["arduino", "espidf"],
+  "platforms": "espressif32"
+}
