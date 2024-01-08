@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 06.01.2023
+ *  Updated on: 08.01.2023
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -206,6 +206,9 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                     s_identificatonHeaderLength = len;
                     ret = parseVorbisFirstPacket(inbuf, len);
                     s_blockPicPos += 28;
+                }
+                else{
+                    ret = ERR_VORBIS_NOT_AUDIO;  // #651
                 }
             }
             else if(s_pageNr == 2){ // comment header
