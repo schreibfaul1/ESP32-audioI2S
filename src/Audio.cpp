@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8f
+ *  Version 3.0.8g
  *  Updated on: Jan 10.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2563,6 +2563,14 @@ const char* Audio::parsePlaylist_M3U8() {
                         m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
                         xMedSeq++;
                     }
+                    else{
+                        lltoa(xMedSeq + 1, llasc, 10);
+                        if(indexOf(tmp, llasc) > 0) {
+                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                            log_w("mediaseq %llu skipped", xMedSeq);
+                            xMedSeq+= 2;
+                        }
+                    }
                 }
                 else { // without mediaSeqNr, with hash
                     uint32_t hash = simpleHash(tmp);
@@ -2594,7 +2602,7 @@ const char* Audio::parsePlaylist_M3U8() {
         vector_clear_and_shrink(m_playlistContent); // clear after reading everything, m_playlistContent.size is now 0
     }
 
-    if(m_playlistURL.size() > 1) {
+    if(m_playlistURL.size() > 0) {
         if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
 
         if(m_playlistURL[m_playlistURL.size() - 1]) {
@@ -2636,7 +2644,9 @@ const char* Audio::parsePlaylist_M3U8() {
                         }
                         else { ; }
 
-                        if(m_playlistURL.size() == 0) { connecttohost(m_lastHost); }
+                        if(m_playlistURL.size() == 0) {
+                            connecttohost(m_lastHost);
+                        }
                     }
                 }
                 else {
@@ -2646,6 +2656,7 @@ const char* Audio::parsePlaylist_M3U8() {
             } // f_medSeq_found
         }
     }
+    playAudioData(); // avoid audio gap
     return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
