@@ -6,7 +6,7 @@
 #include "SD.h"
 #include "FS.h"
 #include "Wire.h"
-#include "ES8388.h"  // https://github.com/maditnerd/es8388
+#include "ES8388.h"  // https://github.com/schreibfaul1/es8388
 #include "Audio.h"   // https://github.com/schreibfaul1/ESP32-audioI2S
 
 
@@ -45,7 +45,6 @@ void setup()
 {
     Serial.begin(115200);
     Serial.println("\r\nReset");
-    Serial.printf_P(PSTR("Free mem=%d\n"), ESP.getFreeHeap());
 
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SPI.setFrequency(1000000);
@@ -84,8 +83,7 @@ void setup()
     pinMode(GPIO_PA_EN, OUTPUT);
     digitalWrite(GPIO_PA_EN, HIGH);
 
-    audio.setPinout(I2S_BCLK, I2S_LRCK, I2S_SDOUT);
-	audio.i2s_mclk_pin_select(I2S_MCLK);
+    audio.setPinout(I2S_BCLK, I2S_LRCK, I2S_SDOUT, I2S_MCLK);
     audio.setVolume(21); // 0...21
 
     audio.connecttohost("http://mp3channels.webradio.antenne.de:80/oldies-but-goldies");
@@ -133,5 +131,4 @@ void audio_lasthost(const char *info){  //stream URL played
 void audio_eof_speech(const char *info){
     Serial.print("eof_speech  ");Serial.println(info);
 }
-
 
