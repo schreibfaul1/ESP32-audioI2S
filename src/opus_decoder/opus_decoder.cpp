@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 23.12.2023
+ *  Updated on: 19.01.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -255,6 +255,9 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 
     if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
     if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
+    if(configNr < 20) return ERR_OPUS_NARROW_BAND_UNSUPPORTED;
+    if(configNr < 24) return ERR_OPUS_WIDE_BAND_UNSUPPORTED;
+    if(configNr < 28) return ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED;
 
     return configNr;
 }
