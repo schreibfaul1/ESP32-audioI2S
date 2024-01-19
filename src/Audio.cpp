@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8g
- *  Updated on: Jan 10.2024
+ *  Version 3.0.8h
+ *  Updated on: Jan 19.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3536,7 +3536,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-        // log_i("httpResponseHeader: %s", rhl);
+         log_i("httpResponseHeader: %s", rhl);
 
         int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
         if(posColon >= 0) {
@@ -4259,6 +4259,13 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
                 if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
             }
+            if(m_codec == CODEC_OPUS) {
+                if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
+                if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
+                if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
+                if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
+                if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
+            }
         }
         return 1; // skip one byte and seek for the next sync word
     }
@@ -4445,6 +4452,9 @@ void Audio::printDecodeError(int r) {
             case ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED: e = "EXTRA CHANNELS UNSUPPORTED"; break;
             case ERR_OPUS_SILK_MODE_UNSUPPORTED: e = "SILK MODE UNSUPPORTED"; break;
             case ERR_OPUS_HYBRID_MODE_UNSUPPORTED: e = "HYBRID MODE UNSUPPORTED"; break;
+            case ERR_OPUS_NARROW_BAND_UNSUPPORTED: e = "NARROW_BAND_UNSUPPORTED"; break;
+            case ERR_OPUS_WIDE_BAND_UNSUPPORTED: e = "WIDE_BAND_UNSUPPORTED"; break;
+            case ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED: e = "SUPER_WIDE_BAND_UNSUPPORTED"; break;
             case ERR_OPUS_CELT_BAD_ARG: e = "CELT_DECODER_BAD_ARG"; break;
             case ERR_OPUS_CELT_INTERNAL_ERROR: e = "CELT DECODER INTERNAL ERROR"; break;
             case ERR_OPUS_CELT_UNIMPLEMENTED: e = "CELT DECODER UNIMPLEMENTED ARG"; break;
