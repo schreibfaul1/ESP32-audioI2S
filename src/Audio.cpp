@@ -3536,7 +3536,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-         log_i("httpResponseHeader: %s", rhl);
+        // log_i("httpResponseHeader: %s", rhl);
 
         int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
         if(posColon >= 0) {
