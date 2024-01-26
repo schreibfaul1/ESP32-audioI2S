@@ -4541,10 +4541,10 @@ uint32_t Audio::getAudioFileDuration() {
         if(!m_contentlength) return 0;
     }
 
-    if(m_avr_bitrate && m_codec == CODEC_MP3) m_audioFileDuration = 8 * (m_audioDataSize / m_avr_bitrate); // #289
-    else if(m_avr_bitrate && m_codec == CODEC_WAV) m_audioFileDuration = 8 * (m_audioDataSize / m_avr_bitrate);
-    else if(m_avr_bitrate && m_codec == CODEC_M4A) m_audioFileDuration = 8 * (m_audioDataSize / m_avr_bitrate);
-    else if(m_avr_bitrate && m_codec == CODEC_AAC) m_audioFileDuration = 8 * (m_audioDataSize / m_avr_bitrate);
+    if(m_avr_bitrate && m_codec == CODEC_MP3) m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate); // #289
+    else if(m_avr_bitrate && m_codec == CODEC_WAV) m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
+    else if(m_avr_bitrate && m_codec == CODEC_M4A) m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
+    else if(m_avr_bitrate && m_codec == CODEC_AAC) m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
     else if(m_codec == CODEC_FLAC) m_audioFileDuration = FLACGetAudioFileDuration();
     else return 0;
     return m_audioFileDuration;
