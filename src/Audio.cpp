@@ -4218,15 +4218,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     int bytesDecoded = 0;
 
     switch(m_codec) {
-        case CODEC_WAV:
-            memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
-            if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
-            if(getBitsPerSample() == 8) m_validSamples = len / 2;
-            bytesLeft = 0;
-            break;
-        case CODEC_MP3: m_decodeError = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
-        case CODEC_AAC: m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
-        case CODEC_M4A: m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
+        case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
+        case CODEC_MP3:  m_decodeError = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
+        case CODEC_AAC:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
+        case CODEC_M4A:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_FLAC: m_decodeError = FLACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_OPUS: m_decodeError = OPUSDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &bytesLeft, m_outBuff); break;
@@ -4272,45 +4267,45 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return 1;
     }
     // status: bytesDecoded > 0 and m_decodeError >= 0
-    {
-        if(m_codec == CODEC_MP3) { m_validSamples = MP3GetOutputSamps() / getChannels(); }
-        if((m_codec == CODEC_AAC) || (m_codec == CODEC_M4A)) { m_validSamples = AACGetOutputSamps() / getChannels(); }
-        if(m_codec == CODEC_FLAC) {
-            const uint8_t FLAC_PARSE_OGG_DONE = 100;
-            if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-            m_validSamples = FLACGetOutputSamps() / getChannels();
-            char* st = FLACgetStreamTitle();
-            if(st) {
-                AUDIO_INFO(st);
-                if(audio_showstreamtitle) audio_showstreamtitle(st);
-            }
-        }
-        if(m_codec == CODEC_OPUS) {
-            const uint8_t OPUS_PARSE_OGG_DONE = 100;
-            if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-            m_validSamples = OPUSGetOutputSamps();
-            char* st = OPUSgetStreamTitle();
-            if(st) {
-                AUDIO_INFO(st);
-                if(audio_showstreamtitle) audio_showstreamtitle(st);
-            }
-        }
-        if(m_codec == CODEC_VORBIS) {
-            const uint8_t VORBIS_PARSE_OGG_DONE = 100;
-            if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-            m_validSamples = VORBISGetOutputSamps();
-            char* st = VORBISgetStreamTitle();
-            if(st) {
-                AUDIO_INFO(st);
-                if(audio_showstreamtitle) audio_showstreamtitle(st);
-            }
-        }
-        if(f_setDecodeParamsOnce) {
-            f_setDecodeParamsOnce = false;
-            setDecoderItems();
-            m_PlayingStartTime = millis();
-        }
+    switch(m_codec) {
+        case CODEC_WAV:     memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
+                            if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
+                            if(getBitsPerSample() == 8) m_validSamples = len / 2;
+                            break;
+        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
+                            break;
+        case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
+                            break;
+        case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
+                            break;
+        case CODEC_FLAC:    if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+                            m_validSamples = FLACGetOutputSamps() / getChannels();
+                            if(FLACgetStreamTitle()) {
+                                AUDIO_INFO(FLACgetStreamTitle());
+                                if(audio_showstreamtitle) audio_showstreamtitle(FLACgetStreamTitle());
+                            }
+                            break;
+        case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+                            m_validSamples = OPUSGetOutputSamps();
+                            if(OPUSgetStreamTitle()) {
+                                AUDIO_INFO(OPUSgetStreamTitle());
+                                if(audio_showstreamtitle) audio_showstreamtitle(OPUSgetStreamTitle());
+                            }
+                            break;
+        case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+                            m_validSamples = VORBISGetOutputSamps();
+                            if(VORBISgetStreamTitle()) {
+                                AUDIO_INFO(VORBISgetStreamTitle());
+                                if(audio_showstreamtitle) audio_showstreamtitle(VORBISgetStreamTitle());
+                            }
+                            break;
     }
+    if(f_setDecodeParamsOnce) {
+        f_setDecodeParamsOnce = false;
+        setDecoderItems();
+        m_PlayingStartTime = millis();
+    }
+
     compute_audioCurrentTime(bytesDecoded);
 
     if(audio_process_extern) {
