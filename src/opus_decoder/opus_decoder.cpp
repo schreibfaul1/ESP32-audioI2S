@@ -75,10 +75,13 @@ void OPUSsetDefaults(){
 
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
+    const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
     static uint16_t fs = 0;
     static uint8_t M = 0;
+    static uint8_t configNr = 31; // FULLBAND
     static uint16_t paddingBytes = 0;
     uint8_t paddingLength = 0;
+    uint8_t endband = 21;
     static uint16_t samplesPerFrame = 0;
     int ret = ERR_OPUS_NONE;
     int len = 0;
@@ -101,11 +104,26 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             s_opusSegmentTableSize--;
             len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
         }
-        parseOpusTOC(inbuf[0]);
+        configNr = parseOpusTOC(inbuf[0]);
         samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
+
+        switch(configNr){
+            case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_NARROWBAND
+                            break;
+            case 20 ... 23: endband = 17; // OPUS_BANDWIDTH_WIDEBAND
+                            break;
+            case 24 ... 27: endband = 19; // OPUS_BANDWIDTH_SUPERWIDEBAND
+                            break;
+            case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_FULLBAND
+                            break;
+            default:        log_e("unknown bandwidth, configNr is: %i", configNr);
+                            break;
+        }
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
     }
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
+
 
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
