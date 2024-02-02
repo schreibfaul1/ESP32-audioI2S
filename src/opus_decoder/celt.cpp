@@ -1516,7 +1516,7 @@ uint32_t quant_partition(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *l
                 cm_mask = (uint32_t)(1UL << B) - 1;
                 fill &= cm_mask;
                 if (!fill) {
-                    memset(X, 0, N * sizeof(X));
+                    memset(X, 0, N * sizeof(int16_t));
                 }
                 else  {
                     if (lowband == NULL) {
