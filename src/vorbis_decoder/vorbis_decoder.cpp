@@ -617,7 +617,7 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
     s_f_vorbisParseOgg = false;
     int ret = 0; (void)ret;
 
-    int idx = VORBIS_specialIndexOf(inbuf, "OggS", 1024);
+    int idx = VORBIS_specialIndexOf(inbuf, "OggS", 8192);
     if(idx != 0){
         if(s_f_oggContinuedPage) return ERR_VORBIS_DECODER_ASYNC;
         inbuf += idx;

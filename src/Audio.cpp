@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8i
- *  Updated on: Jan 23.2024
+ *  Version 3.0.8j
+ *  Updated on: Feb 02.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4267,6 +4267,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return 1;
     }
     // status: bytesDecoded > 0 and m_decodeError >= 0
+    char* st = NULL;
     switch(m_codec) {
         case CODEC_WAV:     memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
                             if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
@@ -4280,23 +4281,26 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             break;
         case CODEC_FLAC:    if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = FLACGetOutputSamps() / getChannels();
-                            if(FLACgetStreamTitle()) {
-                                AUDIO_INFO(FLACgetStreamTitle());
-                                if(audio_showstreamtitle) audio_showstreamtitle(FLACgetStreamTitle());
+                            st = FLACgetStreamTitle();
+                            if(st) {
+                                AUDIO_INFO(st);
+                                if(audio_showstreamtitle) audio_showstreamtitle(st);
                             }
                             break;
         case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = OPUSGetOutputSamps();
-                            if(OPUSgetStreamTitle()) {
-                                AUDIO_INFO(OPUSgetStreamTitle());
-                                if(audio_showstreamtitle) audio_showstreamtitle(OPUSgetStreamTitle());
+                            st = OPUSgetStreamTitle();
+                            if(st){
+                                AUDIO_INFO(st);
+                                if(audio_showstreamtitle) audio_showstreamtitle(st);
                             }
                             break;
         case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = VORBISGetOutputSamps();
-                            if(VORBISgetStreamTitle()) {
-                                AUDIO_INFO(VORBISgetStreamTitle());
-                                if(audio_showstreamtitle) audio_showstreamtitle(VORBISgetStreamTitle());
+                            st = VORBISgetStreamTitle();
+                            if(st) {
+                                AUDIO_INFO(st);
+                                if(audio_showstreamtitle) audio_showstreamtitle(st);
                             }
                             break;
     }
