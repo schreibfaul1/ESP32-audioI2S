@@ -77,7 +77,6 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     static uint16_t fs = 0;
     static uint8_t M = 0;
-    static uint8_t configNr = 0;
     static uint16_t paddingBytes = 0;
     uint8_t paddingLength = 0;
     static uint16_t samplesPerFrame = 0;
@@ -102,11 +101,12 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             s_opusSegmentTableSize--;
             len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
         }
-
-        configNr = parseOpusTOC(inbuf[0]);
+        parseOpusTOC(inbuf[0]);
         samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
     }
+
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
+
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
             *bytesLeft -= len;
@@ -131,25 +131,29 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
                 bool p = ((inbuf[1] & 0x40) == 0x40);  // padding bit
                 M = inbuf[1] & 0x3F;           // max framecount
             //    log_i("v %i, p %i, M %i", v, p, M);
-                paddingBytes = 0;
-                paddingLength = 0;
+                *bytesLeft -= 2;
+                len        -= 2;
+                inbuf      += 2;
+
                 if(p){
+                    paddingBytes = 0;
                     paddingLength = 1;
+
                     int i = 0;
-                    while(inbuf[2 + i] == 255){
-                        paddingBytes += inbuf[2 + i];
+                    while(inbuf[i] == 255){
+                        paddingBytes += inbuf[i];
                         i++;
                     }
-                    paddingBytes += inbuf[2 + i];
-                    fs = (len - (2 + paddingLength + paddingBytes)) / M;
-                    *bytesLeft -= (3 + i);
+                    paddingBytes += inbuf[i];
                     paddingLength += i;
-                    inbuf += 2 + paddingLength;
-                //    log_e("paddingBytes %i, len %i, fs %i", paddingBytes, len, fs);
+
+                    *bytesLeft -= paddingLength;
+                    len        -= paddingLength;
+                    inbuf      += paddingLength;
                 }
+                    fs = (len - paddingBytes) / M;
             }
             *bytesLeft -= fs;
-        //    samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
             ec_dec_init((uint8_t *)inbuf, fs);
             ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
             if(ret < 0) goto exit; // celt error
@@ -157,7 +161,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
             M--;
          //   log_i("M %i fs %i spf %i", M, fs, samplesPerFrame);
             ret = ERR_OPUS_NONE;
-            if(M == 0) {s_opusCountCode = 0; *bytesLeft -= paddingBytes; goto exit;}
+            if(M == 0) {s_opusCountCode = 0; *bytesLeft -= paddingBytes; paddingBytes = 0; goto exit;}
             return ret;
             break;
         default:
@@ -262,7 +266,7 @@ int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  
 int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
     int idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
-     if(idx != 0) return 0; // is not OpusTags
+    if(idx != 0) return 0; // is not OpusTags
     char* artist = NULL;
     char* title  = NULL;
 
