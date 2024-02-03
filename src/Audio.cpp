@@ -296,6 +296,7 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
     stopSong();
+    setSampleRate(16000); // ESP32-S3 -> reduce SR, if 48000Hz a connect to another URL is impossible
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();

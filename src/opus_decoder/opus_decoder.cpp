@@ -19,7 +19,7 @@ bool      s_f_opusFramePacket = false;
 bool      s_f_opusStereoFlag = false;
 uint8_t   s_opusChannels = 0;
 uint8_t   s_opusCountCode =  0;
-uint16_t  s_opusSamplerate = 0;
+uint32_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
 uint32_t  s_opusBlockPicLen = 0;
 uint32_t  s_opusBlockPicPos = 0;
@@ -365,7 +365,7 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
              outputGain        += *(inbuf + 16);
     uint8_t  channelMap         = *(inbuf + 18);
 
-    if(channelCount == 0 or channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
+    if(channelCount == 0 || channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
     s_opusChannels = channelCount;
     if(sampleRate != 48000) return ERR_OPUS_INVALID_SAMPLERATE;
     s_opusSamplerate = sampleRate;
