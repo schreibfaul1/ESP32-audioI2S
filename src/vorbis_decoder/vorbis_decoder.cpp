@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 08.01.2023
+ *  Updated on: 03.02.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -40,7 +40,7 @@ bool      s_f_oggLastPage = false;
 bool      s_f_parseOggDone = true;
 bool      s_f_lastSegmentTable = false;
 uint16_t  s_identificatonHeaderLength = 0;
-uint16_t  s_commentHeaderLength = 0;
+uint16_t  s_vorbisCommentHeaderLength = 0;
 uint16_t  s_setupHeaderLength = 0;
 uint8_t   s_pageNr = 4;
 uint16_t  s_oggHeaderSize = 0;
@@ -54,8 +54,8 @@ char     *s_vorbisChbuf = NULL;
 int32_t   s_vorbisValidSamples = 0;
 uint8_t   s_vorbisOldMode = 0;
 uint32_t  s_blocksizes[2];
-uint32_t  s_blockPicPos = 0;
-uint32_t  s_blockPicLen = 0;
+uint32_t  s_vorbisBlockPicPos = 0;
+uint32_t  s_vorbisBlockPicLen = 0;
 uint32_t  s_commentLength = 0;
 
 uint8_t   s_nrOfCodebooks = 0;
@@ -120,8 +120,8 @@ void VORBISsetDefaults(){
     s_vorbisSegmentTableRdPtr = -1;
     s_vorbisError = 0;
     s_lastSegmentTableLen = 0;
-    s_blockPicPos = 0;
-    s_blockPicLen = 0;
+    s_vorbisBlockPicPos = 0;
+    s_vorbisBlockPicLen = 0;
 
     VORBISDecoder_ClearBuffers();
 }
@@ -205,7 +205,7 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
                     // log_i("first packet (identification len) %i", len);
                     s_identificatonHeaderLength = len;
                     ret = parseVorbisFirstPacket(inbuf, len);
-                    s_blockPicPos += 28;
+                    s_vorbisBlockPicPos += 28;
                 }
                 else{
                     ret = ERR_VORBIS_NOT_AUDIO;  // #651
@@ -213,16 +213,16 @@ int VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             }
             else if(s_pageNr == 2){ // comment header
                 int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
-                s_blockPicPos += 6;
+                s_vorbisBlockPicPos += 6;
                 if(idx == 1){
                     // log_i("second packet (comment len) %i", len);
-                    s_commentHeaderLength = len;
+                    s_vorbisCommentHeaderLength = len;
                     ret = parseVorbisComment(inbuf, len);
                 }
                 else{
                     uint16_t blockLen = len;
                     // log_i("blockPicLen %i blockLen %i", s_blockPicLen, blockLen);
-                    s_blockPicLen -= blockLen;
+                    s_vorbisBlockPicLen -= blockLen;
                     ; // commentlength is greater than (one or more) OggS frame(s)
                 }
                 // log_w("s_vorbisSegmentTableSize %d", s_vorbisSegmentTableSize);
@@ -443,7 +443,7 @@ int parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference https:
     memcpy(s_vorbisChbuf, inbuf + 11, vendorLength);
     s_vorbisChbuf[vendorLength] = '\0';
     pos += 4 + vendorLength;
-    s_commentHeaderLength -= (7 + 4 + vendorLength);
+    s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
 
     // log_i("vendorLength %x", vendorLength);
     // log_i("vendorString %s", s_vorbisChbuf);
@@ -451,7 +451,7 @@ int parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference https:
     uint8_t nrOfComments = *(inbuf + pos);
     // log_i("nrOfComments %i", nrOfComments);
     pos += 4;
-    s_commentHeaderLength -= 4;
+    s_vorbisCommentHeaderLength -= 4;
 
     int idx = 0;
     char* artist = NULL;
@@ -481,14 +481,14 @@ int parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference https:
 
         idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "metadata_block_picture=", 25);
         if(idx == 0){
-                    s_blockPicLen = commentLength - 23;
-                    s_blockPicPos += pos + 23;
-                    uint16_t blockPicLenUntilFrameEnd = s_commentHeaderLength - 4 - 23;
-                    log_i("metadata block picture found at pos %i, length %i, first blockLength %i", s_blockPicPos, s_blockPicLen, blockPicLenUntilFrameEnd);
-                    s_blockPicLen -= blockPicLenUntilFrameEnd;
+                    s_vorbisBlockPicLen = commentLength - 23;
+                    s_vorbisBlockPicPos += pos + 23;
+                    uint16_t blockPicLenUntilFrameEnd = s_vorbisCommentHeaderLength - 4 - 23;
+                    log_i("metadata block picture found at pos %i, length %i, first blockLength %i", s_vorbisBlockPicPos, s_vorbisBlockPicLen, blockPicLenUntilFrameEnd);
+                    s_vorbisBlockPicLen -= blockPicLenUntilFrameEnd;
                     }
         pos += commentLength + 4;
-        s_commentHeaderLength -= (4 + commentLength);
+        s_vorbisCommentHeaderLength -= (4 + commentLength);
     }
     if(artist && title){
         strcpy(s_vorbisChbuf, artist);
@@ -622,7 +622,7 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
         if(s_f_oggContinuedPage) return ERR_VORBIS_DECODER_ASYNC;
         inbuf += idx;
         *bytesLeft -= idx;
-        s_blockPicPos += idx;
+        s_vorbisBlockPicPos += idx;
     }
 
     int16_t segmentTableWrPtr = -1;
@@ -682,7 +682,7 @@ int VORBISparseOGG(uint8_t *inbuf, int *bytesLeft){
     }
 
     *bytesLeft -= headerSize;
-    s_blockPicPos += headerSize;
+    s_vorbisBlockPicPos += headerSize;
     if(s_pageNr < 4 && !continuedPage) s_pageNr++;
 
     s_f_oggFirstPage = firstPage;

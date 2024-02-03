@@ -21,6 +21,8 @@ uint8_t   s_opusChannels = 0;
 uint8_t   s_opusCountCode =  0;
 uint16_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
+uint32_t  s_opusBlockPicLen = 0;
+uint32_t  s_opusBlockPicPos = 0;
 char     *s_opusChbuf = NULL;
 int32_t   s_opusValidSamples = 0;
 
@@ -67,6 +69,7 @@ void OPUSsetDefaults(){
     s_opusSegmentTableSize = 0;
     s_opusSegmentTableRdPtr = -1;
     s_opusCountCode = 0;
+    s_opusBlockPicPos = 0;
 
     s_opusError = 0;
 }
@@ -311,7 +314,17 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
         idx = OPUS_specialIndexOf(inbuf + pos, "title=", 10);
         if(idx == 0){ title = strndup((const char*)(inbuf + pos + 6), commentStringLen - 6);
         }
+        idx = OPUS_specialIndexOf(inbuf + pos, "metadata_block_picture=", 25);
+        if(idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "METADATA_BLOCK_PICTURE=", 25);
+        if(idx == 0){
+            s_opusBlockPicLen = commentStringLen - 23;
+            s_opusBlockPicPos += pos + 23;
+            uint16_t blockPicLenUntilFrameEnd = commentStringLen - 23;
+            log_i("metadata block picture found at pos %i, length %i, first blockLength %i", s_opusBlockPicPos, s_opusBlockPicLen, blockPicLenUntilFrameEnd);
+            s_opusBlockPicLen -= blockPicLenUntilFrameEnd;
+        }
         pos += commentStringLen;
+
     }
     if(artist && title){
         strcpy(s_opusChbuf, artist);
@@ -419,14 +432,17 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
 
+ //   log_i("page %x", headerType );
+
     uint16_t headerSize    = pageSegments + 27;
     (void)continuedPage; (void)lastPage;
-    *bytesLeft -= headerSize;
+    *bytesLeft        -= headerSize;
+    s_opusBlockPicPos += headerSize;
 
     if(firstPage || s_f_opusSubsequentPage){ // OpusHead or OggComment may follows
         ret = parseOpusHead(inbuf + headerSize, s_opusSegmentTable[0]);
-        if(ret == 1) *bytesLeft -= s_opusSegmentTable[0];
-        if(ret < 0){ *bytesLeft -= s_opusSegmentTable[0]; return ret;}
+        if(ret == 1){ *bytesLeft -= s_opusSegmentTable[0]; s_opusBlockPicPos += s_opusSegmentTable[0];}
+        if(ret < 0){  *bytesLeft -= s_opusSegmentTable[0]; s_opusBlockPicPos += s_opusSegmentTable[0]; return ret;}
         ret = parseOpusComment(inbuf + headerSize, s_opusSegmentTable[0]);
         if(ret == 1) *bytesLeft -= s_opusSegmentTable[0];
         if(ret < 0){ *bytesLeft -= s_opusSegmentTable[0]; return ret;}
