@@ -3,7 +3,10 @@
 //#pragma GCC optimize ("O3")
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
-#include "Arduino.h"
+#include <stdint.h>
+#include <memory.h>
+
+
 
 enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_NONE = 0,

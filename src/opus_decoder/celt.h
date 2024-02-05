@@ -36,6 +36,9 @@
 #pragma GCC optimize ("Os")
 
 #include "Arduino.h"
+#include <stdint.h>
+#include <cstddef>
+#include <assert.h>
 
 #define OPUS_RESET_STATE             4028
 #define OPUS_GET_SAMPLE_RATE_REQUEST 4029
@@ -183,8 +186,8 @@ struct CELTMode {
 
 extern const CELTMode m_CELTMode;
 
-#define min(a,b) ((a)<(b)?(a):(b))
-#define max(a,b) ((a)>(b)?(a):(b))
+#define _min(a,b) ((a)<(b)?(a):(b))
+#define _max(a,b) ((a)>(b)?(a):(b))
 
 inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 #define C_MUL(m,a,b)  do{ (m).r = SUB32_ovflw(S_MUL((a).r,(b).r) , S_MUL((a).i,(b).i)); \
@@ -206,7 +209,8 @@ inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 
 
 #define EC_MINI(_a,_b)      ((_a)+(((_b)-(_a))&-((_b)<(_a))))
-#define EC_CLZ0    ((int32_t)sizeof(uint32_t)*CHAR_BIT)
+#define _CHAR_BIT 8
+#define EC_CLZ0    ((int32_t)sizeof(uint32_t)*_CHAR_BIT)
 #define EC_CLZ(_x) (__builtin_clz(_x))
 #define EC_ILOG(_x) (EC_CLZ0-EC_CLZ(_x))
 
@@ -342,8 +346,8 @@ inline int32_t celt_sudiv(int32_t n, int32_t d) {
 
 inline int16_t sig2word16(int32_t x){
    x = PSHR(x, 12);
-   x = max(x, -32768);
-   x = min(x, 32767);
+   x = _max(x, -32768);
+   x = _min(x, 32767);
    return (int16_t)(x);
 }
 
@@ -378,10 +382,10 @@ inline int32_t celt_maxabs16(const int16_t *x, int32_t len) {
     int16_t maxval = 0;
     int16_t minval = 0;
     for(i = 0; i < len; i++) {
-        maxval = max(maxval, x[i]);
-        minval = min(minval, x[i]);
+        maxval = _max(maxval, x[i]);
+        minval = _min(minval, x[i]);
     }
-    return max(EXTEND32(maxval), -EXTEND32(minval));
+    return _max(EXTEND32(maxval), -EXTEND32(minval));
 }
 
 inline int32_t celt_maxabs32(const int32_t *x, int32_t len) {
@@ -389,10 +393,10 @@ inline int32_t celt_maxabs32(const int32_t *x, int32_t len) {
     int32_t maxval = 0;
     int32_t minval = 0;
     for(i = 0; i < len; i++) {
-        maxval = max(maxval, x[i]);
-        minval = min(minval, x[i]);
+        maxval = _max(maxval, x[i]);
+        minval = _min(minval, x[i]);
     }
-    return max(maxval, -minval);
+    return _max(maxval, -minval);
 }
 
 /** Integer log in base2. Undefined for zero and negative numbers */

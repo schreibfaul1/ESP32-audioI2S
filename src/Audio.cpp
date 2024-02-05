@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8j
- *  Updated on: Feb 02.2024
+ *  Version 3.0.8k
+ *  Updated on: Feb 05.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2960,7 +2960,7 @@ void Audio::processLocalFile() {
                         }
                     }
                 }
-                AUDIO_INFO("audio file is corrupt --> send EOF"); // no return, fall through
+                if(m_codec == CODEC_MP3) AUDIO_INFO("audio file is corrupt --> send EOF"); // no return, fall through
             }
         }
 

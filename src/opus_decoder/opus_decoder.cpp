@@ -3,26 +3,38 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 02.02.2024
+ *  Updated on: 05.02.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
 //----------------------------------------------------------------------------------------------------------------------
 #include "opus_decoder.h"
 #include "celt.h"
+#include "Arduino.h"
+#include <vector>
+
 
 // global vars
-bool      s_f_opusSubsequentPage = false;
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
-bool      s_f_opusFramePacket = false;
 bool      s_f_opusStereoFlag = false;
+bool      s_f_continuedPage = false;
+bool      s_f_firstPage = false;
+bool      s_f_lastPage = false;
+bool      s_f_nextChunk = false;
+
 uint8_t   s_opusChannels = 0;
 uint8_t   s_opusCountCode =  0;
+uint8_t   s_opusPageNr = 0;
+uint16_t  s_opusOggHeaderSize = 0;
 uint32_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
-uint32_t  s_opusBlockPicLen = 0;
+uint32_t  s_opusCurrentFilePos = 0;
+int32_t   s_opusBlockPicLen = 0;
+int32_t   s_blockPicLenUntilFrameEnd = 0;
+int32_t   s_opusRemainBlockPicLen = 0;
 uint32_t  s_opusBlockPicPos = 0;
+uint32_t  s_opusBlockLen = 0;
 char     *s_opusChbuf = NULL;
 int32_t   s_opusValidSamples = 0;
 
@@ -31,6 +43,8 @@ uint8_t   s_opusSegmentTableSize = 0;
 int16_t   s_opusSegmentTableRdPtr = -1;
 int8_t    s_opusError = 0;
 float     s_opusCompressionRatio = 0;
+
+std::vector <uint32_t>s_opusBlockPicItem;
 
 bool OPUSDecoder_AllocateBuffers(){
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
@@ -57,21 +71,26 @@ void OPUSDecoder_ClearBuffers(){
     if(s_opusSegmentTable) memset(s_opusSegmentTable, 0, 256 * sizeof(int16_t));
 }
 void OPUSsetDefaults(){
-    s_f_opusSubsequentPage = false;
     s_f_opusParseOgg = false;
     s_f_newSteamTitle = false;  // streamTitle
-    s_f_opusFramePacket = false;
     s_f_opusStereoFlag = false;
     s_opusChannels = 0;
     s_opusSamplerate = 0;
     s_opusSegmentLength = 0;
     s_opusValidSamples = 0;
     s_opusSegmentTableSize = 0;
+    s_opusOggHeaderSize = 0;
     s_opusSegmentTableRdPtr = -1;
     s_opusCountCode = 0;
     s_opusBlockPicPos = 0;
-
+    s_opusCurrentFilePos = 0;
+    s_opusBlockPicLen = 0;
+    s_opusRemainBlockPicLen = 0;
+    s_blockPicLenUntilFrameEnd = 0;
+    s_opusBlockLen = 0;
+    s_opusPageNr = 0;
     s_opusError = 0;
+    s_opusBlockPicItem.clear(); s_opusBlockPicItem.shrink_to_fit();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -90,40 +109,125 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     int len = 0;
 
     if(s_f_opusParseOgg){
+        s_f_opusParseOgg = false;
         fs = 0;
         M = 0;
         paddingBytes = 0;
         s_opusCountCode = 0;
         ret = OPUSparseOGG(inbuf, bytesLeft);
-        if(ret == ERR_OPUS_NONE) return OPUS_PARSE_OGG_DONE; // ok
-        else return ret;  // error
+        if(ret != ERR_OPUS_NONE) return ret; // error
+        inbuf += s_opusOggHeaderSize;
     }
+
+    if(s_opusPageNr == 0){   // OpusHead
+        s_f_opusParseOgg = true;// goto next page
+        ret = parseOpusHead(inbuf, s_opusSegmentTable[0]);
+        *bytesLeft           -= s_opusSegmentTable[0];
+        s_opusCurrentFilePos += s_opusSegmentTable[0];
+        if(ret == 1){ s_opusPageNr++;}
+        if(ret == 0){ log_e("OpusHead not found"); }
+        return OPUS_PARSE_OGG_DONE;
+    }
+    if(s_opusPageNr == 1){   // OpusComment
+        if(s_opusBlockLen > 0) {goto processChunk;}
+        ret = parseOpusComment(inbuf, s_opusSegmentTable[0]);
+        if(ret == 0) log_e("OpusCommemtPage not found");
+        s_opusBlockLen = s_opusSegmentTable[0];
+processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS frame size)
+        if(s_opusBlockLen <= 8192) {
+            *bytesLeft           -= s_opusBlockLen;
+            s_opusCurrentFilePos += s_opusBlockLen;
+            s_opusBlockLen = 0;
+            s_opusPageNr++;
+            s_f_nextChunk = true;
+            s_f_opusParseOgg = true;
+        }
+        else{
+            s_opusBlockLen -= 8192;
+            *bytesLeft -= 8192;
+            s_opusCurrentFilePos += 8192;
+        }
+        return OPUS_PARSE_OGG_DONE;
+    }
+    if(s_opusPageNr == 2){  // OpusComment Subsequent Pages
+        static int32_t opusSegmentLength = 0;
+        if(s_f_nextChunk){
+            s_f_nextChunk = false;
+            opusSegmentLength = s_opusSegmentLength;
+        }
+        // log_i("page(2) opusSegmentLength %i, s_opusRemainBlockPicLen %i", opusSegmentLength, s_opusRemainBlockPicLen);
+
+        if(s_opusRemainBlockPicLen <= 0 && opusSegmentLength <= 0){
+            s_opusPageNr++; // fall through
+            s_f_opusParseOgg = true;
+            if(s_opusBlockPicItem.size() > 0){ // get blockpic data
+                log_i("---------------------------------------------------------------------------");
+                log_i("metadata blockpic found at pos %i, size %i bytes", s_opusBlockPicPos, s_opusBlockPicLen);
+                for(int i = 0; i < s_opusBlockPicItem.size(); i += 2){
+                    log_i("segment %02i, pos %07i, len %05i", i / 2, s_opusBlockPicItem[i], s_opusBlockPicItem[i + 1]);
+                }
+                log_i("---------------------------------------------------------------------------");
+            }
+            return OPUS_PARSE_OGG_DONE;
+        }
+        if(opusSegmentLength == 0){
+            s_f_opusParseOgg = true;
+            s_f_nextChunk = true;
+            return OPUS_PARSE_OGG_DONE;
+        }
+
+        int m = min(s_opusRemainBlockPicLen, opusSegmentLength);
+        if(m > 8192){
+            s_opusRemainBlockPicLen -= 8192;
+            opusSegmentLength -= 8192;
+            *bytesLeft -= 8192;
+            s_opusCurrentFilePos += 8192;
+            return OPUS_PARSE_OGG_DONE;
+        }
+        if(m == s_opusRemainBlockPicLen){
+            *bytesLeft -= s_opusRemainBlockPicLen;
+            s_opusCurrentFilePos += s_opusRemainBlockPicLen;
+            opusSegmentLength -= s_opusRemainBlockPicLen;
+            s_opusRemainBlockPicLen = 0;
+            *bytesLeft -= opusSegmentLength; // paddind bytes
+            s_opusCurrentFilePos += opusSegmentLength;
+            opusSegmentLength = 0;
+            return OPUS_PARSE_OGG_DONE;
+        }
+        if(m == opusSegmentLength){
+            *bytesLeft -= opusSegmentLength;
+            s_opusCurrentFilePos += opusSegmentLength;
+            s_opusRemainBlockPicLen -= opusSegmentLength;
+            opusSegmentLength = 0;
+            return OPUS_PARSE_OGG_DONE;
+        }
+        log_e("never reach this!");
+    }
+
 
     if(s_opusCountCode > 0) goto FramePacking; // more than one frame in the packet
 
-    if(s_f_opusFramePacket){
-        if(s_opusSegmentTableSize > 0){
-            s_opusSegmentTableRdPtr++;
-            s_opusSegmentTableSize--;
-            len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
-        }
-        configNr = parseOpusTOC(inbuf[0]);
-        samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
-
-        switch(configNr){
-            case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_NARROWBAND
-                            break;
-            case 20 ... 23: endband = 17; // OPUS_BANDWIDTH_WIDEBAND
-                            break;
-            case 24 ... 27: endband = 19; // OPUS_BANDWIDTH_SUPERWIDEBAND
-                            break;
-            case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_FULLBAND
-                            break;
-            default:        log_e("unknown bandwidth, configNr is: %i", configNr);
-                            break;
-        }
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
+    if(s_opusSegmentTableSize > 0){
+        s_opusSegmentTableRdPtr++;
+        s_opusSegmentTableSize--;
+        len = s_opusSegmentTable[s_opusSegmentTableRdPtr];
     }
+
+    configNr = parseOpusTOC(inbuf[0]);
+    samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
+    switch(configNr){
+        case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_NARROWBAND
+                        break;
+        case 20 ... 23: endband = 17; // OPUS_BANDWIDTH_WIDEBAND
+                        break;
+        case 24 ... 27: endband = 19; // OPUS_BANDWIDTH_SUPERWIDEBAND
+                        break;
+        case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_FULLBAND
+                        break;
+        default:        log_e("unknown bandwidth, configNr is: %i", configNr);
+                        break;
+    }
+    celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
 
@@ -131,6 +235,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
             *bytesLeft -= len;
+            s_opusCurrentFilePos += len;
             len--;
             inbuf++;
             ec_dec_init((uint8_t *)inbuf, len);
@@ -153,6 +258,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
                 M = inbuf[1] & 0x3F;           // max framecount
             //    log_i("v %i, p %i, M %i", v, p, M);
                 *bytesLeft -= 2;
+                s_opusCurrentFilePos += 2;
                 len        -= 2;
                 inbuf      += 2;
 
@@ -169,12 +275,14 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
                     paddingLength += i;
 
                     *bytesLeft -= paddingLength;
+                    s_opusCurrentFilePos += paddingLength;
                     len        -= paddingLength;
                     inbuf      += paddingLength;
                 }
                     fs = (len - paddingBytes) / M;
             }
             *bytesLeft -= fs;
+            s_opusCurrentFilePos += fs;
             ec_dec_init((uint8_t *)inbuf, fs);
             ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
             if(ret < 0) goto exit; // celt error
@@ -192,9 +300,8 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
     }
 
 exit:
-    if(s_opusSegmentTableSize== 0){
+    if(s_opusSegmentTableSize == 0){
         s_opusSegmentTableRdPtr = -1; // back to the parking position
-        s_f_opusFramePacket = false;
         s_f_opusParseOgg = true;
     }
     return ret;
@@ -288,43 +395,55 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
     int idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
     if(idx != 0) return 0; // is not OpusTags
+
     char* artist = NULL;
     char* title  = NULL;
 
     uint16_t pos = 8;
+             nBytes -= 8;
     uint32_t vendorLength       = *(inbuf + 11) << 24; // lengt of vendor string, e.g. Lavf58.65.101
              vendorLength      += *(inbuf + 10) << 16;
              vendorLength      += *(inbuf +  9) << 8;
              vendorLength      += *(inbuf +  8);
     pos += vendorLength + 4;
+    nBytes -= (vendorLength + 4);
     uint32_t commentListLength  = *(inbuf + 3 + pos) << 24; // nr. of comment entries
              commentListLength += *(inbuf + 2 + pos) << 16;
              commentListLength += *(inbuf + 1 + pos) << 8;
              commentListLength += *(inbuf + 0 + pos);
     pos += 4;
+    nBytes -= 4;
     for(int i = 0; i < commentListLength; i++){
         uint32_t commentStringLen   = *(inbuf + 3 + pos) << 24;
                  commentStringLen  += *(inbuf + 2 + pos) << 16;
                  commentStringLen  += *(inbuf + 1 + pos) << 8;
                  commentStringLen  += *(inbuf + 0 + pos);
         pos += 4;
+        nBytes -= 4;
         idx = OPUS_specialIndexOf(inbuf + pos, "artist=", 10);
+        if(idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "ARTIST=", 10);
         if(idx == 0){ artist = strndup((const char*)(inbuf + pos + 7), commentStringLen - 7);
         }
         idx = OPUS_specialIndexOf(inbuf + pos, "title=", 10);
+        if(idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "TITLE=", 10);
         if(idx == 0){ title = strndup((const char*)(inbuf + pos + 6), commentStringLen - 6);
         }
         idx = OPUS_specialIndexOf(inbuf + pos, "metadata_block_picture=", 25);
         if(idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "METADATA_BLOCK_PICTURE=", 25);
         if(idx == 0){
             s_opusBlockPicLen = commentStringLen - 23;
-            s_opusBlockPicPos += pos + 23;
-            uint16_t blockPicLenUntilFrameEnd = commentStringLen - 23;
-            log_i("metadata block picture found at pos %i, length %i, first blockLength %i", s_opusBlockPicPos, s_opusBlockPicLen, blockPicLenUntilFrameEnd);
-            s_opusBlockPicLen -= blockPicLenUntilFrameEnd;
+            s_opusBlockPicPos += s_opusCurrentFilePos + pos + 23;
+            s_blockPicLenUntilFrameEnd = nBytes - 23;
+        //  log_i("metadata block picture found at pos %i, length %i", s_opusBlockPicPos, s_opusBlockPicLen);
+            uint32_t pLen = _min(s_blockPicLenUntilFrameEnd, s_opusBlockPicLen);
+            if(pLen){
+                s_opusBlockPicItem.push_back(s_opusBlockPicPos);
+                s_opusBlockPicItem.push_back(pLen);
+            }
+            s_opusRemainBlockPicLen = s_opusBlockPicLen - s_blockPicLenUntilFrameEnd;
         }
         pos += commentStringLen;
-
+        nBytes -= commentStringLen;
     }
     if(artist && title){
         strcpy(s_opusChbuf, artist);
@@ -379,8 +498,6 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
 //----------------------------------------------------------------------------------------------------------------------
 int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    s_f_opusParseOgg = false;
-    int ret = 0;
     int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if(idx != 0) return ERR_OPUS_DECODER_ASYNC;
 
@@ -419,6 +536,7 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
         int n = *(inbuf + 27 + i);
         while(*(inbuf + 27 + i) == 255){
             i++;
+            if(i == pageSegments) break;
             n+= *(inbuf + 27 + i);
         }
         segmentTableWrPtr++;
@@ -428,31 +546,24 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     s_opusSegmentTableSize = segmentTableWrPtr + 1;
     s_opusCompressionRatio = (float)(960 * 2 * pageSegments)/s_opusSegmentLength;  // const 960 validBytes out
 
-    bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
-    bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
-    bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
+    s_f_continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
+    s_f_firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
+    s_f_lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
 
- //   log_i("page %x", headerType );
+//  log_i("firstPage %i, continuedPage %i, lastPage %i",s_f_firstPage, s_f_continuedPage, s_f_lastPage);
 
-    uint16_t headerSize    = pageSegments + 27;
-    (void)continuedPage; (void)lastPage;
-    *bytesLeft        -= headerSize;
-    s_opusBlockPicPos += headerSize;
+    uint16_t headerSize   = pageSegments + 27;
+    *bytesLeft           -= headerSize;
+    s_opusCurrentFilePos += headerSize;
+    s_opusOggHeaderSize   = headerSize;
 
-    if(firstPage || s_f_opusSubsequentPage){ // OpusHead or OggComment may follows
-        ret = parseOpusHead(inbuf + headerSize, s_opusSegmentTable[0]);
-        if(ret == 1){ *bytesLeft -= s_opusSegmentTable[0]; s_opusBlockPicPos += s_opusSegmentTable[0];}
-        if(ret < 0){  *bytesLeft -= s_opusSegmentTable[0]; s_opusBlockPicPos += s_opusSegmentTable[0]; return ret;}
-        ret = parseOpusComment(inbuf + headerSize, s_opusSegmentTable[0]);
-        if(ret == 1) *bytesLeft -= s_opusSegmentTable[0];
-        if(ret < 0){ *bytesLeft -= s_opusSegmentTable[0]; return ret;}
-        s_f_opusParseOgg = true;// goto next page
+    int32_t pLen = _min((int32_t)s_opusSegmentLength, s_opusRemainBlockPicLen);
+//  log_i("s_opusSegmentLength %i, s_opusRemainBlockPicLen %i", s_opusSegmentLength, s_opusRemainBlockPicLen);
+    if(s_opusBlockPicLen && pLen > 0){
+        s_opusBlockPicItem.push_back(s_opusCurrentFilePos);
+        s_opusBlockPicItem.push_back(pLen);
     }
-
-    s_f_opusFramePacket = true;
-    if(firstPage) s_f_opusSubsequentPage = true; else s_f_opusSubsequentPage = false;
-
-    return ERR_OPUS_NONE; // no error
+    return ERR_OPUS_NONE;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
