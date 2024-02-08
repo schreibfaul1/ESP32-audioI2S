@@ -757,6 +757,9 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
         if (!audioName) {
             AUDIO_INFO("File doesn't exist: \"%s\"", path);
             xSemaphoreGiveRecursive(mutex_audio);
+            if (audioNameAlternative) {
+                free(audioNameAlternative);
+            }
             return false;
         }
 
