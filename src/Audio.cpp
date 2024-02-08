@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8k
- *  Updated on: Feb 05.2024
+ *  Version 3.0.8l
+ *  Updated on: Feb 08.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2987,6 +2987,7 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
+        setSampleRate(16000); // workaround OPUS48k ESP32-S3 ESP-IDF Version: 4.4.5 - reduce sampRate because need DMA interrupt
         AUDIO_INFO("End of file \"%s\"", afn);
         if(audio_eof_mp3) audio_eof_mp3(afn);
         if(afn) {
@@ -4270,6 +4271,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     // status: bytesDecoded > 0 and m_decodeError >= 0
     char* st = NULL;
+    std::vector<uint32_t> vec;
     switch(m_codec) {
         case CODEC_WAV:     memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
                             if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
@@ -4296,6 +4298,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 AUDIO_INFO(st);
                                 if(audio_showstreamtitle) audio_showstreamtitle(st);
                             }
+                            vec = OPUSgetMetadataBlockPicture();
+                            if(vec.size() > 0){ // get blockpic data
+                                // log_i("---------------------------------------------------------------------------");
+                                // log_i("ogg metadata blockpicture found:");
+                                // for(int i = 0; i < vec.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
+                                // log_i("---------------------------------------------------------------------------");
+                                if(audio_oggimage) audio_oggimage(audiofile, vec);
+                            }
                             break;
         case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = VORBISGetOutputSamps();
@@ -4303,6 +4313,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             if(st) {
                                 AUDIO_INFO(st);
                                 if(audio_showstreamtitle) audio_showstreamtitle(st);
+                            }
+                            vec = VORBISgetMetadataBlockPicture();
+                            if(vec.size() > 0){ // get blockpic data
+                                // log_i("---------------------------------------------------------------------------");
+                                // log_i("ogg metadata blockpicture found:");
+                                // for(int i = 0; i < vec.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
+                                // log_i("---------------------------------------------------------------------------");
+                                if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
                             break;
     }

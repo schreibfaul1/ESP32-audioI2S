@@ -20,14 +20,15 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 06.01.2023
+ *  Updated on: 08.02.2024
  */
 
 
 
 
 #include "Arduino.h"
-
+#include <vector>
+using namespace std;
 #define VI_FLOORB       2
 #define VIF_POSIT      63
 
@@ -216,82 +217,82 @@ inline int32_t CLIP_TO_15(int32_t x) {
 //----------------------------------------------------------------------------------------------------------------------
 
 // ogg impl
-bool     VORBISDecoder_AllocateBuffers();
-void     VORBISDecoder_FreeBuffers();
-void     VORBISDecoder_ClearBuffers();
-void     VORBISsetDefaults();
-void     clearGlobalConfigurations();
-int      VORBISDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
-uint8_t  VORBISGetChannels();
-uint32_t VORBISGetSampRate();
-uint8_t  VORBISGetBitsPerSample();
-uint32_t VORBISGetBitRate();
-uint16_t VORBISGetOutputSamps();
-char    *VORBISgetStreamTitle();
-int      VORBISFindSyncWord(unsigned char *buf, int nBytes);
-int      VORBISparseOGG(uint8_t *inbuf, int *bytesLeft);
-int      vorbisDecodePage1(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
-int      vorbisDecodePage2(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
-int      vorbisDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
-int      vorbisDecodePage4(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short* outbuf);
-int      parseVorbisComment(uint8_t *inbuf, int16_t nBytes);
-int      parseVorbisCodebook();
-int      parseVorbisFirstPacket(uint8_t *inbuf, int16_t nBytes);
-uint16_t continuedOggPackets(uint8_t *inbuf);
-int      vorbis_book_unpack(codebook_t *s);
-uint32_t decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t *b, int maptype);
-int      oggpack_eop();
+bool                  VORBISDecoder_AllocateBuffers();
+void                  VORBISDecoder_FreeBuffers();
+void                  VORBISDecoder_ClearBuffers();
+void                  VORBISsetDefaults();
+void                  clearGlobalConfigurations();
+int                   VORBISDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf);
+uint8_t               VORBISGetChannels();
+uint32_t              VORBISGetSampRate();
+uint8_t               VORBISGetBitsPerSample();
+uint32_t              VORBISGetBitRate();
+uint16_t              VORBISGetOutputSamps();
+char*                 VORBISgetStreamTitle();
+vector<uint32_t>      VORBISgetMetadataBlockPicture();
+int                   VORBISFindSyncWord(unsigned char* buf, int nBytes);
+int                   VORBISparseOGG(uint8_t* inbuf, int* bytesLeft);
+int                   vorbisDecodePage1(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
+int                   vorbisDecodePage2(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
+int                   vorbisDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
+int                   vorbisDecodePage4(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short* outbuf);
+int                   parseVorbisComment(uint8_t* inbuf, int16_t nBytes);
+int                   parseVorbisCodebook();
+int                   parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
+uint16_t              continuedOggPackets(uint8_t* inbuf);
+int                   vorbis_book_unpack(codebook_t* s);
+uint32_t              decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int maptype);
+int                   oggpack_eop();
 vorbis_info_floor_t*  floor0_info_unpack();
 vorbis_info_floor_t*  floor1_info_unpack();
-int      res_unpack(vorbis_info_residue_t *info);
-int      mapping_info_unpack(vorbis_info_mapping_t *info);
-void     vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n);
-void     floor_free_info(vorbis_info_floor_t *i);
-void     res_clear_info(vorbis_info_residue_t *info);
-void     mapping_clear_info(vorbis_info_mapping_t *info);
+int                   res_unpack(vorbis_info_residue_t* info);
+int                   mapping_info_unpack(vorbis_info_mapping_t* info);
+void                  vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
+void                  floor_free_info(vorbis_info_floor_t* i);
+void                  res_clear_info(vorbis_info_residue_t* info);
+void                  mapping_clear_info(vorbis_info_mapping_t* info);
 // vorbis decoder impl
-int      vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
-vorbis_dsp_state_t* vorbis_dsp_create();
-void     vorbis_dsp_destroy(vorbis_dsp_state_t *v);
-void     mdct_shift_right(int n, int32_t *in, int32_t *right);
-int      mapping_inverse(vorbis_info_mapping_t *info);
-int      floor0_memosize(vorbis_info_floor_t *i);
-int      floor1_memosize(vorbis_info_floor_t *i);
-int32_t *floor0_inverse1(vorbis_info_floor_t *i, int32_t *lsp);
-int32_t *floor1_inverse1(vorbis_info_floor_t *in, int32_t *fit_value);
-int32_t  vorbis_book_decode(codebook_t* book);
-int32_t  decode_packed_entry_number(codebook_t *book);
-int      render_point(int x0, int x1, int y0, int y1, int x);
-int32_t  vorbis_book_decodev_set(codebook_t *book, int32_t *a, int n, int point);
-int      decode_map(codebook_t *s, int32_t *v, int point);
-int      res_inverse(vorbis_info_residue_t *info, int32_t **in, int *nonzero, uint8_t ch);
-int32_t  vorbis_book_decodev_add(codebook_t *book, int32_t *a, int n, int point);
-int32_t  vorbis_book_decodevs_add(codebook_t *book, int32_t *a, int n, int point);
-int      floor0_inverse2(vorbis_info_floor_t *i, int32_t *lsp, int32_t *out);
-int      floor1_inverse2(vorbis_info_floor_t *in, int32_t *fit_value, int32_t *out);
-void     render_line(int n, int x0, int x1, int y0, int y1, int32_t *d);
-void     vorbis_lsp_to_curve(int32_t *curve, int n, int ln, int32_t *lsp, int m, int32_t amp, int32_t ampoffset, int32_t nyq);
-int32_t  toBARK(int n);
-int32_t  vorbis_coslook_i(int32_t a);
-int32_t  vorbis_coslook2_i(int32_t a);
-int32_t  vorbis_fromdBlook_i(int32_t a);
-int32_t  vorbis_invsqlook_i(int32_t a, int32_t e);
-void     mdct_backward(int n, int32_t *in);
-void     presymmetry(int32_t *in, int n2, int step);
-void     mdct_butterflies(int32_t *x, int points, int shift);
-void     mdct_butterfly_generic(int32_t *x, int points, int step);
-void     mdct_butterfly_32(int32_t *x);
-void     mdct_butterfly_16(int32_t *x);
-void     mdct_butterfly_8(int32_t *x);
-void     mdct_bitreverse(int32_t *x, int n, int shift);
-int      bitrev12(int x);
-void     mdct_step7(int32_t *x, int n, int step);
-void     mdct_step8(int32_t *x, int n, int step);
-int32_t  vorbis_book_decodevv_add(codebook_t *book, int32_t **a, int32_t offset, uint8_t ch, int n, int point);
-int      vorbis_dsp_pcmout(int16_t *outBuff, int outBuffSize);
-void     mdct_unroll_lap(int n0, int n1, int lW, int W, int32_t *in, int32_t *right, const int32_t *w0, const int32_t *w1, short int *out,
-                     int step, int start, /* samples, this frame */
-                     int end /* samples, this frame */);
+int                   vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
+vorbis_dsp_state_t*   vorbis_dsp_create();
+void                  vorbis_dsp_destroy(vorbis_dsp_state_t* v);
+void                  mdct_shift_right(int n, int32_t* in, int32_t* right);
+int                   mapping_inverse(vorbis_info_mapping_t* info);
+int                   floor0_memosize(vorbis_info_floor_t* i);
+int                   floor1_memosize(vorbis_info_floor_t* i);
+int32_t*              floor0_inverse1(vorbis_info_floor_t* i, int32_t* lsp);
+int32_t*              floor1_inverse1(vorbis_info_floor_t* in, int32_t* fit_value);
+int32_t               vorbis_book_decode(codebook_t* book);
+int32_t               decode_packed_entry_number(codebook_t* book);
+int                   render_point(int x0, int x1, int y0, int y1, int x);
+int32_t               vorbis_book_decodev_set(codebook_t* book, int32_t* a, int n, int point);
+int                   decode_map(codebook_t* s, int32_t* v, int point);
+int                   res_inverse(vorbis_info_residue_t* info, int32_t** in, int* nonzero, uint8_t ch);
+int32_t               vorbis_book_decodev_add(codebook_t* book, int32_t* a, int n, int point);
+int32_t               vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int n, int point);
+int                   floor0_inverse2(vorbis_info_floor_t* i, int32_t* lsp, int32_t* out);
+int                   floor1_inverse2(vorbis_info_floor_t* in, int32_t* fit_value, int32_t* out);
+void                  render_line(int n, int x0, int x1, int y0, int y1, int32_t* d);
+void                  vorbis_lsp_to_curve(int32_t* curve, int n, int ln, int32_t* lsp, int m, int32_t amp, int32_t ampoffset, int32_t nyq);
+int32_t               toBARK(int n);
+int32_t               vorbis_coslook_i(int32_t a);
+int32_t               vorbis_coslook2_i(int32_t a);
+int32_t               vorbis_fromdBlook_i(int32_t a);
+int32_t               vorbis_invsqlook_i(int32_t a, int32_t e);
+void                  mdct_backward(int n, int32_t* in);
+void                  presymmetry(int32_t* in, int n2, int step);
+void                  mdct_butterflies(int32_t* x, int points, int shift);
+void                  mdct_butterfly_generic(int32_t* x, int points, int step);
+void                  mdct_butterfly_32(int32_t* x);
+void                  mdct_butterfly_16(int32_t* x);
+void                  mdct_butterfly_8(int32_t* x);
+void                  mdct_bitreverse(int32_t* x, int n, int shift);
+int                   bitrev12(int x);
+void                  mdct_step7(int32_t* x, int n, int step);
+void                  mdct_step8(int32_t* x, int n, int step);
+int32_t               vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int n, int point);
+int                   vorbis_dsp_pcmout(int16_t* outBuff, int outBuffSize);
+void                  mdct_unroll_lap(int n0, int n1, int lW, int W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, short int* out, int step, int start, /* samples, this frame */
+                                int end /* samples, this frame */);
 
 // some helper functions
 int      VORBIS_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);

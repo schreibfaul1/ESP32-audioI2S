@@ -24,6 +24,7 @@
 #include "lookup.h"
 #include "alloca.h"
 #include <vector>
+using namespace std;
 
 #define __malloc_heap_psram(size) \
     heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
@@ -33,6 +34,7 @@
 
 // global vars
 bool      s_f_vorbisNewSteamTitle = false;  // streamTitle
+bool      s_f_vorbisNewMetadataBlockPicture = false;
 bool      s_f_oggFirstPage = false;
 bool      s_f_oggContinuedPage = false;
 bool      s_f_oggLastPage = false;
@@ -85,7 +87,7 @@ vorbis_info_mapping_t *s_map_param = NULL;
 vorbis_info_mode_t    *s_mode_param = NULL;
 vorbis_dsp_state_t    *s_dsp_state = NULL;
 
-std::vector <uint32_t>s_vorbisBlockPicItem;
+vector<uint32_t>s_vorbisBlockPicItem;
 
 
 bool VORBISDecoder_AllocateBuffers(){
@@ -109,6 +111,7 @@ void VORBISDecoder_ClearBuffers(){
 void VORBISsetDefaults(){
     s_pageNr = 4;
     s_f_vorbisNewSteamTitle = false;  // streamTitle
+    s_f_vorbisNewMetadataBlockPicture = false;
     s_f_lastSegmentTable = false;
     s_f_parseOggDone = false;
     s_f_oggFirstPage = false;
@@ -131,6 +134,8 @@ void VORBISsetDefaults(){
     s_vorbisBlockPicLen = 0;
     s_vorbisBlockPicLenUntilFrameEnd = 0;
     s_commentBlockSegmentSize = 0;
+    s_vorbisBlockPicItem.clear();
+    s_vorbisBlockPicItem.shrink_to_fit();
 
     VORBISDecoder_ClearBuffers();
 }
@@ -199,14 +204,13 @@ int VORBISDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf) {
             s_commentLength -= s_commentBlockSegmentSize;
             s_commentBlockSegmentSize = 0;
         }
-        if(s_vorbisRemainBlockPicLen <= 0) {
+        if(s_vorbisRemainBlockPicLen <= 0 && !s_f_vorbisNewMetadataBlockPicture) {
             if(s_vorbisBlockPicItem.size() > 0) { // get blockpic data
-                log_i("---------------------------------------------------------------------------");
-                log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                for(int i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
-                log_i("---------------------------------------------------------------------------");
-                s_vorbisBlockPicItem.clear();
-                s_vorbisBlockPicItem.shrink_to_fit();
+                // log_i("---------------------------------------------------------------------------");
+                // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
+                // for(int i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
+                // log_i("---------------------------------------------------------------------------");
+                s_f_vorbisNewMetadataBlockPicture = true;
             }
         }
         return VORBIS_PARSE_OGG_DONE;
@@ -278,6 +282,8 @@ int vorbisDecodePage2(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
     int ret = VORBIS_PARSE_OGG_DONE;
     int idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     if(idx == 1) {
+        s_vorbisBlockPicItem.clear();
+        s_vorbisBlockPicItem.shrink_to_fit();
         s_f_vorbisStr_found = true;
         s_vorbisCommentHeaderLength = segmentLength;
         ret = parseVorbisComment(inbuf, segmentLength);
@@ -431,6 +437,17 @@ char* VORBISgetStreamTitle(){
         return s_vorbisChbuf;
     }
     return NULL;
+}
+vector<uint32_t> VORBISgetMetadataBlockPicture(){
+    if(s_f_vorbisNewMetadataBlockPicture){
+        s_f_vorbisNewMetadataBlockPicture = false;
+        return s_vorbisBlockPicItem;
+    }
+    if(s_vorbisBlockPicItem.size() > 0){
+        s_vorbisBlockPicItem.clear();
+        s_vorbisBlockPicItem.shrink_to_fit();
+    }
+    return s_vorbisBlockPicItem;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int parseVorbisFirstPacket(uint8_t *inbuf, int16_t nBytes){ // 4.2.2. Identification header

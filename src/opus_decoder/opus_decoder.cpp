@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 05.02.2024
+ *  Updated on: 08.02.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -17,6 +17,7 @@
 // global vars
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
+bool      s_f_opusNewMetadataBlockPicture = false; // new metadata block picture
 bool      s_f_opusStereoFlag = false;
 bool      s_f_continuedPage = false;
 bool      s_f_firstPage = false;
@@ -73,6 +74,7 @@ void OPUSDecoder_ClearBuffers(){
 void OPUSsetDefaults(){
     s_f_opusParseOgg = false;
     s_f_newSteamTitle = false;  // streamTitle
+    s_f_opusNewMetadataBlockPicture = false;
     s_f_opusStereoFlag = false;
     s_opusChannels = 0;
     s_opusSamplerate = 0;
@@ -161,12 +163,13 @@ processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS
             s_opusPageNr++; // fall through
             s_f_opusParseOgg = true;
             if(s_opusBlockPicItem.size() > 0){ // get blockpic data
-                log_i("---------------------------------------------------------------------------");
-                log_i("metadata blockpic found at pos %i, size %i bytes", s_opusBlockPicPos, s_opusBlockPicLen);
-                for(int i = 0; i < s_opusBlockPicItem.size(); i += 2){
-                    log_i("segment %02i, pos %07i, len %05i", i / 2, s_opusBlockPicItem[i], s_opusBlockPicItem[i + 1]);
-                }
-                log_i("---------------------------------------------------------------------------");
+                // log_i("---------------------------------------------------------------------------");
+                // log_i("metadata blockpic found at pos %i, size %i bytes", s_opusBlockPicPos, s_opusBlockPicLen);
+                // for(int i = 0; i < s_opusBlockPicItem.size(); i += 2){
+                //     log_i("segment %02i, pos %07i, len %05i", i / 2, s_opusBlockPicItem[i], s_opusBlockPicItem[i + 1]);
+                // }
+                // log_i("---------------------------------------------------------------------------");
+                s_f_opusNewMetadataBlockPicture = true;
             }
             return OPUS_PARSE_OGG_DONE;
         }
@@ -352,6 +355,18 @@ char* OPUSgetStreamTitle(){
     }
     return NULL;
 }
+vector<uint32_t> OPUSgetMetadataBlockPicture(){
+    if(s_f_opusNewMetadataBlockPicture){
+        s_f_opusNewMetadataBlockPicture = false;
+        return s_opusBlockPicItem;
+    }
+    if(s_opusBlockPicItem.size() > 0){
+        s_opusBlockPicItem.clear();
+        s_opusBlockPicItem.shrink_to_fit();
+    }
+    return s_opusBlockPicItem;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
