@@ -19,14 +19,14 @@
 #define SPI_SCK       14
 
 // I2S GPIOs, the names refer on AC101, AS1 Audio Kit V2.2 2379
-#define I2S_DSIN      25
+#define I2S_DSIN      35 // pin not used
 #define I2S_BCLK      27
 #define I2S_LRC       26
 #define I2S_MCLK       0
-#define I2S_DOUT      35
+#define I2S_DOUT      25
 
 // I2S GPIOs, the names refer on ES8388, AS1 Audio Kit V2.2 3378
-//#define I2S_DSIN    35
+//#define I2S_DSIN    35 // pin not used
 //#define I2S_BCLK    27
 //#define I2S_LRC     25
 //#define I2S_MCLK     0
@@ -102,10 +102,7 @@ void setup()
     pinMode(GPIO_PA_EN, OUTPUT);
     digitalWrite(GPIO_PA_EN, HIGH);
 
-    // set I2S_MasterClock
-    audio.i2s_mclk_pin_select(I2S_MCLK);
-
-    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DSIN);
+    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK);
     audio.setVolume(10); // 0...21
 
     audio.connecttoFS(SD, "/320k_test.mp3");
