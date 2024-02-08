@@ -5880,14 +5880,11 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
     }
     data += 27;
     idx = specialIndexOf(data, "OpusHead", 40);
-    if(idx >= 0) return CODEC_OPUS;
+    if(idx >= 0) { return CODEC_OPUS; }
     idx = specialIndexOf(data, "fLaC", 40);
-    if(idx >= 0) return CODEC_FLAC;
+    if(idx >= 0) { return CODEC_FLAC; }
     idx = specialIndexOf(data, "vorbis", 40);
-    if(idx >= 0) {
-        log_i("vorbis");
-        return CODEC_VORBIS;
-    }
+    if(idx >= 0) { return CODEC_VORBIS; }
     return CODEC_NONE;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
