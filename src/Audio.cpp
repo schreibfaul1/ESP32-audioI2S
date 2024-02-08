@@ -712,29 +712,63 @@ void Audio::UTF8toASCII(char* str) {
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
-    if(strlen(path) > 255) {
-        xSemaphoreGiveRecursive(mutex_audio);
-        return false;
-    }
-
     m_resumeFilePos = resumeFilePos;
-    char audioName[256];
     setDefaults(); // free buffers an set defaults
-    memcpy(audioName, path, strlen(path) + 1);
-    if(audioName[0] != '/') {
-        for(int i = 255; i > 0; i--) { audioName[i] = audioName[i - 1]; }
-        audioName[0] = '/';
-    }
 
-    AUDIO_INFO("Reading file: \"%s\"", audioName);
-    vTaskDelay(2);
+    { // open audiofile scope
+        const char *audioName = nullptr; // pointer for the final file path
+        char *audioNameAlternative = nullptr; // possible buffer for alternative versions of the audioName
 
-    if(fs.exists(audioName)) {
-        audiofile = fs.open(audioName); // #86
-    }
-    else {
-        UTF8toASCII(audioName);
-        if(fs.exists(audioName)) { audiofile = fs.open(audioName); }
+        if (fs.exists(path)) { // use given path if it exists (issue #86)
+            audioName = path;
+        }
+        else { // try alternative path variants
+            size_t len = strlen(path);
+            size_t copyMemSize = len + 2; // 2 extra bytes for possible leading / and \0 terminator
+            size_t copyOffset = 0;
+
+            audioNameAlternative = (char *) __malloc_heap_psram(copyMemSize);
+            if (!audioNameAlternative) {
+                log_e("out of memory");
+                xSemaphoreGiveRecursive(mutex_audio);
+                return false;
+            }
+
+            // make sure the path starts with a /
+            if (path[0] != '/') {
+                audioNameAlternative[0] = '/';
+                copyOffset = 1;
+            }
+
+            // copy original path to audioNameAlternative buffer
+            strncpy(audioNameAlternative + copyOffset, path, copyMemSize - copyOffset);
+
+            if (fs.exists(audioNameAlternative)) { // use path with extra leading / if it exists
+                audioName = audioNameAlternative;
+            }
+            else { // use ASCII version of the path if it exists
+                UTF8toASCII(audioNameAlternative);
+                if (fs.exists(audioNameAlternative)) {
+                    audioName = audioNameAlternative;
+                }
+            }
+        }
+
+        if (!audioName) {
+            AUDIO_INFO("File doesn't exist: \"%s\"", path);
+            xSemaphoreGiveRecursive(mutex_audio);
+            return false;
+        }
+
+        AUDIO_INFO("Reading file: \"%s\"", audioName);
+        vTaskDelay(2);
+
+        audiofile = fs.open(audioName);
+
+        // free audioNameAlternative if used
+        if (audioNameAlternative) {
+            free(audioNameAlternative);
+        }
     }
 
     if(!audiofile) {
