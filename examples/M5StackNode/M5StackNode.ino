@@ -33,7 +33,7 @@ void setup() {
   dac.setHPvol(32, 32);
 
   /* Setup wm8978 I2S interface */
-  audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_DIN, I2S_MCLKPIN);
+  audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_MCLKPIN);
 
   WiFi.begin("xxx", "xxx");
   while (!WiFi.isConnected()) {
