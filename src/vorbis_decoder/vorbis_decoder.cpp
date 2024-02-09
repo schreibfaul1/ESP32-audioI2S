@@ -298,7 +298,7 @@ int vorbisDecodePage2(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
     }
     else {
         s_commentBlockSegmentSize = segmentLength;
-        uint32_t pLen = min(s_vorbisRemainBlockPicLen, (int)segmentLength);
+        uint32_t pLen = min(s_vorbisRemainBlockPicLen, (int32_t)segmentLength);
         if(s_vorbisRemainBlockPicLen && pLen > 0){
             s_vorbisBlockPicItem.push_back(s_vorbisCurrentFilePos);
             s_vorbisBlockPicItem.push_back(pLen);
