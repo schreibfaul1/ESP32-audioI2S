@@ -711,6 +711,12 @@ void Audio::UTF8toASCII(char* str) {
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
+
+    if(!path) { // guard
+        AUDIO_INFO("The given path is empty");
+        return false;
+    }
+
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
     m_resumeFilePos = resumeFilePos;
