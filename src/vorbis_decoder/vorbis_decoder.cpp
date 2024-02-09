@@ -44,7 +44,7 @@ bool      s_f_vorbisStr_found = false;
 uint16_t  s_identificatonHeaderLength = 0;
 uint16_t  s_vorbisCommentHeaderLength = 0;
 uint16_t  s_setupHeaderLength = 0;
-uint8_t   s_pageNr = 4;
+uint8_t   s_pageNr = 0;
 uint16_t  s_oggHeaderSize = 0;
 uint8_t   s_vorbisChannels = 0;
 uint16_t  s_vorbisSamplerate = 0;
@@ -93,7 +93,7 @@ vector<uint32_t>s_vorbisBlockPicItem;
 bool VORBISDecoder_AllocateBuffers(){
     s_vorbisSegmentTable = (uint16_t*)__calloc_heap_psram(256, sizeof(uint16_t));
     s_vorbisChbuf = (char*)__calloc_heap_psram(256, sizeof(char));
-    s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(1024);
+    s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(4096);
     VORBISsetDefaults();
     return true;
 }
@@ -109,7 +109,7 @@ void VORBISDecoder_ClearBuffers(){
     bitReader_clear();
 }
 void VORBISsetDefaults(){
-    s_pageNr = 4;
+    s_pageNr = 0;
     s_f_vorbisNewSteamTitle = false;  // streamTitle
     s_f_vorbisNewMetadataBlockPicture = false;
     s_f_lastSegmentTable = false;
