@@ -8,7 +8,8 @@
 #include <vector>
 using namespace std;
 
-enum : int8_t  {OPUS_PARSE_OGG_DONE = 100,
+enum : int8_t  {OPUS_CONTINUE = 110,
+                OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_NONE = 0,
                 ERR_OPUS_CHANNELS_OUT_OF_RANGE = -1,
                 ERR_OPUS_INVALID_SAMPLERATE = -2,
@@ -36,6 +37,10 @@ void             OPUSDecoder_FreeBuffers();
 void             OPUSDecoder_ClearBuffers();
 void             OPUSsetDefaults();
 int              OPUSDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf);
+int8_t           opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame);
+int8_t           opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
+int8_t           opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
+int8_t           opus_FramePacking_Code3(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
 uint8_t          OPUSGetChannels();
 uint32_t         OPUSGetSampRate();
 uint8_t          OPUSGetBitsPerSample();
@@ -47,7 +52,7 @@ int              OPUSFindSyncWord(unsigned char* buf, int nBytes);
 int              OPUSparseOGG(uint8_t* inbuf, int* bytesLeft);
 int              parseOpusHead(uint8_t* inbuf, int nBytes);
 int              parseOpusComment(uint8_t* inbuf, int nBytes);
-int              parseOpusTOC(uint8_t TOC_Byte);
+int8_t           parseOpusTOC(uint8_t TOC_Byte);
 int32_t          opus_packet_get_samples_per_frame(const uint8_t* data, int32_t Fs);
 
 // some helper functions

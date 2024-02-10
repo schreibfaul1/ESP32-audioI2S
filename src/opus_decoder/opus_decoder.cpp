@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 08.02.2024
+ *  Updated on: 10.02.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -100,11 +100,8 @@ void OPUSsetDefaults(){
 int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
-    static uint16_t fs = 0;
-    static uint8_t M = 0;
-    static uint8_t configNr = 31; // FULLBAND
-    static uint16_t paddingBytes = 0;
-    uint8_t paddingLength = 0;
+    static uint8_t frameCount = 0;
+    static int8_t configNr = 0;
     uint8_t endband = 21;
     static uint16_t samplesPerFrame = 0;
     int ret = ERR_OPUS_NONE;
@@ -112,10 +109,9 @@ int OPUSDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
     if(s_f_opusParseOgg){
         s_f_opusParseOgg = false;
-        fs = 0;
-        M = 0;
-        paddingBytes = 0;
+        frameCount = 0;
         s_opusCountCode = 0;
+        samplesPerFrame = 0;
         ret = OPUSparseOGG(inbuf, bytesLeft);
         if(ret != ERR_OPUS_NONE) return ret; // error
         inbuf += s_opusOggHeaderSize;
@@ -156,6 +152,9 @@ processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS
         if(s_f_nextChunk){
             s_f_nextChunk = false;
             opusSegmentLength = s_opusSegmentLength;
+        }
+        else{
+            opusSegmentLength = 0;
         }
         // log_i("page(2) opusSegmentLength %i, s_opusRemainBlockPicLen %i", opusSegmentLength, s_opusRemainBlockPicLen);
 
@@ -206,8 +205,6 @@ processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS
         }
         log_e("never reach this!");
     }
-
-
     if(s_opusCountCode > 0) goto FramePacking; // more than one frame in the packet
 
     if(s_opusSegmentTableSize > 0){
@@ -217,6 +214,7 @@ processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS
     }
 
     configNr = parseOpusTOC(inbuf[0]);
+    if(configNr < 0) return configNr; // SILK or Hybrid mode
     samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
     switch(configNr){
         case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_NARROWBAND
@@ -227,87 +225,331 @@ processChunk:     // we can't return more than 2* 4096 bytes at a time (max OPUS
                         break;
         case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_FULLBAND
                         break;
-        default:        log_e("unknown bandwidth, configNr is: %i", configNr);
+        default:        log_e("unknown bandwidth, configNr is: %d", configNr);
+                        endband = 21; // assume OPUS_BANDWIDTH_FULLBAND
                         break;
     }
     celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
 
-
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
-            *bytesLeft -= len;
-            s_opusCurrentFilePos += len;
-            len--;
-            inbuf++;
-            ec_dec_init((uint8_t *)inbuf, len);
-            ret = celt_decode_with_ec(inbuf, len, (int16_t*)outbuf, samplesPerFrame);
-            if(ret < 0) goto exit; // celt error
-            s_opusValidSamples = ret;
-            ret = ERR_OPUS_NONE;
+            ret = opus_FramePacking_Code0(inbuf, bytesLeft, outbuf, len, samplesPerFrame);
             break;
         case 1:  // Code 1: Two Frames in the Packet, Each with Equal Compressed Size
-            log_e("OPUS countCode 1 not supported yet"); vTaskDelay(1000); // todo
+            ret = opus_FramePacking_Code1(inbuf, bytesLeft, outbuf, len, samplesPerFrame, &frameCount);
+            if(ret == OPUS_CONTINUE) return ret;
             break;
         case 2:  // Code 2: Two Frames in the Packet, with Different Compressed Sizes
-            log_e("OPUS countCode 2 not supported yet"); vTaskDelay(1000); // todo
+            ret = opus_FramePacking_Code2(inbuf, bytesLeft, outbuf, len, samplesPerFrame, &frameCount);
+            if(ret == OPUS_CONTINUE) return ret;
             break;
         case 3: // Code 3: A Signaled Number of Frames in the Packet
-            if(M == 0){
-                bool v = ((inbuf[1] & 0x80) == 0x80);  // VBR indicator
-                if(v != 0) {log_e("OPUS countCode 3 with VBR not supported yet"); vTaskDelay(1000);} // todo
-                bool p = ((inbuf[1] & 0x40) == 0x40);  // padding bit
-                M = inbuf[1] & 0x3F;           // max framecount
-            //    log_i("v %i, p %i, M %i", v, p, M);
-                *bytesLeft -= 2;
-                s_opusCurrentFilePos += 2;
-                len        -= 2;
-                inbuf      += 2;
-
-                if(p){
-                    paddingBytes = 0;
-                    paddingLength = 1;
-
-                    int i = 0;
-                    while(inbuf[i] == 255){
-                        paddingBytes += inbuf[i];
-                        i++;
-                    }
-                    paddingBytes += inbuf[i];
-                    paddingLength += i;
-
-                    *bytesLeft -= paddingLength;
-                    s_opusCurrentFilePos += paddingLength;
-                    len        -= paddingLength;
-                    inbuf      += paddingLength;
-                }
-                    fs = (len - paddingBytes) / M;
-            }
-            *bytesLeft -= fs;
-            s_opusCurrentFilePos += fs;
-            ec_dec_init((uint8_t *)inbuf, fs);
-            ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
-            if(ret < 0) goto exit; // celt error
-            s_opusValidSamples = ret;
-            M--;
-         //   log_i("M %i fs %i spf %i", M, fs, samplesPerFrame);
-            ret = ERR_OPUS_NONE;
-            if(M == 0) {s_opusCountCode = 0; *bytesLeft -= paddingBytes; paddingBytes = 0; goto exit;}
-            return ret;
+            ret = opus_FramePacking_Code3(inbuf, bytesLeft, outbuf, len, samplesPerFrame, &frameCount);
+            if(ret == OPUS_CONTINUE) return ret;
             break;
         default:
             log_e("unknown countCode %i", s_opusCountCode);
             break;
-
     }
 
-exit:
     if(s_opusSegmentTableSize == 0){
         s_opusSegmentTableRdPtr = -1; // back to the parking position
         s_f_opusParseOgg = true;
     }
     return ret;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int8_t opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame){
+
+/*  Code 0: One Frame in the Packet
+
+    For code 0 packets, the TOC byte is immediately followed by N-1 bytes
+    of compressed data for a single frame (where N is the size of the
+    packet), as illustrated
+       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+      | config  |s|0|0|                                               |
+      +-+-+-+-+-+-+-+-+                                               |
+      |                    Compressed frame 1 (N-1 bytes)...          :
+      :                                                               |
+      |                                                               |
+      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+*/
+    int ret = 0;
+    *bytesLeft -= packetLen;
+    s_opusCurrentFilePos += packetLen;
+    packetLen--;
+    inbuf++;
+    ec_dec_init((uint8_t *)inbuf, packetLen);
+    ret = celt_decode_with_ec(inbuf, packetLen, (int16_t*)outbuf, samplesPerFrame);
+    if(ret < 0) return ret;
+    s_opusValidSamples = ret;
+    return ERR_OPUS_NONE;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int8_t opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+
+/*  Code 1: Two Frames in the Packet, Each with Equal Compressed Size
+
+   For code 1 packets, the TOC byte is immediately followed by the (N-1)/2 bytes [where N is the size of the packet] of compressed
+   data for the first frame, followed by (N-1)/2 bytes of compressed data for the second frame, as illustrated. The number of payload bytes
+   available for compressed data, N-1, MUST be even for all code 1 packets.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | config  |s|0|1|                                               |
+     +-+-+-+-+-+-+-+-+                                               :
+     |             Compressed frame 1 ((N-1)/2 bytes)...             |
+     :                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               :
+     |             Compressed frame 2 ((N-1)/2 bytes)...             |
+     :                                               +-+-+-+-+-+-+-+-+
+     |                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+*/
+    int ret = 0;
+    static uint16_t c1fs = 0;
+    if(*frameCount == 0){
+        packetLen--;
+        inbuf++;
+        *bytesLeft -= 1;
+        s_opusCurrentFilePos += 1;
+        c1fs = packetLen / 2;
+//      log_w("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
+        *frameCount = 2;
+    }
+    if(*frameCount > 0){
+        ec_dec_init((uint8_t *)inbuf, c1fs);
+        ret = celt_decode_with_ec(inbuf, c1fs, (int16_t*)outbuf, samplesPerFrame);
+        if(ret < 0) return ret;
+        s_opusValidSamples = ret;
+        *bytesLeft -= c1fs;
+        s_opusCurrentFilePos += c1fs;
+    }
+    *frameCount -= 1;
+    if(*frameCount > 0) return OPUS_CONTINUE;
+    s_opusCountCode = 0;
+    c1fs = 0;
+    return ERR_OPUS_NONE;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+
+/*  Code 2: Two Frames in the Packet, with Different Compressed Sizes
+
+   For code 2 packets, the TOC byte is followed by a one- or two-byte sequence indicating the length of the first frame (marked N1 in the Figure),
+   followed by N1 bytes of compressed data for the first frame.  The remaining N-N1-2 or N-N1-3 bytes are the compressed data for the second frame.
+   This is illustrated in the Figure.  A code 2 packet MUST contain enough bytes to represent a valid length.  For example, a 1-byte code 2 packet
+   is always invalid, and a 2-byte code 2 packet whose second byte is in the range 252...255 is also invalid. The length of the first frame, N1,
+   MUST also be no larger than the size of the payload remaining after decoding that length for all code 2 packets. This makes, for example,
+   a 2-byte code 2 packet with a second byte in the range 1...251 invalid as well (the only valid 2-byte code 2 packet is one where the length of
+   both frames is zero).
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | config  |s|1|0| N1 (1-2 bytes):                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               :
+     |               Compressed frame 1 (N1 bytes)...                |
+     :                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+     |                     Compressed frame 2...                     :
+     :                                                               |
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+*/
+
+//  log_w("OPUS countCode 2 packetLen %i", packetLen); // todo
+    int ret = 0;
+    static uint16_t firstFrameLength = 0;
+    static uint16_t secondFrameLength = 0;
+    if(*frameCount == 0){
+        uint8_t b1 = inbuf[1];
+        uint8_t b2 = inbuf[2];
+        if(b1 < 255){
+            packetLen -= 2;
+            *bytesLeft -= 2;
+            s_opusCurrentFilePos += 2;
+            inbuf += 2;
+            firstFrameLength = b1;
+        }
+        else{
+            packetLen -= 3;
+            *bytesLeft -= 3;
+            s_opusCurrentFilePos += 3;
+            inbuf += 3;
+            firstFrameLength = b1 + b2;
+        }
+        secondFrameLength = packetLen - firstFrameLength;
+        *frameCount = 2;
+    }
+    if(*frameCount == 2){
+        ec_dec_init((uint8_t *)inbuf, firstFrameLength);
+        ret = celt_decode_with_ec(inbuf, firstFrameLength, (int16_t*)outbuf, samplesPerFrame);
+        if(ret < 0) return ret;
+        s_opusValidSamples = ret;
+        *bytesLeft -= firstFrameLength;
+        s_opusCurrentFilePos += firstFrameLength;
+    }
+    if(*frameCount == 1){
+        ec_dec_init((uint8_t *)inbuf, secondFrameLength);
+        ret = celt_decode_with_ec(inbuf, secondFrameLength, (int16_t*)outbuf, samplesPerFrame);
+        if(ret < 0) return ret;
+        s_opusValidSamples = ret;
+        *bytesLeft -= secondFrameLength;
+        s_opusCurrentFilePos += secondFrameLength;
+    }
+    *frameCount -= 1;
+    if(*frameCount > 0) return OPUS_CONTINUE;
+    s_opusCountCode = 0;
+    firstFrameLength = 0;
+    secondFrameLength = 0;
+    return ERR_OPUS_NONE;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int8_t opus_FramePacking_Code3(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+
+/*  Code 3: A Signaled Number of Frames in the Packet
+
+   Code 3 packets signal the number of frames, as well as additional padding, called "Opus padding" to indicate that this padding is added
+   at the Opus layer rather than at the transport layer.  Code 3 packets MUST have at least 2 bytes [R6,R7].  The TOC byte is followed by a
+   byte encoding the number of frames in the packet in bits 2 to 7 (marked "M" in the Figure )           0
+                                                                                                         0 1 2 3 4 5 6 7
+                                                                                                        +-+-+-+-+-+-+-+-+
+                                                                                                        |v|p|     M     |
+                                                                                                        +-+-+-+-+-+-+-+-+
+   with bit 1 indicating whether or not Opus
+   padding is inserted (marked "p" in Figure 5), and bit 0 indicating VBR (marked "v" in Figure). M MUST NOT be zero, and the audio
+   duration contained within a packet MUST NOT exceed 120 ms. This limits the maximum frame count for any frame size to 48 (for 2.5 ms
+   frames), with lower limits for longer frame sizes. The Figure below illustrates the layout of the frame count byte.
+   When Opus padding is used, the number of bytes of padding is encoded in the bytes following the frame count byte.  Values from 0...254
+   indicate that 0...254 bytes of padding are included, in addition to the byte(s) used to indicate the size of the padding.  If the value
+   is 255, then the size of the additional padding is 254 bytes, plus the padding value encoded in the next byte.  There MUST be at least
+   one more byte in the packet in this case [R6,R7]. The additional padding bytes appear at the end of the packet and MUST be set to zero
+   by the encoder to avoid creating a covert channel. The decoder MUST accept any value for the padding bytes, however.
+   Although this encoding provides multiple ways to indicate a given number of padding bytes, each uses a different number of bytes to
+   indicate the padding size and thus will increase the total packet size by a different amount.  For example, to add 255 bytes to a
+   packet, set the padding bit, p, to 1, insert a single byte after the frame count byte with a value of 254, and append 254 padding bytes
+   with the value zero to the end of the packet.  To add 256 bytes to a packet, set the padding bit to 1, insert two bytes after the frame
+   count byte with the values 255 and 0, respectively, and append 254 padding bytes with the value zero to the end of the packet.  By using
+   the value 255 multiple times, it is possible to create a packet of any specific, desired size.  Let P be the number of header bytes used
+   to indicate the padding size plus the number of padding bytes themselves (i.e., P is the total number of bytes added to the
+   packet). Then, P MUST be no more than N-2. In the CBR case, let R=N-2-P be the number of bytes remaining in the packet after subtracting the
+   (optional) padding. Then, the compressed length of each frame in bytes is equal to R/M.  The value R MUST be a non-negative integer multiple
+   of M. The compressed data for all M frames follows, each of size R/M bytes, as illustrated in the Figure below.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | config  |s|1|1|0|p|     M     |  Padding length (Optional)    :
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :               Compressed frame 1 (R/M bytes)...               :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :               Compressed frame 2 (R/M bytes)...               :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :                              ...                              :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :               Compressed frame M (R/M bytes)...               :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     :                  Opus Padding (Optional)...                   |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+   In the VBR case, the (optional) padding length is followed by M-1 frame lengths (indicated by "N1" to "N[M-1]" in Figure 7), each encoded in a
+   one- or two-byte sequence as described above. The packet MUST contain enough data for the M-1 lengths after removing the (optional) padding,
+   and the sum of these lengths MUST be no larger than the number of bytes remaining in the packet after decoding them. The compressed data for
+   all M frames follows, each frame consisting of the indicated number of bytes, with the final frame consuming any remaining bytes before the final
+   padding, as illustrated in the Figure below. The number of header bytes (TOC byte, frame count byte, padding length bytes, and frame length bytes),
+   plus the signaled length of the first M-1 frames themselves, plus the signaled length of the padding MUST be no larger than N, the total
+   size of the packet.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | config  |s|1|1|1|p|     M     | Padding length (Optional)     :
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     : N1 (1-2 bytes): N2 (1-2 bytes):     ...       :     N[M-1]    |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :               Compressed frame 1 (N1 bytes)...                :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :               Compressed frame 2 (N2 bytes)...                :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :                              ...                              :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                                                               |
+     :                     Compressed frame M...                     :
+     |                                                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     :                  Opus Padding (Optional)...                   |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+*/
+    static uint16_t paddingBytes = 0;
+    static uint16_t fs = 0;
+    int ret = 0;
+    uint8_t paddingLength = 0;
+    if(*frameCount == 0){
+    //    log_i("code3 v %i", inbuf[1] & 0x80);
+        bool v = ((inbuf[1] & 0x80) == 0x80);  // VBR indicator
+        if(v != 0) {log_e("OPUS countCode 3 with VBR not supported yet"); vTaskDelay(1000);} // todo
+        bool p = ((inbuf[1] & 0x40) == 0x40);  // padding bit
+        *frameCount = inbuf[1] & 0x3F;         // max framecount
+        *bytesLeft -= 2;
+        s_opusCurrentFilePos += 2;
+        packetLen -= 2;
+        inbuf     += 2;
+        if(p){
+            paddingBytes = 0;
+            paddingLength = 1;
+            int i = 0;
+            while(inbuf[i] == 255){
+                paddingBytes += inbuf[i];
+                i++;
+            }
+            paddingBytes += inbuf[i];
+            paddingLength += i;
+            *bytesLeft -= paddingLength;
+            s_opusCurrentFilePos += paddingLength;
+            packetLen  -= paddingLength;
+            inbuf      += paddingLength;
+        }
+        else{
+            paddingBytes = 0;
+        }
+        fs = (packetLen - paddingBytes) / *frameCount;
+    }
+    *bytesLeft -= fs;
+    s_opusCurrentFilePos += fs;
+    ec_dec_init((uint8_t *)inbuf, fs);
+    ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
+    if(ret < 0) return ret; // celt error
+    s_opusValidSamples = ret;
+    *frameCount -= 1;
+    if(*frameCount > 0) return OPUS_CONTINUE;
+    s_opusCountCode = 0;
+    *bytesLeft -= paddingBytes;
+    s_opusCurrentFilePos += paddingBytes;
+    paddingBytes = 0;
+    fs = 0;
+    return ERR_OPUS_NONE;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -368,7 +610,7 @@ vector<uint32_t> OPUSgetMetadataBlockPicture(){
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
+int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
     uint8_t configNr = 0;
     uint8_t s = 0;              // stereo flag
