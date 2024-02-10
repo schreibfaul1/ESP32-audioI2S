@@ -449,7 +449,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     m_expectedPlsFmt = FORMAT_NONE;
 
     if (res) {
-        log_i("connecttohost(): %s", http_request);
         _client->print(http_request);
         if (response_format == "mp3") m_expectedCodec  = CODEC_MP3;
         if (response_format == "opus") m_expectedCodec  = CODEC_OPUS;
