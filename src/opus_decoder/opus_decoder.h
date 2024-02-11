@@ -37,6 +37,8 @@ void             OPUSDecoder_FreeBuffers();
 void             OPUSDecoder_ClearBuffers();
 void             OPUSsetDefaults();
 int              OPUSDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf);
+int              opusDecodePage0(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength);
+int              opusDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short *outbuf);
 int8_t           opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame);
 int8_t           opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
 int8_t           opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
