@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 11.02.2024
+ *  Updated on: 12.02.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -662,7 +662,8 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
         if(idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "METADATA_BLOCK_PICTURE=", 25);
         if(idx == 0){
             s_opusBlockPicLen = commentStringLen - 23;
-            s_opusBlockPicPos += s_opusCurrentFilePos + pos + 23;
+            s_opusCurrentFilePos += pos + 23;
+            s_opusBlockPicPos += s_opusCurrentFilePos;
             s_blockPicLenUntilFrameEnd = nBytes - 23;
         //  log_i("metadata block picture found at pos %i, length %i", s_opusBlockPicPos, s_opusBlockPicLen);
             uint32_t pLen = _min(s_blockPicLenUntilFrameEnd, s_opusBlockPicLen);
