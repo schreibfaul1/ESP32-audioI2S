@@ -371,6 +371,102 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if(timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
 }
 
+/* 
+    Text to speech API provides a speech endpoint based on our TTS (text-to-speech) model.
+    More info: https://platform.openai.com/docs/guides/text-to-speech/text-to-speech
+
+    Request body:
+    model (string) [Required] - One of the available TTS models: tts-1 or tts-1-hd
+    input (string) [Required] - The text to generate audio for. The maximum length is 4096 characters.
+    voice (string) [Required] - The voice to use when generating the audio. Supported voices are alloy, echo, fable, onyx, nova, and shimmer.
+    response_format (string) [Optional] - Defaults to mp3. The format to audio in. Supported formats are mp3, opus, aac, and flac.
+    speed (number) [Optional] - Defaults to 1. The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.
+
+    Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, "shimmer", "mp3", "1");
+*/
+bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& voice, const String& response_format, const String& speed) {
+    char host[] = "api.openai.com";
+    char path[] = "/v1/audio/speech";
+
+    xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY);
+
+    if (input == "") {
+        AUDIO_INFO("input text is empty");
+        stopSong();
+        xSemaphoreGiveRecursive(mutex_audio);
+        return false;
+    }
+
+    AUDIO_INFO("Connect to new host: \"%s\"", host);
+    setDefaults();
+    m_f_ssl = true;
+
+    String input_clean = "";
+    for (int i = 0; i < input.length(); i++) {
+        char c = input.charAt(i);
+        if (c == '\"') {
+            input_clean += "\\\"";
+        } else if (c == '\n') {
+            input_clean += "\\n";
+        } else {
+            input_clean += c;
+        }
+    }
+
+    String post_body = "{"
+        "\"model\": \"" + model + "\"," +
+        "\"input\": \"" + input_clean + "\"," +
+        "\"voice\": \"" + voice + "\"," +
+        "\"response_format\": \"" + response_format + "\"," +
+        "\"speed\": \"" + speed + "\"" +
+    "}";
+
+    String http_request = 
+        "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
+        + "Host: " + String(host) + "\r\n"
+        + "Authorization: Bearer " + api_key + "\r\n"
+        + "Accept-Encoding: identity;q=1,*;q=0\r\n"
+        + "User-Agent: nArija/1.0\r\n" 
+        + "Content-Type: application/json; charset=utf-8\r\n" 
+        + "Content-Length: " + post_body.length() + "\r\n" 
+        + "Connection: keep-alive\r\n" + "\r\n" 
+        + post_body + "\r\n"
+    ;
+
+    bool res = true;
+    int port = 443;
+    _client = static_cast<WiFiClient*>(&clientsecure);
+
+    uint32_t t = millis();
+    if (m_f_Log) AUDIO_INFO("connect to %s on port %d path %s", host, port, path);
+    res = _client->connect(host, port, m_timeout_ms_ssl);
+    if (res) {
+        uint32_t dt = millis() - t;
+        strcpy(m_lastHost, host);
+        AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", "SSL", (long unsigned int) dt, (long unsigned int) ESP.getFreeHeap());
+        m_f_running = true;
+    }
+
+    m_expectedCodec = CODEC_NONE;
+    m_expectedPlsFmt = FORMAT_NONE;
+
+    if (res) {
+        _client->print(http_request);
+        if (response_format == "mp3") m_expectedCodec  = CODEC_MP3;
+        if (response_format == "opus") m_expectedCodec  = CODEC_OPUS;
+        if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
+        if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
+        setDatamode(HTTP_RESPONSE_HEADER);
+        m_streamType = ST_WEBSTREAM;
+    } else {
+        AUDIO_INFO("Request %s failed!", host);
+        m_lastHost[0] = 0;
+    }
+
+    xSemaphoreGiveRecursive(mutex_audio);
+    return res;
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     // user and pwd for authentification only, can be empty
@@ -509,6 +605,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
+        log_i("connecttohost(): %s", rqh);
         _client->print(rqh);
         if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
         if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
@@ -3576,7 +3673,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-        // log_i("httpResponseHeader: %s", rhl);
+        //log_i("httpResponseHeader: %s", rhl);
 
         int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
         if(posColon >= 0) {
@@ -3650,16 +3747,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             AUDIO_INFO("Filename is %s", rhl + pos1);
         }
 
-        // if(startsWith(rhl, "set-cookie:")         ||
-        //         startsWith(rhl, "pragma:")        ||
-        //         startsWith(rhl, "expires:")       ||
-        //         startsWith(rhl, "cache-control:") ||
-        //         startsWith(rhl, "icy-pub:")       ||
-        //         startsWith(rhl, "p3p:")           ||
-        //         startsWith(rhl, "accept-ranges:") ){
-        //     ; // do nothing
-        // }
-
         else if(startsWith(rhl, "connection:")) {
             if(indexOf(rhl, "close", 0) >= 0) { ; /* do nothing */ }
         }
@@ -3721,7 +3808,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(audio_icydescription) audio_icydescription(c_idesc);
         }
 
-        else if((startsWith(rhl, "transfer-encoding:"))) {
+        else if(startsWith(rhl, "transfer-encoding:")) {
             if(endsWith(rhl, "chunked") || endsWith(rhl, "Chunked")) { // Station provides chunked transfer
                 m_f_chunked = true;
                 if(m_f_Log) AUDIO_INFO("chunked data transfer");
@@ -5634,8 +5721,14 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         tmr_lost = millis() + 1000;
         if(cnt_lost == 5) { // 5s no data?
             cnt_lost = 0;
-            AUDIO_INFO("Stream lost -> try new connection");
-            connecttohost(m_lastHost);
+            if (String(m_lastHost) == "api.openai.com") {
+                AUDIO_INFO("End of Stream.");
+                m_f_running = false;
+                setDatamode(AUDIO_NONE);
+            } else {
+                AUDIO_INFO("Stream lost -> try new connection");
+                connecttohost(m_lastHost);
+            }
             return true;
         }
     }
