@@ -150,6 +150,7 @@ boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
 char*    FLACgetStreamTitle();
 int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
 bool     FLACDecoder_AllocateBuffers(void);
+void     FLACDecoder_setDefaults();
 void     FLACDecoder_ClearBuffer();
 void     FLACDecoder_FreeBuffers();
 void     FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength);

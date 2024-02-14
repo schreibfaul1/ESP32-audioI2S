@@ -19,14 +19,14 @@ FLACFrameHeader_t   *FLACFrameHeader;
 FLACMetadataBlock_t *FLACMetadataBlock;
 FLACsubFramesBuff_t *FLACsubFramesBuff;
 
-vector<int32_t> coefs;
+vector<int32_t>  coefs;
+vector<uint16_t> s_flacSegmTableVec;
 const uint16_t  outBuffSize = 2048;
 uint16_t        m_blockSize = 0;
 uint16_t        m_blockSizeLeft = 0;
 uint16_t        m_validSamples = 0;
 uint8_t         m_status = 0;
 uint8_t        *m_inptr;
-uint16_t       *s_flacSegmentTable = NULL;
 float           m_compressionRatio = 0;
 uint32_t        m_bitrate = 0;
 uint16_t        m_rIndex = 0;
@@ -37,6 +37,9 @@ uint8_t         m_flacPageSegments = 0;
 uint8_t         m_page0_len = 0;
 char           *m_streamTitle = NULL;
 boolean         s_f_newSt = false;
+bool             s_f_firstCall = false;
+bool             s_f_oggWrapper = false;
+uint8_t          s_flacPageNr = 0;
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -52,13 +55,13 @@ bool FLACDecoder_AllocateBuffers(void){
     if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  __malloc_heap_psram(sizeof(FLACMetadataBlock_t));}
     if(!FLACsubFramesBuff)  {FLACsubFramesBuff  = (FLACsubFramesBuff_t*)  __malloc_heap_psram(sizeof(FLACsubFramesBuff_t));}
     if(!m_streamTitle)      {m_streamTitle      = (char*)                 __malloc_heap_psram(256);}
-    if(!s_flacSegmentTable) {s_flacSegmentTable = (uint16_t*)             __malloc_heap_psram(256 * sizeof(uint16_t));}
 
-    if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff || !m_streamTitle || !s_flacSegmentTable){
+    if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff || !m_streamTitle){
         log_e("not enough memory to allocate flacdecoder buffers");
         return false;
     }
     FLACDecoder_ClearBuffer();
+    FLACDecoder_setDefaults();
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,6 +69,7 @@ void FLACDecoder_ClearBuffer(){
     memset(FLACFrameHeader,   0, sizeof(FLACFrameHeader_t));
     memset(FLACMetadataBlock, 0, sizeof(FLACMetadataBlock_t));
     memset(FLACsubFramesBuff, 0, sizeof(FLACsubFramesBuff_t));
+    s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
     m_status = DECODE_FRAME;
     return;
 }
@@ -75,7 +79,25 @@ void FLACDecoder_FreeBuffers(){
     if(FLACMetadataBlock)  {free(FLACMetadataBlock);  FLACMetadataBlock  = NULL;}
     if(FLACsubFramesBuff)  {free(FLACsubFramesBuff);  FLACsubFramesBuff  = NULL;}
     if(m_streamTitle)      {free(m_streamTitle);      m_streamTitle      = NULL;}
-    if(s_flacSegmentTable) {free(s_flacSegmentTable); s_flacSegmentTable = NULL;}
+}
+//----------------------------------------------------------------------------------------------------------------------
+void FLACDecoder_setDefaults(){
+    s_flacSegmTableVec.clear();
+    s_flacSegmTableVec.shrink_to_fit();
+    s_f_firstCall = true;
+    s_f_oggWrapper = false;
+    // s_flacSegmentLength = 0;
+    // s_f_oggFlacFirstPage = false;
+    // s_f_oggFlacContinuedPage = false;
+    // s_f_oggFlacLastPage = false;
+    // s_oggFlacHeaderSize = 0;
+    s_flacPageNr = 0;
+    // s_flacCommentHeaderLength = 0;
+    // s_flacCommentLength = 0;
+    // s_flacBlockPicLen  = 0;
+    // s_flacBlockPicPos = 0;
+    // s_flacCurrentFilePos = 0;
+    // s_flacBlockPicLenUntilFrameEnd = 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
@@ -211,82 +233,116 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
 
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
-
-    int16_t segmentTableWrPtr = 0;
-
+    s_flacSegmTableVec.clear();
+    s_flacSegmTableVec.shrink_to_fit();
     for(int i = 0; i < pageSegments; i++){
         int n = *(inbuf + 27 + i);
         while(*(inbuf + 27 + i) == 255){
             i++;
+            if(i == pageSegments) break;
             n+= *(inbuf + 27 + i);
         }
-        s_flacSegmentTable[segmentTableWrPtr] = n;
-        segmentTableWrPtr++;
-    //    s_flacSegmentLength += n;
+        s_flacSegmTableVec.insert(s_flacSegmTableVec.begin(), n);
     }
-    m_page0_len = s_flacSegmentTable[0];
-
-    // for(int i = 0; i<pageSegments; i++){
-    //     log_i("%i %i", i, s_flacSegmentTable[i]);
-    // }
+    for(int i = 0; i< s_flacSegmTableVec.size(); i++){;}//log_i("%i", s_flacSegmTableVec[i]);}
 
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
-    static   uint8_t secondPage = 0; (void)continuedPage; (void)lastPage;
 
-    if(firstPage) secondPage = 3;
-    if(secondPage) secondPage--;
+    if(firstPage) s_flacPageNr = 0;
 
     uint16_t headerSize = 0;
-    uint8_t aLen = 0, tLen = 0;
-    uint8_t *aPos = NULL, *tPos = NULL;
-    if(firstPage || secondPage == 1){
-        // log_i("s_flacSegmentTable[0] %i", s_flacSegmentTable[0]);
-        headerSize = pageSegments + s_flacSegmentTable[0] +27;
-        idx = FLAC_specialIndexOf(inbuf + 28, "ARTIST", s_flacSegmentTable[0]);
-        if(idx > 0){
-            aPos = inbuf + 28 + idx + 7;
-            aLen = *(inbuf + 28 +idx -4) -  7;
-        }
-        idx = FLAC_specialIndexOf(inbuf + 28, "TITLE", s_flacSegmentTable[0]);
-        if(idx > 0){
-            tPos = inbuf + 28 + idx + 6;
-            tLen = *(inbuf + 28 + idx -4) - 6;
-        }
-        int pos = 0;
-        if(aLen) {memcpy(m_streamTitle, aPos, aLen); m_streamTitle[aLen] = '\0'; pos = aLen;}
-        if(aLen && tLen) {strcat(m_streamTitle, " - "); pos += 3;}
-        if(tLen) {memcpy(m_streamTitle + pos, tPos, tLen); m_streamTitle[pos + tLen] = '\0';}
-        if(tLen || aLen) s_f_newSt = true;
-    }
-    else{
+    // uint8_t aLen = 0, tLen = 0;
+    // uint8_t *aPos = NULL, *tPos = NULL;
+    // if(firstPage || secondPage == 1){
+    //     // log_i("s_flacSegmentTable[0] %i", s_flacSegmentTable[0]);
+    //   headerSize = pageSegments + s_flacSegmTableVec[0] +27;
+    //     idx = FLAC_specialIndexOf(inbuf + 28, "ARTIST", s_flacSegmTableVec[0]);
+    //     if(idx > 0){
+    //         aPos = inbuf + 28 + idx + 7;
+    //         aLen = *(inbuf + 28 +idx -4) -  7;
+    //     }
+    //     idx = FLAC_specialIndexOf(inbuf + 28, "TITLE", s_flacSegmTableVec[0]);
+    //     if(idx > 0){
+    //         tPos = inbuf + 28 + idx + 6;
+    //         tLen = *(inbuf + 28 + idx -4) - 6;
+    //     }
+    //     int pos = 0;
+    //     if(aLen) {memcpy(m_streamTitle, aPos, aLen); m_streamTitle[aLen] = '\0'; pos = aLen;}
+    //     if(aLen && tLen) {strcat(m_streamTitle, " - "); pos += 3;}
+    //     if(tLen) {memcpy(m_streamTitle + pos, tPos, tLen); m_streamTitle[pos + tLen] = '\0';}
+    //     if(tLen || aLen) s_f_newSt = true;
+    // }
+    // else{
         headerSize = pageSegments + 27;
-    }
+    // }
     *bytesLeft -= headerSize;
     return ERR_FLAC_NONE; // no error
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
 
-    if(s_f_flacParseOgg == true){
-        int ret = FLACparseOGG(inbuf, bytesLeft);
-        if(ret == ERR_FLAC_NONE) return FLAC_PARSE_OGG_DONE; // ok
-        else return ret;  // error
-    }
+    int ret = 0;
 
-    if ((inbuf[0] == 'O') && (inbuf[1] == 'g') && (inbuf[2] == 'g') && (inbuf[3] == 'S')){
-        s_f_flacParseOgg = true;
-        return FLAC_PARSE_OGG_DONE;
+    if(s_f_firstCall){ // determine if ogg or flag
+        s_f_firstCall = false;
+        log_e("%s", inbuf);
+        if(FLAC_specialIndexOf(inbuf, "OggS", 5) == 0){
+            log_i("Oggs");
+            s_f_oggWrapper = true;
+            s_f_flacParseOgg = true;
+        }
+        // else if(FLAC_specialIndexOf(inbuf, "fLaC", 5) == 0){
+        //     log_i("flac native");
+        // }
+        // else{
+        //     log_e("unknown file format!");
+        // }
     }
-    int ret = FLACDecodeNative(inbuf, bytesLeft, outbuf);
+    uint16_t segmLen = 0;
+    if(s_f_oggWrapper){
+        if(s_f_flacParseOgg == true){
+            s_f_flacParseOgg = false;
+            ret = FLACparseOGG(inbuf, bytesLeft);
+            if(ret == ERR_FLAC_NONE) return FLAC_PARSE_OGG_DONE; // ok
+            else return ret;  // error
+        }
+        //-------------------------------------------------------
+        if(!s_flacSegmTableVec.size()) log_e("size is 0");
+        segmLen = s_flacSegmTableVec.back();
+        s_flacSegmTableVec.pop_back();
+        if(!s_flacSegmTableVec.size()) s_f_flacParseOgg = true;
+        //-------------------------------------------------------
+        if(s_flacPageNr == 0) ; //FLACSetRawBlockParams(2, 44100/1.5, 16, 1,1);
+        if(s_flacPageNr < 2){
+            s_flacPageNr++;
+            *bytesLeft -= segmLen;
+            return FLAC_PARSE_OGG_DONE;
+        }
+
+        if(s_flacPageNr == 2){
+            int nbytes = segmLen;
+            if(*bytesLeft - segmLen < 0) {log_i("underrun"); }
+            while(nbytes != 0){
+                int nbytes1 = nbytes;
+                ret = FLACDecodeNative(inbuf, &nbytes, outbuf);
+            //    log_i("inbuf[0] %02X, inbuf[1] %02X, segmLen %i, nbytes1 %i, nbytes %i",inbuf[0], inbuf[1], segmLen, nbytes1, nbytes);
+                inbuf += nbytes1 - nbytes;
+                if(nbytes < 0){log_e( "nbytes <0");}
+            }
+        }
+        *bytesLeft -= segmLen;
+        return ret;
+    }
+    ret = FLACDecodeNative(inbuf, bytesLeft, outbuf);
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
-    int bl = *bytesLeft;
+     int bl = *bytesLeft;
     static int sbl = 0;
 
     if(m_status != OUT_SAMPLES){
@@ -332,8 +388,8 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         m_bitrate /= m_compressionRatio;
 
         if(offset != m_blockSize) return GIVE_NEXT_LOOP;
-        offset = 0;
         if(offset > m_blockSize) { log_e("offset has a wrong value"); }
+        offset = 0;
     }
 
     alignToByte();
@@ -611,7 +667,7 @@ void restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 int FLAC_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
-    int result;  // seek for str in buffer or in header up to baselen, not nullterninated
+    int result = 0;  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
     for (int i = 0; i < baselen - strlen(str); i++){
         result = i;

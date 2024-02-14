@@ -605,7 +605,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
-        log_i("connecttohost(): %s", rqh);
+    //    log_i("connecttohost(): %s", rqh);
         _client->print(rqh);
         if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
         if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
@@ -3033,6 +3033,7 @@ void Audio::processLocalFile() {
             stopSong();
             return;
         }
+        m_controlCounter = 100;
         if(m_controlCounter != 100) {
             if((millis() - ctime) > timeout) {
                 log_e("audioHeader reading timeout");
@@ -4261,8 +4262,10 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
+        nextSync = OPUSFindSyncWord(data, len);
+        if(nextSync == -1) return len; // OggS not found, search next block
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
-        nextSync = FLACFindSyncWord(data, len);
+        //nextSync = FLACFindSyncWord(data, len);
     }
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
