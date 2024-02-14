@@ -161,6 +161,7 @@ void FLACDecoderReset(){ // set var to default
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
     int i;
     i = FLAC_specialIndexOf(buf, "OggS", nBytes);
+    log_i("sync found at pos %i", i);
     if(i == 0){
         // flag has ogg wrapper
         return 0;
@@ -244,16 +245,22 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
         }
         s_flacSegmTableVec.insert(s_flacSegmTableVec.begin(), n);
     }
-    for(int i = 0; i< s_flacSegmTableVec.size(); i++){;}//log_i("%i", s_flacSegmTableVec[i]);}
-
+    // for(int i = 0; i< s_flacSegmTableVec.size(); i++){log_i("%i", s_flacSegmTableVec[i]);}
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     bool     lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
 
+    (void)continuedPage; (void)lastPage;
+
     if(firstPage) s_flacPageNr = 0;
 
-    uint16_t headerSize = 0;
+    uint16_t headerSize = pageSegments + 27;
+
+    *bytesLeft -= headerSize;
+    return ERR_FLAC_NONE; // no error
+}
+
     // uint8_t aLen = 0, tLen = 0;
     // uint8_t *aPos = NULL, *tPos = NULL;
     // if(firstPage || secondPage == 1){
@@ -276,33 +283,92 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     //     if(tLen || aLen) s_f_newSt = true;
     // }
     // else{
-        headerSize = pageSegments + 27;
+    //    headerSize 
     // }
-    *bytesLeft -= headerSize;
-    return ERR_FLAC_NONE; // no error
+
+//----------------------------------------------------------------------------------------------------------------------
+int parseFlacFirstPacket(uint8_t *inbuf, int16_t nBytes){ // 4.2.2. Identification header
+
+    uint16_t pos = 5; // 0x7F + "FLAC"
+    uint8_t  major_version      = *(inbuf + pos);
+    uint8_t  minor_version      = *(inbuf + pos + 1);
+    uint16_t nfOfHeaderPackets  = *(inbuf + pos + 2) * 255;
+             nfOfHeaderPackets += *(inbuf + pos + 3);
+    if(FLAC_specialIndexOf(inbuf + pos + 4, "fLaC", 4) == 0) {;} // FLAC signature found
+    else {log_e("FLAC signature not found");}
+
+    uint8_t  mdBlockHeader      = *(inbuf + pos + 8);
+    bool     lastMdBlockFlag    = mdBlockHeader & 0b10000000; log_w("lastMdBlockFlag %i", lastMdBlockFlag);
+    uint8_t  blockType          = mdBlockHeader & 0b01111111; log_w("blockType %i", blockType);
+
+    uint32_t bloclLength        = *(inbuf + pos +  9) << 16;
+             bloclLength       += *(inbuf + pos + 10) << 8;
+             bloclLength       += *(inbuf + pos + 11); log_w("bloclLength %i", bloclLength);
+
+    uint8_t  blocksize   = *(inbuf + pos + 21);
+    uint16_t flacBlocksize0 = 1 << ( blocksize & 0x0F);
+    uint16_t flacBlocksize1 = 1 << ((blocksize & 0xF0) >> 4);
+
+
+    if(flacBlocksize0 < 64){
+        log_e("blocksize[0] too low");
+        return -1;
+    }
+    if(flacBlocksize1 < flacBlocksize0){
+        log_e("s_blocksizes[1] is smaller than s_blocksizes[0]");
+        return -1;
+    }
+    if(flacBlocksize1 > 8192){
+        log_e("s_blocksizes[1] is too big");
+        return -1;
+    }
+
+    // if(channels < 1 || channels > 2){
+    //     log_e("nr of channels is not valid ch=%i", channels);
+    //     return -1;
+    // }
+    // log_i("channels %i", channels);
+
+    // if(sampleRate < 4096 || sampleRate > 64000){
+    //     log_e("sampleRate is not valid sr=%i", sampleRate);
+    //     return -1;
+    // }
+    // log_i("sampleRate %i", sampleRate);
+
+    // log_i("bitrate %i", br_nominal);
+
+    return FLAC_PARSE_OGG_DONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
 
-    int ret = 0;
+    int            ret = 0;
+    uint16_t       segmLen = 0;
+    static int     nBytes = 0;
 
     if(s_f_firstCall){ // determine if ogg or flag
         s_f_firstCall = false;
-        log_e("%s", inbuf);
         if(FLAC_specialIndexOf(inbuf, "OggS", 5) == 0){
-            log_i("Oggs");
             s_f_oggWrapper = true;
             s_f_flacParseOgg = true;
         }
-        // else if(FLAC_specialIndexOf(inbuf, "fLaC", 5) == 0){
-        //     log_i("flac native");
-        // }
-        // else{
-        //     log_e("unknown file format!");
-        // }
     }
-    uint16_t segmLen = 0;
+
     if(s_f_oggWrapper){
+
+        if(nBytes > 0){
+            int16_t diff = nBytes;
+            ret = FLACDecodeNative(inbuf, &nBytes, outbuf);
+            diff -= nBytes;
+            if(ret == GIVE_NEXT_LOOP){
+                *bytesLeft -= diff;
+                return ERR_FLAC_NONE;
+            }
+            *bytesLeft -= diff;
+            return ret;
+        }
+        if(nBytes < 0){log_e("flac async"); *bytesLeft -= nBytes; return ERR_FLAC_DECODER_ASYNC;}
+
         if(s_f_flacParseOgg == true){
             s_f_flacParseOgg = false;
             ret = FLACparseOGG(inbuf, bytesLeft);
@@ -315,23 +381,21 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
         s_flacSegmTableVec.pop_back();
         if(!s_flacSegmTableVec.size()) s_f_flacParseOgg = true;
         //-------------------------------------------------------
-        if(s_flacPageNr == 0) ; //FLACSetRawBlockParams(2, 44100/1.5, 16, 1,1);
-        if(s_flacPageNr < 2){
-            s_flacPageNr++;
-            *bytesLeft -= segmLen;
-            return FLAC_PARSE_OGG_DONE;
-        }
-
-        if(s_flacPageNr == 2){
-            int nbytes = segmLen;
-            if(*bytesLeft - segmLen < 0) {log_i("underrun"); }
-            while(nbytes != 0){
-                int nbytes1 = nbytes;
-                ret = FLACDecodeNative(inbuf, &nbytes, outbuf);
-            //    log_i("inbuf[0] %02X, inbuf[1] %02X, segmLen %i, nbytes1 %i, nbytes %i",inbuf[0], inbuf[1], segmLen, nbytes1, nbytes);
-                inbuf += nbytes1 - nbytes;
-                if(nbytes < 0){log_e( "nbytes <0");}
-            }
+        switch(s_flacPageNr) {
+            case 0:
+                parseFlacFirstPacket(inbuf, nBytes);
+                // FLACSetRawBlockParams(2, 44100/1.5, 16, 1,1);
+                s_flacPageNr++;
+                ret = FLAC_PARSE_OGG_DONE;
+                break;
+            case 1:
+                s_flacPageNr++;
+                ret = FLAC_PARSE_OGG_DONE;
+                break;
+            case 2:
+                nBytes = segmLen;
+                return FLAC_PARSE_OGG_DONE;
+                break;
         }
         *bytesLeft -= segmLen;
         return ret;

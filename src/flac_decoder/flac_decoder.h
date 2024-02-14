@@ -149,6 +149,7 @@ int      FLACFindSyncWord(unsigned char *buf, int nBytes);
 boolean  FLACFindMagicWord(unsigned char* buf, int nBytes);
 char*    FLACgetStreamTitle();
 int      FLACparseOGG(uint8_t *inbuf, int *bytesLeft);
+int      parseFlacFirstPacket(uint8_t *inbuf, int16_t nBytes);
 bool     FLACDecoder_AllocateBuffers(void);
 void     FLACDecoder_setDefaults();
 void     FLACDecoder_ClearBuffer();

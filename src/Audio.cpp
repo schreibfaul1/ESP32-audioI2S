@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8l
- *  Updated on: Feb 08.2024
+ *  Version 3.0.8m
+ *  Updated on: Feb 14.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2994,6 +2994,7 @@ void Audio::processLocalFile() {
         ctime = millis();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
+        if(m_resumeFilePos == 0) m_resumeFilePos = -1; // parkposition
         return;
     }
 
@@ -3033,7 +3034,7 @@ void Audio::processLocalFile() {
             stopSong();
             return;
         }
-        m_controlCounter = 100;
+          m_controlCounter = 100;
         if(m_controlCounter != 100) {
             if((millis() - ctime) > timeout) {
                 log_e("audioHeader reading timeout");
@@ -3052,11 +3053,10 @@ void Audio::processLocalFile() {
             }
 
             f_stream = true;
-            AUDIO_INFO("stream ready");
+            AUDIO_INFO("stream ready_1");
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
-
     if(m_resumeFilePos >= 0) {
         if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
@@ -3084,7 +3084,6 @@ void Audio::processLocalFile() {
         m_resumeFilePos = -1;
         f_stream = false;
     }
-
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
         if(InBuff.bufferFilled()) {
@@ -3137,10 +3136,8 @@ void Audio::processLocalFile() {
         }
         return;
     }
-
     if(m_byteCounter == audiofile.size()) { f_fileDataComplete = true; }
     if(m_byteCounter == m_audioDataSize + m_audioDataStart) { f_fileDataComplete = true; }
-
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) { playAudioData(); }
 }
@@ -3591,7 +3588,6 @@ void Audio::playAudioData() {
         playChunk();
         return;
     } // play samples first
-
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // guard
 
     int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
@@ -4262,10 +4258,9 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
-        nextSync = OPUSFindSyncWord(data, len);
+        nextSync = FLACFindSyncWord(data, len);
         if(nextSync == -1) return len; // OggS not found, search next block
-        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
-        //nextSync = FLACFindSyncWord(data, len);
+        //FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
     }
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
