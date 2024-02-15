@@ -1,5 +1,8 @@
-# platformio.ini - example for: https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html
+# OpenAI Speech
 
+### platformio.ini - example for: [XIAO ESP32S3](https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html)
+
+```ShellCheck Config
 [env:seeed_xiao_esp32s3]
 platform = espressif32
 board = seeed_xiao_esp32s3
@@ -14,12 +17,12 @@ build_flags =
 	-DARDUINO_RUNNING_CORE=1       ; Arduino Runs On Core (setup, loop)
 	-DARDUINO_EVENT_RUNNING_CORE=1 ; Events Run On Core
 lib_deps = 
-	https://github.com/schreibfaul1/ESP32-audioI2S.git#f2f1f5bcce74523dfc59e5844ba5878ed69c040a
+	https://github.com/schreibfaul1/ESP32-audioI2S.git
+```
 
+### main.cpp - using xTask example:
 
-# main.cpp - using xTask example:
-
-``
+```cpp
 #include <Arduino.h>
 #include "SPI.h"
 #include <WiFi.h>
@@ -122,11 +125,12 @@ void playaudio(void *pvParameters) {
         }
     }
 }
-``
+```
 ---
 
-# console output example:
+### console output example:
 
+```ShellSession
 --- Terminal on /dev/ttyACM0 | 115200 8-N-1
 --- Available filters and text transformations: colorize, debug, default, direct, esp32_exception_decoder, hexlify, log2file, nocontrol, printable, send_on_enter, time
 --- More details at https://bit.ly/pio-monitor-filters
@@ -137,19 +141,15 @@ void playaudio(void *pvParameters) {
 [  4000][I][WiFiMulti.cpp:174] run(): [WIFI] Connecting done.
 Connected to WiFi
 IP: 192.168.86.23
-Sending result...
-Waiting for result...
-Received result: Added OpenAI Text to speech API support
 audio_info: Connect to new host: "api.openai.com"
 audio_info: PSRAM found, inputBufferSize: 638965 bytes
-[  4781][I][Audio.cpp:5248] ts_parsePacket(): parseTS reset
-audio_info: buffers freed, free Heap: 241976 bytes
+[  4698][I][Audio.cpp:5331] ts_parsePacket(): parseTS reset
+audio_info: buffers freed, free Heap: 255068 bytes
 audio_info: connect to api.openai.com on port 443 path /v1/audio/speech
-audio_info: SSL has been established in 1108 ms, free Heap: 200804 bytes
-Waiting for result...
-[  6707][I][Audio.cpp:3949] parseContentType(): ContentType audio/mpeg, format is mp3
-audio_info: MP3Decoder has been initialized, free Heap: 201136 bytes , free stack 5648 DWORDs
-[  6711][I][Audio.cpp:3795] parseHttpResponseHeader(): Switch to DATA, metaint is 0
+audio_info: SSL has been established in 925 ms, free Heap: 213908 bytes
+[  6921][I][Audio.cpp:4000] parseContentType(): ContentType audio/mpeg, format is mp3
+audio_info: MP3Decoder has been initialized, free Heap: 214564 bytes , free stack 3760 DWORDs
+[  6924][I][Audio.cpp:3846] parseHttpResponseHeader(): Switch to DATA, metaint is 0
 audio_info: stream ready
 audio_info: syncword found at pos 0
 audio_info: Channels: 1
@@ -157,5 +157,5 @@ audio_info: SampleRate: 24000
 audio_info: BitsPerSample: 16
 audio_info: BitRate: 160000
 audio_info: slow stream, dropouts are possible
-audio_info: slow stream, dropouts are possible
 audio_info: End of Stream.
+```
