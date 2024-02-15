@@ -3034,7 +3034,6 @@ void Audio::processLocalFile() {
             stopSong();
             return;
         }
-          m_controlCounter = 100;
         if(m_controlCounter != 100) {
             if((millis() - ctime) > timeout) {
                 log_e("audioHeader reading timeout");
