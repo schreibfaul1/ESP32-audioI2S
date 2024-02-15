@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8l
- *  Updated on: Feb 08.2024
+ *  Version 3.0.8m
+ *  Updated on: Feb 15.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -296,7 +296,6 @@ esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
     stopSong();
-    setSampleRate(16000); // ESP32-S3 -> reduce SR, if 48000Hz a connect to another URL is impossible
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
@@ -371,7 +370,7 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if(timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
 }
 
-/* 
+/*
     Text to speech API provides a speech endpoint based on our TTS (text-to-speech) model.
     More info: https://platform.openai.com/docs/guides/text-to-speech/text-to-speech
 
@@ -421,15 +420,15 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         "\"speed\": \"" + speed + "\"" +
     "}";
 
-    String http_request = 
+    String http_request =
         "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
         + "Host: " + String(host) + "\r\n"
         + "Authorization: Bearer " + api_key + "\r\n"
         + "Accept-Encoding: identity;q=1,*;q=0\r\n"
-        + "User-Agent: nArija/1.0\r\n" 
-        + "Content-Type: application/json; charset=utf-8\r\n" 
-        + "Content-Length: " + post_body.length() + "\r\n" 
-        + "Connection: keep-alive\r\n" + "\r\n" 
+        + "User-Agent: nArija/1.0\r\n"
+        + "Content-Type: application/json; charset=utf-8\r\n"
+        + "Content-Length: " + post_body.length() + "\r\n"
+        + "Connection: keep-alive\r\n" + "\r\n"
         + post_body + "\r\n"
     ;
 
@@ -3127,7 +3126,6 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
-        setSampleRate(16000); // workaround OPUS48k ESP32-S3 ESP-IDF Version: 4.4.5 - reduce sampRate because need DMA interrupt
         AUDIO_INFO("End of file \"%s\"", afn);
         if(audio_eof_mp3) audio_eof_mp3(afn);
         if(afn) {
