@@ -457,16 +457,42 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                     commemtStringLength += *(inbuf + pos + 1) <<  8;
                     commemtStringLength += *(inbuf + pos + 0);
 
+                    char* vb = NULL; // vorbis comment
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "title", 6) == 0)){
-                        log_w("TITLE found %s", inbuf + pos + 4 + 6);
+                        vb = strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        log_w("TITLE: %s", vb);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)){
-                        log_w("ARTIST found %s", inbuf + pos + 4 + 7);
+                        vb = strndup((const char*)(inbuf + pos + 4 + 7), min(127U, commemtStringLength - 7));
+                        log_w("ARTIST: %s", vb);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)){
-                        log_w("GENRE found %s", inbuf + pos + 4 + 6);
+                        vb = strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        log_w("GENRE: %s", vb);
                     }
+                    if((FLAC_specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "album", 6) == 0)){
+                        vb = strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        log_w("ALBUM: %s", vb);
+                    }
+                    if((FLAC_specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)){
+                        vb = strndup((const char*)(inbuf + pos + 4 + 8), min(127U, commemtStringLength - 8));
+                        log_w("COMMENT found %s", vb);
+                    }
+                    if((FLAC_specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "date", 5) == 0)){
+                        vb = strndup((const char*)(inbuf + pos + 4 + 5), min(127U, commemtStringLength - 12));
+                        log_w("DATE found %s", vb);
+                    }
+                    if((FLAC_specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)){
+                        vb = strndup((const char*)(inbuf + pos + 4 + 12), min(127U, commemtStringLength - 12));
+                        log_w("TRACKNUMBER found %s", vb);
+                    }
+                    if((FLAC_specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)){
+                        log_w("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
+                        // blockpiclen = commemtStringLength - 23;
+                    }
+                    if(vb){free(vb); vb = NULL;}
                     pos += 4 + commemtStringLength;
+                    //log_i("nBytes %i, pos %i, commemtStringLength %i", nBytes, pos, commemtStringLength);
                 }
 
                 if(ret == FLAC_PARSE_OGG_DONE) return ret;
