@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 3.0.8m
- *  Updated on: Feb 14.2024
+ *  Updated on: Feb 15.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -370,7 +370,7 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if(timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
 }
 
-/* 
+/*
     Text to speech API provides a speech endpoint based on our TTS (text-to-speech) model.
     More info: https://platform.openai.com/docs/guides/text-to-speech/text-to-speech
 
@@ -420,15 +420,15 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         "\"speed\": \"" + speed + "\"" +
     "}";
 
-    String http_request = 
+    String http_request =
         "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
         + "Host: " + String(host) + "\r\n"
         + "Authorization: Bearer " + api_key + "\r\n"
         + "Accept-Encoding: identity;q=1,*;q=0\r\n"
-        + "User-Agent: nArija/1.0\r\n" 
-        + "Content-Type: application/json; charset=utf-8\r\n" 
-        + "Content-Length: " + post_body.length() + "\r\n" 
-        + "Connection: keep-alive\r\n" + "\r\n" 
+        + "User-Agent: nArija/1.0\r\n"
+        + "Content-Type: application/json; charset=utf-8\r\n"
+        + "Content-Length: " + post_body.length() + "\r\n"
+        + "Connection: keep-alive\r\n" + "\r\n"
         + post_body + "\r\n"
     ;
 
@@ -6045,3 +6045,4 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
     return CODEC_NONE;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
