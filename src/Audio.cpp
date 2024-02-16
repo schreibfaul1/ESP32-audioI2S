@@ -3051,11 +3051,10 @@ void Audio::processLocalFile() {
             }
 
             f_stream = true;
-            AUDIO_INFO("stream ready");
+            AUDIO_INFO("stream ready_1");
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
-
     if(m_resumeFilePos >= 0) {
         if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
@@ -3083,7 +3082,6 @@ void Audio::processLocalFile() {
         m_resumeFilePos = -1;
         f_stream = false;
     }
-
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
         if(InBuff.bufferFilled()) {
@@ -3135,10 +3133,8 @@ void Audio::processLocalFile() {
         }
         return;
     }
-
     if(m_byteCounter == audiofile.size()) { f_fileDataComplete = true; }
     if(m_byteCounter == m_audioDataSize + m_audioDataStart) { f_fileDataComplete = true; }
-
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_stream) { playAudioData(); }
 }
@@ -3589,7 +3585,6 @@ void Audio::playAudioData() {
         playChunk();
         return;
     } // play samples first
-
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // guard
 
     int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
@@ -4419,6 +4414,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             if(st) {
                                 AUDIO_INFO(st);
                                 if(audio_showstreamtitle) audio_showstreamtitle(st);
+                            }
+                            vec = FLACgetMetadataBlockPicture();
+                            if(vec.size() > 0){ // get blockpic data
+                                // log_i("---------------------------------------------------------------------------");
+                                // log_i("ogg metadata blockpicture found:");
+                                // for(int i = 0; i < vec.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
+                                // log_i("---------------------------------------------------------------------------");
+                                if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
                             break;
         case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play

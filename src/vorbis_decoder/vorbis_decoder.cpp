@@ -1050,7 +1050,7 @@ _eofout:
 
 //----------------------------------------------------------------------------------------------------------------------
 int VORBIS_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
-    int result = 0;  // seek for str in buffer or in header up to baselen, not nullterninated
+    int result = -1;  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
     for (int i = 0; i < baselen - strlen(str); i++){
         result = i;
