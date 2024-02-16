@@ -31,7 +31,7 @@ const uint16_t   s_flacOutBuffSize = 2048;
 uint16_t         s_blockSize = 0;
 uint16_t         s_blockSizeLeft = 0;
 uint16_t         s_flacValidSamples = 0;
-uint16_t         m_rIndex = 0;
+uint16_t         s_rIndex = 0;
 uint8_t          s_flacStatus = 0;
 uint8_t*         s_flacInptr;
 float            s_flacCompressionRatio = 0;
@@ -89,6 +89,7 @@ void FLACDecoder_FreeBuffers(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_setDefaults(){
+    coefs.clear(); coefs.shrink_to_fit();
     s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
     s_flacBlockPicItem.clear(); s_flacBlockPicItem.shrink_to_fit();
     s_flac_bitBuffer = 0;
@@ -98,6 +99,15 @@ void FLACDecoder_setDefaults(){
     s_flacBlockPicPos = 0;
     s_flacBlockPicLen = 0;
     s_flacRemainBlockPicLen = 0;
+    s_blockSize = 0;
+    s_blockSizeLeft = 0;
+    s_flacValidSamples = 0;
+    s_rIndex = 0;
+    s_flacStatus = 0;
+    s_flacCompressionRatio = 0;
+    s_flacBitBufferLen = 0;
+    s_flac_pageSegments = 0;
+    s_f_flacNewStreamtitle = false;
     s_f_flacFirstCall = true;
     s_f_oggWrapper = false;
     s_f_lastMetaDataBlock = false;
@@ -116,8 +126,8 @@ const uint32_t mask[] = {0x00000000, 0x00000001, 0x00000003, 0x00000007, 0x00000
 
 uint32_t readUint(uint8_t nBits, int *bytesLeft){
     while (s_flacBitBufferLen < nBits){
-        uint8_t temp = *(s_flacInptr + m_rIndex);
-        m_rIndex++;
+        uint8_t temp = *(s_flacInptr + s_rIndex);
+        s_rIndex++;
         (*bytesLeft)--;
         if(*bytesLeft < 0) { log_i("error in bitreader"); vTaskDelay(100);}
         s_flac_bitBuffer = (s_flac_bitBuffer << 8) | temp;
@@ -529,13 +539,15 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
 
-    int            ret = 0;
-    uint16_t       segmLen = 0;
-    static int     nBytes = 0;
+    int             ret = 0;
+    uint16_t        segmLen = 0;
+    static uint16_t segmLenTmp = 0;
+    static int      nBytes = 0;
 
     if(s_f_flacFirstCall){ // determine if ogg or flag
         s_f_flacFirstCall = false;
         nBytes = 0;
+        segmLenTmp = 0;
         if(FLAC_specialIndexOf(inbuf, "OggS", 5) == 0){
             s_f_oggWrapper = true;
             s_f_flacParseOgg = true;
@@ -543,6 +555,20 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
     }
 
     if(s_f_oggWrapper){
+
+        if(segmLenTmp){ // can't skip more than 16K
+            if(segmLenTmp > 16384){
+                s_flacCurrentFilePos += 16384;
+                *bytesLeft -= 16384;
+                segmLenTmp -= 16384;
+            }
+            else{
+                s_flacCurrentFilePos += segmLenTmp;
+                *bytesLeft -= segmLenTmp;
+                segmLenTmp  = 0;
+            }
+            return FLAC_PARSE_OGG_DONE;
+        }
 
         if(nBytes > 0){
             int16_t diff = nBytes;
@@ -584,7 +610,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
             case 0:
                 ret = parseFlacFirstPacket(inbuf, segmLen);
                 if(ret == segmLen) {
-                    s_flacPageNr++;
+                    s_flacPageNr = 1;
                     ret = FLAC_PARSE_OGG_DONE;
                     break;
                 }
@@ -616,6 +642,10 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
                 return FLAC_PARSE_OGG_DONE;
                 break;
         }
+        if(segmLen > 16384){
+            segmLenTmp = segmLen;
+            return FLAC_PARSE_OGG_DONE;
+        }
         *bytesLeft -= segmLen;
         s_flacCurrentFilePos += segmLen;
         return ret;
@@ -630,7 +660,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
     static int sbl = 0;
 
     if(s_flacStatus != OUT_SAMPLES){
-        m_rIndex = 0;
+        s_rIndex = 0;
         s_flacInptr = inbuf;
     }
 
