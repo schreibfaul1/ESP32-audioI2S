@@ -4415,6 +4415,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 AUDIO_INFO(st);
                                 if(audio_showstreamtitle) audio_showstreamtitle(st);
                             }
+                            vec = FLACgetMetadataBlockPicture();
+                            if(vec.size() > 0){ // get blockpic data
+                                // log_i("---------------------------------------------------------------------------");
+                                // log_i("ogg metadata blockpicture found:");
+                                // for(int i = 0; i < vec.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
+                                // log_i("---------------------------------------------------------------------------");
+                                if(audio_oggimage) audio_oggimage(audiofile, vec);
+                            }
                             break;
         case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = OPUSGetOutputSamps();
