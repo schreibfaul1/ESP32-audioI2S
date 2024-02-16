@@ -604,7 +604,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
-        log_i("connecttohost(): %s", rqh);
+    //    log_i("connecttohost(): %s", rqh);
         _client->print(rqh);
         if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
         if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
@@ -2993,6 +2993,7 @@ void Audio::processLocalFile() {
         ctime = millis();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
+        if(m_resumeFilePos == 0) m_resumeFilePos = -1; // parkposition
         return;
     }
 
@@ -4259,8 +4260,9 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
-        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         nextSync = FLACFindSyncWord(data, len);
+        if(nextSync == -1) return len; // OggS not found, search next block
+        //FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
     }
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
@@ -6040,3 +6042,4 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
     return CODEC_NONE;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
