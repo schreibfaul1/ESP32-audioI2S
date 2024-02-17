@@ -599,8 +599,8 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
         if(s_flacRemainBlockPicLen <= 0 && !s_f_flacNewMetadataBlockPicture) {
             if(s_flacBlockPicItem.size() > 0) { // get blockpic data
                 // log_i("---------------------------------------------------------------------------");
-                // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                // for(int i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
+                // log_i("metadata blockpic found at pos %i, size %i bytes", s_flacBlockPicPos, s_flacBlockPicLen);
+                // for(int i = 0; i < s_flacBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_flacBlockPicItem[i], s_flacBlockPicItem[i + 1]); }
                 // log_i("---------------------------------------------------------------------------");
                 s_f_flacNewMetadataBlockPicture = true;
             }

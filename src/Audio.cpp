@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8m
- *  Updated on: Feb 15.2024
+ *  Version 3.0.8n
+ *  Updated on: Feb 17.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1432,9 +1432,11 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
-    static size_t headerSize;
-    static size_t retvalue = 0;
-    static bool   f_lastMetaBlock;
+    static size_t   headerSize;
+    static size_t   retvalue = 0;
+    static bool     f_lastMetaBlock = false;
+    static uint32_t picPos = 0;
+    static uint32_t picLen = 0;
 
     if(retvalue) {
         if(retvalue > len) { // if returnvalue > bufferfillsize
@@ -1454,6 +1456,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         headerSize = 0;
         retvalue = 0;
         m_audioDataStart = 0;
+        picPos = 0;
+        picLen = 0;
         f_lastMetaBlock = false;
         m_controlCounter = FLAC_MAGIC;
         if(getDatamode() == AUDIO_LOCALFILE) {
@@ -1500,6 +1504,11 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_controlCounter = FLAC_OKAY;
         m_audioDataStart = headerSize;
         m_audioDataSize = m_contentlength - m_audioDataStart;
+        if(picLen) {
+            size_t pos = audiofile.position();
+            audio_id3image(audiofile, picPos, picLen);
+            audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
+        }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
         retvalue = 0;
         return 0;
@@ -1572,18 +1581,22 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_VORBIS) { /* VORBIS COMMENT */ // field names
-        const char fn[7][12] = {"TITLE", "VERSION", "ALBUM", "TRACKNUMBER", "ARTIST", "PERFORMER", "GENRE"};
+        const char fn[7][12] = {"TITLE", "VERSION", "ALBUM", "TRACKNUMBER", "ARTIST", "COMMENT", "GENRE"};
         int        offset;
         size_t     l = bigEndian(data, 3);
 
         for(int i = 0; i < 7; i++) {
             offset = specialIndexOf(data, fn[i], len);
             if(offset >= 0) {
-                sprintf(m_chbuf, "%s: %s", fn[i], data + offset + strlen(fn[i]) + 1);
-                m_chbuf[strlen(m_chbuf) - 1] = 0;
-                for(int i = 0; i < strlen(m_chbuf); i++) {
-                    if(m_chbuf[i] == 255) m_chbuf[i] = 0;
-                }
+                uint32_t s =  data[offset - 4];
+                         s += data[offset - 3] << 8;
+                         s += data[offset - 2] << 16;
+                         s += data[offset - 1] << 24;
+                if(s > 512) s = 512; // guard
+                strcpy(m_chbuf, fn[i]);
+                strcat(m_chbuf, ": ");
+                int p = strlen(m_chbuf);
+                strncat(m_chbuf, (const char*)(data + offset + p - 1), s - p + 1);
                 if(audio_id3data) audio_id3data(m_chbuf);
             }
         }
@@ -1602,9 +1615,11 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_PICTURE) { /* PICTURE */
-        size_t l = bigEndian(data, 3);
+        picLen = bigEndian(data, 3);
+        picPos = headerSize;
+        // log_w("FLAC PICTURE, size %i, pos %i", picLen, picPos);
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
+        retvalue = picLen + 3;
         headerSize += retvalue;
         return 0;
     }
