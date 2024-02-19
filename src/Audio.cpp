@@ -3022,7 +3022,7 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         ctime = millis();
-    //    if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
+        if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         if(m_resumeFilePos == 0) m_resumeFilePos = -1; // parkposition
         return;
@@ -5936,6 +5936,7 @@ void Audio::seek_m4a_stsz() {
         while(seekpos < at.pos + at.size) {
             tmp = atomItems(seekpos);
             seekpos += tmp.size;
+        //  log_i("tmp.name %s, tmp.size %i, seekpos %i", tmp.name, tmp.size, seekpos);
             if(strcmp(tmp.name, name[i]) == 0) {
                 memcpy((void*)&at, (void*)&tmp, sizeof(tmp));
                 found = true;
@@ -5949,7 +5950,6 @@ void Audio::seek_m4a_stsz() {
         if(!found) goto noSuccess;
         seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
     }
-
     seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
     audiofile.seek(seekpos);
     audiofile.readBytes(noe, 4); // number of entries
@@ -5958,8 +5958,8 @@ void Audio::seek_m4a_stsz() {
     m_stsz_position = seekpos + 4;
     if(stsdSize) {
         audiofile.seek(stsdPos);
-        uint8_t data[stsdSize];
-        audiofile.readBytes((char*)data, stsdSize);
+        uint8_t data[128];
+        audiofile.readBytes((char*)data, 128);
         int offset = specialIndexOf(data, "mp4a", stsdSize);
         if(offset > 0) {
             int channel = bigEndian(data + offset + 20, 2); // audio parameter must be set before starting
