@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8n
- *  Updated on: Feb 17.2024
+ *  Version 3.0.8o
+ *  Updated on: Feb 19.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1948,6 +1948,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     static size_t retvalue = 0;
     static size_t atomsize = 0;
     static size_t audioDataPos = 0;
+    static uint32_t picPos = 0;
+    static uint32_t picLen = 0;
 
     if(m_controlCounter == M4A_BEGIN) retvalue = 0;
     static size_t cnt = 0;
@@ -1973,6 +1975,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         retvalue = 0;
         atomsize = 0;
         audioDataPos = 0;
+        picPos = 0;
+        picLen = 0;
         m_controlCounter = M4A_FTYP;
         return 0;
     }
@@ -2168,6 +2172,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                 }
             }
         }
+        offset = specialIndexOf(data, "covr", len);
+        if(offset > 0){
+            picLen = bigEndian(data + offset + 4, 4) - 4;
+            picPos = headerSize + offset + 12;
+        }
         m_controlCounter = M4A_MOOV;
         return 0;
     }
@@ -2185,6 +2194,13 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m_audioDataStart = headerSize;
         //        m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
         if(getDatamode() == AUDIO_LOCALFILE) { AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength); }
+
+        if(picLen) {
+            size_t pos = audiofile.position();
+            audio_id3image(audiofile, picPos, picLen);
+            audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
+        }
+
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
     }
@@ -3006,7 +3022,7 @@ void Audio::processLocalFile() {
         f_stream = false;
         f_fileDataComplete = false;
         ctime = millis();
-        if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
+    //    if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         if(m_resumeFilePos == 0) m_resumeFilePos = -1; // parkposition
         return;
