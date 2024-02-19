@@ -486,31 +486,31 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                     commemtStringLength += *(inbuf + pos + 0);
 
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "title", 6) == 0)){
-                        vb[0] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        vb[0] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
                         //log_w("TITLE: %s", vb[0]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)){
-                        vb[1] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 7), min(127U, commemtStringLength - 7));
+                        vb[1] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
                         //log_w("ARTIST: %s", vb[1]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)){
-                        vb[2] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        vb[2] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
                         //log_w("GENRE: %s", vb[2]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "album", 6) == 0)){
-                        vb[3] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min(127U, commemtStringLength - 6));
+                        vb[3] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
                         //log_w("ALBUM: %s", vb[3]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)){
-                        vb[4] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 8), min(127U, commemtStringLength - 8));
+                        vb[4] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
                         //log_w("COMMENT: %s", vb[4]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "date", 5) == 0)){
-                        vb[5] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 5), min(127U, commemtStringLength - 12));
+                        vb[5] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
                         //log_w("DATE: %s", vb[5]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)){
-                        vb[6] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 12), min(127U, commemtStringLength - 12));
+                        vb[6] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
                         //log_w("TRACKNUMBER: %s", vb[6]);
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)){
