@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Feb 16,2024
+ * Updated on: Feb 19,2024
  *
  * Author: Wolle
  *
@@ -15,7 +15,6 @@ using namespace std;
 
 FLACFrameHeader_t*   FLACFrameHeader;
 FLACMetadataBlock_t* FLACMetadataBlock;
-FLACsubFramesBuff_t* FLACsubFramesBuff;
 
 vector<uint16_t> s_flacSegmTableVec;
 vector<int32_t>  coefs;
@@ -46,6 +45,8 @@ bool             s_f_oggWrapper = false;
 bool             s_f_lastMetaDataBlock = false;
 bool             s_f_flacNewMetadataBlockPicture = false;
 uint8_t          s_flacPageNr = 0;
+int32_t**        s_samplesBuffer;
+uint16_t         s_maxBlocksize = MAX_BLOCKSIZE;
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -59,13 +60,34 @@ bool FLACDecoder_AllocateBuffers(void){
 
     if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    __malloc_heap_psram(sizeof(FLACFrameHeader_t));}
     if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  __malloc_heap_psram(sizeof(FLACMetadataBlock_t));}
-    if(!FLACsubFramesBuff)  {FLACsubFramesBuff  = (FLACsubFramesBuff_t*)  __malloc_heap_psram(sizeof(FLACsubFramesBuff_t));}
     if(!s_flacStreamTitle)  {s_flacStreamTitle  = (char*)                 __malloc_heap_psram(256);}
 
-    if(!FLACFrameHeader || !FLACMetadataBlock || !FLACsubFramesBuff || !s_flacStreamTitle){
+    if(!FLACFrameHeader || !FLACMetadataBlock || !s_flacStreamTitle){
         log_e("not enough memory to allocate flacdecoder buffers");
         return false;
     }
+
+    if(psramFound()){
+        s_samplesBuffer = (int32_t**)ps_malloc(MAX_CHANNELS * sizeof(int32_t*));
+        for (int i = 0; i < MAX_CHANNELS; i++){
+            s_samplesBuffer[i] = (int32_t*)ps_malloc(s_maxBlocksize * sizeof(int32_t));
+            if(!s_samplesBuffer[i]){
+                log_e("not enough memory to allocate flacdecoder buffers");
+                return false;
+            }
+        }
+    }
+    else  {
+        s_samplesBuffer = (int32_t**)malloc(MAX_CHANNELS * sizeof(int32_t*));
+        for (int i = 0; i < MAX_CHANNELS; i++){
+            s_samplesBuffer[i] = (int32_t*)malloc(s_maxBlocksize * sizeof(int32_t));
+            if(!s_samplesBuffer[i]){
+                log_e("not enough memory to allocate flacdecoder buffers");
+                return false;
+            }
+        }
+    }
+
     FLACDecoder_ClearBuffer();
     FLACDecoder_setDefaults();
     return true;
@@ -74,7 +96,13 @@ bool FLACDecoder_AllocateBuffers(void){
 void FLACDecoder_ClearBuffer(){
     memset(FLACFrameHeader,   0, sizeof(FLACFrameHeader_t));
     memset(FLACMetadataBlock, 0, sizeof(FLACMetadataBlock_t));
-    memset(FLACsubFramesBuff, 0, sizeof(FLACsubFramesBuff_t));
+
+    if(s_samplesBuffer) {
+        for (int i = 0; i < MAX_CHANNELS; i++){
+            memset(s_samplesBuffer[i], 0, s_maxBlocksize * sizeof(int32_t));
+        }
+    }
+
     s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
     s_flacStatus = DECODE_FRAME;
     return;
@@ -83,9 +111,12 @@ void FLACDecoder_ClearBuffer(){
 void FLACDecoder_FreeBuffers(){
     if(FLACFrameHeader)    {free(FLACFrameHeader);    FLACFrameHeader    = NULL;}
     if(FLACMetadataBlock)  {free(FLACMetadataBlock);  FLACMetadataBlock  = NULL;}
-    if(FLACsubFramesBuff)  {free(FLACsubFramesBuff);  FLACsubFramesBuff  = NULL;}
     if(s_flacStreamTitle)  {free(s_flacStreamTitle);  s_flacStreamTitle  = NULL;}
     if(s_flacVendorString) {free(s_flacVendorString); s_flacVendorString = NULL;}
+
+    for (int i = 0; i < MAX_CHANNELS; i++)
+        if(!s_samplesBuffer[i]){free(s_samplesBuffer[i]); s_samplesBuffer[i] = NULL;}
+    if(s_samplesBuffer){free(s_samplesBuffer); s_samplesBuffer = NULL;}
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_setDefaults(){
@@ -689,7 +720,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 
         for (int i = 0; i < blockSize; i++) {
             for (int j = 0; j < FLACMetadataBlock->numChannels; j++) {
-                int val = FLACsubFramesBuff->samplesBuffer[j][i + offset];
+                int val = s_samplesBuffer[j][i + offset];
                 if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
                 outbuf[2*i+j] = val;
             }
@@ -836,20 +867,20 @@ int8_t decodeSubframes(int* bytesLeft){
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
         if(FLACFrameHeader->chanAsgn == 8) {
             for (int i = 0; i < s_blockSize; i++)
-                FLACsubFramesBuff->samplesBuffer[1][i] = (
-                        FLACsubFramesBuff->samplesBuffer[0][i] -
-                        FLACsubFramesBuff->samplesBuffer[1][i]);
+                s_samplesBuffer[1][i] = (
+                        s_samplesBuffer[0][i] -
+                        s_samplesBuffer[1][i]);
         }
         else if (FLACFrameHeader->chanAsgn == 9) {
             for (int i = 0; i < s_blockSize; i++)
-                FLACsubFramesBuff->samplesBuffer[0][i] += FLACsubFramesBuff->samplesBuffer[1][i];
+                s_samplesBuffer[0][i] += s_samplesBuffer[1][i];
         }
         else if (FLACFrameHeader->chanAsgn == 10) {
             for (int i = 0; i < s_blockSize; i++) {
-                long side =  FLACsubFramesBuff->samplesBuffer[1][i];
-                long right = FLACsubFramesBuff->samplesBuffer[0][i] - (side >> 1);
-                FLACsubFramesBuff->samplesBuffer[1][i] = right;
-                FLACsubFramesBuff->samplesBuffer[0][i] = right + side;
+                long side =  s_samplesBuffer[1][i];
+                long right = s_samplesBuffer[0][i] - (side >> 1);
+                s_samplesBuffer[1][i] = right;
+                s_samplesBuffer[0][i] = right + side;
             }
         }
         else {
@@ -878,12 +909,12 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     if(type == 0){  // Constant coding
         int16_t s= readSignedInt(sampleDepth, bytesLeft);
         for(int i=0; i < s_blockSize; i++){
-            FLACsubFramesBuff->samplesBuffer[ch][i] = s;
+            s_samplesBuffer[ch][i] = s;
         }
     }
     else if (type == 1) {  // Verbatim coding
         for (int i = 0; i < s_blockSize; i++)
-            FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+            s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
     }
     else if (8 <= type && type <= 12){
         ret = decodeFixedPredictionSubframe(type - 8, sampleDepth, ch, bytesLeft);
@@ -898,7 +929,7 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     }
     if(shift>0){
         for (int i = 0; i < s_blockSize; i++){
-            FLACsubFramesBuff->samplesBuffer[ch][i] <<= shift;
+            s_samplesBuffer[ch][i] <<= shift;
         }
     }
     return ERR_FLAC_NONE;
@@ -907,7 +938,7 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
 int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     uint8_t ret = 0;
     for(uint8_t i = 0; i < predOrder; i++)
-        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
     ret = decodeResiduals(predOrder, ch, bytesLeft);
     if(ret) return ret;
     coefs.clear();
@@ -924,7 +955,7 @@ int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uin
 int8_t decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch, int* bytesLeft){
     int8_t ret = 0;
     for (int i = 0; i < lpcOrder; i++)
-        FLACsubFramesBuff->samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
     int precision = readUint(4, bytesLeft) + 1;
     int shift = readSignedInt(5, bytesLeft);
     coefs.resize(0);
@@ -957,12 +988,12 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
         int param = readUint(paramBits, bytesLeft);
         if (param < escapeParam) {
             for (int j = start; j < end; j++){
-                FLACsubFramesBuff->samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
+                s_samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
             }
         } else {
             int numBits = readUint(5, bytesLeft);
             for (int j = start; j < end; j++){
-                FLACsubFramesBuff->samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
+                s_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
             }
         }
     }
@@ -974,9 +1005,9 @@ void restoreLinearPrediction(uint8_t ch, uint8_t shift) {
     for (int i = coefs.size(); i < s_blockSize; i++) {
         int32_t sum = 0;
         for (int j = 0; j < coefs.size(); j++){
-            sum += FLACsubFramesBuff->samplesBuffer[ch][i - 1 - j] * coefs[j];
+            sum += s_samplesBuffer[ch][i - 1 - j] * coefs[j];
         }
-        FLACsubFramesBuff->samplesBuffer[ch][i] += (sum >> shift);
+        s_samplesBuffer[ch][i] += (sum >> shift);
     }
 }
 //----------------------------------------------------------------------------------------------------------------------

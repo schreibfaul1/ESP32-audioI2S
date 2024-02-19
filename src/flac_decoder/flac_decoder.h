@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Feb 16,2024
+ * Updated on: Feb 19,2024
  *
  *      Author: wolle
  *
@@ -22,10 +22,6 @@ using namespace std;
 
 #define MAX_CHANNELS 2
 #define MAX_BLOCKSIZE 8192
-
-typedef struct FLACsubFramesBuff_t{
-    int32_t samplesBuffer[MAX_CHANNELS][MAX_BLOCKSIZE];
-}FLACsubframesBuffer_t;
 
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
