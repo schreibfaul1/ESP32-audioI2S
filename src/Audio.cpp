@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8o
- *  Updated on: Feb 19.2024
+ *  Version 3.0.8p
+ *  Updated on: Feb 20.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2070,10 +2070,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             (void)len_of_ESD;
             uint8_t audioType = *(pos + 21);
 
-            if(audioType == 0x40) { AUDIO_INFO("AudioType: MPEG4 / Audio"); } // ObjectTypeIndication
-            else if(audioType == 0x66) { AUDIO_INFO("AudioType: MPEG2 / Audio"); }
-            else if(audioType == 0x69) { AUDIO_INFO("AudioType: MPEG2 / Audio Part 3"); } // Backward Compatible Audio
-            else if(audioType == 0x6B) { AUDIO_INFO("AudioType: MPEG1 / Audio"); }
+            if     (audioType == (uint8_t)0x40) { AUDIO_INFO("AudioType: MPEG4 / Audio"); } // ObjectTypeIndication
+            else if(audioType == (uint8_t)0x66) { AUDIO_INFO("AudioType: MPEG2 / Audio"); }
+            else if(audioType == (uint8_t)0x69) { AUDIO_INFO("AudioType: MPEG2 / Audio Part 3"); } // Backward Compatible Audio
+            else if(audioType == (uint8_t)0x6B) { AUDIO_INFO("AudioType: MPEG1 / Audio"); }
             else { AUDIO_INFO("unknown Audio Type %x", audioType); }
 
             uint8_t streamType = *(pos + 22);
@@ -2090,13 +2090,13 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             uint8_t objectType = ASC >> 11; // first 5 bits
 
-            if(objectType == 1) { AUDIO_INFO("AudioObjectType: AAC Main"); } // Audio Object Types
+            if     (objectType == 1) { AUDIO_INFO("AudioObjectType: AAC Main"); } // Audio Object Types
             else if(objectType == 2) { AUDIO_INFO("AudioObjectType: AAC Low Complexity"); }
             else if(objectType == 3) { AUDIO_INFO("AudioObjectType: AAC Scalable Sample Rate"); }
             else if(objectType == 4) { AUDIO_INFO("AudioObjectType: AAC Long Term Prediction"); }
             else if(objectType == 5) { AUDIO_INFO("AudioObjectType: AAC Spectral Band Replication"); }
             else if(objectType == 6) { AUDIO_INFO("AudioObjectType: AAC Scalable"); }
-            else { AUDIO_INFO("unknown Audio Type %x", audioType); }
+            else { AUDIO_INFO("unknown ObjectType %x, stop", objectType); stopSong();}
 
             const uint32_t samplingFrequencies[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
             uint8_t        sRate = (ASC & 0x0600) >> 7; // next 4 bits Sampling Frequencies
@@ -2106,7 +2106,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if(chConfig == 0) AUDIO_INFO("Channel Configurations: AOT Specifc Config");
             if(chConfig == 1) AUDIO_INFO("Channel Configurations: front-center");
             if(chConfig == 2) AUDIO_INFO("Channel Configurations: front-left, front-right");
-            if(chConfig > 2) { log_e("Channel Configurations with more than 2 channels is not allowed!"); }
+            if(chConfig > 2) { log_e("Channel Configurations with more than 2 channels is not allowed, stop!"); stopSong();}
 
             uint8_t frameLengthFlag = (ASC & 0x04);
             uint8_t dependsOnCoreCoder = (ASC & 0x02);
