@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8p
- *  Updated on: Feb 20.2024
+ *  Version 3.0.8q
+ *  Updated on: Mar 04.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -5493,6 +5493,11 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 *packetLength = TS_PACKET_SIZE - posOfPacketStart - startOfData;
                 PES_DataLength -= (*packetLength);
                 PES_DataLength -= (PES_HeaderDataLength + 3);
+                return true;
+            }
+            if(firstByte == 0 && secondByte == 0 && thirdByte == 0){
+                // PES packet startcode prefix is 0x000000
+                // skip such packets
                 return true;
             }
         }
