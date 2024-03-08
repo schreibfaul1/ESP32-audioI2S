@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 07.03.2024
+ *  Updated on: 08.03.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -335,6 +335,9 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
    MUST also be no larger than the size of the payload remaining after decoding that length for all code 2 packets. This makes, for example,
    a 2-byte code 2 packet with a second byte in the range 1...251 invalid as well (the only valid 2-byte code 2 packet is one where the length of
    both frames is zero).
+   compute N1:  o  1...251: Length of the frame in bytes
+                o  252...255: A second byte is needed.  The total length is (second_byte*4)+first_byte
+
       0                   1                   2                   3
       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -358,7 +361,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     if(*frameCount == 0){
         uint8_t b1 = inbuf[1];
         uint8_t b2 = inbuf[2];
-        if(b1 != 255){
+        if(b1 < 252){
             firstFrameLength = b1;
             packetLen -= 2;
             *bytesLeft -= 2;
@@ -366,11 +369,11 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
             inbuf += 2;
         }
         else{
+            firstFrameLength = b1 + (b2 * 4);
             packetLen -= 3;
             *bytesLeft -= 3;
             s_opusCurrentFilePos += 3;
             inbuf += 3;
-            firstFrameLength = b1 + b2;
         }
         secondFrameLength = packetLen - firstFrameLength;
         *frameCount = 2;
