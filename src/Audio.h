@@ -475,6 +475,7 @@ private:
     const size_t    m_frameSizeFLAC   = 4096 * 4;
     const size_t    m_frameSizeOPUS   = 1024;
     const size_t    m_frameSizeVORBIS = 4096 * 2;
+    const size_t    m_outbuffSize     = 4096 * 2;
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;

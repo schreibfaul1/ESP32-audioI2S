@@ -10,6 +10,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 #include "opus_decoder.h"
 #include "celt.h"
+#include "silk.h"
 #include "Arduino.h"
 #include <vector>
 
@@ -19,6 +20,9 @@ const uint32_t CELT_SET_END_BAND_REQUEST   = 10012;
 const uint32_t CELT_SET_START_BAND_REQUEST = 10010;
 const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
+
+enum {OPUS_BANDWIDTH_NARROWBAND = 8000, OPUS_BANDWIDTH_MEDIUMBAND = 12000, OPUS_BANDWIDTH_WIDEBAND = 16000};
+enum {MODE_CELT_ONLY, MODE_SILK_ONLY, MODE_HYBRID};
 
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
@@ -30,10 +34,12 @@ bool      s_f_lastPage = false;
 bool      s_f_nextChunk = false;
 
 uint8_t   s_opusChannels = 0;
+uint8_t   s_mode = 0;
 uint8_t   s_opusCountCode =  0;
 uint8_t   s_opusPageNr = 0;
 uint8_t   s_frameCount = 0;
 uint16_t  s_opusOggHeaderSize = 0;
+uint16_t  s_bandWidth = 0;
 uint32_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
 uint32_t  s_opusCurrentFilePos = 0;
@@ -67,6 +73,15 @@ bool OPUSDecoder_AllocateBuffers(){
     s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {log_e("CELT not init"); return false;}
     s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {log_e("CELT not init"); return false;}
     OPUSsetDefaults();
+
+    int32_t ret = 0, silkDecSizeBytes = 0;
+    //ret = silk_Get_Decoder_Size(&silkDecSizeBytes);
+    if (ret){
+        log_e("internal error");
+    }
+    else{
+        log_i("silkDecSizeBytes %i", silkDecSizeBytes);
+    }
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
@@ -85,7 +100,9 @@ void OPUSsetDefaults(){
     s_f_opusStereoFlag = false;
     s_opusChannels = 0;
     s_frameCount = 0;
+    s_mode = 0;
     s_opusSamplerate = 0;
+    s_bandWidth = 0;
     s_opusSegmentLength = 0;
     s_opusValidSamples = 0;
     s_opusSegmentTableSize = 0;
@@ -206,20 +223,49 @@ int opusDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, shor
     if(configNr < 0) return configNr; // SILK or Hybrid mode
 
     switch(configNr){
-        case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_NARROWBAND
+        case  0 ... 3:  endband  = 0; // OPUS_BANDWIDTH_SILK_NARROWBAND
+                        s_mode = MODE_SILK_ONLY;
+                        s_bandWidth = OPUS_BANDWIDTH_NARROWBAND;
                         break;
-        case 20 ... 23: endband = 17; // OPUS_BANDWIDTH_WIDEBAND
+        case  4 ... 7:  endband  = 0; // OPUS_BANDWIDTH_SILK_MEDIUMBAND
+                        s_mode = MODE_SILK_ONLY;
+                        s_bandWidth = OPUS_BANDWIDTH_MEDIUMBAND;
                         break;
-        case 24 ... 27: endband = 19; // OPUS_BANDWIDTH_SUPERWIDEBAND
+        case  8 ... 11: endband  = 0; // OPUS_BANDWIDTH_SILK_WIDEBAND
+                        s_mode = MODE_SILK_ONLY;
+                        s_bandWidth = OPUS_BANDWIDTH_WIDEBAND;
                         break;
-        case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_FULLBAND
+        case 12 ... 13: endband  = 0; // OPUS_BANDWIDTH_HYBRID_SUPERWIDEBAND
+                        s_mode = MODE_HYBRID;
+                        break;
+        case 14 ... 15: endband  = 0; // OPUS_BANDWIDTH_HYBRID_FULLBAND
+                        s_mode = MODE_HYBRID;
+                       break;
+        case 16 ... 19: endband = 13; // OPUS_BANDWIDTH_CELT_NARROWBAND
+                        s_mode = MODE_CELT_ONLY;
+                        break;
+        case 20 ... 23: endband = 17; // OPUS_BANDWIDTH_CELT_WIDEBAND
+                        s_mode = MODE_CELT_ONLY;
+                        break;
+        case 24 ... 27: endband = 19; // OPUS_BANDWIDTH_CELT_SUPERWIDEBAND
+                        s_mode = MODE_CELT_ONLY;
+                        break;
+        case 28 ... 31: endband = 21; // OPUS_BANDWIDTH_CELT_FULLBAND
+                        s_mode = MODE_CELT_ONLY;
                         break;
         default:        log_e("unknown bandwidth, configNr is: %d", configNr);
                         endband = 21; // assume OPUS_BANDWIDTH_FULLBAND
                         break;
     }
+
 //    celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, endband);
-    celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
+    if (s_mode == MODE_CELT_ONLY){
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, endband);
+    }
+    else if(s_mode == MODE_SILK_ONLY){
+        // silk_InitDecoder();
+    }
+
     samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
@@ -614,10 +660,16 @@ int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc671
     c        = (TOC_Byte & 0b00000011);
 
     /*  Configuration       Mode  Bandwidth            FrameSizes         Audio Bandwidth   Sample Rate (Effective)
-        configNr 16 ... 19  CELT  NB (narrowband)      2.5, 5, 10, 20ms   4 kHz             8 kHz
-        configNr 20 ... 23  CELT  WB (wideband)        2.5, 5, 10, 20ms   8 kHz             16 kHz
-        configNr 24 ... 27  CELT  SWB(super wideband)  2.5, 5, 10, 20ms   12 kHz            24 kHz
-        configNr 28 ... 31  CELT  FB (fullband)        2.5, 5, 10, 20ms   20 kHz (*)        48 kHz     <-------
+
+        configNr  0 ...  3  SILK     NB (narrow band)      10, 20, 40, 60ms   4 kHz              8 kHz
+        configNr  4 ...  7  SILK     MB (medium band)      10, 20, 40, 60ms   6 kHz             12 kHz
+        configNr  8 ... 11  SILK     WB (wide band)        10, 20, 40, 60ms   8 kHz             16 kHz
+        configNr 12 ... 13  HYBRID  SWB (super wideband)   10, 20ms          12 kHz (*)         24 kHz
+        configNr 14 ... 15  HYBRID   FB (full band)        10, 20ms          20 kHz (*)         48 kHz
+        configNr 16 ... 19  CELT     NB (narrow band)      2.5, 5, 10, 20ms   4 kHz              8 kHz
+        configNr 20 ... 23  CELT     WB (wide band)        2.5, 5, 10, 20ms   8 kHz             16 kHz
+        configNr 24 ... 27  CELT    SWB (super wideband)   2.5, 5, 10, 20ms   12 kHz            24 kHz
+        configNr 28 ... 31  CELT     FB (full band)        2.5, 5, 10, 20ms   20 kHz (*)        48 kHz     <-------
 
         (*) Although the sampling theorem allows a bandwidth as large as half the sampling rate, Opus never codes
         audio above 20 kHz, as that is the generally accepted upper limit of human hearing.

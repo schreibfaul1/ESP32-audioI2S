@@ -147,7 +147,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
     if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
     m_lastHost = (char*)__malloc_heap_psram(512);
-    m_outBuff = (int16_t*)__malloc_heap_psram(2048 * 2 * sizeof(int16_t));
+    m_outBuff = (int16_t*)__malloc_heap_psram(m_outbuffSize);
     m_chbuf = (char*)__malloc_heap_psram(m_chbufSize);
     m_ibuff = (char*)__malloc_heap_psram(m_ibuffSize);
 
@@ -2274,7 +2274,7 @@ uint32_t Audio::stopSong() {
         AUDIO_INFO("Closing audio file");
         log_w("Closing audio file"); // for debug
     }
-    memset(m_outBuff, 0, 2048 * 2 * sizeof(uint16_t)); // Clear OutputBuffer
+    memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     m_validSamples = 0;
     return pos;
@@ -2287,7 +2287,7 @@ bool Audio::pauseResume() {
         m_f_running = !m_f_running;
         retVal = true;
         if(!m_f_running) {
-            memset(m_outBuff, 0, 2048 * 2 * sizeof(uint16_t)); // Clear OutputBuffer
+            memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
             m_validSamples = 0;
         }
     }
@@ -3146,7 +3146,8 @@ void Audio::processLocalFile() {
             return;
         } // loop
 
-        char* afn = strdup(audiofile.name()); // store temporary the name
+        char* afn = NULL;
+        if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
         m_f_running = false;
         m_streamType = ST_NONE;
         audiofile.close();
@@ -3158,9 +3159,10 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
-        AUDIO_INFO("End of file \"%s\"", afn);
-        if(audio_eof_mp3) audio_eof_mp3(afn);
+
         if(afn) {
+            if(audio_eof_mp3) audio_eof_mp3(afn);
+            AUDIO_INFO("End of file \"%s\"", afn);
             free(afn);
             afn = NULL;
         }
@@ -4798,7 +4800,7 @@ bool Audio::setFilePos(uint32_t pos) {
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
     if(pos > m_file_size) pos = m_file_size;
     m_resumeFilePos = pos;
-    memset(m_outBuff, 0, 2048 * 2 * sizeof(int16_t));
+    memset(m_outBuff, 0, m_outbuffSize);
     m_validSamples = 0;
     return true;
 }
