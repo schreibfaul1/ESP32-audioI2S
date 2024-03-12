@@ -536,7 +536,7 @@ void     deemphasis(int32_t *in[], int16_t *pcm, int32_t N);
 void     celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t C, int32_t isTransient, int32_t LM,
                         int32_t silence);
 void     tf_decode(int32_t isTransient, int32_t *tf_res, int32_t LM);
-int32_t  celt_decode_with_ec(const uint8_t *inbuf, int32_t len, int16_t *outbuf, int32_t frame_size);
+int32_t  celt_decode_with_ec(int16_t *outbuf, int32_t frame_size);
 int32_t  celt_decoder_ctl(int32_t request, ...);
 int32_t  cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y);
 int32_t  decode_pulses(int32_t *_y, int32_t _n, int32_t _k);

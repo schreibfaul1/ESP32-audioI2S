@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 08.03.2024
+ *  Updated on: 12.03.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -314,7 +314,7 @@ int8_t opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     packetLen--;
     inbuf++;
     ec_dec_init((uint8_t *)inbuf, packetLen);
-    ret = celt_decode_with_ec(inbuf, packetLen, (int16_t*)outbuf, samplesPerFrame);
+    ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     if(ret < 0) return ret;
     s_opusValidSamples = ret;
     return ERR_OPUS_NONE;
@@ -357,7 +357,7 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     }
     if(*frameCount > 0){
         ec_dec_init((uint8_t *)inbuf, c1fs);
-        ret = celt_decode_with_ec(inbuf, c1fs, (int16_t*)outbuf, samplesPerFrame);
+        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
         if(ret < 0){
             return ret;
         }
@@ -426,7 +426,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     }
     if(*frameCount == 2){
         ec_dec_init((uint8_t *)inbuf, firstFrameLength);
-        ret = celt_decode_with_ec(inbuf, firstFrameLength, (int16_t*)outbuf, samplesPerFrame);
+        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
         if(ret < 0){return ret;}
         s_opusValidSamples = ret;
         *bytesLeft -= firstFrameLength;
@@ -434,7 +434,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     }
     if(*frameCount == 1){
         ec_dec_init((uint8_t *)inbuf, secondFrameLength);
-        ret = celt_decode_with_ec(inbuf, secondFrameLength, (int16_t*)outbuf, samplesPerFrame);
+        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
         if(ret < 0){return ret;}
         s_opusValidSamples = ret;
         *bytesLeft -= secondFrameLength;
@@ -574,7 +574,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     *bytesLeft -= fs;
     s_opusCurrentFilePos += fs;
     ec_dec_init((uint8_t *)inbuf, fs);
-    ret = celt_decode_with_ec(inbuf, fs, (int16_t*)outbuf, samplesPerFrame);
+    ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     if(ret < 0) return ret; // celt error
     s_opusValidSamples = ret;
     *frameCount -= 1;
