@@ -10,7 +10,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 #include "opus_decoder.h"
 #include "celt.h"
-#include "silk.h"
 #include "Arduino.h"
 #include <vector>
 
