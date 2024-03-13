@@ -5,7 +5,7 @@
  *
  *  Created on: Sep 01.2022
  *
- *  Updated on: Mar 12.2024
+ *  Updated on: Mar 13.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -2279,7 +2279,7 @@ int32_t celt_decode_with_ec(int16_t *outbuf, int32_t frame_size) {
 
     M = 1 << LM; // LM=3 -> M = 8
 
-    if(s_ec.storage < 0 || s_ec.storage > 1275 || outbuf == NULL) {log_e("OPUS_BAD_ARG"); return ERR_OPUS_CELT_BAD_ARG;}
+    if(s_ec.storage > 1275 || outbuf == NULL) {log_e("OPUS_BAD_ARG"); return ERR_OPUS_CELT_BAD_ARG;}
 
     N = M * m_CELTMode.shortMdctSize; // const m_CELTMode.shortMdctSize == 120, M == 8 -> N = 960
 
