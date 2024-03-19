@@ -74,6 +74,8 @@ bool OPUSDecoder_AllocateBuffers(){
     OPUSsetDefaults();
 
     int32_t ret = 0, silkDecSizeBytes = 0;
+    (void) ret;
+    (void) silkDecSizeBytes;    
     //ret = silk_Get_Decoder_Size(&silkDecSizeBytes);
     if (ret){
         log_e("internal error");
