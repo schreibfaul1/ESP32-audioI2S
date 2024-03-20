@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.8p
- *  Updated on: Feb 20.2024
+ *  Version 3.0.8r
+ *  Updated on: Mar 20.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -16,7 +16,11 @@
 #include <esp32-hal-log.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <SD.h>
+#include <SD_MMC.h>
+#include <SPIFFS.h>
 #include <FS.h>
+#include <FFat.h>
 #include <atomic>
 
 #if ESP_IDF_VERSION_MAJOR == 5
