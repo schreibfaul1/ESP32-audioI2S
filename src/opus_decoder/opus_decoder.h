@@ -4,7 +4,7 @@
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
 #include <stdint.h>
-#include <memory.h>
+#include <string.h>
 #include <vector>
 using namespace std;
 
