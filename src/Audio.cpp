@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8r
- *  Updated on: Mar 20.2024
+ *  Version 3.0.8s
+ *  Updated on: Mar 23.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4825,18 +4825,20 @@ bool Audio::audioFileSeek(const float speed) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
     if(!sampRate) sampRate = 16000; // fuse, if there is no value -> set default #209
+    if(m_sampleRate == sampRate) return true;
     m_sampleRate = sampRate;
 #if ESP_IDF_VERSION_MAJOR == 5
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
-    I2Sstop(0);
+//    I2Sstop(0);
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    I2Sstart(0);
+//    I2Sstart(0);
 #else
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
 #endif
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     return true;
 }
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getSampleRate() { return m_sampleRate; }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setBitsPerSample(int bits) {
