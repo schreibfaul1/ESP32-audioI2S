@@ -35,6 +35,7 @@
 using namespace std;
 
 extern __attribute__((weak)) void audio_info(const char*);
+extern __attribute__((weak)) void audio_stopped(const uint32_t pos); // called after audio has stopped
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
 extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
@@ -50,6 +51,8 @@ extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
+extern __attribute__((weak)) void audio_webfile_data_received(const uint8_t *writePtr, const int16_t bytesWritten); // called after data has been received from a web file stream
+extern __attribute__((weak)) void audio_webfile_start(const bool isTTS, const char *lastHost); // the webfile stream starts
 extern __attribute__((weak)) void audio_process_extern(int16_t* buff, uint16_t len, bool *continueI2S); // record audiodata or send via BT
 extern __attribute__((weak)) void audio_process_i2s(uint32_t* sample, bool *continueI2S); // record audiodata or send via BT
 
