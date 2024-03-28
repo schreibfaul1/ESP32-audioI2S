@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8s
- *  Updated on: Mar 23.2024
+ *  Version 3.0.8t
+ *  Updated on: Mar 28.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -193,6 +193,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(0);
+    m_sampleRate = 44100;
 #else
     m_i2s_config.sample_rate          = 16000;
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
@@ -4824,17 +4825,18 @@ bool Audio::audioFileSeek(const float speed) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
-    if(!sampRate) sampRate = 16000; // fuse, if there is no value -> set default #209
+    if(!sampRate) sampRate = 44100; // fuse, if there is no value -> set default #209
     if(m_sampleRate == sampRate) return true;
     m_sampleRate = sampRate;
 #if ESP_IDF_VERSION_MAJOR == 5
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
-//    I2Sstop(0);
+    I2Sstop(0);
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-//    I2Sstart(0);
+    I2Sstart(0);
 #else
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
 #endif
+    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     return true;
 }
