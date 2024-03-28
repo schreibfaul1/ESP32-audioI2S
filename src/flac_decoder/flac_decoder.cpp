@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Feb 19,2024
+ * Updated on: Mar 28,2024
  *
  * Author: Wolle
  *
@@ -45,7 +45,7 @@ bool             s_f_oggWrapper = false;
 bool             s_f_lastMetaDataBlock = false;
 bool             s_f_flacNewMetadataBlockPicture = false;
 uint8_t          s_flacPageNr = 0;
-int32_t**        s_samplesBuffer;
+int32_t**        s_samplesBuffer = NULL;
 uint16_t         s_maxBlocksize = MAX_BLOCKSIZE;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -114,9 +114,15 @@ void FLACDecoder_FreeBuffers(){
     if(s_flacStreamTitle)  {free(s_flacStreamTitle);  s_flacStreamTitle  = NULL;}
     if(s_flacVendorString) {free(s_flacVendorString); s_flacVendorString = NULL;}
 
-    for (int i = 0; i < MAX_CHANNELS; i++)
-        if(!s_samplesBuffer[i]){free(s_samplesBuffer[i]); s_samplesBuffer[i] = NULL;}
-    if(s_samplesBuffer){free(s_samplesBuffer); s_samplesBuffer = NULL;}
+    if(s_samplesBuffer){
+        for (int i = 0; i < MAX_CHANNELS; i++){
+            if(s_samplesBuffer[i]){free(s_samplesBuffer[i]);}
+        }
+        free(s_samplesBuffer); s_samplesBuffer = NULL;
+    }
+    coefs.clear(); coefs.shrink_to_fit();
+    s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
+    s_flacBlockPicItem.clear(); s_flacBlockPicItem.shrink_to_fit();
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_setDefaults(){
