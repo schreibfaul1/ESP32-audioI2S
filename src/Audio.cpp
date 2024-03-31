@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8t
- *  Updated on: Mar 28.2024
+ *  Version 3.0.8u
+ *  Updated on: Mar 31.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -810,7 +810,7 @@ void Audio::UTF8toASCII(char* str) {
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
 
     if(!path) { // guard
-        AUDIO_INFO("The given path is empty");
+        printProcessLog(AUDIOLOG_PATH_IS_NULL);
         return false;
     }
 
@@ -819,70 +819,31 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
     m_resumeFilePos = resumeFilePos;
     setDefaults(); // free buffers an set defaults
 
-    { // open audiofile scope
-        const char *audioName = nullptr; // pointer for the final file path
-        char *audioNameAlternative = nullptr; // possible buffer for alternative versions of the audioName
+    char *audioPath = (char *) __malloc_heap_psram(strlen(path) + 2);
+    if(!audioPath){
+        printProcessLog(AUDIOLOG_OUT_OF_MEMORY);
+        xSemaphoreGiveRecursive(mutex_audio);
+        return false;
+    }
+    if(path[0] == '/'){strcpy(audioPath, path);}
+    else {audioPath[0] = '/'; strcpy(audioPath + 1, path);}
 
-        if (fs.exists(path)) { // use given path if it exists (issue #86)
-            audioName = path;
-        }
-        else { // try alternative path variants
-            size_t len = strlen(path);
-            size_t copyMemSize = len + 2; // 2 extra bytes for possible leading / and \0 terminator
-            size_t copyOffset = 0;
-
-            audioNameAlternative = (char *) __malloc_heap_psram(copyMemSize);
-            if (!audioNameAlternative) {
-                log_e("out of memory");
-                xSemaphoreGiveRecursive(mutex_audio);
-                return false;
-            }
-
-            // make sure the path starts with a /
-            if (path[0] != '/') {
-                audioNameAlternative[0] = '/';
-                copyOffset = 1;
-            }
-
-            // copy original path to audioNameAlternative buffer
-            strncpy(audioNameAlternative + copyOffset, path, copyMemSize - copyOffset);
-
-            if (fs.exists(audioNameAlternative)) { // use path with extra leading / if it exists
-                audioName = audioNameAlternative;
-            }
-            else { // use ASCII version of the path if it exists
-                UTF8toASCII(audioNameAlternative);
-                if (fs.exists(audioNameAlternative)) {
-                    audioName = audioNameAlternative;
-                }
-            }
-        }
-
-        if (!audioName) {
-            AUDIO_INFO("File doesn't exist: \"%s\"", path);
+    if(!fs.exists(audioPath)) {
+        UTF8toASCII(audioPath);
+        if(!fs.exists(audioPath)){
+            printProcessLog(AUDIOLOG_FILE_NOT_FOUND, audioPath);
             xSemaphoreGiveRecursive(mutex_audio);
-            if (audioNameAlternative) {
-                free(audioNameAlternative);
-            }
+            free(audioPath);
             return false;
-        }
-
-        AUDIO_INFO("Reading file: \"%s\"", audioName);
-        vTaskDelay(2);
-
-        audiofile = fs.open(audioName);
-
-        // free audioNameAlternative if used
-        if (audioNameAlternative) {
-            free(audioNameAlternative);
         }
     }
 
+    AUDIO_INFO("Reading file: \"%s\"", audioPath);
+    audiofile = fs.open(audioPath);
+
     if(!audiofile) {
-        if(audio_info) {
-            vTaskDelay(2);
-            audio_info("Failed to open file for reading");
-        }
+        printProcessLog(AUDIOLOG_FILE_READ_ERR, audioPath);
+        free(audioPath);
         xSemaphoreGiveRecursive(mutex_audio);
         return false;
     }
@@ -911,6 +872,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
         free(afn);
         afn = NULL;
     }
+    free(audioPath);
 
     bool ret = initializeDecoder();
     if(ret) m_f_running = true;
@@ -4563,6 +4525,28 @@ void Audio::compute_audioCurrentTime(int bd) {
     if(cnt == 100) cnt = 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ void Audio::printProcessLog(int r, const char* s){
+    const char* e;
+    const char* f = "";
+    uint8_t logLevel;  // 1 Error, 2 Warn, 3 Info,
+    switch(r) {
+        case AUDIOLOG_PATH_IS_NULL: e = "The path ore file name is empty"; logLevel = 1; break;
+        case AUDIOLOG_OUT_OF_MEMORY: e = "Out of memory"; logLevel = 1; break;
+        case AUDIOLOG_FILE_NOT_FOUND: e = "File doesn't exist: "; logLevel = 1; f = s; break;
+        case AUDIOLOG_FILE_READ_ERR: e = "Failed to open file for reading"; logLevel = 1; break;
+
+        default: e = "UNKNOWN EVENT"; logLevel = 3; break;
+    }
+    if(audio_log){
+        audio_log(logLevel, e, f);
+    }
+    else {
+        if     (logLevel == 1) {AUDIO_INFO("ERROR: %s%s", e, f);}
+        else if(logLevel == 2) {AUDIO_INFO("WARNING: %s%s", e, f);}
+        else                   {AUDIO_INFO("INFO: %s%s", e, f);}
+    }
+ }
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::printDecodeError(int r) {
     const char* e;
 
@@ -4829,8 +4813,8 @@ bool Audio::setSampleRate(uint32_t sampRate) {
     if(m_sampleRate == sampRate) return true;
     m_sampleRate = sampRate;
 #if ESP_IDF_VERSION_MAJOR == 5
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
     I2Sstop(0);
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     I2Sstart(0);
 #else

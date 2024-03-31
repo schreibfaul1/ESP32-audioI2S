@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.8s
- *  Updated on: Mar 23.2024
+ *  Version 3.0.8u
+ *  Updated on: Mar 31.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -52,6 +52,7 @@ extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_extern(int16_t* buff, uint16_t len, bool *continueI2S); // record audiodata or send via BT
 extern __attribute__((weak)) void audio_process_i2s(uint32_t* sample, bool *continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_log(uint8_t logLevel, const char* msg, const char* arg);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -184,83 +185,85 @@ private:
         #define ESP_ARDUINO_VERSION_PATCH 0
     #endif
 
-    void UTF8toASCII(char* str);
-    bool latinToUTF8(char* buff, size_t bufflen);
-    void setDefaults(); // free buffers and set defaults
-    void initInBuff();
-    bool httpPrint(const char* host);
-    void processLocalFile();
-    void processWebStream();
-    void processWebFile();
-    void processWebStreamTS();
-    void processWebStreamHLS();
-    void playAudioData();
-    bool readPlayListData();
-    const char* parsePlaylist_M3U();
-    const char* parsePlaylist_PLS();
-    const char* parsePlaylist_ASX();
-    const char* parsePlaylist_M3U8();
-    const char* m3u8redirection();
-    uint64_t m3u8_findMediaSeqInURL();
-    bool STfromEXTINF(char* str);
-    void showCodecParams();
-    int  findNextSync(uint8_t* data, size_t len);
-    int  sendBytes(uint8_t* data, size_t len);
-    void setDecoderItems();
-    void compute_audioCurrentTime(int bd);
-    void printDecodeError(int r);
-    void showID3Tag(const char* tag, const char* val);
-    size_t readAudioHeader(uint32_t bytes);
-    int  read_WAV_Header(uint8_t* data, size_t len);
-    int  read_FLAC_Header(uint8_t *data, size_t len);
-    int  read_ID3_Header(uint8_t* data, size_t len);
-    int  read_M4A_Header(uint8_t* data, size_t len);
-    size_t process_m3u8_ID3_Header(uint8_t* packet);
-    bool setSampleRate(uint32_t hz);
-    bool setBitsPerSample(int bits);
-    bool setChannels(int channels);
-    bool setBitrate(int br);
-    void playChunk();
-    bool playSample(int16_t sample[2]);
-    void computeVUlevel(int16_t sample[2]);
-    void computeLimit();
-    int32_t Gain(int16_t s[2]);
-    void showstreamtitle(const char* ml);
-    bool parseContentType(char* ct);
-    bool parseHttpResponseHeader();
-    bool initializeDecoder();
-    esp_err_t I2Sstart(uint8_t i2s_num);
-    esp_err_t I2Sstop(uint8_t i2s_num);
-    void urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
-    int16_t* IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-    int16_t* IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-    int16_t* IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-    inline void setDatamode(uint8_t dm){m_datamode=dm;}
-    inline uint8_t getDatamode(){return m_datamode;}
-    inline uint32_t streamavail(){ return _client ? _client->available() : 0;}
-    void IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
-    bool ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4, AUDIOLOG_ERR_UNKNOWN = -127 };
 
-//+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
-    uint16_t readMetadata(uint16_t b, bool first = false);
-    size_t   chunkedDataTransfer(uint8_t* bytes);
-    bool     readID3V1Tag();
-    boolean  streamDetection(uint32_t bytesAvail);
-    void     seek_m4a_stsz();
-    void     seek_m4a_ilst();
-    uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
-    uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
-    uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
-    uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
+  void            UTF8toASCII(char* str);
+  bool            latinToUTF8(char* buff, size_t bufflen);
+  void            setDefaults(); // free buffers and set defaults
+  void            initInBuff();
+  bool            httpPrint(const char* host);
+  void            processLocalFile();
+  void            processWebStream();
+  void            processWebFile();
+  void            processWebStreamTS();
+  void            processWebStreamHLS();
+  void            playAudioData();
+  bool            readPlayListData();
+  const char*     parsePlaylist_M3U();
+  const char*     parsePlaylist_PLS();
+  const char*     parsePlaylist_ASX();
+  const char*     parsePlaylist_M3U8();
+  const char*     m3u8redirection();
+  uint64_t        m3u8_findMediaSeqInURL();
+  bool            STfromEXTINF(char* str);
+  void            showCodecParams();
+  int             findNextSync(uint8_t* data, size_t len);
+  int             sendBytes(uint8_t* data, size_t len);
+  void            setDecoderItems();
+  void            compute_audioCurrentTime(int bd);
+  void            printProcessLog(int r, const char* s = "");
+  void            printDecodeError(int r);
+  void            showID3Tag(const char* tag, const char* val);
+  size_t          readAudioHeader(uint32_t bytes);
+  int             read_WAV_Header(uint8_t* data, size_t len);
+  int             read_FLAC_Header(uint8_t* data, size_t len);
+  int             read_ID3_Header(uint8_t* data, size_t len);
+  int             read_M4A_Header(uint8_t* data, size_t len);
+  size_t          process_m3u8_ID3_Header(uint8_t* packet);
+  bool            setSampleRate(uint32_t hz);
+  bool            setBitsPerSample(int bits);
+  bool            setChannels(int channels);
+  bool            setBitrate(int br);
+  void            playChunk();
+  bool            playSample(int16_t sample[2]);
+  void            computeVUlevel(int16_t sample[2]);
+  void            computeLimit();
+  int32_t         Gain(int16_t s[2]);
+  void            showstreamtitle(const char* ml);
+  bool            parseContentType(char* ct);
+  bool            parseHttpResponseHeader();
+  bool            initializeDecoder();
+  esp_err_t       I2Sstart(uint8_t i2s_num);
+  esp_err_t       I2Sstop(uint8_t i2s_num);
+  void            urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
+  int16_t*        IIR_filterChain0(int16_t iir_in[2], bool clear = false);
+  int16_t*        IIR_filterChain1(int16_t iir_in[2], bool clear = false);
+  int16_t*        IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+  inline void     setDatamode(uint8_t dm) { m_datamode = dm; }
+  inline uint8_t  getDatamode() { return m_datamode; }
+  inline uint32_t streamavail() { return _client ? _client->available() : 0; }
+  void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
+  bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
 
+  //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
+  uint16_t readMetadata(uint16_t b, bool first = false);
+  size_t   chunkedDataTransfer(uint8_t* bytes);
+  bool     readID3V1Tag();
+  boolean  streamDetection(uint32_t bytesAvail);
+  void     seek_m4a_stsz();
+  void     seek_m4a_ilst();
+  uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
+  uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
+  uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
+  uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
-//++++ implement several function with respect to the index of string ++++
-    void strlower(char *str){
-        unsigned char *p = (unsigned char *)str;
-        while (*p) {
-           *p = tolower((unsigned char)*p);
-            p++;
-        }
+  //++++ implement several function with respect to the index of string ++++
+  void strlower(char* str) {
+      unsigned char* p = (unsigned char*)str;
+      while(*p) {
+          *p = tolower((unsigned char)*p);
+          p++;
+      }
     }
 
 
