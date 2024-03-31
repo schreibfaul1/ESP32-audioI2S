@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8u
- *  Updated on: Mar 31.2024
+ *  Version 3.0.8v
+ *  Updated on: Apr 01.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1469,7 +1469,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_audioDataSize = m_contentlength - m_audioDataStart;
         if(picLen) {
             size_t pos = audiofile.position();
-            audio_id3image(audiofile, picPos, picLen);
+            if(audio_id3image) audio_id3image(audiofile, picPos, picLen);
             audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
         }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
@@ -1544,27 +1544,51 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_VORBIS) { /* VORBIS COMMENT */ // field names
-        const char fn[7][12] = {"TITLE", "VERSION", "ALBUM", "TRACKNUMBER", "ARTIST", "COMMENT", "GENRE"};
+        const char fn[12][17] = {"ALBUMARTIST=", "ALBUMARTISTSORT=", "ARTISTSORT=", "TOTALTRACKS=", "TITLE=", "VERSION=", "ALBUM=", "TRACKNUMBER=", "ARTIST=", "COMMENT=", "GENRE=", "DATE="};
         int        offset;
-        size_t     l = bigEndian(data, 3);
+        size_t     vendorLength = bigEndian(data, 3);
+        data += 3;
+        size_t vendorStringLength = data[0];
+        vendorStringLength += data[1] << 8;
+        vendorStringLength += data[2] << 16;
+        vendorStringLength += data[3] << 24;
+        if(vendorStringLength) data += 4;
+        if(vendorStringLength > 495) vendorStringLength = 495; // guard
+        strcpy(m_chbuf, "VENDOR_STRING: ");
+        strncpy(m_chbuf + 15, (const char*)data, vendorStringLength);
+        m_chbuf[15 + vendorStringLength] = '\0';
+        if(audio_id3data) audio_id3data(m_chbuf);
+        data += vendorStringLength;
+        size_t commentListLength = +data[0];
+        commentListLength += data[1];
+        commentListLength += data[2];
+        commentListLength += data[3];
+        data += 4;
 
-        for(int i = 0; i < 7; i++) {
-            offset = specialIndexOf(data, fn[i], len);
-            if(offset >= 0) {
-                uint32_t s =  data[offset - 4];
-                         s += data[offset - 3] << 8;
-                         s += data[offset - 2] << 16;
-                         s += data[offset - 1] << 24;
-                if(s > 512) s = 512; // guard
-                strcpy(m_chbuf, fn[i]);
-                strcat(m_chbuf, ": ");
-                int p = strlen(m_chbuf);
-                strncat(m_chbuf, (const char*)(data + offset + p - 1), s - p + 1);
-                if(audio_id3data) audio_id3data(m_chbuf);
+        uint32_t s = 0;
+
+        for(int i = 0; i < commentListLength; i++) {
+            for(int j = 0; j < 12; j++) {
+                offset = specialIndexOf(data, fn[j], len);
+                if(offset == 4) {
+                    s = data[offset - 4];
+                    s += data[offset - 3] << 8;
+                    s += data[offset - 2] << 16;
+                    s += data[offset - 1] << 24;
+                    if(s > 512) s = 512; // guard
+                    memset(m_chbuf, 0, 512);
+                    strcpy(m_chbuf, fn[j]);
+                    int p = strlen(m_chbuf);
+                    m_chbuf[p - 1] = ':';
+                    m_chbuf[p] = ' ';
+                    strncat(m_chbuf, (const char*)(data + offset + p), (s - p));
+                    if(audio_id3data) audio_id3data(m_chbuf);
+                }
             }
+            data += s + 4;
         }
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
+        retvalue = vendorLength + 3;
         headerSize += retvalue;
         return 0;
     }
