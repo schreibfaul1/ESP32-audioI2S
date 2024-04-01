@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8w
+ *  Version 3.0.8x
  *  Updated on: Apr 01.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -1467,6 +1467,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_controlCounter = FLAC_OKAY;
         m_audioDataStart = headerSize;
         m_audioDataSize = m_contentlength - m_audioDataStart;
+        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         if(picLen) {
             size_t pos = audiofile.position();
             if(audio_id3image) audio_id3image(audiofile, picPos, picLen);
@@ -4267,7 +4268,6 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     if(m_codec == CODEC_FLAC) {
         nextSync = FLACFindSyncWord(data, len);
         if(nextSync == -1) return len; // OggS not found, search next block
-        //FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
     }
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
