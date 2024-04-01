@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8v
+ *  Version 3.0.8w
  *  Updated on: Apr 01.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -1544,48 +1544,30 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_VORBIS) { /* VORBIS COMMENT */ // field names
-        const char fn[12][17] = {"ALBUMARTIST=", "ALBUMARTISTSORT=", "ARTISTSORT=", "TOTALTRACKS=", "TITLE=", "VERSION=", "ALBUM=", "TRACKNUMBER=", "ARTIST=", "COMMENT=", "GENRE=", "DATE="};
-        int        offset;
-        size_t     vendorLength = bigEndian(data, 3);
-        data += 3;
-        size_t vendorStringLength = data[0];
-        vendorStringLength += data[1] << 8;
-        vendorStringLength += data[2] << 16;
-        vendorStringLength += data[3] << 24;
-        if(vendorStringLength) data += 4;
+        size_t vendorLength = bigEndian(data, 3);
+        size_t idx = 0;
+        data += 3; idx += 3;
+        size_t vendorStringLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
+        if(vendorStringLength) {data += 4; idx += 4;}
         if(vendorStringLength > 495) vendorStringLength = 495; // guard
         strcpy(m_chbuf, "VENDOR_STRING: ");
         strncpy(m_chbuf + 15, (const char*)data, vendorStringLength);
         m_chbuf[15 + vendorStringLength] = '\0';
         if(audio_id3data) audio_id3data(m_chbuf);
-        data += vendorStringLength;
-        size_t commentListLength = +data[0];
-        commentListLength += data[1];
-        commentListLength += data[2];
-        commentListLength += data[3];
-        data += 4;
-
-        uint32_t s = 0;
+        data += vendorStringLength; idx += vendorStringLength;
+        size_t commentListLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
+        data += 4; idx += 4;
 
         for(int i = 0; i < commentListLength; i++) {
-            for(int j = 0; j < 12; j++) {
-                offset = specialIndexOf(data, fn[j], len);
-                if(offset == 4) {
-                    s = data[offset - 4];
-                    s += data[offset - 3] << 8;
-                    s += data[offset - 2] << 16;
-                    s += data[offset - 1] << 24;
-                    if(s > 512) s = 512; // guard
-                    memset(m_chbuf, 0, 512);
-                    strcpy(m_chbuf, fn[j]);
-                    int p = strlen(m_chbuf);
-                    m_chbuf[p - 1] = ':';
-                    m_chbuf[p] = ' ';
-                    strncat(m_chbuf, (const char*)(data + offset + p), (s - p));
-                    if(audio_id3data) audio_id3data(m_chbuf);
-                }
-            }
-            data += s + 4;
+            (void)i;
+            size_t commentLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
+            data += 4; idx += 4;
+            if(commentLength > 512) commentLength = 512; // guard
+            strncpy(m_chbuf, (const char *)data , commentLength);
+            m_chbuf[commentLength] = '\0';
+            if(audio_id3data) audio_id3data(m_chbuf);
+            data += commentLength; idx += commentLength;
+            if(idx > vendorLength + 3) {log_e("VORBIS COMMENT section is too long");}
         }
         m_controlCounter = FLAC_MBH;
         retvalue = vendorLength + 3;
