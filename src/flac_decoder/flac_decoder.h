@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Mar 28,2024
+ * Updated on: Apr 02,2024
  *
  *      Author: wolle
  *
