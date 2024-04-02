@@ -2248,6 +2248,9 @@ uint32_t Audio::stopSong() {
     memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     m_validSamples = 0;
+    if (audio_stopped) {
+        audio_stopped(pos);
+    }
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3240,6 +3243,9 @@ void Audio::processWebFile() {
         byteCounter = 0;
         chunkSize = 0;
         audioDataCount = 0;
+        if (audio_webfile_start) {
+            audio_webfile_start(m_f_tts, m_lastHost);
+        }
     }
 
     if(!m_contentlength && !m_f_tts) {
@@ -3267,9 +3273,14 @@ void Audio::processWebFile() {
     availableBytes = min(m_contentlength - byteCounter, availableBytes);
     if(m_audioDataSize) availableBytes = min(m_audioDataSize - (byteCounter - m_audioDataStart), availableBytes);
 
-    int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    uint8_t *writePtr = InBuff.getWritePtr();
+    int16_t bytesAddedToBuffer = _client->read(writePtr, availableBytes);
 
     if(bytesAddedToBuffer > 0) {
+        if (audio_webfile_data_received) {
+            audio_webfile_data_received(writePtr, bytesAddedToBuffer);
+        }
+
         byteCounter += bytesAddedToBuffer; // Pull request #42
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
