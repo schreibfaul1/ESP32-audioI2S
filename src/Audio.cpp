@@ -1563,10 +1563,11 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             (void)i;
             size_t commentLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
             data += 4; idx += 4;
-            if(commentLength > 512) commentLength = 512; // guard
-            strncpy(m_chbuf, (const char *)data , commentLength);
-            m_chbuf[commentLength] = '\0';
-            if(audio_id3data) audio_id3data(m_chbuf);
+            if(commentLength < 512) { // guard
+                strncpy(m_chbuf, (const char *)data , commentLength);
+                m_chbuf[commentLength] = '\0';
+                if(audio_id3data) audio_id3data(m_chbuf);
+            }
             data += commentLength; idx += commentLength;
             if(idx > vendorLength + 3) {log_e("VORBIS COMMENT section is too long");}
         }
