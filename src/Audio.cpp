@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8x
- *  Updated on: Apr 01.2024
+ *  Version 3.0.8y
+ *  Updated on: Apr 03.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2243,11 +2243,12 @@ uint32_t Audio::stopSong() {
         // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
         audiofile.close();
         AUDIO_INFO("Closing audio file");
-        log_w("Closing audio file"); // for debug
     }
     memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     m_validSamples = 0;
+    m_audioCurrentTime = 0;
+    m_audioFileDuration = 0;
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4790,7 +4791,7 @@ bool Audio::setFilePos(uint32_t pos) {
     if(m_codec == CODEC_VORBIS) return false; // not impl. yet
     if(!audiofile) return false;
     if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
-    if(pos > m_file_size) pos = m_file_size;
+    if(pos > m_file_size) {pos = m_file_size; stopSong(); return false;}
     m_resumeFilePos = pos;
     memset(m_outBuff, 0, m_outbuffSize);
     m_validSamples = 0;
@@ -6030,7 +6031,7 @@ uint32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos) {
     p1 = audiofile.read();
     p2 = audiofile.read();
     pos += 2;
-    while(!found || pos == m_file_size) {
+    while(!found || pos >= m_file_size) {
         if(p1 == 0xFF && p2 == 0xF8) {
             found = true;
             break;
@@ -6041,7 +6042,8 @@ uint32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos) {
     }
 
     if(found) return (pos - 2);
-    return m_audioDataStart;
+    stopSong();
+    return 0;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::mp3_correctResumeFilePos(uint32_t resumeFilePos) {
