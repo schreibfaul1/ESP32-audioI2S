@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.8y
+ *  Version 3.0.9
  *  Updated on: Apr 03.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -4317,18 +4317,27 @@ void Audio::setDecoderItems() {
         setSampleRate(FLACGetSampRate());
         setBitsPerSample(FLACGetBitsPerSample());
         setBitrate(FLACGetBitRate());
+        if(FLACGetAudioDataStart() > 0){ // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
+            m_audioDataStart = FLACGetAudioDataStart();
+        }
     }
     if(m_codec == CODEC_OPUS) {
         setChannels(OPUSGetChannels());
         setSampleRate(OPUSGetSampRate());
         setBitsPerSample(OPUSGetBitsPerSample());
         setBitrate(OPUSGetBitRate());
+        if(OPUSGetAudioDataStart() > 0){
+            m_audioDataStart = OPUSGetAudioDataStart();
+        }
     }
     if(m_codec == CODEC_VORBIS) {
         setChannels(VORBISGetChannels());
         setSampleRate(VORBISGetSampRate());
         setBitsPerSample(VORBISGetBitsPerSample());
         setBitrate(VORBISGetBitRate());
+        if(VORBISGetAudioDataStart() > 0){
+            m_audioDataStart = VORBISGetAudioDataStart();
+        }
     }
     if(getBitsPerSample() != 8 && getBitsPerSample() != 16) {
         AUDIO_INFO("Bits per sample must be 8 or 16, found %i", getBitsPerSample());

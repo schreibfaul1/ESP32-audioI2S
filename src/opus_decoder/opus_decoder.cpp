@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 12.03.2024
+ *  Updated on: 03.04.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -42,6 +42,7 @@ uint16_t  s_bandWidth = 0;
 uint32_t  s_opusSamplerate = 0;
 uint32_t  s_opusSegmentLength = 0;
 uint32_t  s_opusCurrentFilePos = 0;
+uint32_t  s_opusAudioDataStart = 0;
 int32_t   s_opusBlockPicLen = 0;
 int32_t   s_blockPicLenUntilFrameEnd = 0;
 int32_t   s_opusRemainBlockPicLen = 0;
@@ -75,7 +76,7 @@ bool OPUSDecoder_AllocateBuffers(){
 
     int32_t ret = 0, silkDecSizeBytes = 0;
     (void) ret;
-    (void) silkDecSizeBytes;    
+    (void) silkDecSizeBytes;
     //ret = silk_Get_Decoder_Size(&silkDecSizeBytes);
     if (ret){
         log_e("internal error");
@@ -112,6 +113,7 @@ void OPUSsetDefaults(){
     s_opusCountCode = 0;
     s_opusBlockPicPos = 0;
     s_opusCurrentFilePos = 0;
+    s_opusAudioDataStart = 0;
     s_opusBlockPicLen = 0;
     s_opusCommentBlockSize = 0;
     s_opusRemainBlockPicLen = 0;
@@ -211,6 +213,11 @@ int opusDecodePage0(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int opusDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short *outbuf){
+
+    if(s_opusAudioDataStart == 0){
+        s_opusAudioDataStart = s_opusCurrentFilePos;
+    }
+
 
     uint8_t endband = 21;
     static int8_t configNr = 0;
@@ -629,6 +636,9 @@ uint32_t OPUSGetBitRate(){
 }
 uint16_t OPUSGetOutputSamps(){
     return s_opusValidSamples; // 1024
+}
+uint32_t OPUSGetAudioDataStart(){
+    return s_opusAudioDataStart;
 }
 char* OPUSgetStreamTitle(){
     if(s_f_newSteamTitle){

@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 08.02.2024
+ *  Updated on: 03.04.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -54,6 +54,7 @@ uint32_t  s_vorbisBitRate = 0;
 uint32_t  s_vorbisSegmentLength = 0;
 uint32_t  s_vorbisBlockPicLenUntilFrameEnd = 0;
 uint32_t  s_vorbisCurrentFilePos = 0;
+uint32_t  s_vorbisAudioDataStart = 0;
 char     *s_vorbisChbuf = NULL;
 int32_t   s_vorbisValidSamples = 0;
 int32_t   s_commentBlockSegmentSize = 0;
@@ -126,6 +127,7 @@ void VORBISsetDefaults(){
     s_vorbisValidSamples = 0;
     s_vorbisSegmentTableSize = 0;
     s_vorbisCurrentFilePos = 0;
+    s_vorbisAudioDataStart = 0;
     s_vorbisOldMode = 0xFF;
     s_vorbisSegmentTableRdPtr = -1;
     s_vorbisError = 0;
@@ -343,6 +345,11 @@ int vorbisDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int vorbisDecodePage4(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short* outbuf){
+
+    if(s_vorbisAudioDataStart == 0){
+        s_vorbisAudioDataStart = s_vorbisCurrentFilePos;
+    }
+
     int ret = 0;
     if(s_f_parseOggDone) { // first loop after VORBISparseOGG()
         if(s_f_oggContinuedPage) {
@@ -427,6 +434,9 @@ uint8_t VORBISGetBitsPerSample(){
 }
 uint32_t VORBISGetBitRate(){
     return s_vorbisBitRate;
+}
+uint32_t VORBISGetAudioDataStart(){
+    return s_vorbisAudioDataStart;
 }
 uint16_t VORBISGetOutputSamps(){
     return s_vorbisValidSamples; // 1024

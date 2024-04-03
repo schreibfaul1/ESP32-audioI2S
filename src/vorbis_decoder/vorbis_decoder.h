@@ -20,7 +20,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 08.02.2024
+ *  Updated on: 03.04.2024
  */
 
 
@@ -225,6 +225,7 @@ void                  clearGlobalConfigurations();
 int                   VORBISDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf);
 uint8_t               VORBISGetChannels();
 uint32_t              VORBISGetSampRate();
+uint32_t              VORBISGetAudioDataStart();
 uint8_t               VORBISGetBitsPerSample();
 uint32_t              VORBISGetBitRate();
 uint16_t              VORBISGetOutputSamps();

@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 02,2024
+ * Updated on: Apr 03,2024
  *
  *      Author: wolle
  *
@@ -166,6 +166,7 @@ uint8_t          FLACGetBitsPerSample();
 uint8_t          FLACGetChannels();
 uint32_t         FLACGetSampRate();
 uint32_t         FLACGetBitRate();
+uint32_t         FLACGetAudioDataStart();
 uint32_t         FLACGetAudioFileDuration();
 uint32_t         readUint(uint8_t nBits, int* bytesLeft);
 int32_t          readSignedInt(int nBits, int* bytesLeft);
