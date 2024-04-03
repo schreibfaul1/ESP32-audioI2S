@@ -6030,6 +6030,37 @@ uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos) {
     return pos;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::ogg_correctResumeFilePos(uint32_t resumeFilePos) {
+    // The starting point is the next OggS magic word
+  log_w("in_resumeFilePos %i", resumeFilePos);
+
+    uint8_t  p1, p2, p3, p4;
+    boolean  found = false;
+    uint32_t pos = resumeFilePos;
+    audiofile.seek(pos);
+
+    p1 = audiofile.read();
+    p2 = audiofile.read();
+    p3 = audiofile.read();
+    p4 = audiofile.read();
+
+    pos += 4;
+    while(!found || pos >= m_file_size) {
+        if(p1 == 'O' && p2 == 'g'&& p3 == 'g' && p4 == 'S') {
+            found = true;
+            break;
+        }
+        p1 = p2;
+        p2 = p3;
+        p3 = p4;
+        p4 = audiofile.read();
+        pos++;
+    }
+    if(found) { log_w("out_resumeFilePos %i", pos - 4);    return (pos - 4);}
+    stopSong();
+    return 0;
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos) {
     // The starting point is the next FLAC syncword
     uint8_t  p1, p2;

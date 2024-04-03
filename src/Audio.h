@@ -253,6 +253,7 @@ private:
   void     seek_m4a_stsz();
   void     seek_m4a_ilst();
   uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
+  uint32_t ogg_correctResumeFilePos(uint32_t resumeFilePos);
   uint32_t flac_correctResumeFilePos(uint32_t resumeFilePos);
   uint32_t mp3_correctResumeFilePos(uint32_t resumeFilePos);
   uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
