@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 03,2024
+ * Updated on: Apr 04,2024
  *
  * Author: Wolle
  *
@@ -845,18 +845,22 @@ uint16_t FLACGetOutputSamps(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint64_t FLACGetTotoalSamplesInStream(){
+    if(!FLACMetadataBlock) return 0;
     return FLACMetadataBlock->totalSamples;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t FLACGetBitsPerSample(){
+    if(!FLACMetadataBlock) return 0;
     return FLACMetadataBlock->bitsPerSample;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t FLACGetChannels(){
+    if(!FLACMetadataBlock) return 0;
     return FLACMetadataBlock->numChannels;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetSampRate(){
+    if(!FLACMetadataBlock) return 0;
     return FLACMetadataBlock->sampleRate;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -869,7 +873,7 @@ uint32_t FLACGetAudioDataStart(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetAudioFileDuration() {
-    if(FLACGetSampRate()){
+    if(FLACGetSampRate()){ // DIV0
         uint32_t afd = FLACGetTotoalSamplesInStream()/ FLACGetSampRate(); // AudioFileDuration
         return afd;
     }

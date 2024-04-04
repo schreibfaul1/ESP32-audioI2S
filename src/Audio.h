@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.9
- *  Updated on: Apr 03.2024
+ *  Version 3.0.9a
+ *  Updated on: Apr 04.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -210,7 +210,7 @@ private:
   int             findNextSync(uint8_t* data, size_t len);
   int             sendBytes(uint8_t* data, size_t len);
   void            setDecoderItems();
-  void            compute_audioCurrentTime(int bd);
+  void            compute_audioCurrentTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
   void            printProcessLog(int r, const char* s = "");
   void            printDecodeError(int r);
   void            showID3Tag(const char* tag, const char* val);
@@ -553,6 +553,7 @@ private:
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
+    bool            m_f_firstCurTimeCall = false;   // InitSequence for compute_audioCurrentTime
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
