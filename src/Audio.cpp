@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9a
- *  Updated on: Apr 04.2024
+ *  Version 3.0.9b
+ *  Updated on: Apr 07.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -330,7 +330,7 @@ void Audio::setDefaults() {
     m_f_metadata = false;
     m_f_tts = false;
     m_f_firstCall = true;        // InitSequence for processWebstream and processLocalFile
-    m_f_firstCurTimeCall = true; // InitSequence for compute_audioCurrentTime
+    m_f_firstCurTimeCall = true; // InitSequence for computeAudioTime
     m_f_firstM3U8call = true;    // InitSequence for parsePlaylist_M3U8
     m_f_running = false;
     m_f_loop = false;     // Set if audio file should loop
@@ -364,6 +364,7 @@ void Audio::setDefaults() {
     m_streamTitleHash = 0;
     m_file_size = 0;
     m_ID3Size = 0;
+    m_haveNewFilePos = 0;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -808,7 +809,7 @@ void Audio::UTF8toASCII(char* str) {
 }
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
+bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
 
     if(!path) { // guard
         printProcessLog(AUDIOLOG_PATH_IS_NULL);
@@ -817,7 +818,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t resumeFilePos) {
 
     xSemaphoreTakeRecursive(mutex_audio, portMAX_DELAY); // #3
 
-    m_resumeFilePos = resumeFilePos;
+    m_fileStartPos = fileStartPos;
     setDefaults(); // free buffers an set defaults
 
     char *audioPath = (char *) __malloc_heap_psram(strlen(path) + 2);
@@ -3061,6 +3062,12 @@ void Audio::processLocalFile() {
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
+
+    if(m_fileStartPos > 0){
+        setFilePos(m_fileStartPos);
+        m_fileStartPos = -1;
+    }
+
     if(m_resumeFilePos >= 0) {
         if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
@@ -3073,11 +3080,11 @@ void Audio::processLocalFile() {
             FLACDecoderReset();
         }
         if(m_codec == CODEC_MP3) { m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos); }
-        if(m_avr_bitrate) m_audioCurrentTime = ((double)(m_resumeFilePos - m_audioDataStart) / m_avr_bitrate) * 8;
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
         byteCounter = m_resumeFilePos;
         f_fileDataComplete = false; // #570
+        m_haveNewFilePos = m_resumeFilePos;
 
         if(m_f_Log) {
             log_i("m_resumeFilePos %i", m_resumeFilePos);
@@ -4491,7 +4498,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     uint16_t bytesDecoderOut = m_validSamples;
     if(m_channels == 2) bytesDecoderOut /= 2;
     if(m_bitsPerSample == 16) bytesDecoderOut *= 2;
-    compute_audioCurrentTime(bytesDecoded, bytesDecoderOut);
+    computeAudioTime(bytesDecoded, bytesDecoderOut);
 
     if(audio_process_extern) {
         bool continueI2S = false;
@@ -4503,18 +4510,20 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     return bytesDecoded;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::compute_audioCurrentTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) {
+void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) {
 
     if(getDatamode() != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
-    static uint64_t sumBytesIn   = 0;
-    static uint64_t sumBytesOut  = 0;
-    static uint32_t sumBitRate   = 0;
-    static uint32_t counter      = 0;
-    static uint32_t timeStamp    = 0;
-    static uint32_t deltaBytesIn = 0;
-    static float    audioCurrentTime = 0;
-    float compressionRatio = 0;
+    static uint64_t sumBytesIn       = 0;
+    static uint64_t sumBytesOut      = 0;
+    static uint32_t sumBitRate       = 0;
+    static uint32_t counter          = 0;
+    static uint32_t timeStamp        = 0;
+    static uint32_t deltaBytesIn     = 0;
+    static uint32_t constBitRate     = 0;
+    static uint32_t playTime         = 0;
+    static uint32_t totalPlayTime    = 0;
+    float compressionRatio           = 0;
 
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
@@ -4524,7 +4533,20 @@ void Audio::compute_audioCurrentTime(uint16_t bytesDecoderIn, uint16_t bytesDeco
         counter = 0;
         timeStamp = millis();
         deltaBytesIn = 0;
-        audioCurrentTime = 0;
+        constBitRate = 0;
+        playTime = 0;
+        totalPlayTime = 0;
+        if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
+            m_audioFileDuration = FLACGetAudioFileDuration();
+            constBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
+            m_avr_bitrate = constBitRate;
+        }
+        if(m_codec == CODEC_WAV){
+            constBitRate = getBitRate();
+            m_avr_bitrate = constBitRate;
+            m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
+            if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
+        }
     }
 
     sumBytesIn   += bytesDecoderIn;
@@ -4532,23 +4554,36 @@ void Audio::compute_audioCurrentTime(uint16_t bytesDecoderIn, uint16_t bytesDeco
     sumBytesOut  += bytesDecoderOut;
 
     if(timeStamp + 950 < millis()){
-        // compressionRatio = (float)sumBytesIn / sumBytesOut;
-        (void) compressionRatio; // unused yet
+        uint32_t t       = millis();      // time tracking
+        uint32_t delta_t = t - timeStamp; //    ---"---
+        playTime += delta_t;              //    ---"---
+        totalPlayTime += timeStamp;       //    ---"---      unused yet
+        timeStamp = t;                    //    ---"---
 
-        uint32_t t       = millis();
-        uint32_t delta_t = t - timeStamp;
-        timeStamp = t;
-        // we know the time and bytesIn to compute the bitrate
-        uint32_t bitRate = ((deltaBytesIn * 8000) / delta_t);
+        // compressionRatio = (float)sumBytesIn / sumBytesOut;
+        (void) compressionRatio;          // unused yet
+
+        uint32_t bitRate = ((deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
 
         sumBitRate += bitRate;
         counter ++;
-        m_avr_bitrate = sumBitRate / counter;
-
-        audioCurrentTime += ((float)(deltaBytesIn * 8) / m_avr_bitrate);
-
-        m_audioCurrentTime = audioCurrentTime;
+        if(constBitRate){
+            m_audioCurrentTime = (float(playTime) / 1000);
+        }
+        else{
+            m_avr_bitrate = sumBitRate / counter;
+            m_audioCurrentTime += ((float)(deltaBytesIn * 8) / m_avr_bitrate);
+            m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
+        }
         deltaBytesIn = 0;
+    }
+
+    if(m_haveNewFilePos && m_avr_bitrate){
+        uint32_t posWhithinAudioBlock =  m_haveNewFilePos - m_audioDataStart;
+        uint32_t newTime = posWhithinAudioBlock / (m_avr_bitrate / 8); // (m_avr_bitrate / 8) equals one second
+        m_audioCurrentTime = newTime;
+        playTime = newTime * 1000; // playTime[ms]
+        m_haveNewFilePos = 0;
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4743,11 +4778,11 @@ uint32_t Audio::getAudioFileDuration() {
     }
 
     if(!m_avr_bitrate) return 0;
-    return m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
+    return m_audioFileDuration;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioCurrentTime() { // return current time in seconds
-    return (uint32_t)m_audioCurrentTime;
+    return round(m_audioCurrentTime);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayPosition(uint16_t sec) {
@@ -4773,39 +4808,37 @@ uint32_t Audio::getTotalPlayingTime() {
     return millis() - m_PlayingStartTime;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::setTimeOffset(int sec) {
-    if(m_codec == CODEC_OPUS) return false;   // not impl. yet
-    if(m_codec == CODEC_VORBIS) return false; // not impl. yet
-    // fast forward or rewind the current position in seconds
-    // audiosource must be a mp3, aac or wav file
+bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
 
     if(!audiofile || !m_avr_bitrate) return false;
+    if(m_codec == CODEC_OPUS) return false;   // not impl. yet
+    if(m_codec == CODEC_VORBIS) return false; // not impl. yet
 
     uint32_t oneSec = m_avr_bitrate / 8;                 // bytes decoded in one sec
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
     uint32_t startAB = m_audioDataStart;                 // audioblock begin
     uint32_t endAB = m_audioDataStart + m_audioDataSize; // audioblock end
 
-    if(m_codec == CODEC_MP3 || m_codec == CODEC_AAC || m_codec == CODEC_WAV || m_codec == CODEC_FLAC) {
-        int32_t pos = getFilePos() - inBufferFilled();
-        pos += offset;
-        if(pos < (int32_t)startAB) pos = startAB;
-        if(pos >= (int32_t)endAB) pos = endAB;
-        setFilePos(pos);
-        return true;
-    }
-    return false;
+    int32_t pos = getFilePos() - inBufferFilled();
+    pos += offset;
+    if(pos < (int32_t)startAB) {pos = startAB;}
+    if(pos >= (int32_t)endAB)  {pos = endAB;}
+    setFilePos(pos);
+
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
+    if(!audiofile) return false;
     if(m_codec == CODEC_OPUS) return false;   // not impl. yet
     if(m_codec == CODEC_VORBIS) return false; // not impl. yet
-    if(!audiofile) return false;
-    if(pos < m_audioDataStart) pos = m_audioDataStart; // issue #96
-    if(pos > m_file_size) {pos = m_file_size; stopSong(); return false;}
-    m_resumeFilePos = pos;
+    if(pos < m_audioDataStart) {pos = m_audioDataStart;}
+    if(pos > m_audioDataStart + m_audioDataSize) {pos = m_audioDataStart + m_audioDataSize; stopSong(); return false;}
     memset(m_outBuff, 0, m_outbuffSize);
     m_validSamples = 0;
+    m_resumeFilePos = pos;  // used in processLocalFile()
+    m_haveNewFilePos = pos; // used in computeAudioCurrentTime()
+
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

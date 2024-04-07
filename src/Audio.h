@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.9a
- *  Updated on: Apr 04.2024
+ *  Version 3.0.9b
+ *  Updated on: Apr 07.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -136,7 +136,7 @@ public:
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& voice, const String& response_format, const String& speed);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
-    bool connecttoFS(fs::FS &fs, const char* path, int32_t resumeFilePos = -1);
+    bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);
     bool setFileLoop(bool input);//TEST loop
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
@@ -210,7 +210,7 @@ private:
   int             findNextSync(uint8_t* data, size_t len);
   int             sendBytes(uint8_t* data, size_t len);
   void            setDecoderItems();
-  void            compute_audioCurrentTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
+  void            computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
   void            printProcessLog(int r, const char* s = "");
   void            printDecodeError(int r);
   void            showID3Tag(const char* tag, const char* val);
@@ -543,17 +543,19 @@ private:
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
-    int32_t         m_resumeFilePos = -1;           // the return value from stopSong() can be entered here, (-1) is idle
+    int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
+    int32_t         m_fileStartPos = -1;            // may be set in connecttoFS()
     uint16_t        m_m3u8_targetDuration = 10;     //
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
+    uint32_t        m_haveNewFilePos = 0;           // user changed the file position
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
-    bool            m_f_firstCurTimeCall = false;   // InitSequence for compute_audioCurrentTime
+    bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
