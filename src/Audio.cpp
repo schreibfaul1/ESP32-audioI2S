@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9b
- *  Updated on: Apr 07.2024
+ *  Version 3.0.9c
+ *  Updated on: Apr 08.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4514,16 +4514,13 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
 
     if(getDatamode() != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
-    static uint64_t sumBytesIn       = 0;
-    static uint64_t sumBytesOut      = 0;
-    static uint32_t sumBitRate       = 0;
-    static uint32_t counter          = 0;
-    static uint32_t timeStamp        = 0;
-    static uint32_t deltaBytesIn     = 0;
-    static uint32_t constBitRate     = 0;
-    static uint32_t playTime         = 0;
-    static uint32_t totalPlayTime    = 0;
-    float compressionRatio           = 0;
+    static uint64_t sumBytesIn         = 0;
+    static uint64_t sumBytesOut        = 0;
+    static uint32_t sumBitRate         = 0;
+    static uint32_t counter            = 0;
+    static uint32_t timeStamp          = 0;
+    static uint32_t deltaBytesIn       = 0;
+    static uint32_t nominalBitRate     = 0;
 
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
@@ -4533,17 +4530,16 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         counter = 0;
         timeStamp = millis();
         deltaBytesIn = 0;
-        constBitRate = 0;
-        playTime = 0;
-        totalPlayTime = 0;
+        nominalBitRate = 0;
+
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
             m_audioFileDuration = FLACGetAudioFileDuration();
-            constBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
-            m_avr_bitrate = constBitRate;
+            nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
+            m_avr_bitrate = nominalBitRate;
         }
         if(m_codec == CODEC_WAV){
-            constBitRate = getBitRate();
-            m_avr_bitrate = constBitRate;
+            nominalBitRate = getBitRate();
+            m_avr_bitrate = nominalBitRate;
             m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
             if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
         }
@@ -4553,36 +4549,32 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
     deltaBytesIn += bytesDecoderIn;
     sumBytesOut  += bytesDecoderOut;
 
-    if(timeStamp + 950 < millis()){
+
+    if(timeStamp + 500 < millis()){
         uint32_t t       = millis();      // time tracking
         uint32_t delta_t = t - timeStamp; //    ---"---
-        playTime += delta_t;              //    ---"---
-        totalPlayTime += timeStamp;       //    ---"---      unused yet
         timeStamp = t;                    //    ---"---
-
-        // compressionRatio = (float)sumBytesIn / sumBytesOut;
-        (void) compressionRatio;          // unused yet
 
         uint32_t bitRate = ((deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
 
         sumBitRate += bitRate;
         counter ++;
-        if(constBitRate){
-            m_audioCurrentTime = (float(playTime) / 1000);
+        if(nominalBitRate){
+            m_audioCurrentTime = round(((float)sumBytesIn * 8) / m_avr_bitrate);
         }
         else{
             m_avr_bitrate = sumBitRate / counter;
-            m_audioCurrentTime += ((float)(deltaBytesIn * 8) / m_avr_bitrate);
-            m_audioFileDuration = 8 * ((float)m_audioDataSize / m_avr_bitrate);
+            m_audioCurrentTime = (sumBytesIn * 8) / m_avr_bitrate;
+            m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         }
         deltaBytesIn = 0;
     }
 
     if(m_haveNewFilePos && m_avr_bitrate){
         uint32_t posWhithinAudioBlock =  m_haveNewFilePos - m_audioDataStart;
-        uint32_t newTime = posWhithinAudioBlock / (m_avr_bitrate / 8); // (m_avr_bitrate / 8) equals one second
+        uint32_t newTime = posWhithinAudioBlock / (m_avr_bitrate / 8);
         m_audioCurrentTime = newTime;
-        playTime = newTime * 1000; // playTime[ms]
+        sumBytesIn = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
     }
 }
@@ -4771,7 +4763,7 @@ uint32_t Audio::getAudioDataStartPos() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
     if(getDatamode() == AUDIO_LOCALFILE) {
-        if(!audiofile) return 0;
+        if(!m_audioDataSize) return 0;
     }
     if(m_streamType == ST_WEBFILE) {
         if(!m_contentlength) return 0;
