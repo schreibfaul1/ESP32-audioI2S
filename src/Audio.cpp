@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9c
- *  Updated on: Apr 08.2024
+ *  Version 3.0.9d
+ *  Updated on: Apr 12.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2686,6 +2686,7 @@ const char* Audio::parsePlaylist_M3U8() {
                 f_EXTINF_found = true;
                 if(STfromEXTINF(m_playlistContent[i])) { showstreamtitle(m_chbuf); }
                 i++;
+                if(startsWith(m_playlistContent[i], "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
                 if(i == lines) continue; // and exit for()
 
                 char* tmp = nullptr;
@@ -3058,7 +3059,7 @@ void Audio::processLocalFile() {
             }
 
             f_stream = true;
-            AUDIO_INFO("stream ready_1");
+            AUDIO_INFO("stream ready");
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
