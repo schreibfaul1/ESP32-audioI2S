@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 04,2024
+ * Updated on: Apr 12,2024
  *
  * Author: Wolle
  *
@@ -32,6 +32,7 @@ uint16_t         s_blockSize = 0;
 uint16_t         s_blockSizeLeft = 0;
 uint16_t         s_flacValidSamples = 0;
 uint16_t         s_rIndex = 0;
+uint16_t         s_offset = 0;
 uint8_t          s_flacStatus = 0;
 uint8_t*         s_flacInptr;
 float            s_flacCompressionRatio = 0;
@@ -139,6 +140,7 @@ void FLACDecoder_setDefaults(){
     s_flacRemainBlockPicLen = 0;
     s_flacAudioDataStart = 0;
     s_blockSize = 0;
+    s_offset = 0;
     s_blockSizeLeft = 0;
     s_flacValidSamples = 0;
     s_rIndex = 0;
@@ -726,20 +728,19 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
         // blocksize can be much greater than outbuff, so we can't stuff all in once
         // therefore we need often more than one loop (split outputblock into pieces)
         uint16_t blockSize;
-        static uint16_t offset = 0;
-        if(s_blockSize < s_flacOutBuffSize + offset) blockSize = s_blockSize - offset;
+        if(s_blockSize < s_flacOutBuffSize + s_offset) blockSize = s_blockSize - s_offset;
         else blockSize = s_flacOutBuffSize;
 
         for (int i = 0; i < blockSize; i++) {
             for (int j = 0; j < FLACMetadataBlock->numChannels; j++) {
-                int val = s_samplesBuffer[j][i + offset];
+                int val = s_samplesBuffer[j][i + s_offset];
                 if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
                 outbuf[2*i+j] = val;
             }
         }
 
         s_flacValidSamples = blockSize * FLACMetadataBlock->numChannels;
-        offset += blockSize;
+        s_offset += blockSize;
         if(sbl > 0){
             s_flacCompressionRatio = (float)((s_flacValidSamples * 2) * FLACMetadataBlock->numChannels) / sbl; // valid samples are 16 bit
             sbl = 0;
@@ -747,9 +748,9 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
             s_flacBitrate /= s_flacCompressionRatio;
       //      log_e("s_flacBitrate %i, s_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", s_flacBitrate, s_flacCompressionRatio, FLACMetadataBlock->sampleRate);
         }
-        if(offset != s_blockSize) return GIVE_NEXT_LOOP;
-        if(offset > s_blockSize) { log_e("offset has a wrong value"); }
-        offset = 0;
+        if(s_offset != s_blockSize) return GIVE_NEXT_LOOP;
+        if(s_offset > s_blockSize) { log_e("offset has a wrong value"); }
+        s_offset = 0;
     }
 
     alignToByte();
