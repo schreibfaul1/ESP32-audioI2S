@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9d
- *  Updated on: Apr 12.2024
+ *  Version 3.0.9e
+ *  Updated on: Apr 15.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2237,14 +2237,12 @@ uint32_t Audio::stopSong() {
         if(getDatamode() == AUDIO_LOCALFILE) {
             m_streamType = ST_NONE;
             pos = getFilePos() - inBufferFilled();
-            audiofile.close();
-            AUDIO_INFO("Closing audio file");
         }
     }
     if(audiofile) {
         // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
+        AUDIO_INFO("Closing audio file \"%s\"", audiofile.name());
         audiofile.close();
-        AUDIO_INFO("Closing audio file");
     }
     memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
@@ -3132,7 +3130,7 @@ void Audio::processLocalFile() {
         m_f_running = false;
         m_streamType = ST_NONE;
         audiofile.close();
-        AUDIO_INFO("Closing audio file");
+        AUDIO_INFO("Closing audio file \"%s\"", afn);
 
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
