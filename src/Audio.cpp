@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9e
- *  Updated on: Apr 15.2024
+ *  Version 3.0.9f
+ *  Updated on: Apr 17.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3069,7 +3069,9 @@ void Audio::processLocalFile() {
 
     if(m_resumeFilePos >= 0) {
         if(m_resumeFilePos < m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-        if(m_resumeFilePos > m_file_size) m_resumeFilePos = m_file_size;
+        if(m_resumeFilePos > m_audioDataStart + m_audioDataSize) {m_resumeFilePos = m_audioDataStart + m_audioDataSize;}
+        m_haveNewFilePos = m_resumeFilePos;
+
         if(m_codec == CODEC_M4A) m_resumeFilePos = m4a_correctResumeFilePos(m_resumeFilePos);
         if(m_codec == CODEC_WAV) {
             while((m_resumeFilePos % 4) != 0) m_resumeFilePos++;
@@ -3083,7 +3085,6 @@ void Audio::processLocalFile() {
         InBuff.resetBuffer();
         byteCounter = m_resumeFilePos;
         f_fileDataComplete = false; // #570
-        m_haveNewFilePos = m_resumeFilePos;
 
         if(m_f_Log) {
             log_i("m_resumeFilePos %i", m_resumeFilePos);
@@ -4823,8 +4824,6 @@ bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
     if(m_codec == CODEC_OPUS) return false;   // not impl. yet
     if(m_codec == CODEC_VORBIS) return false; // not impl. yet
-    if(pos < m_audioDataStart) {pos = m_audioDataStart;}
-    if(pos > m_audioDataStart + m_audioDataSize) {pos = m_audioDataStart + m_audioDataSize; stopSong(); return false;}
     memset(m_outBuff, 0, m_outbuffSize);
     m_validSamples = 0;
     m_resumeFilePos = pos;  // used in processLocalFile()
