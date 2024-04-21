@@ -144,7 +144,7 @@ void FLACDecoder_setDefaults(){
     s_blockSizeLeft = 0;
     s_flacValidSamples = 0;
     s_rIndex = 0;
-    s_flacStatus = 0;
+    s_flacStatus = DECODE_FRAME;
     s_flacCompressionRatio = 0;
     s_flacBitBufferLen = 0;
     s_flac_pageSegments = 0;
@@ -210,9 +210,8 @@ void FLACSetRawBlockParams(uint8_t Chans, uint32_t SampRate, uint8_t BPS, uint32
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoderReset(){ // set var to default
-    s_flacStatus = DECODE_FRAME;
-    s_flac_bitBuffer = 0;
-    s_flacBitBufferLen = 0;
+    FLACDecoder_setDefaults();
+    FLACDecoder_ClearBuffer();
 }
 //----------------------------------------------------------------------------------------------------------------------
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
