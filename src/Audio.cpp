@@ -4274,7 +4274,10 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         m_f_playing = true;
         nextSync = 0;
     }
-    if(m_codec == CODEC_MP3) { nextSync = MP3FindSyncWord(data, len); }
+    if(m_codec == CODEC_MP3) {
+        nextSync = MP3FindSyncWord(data, len);
+        if(nextSync == -1) return len; // syncword not found, search next block
+    }
     if(m_codec == CODEC_AAC) { nextSync = AACFindSyncWord(data, len); }
     if(m_codec == CODEC_M4A) {
         AACSetRawBlockParams(0, 2, 44100, 1);
@@ -4375,6 +4378,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_playing) {
         f_setDecodeParamsOnce = true;
         nextSync = findNextSync(data, len);
+        if(nextSync == -1) return len;
         if(nextSync == 0) { m_f_playing = true; }
         return nextSync;
     }
@@ -4404,7 +4408,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     if(m_decodeError < 0) { // Error, skip the frame...
                             //        i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-        if(!getChannels() && m_codec == CODEC_MP3 && (m_decodeError == -2)) {
+        if(m_codec == CODEC_MP3 && (m_decodeError == -2)) {
             ; // at the beginning this doesn't have to be a mistake, suppress errorcode MAINDATA_UNDERFLOW
         }
         else {

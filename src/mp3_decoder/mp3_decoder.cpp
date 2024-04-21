@@ -755,7 +755,7 @@ int CheckPadBit(){
 int UnpackFrameHeader(unsigned char *buf){
     int verIdx;
     /* validate pointers and sync word */
-    if ((buf[0] & m_SYNCWORDH) != m_SYNCWORDH || (buf[1] & m_SYNCWORDL) != m_SYNCWORDL)  return -1;
+    if ((buf[0] & m_SYNCWORDH) != m_SYNCWORDH || (buf[1] & m_SYNCWORDL) != m_SYNCWORDL){return -1;}
     /* read header fields - use bitmasks instead of GetBits() for speed, since format never varies */
     verIdx = (buf[1] >> 3) & 0x03;
     m_MPEGVersion = (MPEGVersion_t) (verIdx == 0 ? MPEG25 : ((verIdx & 0x01) ? MPEG1 : MPEG2));
@@ -771,7 +771,7 @@ int UnpackFrameHeader(unsigned char *buf){
     m_FrameHeader->origFlag = (buf[3] >> 2) & 0x01;
     m_FrameHeader->emphasis = (buf[3] >> 0) & 0x03;
     /* check parameters to avoid indexing tables with bad values */
-    if (m_FrameHeader->srIdx == 3 || m_FrameHeader->layer == 4 || m_FrameHeader->brIdx == 15) return -1;
+    if (m_FrameHeader->srIdx == 3 || m_FrameHeader->layer == 4 || m_FrameHeader->brIdx == 15) {return -1;}
     /* for readability (we reference sfBandTable many times in decoder) */
     m_SFBandTable = sfBandTable[m_MPEGVersion][m_FrameHeader->srIdx];
     if (m_sMode != Joint) /* just to be safe (dequant, stproc check fh->modeExt) */
@@ -1162,11 +1162,11 @@ int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int g
 
     return (buf - startBuf);
 }
-/***********************************************************************************************************************
+/*****************************************************************************************************************************************************
  * M P 3 D E C
- **********************************************************************************************************************/
+ ****************************************************************************************************************************************************/
 
-/***********************************************************************************************************************
+/*****************************************************************************************************************************************************
  * Function:    MP3FindSyncWord
  *
  * Description: locate the next byte-alinged sync word in the raw mp3 stream
@@ -1178,20 +1178,58 @@ int UnpackScaleFactors( unsigned char *buf, int *bitOffset, int bitsAvail, int g
  *
  * Return:      offset to first sync word (bytes from start of buf)
  *              -1 if sync not found after searching nBytes
- **********************************************************************************************************************/
+ ****************************************************************************************************************************************************/
 int MP3FindSyncWord(unsigned char *buf, int nBytes) {
-    int i;
 
+    const uint8_t mp3FHsize = 4; // frame header size
+    unsigned char firstFH[4];
+
+    //————————————————————————————————————————————————————————————————————————————————————————————————————————
+    auto findSync = [&](unsigned char* buf, uint16_t offset, uint16_t len) { // lambda, inner function
+        for (int i = 0; i < nBytes - 1; i++) {
+            if ((buf[i + offset] & m_SYNCWORDH) == m_SYNCWORDH && (buf[i + offset + 1] & m_SYNCWORDL) == m_SYNCWORDL){
+                return i;
+            }
+        }
+        return -1;
+    };
+    //————————————————————————————————————————————————————————————————————————————————————————————————————————
     /* find byte-aligned syncword - need 12 (MPEG 1,2) or 11 (MPEG 2.5) matching bits */
-    for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] & m_SYNCWORDH) == m_SYNCWORDH
-                && (buf[i + 1] & m_SYNCWORDL) == m_SYNCWORDL)
-            return i;
+    int pos = findSync(buf, 0, nBytes);
+    if(pos == -1) return pos; // syncword not found
+    nBytes -= pos;
+
+    while(nBytes > 0){
+        firstFH[0] = buf[pos + 0];
+        firstFH[1] = buf[pos + 1];
+        firstFH[2] = buf[pos + 2];
+        firstFH[3] = buf[pos + 2];
+
+        if((firstFH[2] & 0b11110000) == 0b11110000){ // wrong bitrate index
+            log_d("wrong bitrate index");
+            pos += mp3FHsize;
+            nBytes -= mp3FHsize;
+            int i = findSync(buf, pos, nBytes);
+            pos += i;
+            nBytes -= i;
+            continue;
+        }
+
+        if((firstFH[2] & 0b00001100) == 0b00001100){ // wrong sampling rate frequency index
+            log_d("wrong sampling rate");
+            pos += mp3FHsize;
+            nBytes -= mp3FHsize;
+            int i = findSync(buf, pos, nBytes);
+            pos += i;
+            nBytes -= i;
+            continue;
+        }
+        break;
     }
 
-    return -1;
+    return pos;
 }
-/***********************************************************************************************************************
+/*****************************************************************************************************************************************************
  * Function:    MP3FindFreeSync
  *
  * Description: figure out number of bytes between adjacent sync words in "free" mode
@@ -1214,7 +1252,7 @@ int MP3FindSyncWord(unsigned char *buf, int nBytes) {
  *              since free mode requires CBR (see spec) we generally only call
  *                this function once (first frame) then store the result (nSlots)
  *                and just use it from then on
- **********************************************************************************************************************/
+ ****************************************************************************************************************************************************/
 int MP3FindFreeSync(unsigned char *buf, unsigned char firstFH[4], int nBytes){
     int offset = 0;
     unsigned char *bufPtr = buf;
@@ -1347,8 +1385,9 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
 
     /* unpack frame header */
     fhBytes = UnpackFrameHeader(inbuf);
-    if (fhBytes < 0)
+    if (fhBytes < 0){
         return ERR_MP3_INVALID_FRAMEHEADER; /* don't clear outbuf since we don't know size (failed to parse header) */
+    }
     inbuf += fhBytes;
     /* unpack side info */
     siBytes = UnpackSideInfo( inbuf);
@@ -1636,10 +1675,10 @@ int DecodeHuffmanPairs(int *xy, int nVals, int tabIdx, int bitsLeft, unsigned ch
 //    assert(tabIdx >= 0);
 //    assert(tabType != invalidTab);
 
-    if((nVals & 0x01)){log_i("assert(!(nVals & 0x01))"); return -1;}
-    if(!(tabIdx < m_HUFF_PAIRTABS)){log_i("assert(tabIdx < m_HUFF_PAIRTABS)"); return -1;}
-    if(!(tabIdx >= 0)){log_i("(tabIdx >= 0)"); return -1;}
-    if(!(tabType != invalidTab)){log_i("(tabType != invalidTab)"); return -1;}
+    if((nVals & 0x01)){log_d("assert(!(nVals & 0x01))"); return -1;}
+    if(!(tabIdx < m_HUFF_PAIRTABS)){log_d("assert(tabIdx < m_HUFF_PAIRTABS)"); return -1;}
+    if(!(tabIdx >= 0)){log_d("(tabIdx >= 0)"); return -1;}
+    if(!(tabType != invalidTab)){log_d("(tabType != invalidTab)"); return -1;}
 
 
     /* initially fill cache with any partial byte */
