@@ -3152,6 +3152,8 @@ exit:
         }
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
+        m_resumeFilePos = -1;
+        m_haveNewFilePos = 0;
         return;
     }
     if(byteCounter == audiofile.size()) { f_fileDataComplete = true; }
