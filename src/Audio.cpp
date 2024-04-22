@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9g
- *  Updated on: Apr 21.2024
+ *  Version 3.0.9h
+ *  Updated on: Apr 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2865,6 +2865,23 @@ const char* Audio::m3u8redirection() {
     }
     else { tmp = strdup(m_playlistContent[choosenLine]); }
 
+    if(startsWith(m_playlistContent[choosenLine], "../")){
+        // ../../2093120-b/RISMI/stream01/streamPlaylist.m3u8
+        if(tmp) { free(tmp); tmp = NULL;}
+        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
+        strcpy(tmp, m_lastHost);
+        int idx1 = lastIndexOf(tmp, "/");
+        tmp[idx1] = '\0';
+
+        while(startsWith(m_playlistContent[choosenLine], "../")){
+            memcpy(m_playlistContent[choosenLine], m_playlistContent[choosenLine] + 3, strlen(m_playlistContent[choosenLine] +3) + 1); // shift << 3
+            idx1 = lastIndexOf(tmp, "/");
+            tmp[idx1] = '\0';
+        }
+        strcat(tmp, "/");
+        strcat(tmp, m_playlistContent[choosenLine]);
+    }
+
     if(m_playlistContent[choosenLine]) {
         free(m_playlistContent[choosenLine]);
         m_playlistContent[choosenLine] = NULL;
@@ -2879,7 +2896,7 @@ const char* Audio::m3u8redirection() {
         free(tmp);
         tmp = NULL;
     }
-    if(m_f_Log) log_i("redirect to %s", m_playlistContent[choosenLine]);
+    log_d("redirect to %s", m_playlistContent[choosenLine]);
     _client->stop();
     return m_playlistContent[choosenLine]; // it's a redirection, a new m3u8 playlist
 exit:
