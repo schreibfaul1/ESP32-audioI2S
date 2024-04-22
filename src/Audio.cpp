@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9h
+ *  Version 3.0.9i
  *  Updated on: Apr 22.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -4426,25 +4426,21 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     //                 < 0: there has been an error
 
     if(m_decodeError < 0) { // Error, skip the frame...
-                            //        i2s_zero_dma_buffer((i2s_port_t)m_i2s_num);
-        if(m_codec == CODEC_MP3 && (m_decodeError == -2)) {
-            ; // at the beginning this doesn't have to be a mistake, suppress errorcode MAINDATA_UNDERFLOW
+
+        printDecodeError(m_decodeError);
+        m_f_playing = false; // seek for new syncword
+        if(m_codec == CODEC_FLAC) {
+        //    if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
+        //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
         }
-        else {
-            printDecodeError(m_decodeError);
-            m_f_playing = false; // seek for new syncword
-            if(m_codec == CODEC_FLAC) {
-            //    if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
-            //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
-            }
-            if(m_codec == CODEC_OPUS) {
-                if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
-                if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
-                if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
-                if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
-                if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
-            }
+        if(m_codec == CODEC_OPUS) {
+            if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
+            if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
+            if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
+            if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
+            if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
         }
+
         return 1; // skip one byte and seek for the next sync word
     }
     bytesDecoded = len - bytesLeft;

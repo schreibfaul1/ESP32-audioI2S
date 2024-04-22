@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 29.03.2023
+ *  Updated on: 22.04.2023
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1382,6 +1382,7 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
     int offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int prevBitOffset, sfBlockBits, huffBlockBits;
     unsigned char *mainPtr;
+    static uint8_t underflowCounter = 0; // http://macslons-irish-pub-radio.stream.laut.fm/macslons-irish-pub-radio
 
     /* unpack frame header */
     fhBytes = UnpackFrameHeader(inbuf);
@@ -1444,6 +1445,7 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
         /* fill main data buffer with enough new data for this frame */
         if (m_MP3DecInfo->mainDataBytes >= m_MP3DecInfo->mainDataBegin) {
             /* adequate "old" main data available (i.e. bit reservoir) */
+            underflowCounter = 0;
             memmove(m_MP3DecInfo->mainBuf,
                     m_MP3DecInfo->mainBuf + m_MP3DecInfo->mainDataBytes - m_MP3DecInfo->mainDataBegin,
                     m_MP3DecInfo->mainDataBegin);
@@ -1456,10 +1458,14 @@ int MP3Decode( unsigned char *inbuf, int *bytesLeft, short *outbuf, int useSize)
             mainPtr = m_MP3DecInfo->mainBuf;
         } else {
             /* not enough data in bit reservoir from previous frames (perhaps starting in middle of file) */
+            underflowCounter ++;
             memcpy(m_MP3DecInfo->mainBuf + m_MP3DecInfo->mainDataBytes, inbuf, m_MP3DecInfo->nSlots);
             m_MP3DecInfo->mainDataBytes += m_MP3DecInfo->nSlots;
             inbuf += m_MP3DecInfo->nSlots;
             *bytesLeft -= (m_MP3DecInfo->nSlots);
+            if(underflowCounter < 4){
+                return ERR_MP3_NONE;
+            }
             MP3ClearBadFrame( outbuf);
             return ERR_MP3_MAINDATA_UNDERFLOW;
         }
