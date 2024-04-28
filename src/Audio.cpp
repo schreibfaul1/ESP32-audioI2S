@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9i
- *  Updated on: Apr 22.2024
+ *  Version 3.0.9j
+ *  Updated on: Apr 28.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2238,6 +2238,7 @@ uint32_t Audio::stopSong() {
             m_streamType = ST_NONE;
             pos = getFilePos() - inBufferFilled();
         }
+        if(_client->connected()) _client->stop();
     }
     if(audiofile) {
         // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
@@ -2249,6 +2250,7 @@ uint32_t Audio::stopSong() {
     m_validSamples = 0;
     m_audioCurrentTime = 0;
     m_audioFileDuration = 0;
+    m_codec = CODEC_NONE;
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3171,6 +3173,7 @@ exit:
         m_audioFileDuration = 0;
         m_resumeFilePos = -1;
         m_haveNewFilePos = 0;
+        m_codec = CODEC_NONE;
         return;
     }
     if(byteCounter == audiofile.size()) { f_fileDataComplete = true; }
@@ -3372,7 +3375,7 @@ void Audio::processWebFile() {
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
-
+        m_codec = CODEC_NONE;
         if(m_f_tts) {
             AUDIO_INFO("End of speech: \"%s\"", m_lastHost);
             if(audio_eof_speech) audio_eof_speech(m_lastHost);
