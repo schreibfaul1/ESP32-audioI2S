@@ -4550,7 +4550,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
     }
-    if(f_setDecodeParamsOnce) {
+    if(f_setDecodeParamsOnce && m_validSamples) {
         f_setDecodeParamsOnce = false;
         setDecoderItems();
         m_PlayingStartTime = millis();
