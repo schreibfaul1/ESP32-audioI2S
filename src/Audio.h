@@ -188,7 +188,7 @@ private:
   enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4, AUDIOLOG_ERR_UNKNOWN = -127 };
 
   void            UTF8toASCII(char* str);
-  bool            latinToUTF8(char* buff, size_t bufflen);
+  bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
   void            setDefaults(); // free buffers and set defaults
   void            initInBuff();
   bool            httpPrint(const char* host);

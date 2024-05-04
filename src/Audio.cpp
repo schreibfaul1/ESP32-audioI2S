@@ -1158,16 +1158,71 @@ void Audio::unicode2utf8(char* buff, uint32_t len) {
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::latinToUTF8(char* buff, size_t bufflen) {
+bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
     // most stations send  strings in UTF-8 but a few sends in latin. To standardize this, all latin strings are
     // converted to UTF-8. If UTF-8 is already present, nothing is done and true is returned.
     // A conversion to UTF-8 extends the string. Therefore it is necessary to know the buffer size. If the converted
     // string does not fit into the buffer, false is returned
 
+    bool     isUTF8 = true;  // assume UTF8
+    uint16_t pos = 0;
     uint16_t in = 0;
     uint16_t out = 0;
+    uint16_t len = strlen(buff);
+    uint8_t  c;
+
+    // We cannot detect if a given string (or byte sequence) is a UTF-8 encoded text as for example each and every series
+    // of UTF-8 octets is also a valid (if nonsensical) series of Latin-1 (or some other encoding) octets.
+    // However not every series of valid Latin-1 octets are valid UTF-8 series. So you can rule out strings that do not conform
+    // to the UTF-8 encoding schema:
+
+    if(UTF8check){
+        while(pos < len) {  // check first, if we have a clear UTF-8 string
+            c = buff[pos];
+            if(c >= 0xC2 && c <= 0xDF) { // may be 2 bytes UTF8, e.g. 0xC2B5 is 'µ' (MICRO SIGN)
+                if(pos + 1 == len){
+                    isUTF8 = false;
+                    break;
+                }
+                if(buff[pos + 1] < 0x80){
+                    log_e("buff[pos + 1] 0x%02x", buff[pos + 1] );
+                    isUTF8 = false;
+                    break;
+                }
+                pos += 2;
+                continue;
+            }
+            if(c >= 0xE0 && c <= 0xEF){ // may  be 3 bytes UTF8, e.g. 0xE0A484 is 'ऄ' (DEVANAGARI LETTER SHORT A)
+                if(pos + 2 >= len){ //
+                    isUTF8 = false;
+                    break;
+                }
+                if(buff[pos + 1] < 0x80 || buff[pos + 2] < 0x80){
+                    isUTF8 = false;
+                    break;
+                }
+                pos += 3;
+                continue;
+            }
+            if(c >= 0xF0){ // may  be 4 bytes UTF8, e.g. 0xF0919AA6 (TAKRI LETTER VA)
+                if(pos + 3 >= len){ //
+                    isUTF8 = false;
+                    break;
+                }
+                if(buff[pos + 1] < 0x80 || buff[pos + 2] < 0x80 || buff[pos + 3] < 0x80){
+                    isUTF8 = false;
+                    break;
+                }
+                pos += 4;
+                continue;
+            }
+            pos++;
+        }
+        if(isUTF8 == true) return true; // is UTF-8, do nothing
+    }
 
     char* iso8859_1 = x_strdup(buff);
+    if(!iso8859_1){log_e("oom"); return false;}
 
     while(iso8859_1[in] != '\0'){
         if(iso8859_1[in] < 0x80){
@@ -1779,7 +1834,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 j++;
             }
             m_ibuff[k] = '\0'; // new termination
-            latinToUTF8(m_ibuff, m_ibuffSize);
+            latinToUTF8(m_ibuff, m_ibuffSize, false);
         }
         showID3Tag(tag, m_ibuff);
         return fs;
