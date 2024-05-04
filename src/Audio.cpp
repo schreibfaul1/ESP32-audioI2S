@@ -1185,7 +1185,6 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
                     break;
                 }
                 if(buff[pos + 1] < 0x80){
-                    log_e("buff[pos + 1] 0x%02x", buff[pos + 1] );
                     isUTF8 = false;
                     break;
                 }
