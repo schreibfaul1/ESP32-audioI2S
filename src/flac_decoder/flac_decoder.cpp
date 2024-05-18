@@ -309,6 +309,8 @@ int FLACparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
 
     (void)continuedPage; (void)lastPage;
 
+    // log_i("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
+
     if(firstPage) s_flacPageNr = 0;
 
     uint16_t headerSize = pageSegments + 27;
@@ -387,8 +389,8 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 break;
             case 1:
                 bt = padding;
-                log_e("padding");
-                return ERR_FLAC_UNIMPLEMENTED;
+            //  log_e("padding");
+                return ERR_FLAC_NONE;
                 break;
             case 2:
                 bt = application;
@@ -564,7 +566,7 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                     if(vb[i]){free(vb[i]); vb[i] = NULL;}
                 }
 
-                if(!s_flacBlockPicLen) s_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
+                if(!s_flacBlockPicLen && s_flacSegmTableVec.size() == 1) s_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                 if(ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
 
