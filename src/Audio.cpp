@@ -3065,7 +3065,6 @@ void Audio::processLocalFile() {
     if(m_audioDataSize) { availableBytes = min(availableBytes, m_audioDataSize + m_audioDataStart - byteCounter); }
 
     int32_t bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
-
     if(bytesAddedToBuffer > 0) {
         byteCounter += bytesAddedToBuffer; // Pull request #42
         InBuff.bytesWritten(bytesAddedToBuffer);
