@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.9k
- *  Updated on: May 04.2024
+ *  Version 3.0.9l
+ *  Updated on: May 18.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3055,7 +3055,7 @@ void Audio::processLocalFile() {
         return;
     }
 
-    availableBytes = 16 * 1024; // set some large value
+    availableBytes = 256 * 1024; // set some large value
 
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     availableBytes = min(availableBytes, audiofile.size() - byteCounter);
