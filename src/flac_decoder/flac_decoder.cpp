@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 12,2024
+ * Updated on: May 18,2024
  *
  * Author: Wolle
  *
@@ -215,17 +215,19 @@ void FLACDecoderReset(){ // set var to default
 }
 //----------------------------------------------------------------------------------------------------------------------
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
-    int i;
-    i = FLAC_specialIndexOf(buf, "OggS", nBytes);
-    if(i == 0){
-        // flag has ogg wrapper
-        return 0;
-    }
-     /* find byte-aligned sync code - need 14 matching bits */
-    for (i = 0; i < nBytes - 1; i++) {
-        if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
-            FLACDecoderReset();
-            return i;
+
+    int i = FLAC_specialIndexOf(buf, "OggS", nBytes);
+    if(i == 0) return 0;  // flag has ogg wrapper
+
+    if(s_f_oggWrapper)
+        return i;
+    else{
+         /* find byte-aligned sync code - need 14 matching bits */
+        for (i = 0; i < nBytes - 1; i++) {
+            if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
+                FLACDecoderReset();
+                return i;
+            }
         }
     }
     return -1;
@@ -451,6 +453,7 @@ int parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
 
                 bitsPerSample  =  (*(inbuf + pos + 12) & 0x01) << 5;
                 bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
+                FLACMetadataBlock->bitsPerSample = bitsPerSample;
                 //log_i("bitsPerSample %i", bitsPerSample);
 
                 totalSamplesInStream  = (uint64_t)(*(inbuf + pos + 17) & 0x0F) << 32;
@@ -762,6 +765,11 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int *bytesLeft, short *outbuf){
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft){
+    if(FLAC_specialIndexOf(inbuf, "OggS", *bytesLeft) == 0){ // async? => new sync is OggS => reset and decode (not page 0 or 1)
+        FLACDecoderReset();
+        s_flacPageNr = 2;
+        return OGG_SYNC_FOUND;
+    }
     readUint(14 + 1, bytesLeft); // synccode + reserved bit
     FLACFrameHeader->blockingStrategy = readUint(1, bytesLeft);
     FLACFrameHeader->blockSizeCode = readUint(4, bytesLeft);

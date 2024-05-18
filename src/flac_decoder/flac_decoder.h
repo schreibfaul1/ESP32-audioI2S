@@ -2,7 +2,7 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Apr 12,2024
+ * Updated on: May 18,2024
  *
  *      Author: wolle
  *
@@ -27,6 +27,7 @@ enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
 enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                 FLAC_DECODE_FRAMES_LOOP = 100,
+                OGG_SYNC_FOUND = +2,
                 GIVE_NEXT_LOOP = +1,
                 ERR_FLAC_NONE = 0,
                 ERR_FLAC_BLOCKSIZE_TOO_BIG = -1,
