@@ -4725,7 +4725,9 @@ void Audio::printDecodeError(int r) {
             case ERR_FLAC_RESERVED_RESIDUAL_CODING: e = "RESERVED RESIDUAL CODING"; break;
             case ERR_FLAC_WRONG_RICE_PARTITION_NR: e = "WRONG RICE PARTITION NR"; break;
             case ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG: e = "BITS PER SAMPLE > 16"; break;
-            case ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN: e = "BITS PER SAMPLE UNKNOWN"; break;
+            case ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN: e = "BITS PER SAMPLE UNKNOWN"; break;
+            case ERR_FLAC_DECODER_ASYNC: e = "DECODER ASYNCHRON"; break;
+            case ERR_FLAC_BITREADER_UNDERFLOW: e = "BITREADER ERROR"; break;
             default: e = "ERR_UNKNOWN";
         }
         AUDIO_INFO("FLAC decode error %d : %s", r, e);

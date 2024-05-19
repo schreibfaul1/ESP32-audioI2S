@@ -38,6 +38,7 @@ uint8_t*         s_flacInptr;
 float            s_flacCompressionRatio = 0;
 uint8_t          s_flacBitBufferLen = 0;
 bool             s_f_flacParseOgg = false;
+bool             s_f_bitReaderError = false;
 uint8_t          s_flac_pageSegments = 0;
 char*            s_flacStreamTitle = NULL;
 char*            s_flacVendorString = NULL;
@@ -49,6 +50,7 @@ bool             s_f_flacNewMetadataBlockPicture = false;
 uint8_t          s_flacPageNr = 0;
 int32_t**        s_samplesBuffer = NULL;
 uint16_t         s_maxBlocksize = MAX_BLOCKSIZE;
+int32_t          s_nBytes = 0;
 
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
@@ -92,6 +94,7 @@ bool FLACDecoder_AllocateBuffers(void){
 
     FLACDecoder_ClearBuffer();
     FLACDecoder_setDefaults();
+    s_flacPageNr = 0;
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -152,9 +155,10 @@ void FLACDecoder_setDefaults(){
     s_f_flacFirstCall = true;
     s_f_oggWrapper = false;
     s_f_lastMetaDataBlock = false;
-    s_flacPageNr = 0;
     s_f_flacNewMetadataBlockPicture = false;
     s_f_flacParseOgg = false;
+    s_f_bitReaderError = false;
+    s_nBytes = 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
@@ -170,7 +174,7 @@ uint32_t readUint(uint8_t nBits, int *bytesLeft){
         uint8_t temp = *(s_flacInptr + s_rIndex);
         s_rIndex++;
         (*bytesLeft)--;
-        if(*bytesLeft < 0) { log_i("error in bitreader"); vTaskDelay(100);}
+        if(*bytesLeft < 0) { log_e("error in bitreader"); s_f_bitReaderError = true; break;}
         s_flac_bitBuffer = (s_flac_bitBuffer << 8) | temp;
         s_flacBitBufferLen += 8;
     }
@@ -217,15 +221,18 @@ void FLACDecoderReset(){ // set var to default
 int FLACFindSyncWord(unsigned char *buf, int nBytes) {
 
     int i = FLAC_specialIndexOf(buf, "OggS", nBytes);
-    if(i == 0) return 0;  // flag has ogg wrapper
+    if(i == 0) {s_f_bitReaderError = false; return 0;}  // flag has ogg wrapper
 
-    if(s_f_oggWrapper)
+    if(s_f_oggWrapper && i > 0){
+        s_f_bitReaderError = false;
         return i;
+    }
     else{
          /* find byte-aligned sync code - need 14 matching bits */
         for (i = 0; i < nBytes - 1; i++) {
             if ((buf[i + 0] & 0xFF) == 0xFF  && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
-                FLACDecoderReset();
+                if(i) FLACDecoderReset();
+            //    s_f_bitReaderError = false;
                 return i;
             }
         }
@@ -587,11 +594,10 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
     int             ret = 0;
     uint16_t        segmLen = 0;
     static uint16_t segmLenTmp = 0;
-    static int      nBytes = 0;
 
     if(s_f_flacFirstCall){ // determine if ogg or flag
         s_f_flacFirstCall = false;
-        nBytes = 0;
+        s_nBytes = 0;
         segmLenTmp = 0;
         if(FLAC_specialIndexOf(inbuf, "OggS", 5) == 0){
             s_f_oggWrapper = true;
@@ -615,21 +621,18 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
             return FLAC_PARSE_OGG_DONE;
         }
 
-        if(nBytes > 0){
-            int16_t diff = nBytes;
+        if(s_nBytes > 0){
+            int16_t diff = s_nBytes;
             if(s_flacAudioDataStart == 0){
                 s_flacAudioDataStart = s_flacCurrentFilePos;
             }
-            ret = FLACDecodeNative(inbuf, &nBytes, outbuf);
-            diff -= nBytes;
+            ret = FLACDecodeNative(inbuf, &s_nBytes, outbuf);
+            diff -= s_nBytes;
             s_flacCurrentFilePos += diff;
             *bytesLeft -= diff;
-            if(ret == GIVE_NEXT_LOOP){
-                return ERR_FLAC_NONE;
-            }
             return ret;
         }
-        if(nBytes < 0){log_e("flac async"); *bytesLeft -= nBytes; s_flacCurrentFilePos += nBytes; return ERR_FLAC_DECODER_ASYNC;}
+        if(s_nBytes < 0){return ERR_FLAC_DECODER_ASYNC;}
 
         if(s_f_flacParseOgg == true){
             s_f_flacParseOgg = false;
@@ -686,7 +689,7 @@ int8_t FLACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf){ //  MAIN LOOP
                 if(s_f_lastMetaDataBlock) s_flacPageNr = 2;
                 break;
             case 2:
-                nBytes = segmLen;
+                s_nBytes = segmLen;
                 return FLAC_PARSE_OGG_DONE;
                 break;
         }
@@ -792,7 +795,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int *bytesLeft){
         if(FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
     }
     if(FLACMetadataBlock->bitsPerSample > 16) return ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG;
-    if(FLACMetadataBlock->bitsPerSample < 8 ) return ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN;
+    if(FLACMetadataBlock->bitsPerSample < 8 ) return ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN;
     if(!FLACMetadataBlock->sampleRate){
         if(FLACFrameHeader->sampleRateCode == 1)  FLACMetadataBlock->sampleRate =  88200;
         if(FLACFrameHeader->sampleRateCode == 2)  FLACMetadataBlock->sampleRate = 176400;
@@ -1012,7 +1015,7 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
     int numPartitions = 1 << partitionOrder;
     if (s_blockSize % numPartitions != 0)
         return ERR_FLAC_WRONG_RICE_PARTITION_NR; //Error: Block size not divisible by number of Rice partitions
-    int partitionSize = s_blockSize/ numPartitions;
+    int partitionSize = s_blockSize / numPartitions;
 
     for (int i = 0; i < numPartitions; i++) {
         int start = i * partitionSize + (i == 0 ? warmup : 0);
@@ -1021,15 +1024,19 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
         int param = readUint(paramBits, bytesLeft);
         if (param < escapeParam) {
             for (int j = start; j < end; j++){
+                if(s_f_bitReaderError) break;
                 s_samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
             }
-        } else {
+        }
+        else {
             int numBits = readUint(5, bytesLeft);
             for (int j = start; j < end; j++){
+                if(s_f_bitReaderError) break;
                 s_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
             }
         }
     }
+    if(s_f_bitReaderError) return ERR_FLAC_BITREADER_UNDERFLOW;
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------

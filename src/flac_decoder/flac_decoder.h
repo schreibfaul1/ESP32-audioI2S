@@ -40,9 +40,10 @@ enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                 ERR_FLAC_RESERVED_RESIDUAL_CODING = -8,
                 ERR_FLAC_WRONG_RICE_PARTITION_NR = -9,
                 ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG = -10,
-                ERR_FLAG_BITS_PER_SAMPLE_UNKNOWN = -11,
+                ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN = -11,
                 ERR_FLAC_DECODER_ASYNC = -12,
-                ERR_FLAC_UNIMPLEMENTED = -13};
+                ERR_FLAC_UNIMPLEMENTED = -13,
+                ERR_FLAC_BITREADER_UNDERFLOW = -14};
 
 typedef struct FLACMetadataBlock_t{
                               // METADATA_BLOCK_STREAMINFO
