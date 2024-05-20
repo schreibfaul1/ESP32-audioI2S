@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 03.04.2024
+ *  Updated on: 20.05.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -61,17 +61,12 @@ float     s_opusCompressionRatio = 0;
 std::vector <uint32_t>s_opusBlockPicItem;
 
 bool OPUSDecoder_AllocateBuffers(){
-    const uint32_t CELT_SET_END_BAND_REQUEST = 10012;
-    const uint32_t CELT_SET_SIGNALLING_REQUEST = 10016;
     s_opusChbuf = (char*)malloc(512);
     if(!CELTDecoder_AllocateBuffers()) {log_e("CELT not init"); return false;}
     s_opusSegmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
     if(!s_opusSegmentTable) {log_e("CELT not init"); return false;}
-    CELTDecoder_ClearBuffer();
     OPUSDecoder_ClearBuffers();
-    s_opusError = celt_decoder_init(2); if(s_opusError < 0) {log_e("CELT not init"); return false;}
-    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {log_e("CELT not init"); return false;}
-    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {log_e("CELT not init"); return false;}
+    // allocate CELT buffers after OPUS head (nr of channels is needed)
     OPUSsetDefaults();
 
     int32_t ret = 0, silkDecSizeBytes = 0;
@@ -804,6 +799,11 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 
     (void)outputGain;
+
+    CELTDecoder_ClearBuffer();
+    s_opusError = celt_decoder_init(s_opusChannels); if(s_opusError < 0) {log_e("CELT not init"); return false;}
+    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {log_e("CELT not init"); return false;}
+    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {log_e("CELT not init"); return false;}
 
     return 1;
 }
