@@ -933,31 +933,39 @@ int8_t decodeSubframes(int* bytesLeft){
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     int8_t ret = 0;
-    readUint(1, bytesLeft);
-    uint8_t type = readUint(6, bytesLeft);
-    int shift = readUint(1, bytesLeft);
+    readUint(1, bytesLeft);                // Zero bit padding, to prevent sync-fooling string of 1s
+    uint8_t type = readUint(6, bytesLeft); // Subframe type: 000000 : SUBFRAME_CONSTANT
+                                           //                000001 : SUBFRAME_VERBATIM
+                                           //                00001x : reserved
+                                           //                0001xx : reserved
+                                           //                001xxx : if(xxx <= 4) SUBFRAME_FIXED, xxx=order ; else reserved
+                                           //                01xxxx : reserved
+                                           //                1xxxxx : SUBFRAME_LPC, xxxxx=order-1
+
+    int shift = readUint(1, bytesLeft);    // Wasted bits-per-sample' flag:
+                                           // 0 : no wasted bits-per-sample in source subblock, k=0
+                                           // 1 : k wasted bits-per-sample in source subblock, k-1 follows, unary coded; e.g. k=3 => 001 follows, k=7 => 0000001 follows.
     if (shift == 1) {
-        while (readUint(1, bytesLeft) == 0)
-            shift++;
+        while (readUint(1, bytesLeft) == 0) { shift++;}
     }
     sampleDepth -= shift;
 
     if(type == 0){  // Constant coding
-        int16_t s= readSignedInt(sampleDepth, bytesLeft);
+        int32_t s= readSignedInt(sampleDepth, bytesLeft);                                    // SUBFRAME_CONSTANT
         for(int i=0; i < s_blockSize; i++){
             s_samplesBuffer[ch][i] = s;
         }
     }
     else if (type == 1) {  // Verbatim coding
         for (int i = 0; i < s_blockSize; i++)
-            s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+            s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);                  // SUBFRAME_VERBATIM
     }
     else if (8 <= type && type <= 12){
-        ret = decodeFixedPredictionSubframe(type - 8, sampleDepth, ch, bytesLeft);
+        ret = decodeFixedPredictionSubframe(type - 8, sampleDepth, ch, bytesLeft);           // SUBFRAME_FIXED
         if(ret) return ret;
     }
     else if (32 <= type && type <= 63){
-        ret = decodeLinearPredictiveCodingSubframe(type - 31, sampleDepth, ch, bytesLeft);
+        ret = decodeLinearPredictiveCodingSubframe(type - 31, sampleDepth, ch, bytesLeft);   // SUBFRAME_LPC
         if(ret) return ret;
     }
     else{
@@ -970,14 +978,15 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
     }
     return ERR_FLAC_NONE;
 }
-//----------------------------------------------------------------------------------------------------------------------
-int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int* bytesLeft) {     // SUBFRAME_FIXED
+
     uint8_t ret = 0;
     for(uint8_t i = 0; i < predOrder; i++)
-        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
+        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft); // Unencoded warm-up samples (n = frame's bits-per-sample * predictor order).
     ret = decodeResiduals(predOrder, ch, bytesLeft);
     if(ret) return ret;
-    coefs.clear();
+    coefs.clear(); coefs.shrink_to_fit();
     if(predOrder == 0) coefs.resize(0);
     if(predOrder == 1) coefs.push_back(1);  // FIXED_PREDICTION_COEFFICIENTS
     if(predOrder == 2){coefs.push_back(2); coefs.push_back(-1);}
@@ -989,14 +998,17 @@ int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uin
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8_t ch, int* bytesLeft){
+
     int8_t ret = 0;
-    for (int i = 0; i < lpcOrder; i++)
-        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);
-    int precision = readUint(4, bytesLeft) + 1;
-    int shift = readSignedInt(5, bytesLeft);
-    coefs.resize(0);
-    for (uint8_t i = 0; i < lpcOrder; i++)
-        coefs.push_back(readSignedInt(precision, bytesLeft));
+    for (int i = 0; i < lpcOrder; i++){
+        s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft); // Unencoded warm-up samples (n = frame's bits-per-sample * lpc order).
+    }
+    int precision = readUint(4, bytesLeft) + 1;                         // (Quantized linear predictor coefficients' precision in bits)-1 (1111 = invalid).
+    int shift = readSignedInt(5, bytesLeft);                            // Quantized linear predictor coefficient shift needed in bits (NOTE: this number is signed two's-complement).
+    coefs.clear(); coefs.shrink_to_fit();
+    for (uint8_t i = 0; i < lpcOrder; i++){
+        coefs.push_back(readSignedInt(precision, bytesLeft));           // Unencoded predictor coefficients (n = qlp coeff precision * lpc order) (NOTE: the coefficients are signed two's-complement).
+    }
     ret = decodeResiduals(lpcOrder, ch, bytesLeft);
     if(ret) return ret;
     restoreLinearPrediction(ch, shift);
@@ -1005,16 +1017,19 @@ int8_t decodeLinearPredictiveCodingSubframe(int lpcOrder, int sampleDepth, uint8
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
 
-    int method = readUint(2, bytesLeft);
-    if (method >= 2)
-        return ERR_FLAC_RESERVED_RESIDUAL_CODING; // Reserved residual coding method
-    uint8_t paramBits = method == 0 ? 4 : 5;
-    int escapeParam = (method == 0 ? 0xF : 0x1F);
-    int partitionOrder = readUint(4, bytesLeft);
+    int method = readUint(2, bytesLeft);                          // Residual coding method:
+                                                                  // 00 : partitioned Rice coding with 4-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE follows
+                                                                  // 01 : partitioned Rice coding with 5-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE2 follows
+                                                                  // 10-11 : reserved
+    if (method >= 2) {return ERR_FLAC_RESERVED_RESIDUAL_CODING;}
+    uint8_t paramBits = method == 0 ? 4 : 5;                      // RESIDUAL_CODING_METHOD_PARTITIONED_RICE || RESIDUAL_CODING_METHOD_PARTITIONED_RICE2
+    int escapeParam = ( method == 0 ? 0xF : 0x1F);
+    int partitionOrder = readUint(4, bytesLeft);                  // Partition order
+    int numPartitions = 1 << partitionOrder;                      // There will be 2^order partitions.
 
-    int numPartitions = 1 << partitionOrder;
-    if (s_blockSize % numPartitions != 0)
-        return ERR_FLAC_WRONG_RICE_PARTITION_NR; //Error: Block size not divisible by number of Rice partitions
+    if (s_blockSize % numPartitions != 0){
+        return ERR_FLAC_WRONG_RICE_PARTITION_NR;                  //Error: Block size not divisible by number of Rice partitions
+    }
     int partitionSize = s_blockSize / numPartitions;
 
     for (int i = 0; i < numPartitions; i++) {
@@ -1029,7 +1044,7 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int* bytesLeft) {
             }
         }
         else {
-            int numBits = readUint(5, bytesLeft);
+            int numBits = readUint(5, bytesLeft);                 // Escape code, meaning the partition is in unencoded binary form using n bits per sample; n follows as a 5-bit number.
             for (int j = start; j < end; j++){
                 if(s_f_bitReaderError) break;
                 s_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
