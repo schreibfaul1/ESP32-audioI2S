@@ -185,9 +185,12 @@ struct CELTMode {
 };
 
 extern const CELTMode m_CELTMode;
-
-#define _min(a,b) ((a)<(b)?(a):(b))
-#define _max(a,b) ((a)>(b)?(a):(b))
+#ifndef _min
+    #define _min(a,b) ((a)<(b)?(a):(b))
+#endif
+#ifndef _max
+    #define _max(a,b) ((a)>(b)?(a):(b))
+#endif
 
 inline int32_t S_MUL(int32_t a, int16_t b){return (int64_t)b * a >> 15;}
 #define C_MUL(m,a,b)  do{ (m).r = SUB32_ovflw(S_MUL((a).r,(b).r) , S_MUL((a).i,(b).i)); \
