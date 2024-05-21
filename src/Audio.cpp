@@ -4426,7 +4426,7 @@ void Audio::setDecoderItems() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
 
-    int         bytesLeft;
+    int32_t     bytesLeft;
     static bool f_setDecodeParamsOnce = true;
     int         nextSync = 0;
     if(!m_f_playing) {
@@ -4443,12 +4443,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
-        case CODEC_MP3:  m_decodeError = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
-        case CODEC_AAC:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
-        case CODEC_M4A:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
+        case CODEC_MP3:  m_decodeError = MP3Decode(data, (int*)&bytesLeft, m_outBuff, 0); break;
+        case CODEC_AAC:  m_decodeError = AACDecode(data, (int*)&bytesLeft, m_outBuff); break;
+        case CODEC_M4A:  m_decodeError = AACDecode(data, (int*)&bytesLeft, m_outBuff); break;
         case CODEC_FLAC: m_decodeError = FLACDecode(data, &bytesLeft, m_outBuff); break;
-        case CODEC_OPUS: m_decodeError = OPUSDecode(data, &bytesLeft, m_outBuff); break;
-        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &bytesLeft, m_outBuff); break;
+        case CODEC_OPUS: m_decodeError = OPUSDecode(data, (int*)&bytesLeft, m_outBuff); break;
+        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, (int*)&bytesLeft, m_outBuff); break;
         default: {
             log_e("no valid codec found codec = %d", m_codec);
             stopSong();
