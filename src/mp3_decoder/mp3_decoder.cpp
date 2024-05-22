@@ -1191,7 +1191,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
                 return i;
             }
         }
-        return -1L;
+        return (int32_t)-1;
     };
     //————————————————————————————————————————————————————————————————————————————————————————————————————————
     /* find byte-aligned syncword - need 12 (MPEG 1,2) or 11 (MPEG 2.5) matching bits */
