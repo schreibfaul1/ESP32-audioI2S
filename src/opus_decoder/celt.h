@@ -457,7 +457,7 @@ inline void dual_inner_prod(const int16_t *x, const int16_t *y01, const int16_t 
 }
 
 inline uint32_t celt_inner_prod(const int16_t *x, const int16_t *y, int32_t N) {
-    int i;
+    int32_t i;
     uint32_t xy = 0;
     for (i = 0; i < N; i++) xy = (int32_t)x[i] * (int32_t)y[i] + xy;
     return xy;

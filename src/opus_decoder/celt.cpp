@@ -1979,7 +1979,7 @@ int32_t celt_decoder_init(int32_t channels){
         return ERR_OPUS_CELT_ALLOC_FAIL;
     }
 
-    int n = celt_decoder_get_size(channels);
+    int32_t n = celt_decoder_get_size(channels);
     memset(s_celtDec, 0, n * sizeof(char));
 
     s_celtDec->channels = channels;
@@ -2004,7 +2004,7 @@ int32_t celt_decoder_init(int32_t channels){
     s_celtDec->_decode_mem[0] = 0;
     s_celtDec->end = s_celtDec->mode->effEBands; // 21
 
-    int ret = celt_decoder_ctl(OPUS_RESET_STATE);
+    int32_t ret = celt_decoder_ctl(OPUS_RESET_STATE);
     if(ret < 0) return ret;
     return ERR_OPUS_NONE;
 }
@@ -2507,7 +2507,7 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
             oldLogE = oldBandE + 2 * s_celtDec->mode->nbEBands;
             oldLogE2 = oldLogE + 2 * s_celtDec->mode->nbEBands;
 
-            int n = celt_decoder_get_size(s_celtDec->channels);
+            int32_t n = celt_decoder_get_size(s_celtDec->channels);
             char* dest   = (char*)&s_celtDec->rng;
             char* offset = (char*)s_celtDec;
             memset(dest, 0,  n - (dest - offset) * sizeof(s_celtDec));

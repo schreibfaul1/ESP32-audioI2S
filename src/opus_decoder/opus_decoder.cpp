@@ -121,10 +121,10 @@ void OPUSsetDefaults(){
 
 //----------------------------------------------------------------------------------------------------------------------
 
-int OPUSDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf) {
+int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 
-    int ret = ERR_OPUS_NONE;
-    int segmLen = 0;
+    int32_t ret = ERR_OPUS_NONE;
+    int32_t segmLen = 0;
 
     if(s_opusCommentBlockSize) {
         if(s_opusCommentBlockSize > 8192) {
@@ -143,7 +143,7 @@ int OPUSDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf) {
             if(s_opusBlockPicItem.size() > 0) { // get blockpic data
                 // log_i("---------------------------------------------------------------------------");
                 // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                // for(int i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
+                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
                 // log_i("---------------------------------------------------------------------------");
                 s_f_opusNewMetadataBlockPicture = true;
             }
@@ -197,8 +197,8 @@ int OPUSDecode(uint8_t* inbuf, int* bytesLeft, short* outbuf) {
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int opusDecodePage0(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
-    int ret = 0;
+int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength){
+    int32_t ret = 0;
     ret = parseOpusHead(inbuf, segmentLength);
     *bytesLeft           -= segmentLength;
     s_opusCurrentFilePos += segmentLength;
@@ -207,7 +207,7 @@ int opusDecodePage0(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength){
     return OPUS_PARSE_OGG_DONE;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int opusDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, short *outbuf){
+int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t *outbuf){
 
     if(s_opusAudioDataStart == 0){
         s_opusAudioDataStart = s_opusCurrentFilePos;
@@ -218,7 +218,7 @@ int opusDecodePage3(uint8_t* inbuf, int* bytesLeft, uint32_t segmentLength, shor
     static int8_t configNr = 0;
     static uint16_t samplesPerFrame = 0;
 
-    int ret = 0;
+    int32_t ret = 0;
 
     if(s_frameCount > 0) goto FramePacking; // more than one frame in the packet
 
@@ -294,7 +294,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame){
+int8_t opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame){
 
 /*  Code 0: One Frame in the Packet
 
@@ -311,7 +311,7 @@ int8_t opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
       |                                                               |
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
-    int ret = 0;
+    int32_t ret = 0;
     *bytesLeft -= packetLen;
     s_opusCurrentFilePos += packetLen;
     packetLen--;
@@ -324,7 +324,7 @@ int8_t opus_FramePacking_Code0(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 1: Two Frames in the Packet, Each with Equal Compressed Size
 
@@ -347,7 +347,7 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
 */
 
 
-    int ret = 0;
+    int32_t ret = 0;
     static uint16_t c1fs = 0;
     if(*frameCount == 0){
         packetLen--;
@@ -373,7 +373,7 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 2: Two Frames in the Packet, with Different Compressed Sizes
 
@@ -403,7 +403,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
 */
 
 //  log_w("OPUS countCode 2 packetLen %i", packetLen);
-    int ret = 0;
+    int32_t ret = 0;
     static uint16_t firstFrameLength = 0;
     static uint16_t secondFrameLength = 0;
 
@@ -448,7 +448,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code3(uint8_t *inbuf, int *bytesLeft, short *outbuf, int packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 3: A Signaled Number of Frames in the Packet
 
@@ -552,7 +552,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int *bytesLeft, short *outbuf, in
     static uint8_t M = 0;
     static bool v = false;
     static bool p = false;
-    int ret = 0;
+    int32_t ret = 0;
     uint8_t paddingLength = 0;
     if(*frameCount == 0){
         v = ((inbuf[1] & 0x80) == 0x80);  // VBR indicator
@@ -699,9 +699,9 @@ int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc671
     return configNr;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
+int32_t parseOpusComment(uint8_t *inbuf, int32_t nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
-    int idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
+    int32_t idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
     if(idx != 0) return 0; // is not OpusTags
 
     char* artist = NULL;
@@ -721,7 +721,7 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
              commentListLength += *(inbuf + 0 + pos);
     pos += 4;
     nBytes -= 4;
-    for(int i = 0; i < commentListLength; i++){
+    for(int32_t i = 0; i < commentListLength; i++){
         uint32_t commentStringLen   = *(inbuf + 3 + pos) << 24;
                  commentStringLen  += *(inbuf + 2 + pos) << 16;
                  commentStringLen  += *(inbuf + 1 + pos) << 8;
@@ -773,10 +773,10 @@ int parseOpusComment(uint8_t *inbuf, int nBytes){      // reference https://exif
     return 1;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.org/OggOpus
+int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wiki.xiph.org/OggOpus
 
 
-    int idx = OPUS_specialIndexOf(inbuf, "OpusHead", 10);
+    int32_t idx = OPUS_specialIndexOf(inbuf, "OpusHead", 10);
      if(idx != 0) {
         return 0; //is not OpusHead
      }
@@ -809,9 +809,9 @@ int parseOpusHead(uint8_t *inbuf, int nBytes){  // reference https://wiki.xiph.o
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
-    int idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
+    int32_t idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if(idx != 0) return ERR_OPUS_DECODER_ASYNC;
 
     int16_t segmentTableWrPtr = -1;
@@ -845,8 +845,8 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
     s_opusSegmentLength = 0;
     segmentTableWrPtr = -1;
 
-    for(int i = 0; i < pageSegments; i++){
-        int n = *(inbuf + 27 + i);
+    for(int32_t i = 0; i < pageSegments; i++){
+        int32_t n = *(inbuf + 27 + i);
         while(*(inbuf + 27 + i) == 255){
             i++;
             if(i == pageSegments) break;
@@ -880,9 +880,9 @@ int OPUSparseOGG(uint8_t *inbuf, int *bytesLeft){  // reference https://www.xiph
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-int OPUSFindSyncWord(unsigned char *buf, int nBytes){
+int32_t OPUSFindSyncWord(unsigned char *buf, int32_t nBytes){
     // assume we have a ogg wrapper
-    int idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
+    int32_t idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
     //    log_i("OggS found at %i", idx);
         s_f_opusParseOgg = true;
@@ -893,12 +893,12 @@ int OPUSFindSyncWord(unsigned char *buf, int nBytes){
     return ERR_OPUS_OGG_SYNC_NOT_FOUND;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int OPUS_specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact){
-    int result = -1;  // seek for str in buffer or in header up to baselen, not nullterninated
+int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact){
+    int32_t result = -1;  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
-    for (int i = 0; i < baselen - strlen(str); i++){
+    for (int32_t i = 0; i < baselen - strlen(str); i++){
         result = i;
-        for (int j = 0; j < strlen(str) + exact; j++){
+        for (int32_t j = 0; j < strlen(str) + exact; j++){
             if (*(base + i + j) != *(str + j)){
                 result = -1;
                 break;

@@ -4,7 +4,7 @@
  *  Created on: Oct 26.2018
  *
  *  Version 3.0.9l
- *  Updated on: May 18.2024
+ *  Updated on: May 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4447,7 +4447,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_AAC:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_M4A:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_FLAC: m_decodeError = FLACDecode(data, &bytesLeft, m_outBuff); break;
-        case CODEC_OPUS: m_decodeError = OPUSDecode(data, (int*)&bytesLeft, m_outBuff); break;
+        case CODEC_OPUS: m_decodeError = OPUSDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_VORBIS: m_decodeError = VORBISDecode(data, (int*)&bytesLeft, m_outBuff); break;
         default: {
             log_e("no valid codec found codec = %d", m_codec);
