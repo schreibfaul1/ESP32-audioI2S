@@ -4444,8 +4444,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
         case CODEC_MP3:  m_decodeError = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
-        case CODEC_AAC:  m_decodeError = AACDecode(data, (int*)&bytesLeft, m_outBuff); break;
-        case CODEC_M4A:  m_decodeError = AACDecode(data, (int*)&bytesLeft, m_outBuff); break;
+        case CODEC_AAC:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
+        case CODEC_M4A:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_FLAC: m_decodeError = FLACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_OPUS: m_decodeError = OPUSDecode(data, (int*)&bytesLeft, m_outBuff); break;
         case CODEC_VORBIS: m_decodeError = VORBISDecode(data, (int*)&bytesLeft, m_outBuff); break;

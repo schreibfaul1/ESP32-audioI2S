@@ -95,62 +95,62 @@ enum {
 typedef struct _AACDecInfo_t {
     /* raw decoded data, before rounding to 16-bit PCM (for postprocessing such as SBR) */
     void  *rawSampleBuf[2];
-    int   rawSampleBytes;
-    int   rawSampleFBits;
+    int32_t   rawSampleBytes;
+    int32_t   rawSampleFBits;
     /* fill data (can be used for processing SBR or other extensions) */
     uint8_t *fillBuf;
-    int   fillCount;
-    int   fillExtType;
-    int   prevBlockID;    /* block information */
-    int   currBlockID;
-    int   currInstTag;
-    int   sbDeinterleaveReqd[2]; // [MAX_NCHANS_ELEM]
-    int   adtsBlocksLeft;
-    int   bitRate;    /* user-accessible info */
-    int   nChans;
-    int   sampRate;
+    int32_t   fillCount;
+    int32_t   fillExtType;
+    int32_t   prevBlockID;    /* block information */
+    int32_t   currBlockID;
+    int32_t   currInstTag;
+    int32_t   sbDeinterleaveReqd[2]; // [MAX_NCHANS_ELEM]
+    int32_t   adtsBlocksLeft;
+    int32_t   bitRate;    /* user-accessible info */
+    int32_t   nChans;
+    int32_t   sampRate;
     float compressionRatio;
-    int   id;         /* 0: MPEG-4, 1: MPEG2 */
-    int   profile;    /* 0: Main profile, 1: LowComplexity (LC), 2: ScalableSamplingRate (SSR), 3: reserved */
-    int   format;
-    int   sbrEnabled;
-    int   tnsUsed;
-    int   pnsUsed;
-    int   frameCount;
+    int32_t   id;         /* 0: MPEG-4, 1: MPEG2 */
+    int32_t   profile;    /* 0: Main profile, 1: LowComplexity (LC), 2: ScalableSamplingRate (SSR), 3: reserved */
+    int32_t   format;
+    int32_t   sbrEnabled;
+    int32_t   tnsUsed;
+    int32_t   pnsUsed;
+    int32_t   frameCount;
 } AACDecInfo_t;
 
 
 typedef struct _aac_BitStreamInfo_t {
     uint8_t *bytePtr;
     uint32_t iCache;
-    int cachedBits;
-    int nBytes;
+    int32_t cachedBits;
+    int32_t nBytes;
 } aac_BitStreamInfo_t;
 
 typedef union _U64 {
     int64_t w64;
     struct {
         uint32_t lo32;
-        signed int  hi32;
+        int32_t  hi32;
     } r;
 } U64;
 
 typedef struct _AACFrameInfo_t {
-    int bitRate;
-    int nChans;
-    int sampRateCore;
-    int sampRateOut;
-    int bitsPerSample;
-    int outputSamps;
-    int profile;
-    int tnsUsed;
-    int pnsUsed;
+    int32_t bitRate;
+    int32_t nChans;
+    int32_t sampRateCore;
+    int32_t sampRateOut;
+    int32_t bitsPerSample;
+    int32_t outputSamps;
+    int32_t profile;
+    int32_t tnsUsed;
+    int32_t pnsUsed;
 } AACFrameInfo_t;
 
 typedef struct _HuffInfo_t {
-    int maxBits;              /* number of bits in longest codeword */
+    int32_t maxBits;              /* number of bits in longest codeword */
     uint8_t count[20];        /*  count[MAX_HUFF_BITS] = number of codes with length i+1 bits */
-    int offset;               /* offset into symbol table */
+    int32_t offset;               /* offset into symbol table */
 } HuffInfo_t;
 
 typedef struct _PulseInfo_t {
@@ -208,11 +208,11 @@ typedef struct _ADTSHeader_t {
     /* variable */
     uint8_t copyBit;                    /* 1 bit of the 72-bit copyright ID (transmitted as 1 bit per frame) */
     uint8_t copyStart;                  /* 1 = this bit starts the 72-bit ID, 0 = it does not */
-    int     frameLength;                /* length of frame */
-    int     bufferFull;                 /* number of 32-bit words left in enc buffer, 0x7FF = VBR */
+    int32_t     frameLength;                /* length of frame */
+    int32_t     bufferFull;                 /* number of 32-bit words left in enc buffer, 0x7FF = VBR */
     uint8_t numRawDataBlocks;           /* number of raw data blocks in frame */
     /* CRC */
-    int     crcCheckWord;                     /* 16-bit CRC check word (present if protectBit == 0) */
+    int32_t     crcCheckWord;                     /* 16-bit CRC check word (present if protectBit == 0) */
 } ADTSHeader_t;
 
 typedef struct _ADIFHeader_t {
@@ -220,9 +220,9 @@ typedef struct _ADIFHeader_t {
     uint8_t  origCopy;                   /* 0 = copy, 1 = original */
     uint8_t  home;                       /* ignore */
     uint8_t  bsType;                     /* bitstream type: 0 = CBR, 1 = VBR */
-    int      bitRate;                    /* bitRate: CBR = bits/sec, VBR = peak bits/frame, 0 = unknown */
+    int32_t      bitRate;                    /* bitRate: CBR = bits/sec, VBR = peak bits/frame, 0 = unknown */
     uint8_t  numPCE;                     /* number of program config elements (max = 16) */
-    int      bufferFull;                 /* bits left in bit reservoir */
+    int32_t      bufferFull;                 /* bits left in bit reservoir */
     uint8_t  copyID[9];                  /* [ADIF_COPYID_SIZE] optional 72-bit copyright ID */
 } ADIFHeader_t;
 
@@ -249,7 +249,7 @@ typedef struct _ProgConfigElement_t {
 } ProgConfigElement_t;
 
 typedef struct _SBRHeader {
-    int      count;
+    int32_t      count;
 
     uint8_t  ampRes;
     uint8_t  startFreq;
@@ -288,15 +288,15 @@ typedef struct _SBRGrid {
 
 /* need one SBRFreq per element (SCE/CPE/LFE), updated only on header reset */
 typedef struct _SBRFreq {
-    int      kStart;               /* k_x */
-    int      nMaster;
-    int      nHigh;
-    int      nLow;
-    int      nLimiter;             /* N_l */
-    int      numQMFBands;          /* M */
-    int      numNoiseFloorBands;   /* Nq */
-    int      kStartPrev;
-    int      numQMFBandsPrev;
+    int32_t      kStart;               /* k_x */
+    int32_t      nMaster;
+    int32_t      nHigh;
+    int32_t      nLow;
+    int32_t      nLimiter;             /* N_l */
+    int32_t      numQMFBands;          /* M */
+    int32_t      numNoiseFloorBands;   /* Nq */
+    int32_t      kStartPrev;
+    int32_t      numQMFBandsPrev;
     uint8_t  freqMaster[48 + 1];     // [MAX_QMF_BANDS + 1]      /* not necessary to save this  after derived tables are generated */
     uint8_t  freqHigh[48 + 1];       // [MAX_QMF_BANDS + 1]
     uint8_t  freqLow[48 / 2 + 1];    // [MAX_QMF_BANDS / 2 + 1]  /* nLow = nHigh - (nHigh >> 1) */
@@ -309,68 +309,68 @@ typedef struct _SBRFreq {
 } SBRFreq;
 
 typedef struct _SBRChan {
-    int      reset;
+    int32_t      reset;
     uint8_t  deltaFlagEnv[5];          // [MAX_NUM_ENV]
     uint8_t  deltaFlagNoise[2];        // [MAX_NUM_NOISE_FLOORS]
     int8_t   envDataQuant[5][48];      // [MAX_NUM_ENV][MAX_QMF_BANDS] /* range = [0, 127] */
     int8_t   noiseDataQuant[2][5];     // [MAX_NUM_NOISE_FLOORS][MAX_NUM_NOISE_FLOOR_BANDS]
 
     uint8_t  invfMode[2][5];           // [2][MAX_NUM_NOISE_FLOOR_BANDS] /* invfMode[0/1][band] = prev/curr */
-    int      chirpFact[5];             // [MAX_NUM_NOISE_FLOOR_BANDS]  /* bwArray */
+    int32_t      chirpFact[5];             // [MAX_NUM_NOISE_FLOOR_BANDS]  /* bwArray */
     uint8_t  addHarmonicFlag[2];       /* addHarmonicFlag[0/1] = prev/curr */
     uint8_t  addHarmonic[2][64];       /* addHarmonic[0/1][band] = prev/curr */
 
-    int      gbMask[2];    /* gbMask[0/1] = XBuf[0-31]/XBuf[32-39] */
+    int32_t      gbMask[2];    /* gbMask[0/1] = XBuf[0-31]/XBuf[32-39] */
     int8_t   laPrev;
 
-    int      noiseTabIndex;
-    int      sinIndex;
-    int      gainNoiseIndex;
-    int      gTemp[5][48];  // [MAX_NUM_SMOOTH_COEFS][MAX_QMF_BANDS]
-    int      qTemp[5][48];  // [MAX_NUM_SMOOTH_COEFS][MAX_QMF_BANDS]
+    int32_t      noiseTabIndex;
+    int32_t      sinIndex;
+    int32_t      gainNoiseIndex;
+    int32_t      gTemp[5][48];  // [MAX_NUM_SMOOTH_COEFS][MAX_QMF_BANDS]
+    int32_t      qTemp[5][48];  // [MAX_NUM_SMOOTH_COEFS][MAX_QMF_BANDS]
 
 } SBRChan;
 
 
 /* state info struct for baseline (MPEG-4 LC) decoding */
 typedef struct _PSInfoBase_t {
-    int      dataCount;
+    int32_t      dataCount;
     uint8_t  dataBuf[510]; // [DATA_BUF_SIZE]
-    int      fillCount;
+    int32_t      fillCount;
     uint8_t  fillBuf[269]; //[FILL_BUF_SIZE]
     /* state information which is the same throughout whole frame */
-    int      nChans;
-    int      useImpChanMap;
-    int      sampRateIdx;
+    int32_t      nChans;
+    int32_t      useImpChanMap;
+    int32_t      sampRateIdx;
     /* state information which can be overwritten by subsequent elements within frame */
     ICSInfo_t  icsInfo[2]; // [MAX_NCHANS_ELEM]
-    int      commonWin;
-    short    scaleFactors[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
+    int32_t      commonWin;
+    int16_t    scaleFactors[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
     uint8_t  sfbCodeBook[2][15*8]; // [MAX_NCHANS_ELEM][MAX_SF_BANDS]
-    int      msMaskPresent;
+    int32_t      msMaskPresent;
     uint8_t  msMaskBits[(15 * 8 + 7) >> 3]; // [MAX_MS_MASK_BYTES]
-    int      pnsUsed[2]; // [MAX_NCHANS_ELEM]
-    int      pnsLastVal;
-    int      intensityUsed[2]; // [MAX_NCHANS_ELEM]
+    int32_t      pnsUsed[2]; // [MAX_NCHANS_ELEM]
+    int32_t      pnsLastVal;
+    int32_t      intensityUsed[2]; // [MAX_NCHANS_ELEM]
 //    PulseInfo_t           pulseInfo[2]; // [MAX_NCHANS_ELEM]
     TNSInfo_t   tnsInfo[2]; // [MAX_NCHANS_ELEM]
-    int      tnsLPCBuf[20]; // [MAX_TNS_ORDER]
-    int      tnsWorkBuf[20]; //[MAX_TNS_ORDER]
+    int32_t      tnsLPCBuf[20]; // [MAX_TNS_ORDER]
+    int32_t      tnsWorkBuf[20]; //[MAX_TNS_ORDER]
     GainControlInfo_t     gainControlInfo[2]; // [MAX_NCHANS_ELEM]
-    int      gbCurrent[2];  // [MAX_NCHANS_ELEM]
-    int      coef[2][1024]; // [MAX_NCHANS_ELEM][AAC_MAX_NSAMPS]
+    int32_t      gbCurrent[2];  // [MAX_NCHANS_ELEM]
+    int32_t      coef[2][1024]; // [MAX_NCHANS_ELEM][AAC_MAX_NSAMPS]
 #ifdef AAC_ENABLE_SBR
-    int      sbrWorkBuf[2][1024]; // [MAX_NCHANS_ELEM][AAC_MAX_NSAMPS];
+    int32_t      sbrWorkBuf[2][1024]; // [MAX_NCHANS_ELEM][AAC_MAX_NSAMPS];
 #endif
     /* state information which must be saved for each element and used in next frame */
-    int      overlap[2][1024];  // [AAC_MAX_NCHANS][AAC_MAX_NSAMPS]
-    int      prevWinShape[2]; // [AAC_MAX_NCHANS]
+    int32_t      overlap[2][1024];  // [AAC_MAX_NCHANS][AAC_MAX_NSAMPS]
+    int32_t      prevWinShape[2]; // [AAC_MAX_NCHANS]
 } PSInfoBase_t;
 
 typedef struct _PSInfoSBR {
     /* save for entire file */
-    int      frameCount;
-    int      sampRateIdx;
+    int32_t      frameCount;
+    int32_t      sampRateIdx;
 
     /* state info that must be saved for each channel */
     SBRHeader   sbrHdr[2];
@@ -382,205 +382,204 @@ typedef struct _PSInfoSBR {
     uint8_t  dataExtra;
     uint8_t  resBitsData;
     uint8_t  extendedDataPresent;
-    int      extendedDataSize;
+    int32_t      extendedDataSize;
 
     int8_t   envDataDequantScale[2][5];  // [MAX_NCHANS_ELEM][MAX_NUM_ENV
-    int      envDataDequant[2][5][48];   // [MAX_NCHANS_ELEM][MAX_NUM_ENV][MAX_QMF_BANDS
-    int      noiseDataDequant[2][2][5];  // [MAX_NCHANS_ELEM][MAX_NUM_NOISE_FLOORS][MAX_NUM_NOISE_FLOOR_BANDS]
+    int32_t      envDataDequant[2][5][48];   // [MAX_NCHANS_ELEM][MAX_NUM_ENV][MAX_QMF_BANDS
+    int32_t      noiseDataDequant[2][2][5];  // [MAX_NCHANS_ELEM][MAX_NUM_NOISE_FLOORS][MAX_NUM_NOISE_FLOOR_BANDS]
 
-    int      eCurr[48];    // [MAX_QMF_BANDS]
+    int32_t      eCurr[48];    // [MAX_QMF_BANDS]
     uint8_t  eCurrExp[48]; // [MAX_QMF_BANDS]
     uint8_t  eCurrExpMax;
     int8_t   la;
 
-    int      crcCheckWord;
-    int      couplingFlag;
-    int      envBand;
-    int      eOMGainMax;
-    int      gainMax;
-    int      gainMaxFBits;
-    int      noiseFloorBand;
-    int      qp1Inv;
-    int      qqp1Inv;
-    int      sMapped;
-    int      sBand;
-    int      highBand;
+    int32_t      crcCheckWord;
+    int32_t      couplingFlag;
+    int32_t      envBand;
+    int32_t      eOMGainMax;
+    int32_t      gainMax;
+    int32_t      gainMaxFBits;
+    int32_t      noiseFloorBand;
+    int32_t      qp1Inv;
+    int32_t      qqp1Inv;
+    int32_t      sMapped;
+    int32_t      sBand;
+    int32_t      highBand;
 
-    int      sumEOrigMapped;
-    int      sumECurrGLim;
-    int      sumSM;
-    int      sumQM;
-    int      gLimBoost[48];
-    int      qmLimBoost[48];
-    int      smBoost[48];
+    int32_t      sumEOrigMapped;
+    int32_t      sumECurrGLim;
+    int32_t      sumSM;
+    int32_t      sumQM;
+    int32_t      gLimBoost[48];
+    int32_t      qmLimBoost[48];
+    int32_t      smBoost[48];
 
-    int      smBuf[48];
-    int      qmLimBuf[48];
-    int      gLimBuf[48];
-    int      gLimFbits[48];
+    int32_t      smBuf[48];
+    int32_t      qmLimBuf[48];
+    int32_t      gLimBuf[48];
+    int32_t      gLimFbits[48];
 
-    int      gFiltLast[48];
-    int      qFiltLast[48];
+    int32_t      gFiltLast[48];
+    int32_t      qFiltLast[48];
 
     /* large buffers */
-    int      delayIdxQMFA[2];        // [AAC_MAX_NCHANS]
-    int      delayQMFA[2][10 * 32];  // [AAC_MAX_NCHANS][DELAY_SAMPS_QMFA]
-    int      delayIdxQMFS[2];        // [AAC_MAX_NCHANS]
-    int      delayQMFS[2][10 * 128]; // [AAC_MAX_NCHANS][DELAY_SAMPS_QMFS]
-    int      XBufDelay[2][8][64][2]; // [AAC_MAX_NCHANS][HF_GEN][64][2]
-    int      XBuf[32+8][64][2];
+    int32_t      delayIdxQMFA[2];        // [AAC_MAX_NCHANS]
+    int32_t      delayQMFA[2][10 * 32];  // [AAC_MAX_NCHANS][DELAY_SAMPS_QMFA]
+    int32_t      delayIdxQMFS[2];        // [AAC_MAX_NCHANS]
+    int32_t      delayQMFS[2][10 * 128]; // [AAC_MAX_NCHANS][DELAY_SAMPS_QMFS]
+    int32_t      XBufDelay[2][8][64][2]; // [AAC_MAX_NCHANS][HF_GEN][64][2]
+    int32_t      XBuf[32+8][64][2];
 } PSInfoSBR_t;
 
 bool AACDecoder_AllocateBuffers(void);
-int AACFlushCodec();
+int32_t AACFlushCodec();
 void AACDecoder_FreeBuffers(void);
 bool AACDecoder_IsInit(void);
-int AACFindSyncWord(uint8_t *buf, int nBytes);
-int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile);
-int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf);
-int AACGetSampRate();
-int AACGetChannels();
-int AACGetID(); // 0-MPEG4, 1-MPEG2
+int32_t AACFindSyncWord(uint8_t *buf, int32_t nBytes);
+int32_t AACSetRawBlockParams(int32_t copyLast, int32_t nChans, int32_t sampRateCore, int32_t profile);
+int32_t AACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf);
+int32_t AACGetSampRate();
+int32_t AACGetChannels();
+int32_t AACGetID(); // 0-MPEG4, 1-MPEG2
 uint8_t AACGetProfile(); // 0-Main, 1-LC, 2-SSR, 3-reserved
 uint8_t AACGetFormat(); // 0-unknown 1-ADTS 2-ADIF, 3-RAW
-int AACGetBitsPerSample();
-int AACGetBitrate();
-int AACGetOutputSamps();
-int AACGetBitrate();
-void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b);
-int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist);
-int TNSFilter(int ch);
-int DecodeSingleChannelElement();
-int DecodeChannelPairElement();
-int DecodeLFEChannelElement();
-int DecodeDataStreamElement();
-int DecodeProgramConfigElement(uint8_t idx);
-int DecodeFillElement();
-int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail);
-void PreMultiply(int tabidx, int *zbuf1);
-void PostMultiply(int tabidx, int *fft1);
-void PreMultiplyRescale(int tabidx, int *zbuf1, int es);
-void PostMultiplyRescale(int tabidx, int *fft1, int es);
-void DCT4(int tabidx, int *coef, int gb);
-void BitReverse(int *inout, int tabidx);
-void R4FirstPass(int *x, int bg);
-void R8FirstPass(int *x, int bg);
-void R4Core(int *x, int bg, int gp, int *wtab);
-void R4FFT(int tabidx, int *x);
-void UnpackZeros(int nVals, int *coef);
-void UnpackQuads(int cb, int nVals, int *coef);
-void UnpackPairsNoEsc(int cb, int nVals, int *coef);
-void UnpackPairsEsc(int cb, int nVals, int *coef);
-void DecodeSpectrumLong(int ch);
-void DecodeSpectrumShort(int ch);
-void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev);
-int IMDCT(int ch, int chOut, short *outbuf);
-void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx);
-void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbCodeBook);
-int DecodeOneScaleFactor();
-void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain, uint8_t *sfbCodeBook, short *scaleFactors);
+int32_t AACGetBitsPerSample();
+int32_t AACGetBitrate();
+int32_t AACGetOutputSamps();
+int32_t AACGetBitrate();
+void DecodeLPCCoefs(int32_t order, int32_t res, int8_t *filtCoef, int32_t *a, int32_t *b);
+int32_t FilterRegion(int32_t size, int32_t dir, int32_t order, int32_t *audioCoef, int32_t *a, int32_t *hist);
+int32_t TNSFilter(int32_t ch);
+int32_t DecodeSingleChannelElement();
+int32_t DecodeChannelPairElement();
+int32_t DecodeLFEChannelElement();
+int32_t DecodeDataStreamElement();
+int32_t DecodeProgramConfigElement(uint8_t idx);
+int32_t DecodeFillElement();
+int32_t DecodeNextElement(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail);
+void PreMultiply(int32_t tabidx, int32_t *zbuf1);
+void PostMultiply(int32_t tabidx, int32_t *fft1);
+void PreMultiplyRescale(int32_t tabidx, int32_t *zbuf1, int32_t es);
+void PostMultiplyRescale(int32_t tabidx, int32_t *fft1, int32_t es);
+void DCT4(int32_t tabidx, int32_t *coef, int32_t gb);
+void BitReverse(int32_t *inout, int32_t tabidx);
+void R4FirstPass(int32_t *x, int32_t bg);
+void R8FirstPass(int32_t *x, int32_t bg);
+void R4Core(int32_t *x, int32_t bg, int32_t gp, int32_t *wtab);
+void R4FFT(int32_t tabidx, int32_t *x);
+void UnpackZeros(int32_t nVals, int32_t *coef);
+void UnpackQuads(int32_t cb, int32_t nVals, int32_t *coef);
+void UnpackPairsNoEsc(int32_t cb, int32_t nVals, int32_t *coef);
+void UnpackPairsEsc(int32_t cb, int32_t nVals, int32_t *coef);
+void DecodeSpectrumLong(int32_t ch);
+void DecodeSpectrumShort(int32_t ch);
+void DecWindowOverlap(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapLongStart(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapLongStop(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapShort(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev);
+int32_t IMDCT(int32_t ch, int32_t chOut, int16_t *outbuf);
+void DecodeICSInfo(ICSInfo_t *icsInfo, int32_t sampRateIdx);
+void DecodeSectionData(int32_t winSequence, int32_t numWinGrp, int32_t maxSFB, uint8_t *sfbCodeBook);
+int32_t DecodeOneScaleFactor();
+void DecodeScaleFactors(int32_t numWinGrp, int32_t maxSFB, int32_t globalGain, uint8_t *sfbCodeBook, int16_t *scaleFactors);
 void DecodePulseInfo(uint8_t ch);
-void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef);
-void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi);
-void DecodeICS(int ch);
-int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch);
-int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val);
-int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail);
-int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail);
-int GetNumChannelsADIF(int nPCE);
-int GetSampleRateIdxADIF(int nPCE);
-int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail);
-int SetRawBlockParams(int copyLast, int nChans, int sampRate, int profile);
-int PrepareRawBlock();
-int DequantBlock(int *inbuf, int nSamps, int scale);
-int AACDequantize(int ch);
-int DeinterleaveShortBlocks(int ch);
+void DecodeTNSInfo(int32_t winSequence, TNSInfo_t *ti, int8_t *tnsCoef);
+void DecodeGainControlInfo(int32_t winSequence, GainControlInfo_t *gi);
+void DecodeICS(int32_t ch);
+int32_t DecodeNoiselessData(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail, int32_t ch);
+int32_t UnpackADTSHeader(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail);
+int32_t GetADTSChannelMapping(uint8_t *buf, int32_t bitOffset, int32_t bitsAvail);
+int32_t GetNumChannelsADIF(int32_t nPCE);
+int32_t GetSampleRateIdxADIF(int32_t nPCE);
+int32_t UnpackADIFHeader(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail);
+int32_t SetRawBlockParams(int32_t copyLast, int32_t nChans, int32_t sampRate, int32_t profile);
+int32_t PrepareRawBlock();
+int32_t DequantBlock(int32_t *inbuf, int32_t nSamps, int32_t scale);
+int32_t AACDequantize(int32_t ch);
+int32_t DeinterleaveShortBlocks(int32_t ch);
 uint32_t Get32BitVal(uint32_t *last);
-int InvRootR(int r);
-int ScaleNoiseVector(int *coef, int nVals, int sf);
-void GenerateNoiseVector(int *coef, int *last, int nVals);
-void CopyNoiseVector(int *coefL, int *coefR, int nVals);
-int PNS(int ch);
-int GetSampRateIdx(int sampRate);
-void StereoProcessGroup(int *coefL, int *coefR, const uint16_t *sfbTab, int msMaskPres, uint8_t *msMaskPtr,
-        int msMaskOffset, int maxSFB, uint8_t *cbRight, short *sfRight, int *gbCurrent);
-int StereoProcess();
-int RatioPowInv(int a, int b, int c);
-int SqrtFix(int q, int fBitsIn, int *fBitsOut);
-int InvRNormalized(int r);
-void BitReverse32(int *inout);
-void R8FirstPass32(int *r0);
-void R4Core32(int *r0);
-void FFT32C(int *x);
-void CVKernel1(int *XBuf, int *accBuf);
-void CVKernel2(int *XBuf, int *accBuf);
-void SetBitstreamPointer(int nBytes, uint8_t *buf);
+int32_t InvRootR(int32_t r);
+int32_t ScaleNoiseVector(int32_t *coef, int32_t nVals, int32_t sf);
+void GenerateNoiseVector(int32_t *coef, int32_t *last, int32_t nVals);
+void CopyNoiseVector(int32_t *coefL, int32_t *coefR, int32_t nVals);
+int32_t PNS(int32_t ch);
+int32_t GetSampRateIdx(int32_t sampRate);
+void StereoProcessGroup(int32_t *coefL, int32_t *coefR, const uint16_t *sfbTab, int32_t msMaskPres, uint8_t *msMaskPtr,
+        int32_t msMaskOffset, int32_t maxSFB, uint8_t *cbRight, int16_t *sfRight, int32_t *gbCurrent);
+int32_t StereoProcess();
+int32_t RatioPowInv(int32_t a, int32_t b, int32_t c);
+int32_t SqrtFix(int32_t q, int32_t fBitsIn, int32_t *fBitsOut);
+int32_t InvRNormalized(int32_t r);
+void BitReverse32(int32_t *inout);
+void R8FirstPass32(int32_t *r0);
+void R4Core32(int32_t *r0);
+void FFT32C(int32_t *x);
+void CVKernel1(int32_t *XBuf, int32_t *accBuf);
+void CVKernel2(int32_t *XBuf, int32_t *accBuf);
+void SetBitstreamPointer(int32_t nBytes, uint8_t *buf);
 inline void RefillBitstreamCache();
-uint32_t GetBits(int nBits);
-uint32_t GetBitsNoAdvance(int nBits);
-void AdvanceBitstream(int nBits);
-int CalcBitsUsed(uint8_t *startBuf, int startOffset);
+uint32_t GetBits(int32_t nBits);
+uint32_t GetBitsNoAdvance(int32_t nBits);
+void AdvanceBitstream(int32_t nBits);
+int32_t CalcBitsUsed(uint8_t *startBuf, int32_t startOffset);
 void ByteAlignBitstream();
 // SBR
 void InitSBRState();
-int DecodeSBRBitstream(int chBase);
-int DecodeSBRData(int chBase, short *outbuf);
-int FlushCodecSBR();
-void BubbleSort(uint8_t *v, int nItems);
-uint8_t VMin(uint8_t *v, int nItems);
-uint8_t VMax(uint8_t *v, int nItems);
-int CalcFreqMasterScaleZero(uint8_t *freqMaster, int alterScale, int k0, int k2);
-int CalcFreqMaster(uint8_t *freqMaster, int freqScale, int alterScale, int k0, int k2);
-int CalcFreqHigh(uint8_t *freqHigh, uint8_t *freqMaster, int nMaster, int crossOverBand);
-int CalcFreqLow(uint8_t *freqLow, uint8_t *freqHigh, int nHigh);
-int CalcFreqNoise(uint8_t *freqNoise, uint8_t *freqLow, int nLow, int kStart, int k2, int noiseBands);
-int BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t *freqMaster, int nMaster, int k0,
-        int kStart, int numQMFBands, int sampRateIdx);
-int FindFreq(uint8_t *freq, int nFreq, uint8_t val);
-void RemoveFreq(uint8_t *freq, int nFreq, int removeIdx);
-int CalcFreqLimiter(uint8_t *freqLimiter, uint8_t *patchNumSubbands, uint8_t *freqLow, int nLow, int kStart,
-        int limiterBands, int numPatches);
-int CalcFreqTables(SBRHeader *sbrHdr, SBRFreq *sbrFreq, int sampRateIdx);
-void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int env);
-int GetSMapped(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int env, int band, int la);
-void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int ch, int env, int lim, int fbitsDQ);
-void CalcNoiseDivFactors(int q, int *qp1Inv, int *qqp1Inv);
-void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch, int env, int lim, int fbitsDQ);
-void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ);
-void CalcGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch, int env);
-void MapHF(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int env, int hfReset);
-void AdjustHighFreq(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch);
-int CalcCovariance1(int *XBuf, int *p01reN, int *p01imN, int *p12reN, int *p12imN, int *p11reN, int *p22reN);
-int CalcCovariance2(int *XBuf, int *p02reN, int *p02imN);
-void CalcLPCoefs(int *XBuf, int *a0re, int *a0im, int *a1re, int *a1im, int gb);
-void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch);
-int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, signed int *val);
-int DecodeOneSymbol(int huffTabIndex);
-int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant);
-void DequantizeNoise(int nBands, int8_t *noiseQuant, int *noiseDequant);
-void DecodeSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch);
-void DecodeSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch);
+int32_t DecodeSBRBitstream(int32_t chBase);
+int32_t DecodeSBRData(int32_t chBase, int16_t *outbuf);
+int32_t FlushCodecSBR();
+void BubbleSort(uint8_t *v, int32_t nItems);
+uint8_t VMin(uint8_t *v, int32_t nItems);
+uint8_t VMax(uint8_t *v, int32_t nItems);
+int32_t CalcFreqMasterScaleZero(uint8_t *freqMaster, int32_t alterScale, int32_t k0, int32_t k2);
+int32_t CalcFreqMaster(uint8_t *freqMaster, int32_t freqScale, int32_t alterScale, int32_t k0, int32_t k2);
+int32_t CalcFreqHigh(uint8_t *freqHigh, uint8_t *freqMaster, int32_t nMaster, int32_t crossOverBand);
+int32_t CalcFreqLow(uint8_t *freqLow, uint8_t *freqHigh, int32_t nHigh);
+int32_t CalcFreqNoise(uint8_t *freqNoise, uint8_t *freqLow, int32_t nLow, int32_t kStart, int32_t k2, int32_t noiseBands);
+int32_t BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t *freqMaster, int32_t nMaster, int32_t k0,
+        int32_t kStart, int32_t numQMFBands, int32_t sampRateIdx);
+int32_t FindFreq(uint8_t *freq, int32_t nFreq, uint8_t val);
+void RemoveFreq(uint8_t *freq, int32_t nFreq, int32_t removeIdx);
+int32_t CalcFreqLimiter(uint8_t *freqLimiter, uint8_t *patchNumSubbands, uint8_t *freqLow, int32_t nLow, int32_t kStart,
+        int32_t limiterBands, int32_t numPatches);
+int32_t CalcFreqTables(SBRHeader *sbrHdr, SBRFreq *sbrFreq, int32_t sampRateIdx);
+void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int32_t env);
+int32_t GetSMapped(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t env, int32_t band, int32_t la);
+void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int32_t ch, int32_t env, int32_t lim, int32_t fbitsDQ);
+void CalcNoiseDivFactors(int32_t q, int32_t *qp1Inv, int32_t *qqp1Inv);
+void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch, int32_t env, int32_t lim, int32_t fbitsDQ);
+void ApplyBoost(SBRFreq *sbrFreq, int32_t lim, int32_t fbitsDQ);
+void CalcGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch, int32_t env);
+void MapHF(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t env, int32_t hfReset);
+void AdjustHighFreq(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch);
+int32_t CalcCovariance1(int32_t *XBuf, int32_t *p01reN, int32_t *p01imN, int32_t *p12reN, int32_t *p12imN, int32_t *p11reN, int32_t *p22reN);
+int32_t CalcCovariance2(int32_t *XBuf, int32_t *p02reN, int32_t *p02imN);
+void CalcLPCoefs(int32_t *XBuf, int32_t *a0re, int32_t *a0im, int32_t *a1re, int32_t *a1im, int32_t gb);
+void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch);
+int32_t DecodeHuffmanScalar(const int16_t *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val);
+int32_t DecodeOneSymbol(int32_t huffTabIndex);
+int32_t DequantizeEnvelope(int32_t nBands, int32_t ampRes, int8_t *envQuant, int32_t *envDequant);
+void DequantizeNoise(int32_t nBands, int8_t *noiseQuant, int32_t *noiseDequant);
+void DecodeSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch);
+void DecodeSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch);
 void UncoupleSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR);
 void UncoupleSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR);
-void DecWindowOverlapNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapLongStartNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapLongStopNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev);
-void DecWindowOverlapShortNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev);
-void PreMultiply64(int *zbuf1);
-void PostMultiply64(int *fft1, int nSampsOut);
-void QMFAnalysisConv(int *cTab, int *delay, int dIdx, int *uBuf);
-int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx, int qmfaBands);
-void QMFSynthesisConv(int *cPtr, int *delay, int dIdx, short *outbuf, int nChans);
-void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands, short *outbuf, int nChans);
-int UnpackSBRHeader(SBRHeader *sbrHdr);
+void DecWindowOverlapNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapLongStartNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapLongStopNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev);
+void DecWindowOverlapShortNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev);
+void PreMultiply64(int32_t *zbuf1);
+void PostMultiply64(int32_t *fft1, int32_t nSampsOut);
+void QMFAnalysisConv(int32_t *cTab, int32_t *delay, int32_t dIdx, int32_t *uBuf);
+int32_t QMFAnalysis(int32_t *inbuf, int32_t *delay, int32_t *XBuf, int32_t fBitsIn, int32_t *delayIdx, int32_t qmfaBands);
+void QMFSynthesisConv(int32_t *cPtr, int32_t *delay, int32_t dIdx, int16_t *outbuf, int32_t nChans);
+void QMFSynthesis(int32_t *inbuf, int32_t *delay, int32_t *delayIdx, int32_t qmfsBands, int16_t *outbuf, int32_t nChans);
+int32_t UnpackSBRHeader(SBRHeader *sbrHdr);
 void UnpackSBRGrid(SBRHeader *sbrHdr, SBRGrid *sbrGrid);
-void UnpackDeltaTimeFreq(int numEnv, uint8_t *deltaFlagEnv, int numNoiseFloors, uint8_t *deltaFlagNoise);
-void UnpackInverseFilterMode(int numNoiseFloorBands, uint8_t *mode);
-void UnpackSinusoids(int nHigh, int addHarmonicFlag, uint8_t *addHarmonic);
+void UnpackDeltaTimeFreq(int32_t numEnv, uint8_t *deltaFlagEnv, int32_t numNoiseFloors, uint8_t *deltaFlagNoise);
+void UnpackInverseFilterMode(int32_t numNoiseFloorBands, uint8_t *mode);
+void UnpackSinusoids(int32_t nHigh, int32_t addHarmonicFlag, uint8_t *addHarmonic);
 void CopyCouplingGrid(SBRGrid *sbrGridLeft, SBRGrid *sbrGridRight);
-void CopyCouplingInverseFilterMode(int numNoiseFloorBands, uint8_t *modeLeft, uint8_t *modeRight);
-void UnpackSBRSingleChannel(int chBase);
-void UnpackSBRChannelPair(int chBase);
+void CopyCouplingInverseFilterMode(int32_t numNoiseFloorBands, uint8_t *modeLeft, uint8_t *modeRight);
+void UnpackSBRSingleChannel(int32_t chBase);
+void UnpackSBRChannelPair(int32_t chBase);

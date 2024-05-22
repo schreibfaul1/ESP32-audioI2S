@@ -3,7 +3,7 @@
  * libhelix_HAACDECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 09.01.2023
+ *  Updated on: 22.05.2024
  ************************************************************************************/
 
 #include "aac_decoder.h"
@@ -87,15 +87,15 @@ aac_BitStreamInfo_t  m_aac_BitStreamInfo;
 PSInfoSBR_t         *m_PSInfoSBR;
 
 //----------------------------------------------------------------------------------------------------------------------
-inline int MULSHIFT32(int x, int y){
-    int z; z = (int64_t)x * (int64_t)y >> 32;
+inline int32_t MULSHIFT32(int32_t x, int32_t y){
+    int32_t z; z = (int64_t)x * (int64_t)y >> 32;
     return z;
 }
-inline int CLZ(int x){
+inline int32_t CLZ(int32_t x){
 #ifdef __XTENSA__
     return __builtin_clz(x);
 #else
-    int numZeros;
+    int32_t numZeros;
     if(!x) return 32; /* count leading zeros with binary search (function should be 17 ARM instructions total) */
     numZeros = 1;
     if (!((uint32_t)x >> 16))    { numZeros += 16; x <<= 16; }
@@ -106,46 +106,46 @@ inline int CLZ(int x){
     return numZeros;
 #endif
 }
-inline int FASTABS(int x){
+inline int32_t FASTABS(int32_t x){
 #ifdef __XTENSA__ //fb
     return __builtin_abs(x);
 #else
-    int sign;
-    sign = x >> (sizeof(int) * 8 - 1);
+    int32_t sign;
+    sign = x >> (sizeof(int32_t) * 8 - 1);
     x ^= sign; x -= sign; return x;
 #endif
 }
-inline int64_t MADD64(int64_t sum64, int x, int y){
+inline int64_t MADD64(int64_t sum64, int32_t x, int32_t y){
     sum64 += (int64_t)x * (int64_t)y;
     return sum64;
 }
-inline short CLIPTOSHORT(int x){
+inline int16_t CLIPTOSHORT(int32_t x){
 #ifdef __XTENSA__ //fb
     asm ("clamps %0, %1, 15" : "=a" (x) : "a" (x) : );
     return x;
 #else
-    int sign; /* clip to [-32768, 32767] */
+    int32_t sign; /* clip to [-32768, 32767] */
     sign = x >> 31;
     if (sign != (x >> 15)) x = sign ^ ((1 << 15) - 1);
-    return (short)x;
+    return (int16_t)x;
 #endif
 }
-inline int CLIP_2N(int y, int n){
+inline int32_t CLIP_2N(int32_t y, int32_t n){
 #ifdef __XTENSA__ //fb
-    int x = 1 << n; \
+    int32_t x = 1 << n; \
     if (y < -x) y = -x; \
     x--; \
     if (y > x) y = x; \
     return y;
 #else
-    int sign = y >> 31;
+    int32_t sign = y >> 31;
     if(sign != (y >> n))
         y = sign ^ ((1 << n) - 1);
     return y;
 #endif
 }
-inline int CLIP_2N_SHIFT30(int y, int n){
-    int sign = y >> 31;
+inline int32_t CLIP_2N_SHIFT30(int32_t y, int32_t n){
+    int32_t sign = y >> 31;
     if(sign != (y >> (30 - n)))
             y = sign ^ (0x3fffffff);
     else
@@ -303,7 +303,7 @@ const uint32_t cos4sin4tab[128 + 1024] PROGMEM = {
 0xa57ddbe4, 0xd2fd2129, 0xa57db204, 0xd2926b41, 0xa57d961a, 0xd2d97350, 0xa57d8825, 0xd2b5e151,
 };
 
-const int cos1sin1tab[514] PROGMEM = {
+const int32_t cos1sin1tab[514] PROGMEM = {
 /* format = Q30 */
 0x40000000, 0x00000000, 0x40323034, 0x003243f1, 0x406438cf, 0x006487c4, 0x409619b2, 0x0096cb58,
 0x40c7d2bd, 0x00c90e90, 0x40f963d3, 0x00fb514b, 0x412accd4, 0x012d936c, 0x415c0da3, 0x015fd4d2,
@@ -374,7 +374,7 @@ const int cos1sin1tab[514] PROGMEM = {
 
 const uint8_t sinWindowOffset[NUM_IMDCT_SIZES] PROGMEM = {0, 128};
 
-const int sinWindow[128 + 1024] PROGMEM = {
+const int32_t sinWindow[128 + 1024] PROGMEM = {
 /* 128 - format = Q31 * 2^0 */
 0x00c90f88, 0x7fff6216, 0x025b26d7, 0x7ffa72d1, 0x03ed26e6, 0x7ff09478, 0x057f0035, 0x7fe1c76b,
 0x0710a345, 0x7fce0c3e, 0x08a2009a, 0x7fb563b3, 0x0a3308bd, 0x7f97cebd, 0x0bc3ac35, 0x7f754e80,
@@ -523,9 +523,9 @@ const int sinWindow[128 + 1024] PROGMEM = {
 0x5a05bdae, 0x5afe8a8b, 0x5a29727b, 0x5adb297d, 0x5a4d1960, 0x5ab7ba6c, 0x5a70b258, 0x5a943d5e,
 };
 
-const int kbdWindowOffset[NUM_IMDCT_SIZES] PROGMEM = {0, 128};
+const int32_t kbdWindowOffset[NUM_IMDCT_SIZES] PROGMEM = {0, 128};
 
-const int kbdWindow[128 + 1024] PROGMEM = {
+const int32_t kbdWindow[128 + 1024] PROGMEM = {
 /* 128 - format = Q31 * 2^0 */
 0x00016f63, 0x7ffffffe, 0x0003e382, 0x7ffffff1, 0x00078f64, 0x7fffffc7, 0x000cc323, 0x7fffff5d,
 0x0013d9ed, 0x7ffffe76, 0x001d3a9d, 0x7ffffcaa, 0x0029581f, 0x7ffff953, 0x0038b1bd, 0x7ffff372,
@@ -889,7 +889,7 @@ const uint32_t twidTabEven[4*6 + 16*6 + 64*6] PROGMEM = {
 };
 
 /* log2Tab[x] = floor(log2(x)), format = Q28 */
-const int log2Tab[65] PROGMEM = {
+const int32_t log2Tab[65] PROGMEM = {
     0x00000000, 0x00000000, 0x10000000, 0x195c01a3, 0x20000000, 0x25269e12, 0x295c01a3, 0x2ceaecfe,
     0x30000000, 0x32b80347, 0x35269e12, 0x3759d4f8, 0x395c01a3, 0x3b350047, 0x3ceaecfe, 0x3e829fb6,
     0x40000000, 0x41663f6f, 0x42b80347, 0x43f782d7, 0x45269e12, 0x4646eea2, 0x4759d4f8, 0x48608280,
@@ -916,7 +916,7 @@ const HuffInfo_t huffTabSpecInfo[11] PROGMEM = {
     {12, {  0,  0,  0,  2,  6,  7, 16, 59, 55, 95, 43,  6,  0,  0,  0,  0,  0,  0,  0,  0}, 952},
 };
 
-const short huffTabSpec[1241] PROGMEM = {
+const int16_t huffTabSpec[1241] PROGMEM = {
     /* spectrum table 1 [81] (signed) */
     0x0000, 0x0200, 0x0e00, 0x0007, 0x0040, 0x0001, 0x0038, 0x0008, 0x01c0, 0x03c0, 0x0e40, 0x0039, 0x0078, 0x01c8, 0x000f, 0x0240,
     0x003f, 0x0fc0, 0x01f8, 0x0238, 0x0047, 0x0e08, 0x0009, 0x0208, 0x01c1, 0x0048, 0x0041, 0x0e38, 0x0201, 0x0e07, 0x0207, 0x0e01,
@@ -1091,7 +1091,7 @@ const HuffInfo_t huffTabScaleFactInfo PROGMEM =
     {19, { 1,  0,  1,  3,  2,  4,  3,  5,  4,  6,  6,  6,  5,  8,  4,  7,  3,  7, 46,  0},   0};
 
 /* note - includes offset of -60 (4.6.2.3 in spec) */
-const short huffTabScaleFact[121] PROGMEM = { /* scale factor table [121] */
+const int16_t huffTabScaleFact[121] PROGMEM = { /* scale factor table [121] */
        0,   -1,    1,   -2,    2,   -3,    3,   -4,    4,   -5,    5,    6,   -6,    7,   -7,    8,
       -8,    9,   -9,   10,  -10,  -11,   11,   12,  -12,   13,  -13,   14,  -14,   16,   15,   17,
       18,  -15,  -17,  -16,   19,  -18,  -19,   20,  -20,   21,  -21,   22,  -22,   23,  -23,  -25,
@@ -1235,7 +1235,7 @@ const uint32_t noiseTab[512*2] PROGMEM = {
 };
 
 /* sample rates (table 4.5.1) */
-const int sampRateTab[12] PROGMEM = {
+const int32_t sampRateTab[12] PROGMEM = {
     96000, 88200, 64000, 48000, 44100, 32000,
     24000, 22050, 16000, 12000, 11025,  8000
 };
@@ -1391,7 +1391,7 @@ const HuffInfo_t huffTabSBRInfo[10] PROGMEM = {
 };
 
 /* Huffman tables from appendix 4.A.6.1, includes offset of -LAV[i] for table i */
-const short huffTabSBR[604] PROGMEM = {
+const int16_t huffTabSBR[604] PROGMEM = {
         /* SBR table sbr_tenv15 [121] (signed) */
        0,   -1,    1,   -2,    2,   -3,    3,   -4,    4,   -5,    5,   -6,    6,   -7,    7,   -8,
       -9,    8,  -10,    9,  -11,   10,  -12,  -13,   11,  -14,   12,  -15,  -16,   13,  -19,  -18,
@@ -1449,7 +1449,7 @@ const short huffTabSBR[604] PROGMEM = {
 /* newBWTab[prev invfMode][curr invfMode], format = Q31 (table 4.158)
  * sample file which uses all of these: al_sbr_sr_64_2_fsaac32.aac
  */
-static const int newBWTab[4][4] PROGMEM = {
+static const int32_t newBWTab[4][4] PROGMEM = {
     {0x00000000, 0x4ccccccd, 0x73333333, 0x7d70a3d7},
     {0x4ccccccd, 0x60000000, 0x73333333, 0x7d70a3d7},
     {0x00000000, 0x60000000, 0x73333333, 0x7d70a3d7},
@@ -1483,7 +1483,7 @@ static const uint32_t twidTabOdd32[8*6] = {
  *   x = sin(angle);
  * }
  */
-static const int cos1sin1tab64[34] PROGMEM = {
+static const int32_t cos1sin1tab64[34] PROGMEM = {
     0x40000000, 0x00000000, 0x43103085, 0x0323ecbe, 0x45f704f7, 0x0645e9af, 0x48b2b335, 0x09640837,
     0x4b418bbe, 0x0c7c5c1e, 0x4da1fab5, 0x0f8cfcbe, 0x4fd288dc, 0x1294062f, 0x51d1dc80, 0x158f9a76,
     0x539eba45, 0x187de2a7, 0x553805f2, 0x1b5d100a, 0x569cc31b, 0x1e2b5d38, 0x57cc15bc, 0x20e70f32,
@@ -1535,7 +1535,7 @@ const uint32_t cTabA[165] PROGMEM = {
  *   x =  sin(angle);
  * }
  */
-static const int cos4sin4tab64[64] PROGMEM = {
+static const int32_t cos4sin4tab64[64] PROGMEM = {
     0x40c7d2bd, 0x00c90e90, 0x424ff28f, 0x3ff4e5e0, 0x43cdd89a, 0x03ecadcf, 0x454149fc, 0x3fc395f9,
     0x46aa0d6d, 0x070de172, 0x4807eb4b, 0x3f6af2e3, 0x495aada2, 0x0a2abb59, 0x4aa22036, 0x3eeb3347,
     0x4bde1089, 0x0d415013, 0x4d0e4de2, 0x3e44a5ef, 0x4e32a956, 0x104fb80e, 0x4f4af5d1, 0x3d77b192,
@@ -1547,7 +1547,7 @@ static const int cos4sin4tab64[64] PROGMEM = {
 };
 
 /* invBandTab[i] = 1.0 / (i + 1), Q31 */
-static const int invBandTab[64] PROGMEM = {
+static const int32_t invBandTab[64] PROGMEM = {
     0x7fffffff, 0x40000000, 0x2aaaaaab, 0x20000000, 0x1999999a, 0x15555555, 0x12492492, 0x10000000,
     0x0e38e38e, 0x0ccccccd, 0x0ba2e8ba, 0x0aaaaaab, 0x09d89d8a, 0x09249249, 0x08888889, 0x08000000,
     0x07878788, 0x071c71c7, 0x06bca1af, 0x06666666, 0x06186186, 0x05d1745d, 0x0590b216, 0x05555555,
@@ -1565,13 +1565,13 @@ static const uint32_t poly43hi[5] PROGMEM = { 0x10852163, 0xd333f6a4, 0x46e9408b
 static const uint16_t pow2exp[8] PROGMEM = { 14, 13, 11, 10, 9, 7, 6, 5 };
 
 /* pow2exp[i] = pow(2, i*4/3) fraction */
-static const int pow2frac[8] PROGMEM = {
+static const int32_t pow2frac[8] PROGMEM = {
     0x6597fa94, 0x50a28be6, 0x7fffffff, 0x6597fa94,
     0x50a28be6, 0x7fffffff, 0x6597fa94, 0x50a28be6
 };
 
 /* pow(2, i/4.0) for i = [0,1,2,3], format = Q30 */
-static const int pow14[4] PROGMEM = {
+static const int32_t pow14[4] PROGMEM = {
     0x40000000, 0x4c1bf829, 0x5a82799a, 0x6ba27e65
 };
 
@@ -1606,7 +1606,7 @@ static const uint32_t pow43_14[4][16] PROGMEM = {
 };
 
 /* pow(j, 4.0 / 3.0) for j = [16,17,18,...,63], format = Q23 */
-static const int pow43[48] PROGMEM = {
+static const int32_t pow43[48] PROGMEM = {
     0x1428a2fa, 0x15db1bd6, 0x1796302c, 0x19598d85,
     0x1b24e8bb, 0x1cf7fcfa, 0x1ed28af2, 0x20b4582a,
     0x229d2e6e, 0x248cdb55, 0x26832fda, 0x28800000,
@@ -1622,7 +1622,7 @@ static const int pow43[48] PROGMEM = {
 };
 
 /* invTab[x] = 1/(x+1), format = Q30 */
-static const int invTab[5] PROGMEM = {0x40000000, 0x20000000, 0x15555555, 0x10000000, 0x0ccccccd};
+static const int32_t invTab[5] PROGMEM = {0x40000000, 0x20000000, 0x15555555, 0x10000000, 0x0ccccccd};
 
 /* inverse quantization tables for TNS filter coefficients, format = Q31
  * see bottom of file for table generation
@@ -1708,7 +1708,7 @@ bool AACDecoder_AllocateBuffers(void){
     m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
     m_AACDecInfo->currBlockID = AAC_ID_INVALID;
     m_AACDecInfo->currInstTag = -1;
-    for(int ch = 0; ch < MAX_NCHANS_ELEM; ch++)
+    for(int32_t ch = 0; ch < MAX_NCHANS_ELEM; ch++)
         m_AACDecInfo->sbDeinterleaveReqd[ch] = 0;
     m_AACDecInfo->adtsBlocksLeft = 0;
     m_AACDecInfo->tnsUsed = 0;
@@ -1728,9 +1728,9 @@ bool AACDecoder_AllocateBuffers(void){
  *
  * Return:      0 if successful, error code (< 0) if error
  **************************************************************************************/
-int AACFlushCodec()
+int32_t AACFlushCodec()
 {
-    int ch;
+    int32_t ch;
 
     if (!m_AACDecInfo)
         return ERR_AAC_NULL_POINTER;
@@ -1749,8 +1749,8 @@ int AACFlushCodec()
     m_AACDecInfo->pnsUsed = 0;
 
     /* reset internal codec state (flush overlap buffers, etc.) */
-    memset(m_PSInfoBase->overlap, 0,  AAC_MAX_NCHANS * AAC_MAX_NSAMPS * sizeof(int));
-    memset(m_PSInfoBase->prevWinShape, 0, AAC_MAX_NCHANS * sizeof(int));
+    memset(m_PSInfoBase->overlap, 0,  AAC_MAX_NCHANS * AAC_MAX_NSAMPS * sizeof(int32_t));
+    memset(m_PSInfoBase->prevWinShape, 0, AAC_MAX_NCHANS * sizeof(int32_t));
 
     return ERR_AAC_NONE;
 }
@@ -1826,9 +1826,9 @@ bool AACDecoder_IsInit(void) {
  * Return:      offset to first sync word (bytes from start of buf)
  *              -1 if sync not found after searching nBytes
  **********************************************************************************************************************/
-int AACFindSyncWord(uint8_t *buf, int nBytes)
+int32_t AACFindSyncWord(uint8_t *buf, int32_t nBytes)
 {
-    int i;
+    int32_t i;
 
     /* find byte-aligned syncword (12 bits = 0xFFF) */
     for (i = 0; i < nBytes - 1; i++) {
@@ -1839,14 +1839,14 @@ int AACFindSyncWord(uint8_t *buf, int nBytes)
     return -1;
 }
 //**************************************************************************************
-int AACGetSampRate(){return m_AACDecInfo->sampRate * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
-int AACGetChannels(){return m_AACDecInfo->nChans;}
-int AACGetBitsPerSample(){return 16;}
-int AACGetID() {return m_AACDecInfo->id;} // 0-MPEG4, 1-MPEG2
+int32_t AACGetSampRate(){return m_AACDecInfo->sampRate * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
+int32_t AACGetChannels(){return m_AACDecInfo->nChans;}
+int32_t AACGetBitsPerSample(){return 16;}
+int32_t AACGetID() {return m_AACDecInfo->id;} // 0-MPEG4, 1-MPEG2
 uint8_t AACGetProfile() {return (uint8_t)m_AACDecInfo->profile;} // 0-Main, 1-LC, 2-SSR, 3-reserved
 uint8_t AACGetFormat() {return (uint8_t)m_AACDecInfo->format;}   // 0-unknown 1-ADTS 2-ADIF, 3-RAW
-int AACGetOutputSamps(){return m_AACDecInfo->nChans * AAC_MAX_NSAMPS  * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
-int AACGetBitrate() {
+int32_t AACGetOutputSamps(){return m_AACDecInfo->nChans * AAC_MAX_NSAMPS  * (m_AACDecInfo->sbrEnabled ? 2 : 1);}
+int32_t AACGetBitrate() {
     uint32_t br = AACGetBitsPerSample() * AACGetChannels() *  AACGetSampRate();
     return (br / m_AACDecInfo->compressionRatio);
 }
@@ -1870,7 +1870,7 @@ int AACGetBitrate() {
  *                aacFrameInfo to configure its internal state (useful when the
  *                source is MP4 format, for example)
  **************************************************************************************/
-int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile)
+int32_t AACSetRawBlockParams(int32_t copyLast, int32_t nChans, int32_t sampRateCore, int32_t profile)
 {
     if (!m_AACDecInfo)
         return ERR_AAC_NULL_POINTER;
@@ -1902,14 +1902,14 @@ int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile
  *                successfully decoded, so if ERR_AAC_INDATA_UNDERFLOW is returned
  *                just call AACDecode again with more data in inbuf
  **********************************************************************************************************************/
-int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
+int32_t AACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf)
 {
-    int err, offset, bitOffset, bitsAvail;
-    int ch, baseChan, elementChans;
+    int32_t err, offset, bitOffset, bitsAvail;
+    int32_t ch, baseChan, elementChans;
     uint8_t *inptr;
 
 #ifdef AAC_ENABLE_SBR
-    int baseChanSBR, elementChansSBR;
+    int32_t baseChanSBR, elementChansSBR;
 #endif
 
     /* make local copies (see "Notes" above) */
@@ -2094,9 +2094,9 @@ int AACDecode(uint8_t *inbuf, int *bytesLeft, short *outbuf)
  *              to ensure no intermediate overflow in all-pole filter, set
  *                FBITS_LPC_COEFS such that number of guard bits >= log2(max order)
  **********************************************************************************************************************/
-void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b)
+void DecodeLPCCoefs(int32_t order, int32_t res, int8_t *filtCoef, int32_t *a, int32_t *b)
 {
-    int i, m, t;
+    int32_t i, m, t;
     const uint32_t *invQuantTab;
 
     if (res == 3)            invQuantTab = invQuant3;
@@ -2130,12 +2130,12 @@ void DecodeLPCCoefs(int order, int res, int8_t *filtCoef, int *a, int *b)
  * Return:      guard bit mask (OR of abs value of all filtered transform coefs)
  *
  * Notes:       assumes no guard bits in input transform coefficients
- *              gains 0 int bits
+ *              gains 0 int32_t bits
  *              history buffer does not need to be preserved between regions
  **********************************************************************************************************************/
-int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist)
+int32_t FilterRegion(int32_t size, int32_t dir, int32_t order, int32_t *audioCoef, int32_t *a, int32_t *hist)
 {
-    int i, j, y, hi32, inc, gbMask;
+    int32_t i, j, y, hi32, inc, gbMask;
     U64 sum64;
 
     /* init history to 0 every time */
@@ -2185,11 +2185,11 @@ int FilterRegion(int size, int dir, int order, int *audioCoef, int *a, int *hist
  *
  * Return:      0 if successful, -1 if error
  **********************************************************************************************************************/
-int TNSFilter(int ch)
+int32_t TNSFilter(int32_t ch)
 {
-    int win, winLen, nWindows, nSFB, filt, bottom, top, order, maxOrder, dir;
-    int start, end, size, tnsMaxBand, numFilt, gbMask;
-    int *audioCoef;
+    int32_t win, winLen, nWindows, nSFB, filt, bottom, top, order, maxOrder, dir;
+    int32_t start, end, size, tnsMaxBand, numFilt, gbMask;
+    int32_t *audioCoef;
     uint8_t *filtLength, *filtOrder, *filtRes, *filtDir;
     int8_t *filtCoef;
     const uint16_t *tnsMaxBandTab;
@@ -2238,7 +2238,7 @@ int TNSFilter(int ch)
         for (filt = 0; filt < numFilt; filt++) {
             top = bottom;
             bottom = top - *filtLength++;
-            bottom = MAX(bottom, 0);
+            bottom = MAX(bottom, (int32_t)0);
             order = *filtOrder++;
             order = MIN(order, maxOrder);
 
@@ -2282,7 +2282,7 @@ int TNSFilter(int ch)
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
  **********************************************************************************************************************/
-int DecodeSingleChannelElement()
+int32_t DecodeSingleChannelElement()
 {
     /* read instance tag */
     m_AACDecInfo->currInstTag = GetBits(NUM_INST_TAG_BITS);
@@ -2306,9 +2306,9 @@ int DecodeSingleChannelElement()
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
  **********************************************************************************************************************/
-int DecodeChannelPairElement()
+int32_t DecodeChannelPairElement()
 {
-    int sfb, gp, maskOffset;
+    int32_t sfb, gp, maskOffset;
     uint8_t currBit, *maskPtr;
     ICSInfo_t *icsInfo;
 
@@ -2364,7 +2364,7 @@ int DecodeChannelPairElement()
  *
  * Notes:       doesn't decode individual channel stream (part of DecodeNoiselessData)
  **********************************************************************************************************************/
-int DecodeLFEChannelElement()
+int32_t DecodeLFEChannelElement()
 {
     /* read instance tag */
     m_AACDecInfo->currInstTag = GetBits( NUM_INST_TAG_BITS);
@@ -2384,7 +2384,7 @@ int DecodeLFEChannelElement()
  *
  * Return:      0 if successful, -1 if error
  **********************************************************************************************************************/
-int DecodeDataStreamElement()
+int32_t DecodeDataStreamElement()
 {
     uint32_t byteAlign, dataCount;
     uint8_t *dataBuf;
@@ -2421,9 +2421,9 @@ int DecodeDataStreamElement()
  * Notes:       #define KEEP_PCE_COMMENTS to save the comment field of the PCE
  *                (otherwise we just skip it in the bitstream, to save memory)
  **********************************************************************************************************************/
-int DecodeProgramConfigElement(uint8_t idx)
+int32_t DecodeProgramConfigElement(uint8_t idx)
 {
-    int i;
+    int32_t i;
 
     m_pce[idx]->elemInstTag =   GetBits(4);
     m_pce[idx]->profile =       GetBits(2);
@@ -2497,7 +2497,7 @@ int DecodeProgramConfigElement(uint8_t idx)
  *
  * Return:      0 if successful, -1 if error
  **********************************************************************************************************************/
-int DecodeFillElement()
+int32_t DecodeFillElement()
 {
     uint32_t fillCount;
     uint8_t *fillBuf;
@@ -2521,7 +2521,7 @@ int DecodeFillElement()
      *    must upsample by 2 for LFE
      */
     if (m_PSInfoBase->fillCount > 0) {
-        m_AACDecInfo->fillExtType = (int)((m_PSInfoBase->fillBuf[0] >> 4) & 0x0f);
+        m_AACDecInfo->fillExtType = (int32_t)((m_PSInfoBase->fillBuf[0] >> 4) & 0x0f);
         if (m_AACDecInfo->fillExtType == EXT_SBR_DATA || m_AACDecInfo->fillExtType == EXT_SBR_DATA_CRC)
             m_AACDecInfo->sbrEnabled = 1;
     }
@@ -2552,9 +2552,9 @@ int DecodeFillElement()
  *
  * Return:      0 if successful, error code (< 0) if error
  **********************************************************************************************************************/
-int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
+int32_t DecodeNextElement(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail)
 {
-    int err, bitsUsed;
+    int32_t err, bitsUsed;
 
     /* init bitstream reader */
     SetBitstreamPointer((*bitsAvail + 7) >> 3, *buf);
@@ -2619,15 +2619,15 @@ int DecodeNextElement(uint8_t **buf, int *bitOffset, int *bitsAvail)
  * Return:      none
  *
  * Notes:       minimum 1 GB in, 2 GB out, gains 5 (short) or 8 (long) frac bits
- *              i.e. gains 2-7= -5 int bits (short) or 2-10 = -8 int bits (long)
+ *              i.e. gains 2-7= -5 int32_t bits (short) or 2-10 = -8 int32_t bits (long)
  *              normalization by -1/N is rolled into tables here (see trigtabs.c)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **********************************************************************************************************************/
-void PreMultiply(int tabidx, int *zbuf1)
+void PreMultiply(int32_t tabidx, int32_t *zbuf1)
 {
-    int i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
-    int t, cms2, cps2a, sin2a, cps2b, sin2b;
-    int *zbuf2;
+    int32_t i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
+    int32_t t, cms2, cps2a, sin2a, cps2b, sin2b;
+    int32_t *zbuf2;
     const uint32_t *csptr;
 
     nmdct = nmdctTab[tabidx];
@@ -2647,7 +2647,7 @@ void PreMultiply(int tabidx, int *zbuf1)
         ai1 = *(zbuf2 + 0);
         ar2 = *(zbuf2 - 1);
 
-        /* gain 2 ints bit from MULSHIFT32 by Q30, but drop 7 or 10 int bits from table scaling of 1/M
+        /* gain 2 ints bit from MULSHIFT32 by Q30, but drop 7 or 10 int32_t bits from table scaling of 1/M
          * max per-sample gain (ignoring implicit scaling) = MAX(sin(angle)+cos(angle)) = 1.414
          * i.e. gain 1 GB since worst case is sin(angle) = cos(angle) = 0.707 (Q30), gain 2 from
          *   extra sign bits, and eat one in adding
@@ -2680,15 +2680,15 @@ void PreMultiply(int tabidx, int *zbuf1)
  *
  * Return:      none
  *
- * Notes:       minimum 1 GB in, 2 GB out - gains 2 int bits
+ * Notes:       minimum 1 GB in, 2 GB out - gains 2 int32_t bits
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **********************************************************************************************************************/
-void PostMultiply(int tabidx, int *fft1)
+void PostMultiply(int32_t tabidx, int32_t *fft1)
 {
-    int i, nmdct, ar1, ai1, ar2, ai2, skipFactor;
-    int t, cms2, cps2, sin2;
-    int *fft2;
-    const int *csptr;
+    int32_t i, nmdct, ar1, ai1, ar2, ai2, skipFactor;
+    int32_t t, cms2, cps2, sin2;
+    int32_t *fft2;
+    const int32_t *csptr;
 
     nmdct = nmdctTab[tabidx];
     csptr = cos1sin1tab;
@@ -2744,11 +2744,11 @@ void PostMultiply(int tabidx, int *fft1)
  *
  * Notes:       see notes on PreMultiply(), above
  **********************************************************************************************************************/
-void PreMultiplyRescale(int tabidx, int *zbuf1, int es)
+void PreMultiplyRescale(int32_t tabidx, int32_t *zbuf1, int32_t es)
 {
-    int i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
-    int t, cms2, cps2a, sin2a, cps2b, sin2b;
-    int *zbuf2;
+    int32_t i, nmdct, ar1, ai1, ar2, ai2, z1, z2;
+    int32_t t, cms2, cps2a, sin2a, cps2b, sin2b;
+    int32_t *zbuf2;
     const uint32_t *csptr;
 
     nmdct = nmdctTab[tabidx];
@@ -2802,12 +2802,12 @@ void PreMultiplyRescale(int tabidx, int *zbuf1, int es)
  * Notes:       clips output to [-2^30, 2^30 - 1], guaranteeing at least 1 guard bit
  *              see notes on PostMultiply(), above
  **********************************************************************************************************************/
-void PostMultiplyRescale(int tabidx, int *fft1, int es)
+void PostMultiplyRescale(int32_t tabidx, int32_t *fft1, int32_t es)
 {
-    int i, nmdct, ar1, ai1, ar2, ai2, skipFactor, z;
-    int t, cs2, sin2;
-    int *fft2;
-    const int *csptr;
+    int32_t i, nmdct, ar1, ai1, ar2, ai2, skipFactor, z;
+    int32_t t, cs2, sin2;
+    int32_t *fft2;
+    const int32_t *csptr;
 
     nmdct = nmdctTab[tabidx];
     csptr = cos1sin1tab;
@@ -2828,11 +2828,11 @@ void PostMultiplyRescale(int tabidx, int *fft1, int es)
 
         t = MULSHIFT32(sin2, ar1 + ai1);
         z = t - MULSHIFT32(cs2, ai1);
-        {int sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
+        {int32_t sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
         *fft2-- = z;
         cs2 -= 2*sin2;
         z = t + MULSHIFT32(cs2, ar1);
-        {int sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
+        {int32_t sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
         *fft1++ = z;
 
         cs2 = *csptr++;
@@ -2843,11 +2843,11 @@ void PostMultiplyRescale(int tabidx, int *fft1, int es)
         ai2 = -ai2;
         t = MULSHIFT32(sin2, ar2 + ai2);
         z = t - MULSHIFT32(cs2, ai2);
-        {int sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
+        {int32_t sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
         *fft2-- = z;
         cs2 -= 2*sin2;
         z = t + MULSHIFT32(cs2, ar2);
-        {int sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
+        {int32_t sign = (z) >> 31; if (sign != (z) >> (30 - (es))) {(z) = sign ^ (0x3fffffff);} else {(z) = (z) << (es);}}
         *fft1++ = z;
         cs2 += 2*sin2;
     }
@@ -2872,13 +2872,13 @@ void PostMultiplyRescale(int tabidx, int *fft1, int es)
  *                the DCT4 (rare)
  *              the output has FBITS_LOST_DCT4 fewer fraction bits than the input
  *              the output will always have at least 1 guard bit (GBITS_IN_DCT4 >= 4)
- *              int bits gained per stage (PreMul + FFT + PostMul)
+ *              int32_t bits gained per stage (PreMul + FFT + PostMul)
  *                 short blocks = (-5 + 4 + 2) = 1 total
  *                 long blocks =  (-8 + 7 + 2) = 1 total
  **********************************************************************************************************************/
-void DCT4(int tabidx, int *coef, int gb)
+void DCT4(int32_t tabidx, int32_t *coef, int32_t gb)
 {
-    int es;
+    int32_t es;
 
     /* fast in-place DCT-IV - adds guard bits if necessary */
     if (gb < GBITS_IN_DCT4) {
@@ -2905,12 +2905,12 @@ void DCT4(int tabidx, int *coef, int gb)
  *
  * Return:      none
  **********************************************************************************************************************/
-void BitReverse(int *inout, int tabidx)
+void BitReverse(int32_t *inout, int32_t tabidx)
 {
-    int *part0, *part1;
-    int a,b, t;
+    int32_t *part0, *part1;
+    int32_t a,b, t;
     const uint8_t* tab = bitrevtab + bitrevtabOffset[tabidx];
-    int nbits = nfftlog2Tab[tabidx];
+    int32_t nbits = nfftlog2Tab[tabidx];
 
     part0 = inout;
     part1 = inout + (1 << nbits);
@@ -2954,9 +2954,9 @@ void BitReverse(int *inout, int tabidx)
  * Notes:       assumes 2 guard bits, gains no integer bits,
  *                guard bits out = guard bits in - 2
  **********************************************************************************************************************/
-void R4FirstPass(int *x, int bg)
+void R4FirstPass(int32_t *x, int32_t bg)
 {
-    int ar, ai, br, bi, cr, ci, dr, di;
+    int32_t ar, ai, br, bi, cr, ci, dr, di;
 
     for (; bg != 0; bg--) {
 
@@ -3000,11 +3000,11 @@ void R4FirstPass(int *x, int bg)
  *                or guard bits in - 2 (if inputs bounded to +/- sqrt(2)/2)
  *              see scaling comments in code
  **********************************************************************************************************************/
-void R8FirstPass(int *x, int bg)
+void R8FirstPass(int32_t *x, int32_t bg)
 {
-    int ar, ai, br, bi, cr, ci, dr, di;
-    int sr, si, tr, ti, ur, ui, vr, vi;
-    int wr, wi, xr, xi, yr, yi, zr, zi;
+    int32_t ar, ai, br, bi, cr, ci, dr, di;
+    int32_t sr, si, tr, ti, ur, ui, vr, vi;
+    int32_t wr, wi, xr, xi, yr, yi, zr, zi;
 
     for (; bg != 0; bg--) {
 
@@ -3071,7 +3071,7 @@ void R8FirstPass(int *x, int bg)
         /* max gain of output vs input = (2 + 2*sqrt(2) ~= 4.83)
          *  (sum of 4 samples >> 1, plus xr/xi/zr/zi with gain of 2*sqrt(2))
          * in absolute terms, we have max gain of appx 9.656 (4 + 0.707*8)
-         *  but we also gain 1 int bit (from MULSHIFT32 or from explicit >> 1)
+         *  but we also gain 1 int32_t bit (from MULSHIFT32 or from explicit >> 1)
          */
         x[ 6] = (tr >> 1) - xr;
         x[14] = (tr >> 1) + xr;
@@ -3105,12 +3105,12 @@ void R8FirstPass(int *x, int bg)
  *              gbOut = gbIn - 1 (short block) or gbIn - 2 (long block)
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **********************************************************************************************************************/
-void R4Core(int *x, int bg, int gp, int *wtab)
+void R4Core(int32_t *x, int32_t bg, int32_t gp, int32_t *wtab)
 {
-    int ar, ai, br, bi, cr, ci, dr, di, tr, ti;
-    int wd, ws, wi;
-    int i, j, step;
-    int *xptr, *wptr;
+    int32_t ar, ai, br, bi, cr, ci, dr, di, tr, ti;
+    int32_t wd, ws, wi;
+    int32_t i, j, step;
+    int32_t *xptr, *wptr;
 
     for (; bg != 0; gp <<= 2, bg >>= 2) {
 
@@ -3118,12 +3118,12 @@ void R4Core(int *x, int bg, int gp, int *wtab)
         xptr = x;
 
         /* max per-sample gain, per group < 1 + 3*sqrt(2) ~= 5.25 if inputs x are full-scale
-         * do 3 groups for long block, 2 groups for short block (gain 2 int bits per group)
+         * do 3 groups for long block, 2 groups for short block (gain 2 int32_t bits per group)
          *
          * very conservative scaling:
-         *   group 1: max gain = 5.25,           int bits gained = 2, gb used = 1 (2^3 = 8)
-         *   group 2: max gain = 5.25^2 = 27.6,  int bits gained = 4, gb used = 1 (2^5 = 32)
-         *   group 3: max gain = 5.25^3 = 144.7, int bits gained = 6, gb used = 2 (2^8 = 256)
+         *   group 1: max gain = 5.25,           int32_t bits gained = 2, gb used = 1 (2^3 = 8)
+         *   group 2: max gain = 5.25^2 = 27.6,  int32_t bits gained = 4, gb used = 1 (2^5 = 32)
+         *   group 3: max gain = 5.25^3 = 144.7, int32_t bits gained = 6, gb used = 2 (2^8 = 256)
          */
         for (i = bg; i != 0; i--) {
 
@@ -3135,7 +3135,7 @@ void R4Core(int *x, int bg, int gp, int *wtab)
                 ai = xptr[1];
                 xptr += step;
 
-                /* gain 2 int bits for br/bi, cr/ci, dr/di (MULSHIFT32 by Q30)
+                /* gain 2 int32_t bits for br/bi, cr/ci, dr/di (MULSHIFT32 by Q30)
                  * gain 1 net GB
                  */
                 ws = wptr[0];
@@ -3216,25 +3216,25 @@ void R4Core(int *x, int bg, int gp, int *wtab)
  *
  * Notes:       assumes 5 guard bits in for nfft <= 512
  *              gbOut = gbIn - 4 (assuming input is from PreMultiply)
- *              gains log2(nfft) - 2 int bits total
- *                so gain 7 int bits (LONG), 4 int bits (SHORT)
+ *              gains log2(nfft) - 2 int32_t bits total
+ *                so gain 7 int32_t bits (LONG), 4 int32_t bits (SHORT)
  **********************************************************************************************************************/
-void R4FFT(int tabidx, int *x)
+void R4FFT(int32_t tabidx, int32_t *x)
 {
-    int order = nfftlog2Tab[tabidx];
-    int nfft = nfftTab[tabidx];
+    int32_t order = nfftlog2Tab[tabidx];
+    int32_t nfft = nfftTab[tabidx];
 
     /* decimation in time */
     BitReverse(x, tabidx);
 
     if (order & 0x1) {
         /* long block: order = 9, nfft = 512 */
-        R8FirstPass(x, nfft >> 3);                        /* gain 1 int bit,  lose 2 GB */
-        R4Core(x, nfft >> 5, 8, (int *)twidTabOdd);        /* gain 6 int bits, lose 2 GB */
+        R8FirstPass(x, nfft >> 3);                        /* gain 1 int32_t bit,  lose 2 GB */
+        R4Core(x, nfft >> 5, 8, (int32_t *)twidTabOdd);        /* gain 6 int32_t bits, lose 2 GB */
     } else {
         /* short block: order = 6, nfft = 64 */
-        R4FirstPass(x, nfft >> 2);                        /* gain 0 int bits, lose 2 GB */
-        R4Core(x, nfft >> 4, 4, (int *)twidTabEven);    /* gain 4 int bits, lose 1 GB */
+        R4FirstPass(x, nfft >> 2);                        /* gain 0 int32_t bits, lose 2 GB */
+        R4Core(x, nfft >> 4, 4, (int32_t *)twidTabEven);    /* gain 4 int32_t bits, lose 1 GB */
     }
 }
 
@@ -3252,7 +3252,7 @@ void R4FFT(int tabidx, int *x)
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **********************************************************************************************************************/
-void UnpackZeros(int nVals, int *coef)
+void UnpackZeros(int32_t nVals, int32_t *coef)
 {
     while (nVals > 0) {
         *coef++ = 0;
@@ -3278,7 +3278,7 @@ void UnpackZeros(int nVals, int *coef)
  * Notes:       assumes nVals is always a multiple of 4 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **********************************************************************************************************************/
-void UnpackQuads(int cb, int nVals, int *coef)
+void UnpackQuads(int32_t cb, int32_t nVals, int32_t *coef)
 {
     int32_t w, x, y, z, maxBits, nCodeBits, nSignBits, val;
     uint32_t bitBuf;
@@ -3295,7 +3295,7 @@ void UnpackQuads(int cb, int nVals, int *coef)
         z = (((int32_t)(val) << 29) >>   29);    /* bits  2-0, sign-extend */
 
         bitBuf <<= nCodeBits;
-        nSignBits = (int)(((uint32_t)(val) << 17) >> 29);    /* bits 14-12, unsigned */
+        nSignBits = (int32_t)(((uint32_t)(val) << 17) >> 29);    /* bits 14-12, unsigned */
 
         AdvanceBitstream(nCodeBits + nSignBits);
         if (nSignBits) {
@@ -3325,7 +3325,7 @@ void UnpackQuads(int cb, int nVals, int *coef)
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **********************************************************************************************************************/
-void UnpackPairsNoEsc(int cb, int nVals, int *coef)
+void UnpackPairsNoEsc(int32_t cb, int32_t nVals, int32_t *coef)
 {
     int32_t y, z, maxBits, nCodeBits, nSignBits, val;
     uint32_t bitBuf;
@@ -3367,7 +3367,7 @@ void UnpackPairsNoEsc(int cb, int nVals, int *coef)
  * Notes:       assumes nVals is always a multiple of 2 because all scalefactor bands
  *                are a multiple of 4 coefficients long
  **********************************************************************************************************************/
-void UnpackPairsEsc(int cb, int nVals, int *coef)
+void UnpackPairsEsc(int32_t cb, int32_t nVals, int32_t *coef)
 {
     int32_t y, z, maxBits, nCodeBits, nSignBits, n, val;
     uint32_t bitBuf;
@@ -3423,12 +3423,12 @@ void UnpackPairsEsc(int cb, int nVals, int *coef)
  *              fills coefficient buffer with zeros in any region not coded with
  *                codebook in range [1, 11] (including sfb's above sfbMax)
  **********************************************************************************************************************/
-void DecodeSpectrumLong(int ch)
+void DecodeSpectrumLong(int32_t ch)
 {
-    int i, sfb, cb, nVals, offset;
+    int32_t i, sfb, cb, nVals, offset;
     const uint16_t *sfbTab;
     uint8_t *sfbCodeBook;
-    int *coef;
+    int32_t *coef;
     ICSInfo_t *icsInfo;
 
     coef = m_PSInfoBase->coef[ch];
@@ -3489,12 +3489,12 @@ void DecodeSpectrumLong(int ch)
  *                codebook in range [1, 11] (including sfb's above sfbMax)
  *              deinterleaves window groups into 8 windows
  **********************************************************************************************************************/
-void DecodeSpectrumShort(int ch)
+void DecodeSpectrumShort(int32_t ch)
 {
-    int gp, cb, nVals=0, win, offset, sfb;
+    int32_t gp, cb, nVals=0, win, offset, sfb;
     const uint16_t *sfbTab;
     uint8_t *sfbCodeBook;
-    int *coef;
+    int32_t *coef;
     ICSInfo_t *icsInfo;
 
     coef = m_PSInfoBase->coef[ch];
@@ -3559,12 +3559,12 @@ void DecodeSpectrumShort(int ch)
  *              this should fit in registers on ARM
  *
  **********************************************************************************************************************/
-void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
+void DecWindowOverlap(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev)
 {
-    int in, w0, w1, f0, f1;
-    int *buf1, *over1;
-    short *pcm1;
-    const int *wndCurr, *wndPrev;
+    int32_t in, w0, w1, f0, f1;
+    int32_t *buf1, *over1;
+    int16_t *pcm1;
+    const int32_t *wndCurr, *wndPrev;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -3643,12 +3643,12 @@ void DecWindowOverlap(int *buf0, int *over0, short *pcm0, int nChans, int winTyp
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
  **********************************************************************************************************************/
-void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
+void DecWindowOverlapLongStart(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev)
 {
-    int i,  in, w0, w1, f0, f1;
-    int *buf1, *over1;
-    short *pcm1;
-    const int *wndPrev, *wndCurr;
+    int32_t i,  in, w0, w1, f0, f1;
+    int32_t *buf1, *over1;
+    int16_t *pcm1;
+    const int32_t *wndPrev, *wndCurr;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -3727,12 +3727,12 @@ void DecWindowOverlapLongStart(int *buf0, int *over0, short *pcm0, int nChans, i
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
  **********************************************************************************************************************/
-void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
+void DecWindowOverlapLongStop(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev)
 {
-    int i, in, w0, w1, f0, f1;
-    int *buf1, *over1;
-    short *pcm1;
-    const int *wndPrev, *wndCurr;
+    int32_t i, in, w0, w1, f0, f1;
+    int32_t *buf1, *over1;
+    int16_t *pcm1;
+    const int32_t *wndPrev, *wndCurr;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -3811,12 +3811,12 @@ void DecWindowOverlapLongStop(int *buf0, int *over0, short *pcm0, int nChans, in
  *                the output buffer (pcm) for stereo interleaving
  *              this should fit in registers on ARM
  **********************************************************************************************************************/
-void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int winTypeCurr, int winTypePrev)
+void DecWindowOverlapShort(int32_t *buf0, int32_t *over0, int16_t *pcm0, int32_t nChans, int32_t winTypeCurr, int32_t winTypePrev)
 {
-    int i, in, w0, w1, f0, f1;
-    int *buf1, *over1;
-    short *pcm1;
-    const int *wndPrev, *wndCurr;
+    int32_t i, in, w0, w1, f0, f1;
+    int32_t *buf1, *over1;
+    int16_t *pcm1;
+    const int32_t *wndPrev, *wndCurr;
 
     wndPrev = (winTypePrev == 1 ? kbdWindow + kbdWindowOffset[0] : sinWindow + sinWindowOffset[0]);
     wndCurr = (winTypeCurr == 1 ? kbdWindow + kbdWindowOffset[0] : sinWindow + sinWindowOffset[0]);
@@ -3997,9 +3997,9 @@ void DecWindowOverlapShort(int *buf0, int *over0, short *pcm0, int nChans, int w
  *                a separate pass over the 32-bit PCM to produce 16-bit PCM output.
  *                This inflicts a slight performance hit when decoding non-SBR files.
  **********************************************************************************************************************/
-int IMDCT(int ch, int chOut, short *outbuf)
+int32_t IMDCT(int32_t ch, int32_t chOut, int16_t *outbuf)
 {
-    int i;
+    int32_t i;
     ICSInfo_t *icsInfo;
 
     icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
@@ -4040,7 +4040,7 @@ int IMDCT(int ch, int chOut, short *outbuf)
     }
 
     m_AACDecInfo->rawSampleBuf[ch] = m_PSInfoBase->sbrWorkBuf[ch];
-    m_AACDecInfo->rawSampleBytes = sizeof(int);
+    m_AACDecInfo->rawSampleBytes = sizeof(int32_t);
     m_AACDecInfo->rawSampleFBits = FBITS_OUT_IMDCT;
 #else
     /* window, overlap-add, round to PCM - optimized for each window sequence */
@@ -4078,9 +4078,9 @@ int IMDCT(int ch, int chOut, short *outbuf)
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx)
+void DecodeICSInfo(ICSInfo_t *icsInfo, int32_t sampRateIdx)
 {
-    int sfb, g, mask;
+    int32_t sfb, g, mask;
 
     icsInfo->icsResBit =      GetBits(1);
     icsInfo->winSequence =    GetBits(2);
@@ -4133,10 +4133,10 @@ void DecodeICSInfo(ICSInfo_t *icsInfo, int sampRateIdx)
  *
  * Notes:       sectCB, sectEnd, sfbCodeBook, ordered by window groups for short blocks
  **********************************************************************************************************************/
-void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbCodeBook)
+void DecodeSectionData(int32_t winSequence, int32_t numWinGrp, int32_t maxSFB, uint8_t *sfbCodeBook)
 {
-    int g, cb, sfb;
-    int sectLen, sectLenBits, sectLenIncr, sectEscapeVal;
+    int32_t g, cb, sfb;
+    int32_t sectLen, sectLenBits, sectLenIncr, sectEscapeVal;
 
     sectLenBits = (winSequence == 2 ? 3 : 5);
     sectEscapeVal = (1 << sectLenBits) - 1;
@@ -4170,7 +4170,7 @@ void DecodeSectionData(int winSequence, int numWinGrp, int maxSFB, uint8_t *sfbC
  *
  * Return:      one decoded scalefactor, including index_offset of -60
  **********************************************************************************************************************/
-int DecodeOneScaleFactor()
+int32_t DecodeOneScaleFactor()
 {
     int32_t nBits, val;
     uint32_t bitBuf;
@@ -4202,10 +4202,10 @@ int DecodeOneScaleFactor()
  *              for section with codebook 14 or 15, scaleFactors buffer has intensity
  *                stereo weight instead of regular scalefactor
  **********************************************************************************************************************/
-void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
-                               uint8_t *sfbCodeBook, short *scaleFactors)
+void DecodeScaleFactors(int32_t numWinGrp, int32_t maxSFB, int32_t globalGain,
+                               uint8_t *sfbCodeBook, int16_t *scaleFactors)
 {
-    int g, sfbCB, nrg, npf, val, sf, is;
+    int32_t g, sfbCB, nrg, npf, val, sf, is;
 
     /* starting values for differential coding */
     sf = globalGain;
@@ -4220,7 +4220,7 @@ void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
             /* intensity stereo - differential coding */
             val = DecodeOneScaleFactor();
             is += val;
-            *scaleFactors++ = (short)is;
+            *scaleFactors++ = (int16_t)is;
         } else if (sfbCB == 13) {
             /* PNS - first energy is directly coded, rest are Huffman coded (npf = noise_pcm_flag) */
             if (npf) {
@@ -4230,12 +4230,12 @@ void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
                 val = DecodeOneScaleFactor();
             }
             nrg += val;
-            *scaleFactors++ = (short)nrg;
+            *scaleFactors++ = (int16_t)nrg;
         } else if (sfbCB >= 1 && sfbCB <= 11) {
             /* regular (non-zero) region - differential coding */
             val = DecodeOneScaleFactor();
             sf += val;
-            *scaleFactors++ = (short)sf;
+            *scaleFactors++ = (int16_t)sf;
         } else {
             /* inactive scalefactor band if codebook 0 */
             *scaleFactors++ = 0;
@@ -4256,7 +4256,7 @@ void DecodeScaleFactors(int numWinGrp, int maxSFB, int globalGain,
  **********************************************************************************************************************/
 void DecodePulseInfo(uint8_t ch)
 {
-    int i;
+    int32_t i;
 
     m_pulseInfo[ch].numPulse = GetBits(2) + 1;        /* add 1 here */
     m_pulseInfo[ch].startSFB = GetBits(6);
@@ -4278,9 +4278,9 @@ void DecodePulseInfo(uint8_t ch)
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef)
+void DecodeTNSInfo(int32_t winSequence, TNSInfo_t *ti, int8_t *tnsCoef)
 {
-    int i, w, f, coefBits, compress;
+    int32_t i, w, f, coefBits, compress;
     int8_t c, s, n;
     uint8_t *filtLength, *filtOrder, *filtDir;
 
@@ -4299,7 +4299,7 @@ void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef)
                 if (*filtOrder) {
                     *filtDir++ =      GetBits(1);
                     compress =        GetBits(1);
-                    coefBits = (int)ti->coefRes[w] - compress;    /* 2, 3, or 4 */
+                    coefBits = (int32_t)ti->coefRes[w] - compress;    /* 2, 3, or 4 */
                     s = sgnMask[coefBits - 2];
                     n = negMask[coefBits - 2];
                     for (i = 0; i < *filtOrder; i++) {
@@ -4323,7 +4323,7 @@ void DecodeTNSInfo(int winSequence, TNSInfo_t *ti, int8_t *tnsCoef)
             if (*filtOrder) {
                 *filtDir++ =     GetBits(1);
                 compress =       GetBits(1);
-                coefBits = (int)ti->coefRes[0] - compress;    /* 2, 3, or 4 */
+                coefBits = (int32_t)ti->coefRes[0] - compress;    /* 2, 3, or 4 */
                 s = sgnMask[coefBits - 2];
                 n = negMask[coefBits - 2];
                 for (i = 0; i < *filtOrder; i++) {
@@ -4361,15 +4361,15 @@ static const uint8_t gainBits[4][3] = {
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi)
+void DecodeGainControlInfo(int32_t winSequence, GainControlInfo_t *gi)
 {
-    int bd, wd, ad;
-    int locBits, locBitsZero, maxWin;
+    int32_t bd, wd, ad;
+    int32_t locBits, locBitsZero, maxWin;
 
     gi->maxBand = GetBits(2);
-    maxWin =      (int)gainBits[winSequence][0];
-    locBitsZero = (int)gainBits[winSequence][1];
-    locBits =     (int)gainBits[winSequence][2];
+    maxWin =      (int32_t)gainBits[winSequence][0];
+    locBitsZero = (int32_t)gainBits[winSequence][1];
+    locBits =     (int32_t)gainBits[winSequence][2];
 
     for (bd = 1; bd <= gi->maxBand; bd++) {
         for (wd = 0; wd < maxWin; wd++) {
@@ -4394,9 +4394,9 @@ void DecodeGainControlInfo(int winSequence, GainControlInfo_t *gi)
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeICS(int ch)
+void DecodeICS(int32_t ch)
 {
-    int globalGain;
+    int32_t globalGain;
     ICSInfo_t *icsInfo;
     TNSInfo_t *ti;
     GainControlInfo_t *gi;
@@ -4443,9 +4443,9 @@ void DecodeICS(int ch)
  *
  * Return:      0 if successful, error code (< 0) if error
  **********************************************************************************************************************/
-int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch)
+int32_t DecodeNoiselessData(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail, int32_t ch)
 {
-    int bitsUsed;
+    int32_t bitsUsed;
     ICSInfo_t *icsInfo;
 
     icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
@@ -4489,11 +4489,11 @@ int DecodeNoiselessData(uint8_t **buf, int *bitOffset, int *bitsAvail, int ch)
  *                if there are no codes at nBits, then we just keep << 1 each time
  *                  (since count[nBits] = 0)
  **********************************************************************************************************************/
-int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val)
+int32_t DecodeHuffmanScalar(const uint16_t *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf, int32_t *val)
 {
     uint32_t count, start, shift, t;
     const uint8_t *countPtr;
-    const signed short *map;
+    const uint16_t *map;
 
     map = huffTab + huffTabInfo->offset;
     countPtr = huffTabInfo->count;
@@ -4530,9 +4530,9 @@ int DecodeHuffmanScalar(const signed short *huffTab, const HuffInfo_t *huffTabIn
 * Return:      0 if successful, error code (< 0) if error
 *              verify that fixed fields don't change between frames
 ***********************************************************************************************************************/
-int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
+int32_t UnpackADTSHeader(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail)
 {
-    int bitsUsed;
+    int32_t bitsUsed;
 
     /* init bitstream reader */
     SetBitstreamPointer((*bitsAvail + 7) >> 3, *buf);
@@ -4625,9 +4625,9 @@ int UnpackADTSHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 * Notes:       calculates total number of channels using rules in 14496-3, 4.5.1.2.1
 *              does not attempt to deduce speaker geometry
 ***********************************************************************************************************************/
-int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
+int32_t GetADTSChannelMapping(uint8_t *buf, int32_t bitOffset, int32_t bitsAvail)
 {
-    int ch, nChans, elementChans, err;
+    int32_t ch, nChans, elementChans, err;
 
     nChans = 0;
     do {
@@ -4670,9 +4670,9 @@ int GetADTSChannelMapping(uint8_t *buf, int bitOffset, int bitsAvail)
 * Return:      total number of channels in file
 *              -1 if error (invalid number of PCE's or unsupported mode)
 ***********************************************************************************************************************/
-int GetNumChannelsADIF(int nPCE)
+int32_t GetNumChannelsADIF(int32_t nPCE)
 {
-    int i, j, nChans;
+    int32_t i, j, nChans;
 
     if (nPCE < 1 || nPCE > MAX_NUM_PCE_ADIF)
         return -1;
@@ -4721,9 +4721,9 @@ int GetNumChannelsADIF(int nPCE)
 * Return:      sample rate of file
 *              -1 if error (invalid number of PCE's or sample rate mismatch)
 ***********************************************************************************************************************/
-int GetSampleRateIdxADIF(int nPCE)
+int32_t GetSampleRateIdxADIF(int32_t nPCE)
 {
-    int i, idx;
+    int32_t i, idx;
 
     if (nPCE < 1 || nPCE > MAX_NUM_PCE_ADIF)
         return -1;
@@ -4755,10 +4755,10 @@ int GetSampleRateIdxADIF(int nPCE)
 *
 * Return:      0 if successful, error code (< 0) if error
 ***********************************************************************************************************************/
-int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
+int32_t UnpackADIFHeader(uint8_t **buf, int32_t *bitOffset, int32_t *bitsAvail)
 {
     uint8_t i;
-    int bitsUsed;
+    int32_t bitsUsed;
 
     /* init bitstream reader */
     SetBitstreamPointer((*bitsAvail + 7) >> 3, *buf);
@@ -4840,9 +4840,9 @@ int UnpackADIFHeader(uint8_t **buf, int *bitOffset, int *bitsAvail)
 *                set them, such as by a previous call to UnpackADTSHeader())
 *              if copyLast == 0, then the parameters we passed in are used instead
 ***********************************************************************************************************************/
-int SetRawBlockParams(int copyLast, int nChans, int sampRate, int profile)
+int32_t SetRawBlockParams(int32_t copyLast, int32_t nChans, int32_t sampRate, int32_t profile)
 {
-    int idx;
+    int32_t idx;
 
     if (!copyLast) {
         m_AACDecInfo->profile = profile;
@@ -4878,7 +4878,7 @@ int SetRawBlockParams(int copyLast, int nChans, int sampRate, int profile)
 *
 * Return:      0 if successful, error code (< 0) if error
 ***********************************************************************************************************************/
-int PrepareRawBlock()
+int32_t PrepareRawBlock()
 {
     /* syntactic element fields will be read from bitstream for each element */
     m_AACDecInfo->prevBlockID = AAC_ID_INVALID;
@@ -4910,9 +4910,9 @@ int PrepareRawBlock()
  *              clips outputs to Q(FBITS_OUT_DQ_OFF)
  *              output has no minimum number of guard bits
  **********************************************************************************************************************/
-int DequantBlock(int *inbuf, int nSamps, int scale)
+int32_t DequantBlock(int32_t *inbuf, int32_t nSamps, int32_t scale)
 {
-    int iSamp, scalef, scalei, x, y, gbMask, shift, tab4[4];
+    int32_t iSamp, scalef, scalei, x, y, gbMask, shift, tab4[4];
     const uint32_t *tab16, *coef;
 
     if (nSamps <= 0)
@@ -5056,13 +5056,13 @@ int DequantBlock(int *inbuf, int nSamps, int scale)
  *
  * Return:      0 if successful, error code (< 0) if error
  **********************************************************************************************************************/
-int AACDequantize(int ch)
+int32_t AACDequantize(int32_t ch)
 {
-    int gp, cb, sfb, win, width, nSamps, gbMask;
-    int *coef;
+    int32_t gp, cb, sfb, win, width, nSamps, gbMask;
+    int32_t *coef;
     const uint16_t *sfbTab;
     uint8_t *sfbCodeBook;
-    short *scaleFactors;
+    int16_t *scaleFactors;
     ICSInfo_t *icsInfo;
 
     icsInfo = (ch == 1 && m_PSInfoBase->commonWin == 1) ? &(m_PSInfoBase->icsInfo[0]) : &(m_PSInfoBase->icsInfo[ch]);
@@ -5087,7 +5087,7 @@ int AACDequantize(int ch)
                 /* dequantize one scalefactor band (not necessary if codebook is intensity or PNS)
                  * for zero codebook, still run dequantizer in case non-zero pulse data was added
                  */
-                cb = (int)(sfbCodeBook[sfb]);
+                cb = (int32_t)(sfbCodeBook[sfb]);
                 width = sfbTab[sfb+1] - sfbTab[sfb];
                 if (cb >= 0 && cb <= 11)
                     gbMask |= DequantBlock(coef, width, scaleFactors[sfb]);
@@ -5123,7 +5123,7 @@ int AACDequantize(int ch)
  *
  * Notes:       only necessary if deinterleaving not part of Huffman decoding
  **********************************************************************************************************************/
-int DeinterleaveShortBlocks(int ch)
+int32_t DeinterleaveShortBlocks(int32_t ch)
 {
 //    (void)aacDecInfo;
 //    (void)ch;
@@ -5180,9 +5180,9 @@ uint32_t Get32BitVal(uint32_t *last)
  *              NUM_ITER_INVSQRT = 3, maxDiff = 1.3747e-02
  *              NUM_ITER_INVSQRT = 4, maxDiff = 3.9832e-04
  **********************************************************************************************************************/
-int InvRootR(int r)
+int32_t InvRootR(int32_t r)
 {
-    int i, xn, t;
+    int32_t i, xn, t;
 
     /* use linear equation for initial guess
      * x0 = -2*r + 3 (so x0 always >= correct answer in range [0.25, 1))
@@ -5218,15 +5218,15 @@ int InvRootR(int r)
  *
  * Return:      guard bit mask (OR of abs value of all noise coefs)
  **********************************************************************************************************************/
-int ScaleNoiseVector(int *coef, int nVals, int sf)
+int32_t ScaleNoiseVector(int32_t *coef, int32_t nVals, int32_t sf)
 {
 
 /* pow(2, i/4.0) for i = [0,1,2,3], format = Q30 */
-static const int pow14[4] PROGMEM = {
+static const int32_t pow14[4] PROGMEM = {
     0x40000000, 0x4c1bf829, 0x5a82799a, 0x6ba27e65
 };
 
-    int i, c, spec, energy, sq, scalef, scalei, invSqrtEnergy, z, gbMask;
+    int32_t i, c, spec, energy, sq, scalef, scalei, invSqrtEnergy, z, gbMask;
 
     energy = 0;
     for (i = 0; i < nVals; i++) {
@@ -5306,9 +5306,9 @@ static const int pow14[4] PROGMEM = {
  *
  * Return:      none
  **********************************************************************************************************************/
-void GenerateNoiseVector(int *coef, int *last, int nVals)
+void GenerateNoiseVector(int32_t *coef, int32_t *last, int32_t nVals)
 {
-    int i;
+    int32_t i;
 
     for (i = 0; i < nVals; i++)
         coef[i] = ((int32_t)Get32BitVal((uint32_t *)last)) >> 16;
@@ -5326,9 +5326,9 @@ void GenerateNoiseVector(int *coef, int *last, int nVals)
  *
  * Return:      none
  **********************************************************************************************************************/
-void CopyNoiseVector(int *coefL, int *coefR, int nVals)
+void CopyNoiseVector(int32_t *coefL, int32_t *coefR, int32_t nVals)
 {
-    int i;
+    int32_t i;
 
     for (i = 0; i < nVals; i++)
         coefR[i] = coefL[i];
@@ -5346,14 +5346,14 @@ void CopyNoiseVector(int *coefL, int *coefR, int nVals)
  *
  * Return:      0 if successful, -1 if error
  **********************************************************************************************************************/
-int PNS(int ch)
+int32_t PNS(int32_t ch)
 {
-    int gp, sfb, win, width, nSamps, gb, gbMask;
-    int *coef;
+    int32_t gp, sfb, win, width, nSamps, gb, gbMask;
+    int32_t *coef;
     const uint16_t *sfbTab;
     uint8_t *sfbCodeBook;
-    short *scaleFactors;
-    int msMaskOffset, checkCorr, genNew;
+    int16_t *scaleFactors;
+    int32_t msMaskOffset, checkCorr, genNew;
     uint8_t msMask;
     uint8_t *msMaskPtr;
     ICSInfo_t *icsInfo;
@@ -5440,9 +5440,9 @@ int PNS(int ch)
  * Return:      index of sample rate (table 1.15 in 14496-3:2001(E))
  *              -1 if sample rate not found in table
  **********************************************************************************************************************/
-int GetSampRateIdx(int sampRate)
+int32_t GetSampRateIdx(int32_t sampRate)
 {
-    int idx;
+    int32_t idx;
 
     for (idx = 0; idx < NUM_SAMPLE_RATES; idx++) {
         if (sampRate == sampRateTab[idx])
@@ -5472,11 +5472,11 @@ int GetSampRateIdx(int sampRate)
  * Return:      none
  *
  * Notes:       assume no guard bits in input
- *              gains 0 int bits
+ *              gains 0 int32_t bits
  **********************************************************************************************************************/
-void StereoProcessGroup(int *coefL, int *coefR, const uint16_t *sfbTab,
-                              int msMaskPres, uint8_t *msMaskPtr, int msMaskOffset, int maxSFB,
-                              uint8_t *cbRight, short *sfRight, int *gbCurrent)
+void StereoProcessGroup(int32_t *coefL, int32_t *coefR, const uint16_t *sfbTab,
+                              int32_t msMaskPres, uint8_t *msMaskPtr, int32_t msMaskOffset, int32_t maxSFB,
+                              uint8_t *cbRight, int16_t *sfRight, int32_t *gbCurrent)
 {
 //fb
 static const uint32_t pow14[2][4] PROGMEM = {
@@ -5484,8 +5484,8 @@ static const uint32_t pow14[2][4] PROGMEM = {
     { 0x40000000, 0x4c1bf829, 0x5a82799a, 0x6ba27e65 }
 };
 
-    int sfb, width, cbIdx, sf, cl, cr, scalef, scalei;
-    int gbMaskL, gbMaskR;
+    int32_t sfb, width, cbIdx, sf, cl, cr, scalef, scalei;
+    int32_t gbMaskL, gbMaskR;
     uint8_t msMask;
 
     msMask = (*msMaskPtr++) >> msMaskOffset;
@@ -5510,7 +5510,7 @@ static const uint32_t pow14[2][4] PROGMEM = {
                     scalei = 30;
                 do {
                     cr = MULSHIFT32(*coefL++, scalef);
-                    {int sign = (cr) >> 31; if (sign != (cr) >> (31-scalei))  {(cr) = sign ^ ((1 << (31-scalei)) - 1);}}
+                    {int32_t sign = (cr) >> 31; if (sign != (cr) >> (31-scalei))  {(cr) = sign ^ ((1 << (31-scalei)) - 1);}}
                     cr <<= scalei;
                     gbMaskR |= FASTABS(cr);
                     *coefR++ = cr;
@@ -5535,10 +5535,10 @@ static const uint32_t pow14[2][4] PROGMEM = {
                     /* avoid overflow (rare) */
                     cl >>= 1;
                     sf = cl + (cr >> 1);
-                    {int sign = (sf) >> 31; if (sign != (sf) >> (30))  {(sf) = sign ^ ((1 << (30)) - 1);}}
+                    {int32_t sign = (sf) >> 31; if (sign != (sf) >> (30))  {(sf) = sign ^ ((1 << (30)) - 1);}}
                     sf <<= 1;
                     cl = cl - (cr >> 1);
-                    {int sign = (cl) >> 31; if (sign != (cl) >> (30))  {(cl) = sign ^ ((1 << (30)) - 1);}}
+                    {int32_t sign = (cl) >> 31; if (sign != (cl) >> (30))  {(cl) = sign ^ ((1 << (30)) - 1);}}
                     cl <<= 1;
                 } else {
                     /* usual case */
@@ -5589,11 +5589,11 @@ static const uint32_t pow14[2][4] PROGMEM = {
  *
  * Return:      0 if successful, -1 if error
  **********************************************************************************************************************/
-int StereoProcess()
+int32_t StereoProcess()
 {
     ICSInfo_t *icsInfo;
-    int gp, win, nSamps, msMaskOffset;
-    int *coefL, *coefR;
+    int32_t gp, win, nSamps, msMaskOffset;
+    int32_t *coefL, *coefR;
     uint8_t *msMaskPtr;
     const uint16_t *sfbTab;
 
@@ -5650,9 +5650,9 @@ int StereoProcess()
  *
  * Return:      y = Q24, range ~= [0.015625, 64]
  **********************************************************************************************************************/
-int RatioPowInv(int a, int b, int c)
+int32_t RatioPowInv(int32_t a, int32_t b, int32_t c)
 {
-    int lna, lnb, i, p, t, y;
+    int32_t lna, lnb, i, p, t, y;
 
     if (a < 1 || b < 1 || c < 1 || a > 64 || b > 64 || c > 64 || a < b)
         return 0;
@@ -5691,9 +5691,9 @@ int RatioPowInv(int a, int b, int c)
  *              normalizes input to range [0x200000000, 0x7fffffff] and takes
  *                floor(sqrt(input)), and sets fBitsOut appropriately
  **********************************************************************************************************************/
-int SqrtFix(int q, int fBitsIn, int *fBitsOut)
+int32_t SqrtFix(int32_t q, int32_t fBitsIn, int32_t *fBitsOut)
 {
-    int z, lo, hi, mid;
+    int32_t z, lo, hi, mid;
 
     if (q <= 0) {
         *fBitsOut = fBitsIn;
@@ -5713,8 +5713,8 @@ int SqrtFix(int q, int fBitsIn, int *fBitsOut)
     /* choose initial bounds */
     lo = 1;
     if (q >= 0x10000000)
-        lo = 16384;    /* (int)sqrt(0x10000000) */
-    hi = 46340;        /* (int)sqrt(0x7fffffff) */
+        lo = 16384;    /* (int32_t)sqrt(0x10000000) */
+    hi = 46340;        /* (int32_t)sqrt(0x7fffffff) */
 
     /* do binary search with 32x32->32 multiply test */
     do {
@@ -5756,9 +5756,9 @@ int SqrtFix(int q, int fBitsIn, int *fBitsOut)
  *              NUM_ITER_IRN = 4, maxDiff = 1.5288e-05 (precision of about 16 bits)
  *              NUM_ITER_IRN = 5, maxDiff = 3.0034e-08 (precision of about 24 bits)
  **********************************************************************************************************************/
-int InvRNormalized(int r)
+int32_t InvRNormalized(int32_t r)
 {
-    int i, xn, t;
+    int32_t i, xn, t;
 
     /* r =   [0.5, 1.0)
      * 1/r = (1.0, 2.0]
@@ -5789,9 +5789,9 @@ int InvRNormalized(int r)
  *
  * Return:      none
 ***********************************************************************************************************************/
-void BitReverse32(int *inout)
+void BitReverse32(int32_t *inout)
 {
-    int t;
+    int32_t t;
     t=inout[2] ; inout[2]=inout[32]; inout[32]=t;
     t=inout[3] ; inout[3]=inout[33]; inout[33]=t;
 
@@ -5848,10 +5848,10 @@ void BitReverse32(int *inout)
  *              should compile with no stack spills on ARM (verify compiled output)
  *              current instruction count (per pass): 16 LDR, 16 STR, 4 SMULL, 61 ALU
  **********************************************************************************************************************/
-void R8FirstPass32(int *r0)
+void R8FirstPass32(int32_t *r0)
 {
-    int r1, r2, r3, r4, r5, r6, r7;
-    int r8, r9, r10, r11, r12, r14;
+    int32_t r1, r2, r3, r4, r5, r6, r7;
+    int32_t r8, r9, r10, r11, r12, r14;
 
     /* number of passes = fft size / 8 = 32 / 8 = 4 */
     r1 = (32 >> 3);
@@ -5998,13 +5998,13 @@ void R8FirstPass32(int *r0)
  *              should compile with no stack spills on ARM (verify compiled output)
  *              current instruction count (per pass): 16 LDR, 16 STR, 4 SMULL, 61 ALU
  **********************************************************************************************************************/
-void R4Core32(int *r0)
+void R4Core32(int32_t *r0)
 {
-    int r2, r3, r4, r5, r6, r7;
-    int r8, r9, r10, r12, r14;
-    int *r1;
+    int32_t r2, r3, r4, r5, r6, r7;
+    int32_t r8, r9, r10, r12, r14;
+    int32_t *r1;
 
-    r1 = (int *)twidTabOdd32;
+    r1 = (int32_t *)twidTabOdd32;
     r10 = 8;
     do {
         /* can use r14 for lo32 scratch register in all MULSHIFT32 */
@@ -6090,14 +6090,14 @@ void R4Core32(int *r0)
  *              (guard bit analysis includes assumptions about steps immediately
  *               before and after, i.e. PreMul and PostMul for DCT)
  **********************************************************************************************************************/
-void FFT32C(int *x)
+void FFT32C(int32_t *x)
 {
     /* decimation in time */
     BitReverse32(x);
 
     /* 32-point complex FFT */
-    R8FirstPass32(x);    /* gain 1 int bit,  lose 2 GB (making assumptions about input) */
-    R4Core32(x);        /* gain 2 int bits, lose 0 GB (making assumptions about input) */
+    R8FirstPass32(x);    /* gain 1 int32_t bit,  lose 2 GB (making assumptions about input) */
+    R4Core32(x);        /* gain 2 int32_t bits, lose 0 GB (making assumptions about input) */
 }
 
 /***********************************************************************************************************************
@@ -6116,10 +6116,10 @@ void FFT32C(int *x)
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrcov.s when building for ARM!
  **********************************************************************************************************************/
-void CVKernel1(int *XBuf, int *accBuf)
+void CVKernel1(int32_t *XBuf, int32_t *accBuf)
 {
     U64 p01re, p01im, p12re, p12im, p11re, p22re;
-    int n, x0re, x0im, x1re, x1im;
+    int32_t n, x0re, x0im, x1re, x1im;
 
     x0re = XBuf[0];
     x0im = XBuf[1];
@@ -6189,10 +6189,10 @@ void CVKernel1(int *XBuf, int *accBuf)
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrcov.s when building for ARM!
  **********************************************************************************************************************/
-void CVKernel2(int *XBuf, int *accBuf)
+void CVKernel2(int32_t *XBuf, int32_t *accBuf)
 {
     U64 p02re, p02im;
-    int n, x0re, x0im, x1re, x1im, x2re, x2im;
+    int32_t n, x0re, x0im, x1re, x1im, x2re, x2im;
 
     p02re.w64 = p02im.w64 = 0;
 
@@ -6238,7 +6238,7 @@ void CVKernel2(int *XBuf, int *accBuf)
  *
  * Return:      none
  **********************************************************************************************************************/
-void SetBitstreamPointer(int nBytes, uint8_t *buf)
+void SetBitstreamPointer(int32_t nBytes, uint8_t *buf)
 {
     /* init bitstream */
     m_aac_BitStreamInfo.bytePtr = buf;
@@ -6265,7 +6265,7 @@ void SetBitstreamPointer(int nBytes, uint8_t *buf)
 //Optimized for REV16, REV32 (FB)
 inline void RefillBitstreamCache()
 {
-    int nBytes = m_aac_BitStreamInfo.nBytes;
+    int32_t nBytes = m_aac_BitStreamInfo.nBytes;
     if (nBytes >= 4) {
         /* optimize for common case, independent of machine endian-ness */
         m_aac_BitStreamInfo.iCache  = (*m_aac_BitStreamInfo.bytePtr++) << 24;
@@ -6303,7 +6303,7 @@ inline void RefillBitstreamCache()
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
  **********************************************************************************************************************/
-uint32_t GetBits(int nBits)
+uint32_t GetBits(int32_t nBits)
 {
     uint32_t data, lowBits;
 
@@ -6313,7 +6313,7 @@ uint32_t GetBits(int nBits)
     m_aac_BitStreamInfo.iCache <<= nBits;                    /* left-justify cache */
     m_aac_BitStreamInfo.cachedBits -= nBits;                 /* how many bits have we drawn from the cache so far */
 
-    /* if we cross an int boundary, refill the cache */
+    /* if we cross an int32_t boundary, refill the cache */
     if (m_aac_BitStreamInfo.cachedBits < 0) {
         lowBits = -m_aac_BitStreamInfo.cachedBits;
         RefillBitstreamCache();
@@ -6342,7 +6342,7 @@ uint32_t GetBits(int nBits)
  *              for speed, does not indicate error if you overrun bit buffer
  *              if nBits == 0, returns 0
  **********************************************************************************************************************/
-uint32_t GetBitsNoAdvance(int nBits)
+uint32_t GetBitsNoAdvance(int32_t nBits)
 {
     uint8_t *buf;
     uint32_t data, iCache;
@@ -6353,7 +6353,7 @@ uint32_t GetBitsNoAdvance(int nBits)
     data >>= 1;                                         /* do as >> 31, >> 1 so that nBits = 0 works okay (returns 0) */
     lowBits = nBits - m_aac_BitStreamInfo.cachedBits;        /* how many bits do we have left to read */
 
-    /* if we cross an int boundary, read next bytes in buffer */
+    /* if we cross an int32_t boundary, read next bytes in buffer */
     if (lowBits > 0) {
         iCache = 0;
         buf = m_aac_BitStreamInfo.bytePtr;
@@ -6383,7 +6383,7 @@ uint32_t GetBitsNoAdvance(int nBits)
  *
  * Notes:       generally used following GetBitsNoAdvance(bsi, maxBits)
  **********************************************************************************************************************/
-void AdvanceBitstream(int nBits)
+void AdvanceBitstream(int32_t nBits)
 {
     nBits &= 0x1f;
     if (nBits > m_aac_BitStreamInfo.cachedBits) {
@@ -6406,9 +6406,9 @@ void AdvanceBitstream(int nBits)
  *
  * Return:      number of bits read from bitstream, as offset from startBuf:startOffset
  **********************************************************************************************************************/
-int CalcBitsUsed(uint8_t *startBuf, int startOffset) {
+int32_t CalcBitsUsed(uint8_t *startBuf, int32_t startOffset) {
 
-    int bitsUsed;
+    int32_t bitsUsed;
 
     bitsUsed  = (m_aac_BitStreamInfo.bytePtr - startBuf) * 8;
     bitsUsed -= m_aac_BitStreamInfo.cachedBits;
@@ -6431,7 +6431,7 @@ int CalcBitsUsed(uint8_t *startBuf, int startOffset) {
  **********************************************************************************************************************/
 void ByteAlignBitstream(){
 
-    int offset;
+    int32_t offset;
 
     offset = m_aac_BitStreamInfo.cachedBits & 0x07;
     AdvanceBitstream(offset);
@@ -6452,7 +6452,7 @@ void ByteAlignBitstream(){
  **************************************************************************************/
 void InitSBRState() {
 
-    int i, ch;
+    int32_t i, ch;
     uint8_t *c;
 
     if (!m_PSInfoSBR)
@@ -6460,7 +6460,7 @@ void InitSBRState() {
 
     /* clear SBR state structure */
     c = (uint8_t *)m_PSInfoSBR;
-    for (i = 0; i < (int)sizeof(m_PSInfoSBR); i++)
+    for (i = 0; i < (int32_t)sizeof(m_PSInfoSBR); i++)
         *c++ = 0;
 
     /* initialize non-zero state variables */
@@ -6486,9 +6486,9 @@ void InitSBRState() {
  *              returns with no error if fill buffer is not an SBR extension block,
  *                or if current block is not a fill block (e.g. for LFE upsampling)
  **********************************************************************************************************************/
-int DecodeSBRBitstream(int chBase) {
+int32_t DecodeSBRBitstream(int32_t chBase) {
 
-    int headerFlag;
+    int32_t headerFlag;
 
     if(m_AACDecInfo->currBlockID != AAC_ID_FIL
             || (m_AACDecInfo->fillExtType != EXT_SBR_DATA && m_AACDecInfo->fillExtType != EXT_SBR_DATA_CRC))
@@ -6555,12 +6555,12 @@ int DecodeSBRBitstream(int chBase) {
  *
  * Return:      0 if successful, error code (< 0) if error
  **********************************************************************************************************************/
-int DecodeSBRData(int chBase, short *outbuf) {
+int32_t DecodeSBRData(int32_t chBase, int16_t *outbuf) {
 
-    int k, l, ch, chBlock, qmfaBands, qmfsBands;
-    int upsampleOnly, gbIdx, gbMask;
-    int *inbuf;
-    short *outptr;
+    int32_t k, l, ch, chBlock, qmfaBands, qmfsBands;
+    int32_t upsampleOnly, gbIdx, gbMask;
+    int32_t *inbuf;
+    int16_t *outptr;
 
     SBRHeader *sbrHdr;
     SBRGrid *sbrGrid;
@@ -6603,7 +6603,7 @@ int DecodeSBRData(int chBase, short *outbuf) {
         sbrChan = &(m_PSInfoSBR->sbrChan[chBase + ch]);
 
         if(m_AACDecInfo->rawSampleBuf[ch] == 0 || m_AACDecInfo->rawSampleBytes != 4) return ERR_AAC_SBR_PCM_FORMAT;
-        inbuf = (int*) m_AACDecInfo->rawSampleBuf[ch];
+        inbuf = (int32_t*) m_AACDecInfo->rawSampleBuf[ch];
         outptr = outbuf + chBase + ch;
 
         /* restore delay buffers (could use ring buffer or keep in temp buffer for nChans == 1) */
@@ -6713,9 +6713,9 @@ int DecodeSBRData(int chBase, short *outbuf) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void BubbleSort(uint8_t *v, int nItems) {
+void BubbleSort(uint8_t *v, int32_t nItems) {
 
-    int i;
+    int32_t i;
     uint8_t t;
 
     while(nItems >= 2) {
@@ -6741,9 +6741,9 @@ void BubbleSort(uint8_t *v, int nItems) {
  *
  * Return:      smallest element in buffer
  **********************************************************************************************************************/
-uint8_t VMin(uint8_t *v, int nItems) {
+uint8_t VMin(uint8_t *v, int32_t nItems) {
 
-    int i;
+    int32_t i;
     uint8_t vMin;
 
     vMin = v[0];
@@ -6764,9 +6764,9 @@ uint8_t VMin(uint8_t *v, int nItems) {
  *
  * Return:      largest element in buffer
  **********************************************************************************************************************/
-uint8_t VMax(uint8_t *v, int nItems) {
+uint8_t VMax(uint8_t *v, int32_t nItems) {
 
-    int i;
+    int32_t i;
     uint8_t vMax;
 
     vMax = v[0];
@@ -6791,9 +6791,9 @@ uint8_t VMax(uint8_t *v, int nItems) {
  *
  * Notes:       assumes k2 - k0 <= 48 and k2 >= k0 (4.6.18.3.6)
  **********************************************************************************************************************/
-int CalcFreqMasterScaleZero(uint8_t *freqMaster, int alterScale, int k0, int k2) {
+int32_t CalcFreqMasterScaleZero(uint8_t *freqMaster, int32_t alterScale, int32_t k0, int32_t k2) {
 
-    int nMaster, k, nBands, k2Achieved, dk, vDk[64], k2Diff;
+    int32_t nMaster, k, nBands, k2Achieved, dk, vDk[64], k2Diff;
 
     if(alterScale) {
         dk = 2;
@@ -6837,10 +6837,10 @@ int CalcFreqMasterScaleZero(uint8_t *freqMaster, int alterScale, int k0, int k2)
 }
 
 /* mBandTab[i] = temp1[i] / 2 */
-static const int mBandTab[3] PROGMEM = {6, 5, 4};
+static const int32_t mBandTab[3] PROGMEM = {6, 5, 4};
 
 /* invWarpTab[i] = 1.0 / temp2[i], Q30 (see 4.6.18.3.2.1) */
-static const int invWarpTab[2] PROGMEM = {0x40000000, 0x313b13b1};
+static const int32_t invWarpTab[2] PROGMEM = {0x40000000, 0x313b13b1};
 
 /***********************************************************************************************************************
  * Function:    CalcFreqMasterScale
@@ -6859,10 +6859,10 @@ static const int invWarpTab[2] PROGMEM = {0x40000000, 0x313b13b1};
  *
  * Notes:       assumes k2 - k0 <= 48 and k2 >= k0 (4.6.18.3.6)
  **********************************************************************************************************************/
-int CalcFreqMaster(uint8_t *freqMaster, int freqScale, int alterScale, int k0, int k2) {
+int32_t CalcFreqMaster(uint8_t *freqMaster, int32_t freqScale, int32_t alterScale, int32_t k0, int32_t k2) {
 
-    int bands, twoRegions, k, k1, t, vLast, vCurr, pCurr;
-    int invWarp, nBands0, nBands1, change;
+    int32_t bands, twoRegions, k, k1, t, vLast, vCurr, pCurr;
+    int32_t invWarp, nBands0, nBands1, change;
     uint8_t vDk1Min, vDk0Max;
     uint8_t *vDelta;
 
@@ -6883,7 +6883,7 @@ int CalcFreqMaster(uint8_t *freqMaster, int freqScale, int alterScale, int k0, i
 
     /* tested for all k0 = [5, 64], k1 = [k0, 64], freqScale = [1,3] */
     t = (log2Tab[k1] - log2Tab[k0]) >> 3; /* log2(k1/k0), Q28 to Q25 */
-    nBands0 = 2 * (((bands * t) + (1 << 24)) >> 25); /* multiply by bands/2, round to nearest int (mBandTab has factor of 1/2 rolled in) */
+    nBands0 = 2 * (((bands * t) + (1 << 24)) >> 25); /* multiply by bands/2, round to nearest int32_t (mBandTab has factor of 1/2 rolled in) */
 
     /* tested for all valid combinations of k0, k1, nBands (from sampRate, freqScale, alterScale)
      * roundoff error can be a problem with fixpt (e.g. pCurr = 12.499999 instead of 12.50003)
@@ -6916,7 +6916,7 @@ int CalcFreqMaster(uint8_t *freqMaster, int freqScale, int alterScale, int k0, i
     /* tested for all k1 = [10, 64], k2 = [k0, 64], freqScale = [1,3] */
     t = (log2Tab[k2] - log2Tab[k1]) >> 3; /* log2(k1/k0), Q28 to Q25 */
     t = MULSHIFT32(bands * t, invWarp) << 2; /* multiply by bands/2, divide by warp factor, keep Q25 */
-    nBands1 = 2 * ((t + (1 << 24)) >> 25); /* round to nearest int */
+    nBands1 = 2 * ((t + (1 << 24)) >> 25); /* round to nearest int32_t */
 
     /* see comments above for calculations in first region */
     t = RatioPowInv(k2, k1, nBands1);
@@ -6962,9 +6962,9 @@ int CalcFreqMaster(uint8_t *freqMaster, int freqScale, int alterScale, int k0, i
  *
  * Return:      number of bands in high resolution frequency table
  **********************************************************************************************************************/
-int CalcFreqHigh(uint8_t *freqHigh, uint8_t *freqMaster, int nMaster, int crossOverBand) {
+int32_t CalcFreqHigh(uint8_t *freqHigh, uint8_t *freqMaster, int32_t nMaster, int32_t crossOverBand) {
 
-    int k, nHigh;
+    int32_t k, nHigh;
 
     nHigh = nMaster - crossOverBand;
 
@@ -6985,9 +6985,9 @@ int CalcFreqHigh(uint8_t *freqHigh, uint8_t *freqMaster, int nMaster, int crossO
  *
  * Return:      number of bands in low resolution frequency table
  **********************************************************************************************************************/
-int CalcFreqLow(uint8_t *freqLow, uint8_t *freqHigh, int nHigh) {
+int32_t CalcFreqLow(uint8_t *freqLow, uint8_t *freqHigh, int32_t nHigh) {
 
-    int k, nLow, oddFlag;
+    int32_t k, nLow, oddFlag;
 
     nLow = nHigh - (nHigh >> 1);
     freqLow[0] = freqHigh[0];
@@ -7013,9 +7013,9 @@ int CalcFreqLow(uint8_t *freqLow, uint8_t *freqHigh, int nHigh) {
  *
  * Return:      number of bands in noise floor frequency table
  **********************************************************************************************************************/
-int CalcFreqNoise(uint8_t *freqNoise, uint8_t *freqLow, int nLow, int kStart, int k2, int noiseBands) {
+int32_t CalcFreqNoise(uint8_t *freqNoise, uint8_t *freqLow, int32_t nLow, int32_t kStart, int32_t k2, int32_t noiseBands) {
 
-    int i, iLast, k, nQ, lTop, lBottom;
+    int32_t i, iLast, k, nQ, lTop, lBottom;
 
     lTop = log2Tab[k2];
     lBottom = log2Tab[kStart];
@@ -7052,11 +7052,11 @@ int CalcFreqNoise(uint8_t *freqNoise, uint8_t *freqLow, int nLow, int kStart, in
  *
  * Return:      number of patches
  **********************************************************************************************************************/
-int BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t *freqMaster, int nMaster, int k0,
-        int kStart, int numQMFBands, int sampRateIdx) {
+int32_t BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t *freqMaster, int32_t nMaster, int32_t k0,
+        int32_t kStart, int32_t numQMFBands, int32_t sampRateIdx) {
 
-    int i, j, k;
-    int msb, sb, usb, numPatches, goalSB, oddFlag;
+    int32_t i, j, k;
+    int32_t msb, sb, usb, numPatches, goalSB, oddFlag;
 
     msb = k0;
     usb = kStart;
@@ -7086,7 +7086,7 @@ int BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t 
             oddFlag = (sb - 2 + k0) & 0x01;
         } while(sb > k0 - 1 + msb - oddFlag);
 
-        patchNumSubbands[numPatches] = MAX(sb - usb, 0);
+        patchNumSubbands[numPatches] = MAX(sb - usb, (int32_t)0);
         patchStartSubband[numPatches] = k0 - oddFlag - patchNumSubbands[numPatches];
 
         /* from MPEG reference code - slightly different from spec */
@@ -7120,9 +7120,9 @@ int BuildPatches(uint8_t *patchNumSubbands, uint8_t *patchStartSubband, uint8_t 
  *
  * Return:      non-zero if the value is found anywhere in the buffer, zero otherwise
  **********************************************************************************************************************/
-int FindFreq(uint8_t *freq, int nFreq, uint8_t val) {
+int32_t FindFreq(uint8_t *freq, int32_t nFreq, uint8_t val) {
 
-    int k;
+    int32_t k;
 
     for(k = 0; k < nFreq; k++) {
         if(freq[k] == val) return 1;
@@ -7143,9 +7143,9 @@ int FindFreq(uint8_t *freq, int nFreq, uint8_t val) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void RemoveFreq(uint8_t *freq, int nFreq, int removeIdx) {
+void RemoveFreq(uint8_t *freq, int32_t nFreq, int32_t removeIdx) {
 
-    int k;
+    int32_t k;
 
     if(removeIdx >= nFreq) return;
 
@@ -7168,11 +7168,11 @@ void RemoveFreq(uint8_t *freq, int nFreq, int removeIdx) {
  *
  * Return:      number of bands in limiter frequency table
  **********************************************************************************************************************/
-int CalcFreqLimiter(uint8_t *freqLimiter, uint8_t *patchNumSubbands, uint8_t *freqLow, int nLow, int kStart,
-        int limiterBands, int numPatches) {
+int32_t CalcFreqLimiter(uint8_t *freqLimiter, uint8_t *patchNumSubbands, uint8_t *freqLow, int32_t nLow, int32_t kStart,
+        int32_t limiterBands, int32_t numPatches) {
 
-    int k, bands, nLimiter, nOctaves;
-    int limBandsPerOctave[3] = { 120, 200, 300 }; /* [1.2, 2.0, 3.0] * 100 */
+    int32_t k, bands, nLimiter, nOctaves;
+    int32_t limBandsPerOctave[3] = { 120, 200, 300 }; /* [1.2, 2.0, 3.0] * 100 */
     uint8_t patchBorders[MAX_NUM_PATCHES + 1];
 
     /* simple case */
@@ -7240,8 +7240,8 @@ int CalcFreqLimiter(uint8_t *freqLimiter, uint8_t *patchNumSubbands, uint8_t *fr
  *
  * Return:      non-zero if error, zero otherwise
  **********************************************************************************************************************/
-int CalcFreqTables(SBRHeader *sbrHdr, SBRFreq *sbrFreq, int sampRateIdx) {
-    int k0, k2;
+int32_t CalcFreqTables(SBRHeader *sbrHdr, SBRFreq *sbrFreq, int32_t sampRateIdx) {
+    int32_t k0, k2;
 
     k0 = k0Tab[sampRateIdx][sbrHdr->startFreq];
 
@@ -7295,11 +7295,11 @@ int CalcFreqTables(SBRHeader *sbrHdr, SBRFreq *sbrFreq, int sampRateIdx) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int env) {
+void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int32_t env) {
 
-    int i, m, iStart, iEnd, xre, xim, nScale, expMax;
-    int p, n, mStart, mEnd, invFact, t;
-    int *XBuf;
+    int32_t i, m, iStart, iEnd, xre, xim, nScale, expMax;
+    int32_t p, n, mStart, mEnd, invFact, t;
+    int32_t *XBuf;
     U64 eCurr;
     uint8_t *freqBandTab;
 
@@ -7322,7 +7322,7 @@ void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int
             eCurr.w64 = 0;
             XBuf = m_PSInfoSBR->XBuf[iStart][sbrFreq->kStart + m];
             for(i = iStart; i < iEnd; i++) {
-                /* scale to int before calculating power (precision not critical, and avoids overflow) */
+                /* scale to int32_t before calculating power (precision not critical, and avoids overflow) */
                 xre = (*XBuf) >> FBITS_OUT_QMFA;
                 XBuf += 1;
                 xim = (*XBuf) >> FBITS_OUT_QMFA;
@@ -7337,15 +7337,15 @@ void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int
             nScale = 0;
             if(eCurr.r.hi32) {
                 nScale = (32 - CLZ(eCurr.r.hi32)) + 1;
-                t = (int) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
+                t = (int32_t) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
                 t |= eCurr.r.hi32 << (32 - nScale);
             }
             else if(eCurr.r.lo32 >> 31) {
                 nScale = 1;
-                t = (int) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
+                t = (int32_t) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
             }
             else {
-                t = (int) eCurr.r.lo32;
+                t = (int32_t) eCurr.r.lo32;
             }
 
             invFact = invBandTab[(iEnd - iStart) - 1];
@@ -7372,15 +7372,15 @@ void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int
             nScale = 0;
             if(eCurr.r.hi32) {
                 nScale = (32 - CLZ(eCurr.r.hi32)) + 1;
-                t = (int) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
+                t = (int32_t) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
                 t |= eCurr.r.hi32 << (32 - nScale);
             }
             else if(eCurr.r.lo32 >> 31) {
                 nScale = 1;
-                t = (int) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
+                t = (int32_t) (eCurr.r.lo32 >> nScale); /* logical (unsigned) >> */
             }
             else {
-                t = (int) eCurr.r.lo32;
+                t = (int32_t) eCurr.r.lo32;
             }
 
             invFact = invBandTab[(iEnd - iStart) - 1];
@@ -7413,9 +7413,9 @@ void EstimateEnvelope(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int
  *
  * Return:      1 if a sinusoid is present in this band, 0 if not
  **********************************************************************************************************************/
-int GetSMapped(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int env, int band, int la) {
+int32_t GetSMapped(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t env, int32_t band, int32_t la) {
 
-    int bandStart, bandEnd, oddFlag, r;
+    int32_t bandStart, bandEnd, oddFlag, r;
 
     if (sbrGrid->freqRes[env]) {
         /* high resolution */
@@ -7463,10 +7463,10 @@ static const uint32_t limGainTab[4] PROGMEM = {0x20138ca7, 0x40000000, 0x7fb27dc
  *
  * Return:      none
  **********************************************************************************************************************/
-void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int ch, int env, int lim, int fbitsDQ) {
+void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int32_t ch, int32_t env, int32_t lim, int32_t fbitsDQ) {
 
-    int m, mStart, mEnd, q, z, r;
-    int sumEOrigMapped, sumECurr, gainMax, eOMGainMax, envBand;
+    int32_t m, mStart, mEnd, q, z, r;
+    int32_t sumEOrigMapped, sumECurr, gainMax, eOMGainMax, envBand;
     uint8_t eCurrExpMax;
     uint8_t *freqBandTab;
 
@@ -7501,7 +7501,7 @@ void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int ch, 
     m_PSInfoSBR->gainMaxFBits = 30; /* Q30 tables */
     if(sumECurr == 0) {
         /* any non-zero numerator * 1/EPS_0 is > G_MAX */
-        gainMax = (sumEOrigMapped == 0 ? (int) limGainTab[sbrHdr->limiterGains] : (int) 0x80000000);
+        gainMax = (sumEOrigMapped == 0 ? (int32_t) limGainTab[sbrHdr->limiterGains] : (int32_t) 0x80000000);
     }
     else if(sumEOrigMapped == 0) {
         /* 1/(any non-zero denominator) * EPS_0 * limGainTab[x] is appx. 0 */
@@ -7532,9 +7532,9 @@ void CalcMaxGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, int ch, 
  *
  * Return:      none
  **********************************************************************************************************************/
-void CalcNoiseDivFactors(int q, int *qp1Inv, int *qqp1Inv) {
+void CalcNoiseDivFactors(int32_t q, int32_t *qp1Inv, int32_t *qqp1Inv) {
 
-    int z, qp1, t, s;
+    int32_t z, qp1, t, s;
 
     /* 1 + Q_orig */
     qp1 = (q >> 1);
@@ -7570,11 +7570,11 @@ void CalcNoiseDivFactors(int q, int *qp1Inv, int *qqp1Inv) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch, int env, int lim, int fbitsDQ) {
+void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch, int32_t env, int32_t lim, int32_t fbitsDQ) {
 
-    int d, m, mStart, mEnd, q, qm, noiseFloor, sIndexMapped;
-    int shift, eCurr, maxFlag, gainMax, gainMaxFBits;
-    int gain, sm, z, r, fbitsGain, gainScale;
+    int32_t d, m, mStart, mEnd, q, qm, noiseFloor, sIndexMapped;
+    int32_t shift, eCurr, maxFlag, gainMax, gainMaxFBits;
+    int32_t gain, sm, z, r, fbitsGain, gainScale;
     uint8_t *freqBandTab;
 
     mStart = sbrFreq->freqLimiter[lim]; /* these are offsets from kStart */
@@ -7654,13 +7654,13 @@ void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, in
 
         /* see if gain for this band exceeds max gain */
         maxFlag = 0;
-        if(gainMax != (int) 0x80000000) {
+        if(gainMax != (int32_t) 0x80000000) {
             if(fbitsGain >= gainMaxFBits) {
-                shift = MIN(fbitsGain - gainMaxFBits, 31);
+                shift = MIN(fbitsGain - gainMaxFBits, (int32_t)31);
                 maxFlag = ((gainScale >> shift) > gainMax ? 1 : 0);
             }
             else {
-                shift = MIN(gainMaxFBits - fbitsGain, 31);
+                shift = MIN(gainMaxFBits - fbitsGain, (int32_t)31);
                 maxFlag = (gainScale > (gainMax >> shift) ? 1 : 0);
             }
         }
@@ -7679,10 +7679,10 @@ void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, in
             r = (gainMax << z) / r; /* out = Q((fbitsGainMax + z) - (fbitsGain - q)) */
             q = (gainMaxFBits + z) - (fbitsGain - q); /* r = Q(q) */
             if(q > 30) {
-                r >>= MIN(q - 30, 31);
+                r >>= MIN(q - 30, (int32_t)31);
             }
             else {
-                z = MIN(30 - q, 30);
+                z = MIN((int32_t)30 - q, (int32_t)30);
                 r = CLIP_2N_SHIFT30(r, z); /* let r = Q30 since range = [0.0, 1.0) (clip to 0x3fffffff = 0.99999) */
             }
 
@@ -7728,10 +7728,10 @@ void CalcComponentGains(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, in
  *
  * Notes:       after scaling, each component has at least 1 GB
  **********************************************************************************************************************/
-void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ) {
+void ApplyBoost(SBRFreq *sbrFreq, int32_t lim, int32_t fbitsDQ) {
 
-    int m, mStart, mEnd, q, z, r;
-    int sumEOrigMapped, gBoost;
+    int32_t m, mStart, mEnd, q, z, r;
+    int32_t sumEOrigMapped, gBoost;
 
     mStart = sbrFreq->freqLimiter[lim]; /* these are offsets from kStart */
     mEnd = sbrFreq->freqLimiter[lim + 1];
@@ -7777,10 +7777,10 @@ void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ) {
         r = SqrtFix(q, m_PSInfoSBR->gLimFbits[m] - 2, &z);
         z -= FBITS_GLIM_BOOST;
         if(z >= 0) {
-            m_PSInfoSBR->gLimBoost[m] = r >> MIN(z, 31);
+            m_PSInfoSBR->gLimBoost[m] = r >> MIN(z, (int32_t)31);
         }
         else {
-            z = MIN(30, -z);
+            z = MIN((int32_t)30, -z);
             r = CLIP_2N_SHIFT30(r, z);
             m_PSInfoSBR->gLimBoost[m] = r;
         }
@@ -7789,10 +7789,10 @@ void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ) {
         r = SqrtFix(q, fbitsDQ - 2, &z);
         z -= FBITS_QLIM_BOOST; /* << by 14, since integer sqrt of x < 2^16, and we want to leave 1 GB */
         if(z >= 0) {
-            m_PSInfoSBR->qmLimBoost[m] = r >> MIN(31, z);
+            m_PSInfoSBR->qmLimBoost[m] = r >> MIN((int32_t)31, z);
         }
         else {
-            z = MIN(30, -z);
+            z = MIN((int32_t)30, -z);
             r = CLIP_2N_SHIFT30(r, z);
             m_PSInfoSBR->qmLimBoost[m] = r;
         }
@@ -7801,10 +7801,10 @@ void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ) {
         r = SqrtFix(q, fbitsDQ - 2, &z);
         z -= FBITS_OUT_QMFA; /* justify for adding to signal (xBuf) later */
         if(z >= 0) {
-            m_PSInfoSBR->smBoost[m] = r >> MIN(31, z);
+            m_PSInfoSBR->smBoost[m] = r >> MIN((int32_t)31, z);
         }
         else {
-            z = MIN(30, -z);
+            z = MIN((int32_t)30, -z);
             r = CLIP_2N_SHIFT30(r, z);
             m_PSInfoSBR->smBoost[m] = r;
         }
@@ -7827,9 +7827,9 @@ void ApplyBoost(SBRFreq *sbrFreq, int lim, int fbitsDQ) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void CalcGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch, int env) {
+void CalcGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch, int32_t env) {
 
-    int lim, fbitsDQ;
+    int32_t lim, fbitsDQ;
 
     /* initialize to -1 so that mapping limiter bands to env/noise bands works right on first pass */
     m_PSInfoSBR->envBand = -1;
@@ -7847,7 +7847,7 @@ void CalcGain(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sb
 }
 
 /* hSmooth table from 4.7.18.7.6, format = Q31 */
-static const int hSmoothCoef[MAX_NUM_SMOOTH_COEFS] PROGMEM = { 0x2aaaaaab, 0x2697a512, 0x1becfa68, 0x0ebdb043,
+static const int32_t hSmoothCoef[MAX_NUM_SMOOTH_COEFS] PROGMEM = { 0x2aaaaaab, 0x2697a512, 0x1becfa68, 0x0ebdb043,
         0x04130598, };
 
 /***********************************************************************************************************************
@@ -7870,12 +7870,12 @@ static const int hSmoothCoef[MAX_NUM_SMOOTH_COEFS] PROGMEM = { 0x2aaaaaab, 0x269
  * Notes:       ensures that output has >= MIN_GBITS_IN_QMFS guard bits,
  *                so it's not necessary to check anything in the synth QMF
  **********************************************************************************************************************/
-void MapHF(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int env, int hfReset) {
+void MapHF(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t env, int32_t hfReset) {
 
-    int noiseTabIndex, sinIndex, gainNoiseIndex, hSL;
-    int i, iStart, iEnd, m, idx, j, s, n, smre, smim;
-    int gFilt, qFilt, xre, xim, gbMask, gbIdx;
-    int *XBuf;
+    int32_t noiseTabIndex, sinIndex, gainNoiseIndex, hSL;
+    int32_t i, iStart, iEnd, m, idx, j, s, n, smre, smim;
+    int32_t gFilt, qFilt, xre, xim, gbMask, gbIdx;
+    int32_t *XBuf;
 
     noiseTabIndex = sbrChan->noiseTabIndex;
     sinIndex = sbrChan->sinIndex;
@@ -8036,9 +8036,9 @@ void MapHF(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrCh
  *
  * Return:      none
  **********************************************************************************************************************/
-void AdjustHighFreq(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch) {
+void AdjustHighFreq(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch) {
 
-    int i, env, hfReset;
+    int32_t i, env, hfReset;
     uint8_t frameClass, pointer;
 
     frameClass = sbrGrid->frameClass;
@@ -8090,10 +8090,10 @@ void AdjustHighFreq(SBRHeader *sbrHdr, SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRCh
  *
  * Notes:       outputs are normalized to have 1 GB (sign in at least top 2 bits)
  **********************************************************************************************************************/
-int CalcCovariance1(int *XBuf, int *p01reN, int *p01imN, int *p12reN, int *p12imN, int *p11reN, int *p22reN) {
+int32_t CalcCovariance1(int32_t *XBuf, int32_t *p01reN, int32_t *p01imN, int32_t *p12reN, int32_t *p12imN, int32_t *p11reN, int32_t *p22reN) {
 
-    int accBuf[2*6];
-    int n, z, s, loShift, hiShift, gbMask;
+    int32_t accBuf[2*6];
+    int32_t n, z, s, loShift, hiShift, gbMask;
     U64 p01re, p01im, p12re, p12im, p11re, p22re;
 
     CVKernel1(XBuf, accBuf);
@@ -8169,11 +8169,11 @@ int CalcCovariance1(int *XBuf, int *p01reN, int *p01imN, int *p12reN, int *p12im
  *
  * Notes:       outputs are normalized to have 1 GB (sign in at least top 2 bits)
  **********************************************************************************************************************/
-int CalcCovariance2(int *XBuf, int *p02reN, int *p02imN) {
+int32_t CalcCovariance2(int32_t *XBuf, int32_t *p02reN, int32_t *p02imN) {
 
     U64 p02re, p02im;
-    int n, z, s, loShift, hiShift, gbMask;
-    int accBuf[2*2];
+    int32_t n, z, s, loShift, hiShift, gbMask;
+    int32_t accBuf[2*2];
 
     CVKernel2(XBuf, accBuf);
     p02re.r.lo32 = accBuf[0];
@@ -8234,10 +8234,10 @@ int CalcCovariance2(int *XBuf, int *p02reN, int *p02imN) {
  *              if the comples coefficients have magnitude >= 4.0, they are all
  *                set to 0 (see spec)
  **********************************************************************************************************************/
-void CalcLPCoefs(int *XBuf, int *a0re, int *a0im, int *a1re, int *a1im, int gb) {
+void CalcLPCoefs(int32_t *XBuf, int32_t *a0re, int32_t *a0im, int32_t *a1re, int32_t *a1im, int32_t gb) {
 
-    int zFlag, n1, n2, nd, d, dInv, tre, tim;
-    int p01re, p01im, p02re, p02im, p12re, p12im, p11re, p22re;
+    int32_t zFlag, n1, n2, nd, d, dInv, tre, tim;
+    int32_t p01re, p01im, p02re, p02im, p12re, p12im, p11re, p22re;
 
     /* pre-scale to avoid overflow - probably never happens in practice (see QMFA)
      *   max bit growth per accumulator = 38*2 = 76 mul-adds (X * X)
@@ -8259,13 +8259,13 @@ void CalcLPCoefs(int *XBuf, int *a0re, int *a0im, int *a1re, int *a1im, int gb) 
 
     /* normalize everything to larger power of 2 scalefactor, call it n1 */
     if (n1 < n2) {
-        nd = MIN(n2 - n1, 31);
+        nd = MIN(n2 - n1, (int32_t)31);
         p01re >>= nd;   p01im >>= nd;
         p12re >>= nd;   p12im >>= nd;
         p11re >>= nd;   p22re >>= nd;
         n1 = n2;
     } else if (n1 > n2) {
-        nd = MIN(n1 - n2, 31);
+        nd = MIN(n1 - n2, (int32_t)31);
         p02re >>= nd;   p02im >>= nd;
     }
 
@@ -8365,14 +8365,14 @@ void CalcLPCoefs(int *XBuf, int *a0re, int *a0im, int *a1re, int *a1im, int gb) 
  *
  * Return:      none
  **********************************************************************************************************************/
-void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch) {
+void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch) {
 
-    int band, newBW, c, t, gb, gbMask, gbIdx;
-    int currPatch, p, x, k, g, i, iStart, iEnd, bw, bwsq;
-    int a0re, a0im, a1re, a1im;
-    int x1re, x1im, x2re, x2im;
-    int ACCre, ACCim;
-    int *XBufLo, *XBufHi;
+    int32_t band, newBW, c, t, gb, gbMask, gbIdx;
+    int32_t currPatch, p, x, k, g, i, iStart, iEnd, bw, bwsq;
+    int32_t a0re, a0im, a1re, a1im;
+    int32_t x1re, x1im, x2re, x2im;
+    int32_t ACCre, ACCim;
+    int32_t *XBufLo, *XBufHi;
     (void) ch;
 
     /* calculate array of chirp factors */
@@ -8470,7 +8470,7 @@ void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int 
                     sbrChan->gbMask[gbIdx] |= gbMask;
                 }
             } else {
-                XBufLo = (int *)m_PSInfoSBR->XBuf[iStart][p];
+                XBufLo = (int32_t *)m_PSInfoSBR->XBuf[iStart][p];
                 for (i = iStart; i < iEnd; i++) {
                     XBufHi[0] = XBufLo[0];
                     XBufHi[1] = XBufLo[1];
@@ -8501,12 +8501,12 @@ void GenerateHighFreq(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int 
  *                if there are no codes at nBits, then we just keep << 1 each time
  *                  (since count[nBits] = 0)
  **********************************************************************************************************************/
-int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf,
-        signed int *val) {
+int32_t DecodeHuffmanScalar(const int16_t *huffTab, const HuffInfo_t *huffTabInfo, uint32_t bitBuf,
+        int32_t *val) {
 
     uint32_t count, start, shift, t;
     const uint8_t *countPtr;
-    const signed int /*short*/*map;
+    const int16_t *map;
 
     map = huffTab + huffTabInfo->offset;
     countPtr = huffTabInfo->count;
@@ -8523,7 +8523,7 @@ int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo
         t = (bitBuf >> shift) - start;
     } while(t >= count);
 
-    *val = (signed int) map[t];
+    *val = (int32_t) map[t];
     return (countPtr - huffTabInfo->count);
 }
 /***********************************************************************************************************************
@@ -8538,7 +8538,7 @@ int DecodeHuffmanScalar(const signed int *huffTab, const HuffInfo_t *huffTabInfo
  *
  * Return:      one decoded symbol
  **********************************************************************************************************************/
-int DecodeOneSymbol(int huffTabIndex) {
+int32_t DecodeOneSymbol(int32_t huffTabIndex) {
 
     int32_t nBits, val;
     uint32_t bitBuf;
@@ -8554,7 +8554,7 @@ int DecodeOneSymbol(int huffTabIndex) {
 }
 
 /* [1.0, sqrt(2)], format = Q29 (one guard bit for decoupling) */
-static const int envDQTab[2] PROGMEM = {0x20000000, 0x2d413ccc};
+static const int32_t envDQTab[2] PROGMEM = {0x20000000, 0x2d413ccc};
 
 /***********************************************************************************************************************
  * Function:    DequantizeEnvelope
@@ -8567,14 +8567,14 @@ static const int envDQTab[2] PROGMEM = {0x20000000, 0x2d413ccc};
  *
  * Outputs:     dequantized envelope scalefactors
  *
- * Return:      extra int bits in output (6 + expMax)
+ * Return:      extra int32_t bits in output (6 + expMax)
  *              in other words, output format = Q(FBITS_OUT_DQ_ENV - (6 + expMax))
  *
  * Notes:       dequantized scalefactors have at least 2 GB
  **********************************************************************************************************************/
-int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant) {
+int32_t DequantizeEnvelope(int32_t nBands, int32_t ampRes, int8_t *envQuant, int32_t *envDequant) {
 
-    int exp, expMax, i, scalei;
+    int32_t exp, expMax, i, scalei;
 
     if(nBands <= 0) return 0;
 
@@ -8599,7 +8599,7 @@ int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant
     if(ampRes) {
         do {
             exp = *envQuant++;
-            scalei = MIN(expMax - exp, 31);
+            scalei = MIN(expMax - exp, (int32_t)31);
             *envDequant++ = envDQTab[0] >> scalei;
         } while(--nBands);
 
@@ -8609,7 +8609,7 @@ int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant
         expMax >>= 1;
         do {
             exp = *envQuant++;
-            scalei = MIN(expMax - (exp >> 1), 31);
+            scalei = MIN(expMax - (exp >> 1), (int32_t)31);
             *envDequant++ = envDQTab[exp & 0x01] >> scalei;
         } while(--nBands);
 
@@ -8631,9 +8631,9 @@ int DequantizeEnvelope(int nBands, int ampRes, int8_t *envQuant, int *envDequant
  *
  * Notes:       dequantized scalefactors have at least 2 GB
  **********************************************************************************************************************/
-void DequantizeNoise(int nBands, int8_t *noiseQuant, int *noiseDequant) {
+void DequantizeNoise(int32_t nBands, int8_t *noiseQuant, int32_t *noiseDequant) {
 
-    int exp, scalei;
+    int32_t exp, scalei;
 
     if(nBands <= 0) return;
 
@@ -8672,10 +8672,10 @@ void DequantizeNoise(int nBands, int8_t *noiseQuant, int *noiseDequant) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch) {
+void DecodeSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch) {
 
-    int huffIndexTime, huffIndexFreq, env, envStartBits, band, nBands, sf, lastEnv;
-    int freqRes, freqResPrev, dShift, i;
+    int32_t huffIndexTime, huffIndexFreq, env, envStartBits, band, nBands, sf, lastEnv;
+    int32_t freqRes, freqResPrev, dShift, i;
 
     if(m_PSInfoSBR->couplingFlag && ch) {
         dShift = 1;
@@ -8782,9 +8782,9 @@ void DecodeSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int
  *
  * Return:      none
  **********************************************************************************************************************/
-void DecodeSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch) {
+void DecodeSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int32_t ch) {
 
-    int huffIndexTime, huffIndexFreq, noiseFloor, band, dShift, sf, lastNoiseFloor;
+    int32_t huffIndexTime, huffIndexFreq, noiseFloor, band, dShift, sf, lastNoiseFloor;
 
     if(m_PSInfoSBR->couplingFlag && ch) {
         dShift = 1;
@@ -8828,7 +8828,7 @@ void DecodeSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChan, int ch
 }
 
 /* dqTabCouple[i] = 2 / (1 + 2^(12 - i)), format = Q30 */
-static const int dqTabCouple[25] PROGMEM = {
+static const int32_t dqTabCouple[25] PROGMEM = {
     0x0007ff80, 0x000ffe00, 0x001ff802, 0x003fe010, 0x007f8080, 0x00fe03f8, 0x01f81f82, 0x03e0f83e,
     0x07878788, 0x0e38e38e, 0x1999999a, 0x2aaaaaab, 0x40000000, 0x55555555, 0x66666666, 0x71c71c72,
     0x78787878, 0x7c1f07c2, 0x7e07e07e, 0x7f01fc08, 0x7f807f80, 0x7fc01ff0, 0x7fe007fe, 0x7ff00200,
@@ -8853,7 +8853,7 @@ static const int dqTabCouple[25] PROGMEM = {
  **********************************************************************************************************************/
 void UncoupleSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR) {
 
-    int env, band, nBands, scalei, E_1;
+    int32_t env, band, nBands, scalei, E_1;
 
     scalei = (sbrGrid->ampResFrame ? 0 : 1);
     for(env = 0; env < sbrGrid->numEnv; env++) {
@@ -8891,7 +8891,7 @@ void UncoupleSBREnvelope(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR) 
  **********************************************************************************************************************/
 void UncoupleSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR) {
 
-    int noiseFloor, band, Q_1;
+    int32_t noiseFloor, band, Q_1;
 
     for (noiseFloor = 0; noiseFloor < sbrGrid->numNoiseFloors; noiseFloor++) {
         for (band = 0; band < sbrFreq->numNoiseFloorBands; band++) {
@@ -8925,11 +8925,11 @@ void UncoupleSBRNoise(SBRGrid *sbrGrid, SBRFreq *sbrFreq, SBRChan *sbrChanR) {
  *
  * Notes:       use this function when the decoded PCM is going to the SBR decoder
  **********************************************************************************************************************/
-void DecWindowOverlapNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev) {
+void DecWindowOverlapNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev) {
 
-    int in, w0, w1, f0, f1;
-    int *buf1, *over1, *out1;
-    const int *wndPrev, *wndCurr;
+    int32_t in, w0, w1, f0, f1;
+    int32_t *buf1, *over1, *out1;
+    const int32_t *wndPrev, *wndCurr;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -9000,11 +9000,11 @@ void DecWindowOverlapNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, i
  *
  * Notes:       use this function when the decoded PCM is going to the SBR decoder
  **********************************************************************************************************************/
-void DecWindowOverlapLongStartNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev) {
+void DecWindowOverlapLongStartNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev) {
 
-    int i,  in, w0, w1, f0, f1;
-    int *buf1, *over1, *out1;
-    const int *wndPrev, *wndCurr;
+    int32_t i,  in, w0, w1, f0, f1;
+    int32_t *buf1, *over1, *out1;
+    const int32_t *wndPrev, *wndCurr;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -9075,11 +9075,11 @@ void DecWindowOverlapLongStartNoClip(int *buf0, int *over0, int *out0, int winTy
  *
  * Notes:       use this function when the decoded PCM is going to the SBR decoder
  **********************************************************************************************************************/
-void DecWindowOverlapLongStopNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev) {
+void DecWindowOverlapLongStopNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev) {
 
-    int i, in, w0, w1, f0, f1;
-    int *buf1, *over1, *out1;
-    const int *wndPrev, *wndCurr;
+    int32_t i, in, w0, w1, f0, f1;
+    int32_t *buf1, *over1, *out1;
+    const int32_t *wndPrev, *wndCurr;
 
     buf0 += (1024 >> 1);
     buf1  = buf0  - 1;
@@ -9150,11 +9150,11 @@ void DecWindowOverlapLongStopNoClip(int *buf0, int *over0, int *out0, int winTyp
  *
  * Notes:       use this function when the decoded PCM is going to the SBR decoder
  **********************************************************************************************************************/
-void DecWindowOverlapShortNoClip(int *buf0, int *over0, int *out0, int winTypeCurr, int winTypePrev) {
+void DecWindowOverlapShortNoClip(int32_t *buf0, int32_t *over0, int32_t *out0, int32_t winTypeCurr, int32_t winTypePrev) {
 
-    int i, in, w0, w1, f0, f1;
-    int *buf1, *over1, *out1;
-    const int *wndPrev, *wndCurr;
+    int32_t i, in, w0, w1, f0, f1;
+    int32_t *buf1, *over1, *out1;
+    const int32_t *wndPrev, *wndCurr;
 
     wndPrev = (winTypePrev == 1 ? kbdWindow + kbdWindowOffset[0] : sinWindow + sinWindowOffset[0]);
     wndCurr = (winTypeCurr == 1 ? kbdWindow + kbdWindowOffset[0] : sinWindow + sinWindowOffset[0]);
@@ -9315,17 +9315,17 @@ void DecWindowOverlapShortNoClip(int *buf0, int *over0, int *out0, int winTypeCu
  *
  * Return:      none
  *
- * Notes:       minimum 1 GB in, 2 GB out, gains 2 int bits
+ * Notes:       minimum 1 GB in, 2 GB out, gains 2 int32_t bits
  *              gbOut = gbIn + 1
  *              output is limited to sqrt(2)/2 plus GB in full GB
  *              uses 3-mul, 3-add butterflies instead of 4-mul, 2-add
  **********************************************************************************************************************/
-void PreMultiply64(int *zbuf1) {
+void PreMultiply64(int32_t *zbuf1) {
 
-    int i, ar1, ai1, ar2, ai2, z1, z2;
-    int t, cms2, cps2a, sin2a, cps2b, sin2b;
-    int *zbuf2;
-    const int *csptr;
+    int32_t i, ar1, ai1, ar2, ai2, z1, z2;
+    int32_t t, cms2, cps2a, sin2a, cps2b, sin2b;
+    int32_t *zbuf2;
+    const int32_t *csptr;
 
     zbuf2 = zbuf1 + 64 - 1;
     csptr = cos4sin4tab64;
@@ -9375,18 +9375,18 @@ void PreMultiply64(int *zbuf1) {
  *
  * Return:      none
  *
- * Notes:       minimum 1 GB in, 2 GB out, gains 2 int bits
+ * Notes:       minimum 1 GB in, 2 GB out, gains 2 int32_t bits
  *              gbOut = gbIn + 1
  *              output is limited to sqrt(2)/2 plus GB in full GB
  *              nSampsOut is rounded up to next multiple of 4, since we calculate
  *                4 samples per loop
  **********************************************************************************************************************/
-void PostMultiply64(int *fft1, int nSampsOut) {
+void PostMultiply64(int32_t *fft1, int32_t nSampsOut) {
 
-    int i, ar1, ai1, ar2, ai2;
-    int t, cms2, cps2, sin2;
-    int *fft2;
-    const int *csptr;
+    int32_t i, ar1, ai1, ar2, ai2;
+    int32_t t, cms2, cps2, sin2;
+    int32_t *fft2;
+    const int32_t *csptr;
 
     csptr = cos1sin1tab64;
     fft2 = fft1 + 64 - 1;
@@ -9404,7 +9404,7 @@ void PostMultiply64(int *fft1, int nSampsOut) {
         ar2 = *(fft2 - 1);
         ai2 = *(fft2 + 0);
 
-        /* gain 2 int bits (multiplying by Q30), max gain = sqrt(2) */
+        /* gain 2 int32_t bits (multiplying by Q30), max gain = sqrt(2) */
         t = MULSHIFT32(sin2, ar1 + ai1);
         *fft2-- = t - MULSHIFT32(cps2, ai1);
         *fft1++ = t + MULSHIFT32(cms2, ar1);
@@ -9435,10 +9435,10 @@ void PostMultiply64(int *fft1, int nSampsOut) {
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrqmfak.s when building for ARM!
  **********************************************************************************************************************/
-void QMFAnalysisConv(int *cTab, int *delay, int dIdx, int *uBuf) {
+void QMFAnalysisConv(int32_t *cTab, int32_t *delay, int32_t dIdx, int32_t *uBuf) {
 
-    int k, dOff;
-    int *cPtr0, *cPtr1;
+    int32_t k, dOff;
+    int32_t *cPtr0, *cPtr1;
     U64 u64lo, u64hi;
 
     dOff = dIdx*32 + 31;
@@ -9505,13 +9505,13 @@ void QMFAnalysisConv(int *cTab, int *delay, int dIdx, int *uBuf) {
  * Return:      guard bit mask
  *
  * Notes:       output stored as RE{X0}, IM{X0}, RE{X1}, IM{X1}, ... RE{X31}, IM{X31}
- *              output stored in int buffer of size 64*2 = 128
+ *              output stored in int32_t buffer of size 64*2 = 128
  *                (zero-filled from XBuf[2*qmfaBands] to XBuf[127])
  **********************************************************************************************************************/
-int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx, int qmfaBands) {
+int32_t QMFAnalysis(int32_t *inbuf, int32_t *delay, int32_t *XBuf, int32_t fBitsIn, int32_t *delayIdx, int32_t qmfaBands) {
 
-    int n, y, shift, gbMask;
-    int *delayPtr, *uBuf, *tBuf;
+    int32_t n, y, shift, gbMask;
+    int32_t *delayPtr, *uBuf, *tBuf;
 
     /* use XBuf[128] as temp buffer for reordering */
     uBuf = XBuf;        /* first 64 samples */
@@ -9522,14 +9522,14 @@ int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx, i
      */
     delayPtr = delay + (*delayIdx * 32);
     if (fBitsIn > FBITS_IN_QMFA) {
-        shift = MIN(fBitsIn - FBITS_IN_QMFA, 31);
+        shift = MIN(fBitsIn - FBITS_IN_QMFA, (int32_t)31);
         for (n = 32; n != 0; n--) {
             y = (*inbuf) >> shift;
             inbuf++;
             *delayPtr++ = y;
         }
     } else {
-        shift = MIN(FBITS_IN_QMFA - fBitsIn, 30);
+        shift = MIN(FBITS_IN_QMFA - fBitsIn, (int32_t)30);
         for (n = 32; n != 0; n--) {
             y = *inbuf++;
             y = CLIP_2N_SHIFT30(y, shift);
@@ -9537,7 +9537,7 @@ int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx, i
         }
     }
 
-    QMFAnalysisConv((int *)cTabA, delay, *delayIdx, uBuf);
+    QMFAnalysisConv((int32_t *)cTabA, delay, *delayIdx, uBuf);
 
     /* uBuf has at least 2 GB right now (1 from clipping to Q(FBITS_IN_QMFA), one from
      *   the scaling by cTab (MULSHIFT32(*delayPtr--, *cPtr++), with net gain of < 1.0)
@@ -9593,9 +9593,9 @@ int QMFAnalysis(int *inbuf, int *delay, int *XBuf, int fBitsIn, int *delayIdx, i
  * Notes:       this is carefully written to be efficient on ARM
  *              use the assembly code version in sbrqmfsk.s when building for ARM!
  **********************************************************************************************************************/
-void QMFSynthesisConv(int *cPtr, int *delay, int dIdx, short *outbuf, int nChans) {
+void QMFSynthesisConv(int32_t *cPtr, int32_t *delay, int32_t dIdx, int16_t *outbuf, int32_t nChans) {
 
-    int k, dOff0, dOff1;
+    int32_t k, dOff0, dOff1;
     U64 sum64;
 
     dOff0 = (dIdx)*128;
@@ -9643,10 +9643,10 @@ void QMFSynthesisConv(int *cPtr, int *delay, int dIdx, short *outbuf, int nChans
  * Notes:       assumes MIN_GBITS_IN_QMFS guard bits in input, either from
  *                QMFAnalysis (if upsampling only) or from MapHF (if SBR on)
  **********************************************************************************************************************/
-void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands, short *outbuf, int nChans) {
+void QMFSynthesis(int32_t *inbuf, int32_t *delay, int32_t *delayIdx, int32_t qmfsBands, int16_t *outbuf, int32_t nChans) {
 
-    int n, a0, a1, b0, b1, dOff0, dOff1, dIdx;
-    int *tBufLo, *tBufHi;
+    int32_t n, a0, a1, b0, b1, dOff0, dOff1, dIdx;
+    int32_t *tBufLo, *tBufHi;
 
     dIdx = *delayIdx;
     tBufLo = delay + dIdx*128 + 0;
@@ -9710,7 +9710,7 @@ void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands, short *o
         delay[dOff1++] = (b1 + a1);
     }
 
-    QMFSynthesisConv((int *)cTabS, delay, dIdx, outbuf, nChans);
+    QMFSynthesisConv((int32_t *)cTabS, delay, dIdx, outbuf, nChans);
 
     *delayIdx = (*delayIdx == NUM_QMF_DELAY_BUFS - 1 ? 0 : *delayIdx + 1);
 }
@@ -9725,7 +9725,7 @@ void QMFSynthesis(int *inbuf, int *delay, int *delayIdx, int qmfsBands, short *o
  *
  * Return:      non-zero if frame reset is triggered, zero otherwise
  **********************************************************************************************************************/
-int UnpackSBRHeader(SBRHeader *sbrHdr) {
+int32_t UnpackSBRHeader(SBRHeader *sbrHdr) {
 
     SBRHeader sbrHdrPrev;
 
@@ -9796,7 +9796,7 @@ static const uint8_t cLog2[9] = {0, 0, 1, 2, 2, 3, 3, 3, 3};
  **********************************************************************************************************************/
 void UnpackSBRGrid(SBRHeader *sbrHdr, SBRGrid *sbrGrid) {
 
-    int numEnvRaw, env, rel, pBits, border, middleBorder = 0;
+    int32_t numEnvRaw, env, rel, pBits, border, middleBorder = 0;
     uint8_t relBordLead[MAX_NUM_ENV], relBordTrail[MAX_NUM_ENV];
     uint8_t relBorder0[3], relBorder1[3], relBorder[3];
     uint8_t numRelBorder0, numRelBorder1, numRelBorder, numRelLead = 0, numRelTrail;
@@ -9977,9 +9977,9 @@ void UnpackSBRGrid(SBRHeader *sbrHdr, SBRGrid *sbrGrid) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void UnpackDeltaTimeFreq(int numEnv, uint8_t *deltaFlagEnv, int numNoiseFloors, uint8_t *deltaFlagNoise) {
+void UnpackDeltaTimeFreq(int32_t numEnv, uint8_t *deltaFlagEnv, int32_t numNoiseFloors, uint8_t *deltaFlagNoise) {
 
-    int env, noiseFloor;
+    int32_t env, noiseFloor;
 
     for (env = 0; env < numEnv; env++)
         deltaFlagEnv[env] = GetBits(1);
@@ -9999,9 +9999,9 @@ void UnpackDeltaTimeFreq(int numEnv, uint8_t *deltaFlagEnv, int numNoiseFloors, 
  *
  * Return:      none
  **********************************************************************************************************************/
-void UnpackInverseFilterMode(int numNoiseFloorBands, uint8_t *mode) {
+void UnpackInverseFilterMode(int32_t numNoiseFloorBands, uint8_t *mode) {
 
-    int n;
+    int32_t n;
 
     for (n = 0; n < numNoiseFloorBands; n++)
         mode[n] = GetBits(2);
@@ -10018,9 +10018,9 @@ void UnpackInverseFilterMode(int numNoiseFloorBands, uint8_t *mode) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void UnpackSinusoids(int nHigh, int addHarmonicFlag, uint8_t *addHarmonic) {
+void UnpackSinusoids(int32_t nHigh, int32_t addHarmonicFlag, uint8_t *addHarmonic) {
 
-    int n;
+    int32_t n;
 
     n = 0;
     if(addHarmonicFlag) {
@@ -10045,7 +10045,7 @@ void UnpackSinusoids(int nHigh, int addHarmonicFlag, uint8_t *addHarmonic) {
  **********************************************************************************************************************/
 void CopyCouplingGrid(SBRGrid *sbrGridLeft, SBRGrid *sbrGridRight) {
 
-    int env, noiseFloor;
+    int32_t env, noiseFloor;
 
     sbrGridRight->frameClass = sbrGridLeft->frameClass;
     sbrGridRight->ampResFrame = sbrGridLeft->ampResFrame;
@@ -10076,9 +10076,9 @@ void CopyCouplingGrid(SBRGrid *sbrGridLeft, SBRGrid *sbrGridRight) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void CopyCouplingInverseFilterMode(int numNoiseFloorBands, uint8_t *modeLeft, uint8_t *modeRight) {
+void CopyCouplingInverseFilterMode(int32_t numNoiseFloorBands, uint8_t *modeLeft, uint8_t *modeRight) {
 
-    int band;
+    int32_t band;
 
     for(band = 0; band < numNoiseFloorBands; band++)
         modeRight[band] = modeLeft[band];
@@ -10098,9 +10098,9 @@ void CopyCouplingInverseFilterMode(int numNoiseFloorBands, uint8_t *modeLeft, ui
  *
  * Return:      none
  **********************************************************************************************************************/
-void UnpackSBRSingleChannel(int chBase) {
+void UnpackSBRSingleChannel(int32_t chBase) {
 
-    int bitsLeft;
+    int32_t bitsLeft;
     SBRHeader *sbrHdr = &(m_PSInfoSBR->sbrHdr[chBase]);
     SBRGrid *sbrGridL = &(m_PSInfoSBR->sbrGrid[chBase + 0]);
     SBRFreq *sbrFreq = &(m_PSInfoSBR->sbrFreq[chBase]);
@@ -10145,9 +10145,9 @@ void UnpackSBRSingleChannel(int chBase) {
  *
  * Return:      none
  **********************************************************************************************************************/
-void UnpackSBRChannelPair(int chBase) {
+void UnpackSBRChannelPair(int32_t chBase) {
 
-    int bitsLeft;
+    int32_t bitsLeft;
     SBRHeader *sbrHdr = &(m_PSInfoSBR->sbrHdr[chBase]);
     SBRGrid *sbrGridL = &(m_PSInfoSBR->sbrGrid[chBase + 0]), *sbrGridR = &(m_PSInfoSBR->sbrGrid[chBase + 1]);
     SBRFreq *sbrFreq = &(m_PSInfoSBR->sbrFreq[chBase]);
