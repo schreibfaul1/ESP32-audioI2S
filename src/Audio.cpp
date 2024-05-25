@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10
- *  Updated on: May 22.2024
+ *  Version 3.0.10a
+ *  Updated on: May 25.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2734,7 +2734,20 @@ const char* Audio::parsePlaylist_M3U8() {
                         tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1);
                         strcpy(tmp, m_lastHost);
                     }
-                    int idx = lastIndexOf(tmp, "/");
+                    int idx = 0;
+                    if(indexOf(m_playlistContent[i], '/') == -1){
+                        //   playlist: http://as-hls-ww-live.akamaized.net/pool_904/live/ww/bbc_6music/bbc_6music.isml/bbc_6music-audio=96000.norewind.m3u8
+                        //   chunklist bbc_6music-audio=96000-268225824.ts
+                        //   result    http://as-hls-ww-live.akamaized.net/pool_904/live/ww/bbc_6music/bbc_6music.isml/bbc_6music-audio=96000-268225837.ts
+                        idx = lastIndexOf(tmp, "/");
+                    }
+                    else{
+                        //   playlist: http://rtsradio-live.morescreens.com/RTS_2_001/audio/chunklist.m3u8 and
+                        //   chunklist /RTS_2_001/audio/2024-05-25-H14/audio-2024-05-25-14-39-36.ts
+                        //   result    http://rtsradio-live.morescreens.com/RTS_2_001/audio/2024-05-25-H14/audio-2024-05-25-14-39-36.ts
+                        //   must remove /RTS_2_001/audio.....
+                        idx = indexOf(tmp, '/', 8);
+                    }
                     strcpy(tmp + idx + 1, m_playlistContent[i]);
                 }
                 else { tmp = strdup(m_playlistContent[i]); }
