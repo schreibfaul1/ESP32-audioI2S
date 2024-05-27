@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10b
+ *  Version 3.0.10c
  *  Updated on: May 27.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -173,13 +173,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
-    m_i2s_std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_16BIT;  // Bits per sample
-    m_i2s_std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_AUTO;   // I2S channel slot bit-width equals to data bit-width
-    m_i2s_std_cfg.slot_cfg.slot_mode      = I2S_SLOT_MODE_STEREO;      // I2S_SLOT_MODE_MONO, I2S_SLOT_MODE_STEREO,
-    m_i2s_std_cfg.slot_cfg.slot_mask      = I2S_STD_SLOT_BOTH;         // I2S_STD_SLOT_LEFT, I2S_STD_SLOT_RIGHT
-    m_i2s_std_cfg.slot_cfg.ws_width       = I2S_DATA_BIT_WIDTH_16BIT;  // WS signal width (i.e. the number of bclk ticks that ws signal is high)
-    m_i2s_std_cfg.slot_cfg.ws_pol         = false;                     // WS signal polarity, set true to enable high lever first
-    m_i2s_std_cfg.slot_cfg.bit_shift      = true;                      // Set to enable bit shift in Philips mode
+    m_i2s_std_cfg.slot_cfg                = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
     m_i2s_std_cfg.gpio_cfg.bclk           = I2S_GPIO_UNUSED;           // BCLK, Assignment in setPinout()
     m_i2s_std_cfg.gpio_cfg.din            = I2S_GPIO_UNUSED;           // not used
     m_i2s_std_cfg.gpio_cfg.dout           = I2S_GPIO_UNUSED;           // DOUT, Assignment in setPinout()
@@ -4988,16 +4982,28 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 
 #if ESP_IDF_VERSION_MAJOR < 5
     if(commFMT) {
-        if(m_f_Log) log_i("commFMT LSB");
+        if(m_f_Log) log_i("commFMT MSB");
         m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB); // v >= 2.0.0
     }
     else {
-        if(m_f_Log) log_i("commFMT MSB");
+        if(m_f_Log) log_i("commFMT Philips");
         m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
     }
     AUDIO_INFO("commFMT = %i", m_i2s_config.communication_format);
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);
     i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
+#else
+    i2s_channel_disable(m_i2s_tx_handle);
+    if(commFMT) {
+        AUDIO_INFO("commFMT = LSBJ (Least Significant Bit Justified)");
+        m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    }
+    else {
+        AUDIO_INFO("commFMT = Philips");
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    }
+    i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
+    i2s_channel_enable(m_i2s_tx_handle);
 #endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
