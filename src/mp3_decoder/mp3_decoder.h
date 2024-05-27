@@ -44,8 +44,8 @@ typedef struct MP3FrameInfo {
 } MP3FrameInfo_t;
 
 typedef struct SFBandTable {
-    int32_t/*short*/ l[23];
-    int32_t/*short*/ s[14];
+    int32_t l[23];
+    int32_t s[14];
 } SFBandTable_t;
 
 typedef struct BitStreamInfo {
@@ -456,6 +456,7 @@ const uint32_t csa[8][2] PROGMEM = {
 
 // prototypes
 bool MP3Decoder_AllocateBuffers(void);
+bool MP3Decoder_IsInit();
 void MP3Decoder_FreeBuffers();
 int32_t  MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t useSize);
 void MP3GetLastFrameInfo();
@@ -469,8 +470,8 @@ int32_t  MP3GetOutputSamps();
 
 //internally used
 void MP3Decoder_ClearBuffer(void);
-void PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase);
-void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase);
+void PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t* coefBase);
+void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t* coefBase);
 void SetBitstreamPointer(BitStreamInfo_t *bsi, int32_t nBytes, uint8_t *buf);
 uint32_t GetBits(BitStreamInfo_t *bsi, int32_t nBits);
 int32_t CalcBitsUsed(BitStreamInfo_t *bsi, uint8_t *startBuf, int32_t startOffset);
@@ -479,7 +480,6 @@ void MidSideProc(int32_t x[m_MAX_NCHAN][m_MAX_NSAMP], int32_t nSamps, int32_t mO
 void IntensityProcMPEG1(int32_t x[m_MAX_NCHAN][m_MAX_NSAMP], int32_t nSamps, ScaleFactorInfoSub_t *sfis,	CriticalBandInfo_t *cbi, int32_t midSideFlag, int32_t mixFlag, int32_t mOut[2]);
 void IntensityProcMPEG2(int32_t x[m_MAX_NCHAN][m_MAX_NSAMP], int32_t nSamps, ScaleFactorInfoSub_t *sfis, CriticalBandInfo_t *cbi, ScaleFactorJS_t *sfjs, int32_t midSideFlag, int32_t mixFlag, int32_t mOut[2]);
 void FDCT32(int32_t *x, int32_t *d, int32_t offset, int32_t oddBlock, int32_t gb);// __attribute__ ((section (".data")));
-void FreeBuffers();
 int32_t CheckPadBit();
 int32_t UnpackFrameHeader(uint8_t *buf);
 int32_t UnpackSideInfo(uint8_t *buf);

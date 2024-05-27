@@ -3954,14 +3954,16 @@ bool Audio::initializeDecoder() {
     uint32_t hWM = 0;
     switch(m_codec) {
         case CODEC_MP3:
-            if(!MP3Decoder_AllocateBuffers()) {
-                AUDIO_INFO("The MP3Decoder could not be initialized");
-                goto exit;
+            if(!MP3Decoder_IsInit()){
+                if(!MP3Decoder_AllocateBuffers()) {
+                    AUDIO_INFO("The MP3Decoder could not be initialized");
+                    goto exit;
+                }
+                gfH = ESP.getFreeHeap();
+                hWM = uxTaskGetStackHighWaterMark(NULL);
+                AUDIO_INFO("MP3Decoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+                InBuff.changeMaxBlockSize(m_frameSizeMP3);
             }
-            gfH = ESP.getFreeHeap();
-            hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("MP3Decoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
-            InBuff.changeMaxBlockSize(m_frameSizeMP3);
             break;
         case CODEC_AAC:
             if(!AACDecoder_IsInit()) {

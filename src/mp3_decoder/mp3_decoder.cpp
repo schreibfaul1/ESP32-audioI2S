@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 22.04.2024
+ *  Updated on: 27.05.2024
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1604,6 +1604,25 @@ bool MP3Decoder_AllocateBuffers(void) {
     return true;
 }
 /***********************************************************************************************************************
+ * Function:    MP3Decoder_IsInit
+ *
+ * Description: returns MP3 decoder initialization status
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      true if buffers allocated, otherwise false
+
+ **********************************************************************************************************************/
+bool MP3Decoder_IsInit(void) {
+    if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
+       !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
+        return false;
+    }
+    return true;
+}
+/***********************************************************************************************************************
  * Function:    MP3Decoder_FreeBuffers
  *
  * Description: frees all the memory used by the MP3 decoder
@@ -1625,10 +1644,10 @@ void MP3Decoder_FreeBuffers()
     if(m_SideInfo)          {free(m_SideInfo);        m_SideInfo=NULL;}
     if(m_ScaleFactorJS )    {free(m_ScaleFactorJS);   m_ScaleFactorJS=NULL;}
     if(m_HuffmanInfo)       {free(m_HuffmanInfo);     m_HuffmanInfo=NULL;}
-    if(m_DequantInfo)       {free(m_DequantInfo);     m_DequantInfo=0;}
-    if(m_IMDCTInfo)         {free(m_IMDCTInfo);       m_IMDCTInfo=0;}
-    if(m_SubbandInfo)       {free(m_SubbandInfo);     m_SubbandInfo=0;}
-    if(m_MP3FrameInfo)      {free(m_MP3FrameInfo);    m_MP3FrameInfo=0;}
+    if(m_DequantInfo)       {free(m_DequantInfo);     m_DequantInfo=NULL;}
+    if(m_IMDCTInfo)         {free(m_IMDCTInfo);       m_IMDCTInfo=NULL;}
+    if(m_SubbandInfo)       {free(m_SubbandInfo);     m_SubbandInfo=NULL;}
+    if(m_MP3FrameInfo)      {free(m_MP3FrameInfo);    m_MP3FrameInfo=NULL;}
 
 //    log_i("MP3Decoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
 }
@@ -3500,9 +3519,7 @@ int32_t Subband(int16_t *pcmBuf) {
         for (b = 0; b < m_BLOCK_SIZE; b++) {
             FDCT32(m_IMDCTInfo->outBuf[0][b], m_SubbandInfo->vbuf + 0 * 32, m_SubbandInfo->vindex,
                     (b & 0x01), m_IMDCTInfo->gb[0]);
-            PolyphaseMono(pcmBuf,
-                    m_SubbandInfo->vbuf + m_SubbandInfo->vindex + m_VBUF_LENGTH * (b & 0x01),
-                    polyCoef);
+            PolyphaseMono(pcmBuf, m_SubbandInfo->vbuf + m_SubbandInfo->vindex + m_VBUF_LENGTH * (b & 0x01), polyCoef);
             m_SubbandInfo->vindex = (m_SubbandInfo->vindex - (b & 0x01)) & 7;
             pcmBuf += m_NBANDS;
         }
@@ -3721,7 +3738,7 @@ short ClipToShort(int32_t x, int32_t fracBits){
  *
  * Return:      none
  **********************************************************************************************************************/
-void PolyphaseMono(short *pcm, int32_t *vbuf, const uint32_t *coefBase){
+void PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase){
    int32_t i;
     const uint32_t *coef;
    int32_t *vb1;
@@ -3786,7 +3803,7 @@ void PolyphaseMono(short *pcm, int32_t *vbuf, const uint32_t *coefBase){
  *
  * Notes:       interleaves PCM samples LRLRLR...
  **********************************************************************************************************************/
-void PolyphaseStereo(short *pcm, int32_t *vbuf, const uint32_t *coefBase){
+void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase){
    int32_t i;
     const uint32_t *coef;
    int32_t *vb1;
