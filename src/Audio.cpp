@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10c
+ *  Version 3.0.10d
  *  Updated on: May 27.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2386,7 +2386,6 @@ void Audio::loop() {
                 if(!parseHttpResponseHeader()) {
                     if(m_f_timeout) connecttohost(m_lastHost);
                 }
-                m_codec = CODEC_AAC;
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
@@ -2682,9 +2681,14 @@ const char* Audio::parsePlaylist_M3U8() {
             if(!f_begin) continue;
 
             if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")) {
-                ret = m3u8redirection();
-                if(ret) return ret;
+                uint8_t codec = CODEC_NONE;
+                ret = m3u8redirection(&codec);
+                if(ret) {
+                    m_codec = codec; // can be AAC or MP3
+                    return ret;
+                }
             }
+            if(m_codec == CODEC_NONE) m_codec = CODEC_AAC; // if we have no redirection
 
             // "#EXT-X-DISCONTINUITY-SEQUENCE: // not used, 0: seek for continuity numbers, is sometimes not set
             // "#EXT-X-MEDIA-SEQUENCE:"        // not used, is unreliable
@@ -2857,7 +2861,7 @@ const char* Audio::parsePlaylist_M3U8() {
     return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-const char* Audio::m3u8redirection() {
+const char* Audio::m3u8redirection(uint8_t* codec) {
     // example: redirection
     // #EXTM3U
     // #EXT-X-STREAM-INF:BANDWIDTH=117500,AVERAGE-BANDWIDTH=117000,CODECS="mp4a.40.2"
@@ -2867,41 +2871,52 @@ const char* Audio::m3u8redirection() {
     // #EXT-X-STREAM-INF:BANDWIDTH=37500,AVERAGE-BANDWIDTH=37000,CODECS="mp4a.40.29"
     // 32/playlist.m3u8?hlssid=7562d0e101b84aeea0fa35f8b963a174
 
-    uint32_t bw[20] = {0};
-    uint32_t finalBW = 0;
+    const char codecString[9][11]={
+        "mp4a.40.34", // mp3 stream
+        "mp4a.40.01", // AAC Main
+        "mp4a.40.2",  // MPEG-4 AAC LC
+        "mp4a.40.02", // MPEG-4 AAC LC, leading 0 for Aud-OTI compatibility
+        "mp4a.40.29", // MPEG-4 HE-AAC v2 (AAC LC + SBR + PS)
+        "mp4a.40.42", // xHE-AAC
+        "mp4a.40.5",  // MPEG-4 HE-AAC v1 (AAC LC + SBR)
+        "mp4a.40.05", // MPEG-4 HE-AAC v1 (AAC LC + SBR), leading 0 for Aud-OTI compatibility
+        "mp4a.67",    // MPEG-2 AAC LC
+    };
+
     uint16_t choosenLine = 0;
     uint16_t plcSize = m_playlistContent.size();
-    if(plcSize > 20) plcSize = 20;
-    int16_t posBW = 0;
+    int8_t   cS = 100;
 
-    for(uint16_t i = 0; i < plcSize; i++) { // looking for best (highest) bandwidth
-        posBW = indexOf(m_playlistContent[i], "BANDWIDTH=");
-        if(posBW > 0) {
-            char* endP;
-            bw[i] = strtol(m_playlistContent[i] + posBW + 10, &endP, 10); // read until comma
+    for(uint16_t i = 0; i < plcSize; i++) { // looking for lowest codeString
+        int16_t posCodec = indexOf(m_playlistContent[i], "CODECS=\"mp4a");
+        if(posCodec > 0){
+            bool found = false;
+            for(uint8_t j = 0; j < sizeof(codecString); j++){
+                if(indexOf(m_playlistContent[i], codecString[j]) > 0){
+                    if(j < cS){cS = j; choosenLine = i;}
+                    found = true;
+                }
+            }
+            if(!found) log_w("codeString %s not in list", m_playlistContent[i] + posCodec);
         }
+        if(cS == 0)            *codec = CODEC_MP3;
+        if(cS > 0 && cS < 100) *codec = CODEC_AAC;
     }
-    for(uint16_t i = 0; i < plcSize; i++) {
-        if(bw[i] > finalBW) { finalBW = bw[i], choosenLine = i + 1; }
-    }
-    AUDIO_INFO("bandwidth: %lu bit/s", (long unsigned)finalBW);
 
     char* tmp = nullptr;
-    if((!endsWith(m_playlistContent[choosenLine], "m3u8") && indexOf(m_playlistContent[choosenLine], "m3u8?") == -1)) {
-        // we have a new m3u8 playlist, skip to next line
-        int pos = indexOf(m_playlistContent[choosenLine - 1], "CODECS=\"mp4a", 18);
-        // 'mp4a.40.01' AAC Main
-        // 'mp4a.40.02' AAC LC (Low Complexity)
-        // 'mp4a.40.03' AAC SSR (Scalable Sampling Rate) ??
-        // 'mp4a.40.03' AAC LTP (Long Term Prediction) ??
-        // 'mp4a.40.03' SBR (Spectral Band Replication)
-        if(pos < 0) { // not found
-            int pos1 = indexOf(m_playlistContent[choosenLine - 1], "CODECS=", 18);
-            if(pos1 < 0) pos1 = 0;
-            log_e("codec %s in m3u8 playlist not supported", m_playlistContent[choosenLine - 1] + pos1);
-            goto exit;
-        }
-    }
+
+    // if((!endsWith(m_playlistContent[choosenLine], "m3u8") && indexOf(m_playlistContent[choosenLine], "m3u8?") == -1)) {
+    //     // we have a new m3u8 playlist, skip to next line
+    //     int pos = indexOf(m_playlistContent[choosenLine - 1], "CODECS=\"mp4a", 18);
+    //     if(pos < 0) { // not found
+    //         int pos1 = indexOf(m_playlistContent[choosenLine - 1], "CODECS=", 18);
+    //         if(pos1 < 0) pos1 = 0;
+    //         log_e("codec %s in m3u8 playlist not supported", m_playlistContent[choosenLine - 1] + pos1);
+    //         goto exit;
+    //     }
+    // }
+    choosenLine++; // next line is the redirection url
+
     if(!startsWith(m_playlistContent[choosenLine], "http")) {
 
         // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
@@ -2949,9 +2964,6 @@ const char* Audio::m3u8redirection() {
     log_d("redirect to %s", m_playlistContent[choosenLine]);
     _client->stop();
     return m_playlistContent[choosenLine]; // it's a redirection, a new m3u8 playlist
-exit:
-    stopSong();
-    return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media sequence is

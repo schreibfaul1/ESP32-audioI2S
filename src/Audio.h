@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.10c
+ *  Version 3.0.10d
  *  Updated on: May 27.2024
  *      Author: Wolle (schreibfaul1)
  */
@@ -203,7 +203,7 @@ private:
   const char*     parsePlaylist_PLS();
   const char*     parsePlaylist_ASX();
   const char*     parsePlaylist_M3U8();
-  const char*     m3u8redirection();
+  const char*     m3u8redirection(uint8_t* codec);
   uint64_t        m3u8_findMediaSeqInURL();
   bool            STfromEXTINF(char* str);
   void            showCodecParams();
