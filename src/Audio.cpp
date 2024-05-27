@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10a
- *  Updated on: May 25.2024
+ *  Version 3.0.10b
+ *  Updated on: May 27.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -169,7 +169,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
     m_i2s_chan_cfg.dma_desc_num  = 16;                     // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = 512;                    // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_frame_num = 512;                // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
@@ -726,7 +726,6 @@ bool Audio::httpPrint(const char* host) {
         if(port == 80) port = 443;
     }
     else { _client = static_cast<WiFiClient*>(&client); }
-
     if(!_client->connected()) {
         AUDIO_INFO("The host has disconnected, reconnecting");
         if(!_client->connect(hostwoext, port)) {
@@ -736,7 +735,6 @@ bool Audio::httpPrint(const char* host) {
         }
     }
     _client->print(rqh);
-
     if(endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
     if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
     if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
@@ -2323,10 +2321,10 @@ void Audio::playChunk() {
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 sample[RIGHTCHANNEL] = x;
                 sample[LEFTCHANNEL] = x;
-                if(!pc(sample)) { break; } // playSample in lambda
+                if(!pc(sample)) { /* break */; } // playSample in lambda
                 sample[RIGHTCHANNEL] = y;
                 sample[LEFTCHANNEL] = y;
-                if(!pc(sample)) { break; } // playSample in lambda
+                if(!pc(sample)) { /* break */; } // playSample in lambda
             }
             if(getChannels() == 2) {
                 uint8_t x = m_outBuff[m_curSample] & 0x00FF;
@@ -2340,7 +2338,7 @@ void Audio::playChunk() {
                     sample[RIGHTCHANNEL] = xy;
                     sample[LEFTCHANNEL] = xy;
                 }
-                if(!pc(sample)) { break; } // playSample in lambda
+                if(!pc(sample)) { /* break */; } // playSample in lambda
             }
         }
 
@@ -2361,7 +2359,7 @@ void Audio::playChunk() {
                 }
             }
         }
-        if(!pc(sample)) { break; } // playSample in lambda
+        if(!pc(sample)) { /* break */; } // playSample in lambda
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2724,8 +2722,11 @@ const char* Audio::parsePlaylist_M3U8() {
 
                 char* tmp = nullptr;
                 if(!startsWith(m_playlistContent[i], "http")) {
-                    // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
-                    // http://livees.com/prog_index48347.aac
+
+                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                        //  chunklist:  http://station.com/aaa/bbb/ddd.aac
+                        //  result:     http://station.com/aaa/bbb/ddd.aac
+
                     if(m_lastM3U8host != 0) {
                         tmp = (char*)malloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1);
                         strcpy(tmp, m_lastM3U8host);
@@ -2734,21 +2735,28 @@ const char* Audio::parsePlaylist_M3U8() {
                         tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1);
                         strcpy(tmp, m_lastHost);
                     }
-                    int idx = 0;
-                    if(indexOf(m_playlistContent[i], '/') == -1){
-                        //   playlist: http://as-hls-ww-live.akamaized.net/pool_904/live/ww/bbc_6music/bbc_6music.isml/bbc_6music-audio=96000.norewind.m3u8
-                        //   chunklist bbc_6music-audio=96000-268225824.ts
-                        //   result    http://as-hls-ww-live.akamaized.net/pool_904/live/ww/bbc_6music/bbc_6music.isml/bbc_6music-audio=96000-268225837.ts
-                        idx = lastIndexOf(tmp, "/");
+
+
+                    if(m_playlistContent[i][0] != '/'){
+
+                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
+                        //  chunklist:  ddd.aac                              // m_playlistContent[i]
+                        //  result:     http://station.com/aaa/bbb/ddd.aac   // m_playlistContent[i]
+
+                        int idx = lastIndexOf(tmp, "/");
+                        tmp[idx  + 1] = '\0';
+                        strcat(tmp, m_playlistContent[i]);
                     }
                     else{
-                        //   playlist: http://rtsradio-live.morescreens.com/RTS_2_001/audio/chunklist.m3u8 and
-                        //   chunklist /RTS_2_001/audio/2024-05-25-H14/audio-2024-05-25-14-39-36.ts
-                        //   result    http://rtsradio-live.morescreens.com/RTS_2_001/audio/2024-05-25-H14/audio-2024-05-25-14-39-36.ts
-                        //   must remove /RTS_2_001/audio.....
-                        idx = indexOf(tmp, '/', 8);
+
+                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                        //  chunklist:  /aaa/bbb/ddd.aac
+                        //  result:     http://station.com/aaa/bbb/ddd.aac
+
+                        int idx = indexOf(tmp, "/", 8);
+                        tmp[idx] = '\0';
+                        strcat(tmp, m_playlistContent[i]);
                     }
-                    strcpy(tmp + idx + 1, m_playlistContent[i]);
                 }
                 else { tmp = strdup(m_playlistContent[i]); }
 
@@ -3540,7 +3548,7 @@ void Audio::processWebStreamTS() {
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(true) {                                                  // statement has no effect
-        if(InBuff.bufferFilled() > maxFrameSize && !f_stream) { // waiting for buffer filled
+        if(InBuff.bufferFilled() > 50000 && !f_stream) {        // waiting for buffer filled
             f_stream = true;                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             if(m_f_Log) AUDIO_INFO("stream ready");
@@ -3646,7 +3654,7 @@ void Audio::processWebStreamHLS() {
 
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 40000) {
+            if(InBuff.bufferFilled() < 50000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
