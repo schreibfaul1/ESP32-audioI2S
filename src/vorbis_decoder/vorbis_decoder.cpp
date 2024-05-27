@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 03.04.2024
+ *  Updated on: 27.05.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -859,8 +859,8 @@ int32_t vorbis_book_unpack(codebook_t *s) {
 
     /* first the basic parameters */
     ret = bitReader(16) ;
-    if(ret < 0) printf("error in vorbis_book_unpack, ret =%i\n", ret);
-    if(ret > 255) printf("error in vorbis_book_unpack, ret =%i\n", ret);
+    if(ret < 0) printf("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
+    if(ret > 255) printf("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
     s->dim = (uint8_t)ret;
     s->entries = bitReader(24);
     if(s->entries == -1) {log_e("no entries in unpack codebooks ?");   goto _eofout;}
