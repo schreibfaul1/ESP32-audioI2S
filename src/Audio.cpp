@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10d
- *  Updated on: May 27.2024
+ *  Version 3.0.10e
+ *  Updated on: May 29.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4996,14 +4996,13 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 
 #if ESP_IDF_VERSION_MAJOR < 5
     if(commFMT) {
-        if(m_f_Log) log_i("commFMT MSB");
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB); // v >= 2.0.0
+        AUDIO_INFO("commFMT = LSBJ (Least Significant Bit Justified)");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB);
     }
     else {
-        if(m_f_Log) log_i("commFMT Philips");
-        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S); // vers >= 2.0.0
+        AUDIO_INFO("commFMT = Philips");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S);
     }
-    AUDIO_INFO("commFMT = %i", m_i2s_config.communication_format);
     i2s_driver_uninstall((i2s_port_t)m_i2s_num);
     i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
 #else
