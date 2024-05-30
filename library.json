@@ -5,7 +5,7 @@
   "keywords": "audio, i2s, esp32",
   "repository": {
     "type": "git",
-    "url": "https://github.com/esphome/ESP32-audioI2S.git"
+    "url": "https://github.com/melwinek/ESP32-audioI2S.git"
   },
   "authors": [
     {
@@ -16,7 +16,7 @@
     }
   ],
   "license": "GPL-3.0",
-  "homepage": "https://github.com/esphome/ESP32-audioI2S",
+  "homepage": "https://github.com/melwinek/ESP32-audioI2S",
   "dependencies": {},
   "frameworks": "arduino",
   "platforms": "espressif32"
