@@ -33,6 +33,7 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 using namespace std;
+#define MULTISAMPLE 16 // set number of frames to send in multi-frame-mode
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
@@ -224,6 +225,8 @@ private:
   bool            setBitsPerSample(int bits);
   bool            setChannels(int channels);
   bool            setBitrate(int br);
+  bool            playPreparedSamples();
+  bool            play16Sample(int16_t sample16[MULTISAMPLE*2]);
   void            playChunk();
   bool            playSample(int16_t sample[2]);
   void            computeVUlevel(int16_t sample[2]);
@@ -487,6 +490,9 @@ private:
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
+
+    uint32_t* 		m_samplebuffer = NULL;          // for multiframe i2s-send
+	uint32_t 		m_sample = 0;                   // shbgr debug
 
     char*           m_ibuff = nullptr;              // used in audio_info()
     char*           m_chbuf = NULL;

@@ -306,7 +306,9 @@ void Audio::setDefaults() {
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear();
     m_hashQueue.shrink_to_fit(); // uint32_t vector
+    client.flush();;
     client.stop();
+    clientsecure.flush();
     clientsecure.stop();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
@@ -2294,67 +2296,234 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::playPreparedSamples() { // only for 16-bit/16 samples (64 byte), saved samples are always filtered + have gain applied
+	if(!m_samplebuffer)
+		return true; // buffer is empty now
+	/*
+int16_t i = 0;
+	for(i=0; i < MULTISAMPLE; i++) {
+		Serial.println(m_sample+i, DEC);
+		Serial.println(m_samplebuffer[i], DEC);
+	}
+	*/
+
+    m_i2s_bytesWritten = 0;
+    #if(ESP_IDF_VERSION_MAJOR == 5)
+    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)m_samplebuffer, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
+    #else
+    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)m_samplebuffer, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
+    #endif
+
+	// attention: filters get off when sample can not be sent
+
+    if(err != ESP_OK) {
+        log_e("ESP32 Errorcode %i", err);
+        return false;
+    }
+    if(m_i2s_bytesWritten < MULTISAMPLE*4) { // no more space in dma buffer  --> break and try it later
+        return false;
+    }
+	m_samplebuffer = NULL;
+	//Serial.println("emptied");
+    return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::play16Sample(int16_t sample16[MULTISAMPLE*2]) { // always 16 frames, only for 16-bit
+	static uint32_t s32arr[MULTISAMPLE]; // has to be static, otherwise might be overwritten; play16Sample must not be called when m_samplebuffer has data
+	uint32_t s32;
+	int16_t sample[2];
+	int16_t *sample2;
+	int16_t i = 0;
+	for(i=0; i < MULTISAMPLE; i++) {
+		sample[0] = sample16[i*2];
+		sample[0+1] = sample16[i*2+1];
+		// set a correction factor if filter have positive amplification
+		if(m_corr > 1) {
+			sample[LEFTCHANNEL] = sample[LEFTCHANNEL] / m_corr;
+			sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
+		}
+
+		computeVUlevel(sample);
+
+		// Filterchain, can commented out if not used
+		sample2 = sample;
+		sample2 = IIR_filterChain0(sample2); // not working otherwise here, something with pointers or memory protection ...
+		sample2 = IIR_filterChain1(sample2);
+		sample2 = IIR_filterChain2(sample2);
+
+		s32 = Gain(sample2);  // sample2volume;
+		//s32 = Gain(sample);  // sample2volume;
+		/*
+		if(audio_process_i2s) { // does not work with 16-frame-chunks
+			// process audio sample just before writing to i2s
+			bool continueI2S = false;
+			audio_process_i2s(&s32, &continueI2S);
+			if(!continueI2S) { return true; }
+		}
+		*/
+
+		if(m_f_internalDAC) { s32 += 0x80008000; }
+
+		if(m_sample < 200)
+			Serial.println(MULTISAMPLE, DEC);
+
+		s32arr[i] = s32;
+	}
+/*
+	for(i=0; i < MULTISAMPLE; i++) {
+		Serial.println(m_sample+i, DEC);
+		Serial.println(s32arr[i], DEC);
+	}
+*/
+
+    m_i2s_bytesWritten = 0;
+    #if(ESP_IDF_VERSION_MAJOR == 5)
+    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)s32arr, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
+    #else
+    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)s32arr, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
+    #endif
+
+	// attention: keep for next loop, otherwise filters go off
+
+    if(err != ESP_OK) {
+        log_e("ESP32 Errorcode %i", err);
+		m_samplebuffer = s32arr; // keep for later use
+        return false;
+    }
+    if(m_i2s_bytesWritten < MULTISAMPLE*4) { // no more space in dma buffer  --> break and try it later
+		m_samplebuffer = s32arr; // keep for later use
+        return false;
+    }
+    return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::playChunk() {
 
     int16_t sample[2];
+    int16_t sample16[MULTISAMPLE*2];
+	int16_t i = 0;
 
-    auto pc = [&](int16_t* s16) { // lambda, inner function
-        if(playSample(s16)) {
+	if(!playPreparedSamples()) // test if we have unsent samples after filter
+		return;
+
+    auto pc = [&](int16_t *s16) {  // lambda, inner function
+       if(playSample(s16)){
             m_validSamples--;
             m_curSample++;
+			m_sample++;
+			//Serial.println("pc");
             return true;
         }
         return false;
     };
 
+    auto pc16 = [&](int16_t *s16) {  // lambda, inner function
+		m_validSamples-=MULTISAMPLE; // always reduced due to additional buffer
+		m_curSample+=MULTISAMPLE;
+		m_sample+=MULTISAMPLE;
+		if(play16Sample(s16)){
+            return true;
+        }
+        return false;
+    };
+
+	int16_t m_validSamples0 = m_validSamples; // shbgr debug
+
     // If we've got data, try and pump it out..
-    while(m_validSamples) {
+    while(m_validSamples){
         if(getBitsPerSample() == 8) {
             if(getChannels() == 1) {
                 uint8_t x = m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
                 sample[RIGHTCHANNEL] = x;
                 sample[LEFTCHANNEL] = x;
-                if(!pc(sample)) { /* break */; } // playSample in lambda
+                if(!pc(sample)){ break;} // playSample in lambda
                 sample[RIGHTCHANNEL] = y;
                 sample[LEFTCHANNEL] = y;
-                if(!pc(sample)) { /* break */; } // playSample in lambda
+                if(!pc(sample)){ break;} // playSample in lambda
             }
             if(getChannels() == 2) {
                 uint8_t x = m_outBuff[m_curSample] & 0x00FF;
                 uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
-                if(!m_f_forceMono) { // stereo mode
+                if(!m_f_forceMono) {  // stereo mode
                     sample[RIGHTCHANNEL] = x;
                     sample[LEFTCHANNEL] = y;
                 }
-                else { // force mono
+                else {  // force mono
                     uint8_t xy = (x + y) / 2;
                     sample[RIGHTCHANNEL] = xy;
                     sample[LEFTCHANNEL] = xy;
                 }
-                if(!pc(sample)) { /* break */; } // playSample in lambda
+                if(!pc(sample)){ break;} // playSample in lambda
             }
         }
 
         if(getBitsPerSample() == 16) {
-            if(getChannels() == 1) {
-                sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
-                sample[LEFTCHANNEL] = m_outBuff[m_curSample];
-            }
-            if(getChannels() == 2) {
-                if(!m_f_forceMono) { // stereo mode
-                    sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
-                    sample[LEFTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
-                }
-                else { // mono mode, #100
-                    int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2;
-                    sample[RIGHTCHANNEL] = xy;
-                    sample[LEFTCHANNEL] = xy;
-                }
-            }
+			if(m_validSamples >= MULTISAMPLE ) {
+				for(i=0; i < MULTISAMPLE; i++) {
+					//Serial.println(i);
+					/*
+					if((m_sample+i)%64 < 32) {
+						sample16[i*2+RIGHTCHANNEL] = - 1000;
+						sample16[i*2+LEFTCHANNEL] = - 1000;
+					}
+					else {
+						sample16[i*2+RIGHTCHANNEL] = 1000;
+						sample16[i*2+LEFTCHANNEL] = 1000;
+					}
+					*/
+
+					if(getChannels() == 1) {
+						sample16[i*2+RIGHTCHANNEL] = m_outBuff[m_curSample];
+						sample16[i*2+LEFTCHANNEL] = m_outBuff[m_curSample];
+					}
+					if(getChannels() == 2) {
+						if(!m_f_forceMono) {  // stereo mode
+							sample16[i*2+RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + i*2];
+							sample16[i*2+LEFTCHANNEL] = m_outBuff[m_curSample * 2 + i*2 + 1];
+						}
+						else {  // mono mode, #100
+							int16_t xy = (m_outBuff[m_curSample * 2 + i*2] + m_outBuff[m_curSample * 2 + i*2 + 1]) / 2; // overflow possible??
+							sample16[i*2+RIGHTCHANNEL] = xy;
+							sample16[i*2+LEFTCHANNEL] = xy;
+						}
+					}
+				}
+				if(!pc16(sample16)){ break;} // playSample in lambda
+			}
+			else {
+				/*
+				if((m_sample+i)%100 < 50) {
+					sample[i*2+RIGHTCHANNEL] = -10000;
+					sample[i*2+LEFTCHANNEL] = -10000;
+				}
+				else {
+					sample[i*2+RIGHTCHANNEL] = +10000;
+					sample[i*2+LEFTCHANNEL] = +10000;
+				}
+				*/
+				if(getChannels() == 1) {
+					sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
+					sample[LEFTCHANNEL] = m_outBuff[m_curSample];
+				}
+				if(getChannels() == 2) {
+						if(!m_f_forceMono) {  // stereo mode
+							sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
+							sample[LEFTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
+						}
+						else {  // mono mode, #100
+							int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2; // overflow possible??
+							sample[RIGHTCHANNEL] = xy;
+							sample[LEFTCHANNEL] = xy;
+						}
+				}
+				if(!pc(sample)){ break;} // playSample in lambda, fixed position in loop (was outside 16-bit-check, likely was wrong for 8-bit sound)
+			}
         }
-        if(!pc(sample)) { /* break */; } // playSample in lambda
     }
+	int16_t m_validSamples1 = m_validSamples; // shbgr debug
+	//log_e("%i %i", m_validSamples0 - m_validSamples1, m_validSamples1); // shbgr debug
+	// if(audio_sent) audio_sent(m_validSamples0 - m_validSamples1, m_validSamples, m_validSamples0); // shbgr debug
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
