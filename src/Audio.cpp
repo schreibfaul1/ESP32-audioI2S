@@ -2345,9 +2345,10 @@ void Audio::playChunk(bool i2s_only) {
         if(audio_process_i2s) {
             // processing the audio samples from external before forwarding them to i2s
             bool continueI2S = false;
-            // audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
+            audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
             if(!continueI2S) {
                 m_validSamples = 0;
+                count = 0;
                 return;
             }
         }
@@ -4630,11 +4631,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(m_bitsPerSample == 16) bytesDecoderOut *= 2;
     computeAudioTime(bytesDecoded, bytesDecoderOut);
 
-    if(audio_process_extern) {
-        bool continueI2S = false;
-        audio_process_extern(m_outBuff, m_validSamples, &continueI2S);
-        if(!continueI2S) { return bytesDecoded; }
-    }
     m_curSample = 0;
     playChunk(false);
     return bytesDecoded;
