@@ -188,6 +188,13 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(0);
     m_sampleRate = 44100;
+
+    if (internalDAC)  {
+        #ifdef CONFIG_IDF_TARGET_ESP32  // ESP32S3 has no DAC
+        printf("internal DAC is not supported");
+         // no support in V5 ???
+        #endif
+    }
 #else
     m_i2s_config.sample_rate          = 44100;
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
@@ -2323,11 +2330,14 @@ void Audio::playChunk(bool i2s_only) {
                 IIR_filterChain2(*sample);
                 //------------------------------------------------------------------
                 Gain(*sample);
-                // if(m_f_internalDAC){
-                //     s2 = *sample;
-                //     s2[LEFTCHANNEL] += 0x8000;
-                //     s2[RIGHTCHANNEL]+= 0x8000;
-                // }
+                if(m_f_internalDAC){
+                    s2 = *sample;
+                    s2[LEFTCHANNEL] += 0x8000;
+                    s2[RIGHTCHANNEL]+= 0x8000;
+                }
+            }
+            else{ // 8 bit per sample
+                    ;
             }
             i += 2;
             validSamples -= 1;
@@ -2345,10 +2355,22 @@ void Audio::playChunk(bool i2s_only) {
 
     validSamples = m_validSamples;
 
-
     if(m_bitsPerSample == 16){
-        esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count,  validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 0);
-        if(err != ESP_OK) log_e("i2s err %i", err);
+#if(ESP_IDF_VERSION_MAJOR == 5)
+        esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
+        if(err != ESP_OK){
+            if     (err == ESP_ERR_INVALID_ARG)   log_e("NULL pointer or this handle is not tx handle");
+            else if(err == ESP_ERR_TIMEOUT)       log_e("Writing timeout, no writing event received from ISR within ticks_to_wait");
+            else if(err == ESP_ERR_INVALID_STATE) log_e("I2S is not ready to write");
+            else log_e("i2s err %i", err);
+        } 
+#else      
+        esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 0);
+        if(err != ESP_OK){
+            log_e("i2s err %i", err);
+        } 
+#endif
+        
         m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
         if(m_validSamples < 0) { m_validSamples = 0;}
         count += i2s_bytesConsumed / sampleSize;
@@ -2357,12 +2379,16 @@ void Audio::playChunk(bool i2s_only) {
 
     if(m_bitsPerSample == 8){ // most only internal DAC, external DACs have 16...32 bit resolution
         while(m_validSamples){
-            esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)&m_outBuff[count], m_channels, &m_i2s_bytesWritten, 0); // no wait
+#if(ESP_IDF_VERSION_MAJOR == 5)
+            esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (uint8_t*)&m_outBuff[count], m_channels, &i2s_bytesConsumed, 0);
+#else
+            esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (uint8_t*)&m_outBuff[count], m_channels, &i2s_bytesConsumed, 0);
+#endif
             if(err) log_e("%i", err);
-            m_validSamples -= 2; //m_i2s_bytesWritten;
-        //    log_i("m_validSamples %i", m_validSamples);
+            m_validSamples -= 1; //m_i2s_bytesWritten;
+        //    log_i("m_i2s_bytesWritten %i", m_i2s_bytesWritten);
             if(m_validSamples <= 0) { m_validSamples = 0;}
-            count += 1; // m_i2s_bytesWritten;
+            count += 1;
         }
     }
 }
@@ -4822,7 +4848,9 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     esp_err_t result = ESP_OK;
 
     if(m_f_internalDAC) {
+#if(ESP_IDF_VERSION_MAJOR != 5)
         i2s_set_pin((i2s_port_t)m_i2s_num,  NULL);
+#endif
         return true;
     }
 
@@ -4989,30 +5017,21 @@ uint8_t Audio::getChannels() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::reconfigI2S(){
 
-    uint16_t sampleRate = 0;
-
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     I2Sstart(0);
 #else
- //   i2s_set_sample_rates((i2s_port_t)m_i2s_num, m_sampleRate);
-#endif
-
-
-    sampleRate  = m_sampleRate;
-//    if(m_bitsPerSample == 8) {sampleRate /= 2; log_e("sr %i", sampleRate);}
-
     if(m_channels == 1){
         m_i2s_config.channel_format = I2S_CHANNEL_FMT_ALL_RIGHT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, sampleRate, m_bitsPerSample, I2S_CHANNEL_MONO);
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, m_bitsPerSample, I2S_CHANNEL_MONO);
     }
-    if(m_channels == 2) {
+    if(m_channels == 2){
         m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, sampleRate, m_bitsPerSample, I2S_CHANNEL_STEREO);
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, m_bitsPerSample, I2S_CHANNEL_STEREO);
     }
-
+#endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
 
