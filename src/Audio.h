@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.10e
- *  Updated on: May 29.2024
+ *  Version 3.0.11
+ *  Updated on: Jun 04.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -33,7 +33,6 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 using namespace std;
-#define MULTISAMPLE 16 // set number of frames to send in multi-frame-mode
 
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
@@ -224,14 +223,12 @@ private:
   bool            setSampleRate(uint32_t hz);
   bool            setBitsPerSample(int bits);
   bool            setChannels(int channels);
+  void            reconfigI2S();
   bool            setBitrate(int br);
-  bool            playPreparedSamples();
-  bool            play16Sample(int16_t sample16[MULTISAMPLE*2]);
-  void            playChunk();
-  bool            playSample(int16_t sample[2]);
+  void            playChunk(bool i2s_only = false);
   void            computeVUlevel(int16_t sample[2]);
   void            computeLimit();
-  int32_t         Gain(int16_t s[2]);
+  void            Gain(int16_t* sample);
   void            showstreamtitle(const char* ml);
   bool            parseContentType(char* ct);
   bool            parseHttpResponseHeader();
@@ -239,9 +236,9 @@ private:
   esp_err_t       I2Sstart(uint8_t i2s_num);
   esp_err_t       I2Sstop(uint8_t i2s_num);
   void            urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
-  int16_t*        IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-  int16_t*        IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-  int16_t*        IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+  void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
+  void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
+  void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
   inline void     setDatamode(uint8_t dm) { m_datamode = dm; }
   inline uint8_t  getDatamode() { return m_datamode; }
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
@@ -491,9 +488,6 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    uint32_t* 		m_samplebuffer = NULL;          // for multiframe i2s-send
-	uint32_t 		m_sample = 0;                   // shbgr debug
-
     char*           m_ibuff = nullptr;              // used in audio_info()
     char*           m_chbuf = NULL;
     uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
@@ -529,9 +523,9 @@ private:
     uint8_t         m_vuLeft = 0;                   // average value of samples, left channel
     uint8_t         m_vuRight = 0;                  // average value of samples, right channel
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
-    std::atomic<int16_t>  m_validSamples = {0};     // #144
-    std::atomic<int16_t>  m_curSample{0};
-    std::atomic<uint16_t> m_datamode{0};            // Statemaschine
+    int16_t         m_validSamples = {0};           // #144
+    int16_t         m_curSample{0};
+    uint16_t        m_datamode{0};                  // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
@@ -545,7 +539,6 @@ private:
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
-	//uint32_t        m_byteCounter = 0;              // count received data
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio

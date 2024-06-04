@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.10e
- *  Updated on: May 29.2024
+ *  Version 3.0.11
+ *  Updated on: Jun 04.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -189,7 +189,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     I2Sstart(0);
     m_sampleRate = 44100;
 #else
-    m_i2s_config.sample_rate          = 16000;
+    m_i2s_config.sample_rate          = 44100;
     m_i2s_config.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
     m_i2s_config.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
     m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // interrupt priority
@@ -306,9 +306,7 @@ void Audio::setDefaults() {
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear();
     m_hashQueue.shrink_to_fit(); // uint32_t vector
-    client.flush();;
     client.stop();
-    clientsecure.flush();
     clientsecure.stop();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
@@ -2296,234 +2294,77 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::playPreparedSamples() { // only for 16-bit/16 samples (64 byte), saved samples are always filtered + have gain applied
-	if(!m_samplebuffer)
-		return true; // buffer is empty now
-	/*
-int16_t i = 0;
-	for(i=0; i < MULTISAMPLE; i++) {
-		Serial.println(m_sample+i, DEC);
-		Serial.println(m_samplebuffer[i], DEC);
-	}
-	*/
+void Audio::playChunk(bool i2s_only) {
 
-    m_i2s_bytesWritten = 0;
-    #if(ESP_IDF_VERSION_MAJOR == 5)
-    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)m_samplebuffer, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
-    #else
-    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)m_samplebuffer, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
-    #endif
+    int16_t validSamples = 0;
+    static uint16_t count = 0;
+    size_t i2s_bytesConsumed = 0;
+    int16_t* sample[2];
+    int16_t* s2;
+    int sampleSize = (m_bitsPerSample / 8);
 
-	// attention: filters get off when sample can not be sent
+    if(!i2s_only){
+        count = 0;
+        int i= 0;
+        validSamples = m_validSamples;
+        while(validSamples){
+            *sample = m_outBuff + i;
+            if(m_bitsPerSample == 16){
+                computeVUlevel(*sample);
 
-    if(err != ESP_OK) {
-        log_e("ESP32 Errorcode %i", err);
-        return false;
-    }
-    if(m_i2s_bytesWritten < MULTISAMPLE*4) { // no more space in dma buffer  --> break and try it later
-        return false;
-    }
-	m_samplebuffer = NULL;
-	//Serial.println("emptied");
-    return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::play16Sample(int16_t sample16[MULTISAMPLE*2]) { // always 16 frames, only for 16-bit
-	static uint32_t s32arr[MULTISAMPLE]; // has to be static, otherwise might be overwritten; play16Sample must not be called when m_samplebuffer has data
-	uint32_t s32;
-	int16_t sample[2];
-	int16_t *sample2;
-	int16_t i = 0;
-	for(i=0; i < MULTISAMPLE; i++) {
-		sample[0] = sample16[i*2];
-		sample[0+1] = sample16[i*2+1];
-		// set a correction factor if filter have positive amplification
-		if(m_corr > 1) {
-			sample[LEFTCHANNEL] = sample[LEFTCHANNEL] / m_corr;
-			sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
-		}
-
-		computeVUlevel(sample);
-
-		// Filterchain, can commented out if not used
-		sample2 = sample;
-		sample2 = IIR_filterChain0(sample2); // not working otherwise here, something with pointers or memory protection ...
-		sample2 = IIR_filterChain1(sample2);
-		sample2 = IIR_filterChain2(sample2);
-
-		s32 = Gain(sample2);  // sample2volume;
-		//s32 = Gain(sample);  // sample2volume;
-		/*
-		if(audio_process_i2s) { // does not work with 16-frame-chunks
-			// process audio sample just before writing to i2s
-			bool continueI2S = false;
-			audio_process_i2s(&s32, &continueI2S);
-			if(!continueI2S) { return true; }
-		}
-		*/
-
-		if(m_f_internalDAC) { s32 += 0x80008000; }
-
-		if(m_sample < 200)
-			Serial.println(MULTISAMPLE, DEC);
-
-		s32arr[i] = s32;
-	}
-/*
-	for(i=0; i < MULTISAMPLE; i++) {
-		Serial.println(m_sample+i, DEC);
-		Serial.println(s32arr[i], DEC);
-	}
-*/
-
-    m_i2s_bytesWritten = 0;
-    #if(ESP_IDF_VERSION_MAJOR == 5)
-    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)s32arr, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
-    #else
-    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)s32arr, MULTISAMPLE*4, &m_i2s_bytesWritten, 0); // fits either complete or not at all (dma-buffer-size is multiple of 64)
-    #endif
-
-	// attention: keep for next loop, otherwise filters go off
-
-    if(err != ESP_OK) {
-        log_e("ESP32 Errorcode %i", err);
-		m_samplebuffer = s32arr; // keep for later use
-        return false;
-    }
-    if(m_i2s_bytesWritten < MULTISAMPLE*4) { // no more space in dma buffer  --> break and try it later
-		m_samplebuffer = s32arr; // keep for later use
-        return false;
-    }
-    return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::playChunk() {
-
-    int16_t sample[2];
-    int16_t sample16[MULTISAMPLE*2];
-	int16_t i = 0;
-
-	if(!playPreparedSamples()) // test if we have unsent samples after filter
-		return;
-
-    auto pc = [&](int16_t *s16) {  // lambda, inner function
-       if(playSample(s16)){
-            m_validSamples--;
-            m_curSample++;
-			m_sample++;
-			//Serial.println("pc");
-            return true;
-        }
-        return false;
-    };
-
-    auto pc16 = [&](int16_t *s16) {  // lambda, inner function
-		m_validSamples-=MULTISAMPLE; // always reduced due to additional buffer
-		m_curSample+=MULTISAMPLE;
-		m_sample+=MULTISAMPLE;
-		if(play16Sample(s16)){
-            return true;
-        }
-        return false;
-    };
-
-	int16_t m_validSamples0 = m_validSamples; // shbgr debug
-
-    // If we've got data, try and pump it out..
-    while(m_validSamples){
-        if(getBitsPerSample() == 8) {
-            if(getChannels() == 1) {
-                uint8_t x = m_outBuff[m_curSample] & 0x00FF;
-                uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
-                sample[RIGHTCHANNEL] = x;
-                sample[LEFTCHANNEL] = x;
-                if(!pc(sample)){ break;} // playSample in lambda
-                sample[RIGHTCHANNEL] = y;
-                sample[LEFTCHANNEL] = y;
-                if(!pc(sample)){ break;} // playSample in lambda
+                //---------- Filterchain, can commented out if not used-------------
+                if(m_corr > 1) {
+                    s2 = *sample;
+                    s2[LEFTCHANNEL]  /= m_corr;
+                    s2[RIGHTCHANNEL] /= m_corr;
+                }
+                IIR_filterChain0(*sample);
+                IIR_filterChain1(*sample);
+                IIR_filterChain2(*sample);
+                //------------------------------------------------------------------
+                Gain(*sample);
+                // if(m_f_internalDAC){
+                //     s2 = *sample;
+                //     s2[LEFTCHANNEL] += 0x8000;
+                //     s2[RIGHTCHANNEL]+= 0x8000;
+                // }
             }
-            if(getChannels() == 2) {
-                uint8_t x = m_outBuff[m_curSample] & 0x00FF;
-                uint8_t y = (m_outBuff[m_curSample] & 0xFF00) >> 8;
-                if(!m_f_forceMono) {  // stereo mode
-                    sample[RIGHTCHANNEL] = x;
-                    sample[LEFTCHANNEL] = y;
-                }
-                else {  // force mono
-                    uint8_t xy = (x + y) / 2;
-                    sample[RIGHTCHANNEL] = xy;
-                    sample[LEFTCHANNEL] = xy;
-                }
-                if(!pc(sample)){ break;} // playSample in lambda
+            i += 2;
+            validSamples -= 1;
+        }
+        if(audio_process_i2s) {
+            // processing the audio samples from external before forwarding them to i2s
+            bool continueI2S = false;
+            // audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
+            if(!continueI2S) {
+                m_validSamples = 0;
+                return;
             }
         }
+    }
 
-        if(getBitsPerSample() == 16) {
-			if(m_validSamples >= MULTISAMPLE ) {
-				for(i=0; i < MULTISAMPLE; i++) {
-					//Serial.println(i);
-					/*
-					if((m_sample+i)%64 < 32) {
-						sample16[i*2+RIGHTCHANNEL] = - 1000;
-						sample16[i*2+LEFTCHANNEL] = - 1000;
-					}
-					else {
-						sample16[i*2+RIGHTCHANNEL] = 1000;
-						sample16[i*2+LEFTCHANNEL] = 1000;
-					}
-					*/
+    validSamples = m_validSamples;
 
-					if(getChannels() == 1) {
-						sample16[i*2+RIGHTCHANNEL] = m_outBuff[m_curSample];
-						sample16[i*2+LEFTCHANNEL] = m_outBuff[m_curSample];
-					}
-					if(getChannels() == 2) {
-						if(!m_f_forceMono) {  // stereo mode
-							sample16[i*2+RIGHTCHANNEL] = m_outBuff[m_curSample * 2 + i*2];
-							sample16[i*2+LEFTCHANNEL] = m_outBuff[m_curSample * 2 + i*2 + 1];
-						}
-						else {  // mono mode, #100
-							int16_t xy = (m_outBuff[m_curSample * 2 + i*2] + m_outBuff[m_curSample * 2 + i*2 + 1]) / 2; // overflow possible??
-							sample16[i*2+RIGHTCHANNEL] = xy;
-							sample16[i*2+LEFTCHANNEL] = xy;
-						}
-					}
-				}
-				if(!pc16(sample16)){ break;} // playSample in lambda
-			}
-			else {
-				/*
-				if((m_sample+i)%100 < 50) {
-					sample[i*2+RIGHTCHANNEL] = -10000;
-					sample[i*2+LEFTCHANNEL] = -10000;
-				}
-				else {
-					sample[i*2+RIGHTCHANNEL] = +10000;
-					sample[i*2+LEFTCHANNEL] = +10000;
-				}
-				*/
-				if(getChannels() == 1) {
-					sample[RIGHTCHANNEL] = m_outBuff[m_curSample];
-					sample[LEFTCHANNEL] = m_outBuff[m_curSample];
-				}
-				if(getChannels() == 2) {
-						if(!m_f_forceMono) {  // stereo mode
-							sample[RIGHTCHANNEL] = m_outBuff[m_curSample * 2];
-							sample[LEFTCHANNEL] = m_outBuff[m_curSample * 2 + 1];
-						}
-						else {  // mono mode, #100
-							int16_t xy = (m_outBuff[m_curSample * 2] + m_outBuff[m_curSample * 2 + 1]) / 2; // overflow possible??
-							sample[RIGHTCHANNEL] = xy;
-							sample[LEFTCHANNEL] = xy;
-						}
-				}
-				if(!pc(sample)){ break;} // playSample in lambda, fixed position in loop (was outside 16-bit-check, likely was wrong for 8-bit sound)
-			}
+
+    if(m_bitsPerSample == 16){
+        esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count,  validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 0);
+        if(err != ESP_OK) log_e("i2s err %i", err);
+        m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
+        if(m_validSamples < 0) { m_validSamples = 0;}
+        count += i2s_bytesConsumed / sampleSize;
+    }
+
+
+    if(m_bitsPerSample == 8){ // most only internal DAC, external DACs have 16...32 bit resolution
+        while(m_validSamples){
+            esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)&m_outBuff[count], m_channels, &m_i2s_bytesWritten, 0); // no wait
+            if(err) log_e("%i", err);
+            m_validSamples -= 2; //m_i2s_bytesWritten;
+        //    log_i("m_validSamples %i", m_validSamples);
+            if(m_validSamples <= 0) { m_validSamples = 0;}
+            count += 1; // m_i2s_bytesWritten;
         }
     }
-	int16_t m_validSamples1 = m_validSamples; // shbgr debug
-	//log_e("%i %i", m_validSamples0 - m_validSamples1, m_validSamples1); // shbgr debug
-	// if(audio_sent) audio_sent(m_validSamples0 - m_validSamples1, m_validSamples, m_validSamples0); // shbgr debug
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
@@ -2533,7 +2374,9 @@ void Audio::loop() {
 
     if(m_playlistFormat != FORMAT_M3U8) { // normal process
         switch(getDatamode()) {
-            case AUDIO_LOCALFILE: processLocalFile(); break;
+            case AUDIO_LOCALFILE:
+                if(m_validSamples) {playChunk(true); break;}
+                processLocalFile(); break;
             case HTTP_RESPONSE_HEADER: parseHttpResponseHeader(); break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
@@ -2542,6 +2385,7 @@ void Audio::loop() {
                 if(m_playlistFormat == FORMAT_ASX) connecttohost(parsePlaylist_ASX());
                 break;
             case AUDIO_DATA:
+                if(m_validSamples) {playChunk(true); break;}
                 if(m_streamType == ST_WEBSTREAM) processWebStream();
                 if(m_streamType == ST_WEBFILE) processWebFile();
                 break;
@@ -2571,6 +2415,7 @@ void Audio::loop() {
 
                 break;
             case AUDIO_DATA:
+                if(m_validSamples) {playChunk(true); break;}
                 if(m_f_ts) { processWebStreamTS(); } // aac or aacp with ts packets
                 else { processWebStreamHLS(); }      // aac or aacp normal stream
 
@@ -3351,7 +3196,7 @@ void Audio::processLocalFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk();
+                    playChunk(false);
                     return;
                 } // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3584,7 +3429,7 @@ void Audio::processWebFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk();
+                    playChunk(false);
                     return;
                 } // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3859,7 +3704,7 @@ void Audio::processWebStreamHLS() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::playAudioData() {
     if(m_validSamples) {
-        playChunk();
+        playChunk(false);
         return;
     } // play samples first
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // guard
@@ -4082,7 +3927,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(startsWith(rhl, "transfer-encoding:")) {
             if(endsWith(rhl, "chunked") || endsWith(rhl, "Chunked")) { // Station provides chunked transfer
                 m_f_chunked = true;
-                if(m_f_Log) AUDIO_INFO("chunked data transfer");
+                AUDIO_INFO("chunked data transfer");
                 m_chunkcount = 0; // Expect chunkcount in DATA
             }
         }
@@ -4619,6 +4464,7 @@ void Audio::setDecoderItems() {
         AUDIO_INFO("Num of channels must be 1 or 2, found %i", getChannels());
         stopSong();
     }
+    reconfigI2S();
     showCodecParams();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4764,7 +4610,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if(!continueI2S) { return bytesDecoded; }
     }
     m_curSample = 0;
-    playChunk();
+    playChunk(false);
     return bytesDecoded;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4975,6 +4821,11 @@ void Audio::printDecodeError(int r) {
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     esp_err_t result = ESP_OK;
 
+    if(m_f_internalDAC) {
+        i2s_set_pin((i2s_port_t)m_i2s_num,  NULL);
+        return true;
+    }
+
 #if(ESP_ARDUINO_VERSION_MAJOR < 2)
     log_e("Arduino Version too old!");
 #endif
@@ -5112,18 +4963,7 @@ bool Audio::audioFileSeek(const float speed) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
     if(!sampRate) sampRate = 44100; // fuse, if there is no value -> set default #209
-    if(m_sampleRate == sampRate) return true;
     m_sampleRate = sampRate;
-#if ESP_IDF_VERSION_MAJOR == 5
-    I2Sstop(0);
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
-    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    I2Sstart(0);
-#else
-    i2s_set_sample_rates((i2s_port_t)m_i2s_num, sampRate);
-#endif
-    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
-    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5137,7 +4977,6 @@ bool Audio::setBitsPerSample(int bits) {
 uint8_t Audio::getBitsPerSample() { return m_bitsPerSample; }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setChannels(int ch) {
-    if((ch < 1) || (ch > 2)) return false;
     m_channels = ch;
     return true;
 }
@@ -5146,6 +4985,39 @@ uint8_t Audio::getChannels() {
         m_channels = 2;
     }
     return m_channels;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::reconfigI2S(){
+
+    uint16_t sampleRate = 0;
+
+#if ESP_IDF_VERSION_MAJOR == 5
+    I2Sstop(0);
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = sampRate;
+    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+    I2Sstart(0);
+#else
+ //   i2s_set_sample_rates((i2s_port_t)m_i2s_num, m_sampleRate);
+#endif
+
+
+    sampleRate  = m_sampleRate;
+//    if(m_bitsPerSample == 8) {sampleRate /= 2; log_e("sr %i", sampleRate);}
+
+    if(m_channels == 1){
+        m_i2s_config.channel_format = I2S_CHANNEL_FMT_ALL_RIGHT;
+        i2s_set_clk((i2s_port_t)m_i2s_num, sampleRate, m_bitsPerSample, I2S_CHANNEL_MONO);
+    }
+    if(m_channels == 2) {
+        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+        i2s_set_clk((i2s_port_t)m_i2s_num, sampleRate, m_bitsPerSample, I2S_CHANNEL_STEREO);
+    }
+
+    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
+    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
+
+
+    return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setBitrate(int br) {
@@ -5257,52 +5129,6 @@ uint16_t Audio::getVUlevel() {
     return (m_vuLeft << 8) + m_vuRight;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::playSample(int16_t sample[2]) {
-    if(getBitsPerSample() == 8) { // Upsample from unsigned 8 bits to signed 16 bits
-        sample[LEFTCHANNEL] = ((sample[LEFTCHANNEL] & 0xff) - 128) << 8;
-        sample[RIGHTCHANNEL] = ((sample[RIGHTCHANNEL] & 0xff) - 128) << 8;
-    }
-
-    // set a correction factor if filter have positive amplification
-    if(m_corr > 1) {
-        sample[LEFTCHANNEL] = sample[LEFTCHANNEL] / m_corr;
-        sample[RIGHTCHANNEL] = sample[RIGHTCHANNEL] / m_corr;
-    }
-
-    computeVUlevel(sample);
-
-    // Filterchain, can commented out if not used
-    sample = IIR_filterChain0(sample);
-    sample = IIR_filterChain1(sample);
-    sample = IIR_filterChain2(sample);
-    //-------------------------------------------
-
-    uint32_t s32 = Gain(sample); // sample2volume;
-
-    if(audio_process_i2s) {
-        // process audio sample just before writing to i2s
-        bool continueI2S = false;
-        audio_process_i2s(&s32, &continueI2S);
-        if(!continueI2S) { return true; }
-    }
-
-    if(m_f_internalDAC) { s32 += 0x80008000; }
-    m_i2s_bytesWritten = 0;
-#if(ESP_IDF_VERSION_MAJOR == 5)
-    esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 0);
-#else
-    esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (const char*)&s32, sizeof(uint32_t), &m_i2s_bytesWritten, 0); // no wait
-#endif
-    if(err != ESP_OK) {
-        if(err != 263) { log_e("ESP32 Errorcode: %i", err); }
-        return false;
-    }
-    if(m_i2s_bytesWritten < 4) { // no more space in dma buffer  --> break and try it later
-        return false;
-    }
-    return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass) {
     // see https://www.earlevel.com/main/2013/10/13/biquad-calculator-v2/
     // values can be between -40 ... +6 (dB)
@@ -5321,14 +5147,13 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
           This will cause a clicking sound when adjusting the EQ.
           Because when the EQ is adjusted, the IIR filter will be cleared and played,
           mixed in the audio data frame, and a click-like sound will be produced.
-      */
-    /*
-      int16_t tmp[2]; tmp[0] = 0; tmp[1]= 0;
 
-      IIR_filterChain0(tmp, true ); // flush the filter
-      IIR_filterChain1(tmp, true ); // flush the filter
-      IIR_filterChain2(tmp, true ); // flush the filter
-      */
+          int16_t tmp[2]; tmp[0] = 0; tmp[1]= 0;
+
+          IIR_filterChain0(tmp, true ); // flush the filter
+          IIR_filterChain1(tmp, true ); // flush the filter
+          IIR_filterChain2(tmp, true ); // flush the filter
+        */
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::forceMono(bool m) { // #100 mono option
@@ -5386,15 +5211,10 @@ void Audio::computeLimit() {    // is calculated when the volume or balance chan
     // log_i("m_limit_left %f,  m_limit_right %f ",m_limit_left, m_limit_right);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-int32_t Audio::Gain(int16_t s[2]) {
-    int32_t v[2];
-
+void Audio::Gain(int16_t* sample) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    v[LEFTCHANNEL] = s[LEFTCHANNEL] * m_limit_left;
-    v[RIGHTCHANNEL] = s[RIGHTCHANNEL] * m_limit_right;
-
-    return (v[LEFTCHANNEL] << 16) | (v[RIGHTCHANNEL] & 0xffff);
+    sample[LEFTCHANNEL]  *= m_limit_left ;
+    sample[RIGHTCHANNEL] *= m_limit_right;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFilled() {
@@ -5518,7 +5338,7 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2) { // Infi
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format off
-int16_t* Audio::IIR_filterChain0(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain0(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
@@ -5560,10 +5380,12 @@ int16_t* Audio::IIR_filterChain0(int16_t iir_in[2], bool clear) { // Infinite Im
     m_filterBuff[0][z1][out][RIGHTCHANNEL] = outSample[RIGHTCHANNEL];
     iir_out[RIGHTCHANNEL] = (int16_t)outSample[RIGHTCHANNEL];
 
-    return iir_out;
+    iir_in[LEFTCHANNEL] = iir_out[LEFTCHANNEL];
+    iir_in[RIGHTCHANNEL] = iir_out[RIGHTCHANNEL];
+    return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int16_t* Audio::IIR_filterChain1(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain1(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
@@ -5605,10 +5427,12 @@ int16_t* Audio::IIR_filterChain1(int16_t iir_in[2], bool clear) { // Infinite Im
     m_filterBuff[1][z1][out][RIGHTCHANNEL] = outSample[RIGHTCHANNEL];
     iir_out[RIGHTCHANNEL] = (int16_t)outSample[RIGHTCHANNEL];
 
-    return iir_out;
+    iir_in[LEFTCHANNEL] = iir_out[LEFTCHANNEL];
+    iir_in[RIGHTCHANNEL] = iir_out[RIGHTCHANNEL];
+    return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int16_t* Audio::IIR_filterChain2(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain2(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
@@ -5650,7 +5474,9 @@ int16_t* Audio::IIR_filterChain2(int16_t iir_in[2], bool clear) { // Infinite Im
     m_filterBuff[2][z1][out][RIGHTCHANNEL] = outSample[RIGHTCHANNEL];
     iir_out[RIGHTCHANNEL] = (int16_t)outSample[RIGHTCHANNEL];
 
-    return iir_out;
+    iir_in[LEFTCHANNEL] = iir_out[LEFTCHANNEL];
+    iir_in[RIGHTCHANNEL] = iir_out[RIGHTCHANNEL];
+    return;
 }
 // clang-format on
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
