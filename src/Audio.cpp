@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11a
+ *  Version 3.0.11b
  *  Updated on: Jun 04.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -891,7 +891,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
 
     uint16_t speechLen = strlen(speech);
     uint16_t speechBuffLen = speechLen + 300;
-    memcpy(m_lastHost, speech, 256);
     char* speechBuff = (char*)malloc(speechBuffLen);
     if(!speechBuff) {
         log_e("out of memory");
@@ -2309,6 +2308,7 @@ void Audio::playChunk(bool i2s_only) {
     int16_t* sample[2];
     int16_t* s2;
     int sampleSize = (m_bitsPerSample / 8);
+    esp_err_t err = ESP_OK;
 
     if(!i2s_only){
         count = 0;
@@ -2330,16 +2330,13 @@ void Audio::playChunk(bool i2s_only) {
                 IIR_filterChain2(*sample);
                 //------------------------------------------------------------------
                 Gain(*sample);
-                if(m_f_internalDAC){
-                    s2 = *sample;
-                    s2[LEFTCHANNEL] += 0x8000;
-                    s2[RIGHTCHANNEL]+= 0x8000;
-                }
+                i += 2;
             }
             else{ // 8 bit per sample
-                    ;
+                Gain(*sample);
+                i += 1;                        ;
             }
-            i += 2;
+
             validSamples -= 1;
         }
         if(audio_process_i2s) {
@@ -2357,41 +2354,46 @@ void Audio::playChunk(bool i2s_only) {
     validSamples = m_validSamples;
 
     if(m_bitsPerSample == 16){
-#if(ESP_IDF_VERSION_MAJOR == 5)
-        esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
-        if(err != ESP_OK){
-            if     (err == ESP_ERR_INVALID_ARG)   log_e("NULL pointer or this handle is not tx handle");
-            else if(err == ESP_ERR_TIMEOUT)       log_e("Writing timeout, no writing event received from ISR within ticks_to_wait");
-            else if(err == ESP_ERR_INVALID_STATE) log_e("I2S is not ready to write");
-            else log_e("i2s err %i", err);
-        } 
-#else      
-        esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 0);
-        if(err != ESP_OK){
-            log_e("i2s err %i", err);
-        } 
-#endif
-        
+
+        #if(ESP_IDF_VERSION_MAJOR == 5)
+            err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
+        #else
+            err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
+        #endif
+
+        if(err != ESP_OK) goto exit;
         m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
         if(m_validSamples < 0) { m_validSamples = 0;}
         count += i2s_bytesConsumed / sampleSize;
     }
 
-
-    if(m_bitsPerSample == 8){ // most only internal DAC, external DACs have 16...32 bit resolution
+    if(m_bitsPerSample == 8){ // most external DACs have 16...32 bit resolution, so convert 8 --> 16 bit
+        int16_t sample[2];
         while(m_validSamples){
-#if(ESP_IDF_VERSION_MAJOR == 5)
-            esp_err_t err = i2s_channel_write(m_i2s_tx_handle, (uint8_t*)&m_outBuff[count], m_channels, &i2s_bytesConsumed, 0);
-#else
-            esp_err_t err = i2s_write((i2s_port_t)m_i2s_num, (uint8_t*)&m_outBuff[count], m_channels, &i2s_bytesConsumed, 0);
-#endif
-            if(err) log_e("%i", err);
-            m_validSamples -= 1; //m_i2s_bytesWritten;
-        //    log_i("m_i2s_bytesWritten %i", m_i2s_bytesWritten);
+            sample[0] = (m_outBuff[count] & 0xFF00);
+            sample[1] = (m_outBuff[count] & 0x00FF) << 8;
+            sample[0] += 0x8000;
+            sample[1] += 0x8000;
+
+            #if(ESP_IDF_VERSION_MAJOR == 5)
+                err = i2s_channel_write(m_i2s_tx_handle, &sample, 4, &i2s_bytesConsumed, 20);
+            #else
+                err = i2s_write((i2s_port_t)m_i2s_num, &sample, 4, &i2s_bytesConsumed, 20);
+            #endif
+
+            if(err != ESP_OK) goto exit;
+            m_validSamples -= 1;
             if(m_validSamples <= 0) { m_validSamples = 0;}
             count += 1;
         }
     }
+    return;
+exit:
+    if     (err == ESP_OK) return;
+    else if(err == ESP_ERR_INVALID_ARG)   log_e("NULL pointer or this handle is not tx handle");
+    else if(err == ESP_ERR_TIMEOUT)       log_e("Writing timeout, no writing event received from ISR within ticks_to_wait");
+    else if(err == ESP_ERR_INVALID_STATE) log_e("I2S is not ready to write");
+    else log_e("i2s err %i", err);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
@@ -5021,11 +5023,11 @@ void Audio::reconfigI2S(){
 #else
     if(m_channels == 1){
         m_i2s_config.channel_format = I2S_CHANNEL_FMT_ALL_RIGHT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, m_bitsPerSample, I2S_CHANNEL_MONO);
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
     }
     if(m_channels == 2){
         m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, m_bitsPerSample, I2S_CHANNEL_STEREO);
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
     }
 #endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
@@ -5228,8 +5230,17 @@ void Audio::computeLimit() {    // is calculated when the volume or balance chan
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::Gain(int16_t* sample) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    sample[LEFTCHANNEL]  *= m_limit_left ;
-    sample[RIGHTCHANNEL] *= m_limit_right;
+    if(m_bitsPerSample == I2S_BITS_PER_SAMPLE_16BIT){
+        sample[LEFTCHANNEL]  *= m_limit_left ;
+        sample[RIGHTCHANNEL] *= m_limit_right;
+    }
+    if(m_bitsPerSample == I2S_BITS_PER_SAMPLE_8BIT){
+        uint8_t* s = reinterpret_cast <uint8_t*>(sample);
+        int8_t l1 = (s[0] - 128) * m_limit_left;
+        int8_t l2 = (s[1] - 128) * m_limit_right;
+        s[0] = 128 + l1;
+        s[1] = 128 + l2;
+    }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::inBufferFilled() {
