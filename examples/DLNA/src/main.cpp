@@ -14,8 +14,8 @@ using namespace std;
 #define I2S_LRC       26
 
 
-char SSID[] = "Wolles-FRITZBOX";
-char PASS[] = "40441061073895958449";
+char SSID[] = "xxxxx";
+char PASS[] = "xxxxx";
 
 
 
