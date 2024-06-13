@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11b
- *  Updated on: Jun 04.2024
+ *  Version 3.0.11c
+ *  Updated on: Jun 13.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -5229,12 +5229,14 @@ void Audio::computeLimit() {    // is calculated when the volume or balance chan
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::Gain(int16_t* sample) {
+
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    if(m_bitsPerSample == I2S_BITS_PER_SAMPLE_16BIT){
+    if(m_bitsPerSample == 16){
         sample[LEFTCHANNEL]  *= m_limit_left ;
         sample[RIGHTCHANNEL] *= m_limit_right;
     }
-    if(m_bitsPerSample == I2S_BITS_PER_SAMPLE_8BIT){
+    /* important: all samples are unsigned 8 bit, 128 is 0, +255 is max (+127), 0 is min (-128)  */
+    if(m_bitsPerSample == 8){
         uint8_t* s = reinterpret_cast <uint8_t*>(sample);
         int8_t l1 = (s[0] - 128) * m_limit_left;
         int8_t l2 = (s[1] - 128) * m_limit_right;
