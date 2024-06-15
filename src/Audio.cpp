@@ -2330,6 +2330,11 @@ void Audio::playChunk(bool i2s_only) {
                 IIR_filterChain2(*sample);
                 //------------------------------------------------------------------
                 Gain(*sample);
+		if(m_f_internalDAC){
+		  s2 = *sample;
+		  s2[LEFTCHANNEL] += 0x8000;
+		  s2[RIGHTCHANNEL]+= 0x8000;
+		}
                 i += 2;
             }
             else{ // 8 bit per sample
