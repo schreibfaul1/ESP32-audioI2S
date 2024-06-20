@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11c
- *  Updated on: Jun 13.2024
+ *  Version 3.0.11d
+ *  Updated on: Jun 20.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2330,11 +2330,11 @@ void Audio::playChunk(bool i2s_only) {
                 IIR_filterChain2(*sample);
                 //------------------------------------------------------------------
                 Gain(*sample);
-		if(m_f_internalDAC){
-		  s2 = *sample;
-		  s2[LEFTCHANNEL] += 0x8000;
-		  s2[RIGHTCHANNEL]+= 0x8000;
-		}
+		        if(m_f_internalDAC){
+		          s2 = *sample;
+		          s2[LEFTCHANNEL] += 0x8000;
+		          s2[RIGHTCHANNEL]+= 0x8000;
+		        }
                 i += 2;
             }
             else{ // 8 bit per sample
@@ -2411,7 +2411,11 @@ void Audio::loop() {
             case AUDIO_LOCALFILE:
                 if(m_validSamples) {playChunk(true); break;}
                 processLocalFile(); break;
-            case HTTP_RESPONSE_HEADER: parseHttpResponseHeader(); break;
+            case HTTP_RESPONSE_HEADER:
+                if(!parseHttpResponseHeader()) {
+                    if(m_f_timeout) connecttohost(m_lastHost);
+                }
+                break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
                 if(m_playlistFormat == FORMAT_M3U) connecttohost(parsePlaylist_M3U());
