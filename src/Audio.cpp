@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11d
- *  Updated on: Jun 20.2024
+ *  Version 3.0.11e
+ *  Updated on: Jun 23.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2305,7 +2305,7 @@ void Audio::playChunk(bool i2s_only) {
     int16_t validSamples = 0;
     static uint16_t count = 0;
     size_t i2s_bytesConsumed = 0;
-    int16_t* sample[2];
+    int16_t* sample[2] = {0};
     int16_t* s2;
     int sampleSize = (m_bitsPerSample / 8);
     esp_err_t err = ESP_OK;
@@ -2315,7 +2315,15 @@ void Audio::playChunk(bool i2s_only) {
         int i= 0;
         validSamples = m_validSamples;
         while(validSamples){
-            *sample = m_outBuff + i;
+
+            if(m_channels == 1){  // mono
+                sample[LEFTCHANNEL]  = (m_outBuff + i);
+                sample[RIGHTCHANNEL] = (m_outBuff + i);
+            }
+            if(m_channels == 2){
+                *sample = m_outBuff + i;
+            }
+
             if(m_bitsPerSample == 16){
                 computeVUlevel(*sample);
 
@@ -2331,11 +2339,11 @@ void Audio::playChunk(bool i2s_only) {
                 //------------------------------------------------------------------
                 Gain(*sample);
 		        if(m_f_internalDAC){
-		          s2 = *sample;
-		          s2[LEFTCHANNEL] += 0x8000;
-		          s2[RIGHTCHANNEL]+= 0x8000;
+		            s2 = *sample;
+		            s2[LEFTCHANNEL] += 0x8000;
+		            s2[RIGHTCHANNEL]+= 0x8000;
 		        }
-                i += 2;
+                i += m_channels;
             }
             else{ // 8 bit per sample
                 Gain(*sample);
