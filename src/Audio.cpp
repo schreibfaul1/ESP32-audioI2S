@@ -5030,7 +5030,7 @@ void Audio::reconfigI2S(){
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, m_channels == 1 ? I2S_SLOT_MODE_MONO : I2S_SLOT_MODE_STEREO);
-    m_i2s_std_cfg.slot_cfg.slot_mask = m_channels == 1 ? I2S_STD_SLOT_LEFT : I2S_STD_SLOT_BOTH;
+    m_i2s_std_cfg.slot_cfg.slot_mask = m_channels == 1 ? I2S_STD_SLOT_RIGHT : I2S_STD_SLOT_BOTH;
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     I2Sstart(0);
 #else
