@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11e
- *  Updated on: Jun 23.2024
+ *  Version 3.0.11f
+ *  Updated on: Jul 17.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2383,10 +2383,8 @@ void Audio::playChunk(bool i2s_only) {
     if(m_bitsPerSample == 8){ // most external DACs have 16...32 bit resolution, so convert 8 --> 16 bit
         int16_t sample[2];
         while(m_validSamples){
-            sample[0] = (m_outBuff[count] & 0xFF00);
-            sample[1] = (m_outBuff[count] & 0x00FF) << 8;
-            sample[0] += 0x8000;
-            sample[1] += 0x8000;
+            sample[0] = ((m_outBuff[count] & 0x00FF) + 0x80) << 8;
+            sample[1] = ((m_outBuff[count] & 0x00FF) + 0x80) << 8;
 
             #if(ESP_IDF_VERSION_MAJOR == 5)
                 err = i2s_channel_write(m_i2s_tx_handle, &sample, 4, &i2s_bytesConsumed, 20);
@@ -5255,10 +5253,8 @@ void Audio::Gain(int16_t* sample) {
     /* important: all samples are unsigned 8 bit, 128 is 0, +255 is max (+127), 0 is min (-128)  */
     if(m_bitsPerSample == 8){
         uint8_t* s = reinterpret_cast <uint8_t*>(sample);
-        int8_t l1 = (s[0] - 128) * m_limit_left;
-        int8_t l2 = (s[1] - 128) * m_limit_right;
-        s[0] = 128 + l1;
-        s[1] = 128 + l2;
+        s[LEFTCHANNEL]  *= m_limit_left;
+        s[RIGHTCHANNEL] *= m_limit_right;
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
