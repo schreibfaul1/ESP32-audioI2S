@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11f
- *  Updated on: Jul 17.2024
+ *  Version 3.0.11g
+ *  Updated on: Jul 18.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2369,9 +2369,9 @@ void Audio::playChunk(bool i2s_only) {
     if(m_bitsPerSample == 16){
 
         #if(ESP_IDF_VERSION_MAJOR == 5)
-            err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
+            err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
         #else
-            err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 20);
+            err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
         #endif
 
         if(err != ESP_OK) goto exit;
@@ -2387,9 +2387,9 @@ void Audio::playChunk(bool i2s_only) {
             sample[1] = ((m_outBuff[count] & 0x00FF) + 0x80) << 8;
 
             #if(ESP_IDF_VERSION_MAJOR == 5)
-                err = i2s_channel_write(m_i2s_tx_handle, &sample, 4, &i2s_bytesConsumed, 20);
+                err = i2s_channel_write(m_i2s_tx_handle, &sample, 4, &i2s_bytesConsumed, 40);
             #else
-                err = i2s_write((i2s_port_t)m_i2s_num, &sample, 4, &i2s_bytesConsumed, 20);
+                err = i2s_write((i2s_port_t)m_i2s_num, &sample, 4, &i2s_bytesConsumed, 40);
             #endif
 
             if(err != ESP_OK) goto exit;
@@ -5033,7 +5033,21 @@ void Audio::reconfigI2S(){
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+
+    if(m_channels == 1){
+        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    }
+
+    if(m_channels == 2){
+        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    }
+
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+    i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     I2Sstart(0);
 #else
     if(m_channels == 1){
@@ -5066,6 +5080,8 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
     // false: I2S communication format is by default I2S_COMM_FORMAT_I2S_MSB, right->left (AC101, PCM5102A)
     // true:  changed to I2S_COMM_FORMAT_I2S_LSB for some DACs (PT8211)
     //        Japanese or called LSBJ (Least Significant Bit Justified) format
+
+    m_f_commFMT = commFMT;
 
 #if ESP_IDF_VERSION_MAJOR < 5
     if(commFMT) {
