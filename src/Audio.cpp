@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11g
+ *  Version 3.0.11h
  *  Updated on: Jul 18.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -202,8 +202,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_config.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL1; // interrupt priority
     m_i2s_config.dma_buf_count        = 16;
     m_i2s_config.dma_buf_len          = 512;
-    m_i2s_config.use_apll             = APLL_DISABLE; // must be disabled in V2.0.1-RC1
-    m_i2s_config.tx_desc_auto_clear   = true;   // new in V1.0.1
+    m_i2s_config.use_apll             = APLL_DISABLE;
+    m_i2s_config.tx_desc_auto_clear   = true;
     m_i2s_config.fixed_mclk           = true;
     m_i2s_config.mclk_multiple        = I2S_MCLK_MULTIPLE_128;
 
@@ -2313,43 +2313,65 @@ void Audio::playChunk(bool i2s_only) {
     if(!i2s_only){
         count = 0;
         int i= 0;
+
+        if(m_bitsPerSample == 8){
+            int16_t s16_1 = 0;
+            int16_t s16_2 = 0;
+
+            validSamples = m_validSamples; // double validsamples, make stereo
+            while(validSamples){
+                s16_1 = (m_outBuff[validSamples - 1] & 0xFF00);
+                s16_2 = (m_outBuff[validSamples - 1] & 0x00FF) << 8;
+                m_outBuff[validSamples * 2 - 1] = s16_1 + 0x8000;
+                m_outBuff[validSamples * 2 - 2] = s16_2 + 0x8000;
+                validSamples--;
+            }
+            if(getChannels() == 1) m_validSamples *= 4;
+            else                   m_validSamples *= 2;
+        }
+
+        if(m_channels == 1){
+            if(m_outbuffSize < m_validSamples * 2){
+                log_e("valid samples: %i greater than buffer size: %i", m_outbuffSize, m_validSamples);
+                m_validSamples = m_outbuffSize / 2; // avoid buffer overrun
+            }
+            int s16 = 0;
+            validSamples = m_validSamples; // double validsamples, make stereo
+            while(validSamples){
+                s16 = m_outBuff[validSamples - 1];
+                m_outBuff[validSamples * 2 - 1] = s16;
+                m_outBuff[validSamples * 2 - 2] = s16;
+                validSamples --;
+            }
+            m_validSamples *= 2;
+        }
+
         validSamples = m_validSamples;
-        while(validSamples){
 
-            if(m_channels == 1){  // mono
-                sample[LEFTCHANNEL]  = (m_outBuff + i);
-                sample[RIGHTCHANNEL] = (m_outBuff + i);
-            }
-            if(m_channels == 2){
-                *sample = m_outBuff + i;
-            }
+        while(validSamples) {
+            *sample = m_outBuff + i;
 
-            if(m_bitsPerSample == 16){
-                computeVUlevel(*sample);
+            computeVUlevel(*sample);
 
-                //---------- Filterchain, can commented out if not used-------------
+            //---------- Filterchain, can commented out if not used-------------
+            {
                 if(m_corr > 1) {
                     s2 = *sample;
-                    s2[LEFTCHANNEL]  /= m_corr;
+                    s2[LEFTCHANNEL] /= m_corr;
                     s2[RIGHTCHANNEL] /= m_corr;
                 }
                 IIR_filterChain0(*sample);
                 IIR_filterChain1(*sample);
                 IIR_filterChain2(*sample);
-                //------------------------------------------------------------------
-                Gain(*sample);
-		        if(m_f_internalDAC){
-		            s2 = *sample;
-		            s2[LEFTCHANNEL] += 0x8000;
-		            s2[RIGHTCHANNEL]+= 0x8000;
-		        }
-                i += m_channels;
             }
-            else{ // 8 bit per sample
-                Gain(*sample);
-                i += 1;                        ;
+            //------------------------------------------------------------------
+            Gain(*sample);
+            if(m_f_internalDAC) {
+                s2 = *sample;
+                s2[LEFTCHANNEL] += 0x8000;
+                s2[RIGHTCHANNEL] += 0x8000;
             }
-
+            i += m_channels;
             validSamples -= 1;
         }
         if(audio_process_i2s) {
@@ -2366,38 +2388,17 @@ void Audio::playChunk(bool i2s_only) {
 
     validSamples = m_validSamples;
 
-    if(m_bitsPerSample == 16){
+#if(ESP_IDF_VERSION_MAJOR == 5)
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
+#else
+    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
+#endif
 
-        #if(ESP_IDF_VERSION_MAJOR == 5)
-            err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
-        #else
-            err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
-        #endif
+    if(err != ESP_OK) goto exit;
+    m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
+    if(m_validSamples < 0) { m_validSamples = 0; }
+    count += i2s_bytesConsumed / sampleSize;
 
-        if(err != ESP_OK) goto exit;
-        m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
-        if(m_validSamples < 0) { m_validSamples = 0;}
-        count += i2s_bytesConsumed / sampleSize;
-    }
-
-    if(m_bitsPerSample == 8){ // most external DACs have 16...32 bit resolution, so convert 8 --> 16 bit
-        int16_t sample[2];
-        while(m_validSamples){
-            sample[0] = ((m_outBuff[count] & 0x00FF) + 0x80) << 8;
-            sample[1] = ((m_outBuff[count] & 0x00FF) + 0x80) << 8;
-
-            #if(ESP_IDF_VERSION_MAJOR == 5)
-                err = i2s_channel_write(m_i2s_tx_handle, &sample, 4, &i2s_bytesConsumed, 40);
-            #else
-                err = i2s_write((i2s_port_t)m_i2s_num, &sample, 4, &i2s_bytesConsumed, 40);
-            #endif
-
-            if(err != ESP_OK) goto exit;
-            m_validSamples -= 1;
-            if(m_validSamples <= 0) { m_validSamples = 0;}
-            count += 1;
-        }
-    }
     return;
 exit:
     if     (err == ESP_OK) return;
@@ -5034,35 +5035,19 @@ void Audio::reconfigI2S(){
     I2Sstop(0);
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
 
-    if(m_channels == 1){
-        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-        m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
-    }
-
-    if(m_channels == 2){
-        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-        m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
-    }
+    if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
 
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     I2Sstart(0);
 #else
-    if(m_channels == 1){
-        m_i2s_config.channel_format = I2S_CHANNEL_FMT_ALL_RIGHT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
-    }
-    if(m_channels == 2){
-        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
-    }
+    m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
 #endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
-
-
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
