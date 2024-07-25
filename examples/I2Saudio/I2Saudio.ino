@@ -36,7 +36,8 @@ String password = "xxxxx";
 
 
 void setup() {
-    pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
+    pinMode(SD_CS, OUTPUT);
+    digitalWrite(SD_CS, HIGH);
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     SPI.setFrequency(1000000);
     Serial.begin(115200);
