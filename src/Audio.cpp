@@ -17,6 +17,7 @@
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
+    mutex_buffer = xSemaphoreCreateMutex();
     // if maxBlockSize isn't set use defaultspace (1600 bytes) is enough for aac and mp3 player
     if(maxBlockSize) m_resBuffSizeRAM = maxBlockSize;
     if(maxBlockSize) m_maxBlockSize = maxBlockSize;
@@ -25,6 +26,7 @@ AudioBuffer::AudioBuffer(size_t maxBlockSize) {
 AudioBuffer::~AudioBuffer() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
+    vSemaphoreDelete(mutex_buffer);
 }
 
 void AudioBuffer::setBufsize(int ram, int psram) {
@@ -72,6 +74,7 @@ size_t AudioBuffer::freeSpace() {
 }
 
 size_t AudioBuffer::writeSpace() {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     if(m_readPtr >= m_writePtr) {
         m_writeSpace = (m_readPtr - m_writePtr - 1); // readPtr must not be overtaken
     }
@@ -80,42 +83,53 @@ size_t AudioBuffer::writeSpace() {
         else m_writeSpace = (m_endPtr - m_writePtr);
     }
     if(m_f_start) m_writeSpace = m_buffSize - 1;
+    xSemaphoreGiveRecursive(mutex_buffer);
     return m_writeSpace;
 }
 
 size_t AudioBuffer::bufferFilled() {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr); }
     else { m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer); }
+    xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr - 1); }
     else { m_dataLength = (m_endPtr - m_readPtr); }
+    xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
 
 void AudioBuffer::bytesWritten(size_t bw) {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
     if(bw && m_f_start) m_f_start = false;
+    xSemaphoreGiveRecursive(mutex_buffer);
 }
 
 void AudioBuffer::bytesWasRead(size_t br) {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
         m_readPtr = m_buffer + tmp;
     }
+    xSemaphoreGiveRecursive(mutex_buffer);
 }
 
 uint8_t* AudioBuffer::getWritePtr() { return m_writePtr; }
 
 uint8_t* AudioBuffer::getReadPtr() {
+    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
     size_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
         memcpy(m_endPtr, m_buffer, m_maxBlockSize - len); // cpy from m_buffer to m_endPtr with len
     }
+    xSemaphoreGiveRecursive(mutex_buffer);
     return m_readPtr;
 }
 
@@ -2282,6 +2296,7 @@ uint32_t Audio::stopSong() {
     m_audioCurrentTime = 0;
     m_audioFileDuration = 0;
     m_codec = CODEC_NONE;
+    stopAudioTask();
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2300,7 +2315,7 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::playChunk(bool i2s_only) {
+void Audio::playChunk() {
 
     int16_t validSamples = 0;
     static uint16_t count = 0;
@@ -2309,80 +2324,77 @@ void Audio::playChunk(bool i2s_only) {
     int16_t* s2;
     int sampleSize = (m_bitsPerSample / 8);
     esp_err_t err = ESP_OK;
+    int i= 0;
 
-    if(!i2s_only){
-        count = 0;
-        int i= 0;
+    count = 0;
+    if(m_bitsPerSample == 8){
+        int16_t s16_1 = 0;
+        int16_t s16_2 = 0;
 
-        if(m_bitsPerSample == 8){
-            int16_t s16_1 = 0;
-            int16_t s16_2 = 0;
-
-            validSamples = m_validSamples; // double validsamples, make stereo
-            while(validSamples){
-                s16_1 = (m_outBuff[validSamples - 1] & 0xFF00);
-                s16_2 = (m_outBuff[validSamples - 1] & 0x00FF) << 8;
-                m_outBuff[validSamples * 2 - 1] = s16_1 + 0x8000;
-                m_outBuff[validSamples * 2 - 2] = s16_2 + 0x8000;
-                validSamples--;
-            }
-            if(getChannels() == 1) m_validSamples *= 4;
-            else                   m_validSamples *= 2;
+        validSamples = m_validSamples; // double validsamples, make stereo
+        while(validSamples){
+            s16_1 = (m_outBuff[validSamples - 1] & 0xFF00);
+            s16_2 = (m_outBuff[validSamples - 1] & 0x00FF) << 8;
+            m_outBuff[validSamples * 2 - 1] = s16_1 + 0x8000;
+            m_outBuff[validSamples * 2 - 2] = s16_2 + 0x8000;
+            validSamples--;
         }
+        if(getChannels() == 1) m_validSamples *= 4;
+        else                   m_validSamples *= 2;
+    }
 
-        if(m_channels == 1){
-            if(m_outbuffSize < m_validSamples * 2){
-                log_e("valid samples: %i greater than buffer size: %i", m_outbuffSize, m_validSamples);
-                m_validSamples = m_outbuffSize / 2; // avoid buffer overrun
-            }
-            int s16 = 0;
-            validSamples = m_validSamples; // double validsamples, make stereo
-            while(validSamples){
-                s16 = m_outBuff[validSamples - 1];
-                m_outBuff[validSamples * 2 - 1] = s16;
-                m_outBuff[validSamples * 2 - 2] = s16;
-                validSamples --;
-            }
-            m_validSamples *= 2;
+    if(m_channels == 1){
+        if(m_outbuffSize < m_validSamples * 2){
+            log_e("valid samples: %i greater than buffer size: %i", m_outbuffSize, m_validSamples);
+            m_validSamples = m_outbuffSize / 2; // avoid buffer overrun
         }
+        int s16 = 0;
+        validSamples = m_validSamples; // double validsamples, make stereo
+        while(validSamples){
+            s16 = m_outBuff[validSamples - 1];
+            m_outBuff[validSamples * 2 - 1] = s16;
+            m_outBuff[validSamples * 2 - 2] = s16;
+            validSamples --;
+        }
+        m_validSamples *= 2;
+    }
 
-        validSamples = m_validSamples;
+    validSamples = m_validSamples;
 
-        while(validSamples) {
-            *sample = m_outBuff + i;
+    while(validSamples) {
+        *sample = m_outBuff + i;
 
-            computeVUlevel(*sample);
+        computeVUlevel(*sample);
 
-            //---------- Filterchain, can commented out if not used-------------
-            {
-                if(m_corr > 1) {
-                    s2 = *sample;
-                    s2[LEFTCHANNEL] /= m_corr;
-                    s2[RIGHTCHANNEL] /= m_corr;
-                }
-                IIR_filterChain0(*sample);
-                IIR_filterChain1(*sample);
-                IIR_filterChain2(*sample);
-            }
-            //------------------------------------------------------------------
-            Gain(*sample);
-            if(m_f_internalDAC) {
+        //---------- Filterchain, can commented out if not used-------------
+        {
+            if(m_corr > 1) {
                 s2 = *sample;
-                s2[LEFTCHANNEL] += 0x8000;
-                s2[RIGHTCHANNEL] += 0x8000;
+                s2[LEFTCHANNEL] /= m_corr;
+                s2[RIGHTCHANNEL] /= m_corr;
             }
-            i += m_channels;
-            validSamples -= 1;
+            IIR_filterChain0(*sample);
+            IIR_filterChain1(*sample);
+            IIR_filterChain2(*sample);
         }
-        if(audio_process_i2s) {
-            // processing the audio samples from external before forwarding them to i2s
-            bool continueI2S = false;
-            audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
-            if(!continueI2S) {
-                m_validSamples = 0;
-                count = 0;
-                return;
-            }
+        //------------------------------------------------------------------
+        Gain(*sample);
+        if(m_f_internalDAC) {
+            s2 = *sample;
+            s2[LEFTCHANNEL] += 0x8000;
+            s2[RIGHTCHANNEL] += 0x8000;
+        }
+        i += m_channels;
+        validSamples -= 1;
+    }
+    if(audio_process_i2s) {
+        // processing the audio samples from external before forwarding them to i2s
+        bool continueI2S = false;
+        audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
+        if(!continueI2S) {
+            m_validSamples = 0;
+            count = 0;
+            return;
         }
     }
 
@@ -2416,7 +2428,6 @@ void Audio::loop() {
     if(m_playlistFormat != FORMAT_M3U8) { // normal process
         switch(getDatamode()) {
             case AUDIO_LOCALFILE:
-                if(m_validSamples) {playChunk(true); break;}
                 processLocalFile(); break;
             case HTTP_RESPONSE_HEADER:
                 if(!parseHttpResponseHeader()) {
@@ -2430,7 +2441,6 @@ void Audio::loop() {
                 if(m_playlistFormat == FORMAT_ASX) connecttohost(parsePlaylist_ASX());
                 break;
             case AUDIO_DATA:
-                if(m_validSamples) {playChunk(true); break;}
                 if(m_streamType == ST_WEBSTREAM) processWebStream();
                 if(m_streamType == ST_WEBFILE) processWebFile();
                 break;
@@ -2460,7 +2470,6 @@ void Audio::loop() {
 
                 break;
             case AUDIO_DATA:
-                if(m_validSamples) {playChunk(true); break;}
                 if(m_f_ts) { processWebStreamTS(); } // aac or aacp with ts packets
                 else { processWebStreamHLS(); }      // aac or aacp normal stream
 
@@ -3241,7 +3250,7 @@ void Audio::processLocalFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk(false);
+                    playChunk();
                     return;
                 } // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3349,6 +3358,7 @@ void Audio::processWebStream() {
 
         if(InBuff.bufferFilled() > maxFrameSize && !f_stream) { // waiting for buffer filled
             f_stream = true;                                    // ready to play the audio data
+            startAudioTask();
             AUDIO_INFO("stream ready");
         }
         if(!f_stream) return;
@@ -3375,7 +3385,7 @@ void Audio::processWebStream() {
     }
 
     // play audio data - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_stream) { playAudioData(); }
+//    if(f_stream) { playAudioData(); }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
@@ -3474,7 +3484,7 @@ void Audio::processWebFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk(false);
+                    playChunk();
                     return;
                 } // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3595,7 +3605,7 @@ void Audio::processWebStreamTS() {
     }
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {
+            if(InBuff.bufferFilled() < 150000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
@@ -3613,7 +3623,7 @@ void Audio::processWebStreamTS() {
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(true) {                                                  // statement has no effect
-        if(InBuff.bufferFilled() > 50000 && !f_stream) {        // waiting for buffer filled
+        if(InBuff.bufferFilled() > 150000 && !f_stream) {        // waiting for buffer filled
             f_stream = true;                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             if(m_f_Log) AUDIO_INFO("stream ready");
@@ -3749,7 +3759,7 @@ void Audio::processWebStreamHLS() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::playAudioData() {
     if(m_validSamples) {
-        playChunk(false);
+        playChunk();
         return;
     } // play samples first
     if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // guard
@@ -4650,7 +4660,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     computeAudioTime(bytesDecoded, bytesDecoderOut);
 
     m_curSample = 0;
-    playChunk(false);
+    playChunk();
     return bytesDecoded;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6329,3 +6339,42 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void Audio::startAudioTask() {
+    if (m_f_audioTaskIsRunning) {
+        log_i("Task is already running.");
+        return;
+    }
+    m_f_audioTaskIsRunning = true;
+    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 2048 * 2, this, 3, &m_audioTaskHandle);
+} // start
+
+void Audio::stopAudioTask()  {
+    if (!m_f_audioTaskIsRunning) {
+        log_i("Task is not running.");
+        return;
+    }
+    m_f_audioTaskIsRunning = false;
+    if (m_audioTaskHandle != nullptr) {
+        vTaskDelete(m_audioTaskHandle);
+        m_audioTaskHandle = nullptr;
+    }
+}
+
+void Audio::taskWrapper(void *param) {
+    Audio *runner = static_cast<Audio*>(param);
+    runner->audioTask();
+}
+
+void Audio::audioTask() {
+    while (m_f_audioTaskIsRunning) {
+        vTaskDelay(10 / portTICK_PERIOD_MS);  // Periodisch jede 10 ms
+        performAudioTask();
+
+    }
+    vTaskDelete(nullptr);  // Delete this task
+}
+
+void Audio::performAudioTask() {
+    // Hier die periodisch auszuführende Logik
+    playAudioData();
+}

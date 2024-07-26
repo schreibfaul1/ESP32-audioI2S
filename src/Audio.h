@@ -105,22 +105,23 @@ public:
     bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    size_t   m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
-    size_t   m_buffSizeRAM      = 1600 * 10;
-    size_t   m_buffSize         = 0;
-    size_t   m_freeSpace        = 0;
-    size_t   m_writeSpace       = 0;
-    size_t   m_dataLength       = 0;
-    size_t   m_resBuffSizeRAM   = 2048;     // reserved buffspace, >= one wav  frame
-    size_t   m_resBuffSizePSRAM = 4096 * 4; // reserved buffspace, >= one flac frame
-    size_t   m_maxBlockSize     = 1600;
-    uint8_t* m_buffer           = NULL;
-    uint8_t* m_writePtr         = NULL;
-    uint8_t* m_readPtr          = NULL;
-    uint8_t* m_endPtr           = NULL;
-    bool     m_f_start          = true;
-    bool     m_f_init           = false;
-    bool     m_f_psram          = false;    // PSRAM is available (and used...)
+    SemaphoreHandle_t mutex_buffer;
+    size_t            m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
+    size_t            m_buffSizeRAM      = 1600 * 10;
+    size_t            m_buffSize         = 0;
+    size_t            m_freeSpace        = 0;
+    size_t            m_writeSpace       = 0;
+    size_t            m_dataLength       = 0;
+    size_t            m_resBuffSizeRAM   = 2048;     // reserved buffspace, >= one wav  frame
+    size_t            m_resBuffSizePSRAM = 4096 * 4; // reserved buffspace, >= one flac frame
+    size_t            m_maxBlockSize     = 1600;
+    uint8_t*          m_buffer           = NULL;
+    uint8_t*          m_writePtr         = NULL;
+    uint8_t*          m_readPtr          = NULL;
+    uint8_t*          m_endPtr           = NULL;
+    bool              m_f_start          = true;
+    bool              m_f_init           = false;
+    bool              m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -224,7 +225,7 @@ private:
   bool            setChannels(int channels);
   void            reconfigI2S();
   bool            setBitrate(int br);
-  void            playChunk(bool i2s_only = false);
+  void            playChunk();
   void            computeVUlevel(int16_t sample[2]);
   void            computeLimit();
   void            Gain(int16_t* sample);
@@ -243,6 +244,13 @@ private:
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
   void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
   bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+
+  //+++ create a T A S K  for playAudioData(), output via I2S +++
+  void            startAudioTask(); // starts a task for decode and play
+  void            stopAudioTask();  // stops task for audio
+  static void     taskWrapper(void *param);
+  void            audioTask();
+  void            performAudioTask();
 
   //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
   uint16_t readMetadata(uint16_t b, bool first = false);
@@ -459,6 +467,7 @@ private:
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
     SemaphoreHandle_t     mutex_audio;
+    TaskHandle_t          m_audioTaskHandle = nullptr;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
@@ -571,6 +580,7 @@ private:
     bool            m_f_psramFound = false;         // set in constructor, result of psramInit()
     bool            m_f_timeout = false;            //
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
+    bool            m_f_audioTaskIsRunning = false; 
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
