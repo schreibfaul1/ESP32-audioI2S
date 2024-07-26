@@ -2924,7 +2924,6 @@ const char* Audio::parsePlaylist_M3U8() {
             } // f_medSeq_found
         }
     }
-    playAudioData(); // avoid audio gap
     return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3202,7 +3201,6 @@ void Audio::processLocalFile() {
 
             m_f_stream = true;
             AUDIO_INFO("stream ready");
-            m_f_stream = true;
             if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
@@ -3249,7 +3247,6 @@ void Audio::processLocalFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk();
                     return;
                 }
                 // int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3475,7 +3472,6 @@ void Audio::processWebFile() {
         if(InBuff.bufferFilled()) {
             if(!readID3V1Tag()) {
                 if(m_validSamples) {
-                    playChunk();
                     return;
                 } // play samples first
                 int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
@@ -3513,7 +3509,6 @@ void Audio::processWebFile() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStreamTS() {
-    const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     uint32_t        availableBytes;                          // available bytes in stream
     static bool     f_firstPacket;
     static bool     f_chunkFinished;
@@ -3538,11 +3533,6 @@ void Audio::processWebStreamTS() {
     }
 
     if(getDatamode() != AUDIO_DATA) return; // guard
-
-    if(InBuff.freeSpace() < maxFrameSize && m_f_stream) {
-        playAudioData();
-        return;
-    }
 
     availableBytes = _client->available();
     if(availableBytes) {
@@ -3613,10 +3603,9 @@ void Audio::processWebStreamTS() {
         if(InBuff.bufferFilled() > 150000 && !m_f_stream) {        // waiting for buffer filled
             m_f_stream = true;                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
-            if(m_f_Log)AUDIO_INFO("stream ready");
+            AUDIO_INFO("stream ready");
             if(m_f_Log) AUDIO_INFO("buffer filled in %d ms", filltime);
         }
-        if(!m_f_stream) return;
     }
     return;
 }
@@ -3636,7 +3625,6 @@ void Audio::processWebStreamHLS() {
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
-        m_f_stream = false;
         f_chunkFinished = false;
         byteCounter = 0;
         chunkSize = 0;
@@ -3696,7 +3684,7 @@ void Audio::processWebStreamHLS() {
 
         size_t bytesWasWritten = 0;
         if(InBuff.writeSpace() >= availableBytes) {
-            if(availableBytes > 1024) availableBytes = 1024; // 1K throttle
+        //    if(availableBytes > 1024) availableBytes = 1024; // 1K throttle
             bytesWasWritten = _client->read(InBuff.getWritePtr(), availableBytes);
         }
         else { bytesWasWritten = _client->read(InBuff.getWritePtr(), InBuff.writeSpace()); }
@@ -3712,7 +3700,7 @@ void Audio::processWebStreamHLS() {
 
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {
+            if(InBuff.bufferFilled() < 150000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
@@ -3731,7 +3719,7 @@ void Audio::processWebStreamHLS() {
     if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
         m_f_stream = true;                                    // ready to play the audio data
         uint16_t filltime = millis() - m_t0;
-        if(m_f_Log) AUDIO_INFO("stream ready");
+        AUDIO_INFO("stream ready");
         if(m_f_Log) AUDIO_INFO("buffer filled in %u ms", filltime);
     }
     return;
@@ -4519,6 +4507,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     bytesLeft = len;
     m_decodeError = 0;
     int bytesDecoded = 0;
+
+    if(m_codec == CODEC_NONE) return 0;
 
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
@@ -6350,8 +6340,6 @@ void Audio::performAudioTask() {
     // Hier die periodisch auszuführende Logik
     static int i = 0;
     if(!m_f_running) return;
-//    if((getDatamode() == AUDIO_LOCALFILE) && (!m_f_stream)) return;
-//    if((m_streamType == ST_WEBFILE) && (!m_f_stream)) return;
     if(!m_f_stream) return;
     i++;
     if(i >= 100){
