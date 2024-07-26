@@ -6330,7 +6330,7 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(8 / portTICK_PERIOD_MS);  // periodically every 8 ms
+        vTaskDelay(7 / portTICK_PERIOD_MS);  // periodically every 7 ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
