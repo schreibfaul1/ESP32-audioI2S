@@ -4508,7 +4508,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     m_decodeError = 0;
     int bytesDecoded = 0;
 
-    if(m_codec == CODEC_NONE) return 0;
+    if(m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
 
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
@@ -6307,13 +6307,13 @@ void Audio::startAudioTask() {
         return;
     }
     m_f_audioTaskIsRunning = true;
-    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 2048 * 3, this, 4, &m_audioTaskHandle);
+    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
 } // start
 
 void Audio::stopAudioTask()  {
     log_w("stop");
     if (!m_f_audioTaskIsRunning) {
-        log_i("Task is not running.");
+        log_i("audio task is not running.");
         return;
     }
     m_f_audioTaskIsRunning = false;
@@ -6330,23 +6330,23 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(7 / portTICK_PERIOD_MS);  // periodically every 7 ms
+        vTaskDelay(8 / portTICK_PERIOD_MS);  // periodically every 8 ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
 }
 
 void Audio::performAudioTask() {
-    // Hier die periodisch auszuführende Logik
-    static int i = 0;
     if(!m_f_running) return;
     if(!m_f_stream) return;
-    i++;
-    if(i >= 100){
-        i = 0;
-        log_i("is running");
-    }
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
     playAudioData();
     xSemaphoreGive(mutex_playAudioData);
+    static int i = 0;
+    i++;
+    if(i == 100){
+        i = 0;
+        uint32_t hWM = uxTaskGetStackHighWaterMark(NULL);
+        log_i("hwm %i", hWM);
+    }
 }
