@@ -17,7 +17,7 @@
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
-    mutex_buffer = xSemaphoreCreateMutex();
+    mutex_buffer = xSemaphoreCreateRecursiveMutex();
     // if maxBlockSize isn't set use defaultspace (1600 bytes) is enough for aac and mp3 player
     if(maxBlockSize) m_resBuffSizeRAM = maxBlockSize;
     if(maxBlockSize) m_maxBlockSize = maxBlockSize;
@@ -74,12 +74,12 @@ size_t AudioBuffer::freeSpace() {
 }
 
 size_t AudioBuffer::writeSpace() {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr >= m_writePtr) {
         m_writeSpace = (m_readPtr - m_writePtr - 1); // readPtr must not be overtaken
     }
     else {
-        if(getReadPos() == 0) m_writeSpace = (m_endPtr - m_writePtr - 1);
+        if((m_readPtr - m_buffer) == 0) m_writeSpace = (m_endPtr - m_writePtr - 1);
         else m_writeSpace = (m_endPtr - m_writePtr);
     }
     if(m_f_start) m_writeSpace = m_buffSize - 1;
@@ -88,7 +88,7 @@ size_t AudioBuffer::writeSpace() {
 }
 
 size_t AudioBuffer::bufferFilled() {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr); }
     else { m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer); }
     xSemaphoreGiveRecursive(mutex_buffer);
@@ -96,7 +96,7 @@ size_t AudioBuffer::bufferFilled() {
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr - 1); }
     else { m_dataLength = (m_endPtr - m_readPtr); }
     xSemaphoreGiveRecursive(mutex_buffer);
@@ -104,7 +104,7 @@ size_t AudioBuffer::getMaxAvailableBytes() {
 }
 
 void AudioBuffer::bytesWritten(size_t bw) {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
     if(bw && m_f_start) m_f_start = false;
@@ -112,7 +112,7 @@ void AudioBuffer::bytesWritten(size_t bw) {
 }
 
 void AudioBuffer::bytesWasRead(size_t br) {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
@@ -124,7 +124,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
 uint8_t* AudioBuffer::getWritePtr() { return m_writePtr; }
 
 uint8_t* AudioBuffer::getReadPtr() {
-    xSemaphoreTakeRecursive(mutex_buffer, portMAX_DELAY);
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     size_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
         memcpy(m_endPtr, m_buffer, m_maxBlockSize - len); // cpy from m_buffer to m_endPtr with len
@@ -139,6 +139,8 @@ void AudioBuffer::resetBuffer() {
     m_endPtr = m_buffer + m_buffSize;
     m_f_start = true;
     // memset(m_buffer, 0, m_buffSize); //Clear Inputbuffer
+    vSemaphoreDelete(mutex_buffer);
+    mutex_buffer = xSemaphoreCreateRecursiveMutex(); // free semaphore is it set
 }
 
 uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer; }
@@ -380,6 +382,7 @@ void Audio::setDefaults() {
     m_fileSize = 0;
     m_ID3Size = 0;
     m_haveNewFilePos = 0;
+    m_validSamples = 0;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2276,6 +2279,7 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::stopSong() {
+    stopAudioTask();
     uint32_t pos = 0;
     if(m_f_running) {
         m_f_running = false;
@@ -2296,7 +2300,6 @@ uint32_t Audio::stopSong() {
     m_audioCurrentTime = 0;
     m_audioFileDuration = 0;
     m_codec = CODEC_NONE;
-    stopAudioTask();
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6340,15 +6343,17 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void Audio::startAudioTask() {
+    log_w("start");
     if (m_f_audioTaskIsRunning) {
         log_i("Task is already running.");
         return;
     }
     m_f_audioTaskIsRunning = true;
-    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 2048 * 2, this, 3, &m_audioTaskHandle);
+    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 2048 * 3, this, 3, &m_audioTaskHandle);
 } // start
 
 void Audio::stopAudioTask()  {
+    log_w("stop");
     if (!m_f_audioTaskIsRunning) {
         log_i("Task is not running.");
         return;
@@ -6369,12 +6374,17 @@ void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
         vTaskDelay(10 / portTICK_PERIOD_MS);  // Periodisch jede 10 ms
         performAudioTask();
-
     }
     vTaskDelete(nullptr);  // Delete this task
 }
 
 void Audio::performAudioTask() {
     // Hier die periodisch auszuführende Logik
+    static int i = 0;
+    i++;
+    if(i >= 100){
+        i = 0;
+        log_i("is running");
+    }
     playAudioData();
 }
