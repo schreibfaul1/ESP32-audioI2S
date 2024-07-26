@@ -466,7 +466,7 @@ private:
     WiFiClient            client;       // @suppress("Abstract class cannot be instantiated")
     WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
     WiFiClient*           _client = nullptr;
-    SemaphoreHandle_t     mutex_audio;
+    SemaphoreHandle_t     mutex_playAudioData;
     TaskHandle_t          m_audioTaskHandle = nullptr;
 
 #pragma GCC diagnostic push
@@ -580,7 +580,8 @@ private:
     bool            m_f_psramFound = false;         // set in constructor, result of psramInit()
     bool            m_f_timeout = false;            //
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
-    bool            m_f_audioTaskIsRunning = false; 
+    bool            m_f_audioTaskIsRunning = false;
+    bool            m_f_stream = false;             // stream ready for output?
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
