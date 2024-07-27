@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12a
+ *  Version 3.0.12b
  *  Updated on: Jul 27.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -555,7 +555,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
 
-    AUDIO_INFO("Connect to new host: \"%s\"", l_host);
     setDefaults(); // no need to stop clients if connection is established (default is true)
 
     if(startsWith(l_host, "https")) m_f_ssl = true;
@@ -597,12 +596,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    //    if(ESP_ARDUINO_VERSION_MAJOR == 2 && ESP_ARDUINO_VERSION_MINOR == 0 && ESP_ARDUINO_VERSION_PATCH >= 3){
-    //        m_timeout_ms_ssl = UINT16_MAX;  // bug in v2.0.3 if hostwoext is a IPaddr not a name
-    //        m_timeout_ms = UINT16_MAX;  // [WiFiClient.cpp:253] connect(): select returned due to timeout 250 ms for
-    //        fd 48
-    //    } fix in V2.0.8
-
     bool res = true; // no need to reconnect if connection exists
 
     if(m_f_ssl) {
@@ -612,8 +605,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     else { _client = static_cast<WiFiClient*>(&client); }
 
     uint32_t t = millis();
-    if(m_f_Log) AUDIO_INFO("connect to %s on port %d path %s", hostwoext, port, extension);
-    res = _client->connect(hostwoext, port, m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
+
+    AUDIO_INFO("connect to %s on port %d path %s", hostwoext, port, extension);
+
+    _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
+    res = _client->connect(hostwoext, port);
     if(res) {
         uint32_t dt = millis() - t;
         strcpy(m_lastHost, l_host);
