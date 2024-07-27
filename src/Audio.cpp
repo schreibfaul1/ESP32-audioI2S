@@ -331,9 +331,9 @@ void Audio::setDefaults() {
     m_hashQueue.clear();
     m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
-    client.clear(); // delete all leftovers in the receive buffer
+    // client.clear(); // delete all leftovers in the receive buffer
     clientsecure.stop();
-    clientsecure.clear(); // delete all leftovers in the receive buffer
+    // clientsecure.clear(); // delete all leftovers in the receive buffer
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     if(m_lastM3U8host) {
