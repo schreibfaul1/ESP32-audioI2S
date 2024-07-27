@@ -6344,11 +6344,4 @@ void Audio::performAudioTask() {
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
     playAudioData();
     xSemaphoreGive(mutex_playAudioData);
-    static int i = 0;
-    i++;
-    if(i == 100){
-        i = 0;
-        uint32_t hWM = uxTaskGetStackHighWaterMark(NULL);
-    //  log_i("hwm %i", hWM);
-    }
 }
