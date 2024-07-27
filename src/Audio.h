@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.11h
- *  Updated on: Jul 18.2024
+ *  Version 3.0.2
+ *  Updated on: Jul 27.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -590,7 +590,7 @@ private:
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
     float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
-    size_t          m_fileSize = 0;                // size of the file
+    size_t          m_fileSize = 0;                 // size of the file
     uint16_t        m_filterFrequency[2];
     int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
     int8_t          m_gain1 = 0;

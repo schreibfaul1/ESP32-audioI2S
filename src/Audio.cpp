@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.11h
- *  Updated on: Jul 18.2024
+ *  Version 3.0.2
+ *  Updated on: Jul 27.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -6298,20 +6298,20 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
     if(idx >= 0) { return CODEC_VORBIS; }
     return CODEC_NONE;
 }
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// separate task for decoding and outputting the data. 'playAudioData()' is started periodically and fetches the data from the InBuffer. This ensures
+// that the I2S-DMA is always sufficiently filled, even if the Arduino 'loop' is stuck.
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::startAudioTask() {
-    log_w("start");
     if (m_f_audioTaskIsRunning) {
         log_i("Task is already running.");
         return;
     }
     m_f_audioTaskIsRunning = true;
     xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
-} // start
+}
 
 void Audio::stopAudioTask()  {
-    log_w("stop");
     if (!m_f_audioTaskIsRunning) {
         log_i("audio task is not running.");
         return;
@@ -6347,6 +6347,6 @@ void Audio::performAudioTask() {
     if(i == 100){
         i = 0;
         uint32_t hWM = uxTaskGetStackHighWaterMark(NULL);
-        log_i("hwm %i", hWM);
+    //  log_i("hwm %i", hWM);
     }
 }
