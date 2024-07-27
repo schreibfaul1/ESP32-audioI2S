@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12
+ *  Version 3.0.12a
  *  Updated on: Jul 27.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -331,7 +331,9 @@ void Audio::setDefaults() {
     m_hashQueue.clear();
     m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
+    client.clear(); // delete all leftovers in the receive buffer
     clientsecure.stop();
+    clientsecure.clear(); // delete all leftovers in the receive buffer
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     if(m_lastM3U8host) {
@@ -3757,7 +3759,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if(getDatamode() != HTTP_RESPONSE_HEADER) return false;
 
     uint32_t ctime = millis();
-    uint32_t timeout = 2500; // ms
+    uint32_t timeout = 4500; // ms
 
     static uint32_t stime;
     static bool     f_time = false;
@@ -3973,7 +3975,7 @@ exit: // termination condition
     if(audio_icydescription) audio_icydescription("");
     if(audio_icyurl) audio_icyurl("");
     if(m_playlistFormat == FORMAT_M3U8) return false;
-    m_lastHost[0] = '\0';
+//    m_lastHost[0] = '\0';
     setDatamode(AUDIO_NONE);
     stopSong();
     return false;
