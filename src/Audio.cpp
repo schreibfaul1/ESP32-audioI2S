@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12b
- *  Updated on: Jul 27.2024
+ *  Version 3.0.12c
+ *  Updated on: Jul 28.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -67,38 +67,63 @@ void AudioBuffer::changeMaxBlockSize(uint16_t mbs) {
 uint16_t AudioBuffer::getMaxBlockSize() { return m_maxBlockSize; }
 
 size_t AudioBuffer::freeSpace() {
-    if(m_readPtr >= m_writePtr) { m_freeSpace = (m_readPtr - m_writePtr); }
-    else { m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer); }
-    if(m_f_start) m_freeSpace = m_buffSize;
-    return m_freeSpace - 1;
+    if(m_readPtr == m_writePtr) {
+        if(m_f_start) m_freeSpace = m_buffSize;
+        else m_freeSpace = 0;
+    }
+    if(m_readPtr < m_writePtr) {
+        m_freeSpace = (m_endPtr - m_writePtr + 1) + (m_readPtr - m_buffer);
+    }
+    if(m_readPtr > m_writePtr) {
+        m_freeSpace = m_readPtr - m_writePtr;
+    }
+    return m_freeSpace;
 }
 
 size_t AudioBuffer::writeSpace() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
-    if(m_readPtr >= m_writePtr) {
-        m_writeSpace = (m_readPtr - m_writePtr - 1); // readPtr must not be overtaken
+    if(m_readPtr == m_writePtr) {
+        if(m_f_start) m_writeSpace = m_endPtr - m_writePtr + 1;
+        else m_writeSpace = 0;
     }
-    else {
-        if((m_readPtr - m_buffer) == 0) m_writeSpace = (m_endPtr - m_writePtr - 1);
-        else m_writeSpace = (m_endPtr - m_writePtr);
+    if(m_readPtr < m_writePtr) {
+        m_writeSpace = m_endPtr - m_writePtr + 1;
     }
-    if(m_f_start) m_writeSpace = m_buffSize - 1;
+    if(m_readPtr > m_writePtr) {
+        m_writeSpace = m_readPtr - m_writePtr ;
+    }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_writeSpace;
 }
 
 size_t AudioBuffer::bufferFilled() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
-    if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr); }
-    else { m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer); }
+    if(m_readPtr == m_writePtr) {
+        if(m_f_start) m_dataLength = 0;
+        else m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+    }
+    if(m_readPtr < m_writePtr) {
+        m_dataLength = m_writePtr - m_readPtr;
+    }
+    if(m_readPtr > m_writePtr) {
+        m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+    }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
-    if(m_writePtr >= m_readPtr) { m_dataLength = (m_writePtr - m_readPtr - 1); }
-    else { m_dataLength = (m_endPtr - m_readPtr); }
+    if(m_readPtr == m_writePtr) {
+        if(m_f_start)m_dataLength = 0;
+        else m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+    }
+    if(m_readPtr < m_writePtr) {
+        m_dataLength = m_writePtr - m_readPtr;
+    }
+    if(m_readPtr > m_writePtr) {
+        m_dataLength = (m_endPtr - m_readPtr + 1);
+    }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
@@ -106,7 +131,8 @@ size_t AudioBuffer::getMaxAvailableBytes() {
 void AudioBuffer::bytesWritten(size_t bw) {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_writePtr += bw;
-    if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
+    if(m_writePtr == m_endPtr + 1) { m_writePtr = m_buffer; }
+    if(m_writePtr > m_endPtr + 1) log_e("m_writePtr %i, m_endPtr %i", m_writePtr, m_endPtr);
     if(bw && m_f_start) m_f_start = false;
     xSemaphoreGiveRecursive(mutex_buffer);
 }
@@ -116,7 +142,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
-        m_readPtr = m_buffer + tmp;
+        m_readPtr = m_buffer + tmp - 1;
     }
     xSemaphoreGiveRecursive(mutex_buffer);
 }
@@ -125,9 +151,9 @@ uint8_t* AudioBuffer::getWritePtr() { return m_writePtr; }
 
 uint8_t* AudioBuffer::getReadPtr() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
-    size_t len = m_endPtr - m_readPtr;
+    int32_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
-        memcpy(m_endPtr, m_buffer, m_maxBlockSize - len); // cpy from m_buffer to m_endPtr with len
+        memcpy(m_endPtr + 1, m_buffer, m_maxBlockSize - (len  - 1)); // cpy from m_buffer to m_endPtr with len
     }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_readPtr;
