@@ -444,7 +444,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         return false;
     }
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
-    AUDIO_INFO("Connect to new host: \"%s\"", host);
+
     setDefaults();
     m_f_ssl = true;
 
@@ -485,7 +485,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     _client = static_cast<WiFiClient*>(&clientsecure);
 
     uint32_t t = millis();
-    if (m_f_Log) AUDIO_INFO("connect to %s on port %d path %s", host, port, path);
+    AUDIO_INFO("Connect to: \"%s\"", host);
     res = _client->connect(host, port, m_timeout_ms_ssl);
     if (res) {
         uint32_t dt = millis() - t;
@@ -632,7 +632,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     uint32_t t = millis();
 
-    AUDIO_INFO("connect to %s on port %d path %s", hostwoext, port, extension);
+    AUDIO_INFO("connect to: \"%s\" on port %d path \"%s\"", hostwoext, port, extension);
 
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
     res = _client->connect(hostwoext, port);
@@ -642,7 +642,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
     }
-
     m_expectedCodec = CODEC_NONE;
     m_expectedPlsFmt = FORMAT_NONE;
 
@@ -746,7 +745,7 @@ bool Audio::httpPrint(const char* host) {
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
 
-    AUDIO_INFO("new request: \"%s\"", host);
+    AUDIO_INFO("connect to: \"%s\"", host);
 
     char rqh[strlen(h_host) + 200]; // http request header
     rqh[0] = '\0';
@@ -961,6 +960,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
         speechBuff = NULL;
     }
     _client = static_cast<WiFiClient*>(&client);
+    AUDIO_INFO("connect to \"%s\"", host);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
         xSemaphoreGive(mutex_playAudioData);
