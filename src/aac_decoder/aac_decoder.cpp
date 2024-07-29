@@ -1,3 +1,10 @@
+/*
+ *  aac_decoder.cpp
+ *  faad2 - ESP32 adaptation
+ *  Created on: 12.09.2023
+ *  Updated on: 28.07.2024
+*/
+
 
 #include "aac_decoder.h"
 #include <stdbool.h>

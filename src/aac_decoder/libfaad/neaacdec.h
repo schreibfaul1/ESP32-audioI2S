@@ -64,8 +64,10 @@
 #define LTP_DEC /* Allow decoding of LTP (long term prediction) profile AAC */
 #define LD_DEC  /* Allow decoding of LD (low delay) profile AAC */
 #define ALLOW_SMALL_FRAMELENGTH
-#define SBR_DEC /* Allow decoding of SBR (spectral band replication) */
-#define PS_DEC /* Allow decoding of PS (parametric stereo) */
+#if (defined CONFIG_IDF_TARGET_ESP32S3 && defined BOARD_HAS_PSRAM)
+    #define SBR_DEC /* Allow decoding of SBR (spectral band replication) */
+    #define PS_DEC /* Allow decoding of PS (parametric stereo) */
+#endif
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* LD can't do without LTP */
 #ifdef LD_DEC
