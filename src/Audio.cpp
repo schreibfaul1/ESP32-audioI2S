@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12e
+ *  Version 3.0.12f
  *  Updated on: Jul 29.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -6323,7 +6323,16 @@ void Audio::startAudioTask() {
         return;
     }
     m_f_audioTaskIsRunning = true;
-    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
+
+    xTaskCreatePinnedToCore(
+        &Audio::taskWrapper,    /* Function to implement the task */
+        "PeriodicTask",         /* Name of the task */
+        3300,                   /* Stack size in words */
+        this,                   /* Task input parameter */
+        4,                      /* Priority of the task */
+        &m_audioTaskHandle,     /* Task handle. */
+        0                       /* Core where the task should run */
+    );
 }
 
 void Audio::stopAudioTask()  {
@@ -6345,7 +6354,7 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(7 / portTICK_PERIOD_MS);  // periodically every 7 ms
+        vTaskDelay(3 / portTICK_PERIOD_MS);  // periodically every 7 ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
