@@ -4383,15 +4383,15 @@ void Audio::showCodecParams() {
             const char hf[4][8] = {"unknown", "ADTS", "ADIF", "RAW"};
             AUDIO_INFO("AAC HeaderFormat: %s", hf[answ])
         }
-        if(answ == 1) { // ADTS Header
-            uint8_t aacId = AACGetID();
-            uint8_t aacPr = AACGetProfile();
-            if(aacId < 2 && aacPr < 4) {
-                const char co[2][7] = {"MPEG-4", "MPEG-2"};
-                const char pr[4][23] = {"Main", "LowComplexity", "Scalable Sampling Rate", "reserved"};
-                AUDIO_INFO("AAC Codec: %s %s", co[aacId], pr[answ]);
-            }
-        }
+        // if(answ == 1) { // ADTS Header
+        //     uint8_t aacId = AACGetID();
+        //     uint8_t aacPr = AACGetProfile();
+        //     if(aacId < 2 && aacPr < 4) {
+        //         const char co[2][7] = {"MPEG-4", "MPEG-2"};
+        //         const char pr[4][23] = {"Main", "LowComplexity", "Scalable Sampling Rate", "reserved"};
+        //         AUDIO_INFO("AAC Codec: %s %s", co[aacId], pr[answ]);
+        //     }
+        // }
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4764,29 +4764,29 @@ void Audio::printDecodeError(int r) {
     }
     if(m_codec == CODEC_AAC) {
         switch(r) {
-            case ERR_AAC_NONE: e = "NONE"; break;
-            case ERR_AAC_INDATA_UNDERFLOW: e = "INDATA_UNDERFLOW"; break;
-            case ERR_AAC_NULL_POINTER: e = "NULL_POINTER"; break;
-            case ERR_AAC_INVALID_ADTS_HEADER: e = "INVALID_ADTS_HEADER"; break;
-            case ERR_AAC_INVALID_ADIF_HEADER: e = "INVALID_ADIF_HEADER"; break;
-            case ERR_AAC_INVALID_FRAME: e = "INVALID_FRAME"; break;
-            case ERR_AAC_MPEG4_UNSUPPORTED: e = "MPEG4_UNSUPPORTED"; break;
-            case ERR_AAC_CHANNEL_MAP: e = "CHANNEL_MAP"; break;
-            case ERR_AAC_SYNTAX_ELEMENT: e = "SYNTAX_ELEMENT"; break;
-            case ERR_AAC_DEQUANT: e = "DEQUANT"; break;
-            case ERR_AAC_STEREO_PROCESS: e = "STEREO_PROCESS"; break;
-            case ERR_AAC_PNS: e = "PNS"; break;
-            case ERR_AAC_SHORT_BLOCK_DEINT: e = "SHORT_BLOCK_DEINT"; break;
-            case ERR_AAC_TNS: e = "TNS"; break;
-            case ERR_AAC_IMDCT: e = "IMDCT"; break;
-            case ERR_AAC_SBR_INIT: e = "SBR_INIT"; break;
-            case ERR_AAC_SBR_BITSTREAM: e = "SBR_BITSTREAM"; break;
-            case ERR_AAC_SBR_DATA: e = "SBR_DATA"; break;
-            case ERR_AAC_SBR_PCM_FORMAT: e = "SBR_PCM_FORMAT"; break;
-            case ERR_AAC_SBR_NCHANS_TOO_HIGH: e = "SBR_NCHANS_TOO_HIGH"; break;
-            case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED: e = "BR_SINGLERATE_UNSUPPORTED"; break;
-            case ERR_AAC_NCHANS_TOO_HIGH: e = "NCHANS_TOO_HIGH"; break;
-            case ERR_AAC_RAWBLOCK_PARAMS: e = "RAWBLOCK_PARAMS"; break;
+            // case ERR_AAC_NONE: e = "NONE"; break;
+            // case ERR_AAC_INDATA_UNDERFLOW: e = "INDATA_UNDERFLOW"; break;
+            // case ERR_AAC_NULL_POINTER: e = "NULL_POINTER"; break;
+            // case ERR_AAC_INVALID_ADTS_HEADER: e = "INVALID_ADTS_HEADER"; break;
+            // case ERR_AAC_INVALID_ADIF_HEADER: e = "INVALID_ADIF_HEADER"; break;
+            // case ERR_AAC_INVALID_FRAME: e = "INVALID_FRAME"; break;
+            // case ERR_AAC_MPEG4_UNSUPPORTED: e = "MPEG4_UNSUPPORTED"; break;
+            // case ERR_AAC_CHANNEL_MAP: e = "CHANNEL_MAP"; break;
+            // case ERR_AAC_SYNTAX_ELEMENT: e = "SYNTAX_ELEMENT"; break;
+            // case ERR_AAC_DEQUANT: e = "DEQUANT"; break;
+            // case ERR_AAC_STEREO_PROCESS: e = "STEREO_PROCESS"; break;
+            // case ERR_AAC_PNS: e = "PNS"; break;
+            // case ERR_AAC_SHORT_BLOCK_DEINT: e = "SHORT_BLOCK_DEINT"; break;
+            // case ERR_AAC_TNS: e = "TNS"; break;
+            // case ERR_AAC_IMDCT: e = "IMDCT"; break;
+            // case ERR_AAC_SBR_INIT: e = "SBR_INIT"; break;
+            // case ERR_AAC_SBR_BITSTREAM: e = "SBR_BITSTREAM"; break;
+            // case ERR_AAC_SBR_DATA: e = "SBR_DATA"; break;
+            // case ERR_AAC_SBR_PCM_FORMAT: e = "SBR_PCM_FORMAT"; break;
+            // case ERR_AAC_SBR_NCHANS_TOO_HIGH: e = "SBR_NCHANS_TOO_HIGH"; break;
+            // case ERR_AAC_SBR_SINGLERATE_UNSUPPORTED: e = "BR_SINGLERATE_UNSUPPORTED"; break;
+            // case ERR_AAC_NCHANS_TOO_HIGH: e = "NCHANS_TOO_HIGH"; break;
+            // case ERR_AAC_RAWBLOCK_PARAMS: e = "RAWBLOCK_PARAMS"; break;
             default: e = "ERR_UNKNOWN";
         }
         AUDIO_INFO("AAC decode error %d : %s", r, e);
@@ -6324,15 +6324,17 @@ void Audio::startAudioTask() {
     }
     m_f_audioTaskIsRunning = true;
 
-    xTaskCreatePinnedToCore(
-        &Audio::taskWrapper,    /* Function to implement the task */
-        "PeriodicTask",         /* Name of the task */
-        3300,                   /* Stack size in words */
-        this,                   /* Task input parameter */
-        4,                      /* Priority of the task */
-        &m_audioTaskHandle,     /* Task handle. */
-        0                       /* Core where the task should run */
-    );
+    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
+
+    // xTaskCreatePinnedToCore(
+    //     &Audio::taskWrapper,    /* Function to implement the task */
+    //     "PeriodicTask",         /* Name of the task */
+    //     3300,                   /* Stack size in words */
+    //     this,                   /* Task input parameter */
+    //     4,                      /* Priority of the task */
+    //     &m_audioTaskHandle,     /* Task handle. */
+    //     1                       /* Core where the task should run */
+    // );
 }
 
 void Audio::stopAudioTask()  {
