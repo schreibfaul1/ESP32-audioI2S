@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12d
+ *  Version 3.0.12e
  *  Updated on: Jul 29.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -3273,16 +3273,6 @@ void Audio::processLocalFile() {
                 if(m_validSamples) {
                     return;
                 }
-                // int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-                // if(bytesDecoded <= InBuff.bufferFilled()) { // avoid InBuff overrun (can be if file is corrupt)
-                //     if(m_f_playing) {
-                //         if(bytesDecoded > 2) {
-                //             InBuff.bytesWasRead(bytesDecoded);
-                //             return;
-                //         }
-                //     }
-                // }
-                // if(m_codec == CODEC_MP3) AUDIO_INFO("audio file is corrupt --> send EOF"); // no return, fall through
             }
         }
 
@@ -3417,6 +3407,7 @@ void Audio::processWebFile() {
         byteCounter = 0;
         chunkSize = 0;
         audioDataCount = 0;
+        m_f_stream = false;
     }
 
     if(!m_contentlength && !m_f_tts) {
@@ -3453,11 +3444,11 @@ void Audio::processWebFile() {
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
-    if(!m_f_stream) {
+    if(!m_f_stream && m_controlCounter == 100) {
         if((InBuff.freeSpace() > maxFrameSize) && (byteCounter < m_contentlength)) return;
         m_f_stream = true; // ready to play the audio data
         uint16_t filltime = millis() - m_t0;
-        AUDIO_INFO("stream ready, buffer filled in %d ms", filltime);
+        AUDIO_INFO("Webfile: stream ready, buffer filled in %d ms", filltime);
         return;
     }
 
@@ -3498,11 +3489,11 @@ void Audio::processWebFile() {
                 if(m_validSamples) {
                     return;
                 } // play samples first
-                int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
-                if(bytesDecoded > 2) {
-                    InBuff.bytesWasRead(bytesDecoded);
-                    return;
-                }
+            //    int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.bufferFilled());
+                // if(bytesDecoded > 2) {
+                //     InBuff.bytesWasRead(bytesDecoded);
+            //        return;
+            //    }
             }
         }
 
