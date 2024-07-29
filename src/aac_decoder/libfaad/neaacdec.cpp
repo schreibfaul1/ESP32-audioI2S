@@ -5552,8 +5552,8 @@ uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right
     /* case can occur due to bit errors */
     if(sbr->id_aac != ID_CPE) return 21;
 
-    // complex_t** m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));
-    // for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));
+    complex_t** m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));
+    for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));
 
     if(sbr->ret || (sbr->header_count == 0)) {
         /* don't process just upsample */
@@ -5572,12 +5572,12 @@ uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right
     if(downSampledSBR) { sbr_qmf_synthesis_32(sbr, sbr->qmfs[1], m_X_dcf, right_chan); }
     else { sbr_qmf_synthesis_64(sbr, sbr->qmfs[1], m_X_dcf, right_chan); }
 
-    // for(uint8_t i = 0; i < MAX_NTSR; i++) {
-    //     free(m_X_dcf[i]);
-    //     m_X_dcf[i] = NULL;
-    // }
-    // free(m_X_dcf);
-    // m_X_dcf = NULL;
+    for(uint8_t i = 0; i < MAX_NTSR; i++) {
+        free(m_X_dcf[i]);
+        m_X_dcf[i] = NULL;
+    }
+    free(m_X_dcf);
+    m_X_dcf = NULL;
 
     if(sbr->bs_header_flag) sbr->just_seeked = 0;
     if(sbr->header_count != 0 && sbr->ret == 0) {
