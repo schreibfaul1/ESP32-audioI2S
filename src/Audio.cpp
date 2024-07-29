@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12c
- *  Updated on: Jul 28.2024
+ *  Version 3.0.12d
+ *  Updated on: Jul 29.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2409,7 +2409,7 @@ void Audio::playChunk() {
             s2[LEFTCHANNEL] += 0x8000;
             s2[RIGHTCHANNEL] += 0x8000;
         }
-        i += m_channels;
+        i += m_bitsPerSample == 16 ? 2 : 1;
         validSamples -= 1;
     }
     if(audio_process_i2s) {
