@@ -502,9 +502,6 @@ static inline void faad_flushbits(bitfile_t* ld, uint32_t bits) {
     if(bits < ld->bits_left) { ld->bits_left -= bits; }
     else { faad_flushbits_ex(ld, bits); }
 }
-
-
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline uint8_t faad_get1bit(bitfile_t* ld) {
     uint8_t r;
@@ -517,7 +514,6 @@ static inline uint8_t faad_get1bit(bitfile_t* ld) {
     r = (uint8_t)faad_getbits(ld, 1);
     return r;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* reversed bitreading routines */
 static inline uint32_t faad_showbits_rev(bitfile_t* ld, uint32_t bits) {
@@ -539,13 +535,6 @@ static inline uint32_t faad_showbits_rev(bitfile_t* ld, uint32_t bits) {
         return B;
     }
 }
-
-
-
-
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* return 1 if position is outside of buffer, 0 otherwise */
 static inline int8_t flushbits_hcr(bits_t_t* ld, uint8_t bits) {
@@ -557,13 +546,11 @@ static inline int8_t flushbits_hcr(bits_t_t* ld, uint8_t bits) {
     }
     else { return 0; }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int8_t getbits_hcr(bits_t_t* ld, uint8_t n, uint32_t* result) {
     *result = showbits_hcr(ld, n);
     return flushbits_hcr(ld, n);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int8_t get1bit_hcr(bits_t_t* ld, uint8_t* result) {
     uint32_t res;
@@ -574,7 +561,6 @@ static inline int8_t get1bit_hcr(bits_t_t* ld, uint8_t* result) {
     return ret;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 static inline int8_t is_intensity(ic_stream_t* ics, uint8_t group, uint8_t sfb) {
     switch(ics->sfb_cb[group][sfb]) {
     case INTENSITY_HCB: return 1;
@@ -582,26 +568,22 @@ static inline int8_t is_intensity(ic_stream_t* ics, uint8_t group, uint8_t sfb) 
     default: return 0;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int8_t invert_intensity(ic_stream_t* ics, uint8_t group, uint8_t sfb) {
     if(ics->ms_mask_present == 1) return (1 - 2 * ics->ms_used[group][sfb]);
     return 1;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Complex multiplication */
 inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) {
     *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
     *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline uint8_t is_noise(ic_stream_t* ics, uint8_t group, uint8_t sfb) {
     if(ics->sfb_cb[group][sfb] == NOISE_HCB) return 1;
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int8_t ps_huff_dec(bitfile_t* ld, ps_huff_tab t_huff) { /* binary search huffman decoding */
     uint8_t bit;

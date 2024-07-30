@@ -33,13 +33,6 @@ sbr_hfadj_info_t*         m_adj = NULL;
 int32_t*                  m_Q_M_lim = NULL;
 int32_t*                  m_G_lim = NULL;
 int32_t*                  m_S_M = NULL;
-
-// complex_t alpha_0[64], alpha_1[64];
-// int32_t  in_real[32], in_imag[32], out_real[32], out_imag[32];
-// int32_t x1[32], x2[32];
-// int32_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
-// int32_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32];
-
 element_t*                m_sce = NULL;
 int16_t*                  m_spec_data = NULL;
 element_t*                m_cpe = NULL;
@@ -75,6 +68,8 @@ void alloc_mem() {
     for(uint8_t i = 0; i < 32; i++){m_X_hybrid_right[i] = (complex_t*)faad_malloc(34 * sizeof(*(m_X_hybrid_right[i])));}     sum += 32 * 34 * sizeof(complex_t);
     m_X_dsf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dsf));                                                          sum += MAX_NTSR * sizeof(complex_t*);
     for(uint8_t i = 0; i < MAX_NTSR; i++){m_X_dsf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dsf[i])));}                 sum += MAX_NTSR * 64 * sizeof(complex_t);
+    m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));                                                          sum += MAX_NTSR * sizeof(complex_t*);
+    for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));                  sum += MAX_NTSR * 64 * sizeof(complex_t);
     m_X_left = (complex_t**)faad_malloc(38 * sizeof(m_X_left));                                                              sum += 38 * sizeof(complex_t*);
     for(uint8_t i = 0; i < 38; i++){ m_X_left[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_left[i])));}                    sum += 38 * 64 * sizeof(int32_t);
     m_X_right = (complex_t**)faad_malloc(38 * sizeof(m_X_right));                                                            sum += 38 * sizeof(complex_t*);
@@ -88,26 +83,6 @@ void alloc_mem() {
     m_G_lim = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));                                                                sum += MAX_M * sizeof(int32_t);
     m_S_M = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));                                                                  sum += MAX_M * sizeof(int32_t);
 #endif
-
-// m_mp4ASC = (mp4AudioSpecificConfig_t*)faad_malloc(1 * sizeof(mp4AudioSpecificConfig_t));                                 sum += 1 * sizeof(mp4AudioSpecificConfig_t);
-// m_mp4ASC_ame = (mp4AudioSpecificConfig_t*)faad_malloc(1 * sizeof(mp4AudioSpecificConfig_t));                             sum += 1 * sizeof(mp4AudioSpecificConfig_t);
-
-
-
-// m_windowed_buf = (int32_t*)faad_malloc(2 * 1024 * sizeof(int32_t));                                                      sum += 2 * 1024 * sizeof(int32_t);
-// m_codeword = (codeword_t*)faad_malloc(512 * sizeof(codeword_t));                                                         sum += 512 * sizeof(codeword_t);
-// m_segment = (bits_t_t*)faad_malloc(512 * sizeof(bits_t_t));                                                              sum += 512 * sizeof(bits_t_t);
-// m_x_est = (int32_t*)faad_malloc(2048 * sizeof(int32_t));                                                                 sum += 2048 * sizeof(int32_t);
-// m_X_est = (int32_t*)faad_malloc(2048 * sizeof(int32_t));                                                                 sum += 2048 * sizeof(int32_t);
-// m_Z1_mdct = (complex_t*)faad_malloc(512 * sizeof(complex_t));                                                            sum += 512 * sizeof(complex_t);
-// m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));                                                          sum += MAX_NTSR * sizeof(complex_t*);
-// for(uint8_t i = 0; i < MAX_NTSR; i++){m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));}                 sum += MAX_NTSR * 64 * sizeof(complex_t);
-// m_lim_imTable = (int32_t*)faad_malloc(100 * sizeof(int32_t));                                                            sum += 100 * sizeof(int32_t);
-// m_patchBorders = (uint8_t*)faad_malloc(64 * sizeof(uint8_t));                                                            sum += 64 * sizeof(uint8_t);
-
-
-
-
     printf(ANSI_ESC_ORANGE "alloc %li bytes\n" ANSI_ESC_WHITE, sum);
     // clang-format off
 }
@@ -923,21 +898,18 @@ uint8_t get_sr_index(const uint32_t samplerate) { /* Returns the sample rate ind
     if(16428320 <= samplerate) return 11;
     return 11;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t get_sample_rate(const uint8_t sr_index) { /* Returns the sample rate based on the sample rate index */
     const uint32_t sample_rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000};
     if(sr_index < 12) return sample_rates[sr_index];
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t max_pred_sfb(const uint8_t sr_index) {
     const uint8_t pred_sfb_max[] = {33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34};
     if(sr_index < 12) return pred_sfb_max[sr_index];
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short) {
     /* entry for each sampling rate
@@ -1004,8 +976,6 @@ void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
 void* faad_malloc(size_t size) {return ps_malloc(size); }
 void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
 #endif
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const uint8_t Parity[256] = { // parity
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -1108,7 +1078,6 @@ int32_t pow2_fix(int32_t val) {
     else { retval = MUL_R(retval, (errcorr + x1)); }
     return retval;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t pow2_int(int32_t val) {
     uint32_t x1, x2;
@@ -1218,7 +1187,6 @@ void tns_decode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* TNS encoding for one channel and frame */
 void tns_encode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8_t object_type, int32_t* spec, uint16_t frame_len) {
@@ -1255,7 +1223,6 @@ void tns_encode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Decoder transmitted coefficients for one TNS filter */
 static void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a) {
@@ -1558,7 +1525,6 @@ exit:
     }
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Init the library using a DecoderSpecificInfo */
 int8_t NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, uint8_t* channels) {
@@ -1935,6 +1901,7 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
     if(hDecoder->adts_header_t_present) hInfo->header_type = ADTS;
 #if(defined(PS_DEC))
     hInfo->ps = hDecoder->ps_used_global;
+    hInfo->isPS = hDecoder->isPS;
 #endif
     if(channels == 0) { /* check if frame has channel elements */
         hDecoder->frame++;
@@ -2026,7 +1993,6 @@ drc_info_t* drc_init(int32_t cut, int32_t boost) {
 void drc_end(drc_info_t* drc) {
     if(drc) faad_free(drc);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void drc_decode(drc_info_t* drc, int32_t* spec) {
     uint16_t i, bd, top;
@@ -2104,7 +2070,6 @@ fb_info_t* filter_bank_init(uint16_t frame_len) {
 #endif
     return fb;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void filter_bank_end(fb_info_t* fb) {
     if(fb != NULL) {
@@ -2555,7 +2520,6 @@ uint8_t huffman_spectral_data(uint8_t cb, bitfile_t* ld, int16_t* sp) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Special version of huffman_spectral_data. Will not read from a bitfile_t but a bits_t_t structure. Will keep track of the bits decoded and return
    the number of bits remaining. Do not read more than ld->len, return -1 if codeword would be longer */
@@ -2985,7 +2949,6 @@ void ms_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int32_t get_sample(int32_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel) {
     if(up_matrix == 1) return input[internal_channel[0]][sample];
@@ -3004,7 +2967,6 @@ static inline int32_t get_sample(int32_t** input, uint8_t channel, uint16_t samp
         return MUL_F(cum, DM_MUL);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void* output_to_PCM(NeAACDecStruct_t* hDecoder, int32_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
     uint8_t  ch;
@@ -3070,7 +3032,6 @@ void* output_to_PCM(NeAACDecStruct_t* hDecoder, int32_t** input, void* sample_bu
     }
     return sample_buffer;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* fixed point square root approximation */
 /* !!!! ONLY WORKS FOR EVEN %REAL_BITS% !!!! */
@@ -3100,7 +3061,6 @@ int32_t fp_sqrt(int32_t value) {
     root <<= (REAL_BITS / 2);
     return root;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* The function gen_rand_vector(addr, size) generates a vector of length  <size> with signed random values of average energy MEAN_NRG per random
    value. A suitable random number generator can be realized using one multiplication/accumulation per random value.
@@ -3132,9 +3092,7 @@ static inline void gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t
         for(i = 0; i < size; i++) { spec[i] = MUL_R(spec[i], scale); }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_left, int32_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
                 /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
     uint8_t  g, sfb, b;
@@ -3203,7 +3161,6 @@ void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_lef
         } /* b */
     }     /* g */
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static hyb_info_t* hybrid_init(uint8_t numTimeSlotsRate) {
     uint8_t     i;
@@ -3229,7 +3186,6 @@ static hyb_info_t* hybrid_init(uint8_t numTimeSlotsRate) {
     for(i = 0; i < hyb->frame_len; i++) { hyb->temp[i] = (complex_t*)faad_malloc(12 /*max*/ * sizeof(complex_t)); }
     return hyb;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void hybrid_free(hyb_info_t* hyb) {
     uint8_t i;
@@ -3246,7 +3202,6 @@ static void hybrid_free(hyb_info_t* hyb) {
     if(hyb->temp) faad_free(hyb->temp);
     faad_free(hyb);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* real filter, size 2 */
 static void channel_filter2(hyb_info_t* hyb, uint8_t frame_len, const int32_t* filter, complex_t* buffer, complex_t** X_hybrid) {
@@ -3276,7 +3231,6 @@ static void channel_filter2(hyb_info_t* hyb, uint8_t frame_len, const int32_t* f
         QMF_IM(X_hybrid[i][1]) = i0 - i1 + i2 - i3 + i4 - i5 + i6;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* complex filter, size 4 */
 static void channel_filter4(hyb_info_t* hyb, uint8_t frame_len, const int32_t* filter, complex_t* buffer, complex_t** X_hybrid) {
@@ -3542,7 +3496,6 @@ static void delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint
         for(i = (nr_par << 1) - 1; i > 0; i--) { index[i] = index[i >> 1]; }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* delta modulo decode array */
 /* in: log2 value of the modulo value to allow using AND instead of MOD */
@@ -3933,39 +3886,11 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
     ps->saved_delay = temp_delay;
     for(m = 0; m < NO_ALLPASS_LINKS; m++) { ps->delay_buf_index_ser[m] = temp_delay_ser[m]; }
 }
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-/* fixed point square root approximation */
-// static int32_t ps_sqrt(int32_t value) {
-//     int32_t root = 0;
-//     step(0);
-//     step(2);
-//     step(4);
-//     step(6);
-//     step(8);
-//     step(10);
-//     step(12);
-//     step(14);
-//     step(16);
-//     step(18);
-//     step(20);
-//     step(22);
-//     step(24);
-//     step(26);
-//     step(28);
-//     step(30);
-//     if(root < value) ++root;
-//     root <<= (REAL_BITS / 2);
-//     return root;
-// }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const int32_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
                                   FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000), FRAC_CONST(0.707106781186547), FRAC_CONST(1.000000000000000)};
 const int32_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.707106781186547),  FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548), FRAC_CONST(0.000000000000000),
                                   FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000)};
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t magnitude_c(complex_t c) {
 
@@ -3978,7 +3903,6 @@ static int32_t magnitude_c(complex_t c) {
     if(abs_inphase > abs_quadrature) { return MUL_F(abs_inphase, ALPHA) + MUL_F(abs_quadrature, BETA); }
     else { return MUL_F(abs_quadrature, ALPHA) + MUL_F(abs_inphase, BETA); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_right[64], complex_t* X_hybrid_left[32], complex_t* X_hybrid_right[32]) {
     uint8_t        n;
@@ -4258,14 +4182,12 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void ps_free(ps_info_t* ps) {
     /* free hybrid filterbank structures */
     hybrid_free((hyb_info_t*)ps->hyb);
     faad_free(ps);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ps_info_t* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
     uint8_t i;
@@ -4313,7 +4235,6 @@ ps_info_t* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
     }
     return ps;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* main Parametric Stereo decoding function */
 uint8_t ps_decode(ps_info_t* ps, complex_t* X_left[64], complex_t* X_right[64]) {
@@ -4353,7 +4274,6 @@ uint8_t ps_decode(ps_info_t* ps, complex_t* X_left[64], complex_t* X_right[64]) 
     hybrid_synthesis((hyb_info_t*)ps->hyb, X_right, m_X_hybrid_right, ps->use34hybrid_bands, ps->numTimeSlotsRate);
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t is_ltp_ot(uint8_t object_type) { /* check if the object type is an object type that can have LTP */
     (void)object_type;
@@ -4397,7 +4317,6 @@ void lt_prediction(ic_stream_t* ics, ltp_info_t* ltp, int32_t* spec, int16_t* lt
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int16_t real_to_int16(int32_t sig_in) {
     if(sig_in >= 0) {
@@ -4410,7 +4329,6 @@ static inline int16_t real_to_int16(int32_t sig_in) {
     }
     return (sig_in >> REAL_BITS);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void lt_update_state(int16_t* lt_pred_stat, int32_t* time, int32_t* overlap, uint16_t frame_len, uint8_t object_type) {
     (void)object_type;
@@ -4443,7 +4361,6 @@ void lt_update_state(int16_t* lt_pred_stat, int32_t* time, int32_t* overlap, uin
     }
 #endif
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 mdct_info_t* faad_mdct_init(uint16_t N) {
     mdct_info_t* mdct = (mdct_info_t*)faad_malloc(sizeof(mdct_info_t));
@@ -4579,7 +4496,6 @@ void faad_mdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
         X_out[N - 1 - n] = RE(x);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* defines if an object type can be decoded by this library or not */
 static uint8_t ObjectTypesTable[32] = {
@@ -4745,7 +4661,6 @@ int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t*
 #endif
     return result;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form) {
     uint8_t   ret = 0;
@@ -4755,7 +4670,6 @@ int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpec
     ret = AudioSpecificConfigFrombitfile_t(&ld, mp4ASC, pce, buffer_size, short_form);
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void extract_envelope_data(sbr_info_t* sbr, uint8_t ch) {
     uint8_t l, k;
@@ -4807,7 +4721,6 @@ void extract_envelope_data(sbr_info_t* sbr, uint8_t ch) {
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void extract_noise_floor_data(sbr_info_t* sbr, uint8_t ch) {
     uint8_t l, k;
@@ -4826,7 +4739,6 @@ void extract_noise_floor_data(sbr_info_t* sbr, uint8_t ch) {
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint16_t ps_data(ps_info_t* ps, bitfile_t* ld, uint8_t* header) {
     uint8_t  tmp, n;
@@ -4902,7 +4814,6 @@ uint16_t ps_data(ps_info_t* ps, bitfile_t* ld, uint8_t* header) {
     ps->ps_data_available = 1;
     return bits;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint16_t ps_extension(ps_info_t* ps, bitfile_t* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
     uint8_t n;
@@ -4927,7 +4838,6 @@ static uint16_t ps_extension(ps_info_t* ps, bitfile_t* ld, const uint8_t ps_exte
     bits = (uint16_t)faad_get_processed_bits(ld) - bits;
     return bits;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* read huffman data coded in either the frequency or the time direction */
 static void huff_data(bitfile_t* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
@@ -4943,7 +4853,6 @@ static void huff_data(bitfile_t* ld, const uint8_t dt, const uint8_t nr_par, ps_
         for(n = 1; n < nr_par; n++) { par[n] = ps_huff_dec(ld, f_huff); }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t pulse_decode(ic_stream_t* ics, int16_t* spec_data, uint16_t framelen) {
     uint8_t       i;
@@ -4960,7 +4869,6 @@ uint8_t pulse_decode(ic_stream_t* ics, int16_t* spec_data, uint16_t framelen) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t rvlc_scale_factor_data(ic_stream_t* ics, bitfile_t* ld) {
     uint8_t bits = 9;
@@ -4979,7 +4887,6 @@ uint8_t rvlc_scale_factor_data(ic_stream_t* ics, bitfile_t* ld) {
     if(ics->noise_used) { ics->dpcm_noise_last_position = (uint16_t)faad_getbits(ld, 9); }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
     uint8_t   result;
@@ -5011,7 +4918,6 @@ uint8_t rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
         if(ics->sf_escapes_present) return result;
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfile_t* ld_esc, uint8_t* intensity_used) {
     int8_t  g, sfb;
@@ -5114,7 +5020,6 @@ static int8_t rvlc_huffman_esc(bitfile_t* ld, int8_t direction) {
     }
     return h->index;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // FFT decimation in frequency,  4*16*2+16=128+16=144 multiplications, 6*16*2+10*8+4*16*2=192+80+128=400 additions
 static void fft_dif(int32_t* Real, int32_t* Imag) {
@@ -5254,7 +5159,6 @@ static void fft_dif(int32_t* Real, int32_t* Imag) {
         Imag[i2] = point1_imag - point2_imag;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* size 64 only! */
 void dct4_kernel(int32_t* in_real, int32_t* in_imag, int32_t* out_real, int32_t* out_imag) {
@@ -5300,7 +5204,6 @@ void dct4_kernel(int32_t* in_real, int32_t* in_imag, int32_t* out_real, int32_t*
         out_imag[i] = MUL_C(x_re, dct4_64_tab[i + 4 * 32]) + tmp;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sbr_info_t* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR) {
     sbr_info_t* sbr = (sbr_info_t*)faad_malloc(sizeof(sbr_info_t));
@@ -5374,7 +5277,6 @@ sbr_info_t* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_
     }
     return sbr;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbrDecodeEnd(sbr_info_t* sbr) {
     uint8_t j;
@@ -5398,7 +5300,6 @@ void sbrDecodeEnd(sbr_info_t* sbr) {
         faad_free(sbr);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbrReset(sbr_info_t* sbr) {
     uint8_t j;
@@ -5449,7 +5350,6 @@ void sbrReset(sbr_info_t* sbr) {
     sbr->bs_add_harmonic_flag_prev[0] = 0;
     sbr->bs_add_harmonic_flag_prev[1] = 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t sbr_save_prev_data(sbr_info_t* sbr, uint8_t ch) {
     uint8_t i;
@@ -5543,17 +5443,13 @@ static uint8_t sbr_process_channel(sbr_info_t* sbr, int32_t* channel_buf, comple
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR) {
-    //    printf(ANSI_ESC_YELLOW "sbrDecodeCoupleFrame\n" ANSI_ESC_WHITE);
+
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    //    complex_t m_X_dcf[MAX_NTSR][64]; // ⏫⏫⏫
 
     if(sbr == NULL) return 20;
     /* case can occur due to bit errors */
     if(sbr->id_aac != ID_CPE) return 21;
-
-    complex_t** m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));
-    for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));
 
     if(sbr->ret || (sbr->header_count == 0)) {
         /* don't process just upsample */
@@ -5571,13 +5467,6 @@ uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right
     /* subband synthesis */
     if(downSampledSBR) { sbr_qmf_synthesis_32(sbr, sbr->qmfs[1], m_X_dcf, right_chan); }
     else { sbr_qmf_synthesis_64(sbr, sbr->qmfs[1], m_X_dcf, right_chan); }
-
-    for(uint8_t i = 0; i < MAX_NTSR; i++) {
-        free(m_X_dcf[i]);
-        m_X_dcf[i] = NULL;
-    }
-    free(m_X_dcf);
-    m_X_dcf = NULL;
 
     if(sbr->bs_header_flag) sbr->just_seeked = 0;
     if(sbr->header_count != 0 && sbr->ret == 0) {
@@ -5597,14 +5486,10 @@ uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t ju
     //    printf(ANSI_ESC_YELLOW "sbrDecodeSingleFrame\n" ANSI_ESC_WHITE);
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    //    complex_t m_X_dsf[MAX_NTSR][64]; // ⏫⏫⏫
 
     if(sbr == NULL) return 20;
     /* case can occur due to bit errors */
     if(sbr->id_aac != ID_SCE && sbr->id_aac != ID_LFE) return 21;
-
-    // complex_t** m_X_dsf = (complex_t**)faad_malloc(MAX_NTSR, sizeof(m_X_dsf));
-    // for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dsf[i] = (complex_t*)faad_malloc(64, sizeof(*(m_X_dsf[i])));
 
     if(sbr->ret || (sbr->header_count == 0)) {
         /* don't process just upsample */
@@ -5620,13 +5505,6 @@ uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t ju
     else { sbr_qmf_synthesis_64(sbr, sbr->qmfs[0], m_X_dsf, channel); }
     if(sbr->bs_header_flag) sbr->just_seeked = 0;
 
-    // for(uint8_t i = 0; i < MAX_NTSR; i++) {
-    //     free(m_X_dsf[i]);
-    //     m_X_dsf[i] = NULL;
-    // }
-    // free(m_X_dsf);
-    // m_X_dsf = NULL;
-
     if(sbr->header_count != 0 && sbr->ret == 0) {
         ret = sbr_save_prev_data(sbr, 0);
         if(ret) return ret;
@@ -5639,12 +5517,10 @@ uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t ju
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t sbrDecodeSingleFramePS(sbr_info_t* sbr, int32_t* left_channel, int32_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
-    //    printf(ANSI_ESC_YELLOW "sbrDecodeSingleFramePS\n" ANSI_ESC_WHITE);
+
     uint8_t l, k;
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    //    complex_t m_X_left[38][64] = {{0}};                           // ⏫⏫⏫
-    //    complex_t m_X_right[38][64] = {{0}}; /* must set this to 0 */ // ⏫⏫⏫
 
     for(uint8_t i = 0; i < 38; i++) memset(m_X_left[i], 0, 64 * sizeof(*(m_X_left[i])));
     for(uint8_t i = 0; i < 38; i++) memset(m_X_right[i], 0, 64 * sizeof(*(m_X_right[i])));
@@ -5652,11 +5528,6 @@ uint8_t sbrDecodeSingleFramePS(sbr_info_t* sbr, int32_t* left_channel, int32_t* 
     if(sbr == NULL) return 20;
     /* case can occur due to bit errors */
     if(sbr->id_aac != ID_SCE && sbr->id_aac != ID_LFE) return 21;
-
-    // complex_t** m_X_left = (complex_t**)faad_calloc(38, sizeof(m_X_left));
-    // for(uint8_t i = 0; i < 38; i++) m_X_left[i] = (complex_t*)faad_calloc(64, sizeof(*(m_X_left[i])));
-    // complex_t** m_X_right = (complex_t**)faad_calloc(38, sizeof(m_X_right));
-    // for(uint8_t i = 0; i < 38; i++) m_X_right[i] = (complex_t*)faad_calloc(64, sizeof(*(m_X_right[i])));
 
     if(sbr->ret || (sbr->header_count == 0)) {
         /* don't process just upsample */
@@ -5689,17 +5560,6 @@ uint8_t sbrDecodeSingleFramePS(sbr_info_t* sbr, int32_t* left_channel, int32_t* 
         sbr_qmf_synthesis_64(sbr, sbr->qmfs[1], m_X_right, right_channel);
     }
 
-    // for(uint8_t i = 0; i < 38; i++) {
-    //     free(m_X_left[i]);
-    //     m_X_left[i] = NULL;
-    // }
-    // free(m_X_left);
-    // for(uint8_t i = 0; i < 38; i++) {
-    //     free(m_X_right[i]);
-    //     m_X_right[i] = NULL;
-    // }
-    // free(m_X_right);
-
     if(sbr->bs_header_flag) sbr->just_seeked = 0;
     if(sbr->header_count != 0 && sbr->ret == 0) {
         ret = sbr_save_prev_data(sbr, 0);
@@ -5709,7 +5569,6 @@ uint8_t sbrDecodeSingleFramePS(sbr_info_t* sbr, int32_t* left_channel, int32_t* 
     sbr->frame++;
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* calculate the start QMF channel for the master frequency band table */
 /* parameter is also called k0 */
@@ -5747,7 +5606,6 @@ uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0)
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* calculate the master frequency table from k0, k2, bs_freq_scale and bs_alter_scale version for bs_freq_scale = 0 */
 uint8_t master_frequency_table_fs0(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale) {
@@ -5789,7 +5647,6 @@ uint8_t master_frequency_table_fs0(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint
     sbr->N_master = (min(sbr->N_master, 64));
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* This function finds the number of bands using this formula: bands * log(a1/a0)/log(2.0) + 0.5 */
 static int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
@@ -5814,7 +5671,6 @@ static int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
     r2 = (r2 >> (COEF_BITS - REAL_BITS)) * bands + (1 << (REAL_BITS - 1));
     return (r2 >> REAL_BITS);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
     /* table with log() values */
@@ -5843,7 +5699,6 @@ static int32_t find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
     int32_t rexp = c1 + MUL_C((c1 + MUL_C((c2 + MUL_C((c3 + MUL_C(c4, r2)), r2)), r2)), r2);
     return (rexp >> (COEF_BITS - REAL_BITS)); /* real */
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* version for bs_freq_scale > 0 */
 uint8_t master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
@@ -5851,13 +5706,6 @@ uint8_t master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t 
     uint8_t k, bands, twoRegions;
     uint8_t k1;
     uint8_t nrBand0, nrBand1;
-    //    int32_t m_vDk0[64] = {0}, m_vDk1[64] = {0}; // ⏫⏫⏫
-    //    int32_t m_vk0[64] = {0}, m_vk1[64] = {0};   // ⏫⏫⏫
-
-    // int32_t* m_vDk0 = (int32_t*)faad_calloc(64, sizeof(int32_t));
-    // int32_t* m_vDk1 = (int32_t*)faad_calloc(64, sizeof(int32_t));
-    // int32_t* m_vk0 = (int32_t*)faad_calloc(64, sizeof(int32_t));
-    // int32_t* m_vk1 = (int32_t*)faad_calloc(64, sizeof(int32_t));
 
     memset(m_vDk0, 0, 64 * sizeof(int32_t));
     memset(m_vDk1, 0, 64 * sizeof(int32_t));
@@ -5959,25 +5807,8 @@ uint8_t master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t 
     goto exit;
 
 exit:
-    // if(m_vk1) {
-    //     free(m_vk1);
-    //     m_vk1 = NULL;
-    // }
-    // if(m_vk0) {
-    //     free(m_vk0);
-    //     m_vk0 = NULL;
-    // }
-    // if(m_vDk1) {
-    //     free(m_vDk1);
-    //     m_vDk1 = NULL;
-    // }
-    // if(m_vDk0) {
-    //     free(m_vDk0);
-    //     m_vDk0 = NULL;
-    // }
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* calculate the derived frequency border tables from f_master */
 uint8_t derived_frequency_table(sbr_info_t* sbr, uint8_t bs_xover_band, uint8_t k2) {
@@ -6029,10 +5860,8 @@ uint8_t derived_frequency_table(sbr_info_t* sbr, uint8_t bs_xover_band, uint8_t 
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* TODO: blegh, ugly Modified to calculate for all possible bs_limiter_bands always This reduces the number calls to this functions needed (now only
-   on header reset) */
+/* TODO: blegh, ugly Modified to calculate for all possible bs_limiter_bands always This reduces the number calls to this functions needed (now only on header reset) */
 void limiter_frequency_table(sbr_info_t* sbr) {
     static const int32_t limiterBandsCompare[] = {REAL_CONST(1.327152), REAL_CONST(1.185093), REAL_CONST(1.119872)};
 
@@ -6045,8 +5874,6 @@ void limiter_frequency_table(sbr_info_t* sbr) {
     int32_t* m_lim_imTable = (int32_t*)faad_malloc(100 * sizeof(int32_t));
     uint8_t* m_patchBorders = (uint8_t*)faad_malloc(64 * sizeof(uint8_t));
     for(s = 1; s < 4; s++) {
-        //    int32_t m_lim_imTable[100 /*TODO*/] = {0};  // ⏫⏫⏫
-        //    uint8_t m_patchBorders[64 /*??*/] = {0};
         memset(m_lim_imTable, 0, 100 * sizeof(int32_t));
         memset(m_patchBorders, 0, 64 * sizeof(uint8_t));
 
@@ -6108,11 +5935,9 @@ void limiter_frequency_table(sbr_info_t* sbr) {
         for(k = 0; k <= nrLim; k++) { sbr->f_table_lim[s][k] = m_lim_imTable[k] - sbr->kx; }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t hf_adjustment(sbr_info_t* sbr, complex_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
-    // sbr_hfadj_info_t m_adj = {}; // ⏫⏫⏫
-    //   sbr_hfadj_info_t* m_adj = (sbr_hfadj_info_t*)faad_calloc(1, sizeof(sbr_hfadj_info_t));
+
     memset(m_adj, 0, sizeof(sbr_hfadj_info_t));
     uint8_t ret = 0;
 
@@ -6137,13 +5962,8 @@ uint8_t hf_adjustment(sbr_info_t* sbr, complex_t Xsbr[MAX_NTSRHFG][64], uint8_t 
     }
     calculate_gain(sbr, m_adj, ch);
     hf_assembly(sbr, m_adj, Xsbr, ch);
-    // if(m_adj) {
-    //     free(m_adj);
-    //     m_adj = NULL;
-    // }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t get_S_mapped(sbr_info_t* sbr, uint8_t ch, uint8_t l, uint8_t current_band) {
     if(sbr->f[ch][l] == HI_RES) {
@@ -6166,7 +5986,6 @@ static uint8_t get_S_mapped(sbr_info_t* sbr, uint8_t ch, uint8_t l, uint8_t curr
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t estimate_current_envelope(sbr_info_t* sbr, sbr_hfadj_info_t* adj, complex_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     (void)adj;
@@ -6215,7 +6034,6 @@ static uint8_t estimate_current_envelope(sbr_info_t* sbr, sbr_hfadj_info_t* adj,
     }
     return 0;
 }
-
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t find_log2_E(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
@@ -6255,7 +6073,6 @@ static int32_t find_log2_E(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t ch) {
         return (6 << REAL_BITS) + (sbr->E[ch][k][l] << (REAL_BITS - amp));
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t find_log2_Q(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
@@ -6289,7 +6106,6 @@ static int32_t find_log2_Q(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     }
     else { return (6 << REAL_BITS) - (sbr->Q[ch][k][l] << REAL_BITS); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t find_log2_Qplus1(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
@@ -6305,7 +6121,6 @@ static int32_t find_log2_Qplus1(sbr_info_t* sbr, uint8_t k, uint8_t l, uint8_t c
         else { return 0; }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void calculate_gain(sbr_info_t* sbr, sbr_hfadj_info_t* adj, uint8_t ch) {
     /* log2 values of limiter gains */
@@ -6314,13 +6129,7 @@ static void calculate_gain(sbr_info_t* sbr, sbr_hfadj_info_t* adj, uint8_t ch) {
 
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-    //    int32_t m_Q_M_lim[MAX_M]; //??? ⏫⏫⏫
-    //    int32_t m_G_lim[MAX_M];
     int32_t G_boost;
-    //    int32_t m_S_M[MAX_M];
-    // int32_t* m_Q_M_lim = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));
-    // int32_t* m_G_lim = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));
-    // int32_t* m_S_M = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));
 
     for(l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
@@ -6457,20 +6266,7 @@ static void calculate_gain(sbr_info_t* sbr, sbr_hfadj_info_t* adj, uint8_t ch) {
             }
         }
     }
-    // if(m_S_M) {
-    //     free(m_S_M);
-    //     m_S_M = NULL;
-    // }
-    // if(m_G_lim) {
-    //     free(m_G_lim);
-    //     m_G_lim = NULL;
-    // }
-    // if(m_Q_M_lim) {
-    //     free(m_Q_M_lim);
-    //     m_Q_M_lim = NULL;
-    // }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void hf_assembly(sbr_info_t* sbr, sbr_hfadj_info_t* adj, complex_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     static int32_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
@@ -6555,7 +6351,6 @@ static void hf_assembly(sbr_info_t* sbr, sbr_hfadj_info_t* adj, complex_t Xsbr[M
     sbr->index_noise_prev[ch] = fIndexNoise;
     sbr->psi_is_prev[ch] = fIndexSine;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void hf_generation(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t Xhigh[MAX_NTSRHFG][64], uint8_t ch) {
     uint8_t   l, i, x;
@@ -6615,7 +6410,6 @@ void hf_generation(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t X
     }
     if(sbr->Reset) { limiter_frequency_table(sbr); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void auto_correlation(sbr_info_t* sbr, acorr_coef_t* ac, complex_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
     int32_t       r01r = 0, r01i = 0, r02r = 0, r02i = 0, r11r = 0;
@@ -6717,7 +6511,6 @@ static void calc_prediction_coef(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64
         IM(alpha_1[k]) = 0;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* FIXED POINT: bwArray = COEF */
 static int32_t mapNewBw(uint8_t invf_mode, uint8_t invf_mode_prev) {
@@ -6739,7 +6532,6 @@ static int32_t mapNewBw(uint8_t invf_mode, uint8_t invf_mode_prev) {
             return COEF_CONST(0.0);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* FIXED POINT: bwArray = COEF */
 static void calc_chirp_factors(sbr_info_t* sbr, uint8_t ch) {
@@ -6756,7 +6548,6 @@ static void calc_chirp_factors(sbr_info_t* sbr, uint8_t ch) {
         sbr->bs_invf_mode_prev[ch][i] = sbr->bs_invf_mode[ch][i];
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void patch_construction(sbr_info_t* sbr) {
     uint8_t i, k;
@@ -6798,7 +6589,6 @@ static void patch_construction(sbr_info_t* sbr) {
     if((sbr->patchNoSubbands[sbr->noPatches - 1] < 3) && (sbr->noPatches > 1)) { sbr->noPatches--; }
     sbr->noPatches = min(sbr->noPatches, 5);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int16_t sbr_huff_dec(bitfile_t* ld, sbr_huff_tab t_huff) {
     uint8_t bit;
@@ -6810,7 +6600,6 @@ static inline int16_t sbr_huff_dec(bitfile_t* ld, sbr_huff_tab t_huff) {
     }
     return index + 64;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 10 */
 void sbr_envelope(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
@@ -6863,7 +6652,6 @@ void sbr_envelope(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     }
     extract_envelope_data(sbr, ch);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 11 */
 void sbr_noise(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
@@ -6893,7 +6681,6 @@ void sbr_noise(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     }
     extract_noise_floor_data(sbr, ch);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 qmfa_info_t* qmfa_init(uint8_t channels) {
     qmfa_info_t* qmfa = (qmfa_info_t*)faad_malloc(sizeof(qmfa_info_t));
@@ -6905,7 +6692,6 @@ qmfa_info_t* qmfa_init(uint8_t channels) {
     qmfa->channels = channels;
     return qmfa;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void qmfa_end(qmfa_info_t* qmfa) {
     if(qmfa) {
@@ -6913,7 +6699,6 @@ void qmfa_end(qmfa_info_t* qmfa) {
         faad_free(qmfa);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbr_qmf_analysis_32(sbr_info_t* sbr, qmfa_info_t* qmfa, const int32_t* input, complex_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx) {
     int32_t  u[64];
@@ -6971,7 +6756,6 @@ void sbr_qmf_analysis_32(sbr_info_t* sbr, qmfa_info_t* qmfa, const int32_t* inpu
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 qmfs_info_t* qmfs_init(uint8_t channels) {
     qmfs_info_t* qmfs = (qmfs_info_t*)faad_malloc(sizeof(qmfs_info_t));
@@ -6982,7 +6766,6 @@ qmfs_info_t* qmfs_init(uint8_t channels) {
     qmfs->channels = channels;
     return qmfs;
 }
-
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void qmfs_end(qmfs_info_t* qmfs) {
     if(qmfs) {
@@ -6990,7 +6773,6 @@ void qmfs_end(qmfs_info_t* qmfs) {
         faad_free(qmfs);
     }
 }
-
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbr_qmf_synthesis_32(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], int32_t* output) {
 
@@ -7031,7 +6813,6 @@ void sbr_qmf_synthesis_32(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], 
         if(qmfs->v_index < 0) qmfs->v_index = (640 - 64);
     }
 }
-
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbr_qmf_synthesis_64(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], int32_t* output) {
     //    printf(ANSI_ESC_YELLOW "sbr_qmf_synthesis_64\n" ANSI_ESC_WHITE);
@@ -7145,7 +6926,6 @@ void sbr_qmf_synthesis_64(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], 
         if(qmfs->v_index < 0) qmfs->v_index = (1280 - 128);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void sbr_reset(sbr_info_t* sbr) {
     //    printf(ANSI_ESC_YELLOW "sbr_reset\n" ANSI_ESC_WHITE);
@@ -7162,7 +6942,6 @@ static void sbr_reset(sbr_info_t* sbr) {
     sbr->bs_xover_band_prev = sbr->bs_xover_band;
     sbr->bs_noise_bands_prev = sbr->bs_noise_bands;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t calc_sbr_tables(sbr_info_t* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band) {
     uint8_t result = 0;
@@ -7187,7 +6966,6 @@ static uint8_t calc_sbr_tables(sbr_info_t* sbr, uint8_t start_freq, uint8_t stop
     result = (result > 0) ? 1 : 0;
     return result;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 2 */
 UNUSED_FUNCTION static uint8_t sbr_extension_data(bitfile_t* ld, sbr_info_t* sbr, uint16_t cnt, uint8_t psResetFlag) {
@@ -7262,7 +7040,6 @@ UNUSED_FUNCTION static uint8_t sbr_extension_data(bitfile_t* ld, sbr_info_t* sbr
     }
     return result;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 3 */
 static void sbr_header(bitfile_t* ld, sbr_info_t* sbr) {
@@ -7302,7 +7079,6 @@ static void sbr_header(bitfile_t* ld, sbr_info_t* sbr) {
         sbr->bs_smoothing_mode = 1;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 4 */
 static uint8_t sbr_data(bitfile_t* ld, sbr_info_t* sbr) {
@@ -7319,7 +7095,6 @@ static uint8_t sbr_data(bitfile_t* ld, sbr_info_t* sbr) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 5 */
 static uint8_t sbr_single_channel_element(bitfile_t* ld, sbr_info_t* sbr) {
@@ -7369,7 +7144,6 @@ static uint8_t sbr_single_channel_element(bitfile_t* ld, sbr_info_t* sbr) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 6 */
 static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
@@ -7460,7 +7234,6 @@ static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* integer log[2](x): input range [0,10) */
 static int8_t sbr_log2(const int8_t val) {
@@ -7469,7 +7242,6 @@ static int8_t sbr_log2(const int8_t val) {
     else
         return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 7 */
 static uint8_t sbr_grid(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
@@ -7549,7 +7321,6 @@ static uint8_t sbr_grid(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     noise_floor_time_border_vector(sbr, ch);
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 8 */
 static void sbr_dtdf(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
@@ -7558,14 +7329,12 @@ static void sbr_dtdf(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     for(i = 0; i < sbr->L_E[ch]; i++) { sbr->bs_df_env[ch][i] = faad_get1bit(ld); }
     for(i = 0; i < sbr->L_Q[ch]; i++) { sbr->bs_df_noise[ch][i] = faad_get1bit(ld); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 9 */
 static void invf_mode(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     uint8_t n;
     for(n = 0; n < sbr->N_Q; n++) { sbr->bs_invf_mode[ch][n] = (uint8_t)faad_getbits(ld, 2); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint16_t sbr_extension(bitfile_t* ld, sbr_info_t* sbr, uint8_t bs_extension_id, uint16_t num_bits_left) {
     (void)num_bits_left;
@@ -7588,14 +7357,12 @@ static uint16_t sbr_extension(bitfile_t* ld, sbr_info_t* sbr, uint8_t bs_extensi
     default: sbr->bs_extension_data = (uint8_t)faad_getbits(ld, 6); return 6;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* table 12 */
 static void sinusoidal_coding(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     uint8_t n;
     for(n = 0; n < sbr->N_high; n++) { sbr->bs_add_harmonic[ch][n] = faad_get1bit(ld); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* function constructs new time border vector first build into temp vector to be able to use previous vector on error */
 uint8_t envelope_time_border_vector(sbr_info_t* sbr, uint8_t ch) {
@@ -7664,7 +7431,6 @@ uint8_t envelope_time_border_vector(sbr_info_t* sbr, uint8_t ch) {
     for(l = 0; l < 6; l++) { sbr->t_E[ch][l] = t_E_temp[l]; }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void noise_floor_time_border_vector(sbr_info_t* sbr, uint8_t ch) {
     sbr->t_Q[ch][0] = sbr->t_E[ch][0];
@@ -7679,7 +7445,6 @@ void noise_floor_time_border_vector(sbr_info_t* sbr, uint8_t ch) {
         sbr->t_Q[ch][2] = sbr->t_E[ch][sbr->L_E[ch]];
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t middleBorder(sbr_info_t* sbr, uint8_t ch) {
     int8_t retval = 0;
@@ -7737,7 +7502,6 @@ int8_t GASpecificConfig(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program
 #endif
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.2 */
 /* An MPEG-4 Audio decoder is only required to follow the Program Configuration Element in GASpecificConfig(). The decoder shall ignore any Program
@@ -7826,7 +7590,6 @@ static uint8_t program_config_t_element(program_config_t* pce, bitfile_t* ld) {
     if(pce->channels > MAX_CHANNELS) return 22;
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void decode_sce_lfe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitfile_t* ld, uint8_t id_syn_ele) {
     uint8_t channels = hDecoder->fr_channels;
@@ -7863,7 +7626,6 @@ static void decode_sce_lfe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInf
     hDecoder->fr_channels += hDecoder->element_output_channels[hDecoder->fr_ch_ele];
     hDecoder->fr_ch_ele++;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void decode_cpe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitfile_t* ld, uint8_t id_syn_ele) {
     uint8_t channels = hDecoder->fr_channels;
@@ -8038,7 +7800,6 @@ void raw_data_block(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitf
     { faad_byte_align(ld); }
     return;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.4 and */
 /* Table 4.4.9 */
@@ -8087,7 +7848,6 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct_t* hDecoder, bitfile_t*
 exit:
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.5 */
 static uint8_t channel_pair_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, uint8_t channels, uint8_t* tag) {
@@ -8195,7 +7955,6 @@ static uint8_t channel_pair_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, u
 exit:
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.6 */
 static uint8_t ics_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, uint8_t common_window) {
@@ -8261,7 +8020,6 @@ static uint8_t ics_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t*
 
     return retval;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.7 */
 static uint8_t pulse_data(ic_stream_t* ics, pulse_info_t* pul, bitfile_t* ld) {
@@ -8277,7 +8035,6 @@ static uint8_t pulse_data(ic_stream_t* ics, pulse_info_t* pul, bitfile_t* ld) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.10 */
 static uint16_t data_stream_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld) {
@@ -8294,7 +8051,6 @@ static uint16_t data_stream_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld) {
     for(i = 0; i < count; i++) { faad_getbits(ld, LEN_BYTE); }
     return count;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.11 */
 static uint8_t fill_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, drc_info_t* drc, uint8_t sbr_ele) {
@@ -8336,7 +8092,6 @@ static uint8_t fill_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, drc_info_
 
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t side_info(NeAACDecStruct_t* hDecoder, element_t* ele, bitfile_t* ld, ic_stream_t* ics, uint8_t scal_flag) {
     uint8_t result;
@@ -8386,7 +8141,6 @@ static uint8_t side_info(NeAACDecStruct_t* hDecoder, element_t* ele, bitfile_t* 
 #endif
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.24 */
 static uint8_t individual_channel_stream(NeAACDecStruct_t* hDecoder, element_t* ele, bitfile_t* ld, ic_stream_t* ics, uint8_t scal_flag, int16_t* spec_data) {
@@ -8418,7 +8172,6 @@ static uint8_t individual_channel_stream(NeAACDecStruct_t* hDecoder, element_t* 
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.25 */
 static uint8_t section_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld) {
@@ -8488,7 +8241,6 @@ static uint8_t section_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfil
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /*
  * decode_scale_factors() decodes the scalefactors from the bitstream. All scalefactors (and also the stereo positions and pns energies) are
@@ -8546,7 +8298,6 @@ static uint8_t decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.26 */
 static uint8_t scale_factor_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld) {
@@ -8569,7 +8320,6 @@ static uint8_t scale_factor_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, b
 #endif
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.27 */
 static void tns_data(ic_stream_t* ics, tns_info_t* tns, bitfile_t* ld) {
@@ -8601,7 +8351,6 @@ static void tns_data(ic_stream_t* ics, tns_info_t* tns, bitfile_t* ld) {
         }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.28 */
 static uint8_t ltp_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, ltp_info_t* ltp, bitfile_t* ld) {
@@ -8637,7 +8386,6 @@ static uint8_t ltp_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, ltp_info_t
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.29 */
 static uint8_t spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, int16_t* spectral_data) {
@@ -8671,7 +8419,6 @@ static uint8_t spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfi
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.30 */
 static uint16_t extension_payload(bitfile_t* ld, drc_info_t* drc, uint16_t count) {
@@ -8718,7 +8465,6 @@ static uint16_t extension_payload(bitfile_t* ld, drc_info_t* drc, uint16_t count
         return count;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.31 */
 static uint8_t dynamic_range_info(bitfile_t* ld, drc_info_t* drc) {
@@ -8755,7 +8501,6 @@ static uint8_t dynamic_range_info(bitfile_t* ld, drc_info_t* drc) {
     }
     return n;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.32 */
 static uint8_t excluded_channels(bitfile_t* ld, drc_info_t* drc) {
@@ -8772,7 +8517,6 @@ static uint8_t excluded_channels(bitfile_t* ld, drc_info_t* drc) {
     }
     return n;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Annex A: Audio Interchange Formats */
 /* Table 1.A.2 */
@@ -8799,7 +8543,6 @@ void get_adif_header_t(adif_header_t* adif, bitfile_t* ld) {
         program_config_t_element(&adif->pce[i], ld);
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 1.A.5 */
 uint8_t adts_frame(adts_header_t* adts, bitfile_t* ld) {
@@ -8809,7 +8552,6 @@ uint8_t adts_frame(adts_header_t* adts, bitfile_t* ld) {
     adts_error_check(adts, ld);
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 1.A.6 */
 static uint8_t adts_fixed_header(adts_header_t* adts, bitfile_t* ld) {
@@ -8842,7 +8584,6 @@ static uint8_t adts_fixed_header(adts_header_t* adts, bitfile_t* ld) {
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 1.A.7 */
 static void adts_variable_header(adts_header_t* adts, bitfile_t* ld) {
@@ -8852,13 +8593,11 @@ static void adts_variable_header(adts_header_t* adts, bitfile_t* ld) {
     adts->adts_buffer_fullness = (uint16_t)faad_getbits(ld, 11);
     adts->no_raw_data_blocks_in_frame = (uint8_t)faad_getbits(ld, 2);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 1.A.8 */
 static void adts_error_check(adts_header_t* adts, bitfile_t* ld) {
     if(adts->protection_absent == 0) { adts->crc_check = (uint16_t)faad_getbits(ld, 16); }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* LATM parsing functions */
 static uint32_t latm_get_value(bitfile_t* ld) {
@@ -8869,7 +8608,6 @@ static uint32_t latm_get_value(bitfile_t* ld) {
     for(l = 0; l < bytesForValue; l++) value = (value << 8) | (uint8_t)faad_getbits(ld, 8);
     return value;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t latmParsePayload(latm_header_t* latm, bitfile_t* ld) {
     // assuming there's only one program with a single layer and 1 subFrame,
@@ -8889,16 +8627,12 @@ static uint32_t latmParsePayload(latm_header_t* latm, bitfile_t* ld) {
         framelen = latm->frameLength;
     return framelen;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
     uint32_t         ascLen, asc_bits = 0;
     uint32_t         x1, y1, m, n, i;
     program_config_t pce;
     uint32_t         ret = 0;
-    //    mp4AudioSpecificConfig_t m_mp4ASC_ame; // ⏫⏫⏫
-
-    //    mp4AudioSpecificConfig_t* m_mp4ASC_ame = (mp4AudioSpecificConfig_t*)faad_malloc(1 * sizeof(mp4AudioSpecificConfig_t));
 
     latm->useSameStreamMux = (uint8_t)faad_getbits(ld, 1);
     if(!latm->useSameStreamMux) {
@@ -8997,13 +8731,8 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
     }
 
 exit:
-    // if(m_mp4ASC_ame) {
-    //     free(m_mp4ASC_ame);
-    //     m_mp4ASC_ame = NULL;
-    // }
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t faad_latm_frame(latm_header_t* latm, bitfile_t* ld) {
     uint16_t len;
@@ -9028,7 +8757,6 @@ uint32_t faad_latm_frame(latm_header_t* latm, bitfile_t* ld) {
     }
     return 0xFFFFFFFF;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /*
   - determine the number of windows in a window_sequence named num_windows
@@ -9131,9 +8859,7 @@ uint8_t window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics) {
     default: return 32;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 static inline int32_t iquant(int16_t q, const int32_t* tab, uint8_t* error) {
     static const int32_t errcorr[] = {REAL_CONST(0),         REAL_CONST(1.0 / 8.0), REAL_CONST(2.0 / 8.0), REAL_CONST(3.0 / 8.0), REAL_CONST(4.0 / 8.0),
                                       REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
@@ -9154,7 +8880,6 @@ static inline int32_t iquant(int16_t q, const int32_t* tab, uint8_t* error) {
     x2 = tab[(q >> 3) + 1];
     return sgn * 16 * (MUL_R(errcorr[q & 7], (x2 - x1)) + x1);
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* quant_to_spec: perform dequantisation and scaling and in case of short block it also does the deinterleaving */
 /* For ONLY_LONG_SEQUENCE windows (num_window_groups = 1, window_group_length[0] = 1) the spectral data is in ascending spectral order.
@@ -9245,7 +8970,6 @@ static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16
     }
     return error;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void faad_free(void* b);
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -9301,7 +9025,6 @@ uint8_t allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uin
     memset(hDecoder->fb_intermed[channel], 0, hDecoder->frameLength * sizeof(int32_t));
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t allocate_channel_pair(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t paired_channel) {
     int32_t mul = 1;
@@ -9347,12 +9070,10 @@ static uint8_t allocate_channel_pair(NeAACDecStruct_t* hDecoder, uint8_t channel
     }
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, element_t* sce, int16_t* spec_data) {
     uint8_t retval;
     int32_t output_channels;
-    // int32_t m_spec_coef[1024]; // ⏫⏫⏫
 
     /* always allocate 2 channels, PS can always "suddenly" turn up */
 
@@ -9385,10 +9106,6 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
     //   int32_t* m_spec_coef = (int32_t*)faad_malloc(1024 * sizeof(int32_t));
     retval = quant_to_spec(hDecoder, ics, spec_data, m_spec_coef, hDecoder->frameLength);
     if(retval > 0) {
-        // if(m_spec_coef) {
-        //     free(m_spec_coef);
-        //     m_spec_coef = NULL;
-        // }
         return retval;
     }
     /* pns decoding */
@@ -9439,10 +9156,10 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
     #if(defined(PS_DEC))
         if(hDecoder->ps_used[ele] == 0) {
     #endif
-            retval = sbrDecodeSingleFrame(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR);
+            retval = sbrDecodeSingleFrame(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR); hDecoder->isPS = 0;
     #if(defined(PS_DEC))
         }
-        else { retval = sbrDecodeSingleFramePS(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->time_out[ch + 1], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR); }
+        else { retval = sbrDecodeSingleFramePS(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->time_out[ch + 1], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR); hDecoder->isPS = 1;}
     #endif
         if(retval > 0) return retval;
     }
@@ -9460,7 +9177,6 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
 #endif
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t reconstruct_channel_pair(NeAACDecStruct_t* hDecoder, ic_stream_t* ics1, ic_stream_t* ics2, element_t* cpe, int16_t* spec_data1, int16_t* spec_data2) {
     uint8_t retval;
@@ -9624,7 +9340,6 @@ static uint32_t showbits_hcr(bits_t_t* ld, uint8_t bits) {
         else { return ((ld->bufb >> (ld->len - bits - 32)) & (0xFFFFFFFF >> (32 - bits))); }
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* return next n bits (right adjusted) */
 static uint32_t faad_getbits(bitfile_t* ld, uint32_t n) {
@@ -9664,7 +9379,6 @@ static uint32_t faad_getbits_rev(bitfile_t* ld, uint32_t n) {
     faad_flushbits_rev(ld, n);
     return ret;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void DST4_32(int32_t* y, int32_t* x) {
     printf(ANSI_ESC_YELLOW "DST4_32\n" ANSI_ESC_WHITE);

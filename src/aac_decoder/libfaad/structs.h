@@ -469,6 +469,7 @@ typedef struct _NeAACDecFrameInfo_t {
     uint8_t  num_lfe_channels;
     uint8_t  channel_position[64];
     uint8_t  ps; /* PS: 0: off, 1: on */
+    uint8_t  isPS;
 } NeAACDecFrameInfo_t;
 
 typedef struct _bitfile_t {
@@ -529,6 +530,7 @@ typedef struct {
     NeAACDecConfiguration_t config; /* Configuration data */
     latm_header_t           latm_config;
     const uint8_t*          cmes;
+    uint8_t                 isPS;
 } NeAACDecStruct_t;
 
 typedef struct {
