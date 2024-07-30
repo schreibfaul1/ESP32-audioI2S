@@ -90,7 +90,7 @@ bool alloc_mem() {
 
 #endif
     if(!mem1 || !mem2) {return false;}
-    printf(ANSI_ESC_ORANGE "libfaad2 INFO: %li bytes allocated\n" ANSI_ESC_WHITE, sum);
+    // printf(ANSI_ESC_ORANGE "libfaad2 INFO: %li bytes allocated" ANSI_ESC_WHITE "\n", sum);
     return true;
     // clang-format off
 }
@@ -134,7 +134,7 @@ void free_mem() {
     if(m_spec_coef1)       {free(m_spec_coef1); m_spec_coef1 = NULL;}
     if(m_spec_coef2)       {free(m_spec_coef2); m_spec_coef2 = NULL;}
 
-    printf(ANSI_ESC_ORANGE "libfaad2 INFO: memory freed\n" ANSI_ESC_WHITE);
+    // printf(ANSI_ESC_ORANGE "libfaad2 INFO: memory freed" ANSI_ESC_WHITE "\n");
     // clang-format on
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1379,7 +1379,7 @@ uint32_t NeAACDecGetCapabilities(void) {
 NeAACDecHandle NeAACDecOpen(void) {
     uint8_t           i;
     NeAACDecStruct_t* hDecoder = NULL;
-    if (!alloc_mem()) {printf(ANSI_ESC_RED "libfaad2 ERROR: out of memory\n" ANSI_ESC_WHITE); return NULL;}
+    if (!alloc_mem()) { printf(ANSI_ESC_RED "libfaad2 ERROR: out of memory" ANSI_ESC_WHITE "\n"); return NULL;}
     if((hDecoder = (NeAACDecStruct_t*)faad_malloc(sizeof(NeAACDecStruct_t))) == NULL) return NULL;
     memset(hDecoder, 0, sizeof(NeAACDecStruct_t));
     hDecoder->cmes = mes;
@@ -2295,7 +2295,7 @@ int8_t huffman_scale_factor(bitfile_t* ld) {
         uint8_t b = faad_get1bit(ld);
         offset += hcb_sf[offset][b];
         if(offset > 240) {
-            printf(ANSI_ESC_RED"libfaad2 ERROR: offset into hcb_sf = %d >240!\n" ANSI_ESC_WHITE, offset);
+            // printf(ANSI_ESC_RED"libfaad2 ERROR: offset into hcb_sf = %d >240!" ANSI_ESC_WHITE "\n", offset);
             return -1;
         }
     }
@@ -2353,7 +2353,7 @@ static uint8_t huffman_2step_quad(uint8_t cb, bitfile_t* ld, int16_t* sp) {
     }
     else { faad_flushbits(ld, hcb_2_quad_table[cb][offset].bits); }
     if(offset > hcb_2_quad_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_quad_table = %d > %ld!\n" ANSI_ESC_WHITE, offset, hcb_2_quad_table_size[cb]);
+        // printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_quad_table = %d > %ld!" ANSI_ESC_WHITE "\n", offset, hcb_2_quad_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_2_quad_table[cb][offset].x;
@@ -2385,7 +2385,7 @@ static uint8_t huffman_2step_pair(uint8_t cb, bitfile_t* ld, int16_t* sp) {
     }
     else { faad_flushbits(ld, hcb_2_pair_table[cb][offset].bits); }
     if(offset > hcb_2_pair_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_pair_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_2_pair_table_size[cb]);
+        // printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_pair_table = %d > %li!" ANSI_ESC_WHITE "\n", offset, hcb_2_pair_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_2_pair_table[cb][offset].x;
@@ -2407,7 +2407,7 @@ static uint8_t huffman_binary_quad(uint8_t cb, bitfile_t* ld, int16_t* sp) {
         offset += hcb3[offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
+        // printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!" ANSI_ESC_WHITE "\n", offset, hcb_bin_table_size[cb]);
         return 10;
     }
     sp[0] = hcb3[offset].data[0];
@@ -2431,7 +2431,7 @@ static uint8_t huffman_binary_pair(uint8_t cb, bitfile_t* ld, int16_t* sp) {
         offset += hcb_bin_table[cb][offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
+        // printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!" ANSI_ESC_WHITE "\n", offset, hcb_bin_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_bin_table[cb][offset].data[0];
@@ -3949,12 +3949,12 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                 int32_t ab1, ab2;
                 int32_t ab3, ab4;
                 if(ps->iid_index[env][bk] < -no_iid_steps) {
-                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d < %d\n" ANSI_ESC_WHITE, ps->iid_index[env][bk], -no_iid_steps);
-                    ps->iid_index[env][bk] = -no_iid_steps;
+                    // printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d < %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], -no_iid_steps);
+                    // ps->iid_index[env][bk] = -no_iid_steps;
                 }
                 else if(ps->iid_index[env][bk] > no_iid_steps) {
-                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d > %d\n" ANSI_ESC_WHITE, ps->iid_index[env][bk], no_iid_steps);
-                    ps->iid_index[env][bk] = no_iid_steps;
+                    // printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d > %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], no_iid_steps);
+                    // ps->iid_index[env][bk] = no_iid_steps;
                 }
                 /* calculate the scalefactors c_1 and c_2 from the intensity differences */
                 c_1 = sf_iid[no_iid_steps + ps->iid_index[env][bk]];
@@ -5487,7 +5487,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
-    //    printf(ANSI_ESC_YELLOW "sbrDecodeSingleFrame\n" ANSI_ESC_WHITE);
+    //    printf(ANSI_ESC_YELLOW "sbrDecodeSingleFrame" ANSI_ESC_WHITE "\n");
     uint8_t dont_process = 0;
     uint8_t ret = 0;
 
@@ -6780,7 +6780,7 @@ void qmfs_end(qmfs_info_t* qmfs) {
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbr_qmf_synthesis_32(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], int32_t* output) {
 
-    // printf(ANSI_ESC_YELLOW "sbr_qmf_synthesis_32\n" ANSI_ESC_WHITE);
+    // printf(ANSI_ESC_YELLOW "sbr_qmf_synthesis_32" ANSI_ESC_WHITE "\n");
     int32_t x1[32], x2[32]; // ⏫⏫⏫
     int32_t n, k, out = 0;
     uint8_t l;
@@ -6819,7 +6819,7 @@ void sbr_qmf_synthesis_32(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], 
 }
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void sbr_qmf_synthesis_64(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], int32_t* output) {
-    //    printf(ANSI_ESC_YELLOW "sbr_qmf_synthesis_64\n" ANSI_ESC_WHITE);
+    //    printf(ANSI_ESC_YELLOW "sbr_qmf_synthesis_64" ANSI_ESC_WHITE "\n");
     int32_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
     int32_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32]; // ⏫⏫⏫
 
@@ -6932,7 +6932,7 @@ void sbr_qmf_synthesis_64(sbr_info_t* sbr, qmfs_info_t* qmfs, complex_t* X[64], 
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void sbr_reset(sbr_info_t* sbr) {
-    //    printf(ANSI_ESC_YELLOW "sbr_reset\n" ANSI_ESC_WHITE);
+    //    printf(ANSI_ESC_YELLOW "sbr_reset" ANSI_ESC_WHITE "\n");
     /* if these are different from the previous frame: Reset = 1 */
     if((sbr->bs_start_freq != sbr->bs_start_freq_prev) || (sbr->bs_stop_freq != sbr->bs_stop_freq_prev) || (sbr->bs_freq_scale != sbr->bs_freq_scale_prev) ||
        (sbr->bs_alter_scale != sbr->bs_alter_scale_prev) || (sbr->bs_xover_band != sbr->bs_xover_band_prev) || (sbr->bs_noise_bands != sbr->bs_noise_bands_prev)) {
@@ -8645,7 +8645,7 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
         if(latm->version) latm->versionA = (uint8_t)faad_getbits(ld, 1);
         if(latm->versionA) {
             // dunno the payload format for versionA
-            printf(ANSI_ESC_ORANGE "libfaad2 INFO; versionA not supported\n" ANSI_ESC_WHITE);
+            // printf(ANSI_ESC_ORANGE "libfaad2 INFO; versionA not supported" ANSI_ESC_WHITE "\n");
             ret = 0;
             goto exit;
         }
@@ -8656,8 +8656,8 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
         latm->numPrograms = (uint8_t)faad_getbits(ld, 4) + 1;
         latm->numLayers = faad_getbits(ld, 3) + 1;
         if(latm->numPrograms > 1 || !latm->allStreamsSameTimeFraming || latm->numSubFrames > 1 || latm->numLayers > 1) {
-            printf(ANSI_ESC_RED "libfaad2 INFO: Unsupported LATM configuration: %li programs/ %li subframes, %li layers, allstreams: %li\n" ANSI_ESC_WHITE, latm->numPrograms, latm->numSubFrames,
-                   latm->numLayers, latm->allStreamsSameTimeFraming);
+            // printf(ANSI_ESC_RED "libfaad2 INFO: Unsupported LATM configuration: %li programs/ %li subframes, %li layers, allstreams: %li" ANSI_ESC_WHITE "\n", latm->numPrograms, latm->numSubFrames,
+            //       latm->numLayers, latm->allStreamsSameTimeFraming);
             ret = 0;
             goto exit;
         }
@@ -8698,14 +8698,14 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
         else if(latm->framelen_type == 1) {
             latm->frameLength = faad_getbits(ld, 9);
             if(latm->frameLength == 0) {
-                printf(ANSI_ESC_ORANGE "libfaad2 INFO: Invalid frameLength: 0\r\n" ANSI_ESC_WHITE);
+                // printf(ANSI_ESC_ORANGE "libfaad2 INFO: Invalid frameLength: 0" ANSI_ESC_WHITE "\n");
                 ret = 0;
                 goto exit;
             }
             latm->frameLength = (latm->frameLength + 20) * 8;
         }
         else { // hellish CELP or HCVX stuff, discard
-            printf(ANSI_ESC_ORANGE "libfaad2 INFO: Unsupported CELP/HCVX framelentype: %li\n" ANSI_ESC_WHITE, latm->framelen_type);
+            // printf(ANSI_ESC_ORANGE "libfaad2 INFO: Unsupported CELP/HCVX framelentype: %li" ANSI_ESC_WHITE "\n", latm->framelen_type);
             ret = 0;
             goto exit;
         }
@@ -9385,7 +9385,7 @@ static uint32_t faad_getbits_rev(bitfile_t* ld, uint32_t n) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void DST4_32(int32_t* y, int32_t* x) {
-    // printf(ANSI_ESC_YELLOW "DST4_32\n" ANSI_ESC_WHITE);
+    // printf(ANSI_ESC_YELLOW "DST4_32" ANSI_ESC_WHITE "\n");
     int32_t* f = (int32_t*)faad_malloc(336 * sizeof(int32_t));
     f[0] = x[0] - x[1];
     f[1] = x[2] - x[1];
@@ -9762,7 +9762,7 @@ static void DST4_32(int32_t* y, int32_t* x) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void DCT4_32(int32_t* y, int32_t* x) {
-    // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE);
+    // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE "\n");
     int32_t* f = (int32_t*)faad_malloc(397 * sizeof(int32_t));
     f[0] = x[15] - x[16];
     f[1] = x[15] + x[16];
