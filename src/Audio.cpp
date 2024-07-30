@@ -6301,17 +6301,17 @@ void Audio::startAudioTask() {
     }
     m_f_audioTaskIsRunning = true;
 
-    xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
+    // xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
 
-    // xTaskCreatePinnedToCore(
-    //     &Audio::taskWrapper,    /* Function to implement the task */
-    //     "PeriodicTask",         /* Name of the task */
-    //     3300,                   /* Stack size in words */
-    //     this,                   /* Task input parameter */
-    //     4,                      /* Priority of the task */
-    //     &m_audioTaskHandle,     /* Task handle. */
-    //     1                       /* Core where the task should run */
-    // );
+    xTaskCreatePinnedToCore(
+        &Audio::taskWrapper,    /* Function to implement the task */
+        "PeriodicTask",         /* Name of the task */
+        3300,                   /* Stack size in words */
+        this,                   /* Task input parameter */
+        4,                      /* Priority of the task */
+        &m_audioTaskHandle,     /* Task handle. */
+        0                       /* Core where the task should run */
+    );
 }
 
 void Audio::stopAudioTask()  {
