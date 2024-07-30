@@ -112,8 +112,8 @@ void audio_eof_speech(const char *info){
 
 <br>
 
-|Codec       | ESP32 | ESP32 PSRAM | ESP32-S3 PSRAM|                         | 
-|------------|-------------------------------------|-------------------------|
+|Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 PSRAM |                         | 
+|------------|-------|-------------|---------------|-------------------------|
 | mp3        | y     | y           | y             |                         |
 | aac        | n     | y           | y             |                         |
 | aacp       | n     | y (mono)    | y (+SBR, +PS) |                         |
