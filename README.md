@@ -121,10 +121,10 @@ void audio_eof_speech(const char *info){
 | flac       | n     | y           | y             |blocksize max 8192 bytes |
 | vorbis     | n     | y           | y             | <=196Kbit/s             |
 | m4a        | n     | y           | y             |                         |
-| opus       | n     | y           | Y             |celt only                |
+| opus       | n     | y           | y             |celt only                |
 
-***
 <br>
+
 Breadboard
 ![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
 Wiring
