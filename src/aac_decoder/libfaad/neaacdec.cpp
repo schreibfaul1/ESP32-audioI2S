@@ -2353,7 +2353,7 @@ static uint8_t huffman_2step_quad(uint8_t cb, bitfile_t* ld, int16_t* sp) {
     }
     else { faad_flushbits(ld, hcb_2_quad_table[cb][offset].bits); }
     if(offset > hcb_2_quad_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_quad_table = %d > %d!\n" ANSI_ESC_WHITE, offset, hcb_2_quad_table_size[cb]);
+        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_quad_table = %d > %ld!\n" ANSI_ESC_WHITE, offset, hcb_2_quad_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_2_quad_table[cb][offset].x;
@@ -2385,7 +2385,7 @@ static uint8_t huffman_2step_pair(uint8_t cb, bitfile_t* ld, int16_t* sp) {
     }
     else { faad_flushbits(ld, hcb_2_pair_table[cb][offset].bits); }
     if(offset > hcb_2_pair_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_pair_table = %d > %d!\n" ANSI_ESC_WHITE, offset, hcb_2_pair_table_size[cb]);
+        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_2_pair_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_2_pair_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_2_pair_table[cb][offset].x;
@@ -2407,7 +2407,7 @@ static uint8_t huffman_binary_quad(uint8_t cb, bitfile_t* ld, int16_t* sp) {
         offset += hcb3[offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %d!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
+        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
         return 10;
     }
     sp[0] = hcb3[offset].data[0];
@@ -2431,7 +2431,7 @@ static uint8_t huffman_binary_pair(uint8_t cb, bitfile_t* ld, int16_t* sp) {
         offset += hcb_bin_table[cb][offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {
-        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %d!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
+        printf(ANSI_ESC_RED "libfaad2 ERROR: offset into hcb_bin_table = %d > %li!\n" ANSI_ESC_WHITE, offset, hcb_bin_table_size[cb]);
         return 10;
     }
     sp[0] = hcb_bin_table[cb][offset].data[0];
