@@ -44,8 +44,9 @@ int32_t*                  m_spec_coef1 = NULL;
 int32_t*                  m_spec_coef2 = NULL;
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void alloc_mem() {
+bool alloc_mem() {
     // clang-format off
+    bool mem1 = true, mem2 = true;
     uint32_t sum = 0;
     m_transf_buf = (int32_t*)faad_malloc(2 * 1024 * sizeof(int32_t));                                                        sum += 2 * 1024 * sizeof(int32_t);
     m_Z1_imdct = (complex_t*)faad_malloc(512 * sizeof(complex_t));                                                           sum += 512 * sizeof(complex_t);
@@ -57,6 +58,7 @@ void alloc_mem() {
     m_spec_data2 = (int16_t*)faad_malloc(1024 * sizeof(int16_t));                                                            sum += 1024 * sizeof(int16_t);
     m_spec_coef1 = (int32_t*)faad_malloc(1024 * sizeof(int32_t));                                                            sum += 1024 * sizeof(int32_t);
     m_spec_coef2 = (int32_t*)faad_malloc(1024 * sizeof(int32_t));                                                            sum += 1024 * sizeof(int32_t);
+    if(!m_transf_buf || !m_Z1_imdct || !m_sce || !m_spec_data || !m_spec_coef || !m_cpe || !m_spec_data1 || !m_spec_data2 || !m_spec_coef1 || !m_spec_coef2){mem1 = false;}
 #ifdef SBR_DEC
     m_P_dec = (int32_t**)faad_malloc(32 * sizeof(m_P_dec));                                                                  sum += 32 * sizeof(int32_t*);
     for(uint8_t i = 0; i < 32; i++){m_P_dec[i] = (int32_t*)faad_malloc(34 * sizeof(*(m_P_dec[i])));}                         sum += 32 * 34 * sizeof(int32_t);
@@ -69,7 +71,7 @@ void alloc_mem() {
     m_X_dsf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dsf));                                                          sum += MAX_NTSR * sizeof(complex_t*);
     for(uint8_t i = 0; i < MAX_NTSR; i++){m_X_dsf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dsf[i])));}                 sum += MAX_NTSR * 64 * sizeof(complex_t);
     m_X_dcf = (complex_t**)faad_malloc(MAX_NTSR * sizeof(m_X_dcf));                                                          sum += MAX_NTSR * sizeof(complex_t*);
-    for(uint8_t i = 0; i < MAX_NTSR; i++) m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));                  sum += MAX_NTSR * 64 * sizeof(complex_t);
+    for(uint8_t i = 0; i < MAX_NTSR; i++){m_X_dcf[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_dcf[i])));}                 sum += MAX_NTSR * 64 * sizeof(complex_t);
     m_X_left = (complex_t**)faad_malloc(38 * sizeof(m_X_left));                                                              sum += 38 * sizeof(complex_t*);
     for(uint8_t i = 0; i < 38; i++){ m_X_left[i] = (complex_t*)faad_malloc(64 * sizeof(*(m_X_left[i])));}                    sum += 38 * 64 * sizeof(int32_t);
     m_X_right = (complex_t**)faad_malloc(38 * sizeof(m_X_right));                                                            sum += 38 * sizeof(complex_t*);
@@ -82,8 +84,14 @@ void alloc_mem() {
     m_Q_M_lim = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));                                                              sum += MAX_M * sizeof(int32_t);
     m_G_lim = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));                                                                sum += MAX_M * sizeof(int32_t);
     m_S_M = (int32_t*)faad_malloc(MAX_M * sizeof(int32_t));                                                                  sum += MAX_M * sizeof(int32_t);
+
+    if(!m_P_dec || !m_G_TransientRatio || !m_X_hybrid_left || !m_X_hybrid_right || !m_X_dsf || !m_X_dcf || !m_X_left || !m_X_right ||!m_vDk0 || !m_vDk1 || !m_adj || !m_Q_M_lim || !m_G_lim  ||
+       !m_S_M) {mem2 = false;}
+
 #endif
-    printf(ANSI_ESC_ORANGE "alloc %li bytes\n" ANSI_ESC_WHITE, sum);
+    if(!mem1 || !mem2) {return false;}
+    printf(ANSI_ESC_ORANGE "libfaad2 alloc %li bytes\n" ANSI_ESC_WHITE, sum);
+    return true;
     // clang-format off
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -126,7 +134,7 @@ void free_mem() {
     if(m_spec_coef1)       {free(m_spec_coef1); m_spec_coef1 = NULL;}
     if(m_spec_coef2)       {free(m_spec_coef2); m_spec_coef2 = NULL;}
 
-    printf(ANSI_ESC_ORANGE "free mem\n" ANSI_ESC_WHITE);
+    printf(ANSI_ESC_ORANGE "libfaad2 memory freed\n" ANSI_ESC_WHITE);
     // clang-format on
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1371,7 +1379,7 @@ uint32_t NeAACDecGetCapabilities(void) {
 NeAACDecHandle NeAACDecOpen(void) {
     uint8_t           i;
     NeAACDecStruct_t* hDecoder = NULL;
-    alloc_mem();
+    if (!alloc_mem()) {printf(ANSI_ESC_RED "out of memory\n"); return NULL;}
     if((hDecoder = (NeAACDecStruct_t*)faad_malloc(sizeof(NeAACDecStruct_t))) == NULL) return NULL;
     memset(hDecoder, 0, sizeof(NeAACDecStruct_t));
     hDecoder->cmes = mes;
