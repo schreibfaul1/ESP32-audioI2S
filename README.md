@@ -121,7 +121,7 @@ void audio_eof_speech(const char *info){
 | flac       | n     | y           | y             |blocksize max 8192 bytes |
 | vorbis     | n     | y           | y             | <=196Kbit/s             |
 | m4a        | n     | y           | y             |                         |
-| opus       | n     | y           |               |celt only                |
+| opus       | n     | y           | Y             |celt only                |
 
 ***
 <br>
