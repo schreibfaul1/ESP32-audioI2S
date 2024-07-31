@@ -6319,7 +6319,7 @@ void Audio::startAudioTask() {
         "PeriodicTask",         /* Name of the task */
         3300,                   /* Stack size in words */
         this,                   /* Task input parameter */
-        4,                      /* Priority of the task */
+        6,                      /* Priority of the task */
         &m_audioTaskHandle,     /* Task handle. */
         m_audioTaskCoreId       /* Core where the task should run */
     );
