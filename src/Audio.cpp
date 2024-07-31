@@ -6295,7 +6295,7 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 // that the I2S-DMA is always sufficiently filled, even if the Arduino 'loop' is stuck.
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Audio::setAudioTaskCore(uint8_t coreID){
+void Audio::setAudioTaskCore(uint8_t coreID){  // Recommendation:If the ARDUINO RUNNING CORE is 1, the audio task should be core 0 or vice versa
     if(coreID > 1) return;
     stopAudioTask();
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
@@ -6303,7 +6303,6 @@ void Audio::setAudioTaskCore(uint8_t coreID){
     xSemaphoreGive(mutex_playAudioData);
     startAudioTask();
 }
-
 
 void Audio::startAudioTask() {
     if (m_f_audioTaskIsRunning) {
@@ -6344,7 +6343,7 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(3 / portTICK_PERIOD_MS);  // periodically every 3 ms
+        vTaskDelay(7 / portTICK_PERIOD_MS);  // periodically every 7 ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
