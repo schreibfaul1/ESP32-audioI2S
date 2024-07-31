@@ -6294,6 +6294,17 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 // separate task for decoding and outputting the data. 'playAudioData()' is started periodically and fetches the data from the InBuffer. This ensures
 // that the I2S-DMA is always sufficiently filled, even if the Arduino 'loop' is stuck.
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void Audio::setAudioTaskCore(uint8_t coreID){
+    if(coreID > 1) return;
+    stopAudioTask();
+    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    m_audioTaskCoreId = coreID;
+    xSemaphoreGive(mutex_playAudioData);
+    startAudioTask();
+}
+
+
 void Audio::startAudioTask() {
     if (m_f_audioTaskIsRunning) {
         log_i("Task is already running.");
@@ -6310,7 +6321,7 @@ void Audio::startAudioTask() {
         this,                   /* Task input parameter */
         4,                      /* Priority of the task */
         &m_audioTaskHandle,     /* Task handle. */
-        0                       /* Core where the task should run */
+        m_audioTaskCoreId       /* Core where the task should run */
     );
 }
 
@@ -6333,7 +6344,7 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(3 / portTICK_PERIOD_MS);  // periodically every 7 ms
+        vTaskDelay(3 / portTICK_PERIOD_MS);  // periodically every 3 ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
