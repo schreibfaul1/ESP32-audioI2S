@@ -6318,7 +6318,7 @@ void Audio::startAudioTask() {
         "PeriodicTask",         /* Name of the task */
         3300,                   /* Stack size in words */
         this,                   /* Task input parameter */
-        6,                      /* Priority of the task */
+        2,                      /* Priority of the task */
         &m_audioTaskHandle,     /* Task handle. */
         m_audioTaskCoreId       /* Core where the task should run */
     );
@@ -6343,7 +6343,7 @@ void Audio::taskWrapper(void *param) {
 
 void Audio::audioTask() {
     while (m_f_audioTaskIsRunning) {
-        vTaskDelay(7 / portTICK_PERIOD_MS);  // periodically every 7 ms
+        vTaskDelay(3 / portTICK_PERIOD_MS);  // periodically every x ms
         performAudioTask();
     }
     vTaskDelete(nullptr);  // Delete this task
