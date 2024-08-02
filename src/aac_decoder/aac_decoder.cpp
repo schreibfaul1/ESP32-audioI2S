@@ -24,6 +24,7 @@ uint32_t aacSamplerate = 0;
 uint8_t aacChannels = 0;
 static uint16_t validSamples = 0;
 clock_t before;
+float compressionRatio = 1;
 
 //----------------------------------------------------------------------------------------------------------------------
 bool AACDecoder_IsInit(){
@@ -87,7 +88,8 @@ int16_t AACGetOutputSamps(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACGetBitrate(){
-    return 0;
+    uint32_t br = AACGetBitsPerSample() * AACGetChannels() *  AACGetSampRate();
+    return (br / compressionRatio);;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACGetChannels(){
@@ -114,6 +116,7 @@ int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     *bytesLeft -= frameInfo.bytesconsumed;
     validSamples = frameInfo.samples;
     int8_t err = 0 - frameInfo.error;
+    compressionRatio = (float)frameInfo.samples * 2 / frameInfo.bytesconsumed;
     return err;
 }
 //----------------------------------------------------------------------------------------------------------------------
