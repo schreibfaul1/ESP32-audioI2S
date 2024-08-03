@@ -48,7 +48,7 @@ void AACDecoder_FreeBuffers(){
     f_firstCall = false;
     clock_t difference = clock() - before;
     int msec = difference  / CLOCKS_PER_SEC;
-    printf("ms %li\n", difference);
+//    printf("ms %li\n", difference);
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t AACGetFormat(){
