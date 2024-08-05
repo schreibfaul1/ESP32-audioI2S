@@ -109,6 +109,22 @@ void audio_eof_speech(const char *info){
 }
 
 ````
+
+<br>
+
+|Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 PSRAM |                         | 
+|------------|-------|-------------|---------------|-------------------------|
+| mp3        | y     | y           | y             |                         |
+| aac        | n     | y           | y             |                         |
+| aacp       | n     | y (mono)    | y (+SBR, +PS) |                         |
+| wav        | y     | y           | y             |                         |
+| flac       | n     | y           | y             |blocksize max 8192 bytes |
+| vorbis     | n     | y           | y             | <=196Kbit/s             |
+| m4a        | n     | y           | y             |                         |
+| opus       | n     | y           | y             |celt only                |
+
+<br>
+
 Breadboard
 ![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
 Wiring
