@@ -210,8 +210,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 #if ESP_IDF_VERSION_MAJOR == 5
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num  = 16;                     // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = 512;                // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_desc_num  = 4;                     // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = 2048;                    // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
@@ -225,8 +225,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
-    m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
-    m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
+    m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_PLL_160M;        // Select PLL_F160M as the default source clock
+    m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_512;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(0);
     m_sampleRate = 44100;
@@ -2427,15 +2427,29 @@ void Audio::playChunk() {
 
 
 #if(ESP_IDF_VERSION_MAJOR == 5)
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 160);
 #else
-    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 40);
+    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 160);
 #endif
 
     if(err != ESP_OK) goto exit;
     m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
     if(m_validSamples < 0) { m_validSamples = 0; }
     count += i2s_bytesConsumed / sampleSize;
+
+
+// ---- statistics, bytes written to I2S (every 10s)
+    // static int cnt = 0;
+    // static uint32_t t = millis();
+
+    // if(t + 10000 < millis()){
+    //     log_w("%i", cnt);
+    //     cnt = 0;
+    //     t = millis();
+    // }
+    // cnt+= i2s_bytesConsumed;
+//-------------------------------------------
+
 
     return;
 exit:
