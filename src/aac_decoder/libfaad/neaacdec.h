@@ -33,6 +33,7 @@
 #ifdef ESP32
 #include "Arduino.h"
 #endif
+#pragma GCC optimize ("Ofast")
 
 #include <inttypes.h>
 #include <math.h>

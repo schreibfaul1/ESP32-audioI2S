@@ -1477,7 +1477,7 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_siz
             bits = bit2byte(faad_get_processed_bits(ld));
             /* Check if an ADTS header is present */
         }
-        else if(adts_frame(adts, ld) == 0) {
+        else if(faad_showbits(ld, 12) == 0xfff) {
             hDecoder->adts_header_t_present = 1;
             adts->old_format = hDecoder->config.useOldADTSFormat;
             adts_frame(adts, ld);
@@ -3698,7 +3698,7 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
     uint8_t          temp_delay = 0;
     uint8_t          sb, maxsb;
     const complex_t* Phi_Fract_SubQmf;
-    uint8_t          temp_delay_ser[NO_ALLPASS_LINKS];
+    uint8_t          temp_delay_ser[NO_ALLPASS_LINKS] = {0};
     int32_t          P_SmoothPeakDecayDiffNrg, nrg;
     complex_t        inputLeft;
 
@@ -4669,7 +4669,7 @@ int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t*
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form) {
     uint8_t   ret = 0;
-    bitfile_t ld;
+    bitfile_t ld; ld.bits_left = 0;
     faad_initbits(&ld, pBuffer, buffer_size);
     faad_byte_align(&ld);
     ret = AudioSpecificConfigFrombitfile_t(&ld, mp4ASC, pce, buffer_size, short_form);
