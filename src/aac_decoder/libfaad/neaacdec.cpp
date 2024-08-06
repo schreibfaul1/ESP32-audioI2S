@@ -1456,6 +1456,7 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_siz
         ret = -1;
         goto exit;
     }
+    adts->old_format = hDecoder->config.useOldADTSFormat;
     hDecoder->sf_index = get_sr_index(hDecoder->config.defSampleRate);
     hDecoder->object_type = hDecoder->config.defObjectType;
     *samplerate = get_sample_rate(hDecoder->sf_index);
@@ -1476,7 +1477,7 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_siz
             bits = bit2byte(faad_get_processed_bits(ld));
             /* Check if an ADTS header is present */
         }
-        else if(faad_showbits(ld, 12) == 0xfff) {
+        else if(adts_frame(adts, ld) == 0) {
             hDecoder->adts_header_t_present = 1;
             adts->old_format = hDecoder->config.useOldADTSFormat;
             adts_frame(adts, ld);
