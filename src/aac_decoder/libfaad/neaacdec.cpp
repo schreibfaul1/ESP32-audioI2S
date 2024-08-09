@@ -3137,71 +3137,89 @@ static inline void gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_left, int32_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
                 /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
-    uint8_t  g, sfb, b;
-    uint16_t size, offs;
-    uint8_t  group = 0;
-    uint16_t nshort = frame_len >> 3;
-    uint8_t  sub = 0;
 
-    /* IMDCT scaling */
-    if(object_type == LD) { sub = 9 /*9*/; }
-    else {
-        if(ics_left->window_sequence == EIGHT_SHORT_SEQUENCE) sub = 7 /*7*/;
-        else
-            sub = 10 /*10*/;
-    }
-    for(g = 0; g < ics_left->num_window_groups; g++) {
+    uint8_t g, sfb, b;
+    uint16_t begin, end;
+
+    uint8_t group = 0;
+    uint16_t nshort = frame_len >> 3;
+
+    uint8_t sub = 0;
+
+    (void)object_type;
+
+    for (g = 0; g < ics_left->num_window_groups; g++) {
         /* Do perceptual noise substitution decoding */
-        for(b = 0; b < ics_left->window_group_length[g]; b++) {
-            for(sfb = 0; sfb < ics_left->max_sfb; sfb++) {
+        for (b = 0; b < ics_left->window_group_length[g]; b++){
+            uint16_t base = group * nshort;
+            for (sfb = 0; sfb < ics_left->max_sfb; sfb++){
                 uint32_t r1_dep = 0, r2_dep = 0;
-                if(is_noise(ics_left, g, sfb)) {
+
+                if (is_noise(ics_left, g, sfb)){
 #ifdef LTP_DEC
-                    /* Simultaneous use of LTP and PNS is not prevented in the syntax. If both LTP, and PNS are enabled on the same
-                       scalefactor band, PNS takes precedence, and no prediction is applied to this band.
+                    /* Simultaneous use of LTP and PNS is not prevented in the
+                       syntax. If both LTP, and PNS are enabled on the same
+                       scalefactor band, PNS takes precedence, and no prediction
+                       is applied to this band.
                     */
                     ics_left->ltp.long_used[sfb] = 0;
                     ics_left->ltp2.long_used[sfb] = 0;
 #endif
-                    offs = ics_left->swb_offset[sfb];
-                    size = min(ics_left->swb_offset[sfb + 1], ics_left->swb_offset_max) - offs;
+
+                    begin = min(base + ics_left->swb_offset[sfb], ics_left->swb_offset_max);
+                    end = min(base + ics_left->swb_offset[sfb+1], ics_left->swb_offset_max);
+
                     r1_dep = *__r1;
                     r2_dep = *__r2;
+
                     /* Generate random vector */
-                    gen_rand_vector(&spec_left[(group * nshort) + offs], ics_left->scale_factors[g][sfb], size, sub, __r1, __r2);
+                    gen_rand_vector(&spec_left[begin],
+                        ics_left->scale_factors[g][sfb], end - begin, sub, __r1, __r2);
                 }
+
                 /* From the spec:
-                   If the same scalefactor band and group is coded by perceptual noise substitution in both channels of a channel pair, the
-                   correlation of the noise signal can be controlled by means of the ms_used field: While the default noise generation process works
-                   independently for each channel (separate generation of random vectors), the same random vector is used for both channels if
-                   ms_used[] is set for a particular scalefactor band and group. In this case, no M/S stereo coding is carried out (because M/S stereo
-                   coding and noise substitution coding are mutually exclusive). If the same scalefactor band and group is coded by perceptual noise
-                   substitution in only one channel of a channel pair the setting of ms_used[] is not evaluated.
+                   If the same scalefactor band and group is coded by perceptual noise substitution in both channels of a channel pair, the correlation of
+                   the noise signal can be controlled by means of the ms_used field: While the default noise generation process works independently for each channel
+                   (separate generation of random vectors), the same random vector is used for both channels if ms_used[] is set for a particular scalefactor band
+                   and group. In this case, no M/S stereo coding is carried out (because M/S stereo coding and noise substitution coding are mutually exclusive).
+                   If the same scalefactor band and group is coded by perceptual noise substitution in only one channel of a channel pair the setting of ms_used[]
+                   is not evaluated.
                 */
-                if((ics_right != NULL) && is_noise(ics_right, g, sfb)) {
+                if ((ics_right != NULL)
+                    && is_noise(ics_right, g, sfb)){
 #ifdef LTP_DEC
                     /* See comment above. */
                     ics_right->ltp.long_used[sfb] = 0;
                     ics_right->ltp2.long_used[sfb] = 0;
 #endif
-                    if(channel_pair && is_noise(ics_left, g, sfb) && (((ics_left->ms_mask_present == 1) && (ics_left->ms_used[g][sfb])) || (ics_left->ms_mask_present == 2))) {
+
+                    if (channel_pair && is_noise(ics_left, g, sfb) &&
+                        (((ics_left->ms_mask_present == 1) &&
+                        (ics_left->ms_used[g][sfb])) ||
+                        (ics_left->ms_mask_present == 2))){
                         /*uint16_t c;*/
-                        offs = ics_right->swb_offset[sfb];
-                        size = min(ics_right->swb_offset[sfb + 1], ics_right->swb_offset_max) - offs;
+
+                        begin = min(base + ics_right->swb_offset[sfb], ics_right->swb_offset_max);
+                        end = min(base + ics_right->swb_offset[sfb+1], ics_right->swb_offset_max);
+
                         /* Generate random vector dependent on left channel*/
-                        gen_rand_vector(&spec_right[(group * nshort) + offs], ics_right->scale_factors[g][sfb], size, sub, &r1_dep, &r2_dep);
+                        gen_rand_vector(&spec_right[begin],
+                            ics_right->scale_factors[g][sfb], end - begin, sub, &r1_dep, &r2_dep);
                     }
                     else /*if (ics_left->ms_mask_present == 0)*/ {
-                        offs = ics_right->swb_offset[sfb];
-                        size = min(ics_right->swb_offset[sfb + 1], ics_right->swb_offset_max) - offs;
+                        begin = min(base + ics_right->swb_offset[sfb], ics_right->swb_offset_max);
+                        end = min(base + ics_right->swb_offset[sfb+1], ics_right->swb_offset_max);
+
                         /* Generate random vector */
-                        gen_rand_vector(&spec_right[(group * nshort) + offs], ics_right->scale_factors[g][sfb], size, sub, __r1, __r2);
+                        gen_rand_vector(&spec_right[begin],
+                            ics_right->scale_factors[g][sfb], end - begin, sub, __r1, __r2);
                     }
                 }
             } /* sfb */
             group++;
         } /* b */
-    }     /* g */
+    } /* g */
+
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static hyb_info_t* hybrid_init(uint8_t numTimeSlotsRate) {
@@ -6684,10 +6702,10 @@ void sbr_envelope(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
                 if(sbr->amp_res[ch]) { sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6) << delta); }
                 else { sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 7) << delta); }
             }
-            for(band = 1; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, f_huff) << delta); }
+            for(band = 1; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, f_huff)); }
         }
         else {
-            for(band = 0; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, t_huff) << delta); }
+            for(band = 0; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, t_huff)); }
         }
     }
     extract_envelope_data(sbr, ch);
@@ -7632,43 +7650,52 @@ static uint8_t program_config_t_element(program_config_t* pce, bitfile_t* ld) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void decode_sce_lfe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitfile_t* ld, uint8_t id_syn_ele) {
+
     uint8_t channels = hDecoder->fr_channels;
     uint8_t tag = 0;
-    if(channels + 1 > MAX_CHANNELS) {
+
+    /* One or two channels are used; exact number will be known after single_lfe_channel_element */
+    if (channels + 2 > MAX_CHANNELS){
         hInfo->error = 12;
         return;
     }
-    if(hDecoder->fr_ch_ele + 1 > MAX_SYNTAX_ELEMENTS) {
+    if (hDecoder->fr_ch_ele + 1 > MAX_SYNTAX_ELEMENTS) {
         hInfo->error = 13;
         return;
     }
+
     /* for SCE hDecoder->element_output_channels[] is not set here because this can become 2 when some form of Parametric Stereo coding is used */
-    if(hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
+
+    if (hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
         /* element inconsistency */
         hInfo->error = 21;
         return;
     }
+
     /* save the syntax element id */
     hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
+
     /* decode the element */
     hInfo->error = single_lfe_channel_element(hDecoder, ld, channels, &tag);
+
     /* map output channels position to internal data channels */
-    if(hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 2) {
+    if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 2) {
         /* this might be faulty when pce_set is true */
         hDecoder->internal_channel[channels] = channels;
-        hDecoder->internal_channel[channels + 1] = channels + 1;
-    }
-    else {
+        hDecoder->internal_channel[channels+1] = channels+1;
+    } else {
         if (hDecoder->pce_set) {
-            if (hDecoder->pce.channels > MAX_CHANNELS){
+            if (hDecoder->pce.channels > MAX_CHANNELS) {
                 hInfo->error = 22;
                 return;
             }
             hDecoder->internal_channel[hDecoder->pce.sce_channel[tag]] = channels;
         }
-        else
+        else {
             hDecoder->internal_channel[channels] = channels;
+        }
     }
+
     hDecoder->fr_channels += hDecoder->element_output_channels[hDecoder->fr_ch_ele];
     hDecoder->fr_ch_ele++;
 }
@@ -9373,17 +9400,35 @@ UNUSED_FUNCTION static void DCT3_4_unscaled(int32_t* y, int32_t* x) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t showbits_hcr(bits_t_t* ld, uint8_t bits) {
-    if(bits == 0) return 0;
-    if(ld->len <= 32) {
-        /* huffman_spectral_data_2 needs to read more than may be available, bits maybe
-           > ld->len, deliver 0 than */
-        if(ld->len >= bits) return ((ld->bufa >> (ld->len - bits)) & (0xFFFFFFFF >> (32 - bits)));
+    // if(bits == 0) return 0;
+    // if(ld->len <= 32) {
+    //     /* huffman_spectral_data_2 needs to read more than may be available, bits maybe
+    //        > ld->len, deliver 0 than */
+    //     if(ld->len >= bits) return ((ld->bufa >> (ld->len - bits)) & (0xFFFFFFFF >> (32 - bits)));
+    //     else
+    //         return ((ld->bufa << (bits - ld->len)) & (0xFFFFFFFF >> (32 - bits)));
+    // }
+    // else {
+    //     if((ld->len - bits) < 32) { return ((ld->bufb & (0xFFFFFFFF >> (64 - ld->len))) << (bits - ld->len + 32)) | (ld->bufa >> (ld->len - bits)); }
+    //     else { return ((ld->bufb >> (ld->len - bits - 32)) & (0xFFFFFFFF >> (32 - bits))); }
+    // }
+    uint32_t mask;
+    int8_t tail;
+    if (bits == 0) return 0;
+    if (ld->len == 0) return 0;
+    tail = ld->len - bits;
+    mask = 0xFFFFFFFF >> (32 - bits);
+    if (ld->len <= 32){
+        /* huffman_spectral_data_2 might request more than available (tail < 0),
+           pad with zeroes then. */
+        if (tail >= 0) return (ld->bufa >> tail) & mask; /* tail is 0..31 */
+        else           return (ld->bufa << -tail) & mask; /* -tail is 1..31 */
+    } else {
+        /* tail is 1..63 */
+        if (tail < 32)
+            return ((ld->bufb << (32 - tail)) | (ld->bufa >> tail)) & mask;
         else
-            return ((ld->bufa << (bits - ld->len)) & (0xFFFFFFFF >> (32 - bits)));
-    }
-    else {
-        if((ld->len - bits) < 32) { return ((ld->bufb & (0xFFFFFFFF >> (64 - ld->len))) << (bits - ld->len + 32)) | (ld->bufa >> (ld->len - bits)); }
-        else { return ((ld->bufb >> (ld->len - bits - 32)) & (0xFFFFFFFF >> (32 - bits))); }
+            return (ld->bufb >> (tail - 32)) & mask;
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
