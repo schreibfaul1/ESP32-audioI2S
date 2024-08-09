@@ -9,11 +9,21 @@
  *
  */
 #include "Audio.h"
-#include "aac_decoder/aac_decoder.h"
-#include "flac_decoder/flac_decoder.h"
-#include "mp3_decoder/mp3_decoder.h"
-#include "opus_decoder/opus_decoder.h"
-#include "vorbis_decoder/vorbis_decoder.h"
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
+    #include "aac_decoder/aac_decoder.h"
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
+    #include "flac_decoder/flac_decoder.h"
+#endif
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
+    #include "mp3_decoder/mp3_decoder.h"
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
+    #include "opus_decoder/opus_decoder.h"
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
+    #include "vorbis_decoder/vorbis_decoder.h"
+#endif
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
@@ -343,11 +353,21 @@ void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
     MP3Decoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
     FLACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     AACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
     OPUSDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
     VORBISDecoder_FreeBuffers();
+#endif
     if(m_playlistBuff) {
         free(m_playlistBuff);
         m_playlistBuff = NULL;
@@ -1294,6 +1314,7 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
             m_controlCounter = 100;
         }
     }
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
     if(m_codec == CODEC_MP3) {
         int res = read_ID3_Header(InBuff.getReadPtr(), bytes);
         if(res >= 0) bytesReaded = res;
@@ -1301,6 +1322,7 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
             m_controlCounter = 100;
         }
     }
+#endif
     if(m_codec == CODEC_M4A) {
         int res = read_M4A_Header(InBuff.getReadPtr(), bytes);
         if(res >= 0) bytesReaded = res;
@@ -1308,11 +1330,14 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
             m_controlCounter = 100;
         }
     }
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC) {
         // stream only, no header
         m_audioDataSize = getFileSize();
         m_controlCounter = 100;
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
     if(m_codec == CODEC_FLAC) {
         int res = read_FLAC_Header(InBuff.getReadPtr(), bytes);
         if(res >= 0) bytesReaded = res;
@@ -1321,8 +1346,13 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
             m_controlCounter = 100;
         }
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
     if(m_codec == CODEC_OPUS) { m_controlCounter = 100; }
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
     if(m_codec == CODEC_VORBIS) { m_controlCounter = 100; }
+#endif
     if(m_codec == CODEC_OGG) { m_controlCounter = 100; }
     if(!isRunning()) {
         log_e("Processing stopped due to invalid audio header");
@@ -1466,6 +1496,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     static size_t   headerSize;
     static size_t   retvalue = 0;
@@ -1668,6 +1699,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     return 0;
 }
+#endif
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     static size_t   id3Size;
@@ -3262,15 +3294,19 @@ void Audio::processLocalFile() {
                 if(m_resumeFilePos >= m_fileSize) goto exit;
             }
         }
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         if(m_codec == CODEC_FLAC) {
             m_resumeFilePos = flac_correctResumeFilePos(m_resumeFilePos);
             if(m_resumeFilePos == -1) goto exit;
             FLACDecoderReset();
         }
+#endif
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         if(m_codec == CODEC_MP3) {
             m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos);
             if(m_resumeFilePos == -1) goto exit;
         }
+#endif
 
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
@@ -3293,7 +3329,9 @@ void Audio::processLocalFile() {
         if(m_f_loop && m_f_stream) {                                                                                      // eof
             AUDIO_INFO("loop from: %lu to: %lu", (long unsigned int)getFilePos(), (long unsigned int)m_audioDataStart); // loop
             setFilePos(m_audioDataStart);
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
             if(m_codec == CODEC_FLAC) FLACDecoderReset();
+#endif
             m_audioCurrentTime = 0;
             byteCounter = m_audioDataStart;
             f_fileDataComplete = false;
@@ -3307,12 +3345,22 @@ exit:
         audiofile.close();
         AUDIO_INFO("Closing audio file \"%s\"", afn);
 
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
         if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
+#endif
 
         if(afn) {
             if(audio_eof_mp3) audio_eof_mp3(afn);
@@ -3513,12 +3561,22 @@ void Audio::processWebFile() {
 
         m_f_running = false;
         m_streamType = ST_NONE;
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
         if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
+#endif
         m_codec = CODEC_NONE;
         if(m_f_tts) {
             AUDIO_INFO("End of speech: \"%s\"", m_lastHost);
@@ -4031,6 +4089,7 @@ bool Audio::initializeDecoder() {
     uint32_t gfH = 0;
     uint32_t hWM = 0;
     switch(m_codec) {
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         case CODEC_MP3:
             if(!MP3Decoder_IsInit()){
                 if(!MP3Decoder_AllocateBuffers()) {
@@ -4043,6 +4102,8 @@ bool Audio::initializeDecoder() {
                 InBuff.changeMaxBlockSize(m_frameSizeMP3);
             }
             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
         case CODEC_AAC:
             if(!AACDecoder_IsInit()) {
                 if(!AACDecoder_AllocateBuffers()) {
@@ -4067,6 +4128,8 @@ bool Audio::initializeDecoder() {
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         case CODEC_FLAC:
             if(!psramFound()) {
                 AUDIO_INFO("FLAC works only with PSRAM!");
@@ -4081,6 +4144,8 @@ bool Audio::initializeDecoder() {
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
             AUDIO_INFO("FLACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         case CODEC_OPUS:
             if(!OPUSDecoder_AllocateBuffers()) {
                 AUDIO_INFO("The OPUSDecoder could not be initialized");
@@ -4091,6 +4156,8 @@ bool Audio::initializeDecoder() {
             AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
         case CODEC_VORBIS:
             if(!psramFound()) {
                 AUDIO_INFO("VORBIS works only with PSRAM!");
@@ -4105,6 +4172,7 @@ bool Audio::initializeDecoder() {
             AUDIO_INFO("VORBISDecoder has been initialized, free Heap: %lu bytes,  free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
+#endif
         case CODEC_WAV: InBuff.changeMaxBlockSize(m_frameSizeWav); break;
         case CODEC_OGG: // the decoder will be determined later (vorbis, flac, opus?)
             break;
@@ -4391,6 +4459,7 @@ void Audio::showCodecParams() {
     if(getBitRate()) { AUDIO_INFO("BitRate: %lu", (long unsigned int)getBitRate()); }
     else { AUDIO_INFO("BitRate: N/A"); }
 
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC) {
         uint8_t answ = AACGetFormat();
         if(answ < 3) {
@@ -4403,6 +4472,7 @@ void Audio::showCodecParams() {
             AUDIO_INFO("Spectral band replication: %s", sbr[answ]);
         }
     }
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::findNextSync(uint8_t* data, size_t len) {
@@ -4419,28 +4489,38 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         m_f_playing = true;
         nextSync = 0;
     }
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
     if(m_codec == CODEC_MP3) {
         nextSync = MP3FindSyncWord(data, len);
         if(nextSync == -1) return len; // syncword not found, search next block
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC) { nextSync = AACFindSyncWord(data, len); }
     if(m_codec == CODEC_M4A) {
         AACSetRawBlockParams(0, 2, 44100, 1);
         m_f_playing = true;
         nextSync = 0;
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
     if(m_codec == CODEC_FLAC) {
         nextSync = FLACFindSyncWord(data, len);
         if(nextSync == -1) return len; // OggS not found, search next block
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
     if(m_codec == CODEC_OPUS) {
         nextSync = OPUSFindSyncWord(data, len);
         if(nextSync == -1) return len; // OggS not found, search next block
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
     if(m_codec == CODEC_VORBIS) {
         nextSync = VORBISFindSyncWord(data, len);
         if(nextSync == -1) return len; // OggS not found, search next block
     }
+#endif
     if(nextSync == -1) {
         if(audio_info && swnf == 0) audio_info("syncword not found");
         else {
@@ -4462,18 +4542,23 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDecoderItems() {
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
     if(m_codec == CODEC_MP3) {
         setChannels(MP3GetChannels());
         setSampleRate(MP3GetSampRate());
         setBitsPerSample(MP3GetBitsPerSample());
         setBitrate(MP3GetBitrate());
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         setChannels(AACGetChannels());
         setSampleRate(AACGetSampRate());
         setBitsPerSample(AACGetBitsPerSample());
         setBitrate(AACGetBitrate());
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
     if(m_codec == CODEC_FLAC) {
         setChannels(FLACGetChannels());
         setSampleRate(FLACGetSampRate());
@@ -4484,6 +4569,8 @@ void Audio::setDecoderItems() {
             if(getFileSize()) m_audioDataSize = getFileSize() - m_audioDataStart;
         }
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
     if(m_codec == CODEC_OPUS) {
         setChannels(OPUSGetChannels());
         setSampleRate(OPUSGetSampRate());
@@ -4494,6 +4581,8 @@ void Audio::setDecoderItems() {
             if(getFileSize()) m_audioDataSize = getFileSize() - m_audioDataStart;
         }
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
     if(m_codec == CODEC_VORBIS) {
         setChannels(VORBISGetChannels());
         setSampleRate(VORBISGetSampRate());
@@ -4504,6 +4593,7 @@ void Audio::setDecoderItems() {
             if(getFileSize()) m_audioDataSize = getFileSize() - m_audioDataStart;
         }
     }
+#endif
     if(getBitsPerSample() != 8 && getBitsPerSample() != 16) {
         AUDIO_INFO("Bits per sample must be 8 or 16, found %i", getBitsPerSample());
         stopSong();
@@ -4537,12 +4627,22 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         case CODEC_MP3:  m_decodeError = MP3Decode(data, &bytesLeft, m_outBuff, 0); break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
         case CODEC_AAC:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
         case CODEC_M4A:  m_decodeError = AACDecode(data, &bytesLeft, m_outBuff); break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         case CODEC_FLAC: m_decodeError = FLACDecode(data, &bytesLeft, m_outBuff); break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         case CODEC_OPUS: m_decodeError = OPUSDecode(data, &bytesLeft, m_outBuff); break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
         case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &bytesLeft, m_outBuff); break;
+#endif
         default: {
             log_e("no valid codec found codec = %d", m_codec);
             stopSong();
@@ -4562,6 +4662,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         //    if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
         //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
         }
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         if(m_codec == CODEC_OPUS) {
             if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
             if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
@@ -4569,6 +4670,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
             if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
         }
+#endif
 
         return 1; // skip one byte and seek for the next sync word
     }
@@ -4588,8 +4690,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
                             if(getBitsPerSample() == 8) m_validSamples = len / 2;
                             break;
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
                             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
                             static uint8_t isPS = 0;
                             if(!isPS && AACGetParametricStereo()){ // only change 0 -> 1
@@ -4600,6 +4705,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             break;
         case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
                             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         case CODEC_FLAC:    if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = FLACGetOutputSamps() / getChannels();
                             st = FLACgetStreamTitle();
@@ -4616,6 +4723,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
                             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = OPUSGetOutputSamps();
                             st = OPUSgetStreamTitle();
@@ -4632,6 +4741,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
                             break;
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
         case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = VORBISGetOutputSamps();
                             st = VORBISgetStreamTitle();
@@ -4648,6 +4759,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
                             break;
+#endif
     }
     if(f_setDecodeParamsOnce && m_validSamples) {
         f_setDecodeParamsOnce = false;
@@ -4687,11 +4799,13 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         deltaBytesIn = 0;
         nominalBitRate = 0;
 
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
             m_audioFileDuration = FLACGetAudioFileDuration();
             nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
             m_avr_bitrate = nominalBitRate;
         }
+#endif
         if(m_codec == CODEC_WAV){
             nominalBitRate = getBitRate();
             m_avr_bitrate = nominalBitRate;
@@ -4759,6 +4873,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
 void Audio::printDecodeError(int r) {
     const char* e;
 
+#ifndef AUDIO_I2S_DISABLE_MP3_DECODER
     if(m_codec == CODEC_MP3) {
         switch(r) {
             case ERR_MP3_NONE: e = "NONE"; break;
@@ -4778,10 +4893,14 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("MP3 decode error %d : %s", r, e);
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC) {
         e = AACGetErrorMessage(abs(r));
         AUDIO_INFO("AAC decode error %d : %s", r, e);
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_FLAC_DECODER
     if(m_codec == CODEC_FLAC) {
         switch(r) {
             case ERR_FLAC_NONE: e = "NONE"; break;
@@ -4802,6 +4921,8 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
     if(m_codec == CODEC_OPUS) {
         switch(r) {
             case ERR_OPUS_NONE: e = "NONE"; break;
@@ -4827,6 +4948,8 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("OPUS decode error %d : %s", r, e);
     }
+#endif
+#ifndef AUDIO_I2S_DISABLE_VORBIS_DECODER
     if(m_codec == CODEC_VORBIS) {
         switch(r) {
             case ERR_VORBIS_NONE: e = "NONE"; break;
@@ -4842,6 +4965,7 @@ void Audio::printDecodeError(int r) {
         }
         AUDIO_INFO("VORBIS decode error %d : %s", r, e);
     }
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
