@@ -949,7 +949,12 @@ uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uin
 int8_t can_decode_ot(const uint8_t object_type) { /* Returns 0 if an object type is decodable, otherwise returns -1 */
     switch(object_type) {
     case LC: return 0;
-    case MAIN: return -1;
+    case MAIN:
+#ifdef MAIN_DEC
+        return 0;
+#else
+        return -1;
+#endif
     case SSR: return -1;
 
     case LTP:
@@ -1361,6 +1366,9 @@ const char* NeAACDecGetErrorMessage(uint8_t errcode) {
 uint32_t NeAACDecGetCapabilities(void) {
     uint32_t cap = 0;
     cap += LC_DEC_CAP; /* can't do without it */
+#ifdef MAIN_DEC
+    cap += MAIN_DEC_CAP;
+#endif
 #ifdef LTP_DEC
     cap += LTP_DEC_CAP;
 #endif
@@ -1403,6 +1411,9 @@ NeAACDecHandle NeAACDecOpen(void) {
         hDecoder->window_shape_prev[i] = 0;
         hDecoder->time_out[i] = NULL;
         hDecoder->fb_intermed[i] = NULL;
+#ifdef MAIN_DEC
+        hDecoder->pred_stat[i] = NULL;
+#endif
 #ifdef LTP_DEC
         hDecoder->ltp_lag[i] = 0;
         hDecoder->lt_pred_stat[i] = NULL;
@@ -1605,6 +1616,9 @@ void NeAACDecClose(NeAACDecHandle hpDecoder) {
     for(i = 0; i < MAX_CHANNELS; i++) {
         if(hDecoder->time_out[i]) faad_free(hDecoder->time_out[i]);
         if(hDecoder->fb_intermed[i]) faad_free(hDecoder->fb_intermed[i]);
+#ifdef MAIN_DEC
+        if (hDecoder->pred_stat[i]) faad_free(hDecoder->pred_stat[i]);
+#endif
 #ifdef LTP_DEC
         if(hDecoder->lt_pred_stat[i]) faad_free(hDecoder->lt_pred_stat[i]);
 #endif
@@ -2661,27 +2675,65 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t_t* ld, int16_t* sp) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void is_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_spec, uint16_t frame_len) {
-    uint8_t  g, sfb, b;
-    uint16_t i;
-    int32_t  exp, frac;
-    uint16_t nshort = frame_len / 8;
-    uint8_t  group = 0;
+    // uint8_t  g, sfb, b;
+    // uint16_t i;
+    // int32_t  exp, frac;
+    // uint16_t nshort = frame_len / 8;
+    // uint8_t  group = 0;
 
-    for(g = 0; g < icsr->num_window_groups; g++) {
+    // for(g = 0; g < icsr->num_window_groups; g++) {
+    //     /* Do intensity stereo decoding */
+    //     for(b = 0; b < icsr->window_group_length[g]; b++) {
+    //         for(sfb = 0; sfb < icsr->max_sfb; sfb++) {
+    //             if(is_intensity(icsr, g, sfb)) {
+    //                 exp = icsr->scale_factors[g][sfb] >> 2;
+    //                 frac = icsr->scale_factors[g][sfb] & 3;
+    //                 /* Scale from left to right channel,
+    //                    do not touch left channel */
+    //                 for(i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb + 1], ics->swb_offset_max); i++) {
+    //                     if(exp < 0) r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] << -exp;
+    //                     else
+    //                         r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] >> exp;
+    //                     r_spec[(group * nshort) + i] = MUL_C(r_spec[(group * nshort) + i], pow05_table[frac + 3]);
+    //                     if(is_intensity(icsr, g, sfb) != invert_intensity(ics, g, sfb)) r_spec[(group * nshort) + i] = -r_spec[(group * nshort) + i];
+    //                 }
+    //             }
+    //         }
+    //         group++;
+    //     }
+    // }
+    uint8_t g, sfb, b;
+    uint16_t i;
+    int32_t scale;
+
+    uint16_t nshort = frame_len/8;
+    uint8_t group = 0;
+
+    for (g = 0; g < icsr->num_window_groups; g++) {
         /* Do intensity stereo decoding */
-        for(b = 0; b < icsr->window_group_length[g]; b++) {
-            for(sfb = 0; sfb < icsr->max_sfb; sfb++) {
-                if(is_intensity(icsr, g, sfb)) {
-                    exp = icsr->scale_factors[g][sfb] >> 2;
-                    frac = icsr->scale_factors[g][sfb] & 3;
+        for (b = 0; b < icsr->window_group_length[g]; b++) {
+            for (sfb = 0; sfb < icsr->max_sfb; sfb++) {
+                if (is_intensity(icsr, g, sfb)) {
+                    int16_t scale_factor = icsr->scale_factors[g][sfb];
+#ifdef MAIN_DEC
+                    /* For scalefactor bands coded in intensity stereo the
+                       corresponding predictors in the right channel are
+                       switched to "off".
+                     */
+                    ics->pred.prediction_used[sfb] = 0;
+                    icsr->pred.prediction_used[sfb] = 0;
+#endif
+
+                    scale_factor = min(max(scale_factor, -120), 120);
+                    scale = (int32_t)pow(0.5, (0.25*scale_factor));
+
                     /* Scale from left to right channel,
                        do not touch left channel */
-                    for(i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb + 1], ics->swb_offset_max); i++) {
-                        if(exp < 0) r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] << -exp;
-                        else
-                            r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] >> exp;
-                        r_spec[(group * nshort) + i] = MUL_C(r_spec[(group * nshort) + i], pow05_table[frac + 3]);
-                        if(is_intensity(icsr, g, sfb) != invert_intensity(ics, g, sfb)) r_spec[(group * nshort) + i] = -r_spec[(group * nshort) + i];
+                    for (i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb+1], ics->swb_offset_max); i++)
+                    {
+                        r_spec[(group*nshort)+i] = MUL_R(l_spec[(group*nshort)+i], scale);
+                        if (is_intensity(icsr, g, sfb) != invert_intensity(ics, g, sfb))
+                            r_spec[(group*nshort)+i] = -r_spec[(group*nshort)+i];
                     }
                 }
             }
@@ -3166,6 +3218,13 @@ void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_lef
                     ics_left->ltp2.long_used[sfb] = 0;
 #endif
 
+#ifdef MAIN_DEC
+                    /* For scalefactor bands coded using PNS the corresponding
+                       predictors are switched to "off".
+                    */
+                    ics_left->pred.prediction_used[sfb] = 0;
+#endif
+
                     begin = min(base + ics_left->swb_offset[sfb], ics_left->swb_offset_max);
                     end = min(base + ics_left->swb_offset[sfb+1], ics_left->swb_offset_max);
 
@@ -3191,6 +3250,10 @@ void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_lef
                     /* See comment above. */
                     ics_right->ltp.long_used[sfb] = 0;
                     ics_right->ltp2.long_used[sfb] = 0;
+#endif
+#ifdef MAIN_DEC
+                    /* See comment above. */
+                    ics_right->pred.prediction_used[sfb] = 0;
 #endif
 
                     if (channel_pair && is_noise(ics_left, g, sfb) &&
@@ -4562,9 +4625,17 @@ void faad_mdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
 /* defines if an object type can be decoded by this library or not */
 static uint8_t ObjectTypesTable[32] = {
     0, /*  0 NULL */
+#ifdef MAIN_DEC
+    1, /*  1 AAC Main */
+#else
     0, /*  1 AAC Main */
+#endif
     1, /*  2 AAC LC */
+#ifdef SSR_DEC
+    1, /*  3 AAC SSR */
+#else
     0, /*  3 AAC SSR */
+#endif
 #ifdef LTP_DEC
     1, /*  4 AAC LTP */
 #else
@@ -4587,28 +4658,28 @@ static uint8_t ObjectTypesTable[32] = {
     0, /* 15 General MIDI */
     0, /* 16 Algorithmic Synthesis and Audio FX */
 
-/* MPEG-4 Version 2 */
+    /* MPEG-4 Version 2 */
 #ifdef ERROR_RESILIENCE
     1, /* 17 ER AAC LC */
     0, /* 18 (Reserved) */
-    #ifdef LTP_DEC
+#ifdef LTP_DEC
     1, /* 19 ER AAC LTP */
-    #else
+#else
     0, /* 19 ER AAC LTP */
-    #endif
+#endif
     0, /* 20 ER AAC scalable */
     0, /* 21 ER TwinVQ */
     0, /* 22 ER BSAC */
-    #ifdef LD_DEC
+#ifdef LD_DEC
     1, /* 23 ER AAC LD */
-    #else
+#else
     0, /* 23 ER AAC LD */
-    #endif
+#endif
     0, /* 24 ER CELP */
     0, /* 25 ER HVXC */
     0, /* 26 ER HILN */
     0, /* 27 ER Parametric */
-#else  /* No ER defined */
+#else /* No ER defined */
     0, /* 17 ER AAC LC */
     0, /* 18 (Reserved) */
     0, /* 19 ER AAC LTP */
@@ -8035,63 +8106,100 @@ exit:
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.6 */
 static uint8_t ics_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, uint8_t common_window) {
-    (void)common_window;
     uint8_t retval = 0;
     uint8_t ics_reserved_bit;
+
     ics_reserved_bit = faad_get1bit(ld);
-    if(ics_reserved_bit != 0) return 32;
+    if (ics_reserved_bit != 0) return 32;
     ics->window_sequence = (uint8_t)faad_getbits(ld, 2);
     ics->window_shape = faad_get1bit(ld);
+
 #ifdef LD_DEC
     /* No block switching in LD */
-    if((hDecoder->object_type == LD) && (ics->window_sequence != ONLY_LONG_SEQUENCE)) return 32;
+    if ((hDecoder->object_type == LD) && (ics->window_sequence != ONLY_LONG_SEQUENCE))
+        return 32;
 #endif
-    if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
         ics->max_sfb = (uint8_t)faad_getbits(ld, 4);
         ics->scale_factor_grouping = (uint8_t)faad_getbits(ld, 7);
     }
-    else { ics->max_sfb = (uint8_t)faad_getbits(ld, 6); }
+    else {
+        ics->max_sfb = (uint8_t)faad_getbits(ld, 6);
+    }
+
     /* get the grouping information */
-    if((retval = window_grouping_info(hDecoder, ics)) > 0) return retval;
+    if ((retval = window_grouping_info(hDecoder, ics)) > 0)
+        return retval;
+
+
     /* should be an error */
     /* check the range of max_sfb */
-    if(ics->max_sfb > ics->num_swb) return 16;
-    if(ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
-        if((ics->predictor_data_present = faad_get1bit(ld)) & 1) {
-            if(hDecoder->object_type == MAIN) /* MPEG2 style AAC predictor */
-            {
-                uint8_t sfb;
-                uint8_t limit = min(ics->max_sfb, max_pred_sfb(hDecoder->sf_index));
-                if((
+    if (ics->max_sfb > ics->num_swb)
+        return 16;
 
-                       faad_get1bit(ld)) &
-                   1) {
-                    uint32_t unused = faad_getbits(ld, 5);
-                    (void)unused;
+    if (ics->window_sequence != EIGHT_SHORT_SEQUENCE){
+        if((ics->predictor_data_present = faad_get1bit(ld)) & 1) {
+            if (hDecoder->object_type == MAIN) {/* MPEG2 style AAC predictor */
+                uint8_t sfb;
+                uint8_t predictor_reset, predictor_reset_group_number, prediction_used;
+                uint8_t limit = min(ics->max_sfb, max_pred_sfb(hDecoder->sf_index));
+
+                predictor_reset = faad_get1bit(ld);
+                if (predictor_reset) {
+                    predictor_reset_group_number =
+                        (uint8_t)faad_getbits(ld, 5);
                 }
-                for(sfb = 0; sfb < limit; sfb++) { faad_get1bit(ld); }
+                else {
+                    predictor_reset_group_number = 0;
+                }
+
+                for (sfb = 0; sfb < limit; sfb++){
+                    prediction_used = faad_get1bit(ld);
+#ifdef MAIN_DEC
+                    ics->pred.prediction_used[sfb] = prediction_used;
+#endif
+                }
+#ifdef MAIN_DEC
+                ics->pred.limit = limit;
+                ics->pred.predictor_reset = predictor_reset;
+                ics->pred.predictor_reset_group_number = predictor_reset_group_number;
+#else
+                (void)predictor_reset_group_number;
+                (void)prediction_used;
+#endif
             }
 #ifdef LTP_DEC
             else { /* Long Term Prediction */
-                if(hDecoder->object_type < ER_OBJECT_START) {
-                    if((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
-                        if((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) { return retval; }
+                if (hDecoder->object_type < ER_OBJECT_START)
+                {
+                    if ((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
+                        if ((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) {
+                            return retval;
+                        }
                     }
-                    if(common_window) {
-                        if((ics->ltp2.data_present = faad_get1bit(ld)) & 1) {
-                            if((retval = ltp_data(hDecoder, ics, &(ics->ltp2), ld)) > 0) { return retval; }
+                    if (common_window) {
+                        if ((ics->ltp2.data_present = faad_get1bit(ld)) & 1) {
+                            if ((retval = ltp_data(hDecoder, ics, &(ics->ltp2), ld)) > 0) {
+                                return retval;
+                            }
                         }
                     }
                 }
-    #ifdef ERROR_RESILIENCE
-                if(!common_window && (hDecoder->object_type >= ER_OBJECT_START)) {
-                    if((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
-                        if((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) { return retval; }
+#ifdef ERROR_RESILIENCE
+                if (!common_window && (hDecoder->object_type >= ER_OBJECT_START))
+                {
+                    if ((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
+                        if ((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) {
+                            return retval;
+                        }
                     }
                 }
-    #endif
+#endif  /* ERROR_RESILIENCE */
             }
-#endif
+#else  /* LTP_DEC */
+            (void)common_window;
+#endif  /* LTP_DEC */
         }
     }
 
@@ -9054,6 +9162,20 @@ uint8_t allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uin
     (void)output_channels;
     int32_t mul = 1;
 
+#ifdef MAIN_DEC
+    /* MAIN object type prediction */
+    if (hDecoder->object_type == MAIN) {
+        /* allocate the state only when needed */
+        if (hDecoder->pred_stat[channel] != NULL) {
+            faad_free(hDecoder->pred_stat[channel]);
+            hDecoder->pred_stat[channel] = NULL;
+        }
+
+        hDecoder->pred_stat[channel] = (pred_state_t*)faad_malloc(hDecoder->frameLength * sizeof(pred_state_t));
+        reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
+    }
+#endif
+
 #ifdef LTP_DEC
     if(is_ltp_ot(hDecoder->object_type)) {
         /* allocate the state only when needed */
@@ -9105,6 +9227,21 @@ uint8_t allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uin
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t allocate_channel_pair(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t paired_channel) {
     int32_t mul = 1;
+
+#ifdef MAIN_DEC
+    /* MAIN object type prediction */
+    if (hDecoder->object_type == MAIN) {
+        /* allocate the state only when needed */
+        if (hDecoder->pred_stat[channel] == NULL) {
+            hDecoder->pred_stat[channel] = (pred_state_t*)faad_malloc(hDecoder->frameLength * sizeof(pred_state_t));
+            reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
+        }
+        if (hDecoder->pred_stat[paired_channel] == NULL) {
+            hDecoder->pred_stat[paired_channel] = (pred_state_t*)faad_malloc(hDecoder->frameLength * sizeof(pred_state_t));
+            reset_all_predictors(hDecoder->pred_stat[paired_channel], hDecoder->frameLength);
+        }
+    }
+#endif
 
 #ifdef LTP_DEC
     if(is_ltp_ot(hDecoder->object_type)) {
@@ -9187,6 +9324,25 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
     }
     /* pns decoding */
     pns_decode(ics, NULL, m_spec_coef, NULL, hDecoder->frameLength, 0, hDecoder->object_type, &(hDecoder->__r1), &(hDecoder->__r2));
+
+#ifdef MAIN_DEC
+    /* MAIN object type prediction */
+    if (hDecoder->object_type == MAIN){
+		if (!hDecoder->pred_stat[sce->channel])
+			return 33;
+
+        /* intra channel prediction */
+        ic_prediction(ics, m_spec_coef, hDecoder->pred_stat[sce->channel], hDecoder->frameLength,
+            hDecoder->sf_index);
+
+        /* In addition, for scalefactor bands coded by perceptual
+           noise substitution the predictors belonging to the
+           corresponding spectral coefficients are reset.
+        */
+        pns_reset_pred_state(ics, hDecoder->pred_stat[sce->channel]);
+    }
+#endif
+
 #ifdef LTP_DEC
     if(is_ltp_ot(hDecoder->object_type)) {
     #ifdef LD_DEC
@@ -9284,6 +9440,25 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct_t* hDecoder, ic_stream_t* ics1, 
     ms_decode(ics1, ics2, m_spec_coef1, m_spec_coef2, hDecoder->frameLength);
     /* intensity stereo decoding */
     is_decode(ics1, ics2, m_spec_coef1, m_spec_coef2, hDecoder->frameLength);
+
+#ifdef MAIN_DEC
+    /* MAIN object type prediction */
+    if (hDecoder->object_type == MAIN) {
+        /* intra channel prediction */
+        ic_prediction(ics1, m_spec_coef1, hDecoder->pred_stat[cpe->channel], hDecoder->frameLength,
+            hDecoder->sf_index);
+        ic_prediction(ics2, m_spec_coef2, hDecoder->pred_stat[cpe->paired_channel], hDecoder->frameLength,
+            hDecoder->sf_index);
+
+        /* In addition, for scalefactor bands coded by perceptual
+           noise substitution the predictors belonging to the
+           corresponding spectral coefficients are reset.
+        */
+        pns_reset_pred_state(ics1, hDecoder->pred_stat[cpe->channel]);
+        pns_reset_pred_state(ics2, hDecoder->pred_stat[cpe->paired_channel]);
+    }
+#endif
+
 #ifdef LTP_DEC
     if(is_ltp_ot(hDecoder->object_type)) {
         ltp_info_t* ltp1 = &(ics1->ltp);
@@ -9469,6 +9644,186 @@ static uint32_t faad_getbits_rev(bitfile_t* ld, uint32_t n) {
     ret = faad_showbits_rev(ld, n);
     faad_flushbits_rev(ld, n);
     return ret;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static void reset_pred_state(pred_state_t *state)
+{
+    state->r[0]   = 0;
+    state->r[1]   = 0;
+    state->COR[0] = 0;
+    state->COR[1] = 0;
+    state->VAR[0] = 0x3F80;
+    state->VAR[1] = 0x3F80;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static void reset_all_predictors(pred_state_t *state, uint16_t frame_len){
+    uint16_t i;
+    for (i = 0; i < frame_len; i++)
+        reset_pred_state(&state[i]);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+/* intra channel prediction */
+static void ic_prediction(ic_stream_t *ics, int32_t *spec, pred_state_t *state, uint16_t frame_len, uint8_t sf_index){
+    uint8_t sfb;
+    uint16_t bin;
+
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        reset_all_predictors(state, frame_len);
+    }
+    else {
+        for (sfb = 0; sfb < max_pred_sfb(sf_index); sfb++){
+            uint16_t low  = ics->swb_offset[sfb];
+            uint16_t high = min(ics->swb_offset[sfb+1], ics->swb_offset_max);
+
+            for (bin = low; bin < high; bin++){
+                ic_predict(&state[bin], spec[bin], &spec[bin],
+                    (ics->predictor_data_present && ics->pred.prediction_used[sfb]));
+            }
+        }
+
+        if (ics->predictor_data_present) {
+            if (ics->pred.predictor_reset){
+                for (bin = ics->pred.predictor_reset_group_number - 1;
+                     bin < frame_len; bin += 30)
+                {
+                    reset_pred_state(&state[bin]);
+                }
+            }
+        }
+    }
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static uint32_t float_to_bits(float f32) {
+    uint32_t u32;
+    memcpy(&u32, &f32, 4);
+    return u32;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static float bits_to_float(uint32_t u32) {
+    float f32;
+    memcpy(&f32, &u32, 4);
+    return f32;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static int16_t quant_pred(float x){
+    return (int16_t)(float_to_bits(x) >> 16);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static float inv_quant_pred(int16_t q){
+    uint16_t u16 = (uint16_t)q;
+    return bits_to_float((uint32_t)u16 << 16);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static float flt_round(float_t pf) {
+    int32_t  flg;
+    uint32_t tmp, tmp1, tmp2;
+
+    tmp = float_to_bits(pf);
+    flg = tmp & (uint32_t)0x00008000;
+    tmp &= (uint32_t)0xffff0000;
+    tmp1 = tmp;
+    /* round 1/2 lsb toward infinity */
+    if(flg) {
+        tmp &= (uint32_t)0xff800000; /* extract exponent and sign */
+        tmp |= (uint32_t)0x00010000; /* insert 1 lsb */
+        tmp2 = tmp;                  /* add 1 lsb and elided one */
+        tmp &= (uint32_t)0xff800000; /* extract exponent and sign */
+
+        return bits_to_float(tmp1) + bits_to_float(tmp2) - bits_to_float(tmp);
+    }
+    else { return bits_to_float(tmp); }
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static void ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint8_t pred){
+    uint16_t tmp;
+    int16_t i, j;
+    int32_t dr1;
+	float predictedvalue;
+    int32_t e0, e1;
+    int32_t k1, k2;
+
+    int32_t r[2];
+    int32_t COR[2];
+    int32_t VAR[2];
+
+    r[0] = inv_quant_pred(state->r[0]);
+    r[1] = inv_quant_pred(state->r[1]);
+    COR[0] = inv_quant_pred(state->COR[0]);
+    COR[1] = inv_quant_pred(state->COR[1]);
+    VAR[0] = inv_quant_pred(state->VAR[0]);
+    VAR[1] = inv_quant_pred(state->VAR[1]);
+
+    tmp = state->VAR[0];
+    j = (tmp >> 7);
+    i = tmp & 0x7f;
+    if (j >= 128) {
+        j -= 128;
+        k1 = COR[0] * exp_table[j] * mnt_table[i];
+    }
+    else {
+        k1 = REAL_CONST(0);
+    }
+
+
+    if (pred) {
+        tmp = state->VAR[1];
+        j = (tmp >> 7);
+        i = tmp & 0x7f;
+        if (j >= 128)
+        {
+            j -= 128;
+            k2 = COR[1] * exp_table[j] * mnt_table[i];
+        } else {
+            k2 = REAL_CONST(0);
+        }
+
+        predictedvalue = k1*r[0] + k2*r[1];
+        predictedvalue = flt_round(predictedvalue);
+        *output = input + predictedvalue;
+    }
+
+    /* calculate new state data */
+    e0 = *output;
+    e1 = e0 - k1*r[0];
+    dr1 = k1*e0;
+
+    VAR[0] = ALPHA*VAR[0] + 0.5f * (r[0]*r[0] + e0*e0);
+    COR[0] = ALPHA*COR[0] + r[0]*e0;
+    VAR[1] = ALPHA*VAR[1] + 0.5f * (r[1]*r[1] + e1*e1);
+    COR[1] = ALPHA*COR[1] + r[1]*e1;
+#define A  REAL_CONST(0.953125)
+    r[1] = A * (r[0]-dr1);
+    r[0] = A * e0;
+
+    state->r[0] = quant_pred(r[0]);
+    state->r[1] = quant_pred(r[1]);
+    state->COR[0] = quant_pred(COR[0]);
+    state->COR[1] = quant_pred(COR[1]);
+    state->VAR[0] = quant_pred(VAR[0]);
+    state->VAR[1] = quant_pred(VAR[1]);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static void pns_reset_pred_state(ic_stream_t *ics, pred_state_t *state){
+    uint8_t sfb, g, b;
+    uint16_t i, offs, offs2;
+
+    /* prediction only for long blocks */
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE)
+        return;
+
+    for (g = 0; g < ics->num_window_groups; g++) {
+        for (b = 0; b < ics->window_group_length[g]; b++) {
+            for (sfb = 0; sfb < ics->max_sfb; sfb++){
+                if (is_noise(ics, g, sfb)) {
+                    offs = ics->swb_offset[sfb];
+                    offs2 = min(ics->swb_offset[sfb+1], ics->swb_offset_max);
+
+                    for (i = offs; i < offs2; i++)
+                        reset_pred_state(&state[i]);
+                }
+            }
+        }
+    }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void DST4_32(int32_t* y, int32_t* x) {

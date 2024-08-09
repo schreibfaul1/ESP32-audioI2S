@@ -60,6 +60,7 @@
 //------------------------------------------------------
 
 /* COMPILE TIME DEFINITIONS */
+#define MAIN_DEC /* Allow decoding of MAIN profile AAC */
 #define PREFER_POINTERS
 #define ERROR_RESILIENCE
 #define LTP_DEC /* Allow decoding of LTP (long term prediction) profile AAC */
@@ -493,6 +494,10 @@ static void                tns_ma_filter(int32_t* spectrum, uint16_t size, int8_
 static void                vcb11_check_LAV(uint8_t cb, int16_t* sp);
 uint8_t                    window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics);
 uint32_t                   wl_min_lzc(uint32_t x);
+static void                reset_all_predictors(pred_state_t *state, uint16_t frame_len);
+static void                ic_prediction(ic_stream_t *ics, int32_t *spec, pred_state_t *state, uint16_t frame_len, uint8_t sf_index);
+static void                ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint8_t pred);
+static void                pns_reset_pred_state(ic_stream_t *ics, pred_state_t *state);
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //                                              I N L I N E S
