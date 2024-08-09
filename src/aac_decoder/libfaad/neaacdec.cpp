@@ -1237,23 +1237,21 @@ static void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_c
     uint8_t i, m;
     int32_t tmp2[TNS_MAX_ORDER + 1];
     int32_t b[TNS_MAX_ORDER + 1];
+    uint8_t table_index = 2 * (coef_compress != 0) + (coef_res_bits != 3);
+
+    const int32_t* all_tns_coefs[] = {tns_coef_0_3, tns_coef_0_4, tns_coef_1_3, tns_coef_1_4};
+    const int32_t *tns_coef = all_tns_coefs[table_index];
 
     for(i = 0; i < order; i++) { /* Conversion to signed integer */
-        if(coef_compress == 0) {
-            if(coef_res_bits == 3) { tmp2[i] = tns_coef_0_3[coef[i]]; }
-            else { tmp2[i] = tns_coef_0_4[coef[i]]; }
-        }
-        else {
-            if(coef_res_bits == 3) { tmp2[i] = tns_coef_1_3[coef[i]]; }
-            else { tmp2[i] = tns_coef_1_4[coef[i]]; }
-        }
+        tmp2[i] = tns_coef[coef[i]];
     }
+
     /* Conversion to LPC coefficients */
     a[0] = COEF_CONST(1.0);
     for(m = 1; m <= order; m++) {
+        a[m] = tmp2[m - 1]; /* changed */
         for(i = 1; i < m; i++) { b[i] = a[i] + MUL_C(tmp2[m - 1], a[m - i]); } /* loop only while i<m */
         for(i = 1; i < m; i++) { a[i] = b[i]; }                                /* loop only while i<m */
-        a[m] = tmp2[m - 1];                                                    /* changed */
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1468,7 +1466,7 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_siz
             hDecoder->adif_header_t_present = 1;
             get_adif_header_t(adif, ld);
             faad_byte_align(ld);
-            
+
             hDecoder->sf_index = adif->pce[0].sf_index;
             hDecoder->object_type = adif->pce[0].object_type + 1;
             *samplerate = get_sample_rate(hDecoder->sf_index);
@@ -3703,6 +3701,8 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
     int32_t          P_SmoothPeakDecayDiffNrg, nrg;
     complex_t        inputLeft;
 
+    for(uint8_t i = 0; i < 32; i++) memset(m_G_TransientRatio[i], 0, 34 * sizeof(*(m_G_TransientRatio[i])));
+
     if(ps->use34hybrid_bands) { Phi_Fract_SubQmf = Phi_Fract_SubQmf34; } /* chose hybrid filterbank: 20 or 34 band case */
     else { Phi_Fract_SubQmf = Phi_Fract_SubQmf20; }
     for(n = 0; n < 32; n++) { /* clear the energy values */
@@ -3951,12 +3951,12 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                 int32_t ab1, ab2;
                 int32_t ab3, ab4;
                 if(ps->iid_index[env][bk] < -no_iid_steps) {
-                    // printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d < %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], -no_iid_steps);
-                    // ps->iid_index[env][bk] = -no_iid_steps;
+                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d < %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], -no_iid_steps);
+                    ps->iid_index[env][bk] = -no_iid_steps;
                 }
                 else if(ps->iid_index[env][bk] > no_iid_steps) {
-                    // printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d > %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], no_iid_steps);
-                    // ps->iid_index[env][bk] = no_iid_steps;
+                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d > %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], no_iid_steps);
+                    ps->iid_index[env][bk] = no_iid_steps;
                 }
                 /* calculate the scalefactors c_1 and c_2 from the intensity differences */
                 c_1 = sf_iid[no_iid_steps + ps->iid_index[env][bk]];
@@ -4899,7 +4899,7 @@ uint8_t rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
     uint8_t   intensity_used = 0;
     uint8_t*  rvlc_sf_buffer = NULL;
     uint8_t*  rvlc_esc_buffer = NULL;
-    bitfile_t ld_rvlc_sf, ld_rvlc_esc;
+    bitfile_t ld_rvlc_sf = {0, 0, 0, 0 ,0 ,0, 0, 0, 0}, ld_rvlc_esc = {0, 0, 0, 0 ,0 ,0, 0, 0, 0};
     //    bitfile_t ld_rvlc_sf_rev, ld_rvlc_esc_rev;
 
     if(ics->length_of_rvlc_sf > 0) {
@@ -5960,10 +5960,6 @@ uint8_t hf_adjustment(sbr_info_t* sbr, complex_t Xsbr[MAX_NTSRHFG][64], uint8_t 
     }
     ret = estimate_current_envelope(sbr, m_adj, Xsbr, ch);
     if(ret > 0) {
-        if(m_adj) {
-            free(m_adj);
-            m_adj = NULL;
-        }
         return 1;
     }
     calculate_gain(sbr, m_adj, ch);
@@ -6004,7 +6000,7 @@ static uint8_t estimate_current_envelope(sbr_info_t* sbr, sbr_hfadj_info_t* adj,
             l_i = sbr->t_E[ch][l];
             u_i = sbr->t_E[ch][l + 1];
             div = (int32_t)(u_i - l_i);
-            if(div == 0) div = 1;
+            if(div <= 0) {log_e("div %i", div); div = 1;}
             for(m = 0; m < sbr->M; m++) {
                 nrg = 0;
                 for(i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
@@ -9139,10 +9135,6 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
 
     /* save window shape for next frame */
     hDecoder->window_shape_prev[sce->channel] = ics->window_shape;
-    // if(m_spec_coef) {
-    //     free(m_spec_coef);
-    //     m_spec_coef = NULL;
-    // }
 #ifdef LTP_DEC
     if(is_ltp_ot(hDecoder->object_type)) {
         lt_update_state(hDecoder->lt_pred_stat[sce->channel], hDecoder->time_out[sce->channel], hDecoder->fb_intermed[sce->channel], hDecoder->frameLength, hDecoder->object_type);
