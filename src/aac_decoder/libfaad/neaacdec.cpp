@@ -863,10 +863,10 @@ startloop:
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 cfft_info_t* cffti(uint16_t n) {
-    cfft_info_t* cfft = (cfft_info_t*)faad_malloc(sizeof(cfft_info_t));
+    cfft_info_t* cfft = (cfft_info_t*)faad_calloc(1, sizeof(cfft_info_t));
 
     cfft->n = n;
-    cfft->work = (complex_t*)faad_malloc(n * sizeof(complex_t));
+    cfft->work = (complex_t*)faad_calloc(n, sizeof(complex_t));
     cffti1(n, NULL, cfft->ifac);
     switch(n) {
     case 64: cfft->tab = (complex_t*)cfft_tab_64; break;
@@ -1448,7 +1448,7 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_siz
 
     adif_header_t* adif = (adif_header_t*)faad_malloc(1 * sizeof(adif_header_t));
     adts_header_t* adts = (adts_header_t*)faad_malloc(1 * sizeof(adts_header_t));
-    bitfile_t*     ld = (bitfile_t*)faad_malloc(1 * sizeof(bitfile_t));
+    bitfile_t*     ld = (bitfile_t*)faad_calloc(1, sizeof(bitfile_t));
 
     if((hDecoder == NULL) || (samplerate == NULL) || (channels == NULL) || (buffer_size == 0)) {
         ret = -1;
@@ -2704,34 +2704,62 @@ static uint32_t rewrev_word(uint32_t v, const uint8_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* 64 bit version */
-static void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
-    if(len <= 32) {
-        *hi = 0;
-        *lo = rewrev_word(*lo, len);
-    }
-    else {
-        uint32_t t = *hi, v = *lo;
-        /* double 32 bit reverse */
-        v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
-        t = ((t >> S[0]) & B[0]) | ((t << S[0]) & ~B[0]);
-        v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
-        t = ((t >> S[1]) & B[1]) | ((t << S[1]) & ~B[1]);
-        v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
-        t = ((t >> S[2]) & B[2]) | ((t << S[2]) & ~B[2]);
-        v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
-        t = ((t >> S[3]) & B[3]) | ((t << S[3]) & ~B[3]);
-        v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
-        t = ((t >> S[4]) & B[4]) | ((t << S[4]) & ~B[4]);
-        /* last 32<>32 bit swap is implicit below shift off low bits (this is really only one 64 bit shift) */
-        *lo = (t >> (64 - len)) | (v << (len - 32));
-        *hi = v >> (64 - len);
-    }
+// static void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
+//     if(len <= 32) {
+//         *hi = 0;
+//         *lo = rewrev_word(*lo, len);
+//     }
+//     else {
+//         uint32_t t = *hi, v = *lo;
+//         /* double 32 bit reverse */
+//         v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
+//         t = ((t >> S[0]) & B[0]) | ((t << S[0]) & ~B[0]);
+//         v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
+//         t = ((t >> S[1]) & B[1]) | ((t << S[1]) & ~B[1]);
+//         v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
+//         t = ((t >> S[2]) & B[2]) | ((t << S[2]) & ~B[2]);
+//         v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
+//         t = ((t >> S[3]) & B[3]) | ((t << S[3]) & ~B[3]);
+//         v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
+//         t = ((t >> S[4]) & B[4]) | ((t << S[4]) & ~B[4]);
+//         /* last 32<>32 bit swap is implicit below shift off low bits (this is really only one 64 bit shift) */
+//         *lo = (t >> (64 - len)) | (v << (len - 32));
+//         *hi = v >> (64 - len);
+//     }
+// }
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static uint32_t reverse_word(uint32_t v){
+    v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
+    v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
+    v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
+    v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
+    v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
+    return v;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* bits_t_t version */
 static void rewrev_bits(bits_t_t* bits) {
-    if(bits->len == 0) return;
-    rewrev_lword(&bits->bufb, &bits->bufa, bits->len);
+    // if(bits->len == 0) return;
+    // rewrev_lword(&bits->bufb, &bits->bufa, bits->len);
+    if (bits->len == 0) return;
+    if (bits->len <= 32) {
+        bits->bufb = 0;
+        bits->bufa = reverse_word(bits->bufa) >> (32 - bits->len);
+    } else {
+        /* last 32<>32 bit swap via rename */
+        uint32_t lo = reverse_word(bits->bufb);
+        uint32_t hi = reverse_word(bits->bufa);
+
+        if (bits->len == 64) {
+            bits->bufb = hi;
+            bits->bufa = lo;
+        } else {
+            /* shift off low bits (this is really only one 64 bit shift) */
+            bits->bufb = hi >> (64 - bits->len);
+            bits->bufa = (lo >> (64 - bits->len)) | (hi << (bits->len - 32));
+        }
+    }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* merge bits of a to b */
@@ -2739,18 +2767,30 @@ static void concat_bits(bits_t_t* b, bits_t_t* a) {
     uint32_t bl, bh, al, ah;
 
     if(a->len == 0) return;
+    /* addend becomes result */
+    if (b->len == 0)
+    {
+        *b = *a;
+        return;
+    }
     al = a->bufa;
     ah = a->bufb;
     if(b->len > 32) {
         /* maskoff superfluous high b bits */
         bl = b->bufa;
-        bh = b->bufb & ((1 << (b->len - 32)) - 1);
+        bh = b->bufb & ((1u << (b->len - 32)) - 1);
         /* left shift a b->len bits */
         ah = al << (b->len - 32);
         al = 0;
     }
+    else if (b->len == 32) {
+        bl = b->bufa;
+        bh = 0;
+        ah = al;
+        al = 0;
+    }
     else {
-        bl = b->bufa & ((1 << (b->len)) - 1);
+        bl = b->bufa & ((1u << (b->len)) - 1);
         bh = 0;
         ah = (ah << (b->len)) | (al >> (32 - b->len));
         al = al << b->len;
@@ -4670,7 +4710,7 @@ int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t*
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form) {
     uint8_t   ret = 0;
-    bitfile_t ld; ld.bits_left = 0;
+    bitfile_t ld = {0,0,0,0,0,0,0,0,0}; // ld.bits_left = 0;
     faad_initbits(&ld, pBuffer, buffer_size);
     faad_byte_align(&ld);
     ret = AudioSpecificConfigFrombitfile_t(&ld, mp4ASC, pce, buffer_size, short_form);
@@ -7257,7 +7297,7 @@ static uint8_t sbr_grid(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch) {
     switch(sbr->bs_frame_class[ch]) {
     case FIXFIX:
         i = (uint8_t)faad_getbits(ld, 2);
-        bs_num_env = min(1 << i, 5);
+        bs_num_env = min(1u << i, 5);
         i = (uint8_t)faad_get1bit(ld);
         for(env = 0; env < bs_num_env; env++) sbr->f[ch][env] = i;
         sbr->abs_bord_lead[ch] = 0;
@@ -8184,7 +8224,7 @@ static uint8_t section_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfil
     if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) sect_bits = 3;
     else
         sect_bits = 5;
-    sect_esc_val = (1 << sect_bits) - 1;
+    sect_esc_val = (1u << sect_bits) - 1;
     for(g = 0; g < ics->num_window_groups; g++) {
         uint8_t k = 0;
         uint8_t i = 0;
@@ -9303,7 +9343,7 @@ static uint32_t faad_showbits(bitfile_t* ld, uint32_t bits) {
     }
     bits -= ld->bits_left;
     // return ((ld->bufa & bitmask[ld->bits_left]) << bits) | (ld->bufb >> (32 - bits));
-    return ((ld->bufa & ((1 << ld->bits_left) - 1)) << bits) | (ld->bufb >> (32 - bits));
+    return ((ld->bufa & ((1u << ld->bits_left) - 1)) << bits) | (ld->bufb >> (32 - bits));
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 UNUSED_FUNCTION static void DCT3_4_unscaled(int32_t* y, int32_t* x) {

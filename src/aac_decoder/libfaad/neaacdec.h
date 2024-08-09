@@ -227,13 +227,13 @@ typedef const int8_t (*sbr_huff_tab)[2];
 #define Q2_BITS           22
 #define Q2_PRECISION      (1 << Q2_BITS)
 #define Q2_CONST(A)       (((A) >= 0) ? ((int32_t)((A) * (Q2_PRECISION) + 0.5)) : ((int32_t)((A) * (Q2_PRECISION)-0.5)))
-#define MUL_R(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS) /* multiply with real shift */
-#define MUL_C(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS) /* multiply with coef shift */
-#define _MulHigh(A, B)    (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE) /* multiply with fractional shift */
-#define MUL_F(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
-#define MUL_Q2(A, B)      (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
-#define MUL_SHIFT6(A, B)  (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
-#define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
+#define MUL_R(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (REAL_BITS - 1))) >> REAL_BITS) /* multiply with real shift */
+#define MUL_C(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (COEF_BITS - 1))) >> COEF_BITS) /* multiply with coef shift */
+#define _MulHigh(A, B)    (int32_t)(((int64_t)(A) * (int64_t)(B) + (1u << (FRAC_SIZE - 1))) >> FRAC_SIZE) /* multiply with fractional shift */
+#define MUL_F(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (FRAC_BITS - 1))) >> FRAC_BITS)
+#define MUL_Q2(A, B)      (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (Q2_BITS - 1))) >> Q2_BITS)
+#define MUL_SHIFT6(A, B)  (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (6 - 1))) >> 6)
+#define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (23 - 1))) >> 23)
 #define RE(A)             A[0]
 #define IM(A)             A[1]
 #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
@@ -522,16 +522,16 @@ static inline uint32_t faad_showbits_rev(bitfile_t* ld, uint32_t bits) {
     uint32_t B = 0;
     if(bits <= ld->bits_left) {
         for(i = 0; i < bits; i++) {
-            if(ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
+            if(ld->bufa & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - i - 1));
         }
         return B;
     }
     else {
         for(i = 0; i < ld->bits_left; i++) {
-            if(ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
+            if(ld->bufa & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - i - 1));
         }
         for(i = 0; i < bits - ld->bits_left; i++) {
-            if(ld->bufb & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - ld->bits_left - i - 1));
+            if(ld->bufb & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - ld->bits_left - i - 1));
         }
         return B;
     }
