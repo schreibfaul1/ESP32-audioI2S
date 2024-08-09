@@ -2691,17 +2691,17 @@ void is_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* rewind and reverse - 32 bit version */
-static uint32_t rewrev_word(uint32_t v, const uint8_t len) {
-    /* 32 bit reverse */
-    v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
-    v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
-    v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
-    v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
-    v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
-    /* shift off low bits */
-    v >>= (32 - len);
-    return v;
-}
+// static uint32_t rewrev_word(uint32_t v, const uint8_t len) {
+//     /* 32 bit reverse */
+//     v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
+//     v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
+//     v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
+//     v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
+//     v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
+//     /* shift off low bits */
+//     v >>= (32 - len);
+//     return v;
+// }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* 64 bit version */
 // static void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
@@ -2905,12 +2905,14 @@ uint8_t reordered_spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bi
                                         else {
                                             /* remaining stuff after last m_segment, we unfortunately couldn't read
                                                this in earlier because it might not fit in 64 bits. since we already
-                                               decoded (and removed) the PCW it is now guaranteed to fit */
+                                               decoded (and removed) the PCW it is now should fit */
                                             if(bitsread < sp_data_len) {
                                                 const uint8_t additional_bits = sp_data_len - bitsread;
                                                 read_segment(&m_segment[numberOfSegments], additional_bits, ld);
                                                 m_segment[numberOfSegments].len += m_segment[numberOfSegments - 1].len;
+                                                if (m_segment[numberOfSegments].len > 64) return 10;
                                                 rewrev_bits(&m_segment[numberOfSegments]);
+
                                                 if(m_segment[numberOfSegments - 1].len > 32) {
                                                     m_segment[numberOfSegments - 1].bufb =
                                                         m_segment[numberOfSegments].bufb + showbits_hcr(&m_segment[numberOfSegments - 1], m_segment[numberOfSegments - 1].len - 32);
@@ -3111,29 +3113,25 @@ int32_t fp_sqrt(int32_t value) {
 */
 static inline void gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
     uint16_t i;
-    int32_t  energy = 0, scale;
-    int32_t  exp, frac;
+    int32_t  energy = 0;
 
-    for(i = 0; i < size; i++) {
-        /* this can be replaced by a 16 bit random generator!!!! */
+    scale_factor = min(max(scale_factor, -120), 120);
+
+    for (i = 0; i < size; i++)
+    {
         int32_t tmp = (int32_t)ne_rng(__r1, __r2);
-        if(tmp < 0) tmp = -(tmp & ((1 << (REAL_BITS - 1)) - 1));
-        else { tmp = (tmp & ((1 << (REAL_BITS - 1)) - 1)); }
-        energy += MUL_R(tmp, tmp);
         spec[i] = tmp;
+        energy += tmp*tmp;
     }
-    energy = fp_sqrt(energy);
-    if(energy > 0) {
-        scale = DIV(REAL_CONST(1), energy);
-        exp = scale_factor >> 2;
-        frac = scale_factor & 3;
-        /* IMDCT pre-scaling */
-        exp -= sub;
-        if(exp < 0) scale >>= -exp;
-        else
-            scale <<= exp;
-        if(frac) scale = MUL_C(scale, pow2_table[frac]);
-        for(i = 0; i < size; i++) { spec[i] = MUL_R(spec[i], scale); }
+
+    if (energy > 0)
+    {
+        int32_t scale = (int32_t)1.0/(int32_t)sqrt(energy);
+        scale *= (int32_t)pow(2.0, 0.25 * scale_factor);
+        for (i = 0; i < size; i++)
+        {
+            spec[i] *= scale;
+        }
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -7661,7 +7659,13 @@ static void decode_sce_lfe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInf
         hDecoder->internal_channel[channels + 1] = channels + 1;
     }
     else {
-        if(hDecoder->pce_set) hDecoder->internal_channel[hDecoder->pce.sce_channel[tag]] = channels;
+        if (hDecoder->pce_set) {
+            if (hDecoder->pce.channels > MAX_CHANNELS){
+                hInfo->error = 22;
+                return;
+            }
+            hDecoder->internal_channel[hDecoder->pce.sce_channel[tag]] = channels;
+        }
         else
             hDecoder->internal_channel[channels] = channels;
     }
@@ -7678,6 +7682,10 @@ static void decode_cpe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, b
     }
     if(hDecoder->fr_ch_ele + 1 > MAX_SYNTAX_ELEMENTS) {
         hInfo->error = 13;
+        return;
+    }
+    if (hDecoder->pce_set && (hDecoder->pce.channels > MAX_CHANNELS)){
+        hInfo->error = 22;
         return;
     }
     /* for CPE the number of output channels is always 2 */
