@@ -497,12 +497,12 @@ static uint8_t             side_info(NeAACDecStruct_t* hDecoder, element_t* ele,
 static uint8_t             single_lfe_channel_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, uint8_t channel, uint8_t* tag);
 static void                sinusoidal_coding(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch);
 static uint8_t             spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, int16_t* spectral_data);
-static void                tns_ar_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order);
+static void                tns_ar_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order, uint8_t exp);
 static void                tns_data(ic_stream_t* ics, tns_info_t* tns, bitfile_t* ld);
-static void                tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a);
+static uint8_t             tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a);
 void                       tns_decode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8_t object_type, int32_t* spec, uint16_t frame_len);
 void                       tns_encode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8_t object_type, int32_t* spec, uint16_t frame_len);
-static void                tns_ma_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order);
+static void                tns_ma_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order, uint8_t exp);
 static void                vcb11_check_LAV(uint8_t cb, int16_t* sp);
 uint8_t                    window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics);
 uint32_t                   wl_min_lzc(uint32_t x);
