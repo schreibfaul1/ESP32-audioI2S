@@ -330,6 +330,12 @@ typedef struct {
 } qmfs_info_t;
 
 typedef struct {
+    int16_t index;
+    uint16_t len;
+    uint32_t cw;
+} rvlc_huff_table;
+
+typedef struct {
     uint32_t     sample_rate;
     uint32_t     maxAACLine;
     uint8_t      rate;

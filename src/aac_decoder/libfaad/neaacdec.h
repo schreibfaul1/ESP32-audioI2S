@@ -70,6 +70,7 @@
     #define SBR_DEC /* Allow decoding of SBR (spectral band replication) */
     #define PS_DEC /* Allow decoding of PS (parametric stereo) */
 #endif
+#define FIXED_POINT  // must be defined!!
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* LD can't do without LTP */
 #ifdef LD_DEC
@@ -237,8 +238,17 @@ typedef const int8_t (*sbr_huff_tab)[2];
 #define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (23 - 1))) >> 23)
 #define RE(A)             A[0]
 #define IM(A)             A[1]
-#define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
-#define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
+
+#ifdef FIXED_POINT
+#define DIV_R(A, B) (((int64_t)A * REAL_PRECISION)/B)
+#define DIV_C(A, B) (((int64_t)A * COEF_PRECISION)/B)
+#define DIV_F(A, B) (((int64_t)A * FRAC_PRECISION)/B)
+#else
+#define DIV_R(A, B) ((A)/(B))
+#define DIV_C(A, B) ((A)/(B))
+#define DIV_F(A, B) ((A)/(B))
+#endif
+
 #define QMF_RE(A)         RE(A)
 #define QMF_IM(A)         IM(A)
 #define DM_MUL            FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
@@ -341,7 +351,7 @@ static void                faad_free(void* b);
 static uint32_t            faad_get_processed_bits(bitfile_t* ld);
 static uint8_t*            faad_getbitbuffer(bitfile_t* ld, uint32_t bits);
 static uint32_t            faad_getbits(bitfile_t* ld, uint32_t n);
-static uint32_t            faad_getbits_rev(bitfile_t* ld, uint32_t n);
+static uint32_t            faad_getbits_rev(bitfile_t* ld, uint32_t n) __attribute__((unused));
 static void                faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out);
 static void                faad_initbits_rev(bitfile_t* ld, void* buffer, uint32_t bits_in_buffer);
 static void                faad_initbits(bitfile_t* ld, const void* buffer, const uint32_t buffer_size);
@@ -456,8 +466,8 @@ uint8_t                    reconstruct_single_channel(NeAACDecStruct_t* hDecoder
 uint8_t                    reordered_spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, int16_t* spectral_data);
 uint8_t                    rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld);
 static uint8_t             rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfile_t* ld_esc, uint8_t* is_used);
-static int8_t              rvlc_huffman_esc(bitfile_t* ld_esc, int8_t direction);
-static int8_t              rvlc_huffman_sf(bitfile_t* ld_sf, bitfile_t* ld_esc, int8_t direction);
+static int8_t              rvlc_huffman_esc(bitfile_t* ld /*, int8_t direction*/);
+static int8_t              rvlc_huffman_sf(bitfile_t *ld_sf, bitfile_t *ld_esc /*, int8_t direction*/);
 uint8_t                    rvlc_scale_factor_data(ic_stream_t* ics, bitfile_t* ld);
 static uint8_t             sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr);
 static uint8_t             sbr_data(bitfile_t* ld, sbr_info_t* sbr);
@@ -500,6 +510,9 @@ static void                reset_all_predictors(pred_state_t *state, uint16_t fr
 static void                ic_prediction(ic_stream_t *ics, int32_t *spec, pred_state_t *state, uint16_t frame_len, uint8_t sf_index);
 static void                ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint8_t pred);
 static void                pns_reset_pred_state(ic_stream_t *ics, pred_state_t *state);
+static float               inv_quant_pred(int16_t q) __attribute__((unused));
+static float               flt_round(float_t pf) __attribute__((unused));
+static int16_t             quant_pred(float x) __attribute__((unused));
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //                                              I N L I N E S

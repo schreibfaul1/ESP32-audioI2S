@@ -138,9 +138,6 @@ void free_mem() {
     // clang-format on
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* common free function */
-static void faad_free(void* b) { free(b); }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* initialize buffer, call once before first getbits or showbits */
 static void faad_initbits(bitfile_t* ld, const void* _buffer, const uint32_t buffer_size) {
     uint32_t tmp;
@@ -2675,37 +2672,13 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t_t* ld, int16_t* sp) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void is_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_spec, uint16_t frame_len) {
-    // uint8_t  g, sfb, b;
-    // uint16_t i;
-    // int32_t  exp, frac;
-    // uint16_t nshort = frame_len / 8;
-    // uint8_t  group = 0;
 
-    // for(g = 0; g < icsr->num_window_groups; g++) {
-    //     /* Do intensity stereo decoding */
-    //     for(b = 0; b < icsr->window_group_length[g]; b++) {
-    //         for(sfb = 0; sfb < icsr->max_sfb; sfb++) {
-    //             if(is_intensity(icsr, g, sfb)) {
-    //                 exp = icsr->scale_factors[g][sfb] >> 2;
-    //                 frac = icsr->scale_factors[g][sfb] & 3;
-    //                 /* Scale from left to right channel,
-    //                    do not touch left channel */
-    //                 for(i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb + 1], ics->swb_offset_max); i++) {
-    //                     if(exp < 0) r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] << -exp;
-    //                     else
-    //                         r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] >> exp;
-    //                     r_spec[(group * nshort) + i] = MUL_C(r_spec[(group * nshort) + i], pow05_table[frac + 3]);
-    //                     if(is_intensity(icsr, g, sfb) != invert_intensity(ics, g, sfb)) r_spec[(group * nshort) + i] = -r_spec[(group * nshort) + i];
-    //                 }
-    //             }
-    //         }
-    //         group++;
-    //     }
-    // }
     uint8_t g, sfb, b;
     uint16_t i;
     int32_t scale;
-
+#ifdef FIXED_POINT
+    int32_t exp, frac;
+#endif
     uint16_t nshort = frame_len/8;
     uint8_t group = 0;
 
@@ -2723,10 +2696,20 @@ void is_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_
                     ics->pred.prediction_used[sfb] = 0;
                     icsr->pred.prediction_used[sfb] = 0;
 #endif
-
+#ifndef FIXED_POINT
                     scale_factor = min(max(scale_factor, -120), 120);
                     scale = (int32_t)pow(0.5, (0.25*scale_factor));
-
+#else
+                    scale_factor = min(max(scale_factor, -60), 60);
+                    exp = scale_factor >> 2; /* exp is -15..15 */
+                    frac = scale_factor & 3;
+                    scale = pow05_table[frac];
+                    exp += COEF_BITS - REAL_BITS; /* exp is -1..29 */
+                    if (exp < 0)
+                        scale <<= -exp;
+                    else
+                        scale >>= exp;
+#endif
                     /* Scale from left to right channel,
                        do not touch left channel */
                     for (i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb+1], ics->swb_offset_max); i++)
@@ -3164,27 +3147,48 @@ int32_t fp_sqrt(int32_t value) {
    value. A suitable random number generator can be realized using one multiplication/accumulation per random value.
 */
 static inline void gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
+
+#ifndef FIXED_POINT
+    uint16_t i;
+    int32_t energy = 0.0;
+    (void)sub;
+
+    scale_factor = min(max(scale_factor, -120), 120);
+
+    for (i = 0; i < size; i++) {
+        int32_t tmp = (int32_t)(int32_t)ne_rng(__r1, __r2);
+        spec[i] = tmp;
+        energy += tmp*tmp;
+    }
+
+    if (energy > 0) {
+        int32_t scale = (int32_t)1.0/(int32_t)sqrt(energy);
+        scale *= (int32_t)pow(2.0, 0.25 * scale_factor);
+        for (i = 0; i < size; i++){
+            spec[i] *= scale;
+        }
+    }
+#else
+
     uint16_t i;
     int32_t  energy = 0;
 
     scale_factor = min(max(scale_factor, -120), 120);
 
-    for (i = 0; i < size; i++)
-    {
+    for (i = 0; i < size; i++){
         int32_t tmp = (int32_t)ne_rng(__r1, __r2);
         spec[i] = tmp;
         energy += tmp*tmp;
     }
 
-    if (energy > 0)
-    {
+    if (energy > 0) {
         int32_t scale = (int32_t)1.0/(int32_t)sqrt(energy);
         scale *= (int32_t)pow(2.0, 0.25 * scale_factor);
-        for (i = 0; i < size; i++)
-        {
+        for (i = 0; i < size; i++){
             spec[i] *= scale;
         }
     }
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_left, int32_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
@@ -3198,8 +3202,20 @@ void pns_decode(ic_stream_t* ics_left, ic_stream_t* ics_right, int32_t* spec_lef
 
     uint8_t sub = 0;
 
+#ifdef FIXED_POINT
+    /* IMDCT scaling */
+    if (object_type == LD){
+        sub = 9 /*9*/;
+    }
+    else {
+        if (ics_left->window_sequence == EIGHT_SHORT_SEQUENCE)
+            sub = 7 /*7*/;
+        else
+            sub = 10 /*10*/;
+    }
+#else
     (void)object_type;
-
+#endif
     for (g = 0; g < ics_left->num_window_groups; g++) {
         /* Do perceptual noise substitution decoding */
         for (b = 0; b < ics_left->window_group_length[g]; b++){
@@ -3812,29 +3828,45 @@ static void ps_data_decode(ps_info_t* ps) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* decorrelate the mono signal using an allpass filter */
 static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_right[64], complex_t* X_hybrid_left[32], complex_t* X_hybrid_right[32]) {
-    uint8_t          gr, n, m, bk;
+
+    uint8_t          gr, n, bk;
     uint8_t          temp_delay = 0;
     uint8_t          sb, maxsb;
     const complex_t* Phi_Fract_SubQmf;
     uint8_t          temp_delay_ser[NO_ALLPASS_LINKS] = {0};
-    int32_t          P_SmoothPeakDecayDiffNrg, nrg;
+    int32_t           P_SmoothPeakDecayDiffNrg, nrg;
     complex_t        inputLeft;
+    int32_t**        P = NULL;
+
+    P = (int32_t**)faad_malloc(32 * sizeof(P));
+    for(uint8_t i = 0; i < 32; i++){P[i] = (int32_t*)faad_malloc(34 * sizeof(*(P[i])));}
 
     for(uint8_t i = 0; i < 32; i++) memset(m_G_TransientRatio[i], 0, 34 * sizeof(*(m_G_TransientRatio[i])));
 
-    if(ps->use34hybrid_bands) { Phi_Fract_SubQmf = Phi_Fract_SubQmf34; } /* chose hybrid filterbank: 20 or 34 band case */
+    /* chose hybrid filterbank: 20 or 34 band case */
+    if(ps->use34hybrid_bands) { Phi_Fract_SubQmf = Phi_Fract_SubQmf34; }
     else { Phi_Fract_SubQmf = Phi_Fract_SubQmf20; }
-    for(n = 0; n < 32; n++) { /* clear the energy values */
-        for(bk = 0; bk < 34; bk++) { m_P_dec[n][bk] = 0; }
+
+    /* clear the energy values */
+    for(n = 0; n < 32; n++) {
+        for(bk = 0; bk < 34; bk++) { P[n][bk] = 0; }
     }
 
-    for(gr = 0; gr < ps->num_groups; gr++) {                                                        /* calculate the energy in each parameter band b(k) */
-        bk = (~NEGATE_IPD_MASK) & ps->map_group2bk[gr];                                             /* select the parameter index b(k) to which this group belongs */
-        maxsb = (gr < ps->num_hybrid_groups) ? ps->group_border[gr] + 1 : ps->group_border[gr + 1]; /* select the upper subband border for this group */
+    /* calculate the energy in each parameter band b(k) */
+    for(gr = 0; gr < ps->num_groups; gr++) {
+        /* select the parameter index b(k) to which this group belongs */
+        bk = (~NEGATE_IPD_MASK) & ps->map_group2bk[gr];
+
+        /* select the upper subband border for this group */
+        maxsb = (gr < ps->num_hybrid_groups) ? ps->group_border[gr] + 1 : ps->group_border[gr + 1];
+
         for(sb = ps->group_border[gr]; sb < maxsb; sb++) {
             for(n = ps->border_position[0]; n < ps->border_position[ps->num_env]; n++) {
+#ifdef FIXED_POINT
                 uint32_t in_re, in_im;
-                if(gr < ps->num_hybrid_groups) { /* input from hybrid subbands or QMF subbands */
+#endif
+                /* input from hybrid subbands or QMF subbands */
+                if(gr < ps->num_hybrid_groups) {
                     RE(inputLeft) = QMF_RE(X_hybrid_left[n][sb]);
                     IM(inputLeft) = QMF_IM(X_hybrid_left[n][sb]);
                 }
@@ -3842,50 +3874,78 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
                     RE(inputLeft) = QMF_RE(X_left[n][sb]);
                     IM(inputLeft) = QMF_IM(X_left[n][sb]);
                 }
+
                 /* accumulate energy */
-                /* NOTE: all input is scaled by 2^(-5) because of fixed point QMF meaning that m_P_dec will be scaled by 2^(-10) compared to floating point version */
+#ifdef FIXED_POINT
+                /* NOTE: all input is scaled by 2^(-5) because of fixed point QMF
+                 * meaning that P will be scaled by 2^(-10) compared to floating point version
+                 */
                 in_re = ((abs(RE(inputLeft)) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
                 in_im = ((abs(IM(inputLeft)) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
-                m_P_dec[n][bk] += in_re * in_re + in_im * in_im;
+                P[n][bk] += in_re * in_re + in_im * in_im;
+#else
+                P[n][bk] += MUL_R(RE(inputLeft), RE(inputLeft)) + MUL_R(IM(inputLeft), IM(inputLeft));
+#endif
             }
         }
     }
+
     /* calculate transient reduction ratio for each parameter band b(k) */
     for(bk = 0; bk < ps->nr_par_bands; bk++) {
         for(n = ps->border_position[0]; n < ps->border_position[ps->num_env]; n++) {
             const int32_t gamma = COEF_CONST(1.5);
+
             ps->P_PeakDecayNrg[bk] = MUL_F(ps->P_PeakDecayNrg[bk], ps->alpha_decay);
-            if(ps->P_PeakDecayNrg[bk] < m_P_dec[n][bk]) ps->P_PeakDecayNrg[bk] = m_P_dec[n][bk];
-            P_SmoothPeakDecayDiffNrg = ps->P_SmoothPeakDecayDiffNrg_prev[bk]; /* apply smoothing filter to peak decay energy */
-            P_SmoothPeakDecayDiffNrg += MUL_F((ps->P_PeakDecayNrg[bk] - m_P_dec[n][bk] - ps->P_SmoothPeakDecayDiffNrg_prev[bk]), ps->alpha_smooth);
+            if(ps->P_PeakDecayNrg[bk] < P[n][bk]) ps->P_PeakDecayNrg[bk] = P[n][bk];
+
+            /* apply smoothing filter to peak decay energy */
+            P_SmoothPeakDecayDiffNrg = ps->P_SmoothPeakDecayDiffNrg_prev[bk];
+            P_SmoothPeakDecayDiffNrg += MUL_F((ps->P_PeakDecayNrg[bk] - P[n][bk] - ps->P_SmoothPeakDecayDiffNrg_prev[bk]), ps->alpha_smooth);
             ps->P_SmoothPeakDecayDiffNrg_prev[bk] = P_SmoothPeakDecayDiffNrg;
-            nrg = ps->P_prev[bk]; /* apply smoothing filter to energy */
-            nrg += MUL_F((m_P_dec[n][bk] - ps->P_prev[bk]), ps->alpha_smooth);
+
+            /* apply smoothing filter to energy */
+            nrg = ps->P_prev[bk];
+            nrg += MUL_F((P[n][bk] - ps->P_prev[bk]), ps->alpha_smooth);
             ps->P_prev[bk] = nrg;
-            if(MUL_C(P_SmoothPeakDecayDiffNrg, gamma) <= nrg) { m_G_TransientRatio[n][bk] = REAL_CONST(1.0); } /* calculate transient ratio */
+
+            /* calculate transient ratio */
+            if(MUL_C(P_SmoothPeakDecayDiffNrg, gamma) <= nrg) { m_G_TransientRatio[n][bk] = REAL_CONST(1.0); }
             else { m_G_TransientRatio[n][bk] = DIV_R(nrg, (MUL_C(P_SmoothPeakDecayDiffNrg, gamma))); }
         }
     }
-    for(gr = 0; gr < ps->num_groups; gr++) { /* apply stereo decorrelation filter to the signal */
+
+    /* apply stereo decorrelation filter to the signal */
+    for(gr = 0; gr < ps->num_groups; gr++) {
         if(gr < ps->num_hybrid_groups) maxsb = ps->group_border[gr] + 1;
-        else
-            maxsb = ps->group_border[gr + 1];
-        for(sb = ps->group_border[gr]; sb < maxsb; sb++) { /* QMF channel */
+        else maxsb = ps->group_border[gr + 1];
+
+        /* QMF channel */
+        for(sb = ps->group_border[gr]; sb < maxsb; sb++) {
             int32_t g_DecaySlope;
             int32_t g_DecaySlope_filt[NO_ALLPASS_LINKS];
-            if(gr < ps->num_hybrid_groups || sb <= ps->decay_cutoff) { g_DecaySlope = FRAC_CONST(1.0); } /* g_DecaySlope: [0..1] */
+
+            /* g_DecaySlope: [0..1] */
+            if(gr < ps->num_hybrid_groups || sb <= ps->decay_cutoff) { g_DecaySlope = FRAC_CONST(1.0); }
             else {
                 int8_t decay = ps->decay_cutoff - sb;
                 if(decay <= -20 /* -1/DECAY_SLOPE */) { g_DecaySlope = 0; }
-                else { g_DecaySlope = FRAC_CONST(1.0) + DECAY_SLOPE * decay; /* decay(int32_t)*decay_slope(frac) = g_DecaySlope(frac) */ }
+                else {
+                    /* decay(int)*decay_slope(frac) = g_DecaySlope(frac) */
+                    g_DecaySlope = FRAC_CONST(1.0) + DECAY_SLOPE * decay;
+                }
             }
-            /* calculate g_DecaySlope_filt for every m multiplied by filter_a[m] */
-            for(m = 0; m < NO_ALLPASS_LINKS; m++) { g_DecaySlope_filt[m] = MUL_F(g_DecaySlope, filter_a[m]); }
+
+            /* calculate g_DecaySlope_filt for every n multiplied by filter_a[n] */
+            for(n = 0; n < NO_ALLPASS_LINKS; n++) { g_DecaySlope_filt[n] = MUL_F(g_DecaySlope, filter_a[n]); }
+
             /* set delay indices */
             temp_delay = ps->saved_delay;
             for(n = 0; n < NO_ALLPASS_LINKS; n++) temp_delay_ser[n] = ps->delay_buf_index_ser[n];
+
             for(n = ps->border_position[0]; n < ps->border_position[ps->num_env]; n++) {
                 complex_t tmp, tmp0, R0;
+                uint8_t   m;
+
                 if(gr < ps->num_hybrid_groups) {
                     /* hybrid filterbank input */
                     RE(inputLeft) = QMF_RE(X_hybrid_left[n][sb]);
@@ -3896,8 +3956,10 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
                     RE(inputLeft) = QMF_RE(X_left[n][sb]);
                     IM(inputLeft) = QMF_IM(X_left[n][sb]);
                 }
+
                 if(sb > ps->nr_allpass_bands && gr >= ps->num_hybrid_groups) {
                     /* delay */
+
                     /* never hybrid subbands here, always QMF subbands */
                     RE(tmp) = RE(ps->delay_Qmf[ps->delay_buf_index_delay[sb]][sb]);
                     IM(tmp) = IM(ps->delay_Qmf[ps->delay_buf_index_delay[sb]][sb]);
@@ -3908,8 +3970,8 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
                 }
                 else {
                     /* allpass filter */
-                    uint8_t   m;
                     complex_t Phi_Fract;
+
                     /* fetch parameters */
                     if(gr < ps->num_hybrid_groups) {
                         /* select data from the hybrid subbands */
@@ -3929,8 +3991,10 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
                         RE(Phi_Fract) = RE(Phi_Fract_Qmf[sb]);
                         IM(Phi_Fract) = IM(Phi_Fract_Qmf[sb]);
                     }
+
                     /* z^(-2) * Phi_Fract[k] */
                     ComplexMult(&RE(tmp), &IM(tmp), RE(tmp0), IM(tmp0), RE(Phi_Fract), IM(Phi_Fract));
+
                     RE(R0) = RE(tmp);
                     IM(R0) = IM(tmp);
                     for(m = 0; m < NO_ALLPASS_LINKS; m++) {
@@ -3984,6 +4048,7 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
                 /* duck if a past transient is found */
                 RE(R0) = MUL_R(m_G_TransientRatio[n][bk], RE(R0));
                 IM(R0) = MUL_R(m_G_TransientRatio[n][bk], IM(R0));
+
                 if(gr < ps->num_hybrid_groups) {
                     /* hybrid */
                     QMF_RE(X_hybrid_right[n][sb]) = RE(R0);
@@ -4009,7 +4074,9 @@ static void ps_decorrelate(ps_info_t* ps, complex_t* X_left[64], complex_t* X_ri
     }
     /* update delay indices */
     ps->saved_delay = temp_delay;
-    for(m = 0; m < NO_ALLPASS_LINKS; m++) { ps->delay_buf_index_ser[m] = temp_delay_ser[m]; }
+    for(n = 0; n < NO_ALLPASS_LINKS; n++) ps->delay_buf_index_ser[n] = temp_delay_ser[n];
+
+    if(P) {for(uint8_t i = 0; i < 32; i++){free(P[i]); P[i] = NULL;} free(P); P = NULL;}
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const int32_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
@@ -4019,6 +4086,7 @@ const int32_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.7
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static int32_t magnitude_c(complex_t c) {
 
+#ifdef FIXED_POINT
     #define ps_abs(A) (((A) > 0) ? (A) : (-(A)))
     #define ALPHA     FRAC_CONST(0.948059448969)
     #define BETA      FRAC_CONST(0.392699081699)
@@ -4027,22 +4095,24 @@ static int32_t magnitude_c(complex_t c) {
     int32_t abs_quadrature = ps_abs(IM(c));
     if(abs_inphase > abs_quadrature) { return MUL_F(abs_inphase, ALPHA) + MUL_F(abs_quadrature, BETA); }
     else { return MUL_F(abs_quadrature, ALPHA) + MUL_F(abs_inphase, BETA); }
+#else
+    return sqrt(RE(c)*RE(c) + IM(c)*IM(c));
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_right[64], complex_t* X_hybrid_left[32], complex_t* X_hybrid_right[32]) {
+
     uint8_t        n;
     uint8_t        gr;
     uint8_t        bk = 0;
     uint8_t        sb, maxsb;
     uint8_t        env;
     uint8_t        nr_ipdopd_par;
-    complex_t      h11 = {0}, h12 = {0}, h21 = {0}, h22 = {0};
-    complex_t      H11 = {0}, H12 = {0}, H21 = {0}, H22 = {0};
-    complex_t      deltaH11 = {0}, deltaH12 = {0}, deltaH21 = {0}, deltaH22 = {0};
-    complex_t      tempLeft;
-    complex_t      tempRight;
-    complex_t      phaseLeft;
-    complex_t      phaseRight;
+    complex_t      h11 = {0}, h12 = {0}, h21 = {0}, h22 = {0};                     // COEF
+    complex_t      H11 = {0}, H12 = {0}, H21 = {0}, H22 = {0};                     // COEF
+    complex_t      deltaH11 = {0}, deltaH12 = {0}, deltaH21 = {0}, deltaH22 = {0}; // COEF
+    complex_t      tempLeft = {0}, tempRight = {0};                    // FRAC
+    complex_t      phaseLeft = {0}, phaseRight = {0};                  // FRAC
     int32_t        L;
     const int32_t* sf_iid;
     uint8_t        no_iid_steps;
@@ -4055,58 +4125,80 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
         no_iid_steps = 7;
         sf_iid = sf_iid_normal;
     }
+
     if(ps->ipd_mode == 0 || ps->ipd_mode == 3) { nr_ipdopd_par = 11; /* resolution */ }
     else { nr_ipdopd_par = ps->nr_ipdopd_par; }
+
     for(gr = 0; gr < ps->num_groups; gr++) {
         bk = (~NEGATE_IPD_MASK) & ps->map_group2bk[gr];
+
         /* use one channel per group in the subqmf domain */
         maxsb = (gr < ps->num_hybrid_groups) ? ps->group_border[gr] + 1 : ps->group_border[gr + 1];
+
         for(env = 0; env < ps->num_env; env++) {
+            uint8_t abs_iid = (uint8_t)abs(ps->iid_index[env][bk]);
+            /* index range is supposed to be -7...7 or -15...15 depending on iid_mode
+                (Table 8.24, ISO/IEC 14496-3:2005).
+                if it is outside these boundaries, this is most likely an error. sanitize
+                it and try to process further. */
+            if(ps->iid_index[env][bk] < -no_iid_steps) {
+                fprintf(stderr, "Warning: invalid iid_index: %d < %d\n", ps->iid_index[env][bk], -no_iid_steps);
+                ps->iid_index[env][bk] = -no_iid_steps;
+                abs_iid = no_iid_steps;
+            }
+            else if(ps->iid_index[env][bk] > no_iid_steps) {
+                fprintf(stderr, "Warning: invalid iid_index: %d > %d\n", ps->iid_index[env][bk], no_iid_steps);
+                ps->iid_index[env][bk] = no_iid_steps;
+                abs_iid = no_iid_steps;
+            }
+            if(ps->icc_index[env][bk] < 0) {
+                fprintf(stderr, "Warning: invalid icc_index: %d < 0\n", ps->icc_index[env][bk]);
+                ps->icc_index[env][bk] = 0;
+            }
+            else if(ps->icc_index[env][bk] > 7) {
+                fprintf(stderr, "Warning: invalid icc_index: %d > 7\n", ps->icc_index[env][bk]);
+                ps->icc_index[env][bk] = 7;
+            }
+
             if(ps->icc_mode < 3) {
                 /* type 'A' mixing as described in 8.6.4.6.2.1 */
-                int32_t c_1, c_2;
-                int32_t cosa, sina;
-                int32_t cosb, sinb;
-                int32_t ab1, ab2;
-                int32_t ab3, ab4;
-                if(ps->iid_index[env][bk] < -no_iid_steps) {
-                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d < %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], -no_iid_steps);
-                    ps->iid_index[env][bk] = -no_iid_steps;
-                }
-                else if(ps->iid_index[env][bk] > no_iid_steps) {
-                    printf(ANSI_ESC_ORANGE "Warning: invalid iid_index: %d > %d" ANSI_ESC_WHITE "\n", ps->iid_index[env][bk], no_iid_steps);
-                    ps->iid_index[env][bk] = no_iid_steps;
-                }
+                int32_t c_1, c_2;   // COEF
+                int32_t cosa, sina; // COEF
+                int32_t cosb, sinb; // COEF
+                int32_t ab1, ab2;   // COEF
+                int32_t ab3, ab4;   // COEF
+
+                /*
+                c_1 = sqrt(2.0 / (1.0 + pow(10.0, quant_iid[no_iid_steps + iid_index] / 10.0)));
+                c_2 = sqrt(2.0 / (1.0 + pow(10.0, quant_iid[no_iid_steps - iid_index] / 10.0)));
+                alpha = 0.5 * acos(quant_rho[icc_index]);
+                beta = alpha * ( c_1 - c_2 ) / sqrt(2.0);
+                */
+
+                // printf("%d\n", ps->iid_index[env][bk]);
+
                 /* calculate the scalefactors c_1 and c_2 from the intensity differences */
                 c_1 = sf_iid[no_iid_steps + ps->iid_index[env][bk]];
                 c_2 = sf_iid[no_iid_steps - ps->iid_index[env][bk]];
+
                 /* calculate alpha and beta using the ICC parameters */
                 cosa = cos_alphas[ps->icc_index[env][bk]];
                 sina = sin_alphas[ps->icc_index[env][bk]];
+
                 if(ps->iid_mode >= 3) {
-                    if(ps->iid_index[env][bk] < 0) {
-                        cosb = cos_betas_fine[-ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                        sinb = -sin_betas_fine[-ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                    }
-                    else {
-                        cosb = cos_betas_fine[ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                        sinb = sin_betas_fine[ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                    }
+                    cosb = cos_betas_fine[abs_iid][ps->icc_index[env][bk]];
+                    sinb = sin_betas_fine[abs_iid][ps->icc_index[env][bk]];
                 }
                 else {
-                    if(ps->iid_index[env][bk] < 0) {
-                        cosb = cos_betas_normal[-ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                        sinb = -sin_betas_normal[-ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                    }
-                    else {
-                        cosb = cos_betas_normal[ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                        sinb = sin_betas_normal[ps->iid_index[env][bk]][ps->icc_index[env][bk]];
-                    }
+                    cosb = cos_betas_normal[abs_iid][ps->icc_index[env][bk]];
+                    sinb = sin_betas_normal[abs_iid][ps->icc_index[env][bk]];
                 }
+
                 ab1 = MUL_C(cosb, cosa);
                 ab2 = MUL_C(sinb, sina);
                 ab3 = MUL_C(sinb, cosa);
                 ab4 = MUL_C(cosb, sina);
+
                 /* h_xy: COEF */
                 RE(h11) = MUL_C(c_2, (ab1 - ab2));
                 RE(h12) = MUL_C(c_1, (ab1 + ab2));
@@ -4115,109 +4207,208 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
             }
             else {
                 /* type 'B' mixing as described in 8.6.4.6.2.2 */
-                int32_t sina, cosa;
-                int32_t cosg, sing;
+                int32_t sina, cosa; // COEF
+                int32_t cosg, sing; // COEF
+
+                /*
+                real_t c, rho, mu, alpha, gamma;
+                uint8_t i;
+
+                i = ps->iid_index[env][bk];
+                c = (real_t)pow(10.0, ((i)?(((i>0)?1:-1)*quant_iid[((i>0)?i:-i)-1]):0.)/20.0);
+                rho = quant_rho[ps->icc_index[env][bk]];
+
+                if (rho == 0.0f && c == 1.)
+                {
+                    alpha = (real_t)M_PI/4.0f;
+                    rho = 0.05f;
+                } else {
+                    if (rho <= 0.05f)
+                    {
+                        rho = 0.05f;
+                    }
+                    alpha = 0.5f*(real_t)atan( (2.0f*c*rho) / (c*c-1.0f) );
+
+                    if (alpha < 0.)
+                    {
+                        alpha += (real_t)M_PI/2.0f;
+                    }
+                    if (rho < 0.)
+                    {
+                        alpha += (real_t)M_PI;
+                    }
+                }
+                mu = c+1.0f/c;
+                mu = 1+(4.0f*rho*rho-4.0f)/(mu*mu);
+                gamma = (real_t)atan(sqrt((1.0f-sqrt(mu))/(1.0f+sqrt(mu))));
+                */
 
                 if(ps->iid_mode >= 3) {
-                    uint8_t abs_iid = abs(ps->iid_index[env][bk]);
                     cosa = sincos_alphas_B_fine[no_iid_steps + ps->iid_index[env][bk]][ps->icc_index[env][bk]];
                     sina = sincos_alphas_B_fine[30 - (no_iid_steps + ps->iid_index[env][bk])][ps->icc_index[env][bk]];
                     cosg = cos_gammas_fine[abs_iid][ps->icc_index[env][bk]];
                     sing = sin_gammas_fine[abs_iid][ps->icc_index[env][bk]];
                 }
                 else {
-                    uint8_t abs_iid = abs(ps->iid_index[env][bk]);
                     cosa = sincos_alphas_B_normal[no_iid_steps + ps->iid_index[env][bk]][ps->icc_index[env][bk]];
                     sina = sincos_alphas_B_normal[14 - (no_iid_steps + ps->iid_index[env][bk])][ps->icc_index[env][bk]];
                     cosg = cos_gammas_normal[abs_iid][ps->icc_index[env][bk]];
                     sing = sin_gammas_normal[abs_iid][ps->icc_index[env][bk]];
                 }
+
                 RE(h11) = MUL_C(COEF_SQRT2, MUL_C(cosa, cosg));
                 RE(h12) = MUL_C(COEF_SQRT2, MUL_C(sina, cosg));
                 RE(h21) = MUL_C(COEF_SQRT2, MUL_C(-cosa, sing));
                 RE(h22) = MUL_C(COEF_SQRT2, MUL_C(sina, sing));
             }
-            /* calculate phase rotation parameters H_xy, note that the imaginary part of these parameters are only calculated when
+            IM(h11) = IM(h12) = IM(h21) = IM(h22) = 0;
+
+            /* calculate phase rotation parameters H_xy */
+            /* note that the imaginary part of these parameters are only calculated when
                IPD and OPD are enabled
              */
             if((ps->enable_ipdopd) && (bk < nr_ipdopd_par)) {
                 int8_t  i;
-                int32_t xy, pq, xypq;
+                int32_t xy, pq, xypq; // FRAC
+
                 /* ringbuffer index */
                 i = ps->phase_hist;
+
                 /* previous value */
-                /* divide by 4, shift right 2 bits */
-                RE(tempLeft) = RE(ps->ipd_prev[bk][i]) >> 2;
-                IM(tempLeft) = IM(ps->ipd_prev[bk][i]) >> 2;
-                RE(tempRight) = RE(ps->opd_prev[bk][i]) >> 2;
-                IM(tempRight) = IM(ps->opd_prev[bk][i]) >> 2;
+#ifdef FIXED_POINT
+                /* divide by 4*2, shift right 3 bits;
+                   extra halving to avoid overflows; it is ok, because result is normalized */
+                RE(tempLeft) = RE(ps->ipd_prev[bk][i]) >> 3;
+                IM(tempLeft) = IM(ps->ipd_prev[bk][i]) >> 3;
+                RE(tempRight) = RE(ps->opd_prev[bk][i]) >> 3;
+                IM(tempRight) = IM(ps->opd_prev[bk][i]) >> 3;
+#else
+                RE(tempLeft) = MUL_F(RE(ps->ipd_prev[bk][i]), FRAC_CONST(0.25));
+                IM(tempLeft) = MUL_F(IM(ps->ipd_prev[bk][i]), FRAC_CONST(0.25));
+                RE(tempRight) = MUL_F(RE(ps->opd_prev[bk][i]), FRAC_CONST(0.25));
+                IM(tempRight) = MUL_F(IM(ps->opd_prev[bk][i]), FRAC_CONST(0.25));
+#endif
+
                 /* save current value */
                 RE(ps->ipd_prev[bk][i]) = ipdopd_cos_tab[abs(ps->ipd_index[env][bk])];
                 IM(ps->ipd_prev[bk][i]) = ipdopd_sin_tab[abs(ps->ipd_index[env][bk])];
                 RE(ps->opd_prev[bk][i]) = ipdopd_cos_tab[abs(ps->opd_index[env][bk])];
                 IM(ps->opd_prev[bk][i]) = ipdopd_sin_tab[abs(ps->opd_index[env][bk])];
+
                 /* add current value */
+#ifdef FIXED_POINT
+                /* extra halving to avoid overflows */
+                RE(tempLeft) += RE(ps->ipd_prev[bk][i]) >> 1;
+                IM(tempLeft) += IM(ps->ipd_prev[bk][i]) >> 1;
+                RE(tempRight) += RE(ps->opd_prev[bk][i]) >> 1;
+                IM(tempRight) += IM(ps->opd_prev[bk][i]) >> 1;
+#else
                 RE(tempLeft) += RE(ps->ipd_prev[bk][i]);
                 IM(tempLeft) += IM(ps->ipd_prev[bk][i]);
                 RE(tempRight) += RE(ps->opd_prev[bk][i]);
                 IM(tempRight) += IM(ps->opd_prev[bk][i]);
+#endif
+
                 /* ringbuffer index */
                 if(i == 0) { i = 2; }
                 i--;
+
                 /* get value before previous */
-                /* dividing by 2, shift right 1 bit */
-                RE(tempLeft) += (RE(ps->ipd_prev[bk][i]) >> 1);
-                IM(tempLeft) += (IM(ps->ipd_prev[bk][i]) >> 1);
-                RE(tempRight) += (RE(ps->opd_prev[bk][i]) >> 1);
-                IM(tempRight) += (IM(ps->opd_prev[bk][i]) >> 1);
+#ifdef FIXED_POINT
+                /* dividing by 2*2, shift right 2 bits; extra halving to avoid overflows */
+                RE(tempLeft) += (RE(ps->ipd_prev[bk][i]) >> 2);
+                IM(tempLeft) += (IM(ps->ipd_prev[bk][i]) >> 2);
+                RE(tempRight) += (RE(ps->opd_prev[bk][i]) >> 2);
+                IM(tempRight) += (IM(ps->opd_prev[bk][i]) >> 2);
+#else
+                RE(tempLeft) += MUL_F(RE(ps->ipd_prev[bk][i]), FRAC_CONST(0.5));
+                IM(tempLeft) += MUL_F(IM(ps->ipd_prev[bk][i]), FRAC_CONST(0.5));
+                RE(tempRight) += MUL_F(RE(ps->opd_prev[bk][i]), FRAC_CONST(0.5));
+                IM(tempRight) += MUL_F(IM(ps->opd_prev[bk][i]), FRAC_CONST(0.5));
+#endif
+
+#if 0 /* original code */
+                ipd = (float)atan2(IM(tempLeft), RE(tempLeft));
+                opd = (float)atan2(IM(tempRight), RE(tempRight));
+
+                /* phase rotation */
+                RE(phaseLeft) = (float)cos(opd);
+                IM(phaseLeft) = (float)sin(opd);
+                opd -= ipd;
+                RE(phaseRight) = (float)cos(opd);
+                IM(phaseRight) = (float)sin(opd);
+#else
+
+                // x = IM(tempLeft)
+                // y = RE(tempLeft)
+                // p = IM(tempRight)
+                // q = RE(tempRight)
+                // cos(atan2(x,y)) = y/sqrt((x*x) + (y*y))
+                // sin(atan2(x,y)) = x/sqrt((x*x) + (y*y))
+                // cos(atan2(x,y)-atan2(p,q)) = (y*q + x*p) / ( sqrt((x*x) + (y*y)) * sqrt((p*p) + (q*q)) );
+                // sin(atan2(x,y)-atan2(p,q)) = (x*q - y*p) / ( sqrt((x*x) + (y*y)) * sqrt((p*p) + (q*q)) );
+
                 xy = magnitude_c(tempRight);
                 pq = magnitude_c(tempLeft);
+
                 if(xy != 0) {
-                    RE(phaseLeft) = DIV_R(RE(tempRight), xy);
-                    IM(phaseLeft) = DIV_R(IM(tempRight), xy);
+                    RE(phaseLeft) = DIV_F(RE(tempRight), xy);
+                    IM(phaseLeft) = DIV_F(IM(tempRight), xy);
                 }
                 else {
                     RE(phaseLeft) = 0;
                     IM(phaseLeft) = 0;
                 }
-                xypq = MUL_R(xy, pq);
-                if(xypq != 0) {
-                    int32_t tmp1 = MUL_R(RE(tempRight), RE(tempLeft)) + MUL_R(IM(tempRight), IM(tempLeft));
-                    int32_t tmp2 = MUL_R(IM(tempRight), RE(tempLeft)) - MUL_R(RE(tempRight), IM(tempLeft));
 
-                    RE(phaseRight) = DIV_R(tmp1, xypq);
-                    IM(phaseRight) = DIV_R(tmp2, xypq);
+                xypq = MUL_F(xy, pq);
+
+                if(xypq != 0) {
+                    int32_t tmp1 = MUL_F(RE(tempRight), RE(tempLeft)) + MUL_F(IM(tempRight), IM(tempLeft));
+                    int32_t tmp2 = MUL_F(IM(tempRight), RE(tempLeft)) - MUL_F(RE(tempRight), IM(tempLeft));
+
+                    RE(phaseRight) = DIV_F(tmp1, xypq);
+                    IM(phaseRight) = DIV_F(tmp2, xypq);
                 }
                 else {
                     RE(phaseRight) = 0;
                     IM(phaseRight) = 0;
                 }
+
+#endif
+
                 /* MUL_F(COEF, REAL) = COEF */
-                IM(h11) = MUL_R(RE(h11), IM(phaseLeft));
-                IM(h12) = MUL_R(RE(h12), IM(phaseRight));
-                IM(h21) = MUL_R(RE(h21), IM(phaseLeft));
-                IM(h22) = MUL_R(RE(h22), IM(phaseRight));
-                RE(h11) = MUL_R(RE(h11), RE(phaseLeft));
-                RE(h12) = MUL_R(RE(h12), RE(phaseRight));
-                RE(h21) = MUL_R(RE(h21), RE(phaseLeft));
-                RE(h22) = MUL_R(RE(h22), RE(phaseRight));
+                IM(h11) = MUL_F(RE(h11), IM(phaseLeft));
+                IM(h12) = MUL_F(RE(h12), IM(phaseRight));
+                IM(h21) = MUL_F(RE(h21), IM(phaseLeft));
+                IM(h22) = MUL_F(RE(h22), IM(phaseRight));
+
+                RE(h11) = MUL_F(RE(h11), RE(phaseLeft));
+                RE(h12) = MUL_F(RE(h12), RE(phaseRight));
+                RE(h21) = MUL_F(RE(h21), RE(phaseLeft));
+                RE(h22) = MUL_F(RE(h22), RE(phaseRight));
             }
+
             /* length of the envelope n_e+1 - n_e (in time samples) */
             /* 0 < L <= 32: integer */
             L = (int32_t)(ps->border_position[env + 1] - ps->border_position[env]);
+
             /* obtain final H_xy by means of linear interpolation */
             RE(deltaH11) = (RE(h11) - RE(ps->h11_prev[gr])) / L;
             RE(deltaH12) = (RE(h12) - RE(ps->h12_prev[gr])) / L;
             RE(deltaH21) = (RE(h21) - RE(ps->h21_prev[gr])) / L;
             RE(deltaH22) = (RE(h22) - RE(ps->h22_prev[gr])) / L;
+
             RE(H11) = RE(ps->h11_prev[gr]);
             RE(H12) = RE(ps->h12_prev[gr]);
             RE(H21) = RE(ps->h21_prev[gr]);
             RE(H22) = RE(ps->h22_prev[gr]);
+            IM(H11) = IM(H12) = IM(H21) = IM(H22) = 0;
+
             RE(ps->h11_prev[gr]) = RE(h11);
             RE(ps->h12_prev[gr]) = RE(h12);
             RE(ps->h21_prev[gr]) = RE(h21);
             RE(ps->h22_prev[gr]) = RE(h22);
+
             /* only calculate imaginary part when needed */
             if((ps->enable_ipdopd) && (bk < nr_ipdopd_par)) {
                 /* obtain final H_xy by means of linear interpolation */
@@ -4225,25 +4416,30 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                 IM(deltaH12) = (IM(h12) - IM(ps->h12_prev[gr])) / L;
                 IM(deltaH21) = (IM(h21) - IM(ps->h21_prev[gr])) / L;
                 IM(deltaH22) = (IM(h22) - IM(ps->h22_prev[gr])) / L;
+
                 IM(H11) = IM(ps->h11_prev[gr]);
                 IM(H12) = IM(ps->h12_prev[gr]);
                 IM(H21) = IM(ps->h21_prev[gr]);
                 IM(H22) = IM(ps->h22_prev[gr]);
+
                 if((NEGATE_IPD_MASK & ps->map_group2bk[gr]) != 0) {
                     IM(deltaH11) = -IM(deltaH11);
                     IM(deltaH12) = -IM(deltaH12);
                     IM(deltaH21) = -IM(deltaH21);
                     IM(deltaH22) = -IM(deltaH22);
+
                     IM(H11) = -IM(H11);
                     IM(H12) = -IM(H12);
                     IM(H21) = -IM(H21);
                     IM(H22) = -IM(H22);
                 }
+
                 IM(ps->h11_prev[gr]) = IM(h11);
                 IM(ps->h12_prev[gr]) = IM(h12);
                 IM(ps->h21_prev[gr]) = IM(h21);
                 IM(ps->h22_prev[gr]) = IM(h22);
             }
+
             /* apply H_xy to the current envelope band of the decorrelated subband */
             for(n = ps->border_position[env]; n < ps->border_position[env + 1]; n++) {
                 /* addition finalises the interpolation over every n */
@@ -4257,9 +4453,11 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                     IM(H21) += IM(deltaH21);
                     IM(H22) += IM(deltaH22);
                 }
+
                 /* channel is an alias to the subband */
                 for(sb = ps->group_border[gr]; sb < maxsb; sb++) {
-                    complex_t inLeft, inRight;
+                    complex_t inLeft, inRight; // precision_of in(Left|Right) == precision_of X_(left|right)
+
                     /* load decorrelated samples */
                     if(gr < ps->num_hybrid_groups) {
                         RE(inLeft) = RE(X_hybrid_left[n][sb]);
@@ -4273,11 +4471,15 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                         RE(inRight) = RE(X_right[n][sb]);
                         IM(inRight) = IM(X_right[n][sb]);
                     }
+
+                    /* precision_of temp(Left|Right) == precision_of X_(left|right) */
+
                     /* apply mixing */
                     RE(tempLeft) = MUL_C(RE(H11), RE(inLeft)) + MUL_C(RE(H21), RE(inRight));
                     IM(tempLeft) = MUL_C(RE(H11), IM(inLeft)) + MUL_C(RE(H21), IM(inRight));
                     RE(tempRight) = MUL_C(RE(H12), RE(inLeft)) + MUL_C(RE(H22), RE(inRight));
                     IM(tempRight) = MUL_C(RE(H12), IM(inLeft)) + MUL_C(RE(H22), IM(inRight));
+
                     /* only perform imaginary operations when needed */
                     if((ps->enable_ipdopd) && (bk < nr_ipdopd_par)) {
                         /* apply rotation */
@@ -4286,6 +4488,7 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                         RE(tempRight) -= MUL_C(IM(H12), IM(inLeft)) + MUL_C(IM(H22), IM(inRight));
                         IM(tempRight) += MUL_C(IM(H12), RE(inLeft)) + MUL_C(IM(H22), RE(inRight));
                     }
+
                     /* store final samples */
                     if(gr < ps->num_hybrid_groups) {
                         RE(X_hybrid_left[n][sb]) = RE(tempLeft);
@@ -4301,6 +4504,7 @@ static void ps_mix_phase(ps_info_t* ps, complex_t* X_left[64], complex_t* X_righ
                     }
                 }
             }
+
             /* shift phase smoother's circular buffer index */
             ps->phase_hist++;
             if(ps->phase_hist == 2) { ps->phase_hist = 0; }
@@ -4443,6 +4647,7 @@ void lt_prediction(ic_stream_t* ics, ltp_info_t* ltp, int32_t* spec, int16_t* lt
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#ifdef FIXED_POINT
 static inline int16_t real_to_int16(int32_t sig_in) {
     if(sig_in >= 0) {
         sig_in += (1 << (REAL_BITS - 1));
@@ -4454,6 +4659,22 @@ static inline int16_t real_to_int16(int32_t sig_in) {
     }
     return (sig_in >> REAL_BITS);
 }
+#else
+static INLINE int16_t real_to_int16(real_t sig_in){
+    if (sig_in >= 0) {
+#ifndef HAS_LRINTF
+        sig_in += 0.5f;
+#endif
+        if (sig_in >= 32768.0f) return 32767;
+    } else {
+#ifndef HAS_LRINTF
+        sig_in += -0.5f;
+#endif
+        if (sig_in <= -32768.0f) return -32768;
+    }
+    return (int16_t)lrintf(sig_in);
+}
+#endif
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void lt_update_state(int16_t* lt_pred_stat, int32_t* time, int32_t* overlap, uint16_t frame_len, uint8_t object_type) {
     (void)object_type;
@@ -4525,7 +4746,9 @@ void faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
     uint16_t  k;
     complex_t x;
 #ifdef ALLOW_SMALL_FRAMELENGTH
-    int32_t scale, b_scale = 0;
+#ifdef FIXED_POINT
+    int32_t scale = 0, b_scale = 0;
+#endif
 #endif
     complex_t* sincos = mdct->sincos;
     uint16_t   N = mdct->N;
@@ -4533,6 +4756,7 @@ void faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
     uint16_t   N4 = N >> 2;
     uint16_t   N8 = N >> 3;
 #ifdef ALLOW_SMALL_FRAMELENGTH
+#ifdef FIXED_POINT
     /* detect non-power of 2 */
     if(N & (N - 1)) {
         /* adjust scale for non-power of 2 MDCT */
@@ -4540,6 +4764,7 @@ void faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
         b_scale = 1;
         scale = COEF_CONST(1.0666666666666667);
     }
+#endif
 #endif
     /* pre-IFFT complex multiplication */
     for(k = 0; k < N4; k++) { ComplexMult(&IM(m_Z1_imdct[k]), &RE(m_Z1_imdct[k]), X_in[2 * k], X_in[N2 - 1 - 2 * k], RE(sincos[k]), IM(sincos[k])); }
@@ -4551,11 +4776,13 @@ void faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
         IM(x) = IM(m_Z1_imdct[k]);
         ComplexMult(&IM(m_Z1_imdct[k]), &RE(m_Z1_imdct[k]), IM(x), RE(x), RE(sincos[k]), IM(sincos[k]));
 #ifdef ALLOW_SMALL_FRAMELENGTH
+#ifdef FIXED_POINT
         /* non-power of 2 MDCT scaling */
         if(b_scale) {
             RE(m_Z1_imdct[k]) = MUL_C(RE(m_Z1_imdct[k]), scale);
             IM(m_Z1_imdct[k]) = MUL_C(IM(m_Z1_imdct[k]), scale);
         }
+#endif
 #endif
     }
     /* reordering */
@@ -4587,14 +4814,19 @@ void faad_mdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out) {
     uint16_t   N2 = N >> 1;
     uint16_t   N4 = N >> 2;
     uint16_t   N8 = N >> 3;
-    int32_t    scale = REAL_CONST(4.0 / N);
-
+#ifndef FIXED_POINT
+    int32_t    scale = REAL_CONST(N);
+#else
+	int32_t scale = REAL_CONST(4.0 / N);
+#endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
+#ifdef FIXED_POINT
     /* detect non-power of 2 */
     if(N & (N - 1)) {
         /* adjust scale for non-power of 2 MDCT = sqrt(2048/1920) */
         scale = MUL_C(scale, COEF_CONST(1.0327955589886444));
     }
+#endif
 #endif
     for(k = 0; k < N8; k++) { /* pre-FFT complex multiplication */
         uint16_t n = k << 1;
@@ -5053,48 +5285,99 @@ uint8_t rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfile_t* ld_esc, uint8_t* intensity_used) {
-    int8_t  g, sfb;
-    int8_t  t = 0;
-    int8_t  error = 0;
-    int8_t  noise_pcm_flag = 1;
+    // int8_t  g, sfb;
+    // int8_t  t = 0;
+    // int8_t  error = 0;
+    // int8_t  noise_pcm_flag = 1;
+    // int16_t scale_factor = ics->global_gain;
+    // int16_t is_position = 0;
+    // int16_t noise_energy = ics->global_gain - 90 - 256;
+
+    // for(g = 0; g < ics->num_window_groups; g++) {
+    //     for(sfb = 0; sfb < ics->max_sfb; sfb++) {
+    //         if(error) { ics->scale_factors[g][sfb] = 0; }
+    //         else {
+    //             switch(ics->sfb_cb[g][sfb]) {
+    //             case ZERO_HCB: /* zero book */ ics->scale_factors[g][sfb] = 0; break;
+    //             case INTENSITY_HCB: /* intensity books */
+    //             case INTENSITY_HCB2:
+    //                 *intensity_used = 1;
+    //                 /* decode intensity position */
+    //                 t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+    //                 is_position += t;
+    //                 ics->scale_factors[g][sfb] = is_position;
+    //                 break;
+    //             case NOISE_HCB: /* noise books */
+    //                 /* decode noise energy */
+    //                 if(noise_pcm_flag) {
+    //                     int16_t n = ics->dpcm_noise_nrg;
+    //                     noise_pcm_flag = 0;
+    //                     noise_energy += n;
+    //                 }
+    //                 else {
+    //                     t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+    //                     noise_energy += t;
+    //                 }
+    //                 ics->scale_factors[g][sfb] = noise_energy;
+    //                 break;
+    //             default: /* spectral books */
+    //                 /* decode scale factor */
+    //                 t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+    //                 scale_factor += t;
+    //                 if(scale_factor < 0) return 4;
+    //                 ics->scale_factors[g][sfb] = scale_factor;
+    //                 break;
+    //             }
+    //             if(t == 99) { error = 1; }
+    //         }
+    //     }
+    // }
+    // return 0;
+
+    int8_t g, sfb;
+    int8_t t = 0;
+    int8_t error = ld_sf->error | ld_esc->error;
+    int8_t noise_pcm_flag = 1;
+
     int16_t scale_factor = ics->global_gain;
     int16_t is_position = 0;
     int16_t noise_energy = ics->global_gain - 90 - 256;
+    int16_t scale_factor_max = 255;
 
     for(g = 0; g < ics->num_window_groups; g++) {
         for(sfb = 0; sfb < ics->max_sfb; sfb++) {
             if(error) { ics->scale_factors[g][sfb] = 0; }
             else {
                 switch(ics->sfb_cb[g][sfb]) {
-                case ZERO_HCB: /* zero book */ ics->scale_factors[g][sfb] = 0; break;
-                case INTENSITY_HCB: /* intensity books */
-                case INTENSITY_HCB2:
-                    *intensity_used = 1;
-                    /* decode intensity position */
-                    t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-                    is_position += t;
-                    ics->scale_factors[g][sfb] = is_position;
-                    break;
-                case NOISE_HCB: /* noise books */
-                    /* decode noise energy */
-                    if(noise_pcm_flag) {
-                        int16_t n = ics->dpcm_noise_nrg;
-                        noise_pcm_flag = 0;
-                        noise_energy += n;
-                    }
-                    else {
-                        t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-                        noise_energy += t;
-                    }
-                    ics->scale_factors[g][sfb] = noise_energy;
-                    break;
-                default: /* spectral books */
-                    /* decode scale factor */
-                    t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-                    scale_factor += t;
-                    if(scale_factor < 0) return 4;
-                    ics->scale_factors[g][sfb] = scale_factor;
-                    break;
+                    case ZERO_HCB: /* zero book */ ics->scale_factors[g][sfb] = 0; break;
+                    case INTENSITY_HCB: /* intensity books */
+                    case INTENSITY_HCB2:
+                        *intensity_used = 1;
+                        /* decode intensity position */
+                        t = rvlc_huffman_sf(ld_sf, ld_esc /*, +1*/);
+                        is_position += t;
+                        ics->scale_factors[g][sfb] = is_position;
+                        break;
+                    case NOISE_HCB: /* noise books */
+                        /* decode noise energy */
+                        if(noise_pcm_flag) {
+                            int16_t n = ics->dpcm_noise_nrg;
+                            noise_pcm_flag = 0;
+                            noise_energy += n;
+                        }
+                        else {
+                            t = rvlc_huffman_sf(ld_sf, ld_esc /*, +1*/);
+                            noise_energy += t;
+                        }
+                        ics->scale_factors[g][sfb] = noise_energy;
+                        break;
+                    default: /* spectral books */
+                        /* decode scale factor */
+                        t = rvlc_huffman_sf(ld_sf, ld_esc /*, +1*/);
+                        scale_factor += t;
+                        if(scale_factor < 0 || scale_factor > 255) return 4;
+                        ics->scale_factors[g][sfb] = min(scale_factor, scale_factor_max);
+                        break;
                 }
                 if(t == 99) { error = 1; }
             }
@@ -5103,55 +5386,62 @@ static uint8_t rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfil
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-static int8_t rvlc_huffman_sf(bitfile_t* ld_sf, bitfile_t* ld_esc, int8_t direction) {
-    uint8_t                  i, j;
-    int8_t                   index;
+static int8_t rvlc_huffman_sf(bitfile_t *ld_sf, bitfile_t *ld_esc /*, int8_t direction*/){
+    uint16_t                 i, j;
+    int16_t                  index;
     uint32_t                 cw;
     const rvlc_huff_table_t* h = book_rvlc;
+    int8_t                   direction = +1;
 
     i = h->len;
-    if(direction > 0) { cw = faad_getbits(ld_sf, i); }
-    else { cw = faad_getbits_rev(ld_sf, i); }
+    if(direction > 0) cw = faad_getbits(ld_sf, i);
+    else cw = 0 /* faad_getbits_rev(ld_sf, i DEBUGVAR(1,0,"")) */;
+
     while((cw != h->cw) && (i < 10)) {
         h++;
         j = h->len - i;
         i += j;
         cw <<= j;
         if(direction > 0) cw |= faad_getbits(ld_sf, j);
-        else
-            cw |= faad_getbits_rev(ld_sf, j);
+        else cw |= 0 /* faad_getbits_rev(ld_sf, j DEBUGVAR(1,0,"")) */;
     }
+
     index = h->index;
+
     if(index == +ESC_VAL) {
-        int8_t esc = rvlc_huffman_esc(ld_esc, direction);
+        int8_t esc = rvlc_huffman_esc(ld_esc /*, direction*/);
         if(esc == 99) return 99;
         index += esc;
     }
     if(index == -ESC_VAL) {
-        int8_t esc = rvlc_huffman_esc(ld_esc, direction);
+        int8_t esc = rvlc_huffman_esc(ld_esc /*, direction*/);
         if(esc == 99) return 99;
         index -= esc;
     }
-    return index;
+
+    return (int8_t)index;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-static int8_t rvlc_huffman_esc(bitfile_t* ld, int8_t direction) {
-    uint8_t                  i, j;
+static int8_t rvlc_huffman_esc(bitfile_t* ld /*, int8_t direction*/) {
+    uint16_t                 i, j;
     uint32_t                 cw;
     const rvlc_huff_table_t* h = book_escape;
+    int8_t                   direction = +1;
 
     i = h->len;
-    if(direction > 0) { cw = faad_getbits(ld, i); }
-    else { cw = faad_getbits_rev(ld, i); }
+    if(direction > 0) cw = faad_getbits(ld, i);
+    else cw = 0 /* faad_getbits_rev(ld, i DEBUGVAR(1,0,"")) */;
+
     while((cw != h->cw) && (i < 21)) {
         h++;
         j = h->len - i;
         i += j;
         cw <<= j;
-        if(direction > 0) { cw |= faad_getbits(ld, j); }
-        else { cw |= faad_getbits_rev(ld, j); }
+        if(direction > 0) cw |= faad_getbits(ld, j);
+        else cw |= 0 /* faad_getbits_rev(ld, j DEBUGVAR(1,0,"")) */;
     }
-    return h->index;
+
+    return (int8_t)h->index;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // FFT decimation in frequency,  4*16*2+16=128+16=144 multiplications, 6*16*2+10*8+4*16*2=192+80+128=400 additions
@@ -9187,7 +9477,7 @@ static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16
     return error;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void faad_free(void* b);
+static void faad_free(void* b) {free(b); b = NULL;};
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t output_channels) {
     (void)output_channels;
@@ -9754,6 +10044,12 @@ static float flt_round(float_t pf) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint8_t pred){
+
+#ifdef FIXED_POINT
+    // main codepath is simply not ready for FIXED_POINT, better not to run it at all.
+    if (pred)
+        *output = input;
+#else
     uint16_t tmp;
     int16_t i, j;
     int32_t dr1;
@@ -9820,6 +10116,7 @@ static void ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint
     state->COR[1] = quant_pred(COR[1]);
     state->VAR[0] = quant_pred(VAR[0]);
     state->VAR[1] = quant_pred(VAR[1]);
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void pns_reset_pred_state(ic_stream_t *ics, pred_state_t *state){
