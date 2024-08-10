@@ -9079,71 +9079,102 @@ static inline int32_t iquant(int16_t q, const int32_t* tab, uint8_t* error) {
   - Within a scalefactor window band, the coefficients are in ascending spectral order.
 */
 static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16_t* quant_data, int32_t* spec_data, uint16_t frame_len) {
-    (void)frame_len;
+
     static const int32_t pow2_table[] = {
-        COEF_CONST(1.0), COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
-        COEF_CONST(1.4142135623730950488016887242097),                  /* 2^0.5 */
-        COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
+        COEF_CONST(1.0),
+        COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
+        COEF_CONST(1.4142135623730950488016887242097), /* 2^0.5 */
+        COEF_CONST(1.6817928305074290860622509524664) /* 2^0.75 */
     };
-    const int32_t* tab = iq_table;
-    uint8_t        g, sfb, win;
-    uint16_t       width, bin, k, gindex, wa, wb;
-    uint8_t        error = 0; /* Init error flag */
+    const int32_t *tab = iq_table;
+
+    uint8_t g, sfb, win;
+    uint16_t width, bin, k, gindex;
+    uint8_t error = 0; /* Init error flag */
+    int32_t sat_shift_mask = 0;
+
     k = 0;
     gindex = 0;
-    for(g = 0; g < ics->num_window_groups; g++) {
+
+    /* In this case quant_to_spec is no-op and spec_data remains undefined.
+     * Without peeking into AAC specification, there is no strong evidence if
+     * such streams are invalid -> just calm down MSAN. */
+    if (ics->num_swb == 0)
+        memset(spec_data, 0, frame_len * sizeof(int32_t));
+
+    for (g = 0; g < ics->num_window_groups; g++) {
         uint16_t j = 0;
         uint16_t gincrease = 0;
         uint16_t win_inc = ics->swb_offset[ics->num_swb];
-        for(sfb = 0; sfb < ics->num_swb; sfb++) {
+
+        for (sfb = 0; sfb < ics->num_swb; sfb++) {
             int32_t exp, frac;
-            width = ics->swb_offset[sfb + 1] - ics->swb_offset[sfb];
-            /* this could be scalefactor for IS or PNS, those can be negative or bigger then 255 */
-            /* just ignore them */
-            if(ics->scale_factors[g][sfb] < 0 || ics->scale_factors[g][sfb] > 255) {
-                exp = 0;
-                frac = 0;
-            }
-            else {
-                /* ics->scale_factors[g][sfb] must be between 0 and 255 */
-                exp = (ics->scale_factors[g][sfb] /* - 100 */) >> 2;
-                /* frac must always be > 0 */
-                frac = (ics->scale_factors[g][sfb] /* - 100 */) & 3;
-            }
-            exp -= 25;
+            uint16_t wa = gindex + j;
+            int16_t scale_factor = ics->scale_factors[g][sfb];
+
+            width = ics->swb_offset[sfb+1] - ics->swb_offset[sfb];
+
+            scale_factor -= 100;
             /* IMDCT pre-scaling */
-            if(hDecoder->object_type == LD) { exp -= 6 /*9*/; }
-            else {
-                if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) exp -= 4 /*7*/;
+            if (hDecoder->object_type == LD)
+            {
+                scale_factor -= 24 /*9*/;
+            } else {
+                if (ics->window_sequence == EIGHT_SHORT_SEQUENCE)
+                    scale_factor -= 16 /*7*/;
                 else
-                    exp -= 7 /*10*/;
+                    scale_factor -= 28 /*10*/;
             }
-            wa = gindex + j;
-            for(win = 0; win < ics->window_group_length[g]; win++) {
-                for(bin = 0; bin < width; bin += 4) {
-                    int32_t iq0 = iquant(quant_data[k + 0], tab, &error);
-                    int32_t iq1 = iquant(quant_data[k + 1], tab, &error);
-                    int32_t iq2 = iquant(quant_data[k + 2], tab, &error);
-                    int32_t iq3 = iquant(quant_data[k + 3], tab, &error);
-                    wb = wa + bin;
-                    if(exp < 0) {
-                        spec_data[wb + 0] = iq0 >>= -exp;
-                        spec_data[wb + 1] = iq1 >>= -exp;
-                        spec_data[wb + 2] = iq2 >>= -exp;
-                        spec_data[wb + 3] = iq3 >>= -exp;
+            if (scale_factor > 120)
+                scale_factor = 120;  /* => exp <= 30 */
+
+            /* scale_factor for IS or PNS, has different meaning; fill with almost zeroes */
+            if (is_intensity(ics, g, sfb) || is_noise(ics, g, sfb)) {
+                scale_factor = 0;
+            }
+
+            /* scale_factor must be between 0 and 255 */
+            exp = (scale_factor /* - 100 */) >> 2;
+            /* frac must always be > 0 */
+            frac = (scale_factor /* - 100 */) & 3;
+
+            if (exp > 0)
+                sat_shift_mask = SAT_SHIFT_MASK(exp);
+
+            for (win = 0; win < ics->window_group_length[g]; win++){
+                for (bin = 0; bin < width; bin += 4) {
+                    uint16_t wb = wa + bin;
+
+                    int32_t iq0 = iquant(quant_data[k+0], tab, &error);
+                    int32_t iq1 = iquant(quant_data[k+1], tab, &error);
+                    int32_t iq2 = iquant(quant_data[k+2], tab, &error);
+                    int32_t iq3 = iquant(quant_data[k+3], tab, &error);
+
+                    if (exp == -32) {
+                        spec_data[wb+0] = 0;
+                        spec_data[wb+1] = 0;
+                        spec_data[wb+2] = 0;
+                        spec_data[wb+3] = 0;
                     }
-                    else {
-                        spec_data[wb + 0] = iq0 <<= exp;
-                        spec_data[wb + 1] = iq1 <<= exp;
-                        spec_data[wb + 2] = iq2 <<= exp;
-                        spec_data[wb + 3] = iq3 <<= exp;
+                    else if (exp <= 0) {
+                        spec_data[wb+0] = iq0 >> -exp;
+                        spec_data[wb+1] = iq1 >> -exp;
+                        spec_data[wb+2] = iq2 >> -exp;
+                        spec_data[wb+3] = iq3 >> -exp;
                     }
-                    if(frac != 0) {
-                        spec_data[wb + 0] = MUL_C(spec_data[wb + 0], pow2_table[frac]);
-                        spec_data[wb + 1] = MUL_C(spec_data[wb + 1], pow2_table[frac]);
-                        spec_data[wb + 2] = MUL_C(spec_data[wb + 2], pow2_table[frac]);
-                        spec_data[wb + 3] = MUL_C(spec_data[wb + 3], pow2_table[frac]);
+                    else { /* exp > 0 */
+                        spec_data[wb+0] = SAT_SHIFT(iq0, exp, sat_shift_mask);
+                        spec_data[wb+1] = SAT_SHIFT(iq1, exp, sat_shift_mask);
+                        spec_data[wb+2] = SAT_SHIFT(iq2, exp, sat_shift_mask);
+                        spec_data[wb+3] = SAT_SHIFT(iq3, exp, sat_shift_mask);
                     }
+                    if (frac != 0) {
+                        spec_data[wb+0] = MUL_C(spec_data[wb+0],pow2_table[frac]);
+                        spec_data[wb+1] = MUL_C(spec_data[wb+1],pow2_table[frac]);
+                        spec_data[wb+2] = MUL_C(spec_data[wb+2],pow2_table[frac]);
+                        spec_data[wb+3] = MUL_C(spec_data[wb+3],pow2_table[frac]);
+                    }
+
                     gincrease += 4;
                     k += 4;
                 }
@@ -9575,18 +9606,6 @@ UNUSED_FUNCTION static void DCT3_4_unscaled(int32_t* y, int32_t* x) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint32_t showbits_hcr(bits_t_t* ld, uint8_t bits) {
-    // if(bits == 0) return 0;
-    // if(ld->len <= 32) {
-    //     /* huffman_spectral_data_2 needs to read more than may be available, bits maybe
-    //        > ld->len, deliver 0 than */
-    //     if(ld->len >= bits) return ((ld->bufa >> (ld->len - bits)) & (0xFFFFFFFF >> (32 - bits)));
-    //     else
-    //         return ((ld->bufa << (bits - ld->len)) & (0xFFFFFFFF >> (32 - bits)));
-    // }
-    // else {
-    //     if((ld->len - bits) < 32) { return ((ld->bufb & (0xFFFFFFFF >> (64 - ld->len))) << (bits - ld->len + 32)) | (ld->bufa >> (ld->len - bits)); }
-    //     else { return ((ld->bufb >> (ld->len - bits - 32)) & (0xFFFFFFFF >> (32 - bits))); }
-    // }
     uint32_t mask;
     int8_t tail;
     if (bits == 0) return 0;

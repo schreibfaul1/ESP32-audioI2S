@@ -246,6 +246,8 @@ typedef const int8_t (*sbr_huff_tab)[2];
 #define segmentWidth(cb)  min(maxCwLen[cb], ics->length_of_longest_codeword)
 #define DIV(A, B)         (((int64_t)A << REAL_BITS) / B)
 #define bit_set(A, B)     ((A) & (1 << (B)))
+#define SAT_SHIFT_MASK(E) (~0u << (31u - (E)))
+#define SAT_SHIFT(V,E,M) (((((V) >> ((E) + 1)) ^ (V)) & (M)) ? (((V) < 0) ? (int32_t)0x80000000 : 0x7FFFFFFF) : ((int32_t)((uint32_t)(V) << (E))))
 
 #define step(shift)                                  \
     if((0x40000000l >> shift) + root <= value) {     \
