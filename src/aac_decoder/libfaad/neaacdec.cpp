@@ -8014,20 +8014,24 @@ static uint8_t sbr_data(bitfile_t* ld, sbr_info_t* sbr) {
 /* table 5 */
 static uint8_t sbr_single_channel_element(bitfile_t* ld, sbr_info_t* sbr) {
     uint8_t result;
-
     if(faad_get1bit(ld)) { faad_getbits(ld, 4); }
     if((result = sbr_grid(ld, sbr, 0)) > 0) return result;
     sbr_dtdf(ld, sbr, 0);
     invf_mode(ld, sbr, 0);
     sbr_envelope(ld, sbr, 0);
     sbr_noise(ld, sbr, 0);
+
+#ifndef FIXED_POINT
+    envelope_noise_dequantisation(sbr, 0);
+#endif
+
     memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
     sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
     if(sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
     sbr->bs_extended_data = faad_get1bit(ld);
     if(sbr->bs_extended_data) {
         uint16_t nr_bits_left;
-#if(defined(PS_DEC))
+#if(defined(PS_DEC) || defined(DRM_PS))
         uint8_t ps_ext_read = 0;
 #endif
         uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
@@ -8037,15 +8041,30 @@ static uint8_t sbr_single_channel_element(bitfile_t* ld, sbr_info_t* sbr) {
             uint16_t tmp_nr_bits = 0;
             sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
             tmp_nr_bits += 2;
+
             /* allow only 1 PS extension element per extension data */
-#if(defined(PS_DEC))
+#if(defined(PS_DEC) || defined(DRM_PS))
+    #if(defined(PS_DEC) && defined(DRM_PS))
+            if(sbr->bs_extension_id == EXTENSION_ID_PS || sbr->bs_extension_id == DRM_PARAMETRIC_STEREO)
+    #else
+        #ifdef PS_DEC
+            if(sbr->bs_extension_id == EXTENSION_ID_PS)
+        #else
+            #ifdef DRM_PS
+            if(sbr->bs_extension_id == DRM_PARAMETRIC_STEREO)
+            #endif
+        #endif
+    #endif
             {
                 if(ps_ext_read == 0) { ps_ext_read = 1; }
                 else {
                     /* to be safe make it 3, will switch to "default"
                      * in sbr_extension() */
-
+    #ifdef DRM
+                    return 1;
+    #else
                     sbr->bs_extension_id = 3;
+    #endif
                 }
             }
 #endif
@@ -8063,12 +8082,12 @@ static uint8_t sbr_single_channel_element(bitfile_t* ld, sbr_info_t* sbr) {
 /* table 6 */
 static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
     uint8_t n, result;
-
     if(faad_get1bit(ld)) {
         faad_getbits(ld, 4);
         faad_getbits(ld, 4);
     }
     sbr->bs_coupling = faad_get1bit(ld);
+
     if(sbr->bs_coupling) {
         if((result = sbr_grid(ld, sbr, 0)) > 0) return result;
         /* need to copy some data from left to right */
@@ -8092,8 +8111,10 @@ static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
         sbr_noise(ld, sbr, 1);
         memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
         memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
+
         sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
         if(sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
+
         sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
         if(sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
     }
@@ -8102,8 +8123,10 @@ static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
         uint8_t saved_L_E = sbr->L_E[0];
         uint8_t saved_L_Q = sbr->L_Q[0];
         uint8_t saved_frame_class = sbr->bs_frame_class[0];
+
         for(n = 0; n < saved_L_E; n++) saved_t_E[n] = sbr->t_E[0][n];
         for(n = 0; n < saved_L_Q; n++) saved_t_Q[n] = sbr->t_Q[0][n];
+
         if((result = sbr_grid(ld, sbr, 0)) > 0) return result;
         if((result = sbr_grid(ld, sbr, 1)) > 0) {
             /* restore first channel data as well */
@@ -8112,6 +8135,7 @@ static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
             sbr->L_Q[0] = saved_L_Q;
             for(n = 0; n < 6; n++) sbr->t_E[0][n] = saved_t_E[n];
             for(n = 0; n < 3; n++) sbr->t_Q[0][n] = saved_t_Q[n];
+
             return result;
         }
         sbr_dtdf(ld, sbr, 0);
@@ -8122,28 +8146,43 @@ static uint8_t sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr) {
         sbr_envelope(ld, sbr, 1);
         sbr_noise(ld, sbr, 0);
         sbr_noise(ld, sbr, 1);
+
         memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
         memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
+
         sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
         if(sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
+
         sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
         if(sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
     }
+#ifndef FIXED_POINT
+    envelope_noise_dequantisation(sbr, 0);
+    envelope_noise_dequantisation(sbr, 1);
+
+    if(sbr->bs_coupling) unmap_envelope_noise(sbr);
+#endif
+
     sbr->bs_extended_data = faad_get1bit(ld);
     if(sbr->bs_extended_data) {
         uint16_t nr_bits_left;
         uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
         if(cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
+
         nr_bits_left = 8 * cnt;
         while(nr_bits_left > 7) {
             uint16_t tmp_nr_bits = 0;
+
             sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
             tmp_nr_bits += 2;
             tmp_nr_bits += sbr_extension(ld, sbr, sbr->bs_extension_id, nr_bits_left);
+
             /* check if the data read is bigger than the number of available bits */
             if(tmp_nr_bits > nr_bits_left) return 1;
+
             nr_bits_left -= tmp_nr_bits;
         }
+
         /* Corrigendum */
         if(nr_bits_left > 0) { faad_getbits(ld, nr_bits_left); }
     }
@@ -9220,50 +9259,83 @@ static uint8_t section_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfil
 static uint8_t decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
     uint8_t g, sfb;
     int16_t t;
-    int8_t  noise_pcm_flag = 1;
+
     int16_t scale_factor = ics->global_gain;
     int16_t is_position = 0;
+    int16_t scale_factor_max = 255;
+#ifdef FIXED_POINT
+    /* TODO: consider rolling out to regular build. */
+    #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+    /* The value is inexact, adjusted to current fuzzer findings. */
+    scale_factor_max = 165;
+    #endif // FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+#endif     // FIXED_POINT
+#ifndef DRM
+    int8_t  noise_pcm_flag = 1;
     int16_t noise_energy = ics->global_gain - 90;
+#endif
 
     for(g = 0; g < ics->num_window_groups; g++) {
         for(sfb = 0; sfb < ics->max_sfb; sfb++) {
             switch(ics->sfb_cb[g][sfb]) {
-            case ZERO_HCB: /* zero book */
-                ics->scale_factors[g][sfb] = 0;
-                break;
-            case INTENSITY_HCB: /* intensity books */
-            case INTENSITY_HCB2:
+                case ZERO_HCB: /* zero book */
+                    ics->scale_factors[g][sfb] = 0;
+// #define SF_PRINT
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
+                    break;
+                case INTENSITY_HCB: /* intensity books */
+                case INTENSITY_HCB2:
 
-                /* decode intensity position */
-                t = huffman_scale_factor(ld);
-                is_position += (t - 60);
-                ics->scale_factors[g][sfb] = is_position;
-                break;
-            case NOISE_HCB: /* noise books */
-                /* decode noise energy */
-                if(noise_pcm_flag) {
-                    noise_pcm_flag = 0;
-                    t = (int16_t)faad_getbits(ld, 9) - 256;
-                }
-                else {
+                    /* decode intensity position */
                     t = huffman_scale_factor(ld);
-                    t -= 60;
-                }
-                noise_energy += t;
-                ics->scale_factors[g][sfb] = noise_energy;
-                break;
-            default: /* spectral books */
+                    is_position += (t - 60);
+                    ics->scale_factors[g][sfb] = is_position;
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
 
-                /* ics->scale_factors[g][sfb] must be between 0 and 255 */
+                    break;
+                case NOISE_HCB: /* noise books */
 
-                ics->scale_factors[g][sfb] = 0;
+#ifndef DRM
+                    /* decode noise energy */
+                    if(noise_pcm_flag) {
+                        noise_pcm_flag = 0;
+                        t = (int16_t)faad_getbits(ld, 9) - 256;
+                    }
+                    else {
+                        t = huffman_scale_factor(ld);
+                        t -= 60;
+                    }
+                    noise_energy += t;
+                    ics->scale_factors[g][sfb] = noise_energy;
+    #ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+    #endif
+#else
+                    /* PNS not allowed in DRM */
+                    return 29;
+#endif
 
-                /* decode scale factor */
-                t = huffman_scale_factor(ld);
-                scale_factor += (t - 60);
-                if(scale_factor < 0 || scale_factor > 255) return 4;
-                ics->scale_factors[g][sfb] = scale_factor;
-                break;
+                    break;
+                default: /* spectral books */
+
+                    /* ics->scale_factors[g][sfb] must be between 0 and 255 */
+
+                    ics->scale_factors[g][sfb] = 0;
+
+                    /* decode scale factor */
+                    t = huffman_scale_factor(ld);
+                    scale_factor += (t - 60);
+                    if(scale_factor < 0 || scale_factor > 255) return 4;
+                    ics->scale_factors[g][sfb] = min(scale_factor, scale_factor_max);
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
+
+                    break;
             }
         }
     }
@@ -9832,24 +9904,63 @@ uint8_t window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static inline int32_t iquant(int16_t q, const int32_t* tab, uint8_t* error) {
+#ifdef FIXED_POINT
+    /* For FIXED_POINT the iq_table is prescaled by 3 bits (iq_table[]/8) */
+    /* BIG_IQ_TABLE allows you to use the full 8192 value table, if this is not
+     * defined a 1026 value table and interpolation will be used
+     */
+    #ifndef BIG_IQ_TABLE
     static const int32_t errcorr[] = {REAL_CONST(0),         REAL_CONST(1.0 / 8.0), REAL_CONST(2.0 / 8.0), REAL_CONST(3.0 / 8.0), REAL_CONST(4.0 / 8.0),
-                                      REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
+                                     REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
     int32_t              x1, x2;
-    int16_t              sgn = 1;
+    #endif
+    int16_t sgn = 1;
 
     if(q < 0) {
         q = -q;
         sgn = -1;
     }
-    if(q < IQ_TABLE_SIZE) { return sgn * tab[q]; }
+
+    if(q < IQ_TABLE_SIZE) {
+    // #define IQUANT_PRINT
+    #ifdef IQUANT_PRINT
+        // printf("0x%.8X\n", sgn * tab[q]);
+        printf("%d\n", sgn * tab[q]);
+    #endif
+        return sgn * tab[q];
+    }
+
+    #ifndef BIG_IQ_TABLE
     if(q >= 8192) {
         *error = 17;
         return 0;
     }
+
     /* linear interpolation */
     x1 = tab[q >> 3];
     x2 = tab[(q >> 3) + 1];
     return sgn * 16 * (MUL_R(errcorr[q & 7], (x2 - x1)) + x1);
+    #else
+    *error = 17;
+    return 0;
+    #endif
+
+#else
+    if(q < 0) {
+        /* tab contains a value for all possible q [0,8192] */
+        if(-q < IQ_TABLE_SIZE) return -tab[-q];
+
+        *error = 17;
+        return 0;
+    }
+    else {
+        /* tab contains a value for all possible q [0,8192] */
+        if(q < IQ_TABLE_SIZE) return tab[q];
+
+        *error = 17;
+        return 0;
+    }
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* quant_to_spec: perform dequantisation and scaling and in case of short block it also does the deinterleaving */
@@ -9867,17 +9978,20 @@ static inline int32_t iquant(int16_t q, const int32_t* tab, uint8_t* error) {
 static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16_t* quant_data, int32_t* spec_data, uint16_t frame_len) {
 
     static const int32_t pow2_table[] = {
-        COEF_CONST(1.0),
-        COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
-        COEF_CONST(1.4142135623730950488016887242097), /* 2^0.5 */
-        COEF_CONST(1.6817928305074290860622509524664) /* 2^0.75 */
+        COEF_CONST(1.0), COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
+        COEF_CONST(1.4142135623730950488016887242097),                  /* 2^0.5 */
+        COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
     };
-    const int32_t *tab = iq_table;
+    const int32_t* tab = iq_table;
 
-    uint8_t g, sfb, win;
+    uint8_t  g, sfb, win;
     uint16_t width, bin, k, gindex;
-    uint8_t error = 0; /* Init error flag */
+    uint8_t  error = 0; /* Init error flag */
+#ifndef FIXED_POINT
+    int32_t scf;
+#else
     int32_t sat_shift_mask = 0;
+#endif
 
     k = 0;
     gindex = 0;
@@ -9885,82 +9999,96 @@ static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16
     /* In this case quant_to_spec is no-op and spec_data remains undefined.
      * Without peeking into AAC specification, there is no strong evidence if
      * such streams are invalid -> just calm down MSAN. */
-    if (ics->num_swb == 0)
-        memset(spec_data, 0, frame_len * sizeof(int32_t));
+    if(ics->num_swb == 0) memset(spec_data, 0, frame_len * sizeof(int32_t));
 
-    for (g = 0; g < ics->num_window_groups; g++) {
+    for(g = 0; g < ics->num_window_groups; g++) {
         uint16_t j = 0;
         uint16_t gincrease = 0;
         uint16_t win_inc = ics->swb_offset[ics->num_swb];
 
-        for (sfb = 0; sfb < ics->num_swb; sfb++) {
-            int32_t exp, frac;
+        for(sfb = 0; sfb < ics->num_swb; sfb++) {
+            int32_t  exp, frac;
             uint16_t wa = gindex + j;
-            int16_t scale_factor = ics->scale_factors[g][sfb];
+            int16_t  scale_factor = ics->scale_factors[g][sfb];
 
-            width = ics->swb_offset[sfb+1] - ics->swb_offset[sfb];
+            width = ics->swb_offset[sfb + 1] - ics->swb_offset[sfb];
 
+#ifdef FIXED_POINT
             scale_factor -= 100;
             /* IMDCT pre-scaling */
-            if (hDecoder->object_type == LD)
-            {
-                scale_factor -= 24 /*9*/;
-            } else {
-                if (ics->window_sequence == EIGHT_SHORT_SEQUENCE)
-                    scale_factor -= 16 /*7*/;
-                else
-                    scale_factor -= 28 /*10*/;
+            if(hDecoder->object_type == LD) { scale_factor -= 24 /*9*/; }
+            else {
+                if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) scale_factor -= 16 /*7*/;
+                else scale_factor -= 28 /*10*/;
             }
-            if (scale_factor > 120)
-                scale_factor = 120;  /* => exp <= 30 */
-
+            if(scale_factor > 120) scale_factor = 120; /* => exp <= 30 */
+#else
+            (void)hDecoder;
+#endif
             /* scale_factor for IS or PNS, has different meaning; fill with almost zeroes */
-            if (is_intensity(ics, g, sfb) || is_noise(ics, g, sfb)) {
-                scale_factor = 0;
-            }
+            if(is_intensity(ics, g, sfb) || is_noise(ics, g, sfb)) { scale_factor = 0; }
 
             /* scale_factor must be between 0 and 255 */
             exp = (scale_factor /* - 100 */) >> 2;
             /* frac must always be > 0 */
             frac = (scale_factor /* - 100 */) & 3;
 
-            if (exp > 0)
-                sat_shift_mask = SAT_SHIFT_MASK(exp);
+#ifndef FIXED_POINT
+            scf = pow2sf_tab[exp /*+25*/] * pow2_table[frac];
+#else
+            if(exp > 0) sat_shift_mask = SAT_SHIFT_MASK(exp);
+#endif
 
-            for (win = 0; win < ics->window_group_length[g]; win++){
-                for (bin = 0; bin < width; bin += 4) {
+            for(win = 0; win < ics->window_group_length[g]; win++) {
+                for(bin = 0; bin < width; bin += 4) {
                     uint16_t wb = wa + bin;
+#ifndef FIXED_POINT
+                    spec_data[wb + 0] = iquant(quant_data[k + 0], tab, &error) * scf;
+                    spec_data[wb + 1] = iquant(quant_data[k + 1], tab, &error) * scf;
+                    spec_data[wb + 2] = iquant(quant_data[k + 2], tab, &error) * scf;
+                    spec_data[wb + 3] = iquant(quant_data[k + 3], tab, &error) * scf;
+#else
+                    int32_t iq0 = iquant(quant_data[k + 0], tab, &error);
+                    int32_t iq1 = iquant(quant_data[k + 1], tab, &error);
+                    int32_t iq2 = iquant(quant_data[k + 2], tab, &error);
+                    int32_t iq3 = iquant(quant_data[k + 3], tab, &error);
 
-                    int32_t iq0 = iquant(quant_data[k+0], tab, &error);
-                    int32_t iq1 = iquant(quant_data[k+1], tab, &error);
-                    int32_t iq2 = iquant(quant_data[k+2], tab, &error);
-                    int32_t iq3 = iquant(quant_data[k+3], tab, &error);
-
-                    if (exp == -32) {
-                        spec_data[wb+0] = 0;
-                        spec_data[wb+1] = 0;
-                        spec_data[wb+2] = 0;
-                        spec_data[wb+3] = 0;
+                    if(exp == -32) {
+                        spec_data[wb + 0] = 0;
+                        spec_data[wb + 1] = 0;
+                        spec_data[wb + 2] = 0;
+                        spec_data[wb + 3] = 0;
                     }
-                    else if (exp <= 0) {
-                        spec_data[wb+0] = iq0 >> -exp;
-                        spec_data[wb+1] = iq1 >> -exp;
-                        spec_data[wb+2] = iq2 >> -exp;
-                        spec_data[wb+3] = iq3 >> -exp;
+                    else if(exp <= 0) {
+                        spec_data[wb + 0] = iq0 >> -exp;
+                        spec_data[wb + 1] = iq1 >> -exp;
+                        spec_data[wb + 2] = iq2 >> -exp;
+                        spec_data[wb + 3] = iq3 >> -exp;
                     }
-                    else { /* exp > 0 */
-                        spec_data[wb+0] = SAT_SHIFT(iq0, exp, sat_shift_mask);
-                        spec_data[wb+1] = SAT_SHIFT(iq1, exp, sat_shift_mask);
-                        spec_data[wb+2] = SAT_SHIFT(iq2, exp, sat_shift_mask);
-                        spec_data[wb+3] = SAT_SHIFT(iq3, exp, sat_shift_mask);
+                    else { /* exp > 0 */ spec_data[wb + 0] = SAT_SHIFT(iq0, exp, sat_shift_mask);
+                        spec_data[wb + 1] = SAT_SHIFT(iq1, exp, sat_shift_mask);
+                        spec_data[wb + 2] = SAT_SHIFT(iq2, exp, sat_shift_mask);
+                        spec_data[wb + 3] = SAT_SHIFT(iq3, exp, sat_shift_mask);
                     }
-                    if (frac != 0) {
-                        spec_data[wb+0] = MUL_C(spec_data[wb+0],pow2_table[frac]);
-                        spec_data[wb+1] = MUL_C(spec_data[wb+1],pow2_table[frac]);
-                        spec_data[wb+2] = MUL_C(spec_data[wb+2],pow2_table[frac]);
-                        spec_data[wb+3] = MUL_C(spec_data[wb+3],pow2_table[frac]);
+                    if(frac != 0) {
+                        spec_data[wb + 0] = MUL_C(spec_data[wb + 0], pow2_table[frac]);
+                        spec_data[wb + 1] = MUL_C(spec_data[wb + 1], pow2_table[frac]);
+                        spec_data[wb + 2] = MUL_C(spec_data[wb + 2], pow2_table[frac]);
+                        spec_data[wb + 3] = MUL_C(spec_data[wb + 3], pow2_table[frac]);
                     }
 
+    // #define SCFS_PRINT
+    #ifdef SCFS_PRINT
+                    printf("%d\n", spec_data[gindex + (win * win_inc) + j + bin + 0]);
+                    printf("%d\n", spec_data[gindex + (win * win_inc) + j + bin + 1]);
+                    printf("%d\n", spec_data[gindex + (win * win_inc) + j + bin + 2]);
+                    printf("%d\n", spec_data[gindex + (win * win_inc) + j + bin + 3]);
+                        // printf("0x%.8X\n", spec_data[gindex+(win*win_inc)+j+bin+0]);
+                        // printf("0x%.8X\n", spec_data[gindex+(win*win_inc)+j+bin+1]);
+                        // printf("0x%.8X\n", spec_data[gindex+(win*win_inc)+j+bin+2]);
+                        // printf("0x%.8X\n", spec_data[gindex+(win*win_inc)+j+bin+3]);
+    #endif
+#endif
                     gincrease += 4;
                     k += 4;
                 }
@@ -9972,7 +10100,7 @@ static uint8_t quant_to_spec(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, int16
     }
     return error;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static void faad_free(void* b) {free(b); b = NULL;};
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t output_channels) {
