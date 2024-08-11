@@ -410,6 +410,7 @@ void                       lt_update_state(int16_t* lt_pred_stat, int32_t* time,
 static uint8_t             ltp_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, ltp_info_t* ltp, bitfile_t* ld);
 static void                map20indexto34(int8_t* index, uint8_t bins);
 uint8_t                    master_frequency_table_fs0(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale);
+static int                 int32cmp(const void *a, const void *b);
 uint8_t                    master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale);
 uint8_t                    max_pred_sfb(const uint8_t sr_index);
 uint8_t                    max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short);
