@@ -1045,25 +1045,48 @@ static uint32_t ones32(uint32_t x) {
     return (x & 0x0000003f);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-static uint32_t floor_log2(uint32_t x) {
-
+static uint32_t ones64(uint64_t x){
+    return ones32((uint32_t)x) + ones32(x >> 32);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static uint32_t floor_log2(uint64_t x) {
+#if 1
     x |= (x >> 1);
     x |= (x >> 2);
     x |= (x >> 4);
     x |= (x >> 8);
     x |= (x >> 16);
-    return (ones32(x) - 1);
+    x |= (x >> 32);
+
+    return (ones64(x) - 1);
+#else
+    uint32_t count = 0;
+
+    while (x >>= 1)
+        count++;
+
+    return count;
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* returns position of first bit that is not 0 from msb, starting count at lsb */
 uint32_t wl_min_lzc(uint32_t x) {
-
+#if 1
     x |= (x >> 1);
     x |= (x >> 2);
     x |= (x >> 4);
     x |= (x >> 8);
     x |= (x >> 16);
+
     return (ones32(x));
+#else
+    uint32_t count = 0;
+
+    while (x >>= 1)
+        count++;
+
+    return (count + 1);
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t pow2_fix(int32_t val) {
@@ -1090,52 +1113,81 @@ int32_t pow2_fix(int32_t val) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t pow2_int(int32_t val) {
+
     uint32_t x1, x2;
     uint32_t errcorr;
     uint32_t index_frac;
-    int32_t  retval;
-    int32_t  whole = (val >> REAL_BITS);
-    int32_t  rest = val - (whole << REAL_BITS);        /* rest = [0..1] */
-    int32_t  index = rest >> (REAL_BITS - TABLE_BITS); /* index into pow2_tab */
+    uint64_t retval;
+    int32_t whole = (val >> REAL_BITS);
+    int32_t exp = 0;
 
-    if(val == 0) return 1;
+    /* rest = [0..1] */
+    int32_t rest = val & ((1 << REAL_BITS) - 1);
+
+    /* index into pow2_tab */
+    int32_t index = rest >> (REAL_BITS-TABLE_BITS);
+
+    if (val < 0)
+        return 0;
+    if (val == 0)
+        return 1;
+    if (whole > COEF_BITS) {
+        exp = whole - COEF_BITS;
+        whole = COEF_BITS;
+    }
+
     /* leave INTERP_BITS bits */
-    index_frac = rest >> (REAL_BITS - TABLE_BITS - INTERP_BITS);
-    index_frac = index_frac & ((1 << INTERP_BITS) - 1);
-    if(whole > 0) retval = 1 << whole;
+    index_frac = rest >> (REAL_BITS-TABLE_BITS-INTERP_BITS);
+    index_frac = index_frac & ((1<<INTERP_BITS)-1);
+
+    if (whole >= 0)
+        retval = (uint32_t)(1 << whole);
     else
         retval = 0;
-    x1 = pow2_tab[index & ((1 << TABLE_BITS) - 1)];
-    x2 = pow2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
-    errcorr = ((index_frac * (x2 - x1))) >> INTERP_BITS;
+
+    x1 = pow2_tab[index & ((1<<TABLE_BITS)-1)];
+    x2 = pow2_tab[(index & ((1<<TABLE_BITS)-1)) + 1];
+    errcorr = ((index_frac*(x2-x1))) >> INTERP_BITS;
+
     retval = MUL_R(retval, (errcorr + x1));
-    return retval;
+
+    return retval << exp;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t log2_int(uint32_t val) {
     uint32_t frac;
-    uint32_t whole = (val);
-    int32_t  exp = 0;
+    int32_t exp = 0;
     uint32_t index;
     uint32_t index_frac;
     uint32_t x1, x2;
     uint32_t errcorr;
 
-    (void)whole;
-    /* error */
-    if(val == 0) return -10000;
     exp = floor_log2(val);
     exp -= REAL_BITS;
+
     /* frac = [1..2] */
-    if(exp >= 0) frac = val >> exp;
-    else { frac = val << -exp; }              /* index in the log2 table */
-    index = frac >> (REAL_BITS - TABLE_BITS); /* leftover part for linear interpolation */
-    index_frac = frac & ((1 << (REAL_BITS - TABLE_BITS)) - 1);
-    index_frac = index_frac >> (REAL_BITS - TABLE_BITS - INTERP_BITS); /* leave INTERP_BITS bits */
-    x1 = log2_tab[index & ((1 << TABLE_BITS) - 1)];
-    x2 = log2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
-    errcorr = (index_frac * (x2 - x1)) >> INTERP_BITS; /* linear interpolation */
-    return ((exp + REAL_BITS) << REAL_BITS) + errcorr + x1;
+    if (exp >= 0)
+        frac = (uint32_t)(val >> exp);
+    else
+        frac = (uint32_t)(val << -exp);
+
+    /* index in the log2 table */
+    index = frac >> (REAL_BITS-TABLE_BITS);
+
+    /* leftover part for linear interpolation */
+    index_frac = frac & ((1<<(REAL_BITS-TABLE_BITS))-1);
+
+    /* leave INTERP_BITS bits */
+    index_frac = index_frac >> (REAL_BITS-TABLE_BITS-INTERP_BITS);
+
+    x1 = log2_tab[index & ((1<<TABLE_BITS)-1)];
+    x2 = log2_tab[(index & ((1<<TABLE_BITS)-1)) + 1];
+
+    /* linear interpolation */
+    /* retval = exp + ((index_frac)*x2 + (1-index_frac)*x1) */
+
+    errcorr = (index_frac * (x2-x1)) >> INTERP_BITS;
+    return ((exp+REAL_BITS) << REAL_BITS) + errcorr + x1;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t log2_fix(uint32_t val) {
@@ -5332,54 +5384,6 @@ uint8_t rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 static uint8_t rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfile_t* ld_esc, uint8_t* intensity_used) {
-    // int8_t  g, sfb;
-    // int8_t  t = 0;
-    // int8_t  error = 0;
-    // int8_t  noise_pcm_flag = 1;
-    // int16_t scale_factor = ics->global_gain;
-    // int16_t is_position = 0;
-    // int16_t noise_energy = ics->global_gain - 90 - 256;
-
-    // for(g = 0; g < ics->num_window_groups; g++) {
-    //     for(sfb = 0; sfb < ics->max_sfb; sfb++) {
-    //         if(error) { ics->scale_factors[g][sfb] = 0; }
-    //         else {
-    //             switch(ics->sfb_cb[g][sfb]) {
-    //             case ZERO_HCB: /* zero book */ ics->scale_factors[g][sfb] = 0; break;
-    //             case INTENSITY_HCB: /* intensity books */
-    //             case INTENSITY_HCB2:
-    //                 *intensity_used = 1;
-    //                 /* decode intensity position */
-    //                 t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-    //                 is_position += t;
-    //                 ics->scale_factors[g][sfb] = is_position;
-    //                 break;
-    //             case NOISE_HCB: /* noise books */
-    //                 /* decode noise energy */
-    //                 if(noise_pcm_flag) {
-    //                     int16_t n = ics->dpcm_noise_nrg;
-    //                     noise_pcm_flag = 0;
-    //                     noise_energy += n;
-    //                 }
-    //                 else {
-    //                     t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-    //                     noise_energy += t;
-    //                 }
-    //                 ics->scale_factors[g][sfb] = noise_energy;
-    //                 break;
-    //             default: /* spectral books */
-    //                 /* decode scale factor */
-    //                 t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
-    //                 scale_factor += t;
-    //                 if(scale_factor < 0) return 4;
-    //                 ics->scale_factors[g][sfb] = scale_factor;
-    //                 break;
-    //             }
-    //             if(t == 99) { error = 1; }
-    //         }
-    //     }
-    // }
-    // return 0;
 
     int8_t g, sfb;
     int8_t t = 0;
@@ -5865,8 +5869,10 @@ static uint8_t sbr_process_channel(sbr_info_t* sbr, int32_t* channel_buf, comple
         /* insert high frequencies here */
         /* hf generation using patching */
         hf_generation(sbr, sbr->Xsbr[ch], sbr->Xsbr[ch], ch);
+
         /* hf adjustment */
         ret = hf_adjustment(sbr, sbr->Xsbr[ch], ch);
+
         if(ret > 0) { dont_process = 1; }
     }
     if((sbr->just_seeked != 0) || dont_process) {
@@ -5916,6 +5922,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info_t* sbr, int32_t* left_chan, int32_t* right
 
     uint8_t dont_process = 0;
     uint8_t ret = 0;
+ //   for(uint8_t i = 0; i < MAX_NTSRHFG; i++) memset(m_X_dcf[i], 0, 64 * sizeof(*(m_X_dcf[i])));
 
     if(sbr == NULL) return 20;
     /* case can occur due to bit errors */
@@ -5956,6 +5963,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t ju
     //    printf(ANSI_ESC_YELLOW "sbrDecodeSingleFrame" ANSI_ESC_WHITE "\n");
     uint8_t dont_process = 0;
     uint8_t ret = 0;
+//    for(uint8_t i = 0; i < MAX_NTSRHFG; i++) memset(m_X_dsf[i], 0, 64 * sizeof(*(m_X_dsf[i])));
 
     if(sbr == NULL) return 20;
     /* case can occur due to bit errors */
@@ -5984,7 +5992,6 @@ uint8_t sbrDecodeSingleFrame(sbr_info_t* sbr, int32_t* channel, const uint8_t ju
 
     return 0;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t sbrDecodeSingleFramePS(sbr_info_t* sbr, int32_t* left_channel, int32_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
 
@@ -6187,141 +6194,6 @@ static int int32cmp(const void *a, const void *b){
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* version for bs_freq_scale > 0 */
 uint8_t master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
-    //     (void)bs_alter_scale;
-    //     uint8_t k, bands, twoRegions;
-    //     uint8_t k1;
-    //     uint8_t nrBand0, nrBand1;
-
-    //     memset(m_vDk0, 0, 64 * sizeof(int32_t));
-    //     memset(m_vDk1, 0, 64 * sizeof(int32_t));
-    //     memset(m_vk0, 0, 64 * sizeof(int32_t));
-    //     memset(m_vk1, 0, 64 * sizeof(int32_t));
-
-    //     uint8_t temp1[] = {6, 5, 4};
-    //     int32_t q, qk;
-    //     int32_t A_1;
-    // #ifdef FIXED_POINT
-    //     int32_t rk2, rk0;
-    // #endif
-    //     uint8_t ret;
-
-    //     /* mft only defined for k2 > k0 */
-    //     if(k2 <= k0) {
-    //         sbr->N_master = 0;
-    //         ret = 1;
-    //         goto exit;
-    //     }
-    //     bands = temp1[bs_freq_scale - 1];
-    // #ifdef FIXED_POINT
-    //     rk0 = (int32_t)k0 << REAL_BITS;
-    //     rk2 = (int32_t)k2 << REAL_BITS;
-    //     if(rk2 > MUL_C(rk0, COEF_CONST(2.2449)))
-    // #else
-    //     if ((float)k2/(float)k0 > 2.2449)
-    // #endif
-    //     {
-    //         twoRegions = 1;
-    //         k1 = k0 << 1;
-    //     }
-    //     else {
-    //         twoRegions = 0;
-    //         k1 = k2;
-    //     }
-    //     nrBand0 = (uint8_t)(2 * find_bands(0, bands, k0, k1));
-    //     nrBand0 = min(nrBand0, 63);
-    //     if(nrBand0 <= 0) {
-    //         ret = 1;
-    //         goto exit;
-    //     }
-    //     q = find_initial_power(nrBand0, k0, k1);
-    // #ifdef FIXED_POINT
-    //     qk = (int32_t)k0 << REAL_BITS;
-    //     // A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
-    //     A_1 = k0;
-    // #else
-    //     qk = REAL_CONST(k0);
-    //     A_1 = (int32_t)(qk + .5);
-    // #endif
-    //     for(k = 0; k <= nrBand0; k++) {
-    //         int32_t A_0 = A_1;
-    // #ifdef FIXED_POINT
-    //         qk = MUL_R(qk, q);
-    //         A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
-    // #else
-    //         qk *= q;
-    //         A_1 = (int32_t)(qk + 0.5);
-    // #endif
-    //         m_vDk0[k] = A_1 - A_0;
-    //     }
-    //     /* needed? */
-    //     qsort(m_vDk0, nrBand0, sizeof(m_vDk0[0]), (__compar_fn_t)longcmp);
-    //     m_vk0[0] = k0;
-    //     for(k = 1; k <= nrBand0; k++) {
-    //         m_vk0[k] = m_vk0[k - 1] + m_vDk0[k - 1];
-    //         if(m_vDk0[k - 1] == 0) {
-    //             ret = 1;
-    //             goto exit;
-    //         }
-    //     }
-    //     if(!twoRegions) {
-    //         for(k = 0; k <= nrBand0; k++) sbr->f_master[k] = (uint8_t)m_vk0[k];
-    //         sbr->N_master = nrBand0;
-    //         sbr->N_master = min(sbr->N_master, 64);
-    //         ret = 0;
-    //         ;
-    //         goto exit;
-    //     }
-    //     nrBand1 = (uint8_t)(2 * find_bands(1 /* warped */, bands, k1, k2));
-    //     nrBand1 = min(nrBand1, 63);
-    //     q = find_initial_power(nrBand1, k1, k2);
-    // #ifdef FIXED_POINT
-    //     qk = (int32_t)k1 << REAL_BITS;
-    //     // A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
-    //     A_1 = k1;
-    // #else
-    //     qk = REAL_CONST(k1);
-    //     A_1 = (int32_t)(qk + .5);
-    // #endif
-    //     for(k = 0; k <= nrBand1 - 1; k++) {
-    //         int32_t A_0 = A_1;
-    // #ifdef FIXED_POINT
-    //         qk = MUL_R(qk, q);
-    //         A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
-    // #else
-    //         qk *= q;
-    //         A_1 = (int32_t)(qk + 0.5);
-    // #endif
-    //         m_vDk1[k] = A_1 - A_0;
-    //     }
-    //     if(m_vDk1[0] < m_vDk0[nrBand0 - 1]) {
-    //         int32_t change;
-    //         /* needed? */
-    //         qsort(m_vDk1, nrBand1 + 1, sizeof(m_vDk1[0]), (__compar_fn_t)longcmp);
-    //         change = m_vDk0[nrBand0 - 1] - m_vDk1[0];
-    //         m_vDk1[0] = m_vDk0[nrBand0 - 1];
-    //         m_vDk1[nrBand1 - 1] = m_vDk1[nrBand1 - 1] - change;
-    //     }
-    //     /* needed? */
-    //     qsort(m_vDk1, nrBand1, sizeof(m_vDk1[0]), (__compar_fn_t)longcmp);
-    //     m_vk1[0] = k1;
-    //     for(k = 1; k <= nrBand1; k++) {
-    //         m_vk1[k] = m_vk1[k - 1] + m_vDk1[k - 1];
-    //         if(m_vDk1[k - 1] == 0) {
-    //             ret = 1;
-    //             goto exit;
-    //         }
-    //     }
-    //     sbr->N_master = nrBand0 + nrBand1;
-    //     sbr->N_master = min(sbr->N_master, 64);
-    //     for(k = 0; k <= nrBand0; k++) { sbr->f_master[k] = (uint8_t)m_vk0[k]; }
-    //     for(k = nrBand0 + 1; k <= sbr->N_master; k++) { sbr->f_master[k] = (uint8_t)m_vk1[k - nrBand0]; }
-    //     ret = 0;
-    //     goto exit;
-
-    // exit:
-    //     return ret;
-    // }
-
     uint8_t k, bands, twoRegions;
     uint8_t k1;
     uint8_t nrBand0, nrBand1;
@@ -7198,40 +7070,6 @@ static void auto_correlation(sbr_info_t* sbr, acorr_coef_t* ac, complex_t buffer
     ac->det = MUL_R(RE(ac->r11), RE(ac->r22)) - MUL_F(rel, (MUL_R(RE(ac->r12), RE(ac->r12)) + MUL_R(IM(ac->r12), IM(ac->r12))));
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* calculate linear prediction coefficients using the covariance method */
-// static void calc_prediction_coef(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
-//     int32_t      tmp;
-//     acorr_coef_t ac;
-
-//     auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
-//     if(ac.det == 0) {
-//         RE(alpha_1[k]) = 0;
-//         IM(alpha_1[k]) = 0;
-//     }
-//     else {
-//         tmp = (MUL_R(RE(ac.r01), RE(ac.r12)) - MUL_R(IM(ac.r01), IM(ac.r12)) - MUL_R(RE(ac.r02), RE(ac.r11)));
-//         RE(alpha_1[k]) = DIV_R(tmp, ac.det);
-//         tmp = (MUL_R(IM(ac.r01), RE(ac.r12)) + MUL_R(RE(ac.r01), IM(ac.r12)) - MUL_R(IM(ac.r02), RE(ac.r11)));
-//         IM(alpha_1[k]) = DIV_R(tmp, ac.det);
-//     }
-//     if(RE(ac.r11) == 0) {
-//         RE(alpha_0[k]) = 0;
-//         IM(alpha_0[k]) = 0;
-//     }
-//     else {
-//         tmp = -(RE(ac.r01) + MUL_R(RE(alpha_1[k]), RE(ac.r12)) + MUL_R(IM(alpha_1[k]), IM(ac.r12)));
-//         RE(alpha_0[k]) = DIV_R(tmp, RE(ac.r11));
-//         tmp = -(IM(ac.r01) + MUL_R(IM(alpha_1[k]), RE(ac.r12)) - MUL_R(RE(alpha_1[k]), IM(ac.r12)));
-//         IM(alpha_0[k]) = DIV_R(tmp, RE(ac.r11));
-//     }
-//     if((MUL_R(RE(alpha_0[k]), RE(alpha_0[k])) + MUL_R(IM(alpha_0[k]), IM(alpha_0[k])) >= REAL_CONST(16)) ||
-//        (MUL_R(RE(alpha_1[k]), RE(alpha_1[k])) + MUL_R(IM(alpha_1[k]), IM(alpha_1[k])) >= REAL_CONST(16))) {
-//         RE(alpha_0[k]) = 0;
-//         IM(alpha_0[k]) = 0;
-//         RE(alpha_1[k]) = 0;
-//         IM(alpha_1[k]) = 0;
-//     }
-// }
 static void calc_prediction_coef(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
     int32_t      tmp;
     acorr_coef_t ac;
@@ -7471,63 +7309,6 @@ void qmfa_end(qmfa_info_t* qmfa) {
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// void sbr_qmf_analysis_32(sbr_info_t* sbr, qmfa_info_t* qmfa, const int32_t* input, complex_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx) {
-//     int32_t  u[64];
-//     int32_t  in_real[32], in_imag[32], out_real[32], out_imag[32]; // ⏫⏫⏫ ??
-//     uint32_t in = 0;
-//     uint8_t  l;
-//     /* qmf subsample l */
-//     for(l = 0; l < sbr->numTimeSlotsRate; l++) {
-//         int16_t n;
-//         /* shift input buffer x */
-//         /* input buffer is not shifted anymore, x is implemented as double ringbuffer */
-//         // memmove(qmfa->x + 32, qmfa->x, (320-32)*sizeof(int32_t));
-//         /* add new samples to input buffer x */
-//         for(n = 32 - 1; n >= 0; n--) { qmfa->x[qmfa->x_index + n] = qmfa->x[qmfa->x_index + n + 320] = (input[in++]) >> 4; }
-//         /* window and summation to create array u */
-//         for(n = 0; n < 64; n++) {
-//             u[n] = MUL_F(qmfa->x[qmfa->x_index + n], qmf_c[2 * n]) + MUL_F(qmfa->x[qmfa->x_index + n + 64], qmf_c[2 * (n + 64)]) + MUL_F(qmfa->x[qmfa->x_index + n + 128], qmf_c[2 * (n + 128)]) +
-//                    MUL_F(qmfa->x[qmfa->x_index + n + 192], qmf_c[2 * (n + 192)]) + MUL_F(qmfa->x[qmfa->x_index + n + 256], qmf_c[2 * (n + 256)]);
-//         }
-//         /* update ringbuffer index */
-//         qmfa->x_index -= 32;
-//         if(qmfa->x_index < 0) qmfa->x_index = (320 - 32);
-//         /* calculate 32 subband samples by introducing X */
-//         // Reordering of data moved from DCT_IV to here
-//         in_imag[31] = u[1];
-//         in_real[0] = u[0];
-//         for(n = 1; n < 31; n++) {
-//             in_imag[31 - n] = u[n + 1];
-//             in_real[n] = -u[64 - n];
-//         }
-//         in_imag[0] = u[32];
-//         in_real[31] = -u[33];
-//         // dct4_kernel is DCT_IV without reordering which is done before and after FFT
-//         dct4_kernel(in_real, in_imag, out_real, out_imag);
-//         // Reordering of data moved from DCT_IV to here
-//         for(n = 0; n < 16; n++) {
-//             if(2 * n + 1 < kx) {
-//                 QMF_RE(X[l + offset][2 * n]) = out_real[n];
-//                 QMF_IM(X[l + offset][2 * n]) = out_imag[n];
-//                 QMF_RE(X[l + offset][2 * n + 1]) = -out_imag[31 - n];
-//                 QMF_IM(X[l + offset][2 * n + 1]) = -out_real[31 - n];
-//             }
-//             else {
-//                 if(2 * n < kx) {
-//                     QMF_RE(X[l + offset][2 * n]) = out_real[n];
-//                     QMF_IM(X[l + offset][2 * n]) = out_imag[n];
-//                 }
-//                 else {
-//                     QMF_RE(X[l + offset][2 * n]) = 0;
-//                     QMF_IM(X[l + offset][2 * n]) = 0;
-//                 }
-//                 QMF_RE(X[l + offset][2 * n + 1]) = 0;
-//                 QMF_IM(X[l + offset][2 * n + 1]) = 0;
-//             }
-//         }
-//     }
-// }
-
 void sbr_qmf_analysis_32(sbr_info_t* sbr, qmfa_info_t* qmfa, const int32_t* input, complex_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx) {
     int32_t u[64];
 #ifndef SBR_LOW_POWER
@@ -7584,7 +7365,6 @@ void sbr_qmf_analysis_32(sbr_info_t* sbr, qmfa_info_t* qmfa, const int32_t* inpu
             else { QMF_RE(X[l + offset][n]) = 0; }
         }
 #else
-
         // Reordering of data moved from DCT_IV to here
         in_imag[31] = u[1];
         in_real[0] = u[0];
