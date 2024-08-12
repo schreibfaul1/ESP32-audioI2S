@@ -39,6 +39,13 @@ typedef struct {
     complex_t* tab;
 } cfft_info_t;
 
+/* used to save the prediction state */
+typedef struct {
+    int16_t r[2];
+    int16_t COR[2];
+    int16_t VAR[2];
+} pred_state_t;
+
 typedef struct {
     uint16_t     N;
     cfft_info_t* cfft;
@@ -152,6 +159,14 @@ typedef struct {
     uint8_t  short_lag[8];
 } ltp_info_t;
 
+typedef struct
+{
+    uint8_t limit;
+    uint8_t predictor_reset;
+    uint8_t predictor_reset_group_number;
+    uint8_t prediction_used[MAX_SFB];
+} pred_info_t;
+
 typedef struct {
     uint8_t number_pulse;
     uint8_t pulse_start_sfb;
@@ -198,6 +213,7 @@ typedef struct {
     uint8_t      predictor_data_present;
     pulse_info_t pul;
     tns_info_t   tns;
+    pred_info_t  pred;
     ltp_info_t   ltp;
     ltp_info_t   ltp2;
     uint16_t     length_of_reordered_spectral_data; /* ER HCR data */
@@ -312,6 +328,12 @@ typedef struct {
     int16_t  v_index;
     uint8_t  channels;
 } qmfs_info_t;
+
+typedef struct {
+    int16_t index;
+    uint16_t len;
+    uint32_t cw;
+} rvlc_huff_table;
 
 typedef struct {
     uint32_t     sample_rate;
@@ -485,45 +507,46 @@ typedef struct _bitfile_t {
 } bitfile_t;
 
 typedef struct {
-    uint8_t     adts_header_t_present;
-    uint8_t     adif_header_t_present;
-    uint8_t     latm_header_t_present;
-    uint8_t     sf_index;
-    uint8_t     object_type;
-    uint8_t     channelConfiguration;
-    uint8_t     aacSectionDataResilienceFlag;
-    uint8_t     aacScalefactorDataResilienceFlag;
-    uint8_t     aacSpectralDataResilienceFlag;
-    uint16_t    frameLength;
-    uint8_t     postSeekResetFlag;
-    uint32_t    frame;
-    uint8_t     downMatrix;
-    uint8_t     upMatrix;
-    uint8_t     first_syn_ele;
-    uint8_t     has_lfe;
-    uint8_t     fr_channels;                                  /* number of channels in current frame */
-    uint8_t     fr_ch_ele;                                    /* number of elements in current frame */
-    uint8_t     element_output_channels[MAX_SYNTAX_ELEMENTS]; /* element_output_channels: determines the number of channels the element will output */
-    uint8_t     element_alloced[MAX_SYNTAX_ELEMENTS]; /* element_alloced: determines whether the data needed for the element is allocated or not */
-    uint8_t     alloced_channels;                     /* alloced_channels:  determines the number of channels where output data is allocated for */
-    void*       sample_buffer;                        /* output data buffer */
-    uint8_t     window_shape_prev[MAX_CHANNELS];
-    uint16_t    ltp_lag[MAX_CHANNELS];
-    fb_info_t*  fb;
-    drc_info_t* drc;
-    int32_t*    time_out[MAX_CHANNELS];
-    int32_t*    fb_intermed[MAX_CHANNELS];
-    int8_t      sbr_present_flag;
-    int8_t      forceUpSampling;
-    int8_t      downSampledSBR;
-    uint8_t     sbr_alloced[MAX_SYNTAX_ELEMENTS]; /* determines whether SBR data is allocated for the gives element */
-    sbr_info_t* sbr[MAX_SYNTAX_ELEMENTS];
-    uint8_t     ps_used[MAX_SYNTAX_ELEMENTS];
-    uint8_t     ps_used_global;
-    int16_t*    lt_pred_stat[MAX_CHANNELS];
-    uint32_t    __r1; /* RNG states */
-    uint32_t    __r2;
-    uint8_t     pce_set; /* Program Config Element */
+    uint8_t      adts_header_t_present;
+    uint8_t      adif_header_t_present;
+    uint8_t      latm_header_t_present;
+    uint8_t      sf_index;
+    uint8_t      object_type;
+    uint8_t      channelConfiguration;
+    uint8_t      aacSectionDataResilienceFlag;
+    uint8_t      aacScalefactorDataResilienceFlag;
+    uint8_t      aacSpectralDataResilienceFlag;
+    uint16_t     frameLength;
+    uint8_t      postSeekResetFlag;
+    uint32_t     frame;
+    uint8_t      downMatrix;
+    uint8_t      upMatrix;
+    uint8_t      first_syn_ele;
+    uint8_t      has_lfe;
+    uint8_t      fr_channels;                                  /* number of channels in current frame */
+    uint8_t      fr_ch_ele;                                    /* number of elements in current frame */
+    uint8_t      element_output_channels[MAX_SYNTAX_ELEMENTS]; /* element_output_channels: determines the number of channels the element will output */
+    uint8_t      element_alloced[MAX_SYNTAX_ELEMENTS]; /* element_alloced: determines whether the data needed for the element is allocated or not */
+    uint8_t      alloced_channels;                     /* alloced_channels:  determines the number of channels where output data is allocated for */
+    void*        sample_buffer;                        /* output data buffer */
+    uint8_t      window_shape_prev[MAX_CHANNELS];
+    uint16_t     ltp_lag[MAX_CHANNELS];
+    fb_info_t*   fb;
+    drc_info_t*  drc;
+    int32_t*     time_out[MAX_CHANNELS];
+    int32_t*     fb_intermed[MAX_CHANNELS];
+    int8_t       sbr_present_flag;
+    int8_t       forceUpSampling;
+    int8_t       downSampledSBR;
+    uint8_t      sbr_alloced[MAX_SYNTAX_ELEMENTS]; /* determines whether SBR data is allocated for the gives element */
+    sbr_info_t*  sbr[MAX_SYNTAX_ELEMENTS];
+    uint8_t      ps_used[MAX_SYNTAX_ELEMENTS];
+    uint8_t      ps_used_global;
+    pred_state_t *pred_stat[MAX_CHANNELS];
+    int16_t*     lt_pred_stat[MAX_CHANNELS];
+    uint32_t     __r1; /* RNG states */
+    uint32_t     __r2;
+    uint8_t      pce_set; /* Program Config Element */
     program_config_t        pce;
     uint8_t                 element_id[MAX_CHANNELS];
     uint8_t                 internal_channel[MAX_CHANNELS];

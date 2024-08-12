@@ -60,6 +60,7 @@
 //------------------------------------------------------
 
 /* COMPILE TIME DEFINITIONS */
+#define MAIN_DEC /* Allow decoding of MAIN profile AAC */
 #define PREFER_POINTERS
 #define ERROR_RESILIENCE
 #define LTP_DEC /* Allow decoding of LTP (long term prediction) profile AAC */
@@ -69,6 +70,7 @@
     #define SBR_DEC /* Allow decoding of SBR (spectral band replication) */
     #define PS_DEC /* Allow decoding of PS (parametric stereo) */
 #endif
+#define FIXED_POINT  // must be defined!!
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* LD can't do without LTP */
 #ifdef LD_DEC
@@ -227,17 +229,26 @@ typedef const int8_t (*sbr_huff_tab)[2];
 #define Q2_BITS           22
 #define Q2_PRECISION      (1 << Q2_BITS)
 #define Q2_CONST(A)       (((A) >= 0) ? ((int32_t)((A) * (Q2_PRECISION) + 0.5)) : ((int32_t)((A) * (Q2_PRECISION)-0.5)))
-#define MUL_R(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS) /* multiply with real shift */
-#define MUL_C(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS) /* multiply with coef shift */
-#define _MulHigh(A, B)    (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE) /* multiply with fractional shift */
-#define MUL_F(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
-#define MUL_Q2(A, B)      (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
-#define MUL_SHIFT6(A, B)  (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
-#define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
+#define MUL_R(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (REAL_BITS - 1))) >> REAL_BITS) /* multiply with real shift */
+#define MUL_C(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (COEF_BITS - 1))) >> COEF_BITS) /* multiply with coef shift */
+#define _MulHigh(A, B)    (int32_t)(((int64_t)(A) * (int64_t)(B) + (1u << (FRAC_SIZE - 1))) >> FRAC_SIZE) /* multiply with fractional shift */
+#define MUL_F(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (FRAC_BITS - 1))) >> FRAC_BITS)
+#define MUL_Q2(A, B)      (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (Q2_BITS - 1))) >> Q2_BITS)
+#define MUL_SHIFT6(A, B)  (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (6 - 1))) >> 6)
+#define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1  << (23 - 1))) >> 23)
 #define RE(A)             A[0]
 #define IM(A)             A[1]
-#define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
-#define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
+
+#ifdef FIXED_POINT
+#define DIV_R(A, B) (((int64_t)A * REAL_PRECISION)/B)
+#define DIV_C(A, B) (((int64_t)A * COEF_PRECISION)/B)
+#define DIV_F(A, B) (((int64_t)A * FRAC_PRECISION)/B)
+#else
+#define DIV_R(A, B) ((A)/(B))
+#define DIV_C(A, B) ((A)/(B))
+#define DIV_F(A, B) ((A)/(B))
+#endif
+
 #define QMF_RE(A)         RE(A)
 #define QMF_IM(A)         IM(A)
 #define DM_MUL            FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
@@ -245,6 +256,8 @@ typedef const int8_t (*sbr_huff_tab)[2];
 #define segmentWidth(cb)  min(maxCwLen[cb], ics->length_of_longest_codeword)
 #define DIV(A, B)         (((int64_t)A << REAL_BITS) / B)
 #define bit_set(A, B)     ((A) & (1 << (B)))
+#define SAT_SHIFT_MASK(E) (~0u << (31u - (E)))
+#define SAT_SHIFT(V,E,M) (((((V) >> ((E) + 1)) ^ (V)) & (M)) ? (((V) < 0) ? (int32_t)0x80000000 : 0x7FFFFFFF) : ((int32_t)((uint32_t)(V) << (E))))
 
 #define step(shift)                                  \
     if((0x40000000l >> shift) + root <= value) {     \
@@ -338,7 +351,7 @@ static void                faad_free(void* b);
 static uint32_t            faad_get_processed_bits(bitfile_t* ld);
 static uint8_t*            faad_getbitbuffer(bitfile_t* ld, uint32_t bits);
 static uint32_t            faad_getbits(bitfile_t* ld, uint32_t n);
-static uint32_t            faad_getbits_rev(bitfile_t* ld, uint32_t n);
+static uint32_t            faad_getbits_rev(bitfile_t* ld, uint32_t n) __attribute__((unused));
 static void                faad_imdct(mdct_info_t* mdct, int32_t* X_in, int32_t* X_out);
 static void                faad_initbits_rev(bitfile_t* ld, void* buffer, uint32_t bits_in_buffer);
 static void                faad_initbits(bitfile_t* ld, const void* buffer, const uint32_t buffer_size);
@@ -397,6 +410,7 @@ void                       lt_update_state(int16_t* lt_pred_stat, int32_t* time,
 static uint8_t             ltp_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, ltp_info_t* ltp, bitfile_t* ld);
 static void                map20indexto34(int8_t* index, uint8_t bins);
 uint8_t                    master_frequency_table_fs0(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale);
+static int                 int32cmp(const void *a, const void *b);
 uint8_t                    master_frequency_table(sbr_info_t* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale);
 uint8_t                    max_pred_sfb(const uint8_t sr_index);
 uint8_t                    max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short);
@@ -453,8 +467,8 @@ uint8_t                    reconstruct_single_channel(NeAACDecStruct_t* hDecoder
 uint8_t                    reordered_spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, int16_t* spectral_data);
 uint8_t                    rvlc_decode_scale_factors(ic_stream_t* ics, bitfile_t* ld);
 static uint8_t             rvlc_decode_sf_forward(ic_stream_t* ics, bitfile_t* ld_sf, bitfile_t* ld_esc, uint8_t* is_used);
-static int8_t              rvlc_huffman_esc(bitfile_t* ld_esc, int8_t direction);
-static int8_t              rvlc_huffman_sf(bitfile_t* ld_sf, bitfile_t* ld_esc, int8_t direction);
+static int8_t              rvlc_huffman_esc(bitfile_t* ld /*, int8_t direction*/);
+static int8_t              rvlc_huffman_sf(bitfile_t *ld_sf, bitfile_t *ld_esc /*, int8_t direction*/);
 uint8_t                    rvlc_scale_factor_data(ic_stream_t* ics, bitfile_t* ld);
 static uint8_t             sbr_channel_pair_element(bitfile_t* ld, sbr_info_t* sbr);
 static uint8_t             sbr_data(bitfile_t* ld, sbr_info_t* sbr);
@@ -484,15 +498,22 @@ static uint8_t             side_info(NeAACDecStruct_t* hDecoder, element_t* ele,
 static uint8_t             single_lfe_channel_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, uint8_t channel, uint8_t* tag);
 static void                sinusoidal_coding(bitfile_t* ld, sbr_info_t* sbr, uint8_t ch);
 static uint8_t             spectral_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfile_t* ld, int16_t* spectral_data);
-static void                tns_ar_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order);
+static void                tns_ar_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order, uint8_t exp);
 static void                tns_data(ic_stream_t* ics, tns_info_t* tns, bitfile_t* ld);
-static void                tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a);
+static uint8_t             tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a);
 void                       tns_decode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8_t object_type, int32_t* spec, uint16_t frame_len);
 void                       tns_encode_frame(ic_stream_t* ics, tns_info_t* tns, uint8_t sr_index, uint8_t object_type, int32_t* spec, uint16_t frame_len);
-static void                tns_ma_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order);
+static void                tns_ma_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lpc, uint8_t order, uint8_t exp);
 static void                vcb11_check_LAV(uint8_t cb, int16_t* sp);
 uint8_t                    window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics);
 uint32_t                   wl_min_lzc(uint32_t x);
+static void                reset_all_predictors(pred_state_t *state, uint16_t frame_len);
+static void                ic_prediction(ic_stream_t *ics, int32_t *spec, pred_state_t *state, uint16_t frame_len, uint8_t sf_index);
+static void                ic_predict(pred_state_t *state, int32_t input, int32_t *output, uint8_t pred);
+static void                pns_reset_pred_state(ic_stream_t *ics, pred_state_t *state);
+static float               inv_quant_pred(int16_t q) __attribute__((unused));
+static float               flt_round(float_t pf) __attribute__((unused));
+static int16_t             quant_pred(float x) __attribute__((unused));
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //                                              I N L I N E S
@@ -522,16 +543,16 @@ static inline uint32_t faad_showbits_rev(bitfile_t* ld, uint32_t bits) {
     uint32_t B = 0;
     if(bits <= ld->bits_left) {
         for(i = 0; i < bits; i++) {
-            if(ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
+            if(ld->bufa & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - i - 1));
         }
         return B;
     }
     else {
         for(i = 0; i < ld->bits_left; i++) {
-            if(ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
+            if(ld->bufa & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - i - 1));
         }
         for(i = 0; i < bits - ld->bits_left; i++) {
-            if(ld->bufb & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - ld->bits_left - i - 1));
+            if(ld->bufb & (1u << (i + (32 - ld->bits_left)))) B |= (1u << (bits - ld->bits_left - i - 1));
         }
         return B;
     }
