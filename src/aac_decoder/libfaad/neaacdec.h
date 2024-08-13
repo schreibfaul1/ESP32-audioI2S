@@ -307,7 +307,7 @@ uint8_t                    adts_frame(adts_header_t* adts, bitfile_t* ld);
 static void                adts_variable_header(adts_header_t* adts, bitfile_t* ld);
 uint8_t                    allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t output_channels);
 int8_t                     AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form);
-int8_t                     AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t bsize, uint8_t short_form);
+int8_t                     AudioSpecificConfigFrombitfile(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t bsize, uint8_t short_form);
 static void                calc_chirp_factors(sbr_info_t* sbr, uint8_t ch);
 static void                calc_prediction_coef(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k);
 static uint8_t             calc_sbr_tables(sbr_info_t* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band);

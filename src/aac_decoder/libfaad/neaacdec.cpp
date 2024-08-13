@@ -38,7 +38,6 @@ int16_t*                  m_spec_data = NULL;
 element_t*                m_cpe = NULL;
 int16_t*                  m_spec_data1 = NULL;
 int16_t*                  m_spec_data2 = NULL;
-mp4AudioSpecificConfig_t* m_mp4ASC_ame = NULL;
 int32_t*                  m_spec_coef = NULL;
 int32_t*                  m_spec_coef1 = NULL;
 int32_t*                  m_spec_coef2 = NULL;
@@ -129,7 +128,6 @@ void free_mem() {
     if(m_cpe)              {free(m_cpe); m_cpe = NULL;}
     if(m_spec_data1)       {free(m_spec_data1); m_spec_data1 = NULL;}
     if(m_spec_data2)       {free(m_spec_data2); m_spec_data2 = NULL;}
-    if(m_mp4ASC_ame)       {free(m_mp4ASC_ame); m_mp4ASC_ame = NULL;}
     if(m_spec_coef)        {free(m_spec_coef); m_spec_coef = NULL;}
     if(m_spec_coef1)       {free(m_spec_coef1); m_spec_coef1 = NULL;}
     if(m_spec_coef2)       {free(m_spec_coef2); m_spec_coef2 = NULL;}
@@ -5036,7 +5034,7 @@ static uint8_t ObjectTypesTable[32] = {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t buffer_size, uint8_t short_form) {
+int8_t AudioSpecificConfigFrombitfile(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t buffer_size, uint8_t short_form) {
     int8_t   result = 0;
     uint32_t startpos = faad_get_processed_bits(ld);
     (void)startpos;
@@ -5131,7 +5129,7 @@ int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpec
     bitfile_t ld = {0,0,0,0,0,0,0,0,0}; // ld.bits_left = 0;
     faad_initbits(&ld, pBuffer, buffer_size);
     faad_byte_align(&ld);
-    ret = AudioSpecificConfigFrombitfile_t(&ld, mp4ASC, pce, buffer_size, short_form);
+    ret = AudioSpecificConfigFrombitfile(&ld, mp4ASC, pce, buffer_size, short_form);
     return ret;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -9484,7 +9482,7 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
         if(latm->version) ascLen = latm_get_value(ld);
         x1 = faad_get_processed_bits(ld);
 
-        if(AudioSpecificConfigFrombitfile_t(ld, m_mp4ASC_ame, &pce, 0, 1) < 0) {
+        if(AudioSpecificConfigFrombitfile(ld, m_mp4ASC, &pce, 0, 1) < 0) {
             ret = 0;
             goto exit;
         }
