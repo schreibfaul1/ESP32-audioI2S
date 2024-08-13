@@ -306,8 +306,8 @@ static uint8_t             adts_fixed_header(adts_header_t* adts, bitfile_t* ld)
 uint8_t                    adts_frame(adts_header_t* adts, bitfile_t* ld);
 static void                adts_variable_header(adts_header_t* adts, bitfile_t* ld);
 uint8_t                    allocate_single_channel(NeAACDecStruct_t* hDecoder, uint8_t channel, uint8_t output_channels);
-int8_t                     AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form);
-int8_t                     AudioSpecificConfigFrombitfile(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t bsize, uint8_t short_form);
+int8_t                     AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, program_config_t* pce, uint8_t short_form);
+int8_t                     AudioSpecificConfigFrombitfile(bitfile_t* ld, program_config_t* pce, uint32_t bsize, uint8_t short_form);
 static void                calc_chirp_factors(sbr_info_t* sbr, uint8_t ch);
 static void                calc_prediction_coef(sbr_info_t* sbr, complex_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k);
 static uint8_t             calc_sbr_tables(sbr_info_t* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band);
@@ -368,7 +368,7 @@ void                       filter_bank_end(fb_info_t* fb);
 fb_info_t*                 filter_bank_init(uint16_t frame_len);
 void                       filter_bank_ltp(fb_info_t* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, int32_t* in_data, int32_t* out_mdct, uint8_t object_type, uint16_t frame_len);
 static int32_t             find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1);
-int8_t                     GASpecificConfig(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce);
+int8_t                     GASpecificConfig(bitfile_t* ld, program_config_t* pce);
 static void                gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2);
 void                       get_adif_header_t(adif_header_t* adif, bitfile_t* ld);
 uint32_t                   get_sample_rate(const uint8_t sr_index);
@@ -417,7 +417,7 @@ uint8_t                    max_tns_sfb(const uint8_t sr_index, const uint8_t obj
 static uint8_t             middleBorder(sbr_info_t* sbr, uint8_t ch);
 void                       ms_decode(ic_stream_t* ics, ic_stream_t* icsr, int32_t* l_spec, int32_t* r_spec, uint16_t frame_len);
 uint32_t                   ne_rng(uint32_t* __r1, uint32_t* __r2);
-int8_t                     NeAACDecAudioSpecificConfig(uint8_t*pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC);
+int8_t                     NeAACDecAudioSpecificConfig(uint8_t*pBuffer, uint32_t buffer_size);
 void                       NeAACDecClose(NeAACDecHandle hDecoder);
 void*                      NeAACDecDecode(NeAACDecHandle hDecoder, NeAACDecFrameInfo_t* hInfo, uint8_t*buffer, uint32_t buffer_size);
 void*                      NeAACDecDecode2(NeAACDecHandle hDecoder, NeAACDecFrameInfo_t* hInfo, uint8_t*buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size);
