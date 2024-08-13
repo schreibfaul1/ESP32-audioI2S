@@ -38,7 +38,6 @@ int16_t*                  m_spec_data = NULL;
 element_t*                m_cpe = NULL;
 int16_t*                  m_spec_data1 = NULL;
 int16_t*                  m_spec_data2 = NULL;
-mp4AudioSpecificConfig_t* m_mp4ASC_ame = NULL;
 int32_t*                  m_spec_coef = NULL;
 int32_t*                  m_spec_coef1 = NULL;
 int32_t*                  m_spec_coef2 = NULL;
@@ -58,7 +57,8 @@ bool alloc_mem() {
     m_spec_data2 = (int16_t*)faad_malloc(1024 * sizeof(int16_t));                                                            sum += 1024 * sizeof(int16_t);
     m_spec_coef1 = (int32_t*)faad_malloc(1024 * sizeof(int32_t));                                                            sum += 1024 * sizeof(int32_t);
     m_spec_coef2 = (int32_t*)faad_malloc(1024 * sizeof(int32_t));                                                            sum += 1024 * sizeof(int32_t);
-    if(!m_transf_buf || !m_Z1_imdct || !m_sce || !m_spec_data || !m_spec_coef || !m_cpe || !m_spec_data1 || !m_spec_data2 || !m_spec_coef1 || !m_spec_coef2){mem1 = false;}
+    m_mp4ASC = (mp4AudioSpecificConfig_t*)faad_malloc(1 * sizeof(mp4AudioSpecificConfig_t));                                 sum += 1 * sizeof(mp4AudioSpecificConfig_t);
+    if(!m_transf_buf || !m_Z1_imdct || !m_sce || !m_spec_data || !m_spec_coef || !m_cpe || !m_spec_data1 || !m_spec_data2 || !m_spec_coef1 || !m_spec_coef2 ||!m_mp4ASC){mem1 = false;}
 #ifdef SBR_DEC
     m_P_dec = (int32_t**)faad_malloc(32 * sizeof(m_P_dec));                                                                  sum += 32 * sizeof(int32_t*);
     for(uint8_t i = 0; i < 32; i++){m_P_dec[i] = (int32_t*)faad_malloc(34 * sizeof(*(m_P_dec[i])));}                         sum += 32 * 34 * sizeof(int32_t);
@@ -129,7 +129,6 @@ void free_mem() {
     if(m_cpe)              {free(m_cpe); m_cpe = NULL;}
     if(m_spec_data1)       {free(m_spec_data1); m_spec_data1 = NULL;}
     if(m_spec_data2)       {free(m_spec_data2); m_spec_data2 = NULL;}
-    if(m_mp4ASC_ame)       {free(m_mp4ASC_ame); m_mp4ASC_ame = NULL;}
     if(m_spec_coef)        {free(m_spec_coef); m_spec_coef = NULL;}
     if(m_spec_coef1)       {free(m_spec_coef1); m_spec_coef1 = NULL;}
     if(m_spec_coef2)       {free(m_spec_coef2); m_spec_coef2 = NULL;}
@@ -1653,7 +1652,7 @@ int8_t NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t SizeOf
     }
     hDecoder->adif_header_t_present = 0;
     hDecoder->adts_header_t_present = 0;
-    rc = AudioSpecificConfig2(pBuffer, SizeOfDecoderSpecificInfo, m_mp4ASC, &(hDecoder->pce), hDecoder->latm_header_t_present); /* decode the audio specific config */
+    rc = AudioSpecificConfig2(pBuffer, SizeOfDecoderSpecificInfo, &(hDecoder->pce), hDecoder->latm_header_t_present); /* decode the audio specific config */
     *samplerate = m_mp4ASC->samplingFrequency;                                                                                  /* copy the relevant info to the decoder handle */
     if(m_mp4ASC->channelsConfiguration) { *channels = m_mp4ASC->channelsConfiguration; }
     else {
@@ -5034,9 +5033,9 @@ static uint8_t ObjectTypesTable[32] = {
 };
 /* Table 1.6.1 */
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
+int8_t NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size) { return AudioSpecificConfig2(pBuffer, buffer_size, NULL, 0); }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint32_t buffer_size, uint8_t short_form) {
+int8_t AudioSpecificConfigFrombitfile(bitfile_t* ld, program_config_t* pce, uint32_t buffer_size, uint8_t short_form) {
     int8_t   result = 0;
     uint32_t startpos = faad_get_processed_bits(ld);
     (void)startpos;
@@ -5045,46 +5044,46 @@ int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t*
 #ifdef SBR_DEC
     int8_t bits_to_decode = 0;
 #endif
-    if(mp4ASC == NULL) return -8;
-    memset(mp4ASC, 0, sizeof(mp4AudioSpecificConfig_t));
-    mp4ASC->objectTypeIndex = (uint8_t)faad_getbits(ld, 5);
-    mp4ASC->samplingFrequencyIndex = (uint8_t)faad_getbits(ld, 4);
-    if(mp4ASC->samplingFrequencyIndex == 0x0f) faad_getbits(ld, 24);
-    mp4ASC->channelsConfiguration = (uint8_t)faad_getbits(ld, 4);
-    mp4ASC->samplingFrequency = get_sample_rate(mp4ASC->samplingFrequencyIndex);
-    if(ObjectTypesTable[mp4ASC->objectTypeIndex] != 1) { return -1; }
-    if(mp4ASC->samplingFrequency == 0) { return -2; }
-    if(mp4ASC->channelsConfiguration > 7) { return -3; }
+    if(m_mp4ASC == NULL) return -8;
+    memset(m_mp4ASC, 0, sizeof(mp4AudioSpecificConfig_t));
+    m_mp4ASC->objectTypeIndex = (uint8_t)faad_getbits(ld, 5);
+    m_mp4ASC->samplingFrequencyIndex = (uint8_t)faad_getbits(ld, 4);
+    if(m_mp4ASC->samplingFrequencyIndex == 0x0f) faad_getbits(ld, 24);
+    m_mp4ASC->channelsConfiguration = (uint8_t)faad_getbits(ld, 4);
+    m_mp4ASC->samplingFrequency = get_sample_rate(m_mp4ASC->samplingFrequencyIndex);
+    if(ObjectTypesTable[m_mp4ASC->objectTypeIndex] != 1) { return -1; }
+    if(m_mp4ASC->samplingFrequency == 0) { return -2; }
+    if(m_mp4ASC->channelsConfiguration > 7) { return -3; }
 #if(defined(PS_DEC))
     /* check if we have a mono file */
-    if(mp4ASC->channelsConfiguration == 1) {
+    if(m_mp4ASC->channelsConfiguration == 1) {
         /* upMatrix to 2 channels for implicit signalling of PS */
-        mp4ASC->channelsConfiguration = 2;
+        m_mp4ASC->channelsConfiguration = 2;
     }
 #endif
 #ifdef SBR_DEC
-    mp4ASC->sbr_present_flag = -1;
-    if(mp4ASC->objectTypeIndex == 5 || mp4ASC->objectTypeIndex == 29) {
+    m_mp4ASC->sbr_present_flag = -1;
+    if(m_mp4ASC->objectTypeIndex == 5 || m_mp4ASC->objectTypeIndex == 29) {
         uint8_t tmp;
-        mp4ASC->sbr_present_flag = 1;
+        m_mp4ASC->sbr_present_flag = 1;
         tmp = (uint8_t)faad_getbits(ld, 4);
         /* check for downsampled SBR */
-        if(tmp == mp4ASC->samplingFrequencyIndex) mp4ASC->downSampledSBR = 1;
-        mp4ASC->samplingFrequencyIndex = tmp;
-        if(mp4ASC->samplingFrequencyIndex == 15) { mp4ASC->samplingFrequency = (uint32_t)faad_getbits(ld, 24); }
-        else { mp4ASC->samplingFrequency = get_sample_rate(mp4ASC->samplingFrequencyIndex); }
-        mp4ASC->objectTypeIndex = (uint8_t)faad_getbits(ld, 5);
+        if(tmp == m_mp4ASC->samplingFrequencyIndex) m_mp4ASC->downSampledSBR = 1;
+        m_mp4ASC->samplingFrequencyIndex = tmp;
+        if(m_mp4ASC->samplingFrequencyIndex == 15) { m_mp4ASC->samplingFrequency = (uint32_t)faad_getbits(ld, 24); }
+        else { m_mp4ASC->samplingFrequency = get_sample_rate(m_mp4ASC->samplingFrequencyIndex); }
+        m_mp4ASC->objectTypeIndex = (uint8_t)faad_getbits(ld, 5);
     }
 #endif
     /* get GASpecificConfig */
-    if(mp4ASC->objectTypeIndex == 1 || mp4ASC->objectTypeIndex == 2 || mp4ASC->objectTypeIndex == 3 || mp4ASC->objectTypeIndex == 4 || mp4ASC->objectTypeIndex == 6 || mp4ASC->objectTypeIndex == 7) {
-        result = GASpecificConfig(ld, mp4ASC, pce);
+    if(m_mp4ASC->objectTypeIndex == 1 || m_mp4ASC->objectTypeIndex == 2 || m_mp4ASC->objectTypeIndex == 3 || m_mp4ASC->objectTypeIndex == 4 || m_mp4ASC->objectTypeIndex == 6 || m_mp4ASC->objectTypeIndex == 7) {
+        result = GASpecificConfig(ld, pce);
 #ifdef ERROR_RESILIENCE
     }
-    else if(mp4ASC->objectTypeIndex >= ER_OBJECT_START) { /* ER */
-        result = GASpecificConfig(ld, mp4ASC, pce);
-        mp4ASC->epConfig = (uint8_t)faad_getbits(ld, 2);
-        if(mp4ASC->epConfig != 0) result = -5;
+    else if(m_mp4ASC->objectTypeIndex >= ER_OBJECT_START) { /* ER */
+        result = GASpecificConfig(ld, pce);
+        m_mp4ASC->epConfig = (uint8_t)faad_getbits(ld, 2);
+        if(m_mp4ASC->epConfig != 0) result = -5;
 #endif
     }
     else { result = -4; }
@@ -5092,46 +5091,46 @@ int8_t AudioSpecificConfigFrombitfile_t(bitfile_t* ld, mp4AudioSpecificConfig_t*
     if(short_form) bits_to_decode = 0;
     else
         bits_to_decode = (int8_t)(buffer_size * 8 - (startpos - faad_get_processed_bits(ld)));
-    if((mp4ASC->objectTypeIndex != 5 && mp4ASC->objectTypeIndex != 29) && (bits_to_decode >= 16)) {
+    if((m_mp4ASC->objectTypeIndex != 5 && m_mp4ASC->objectTypeIndex != 29) && (bits_to_decode >= 16)) {
         int16_t syncExtensionType = (int16_t)faad_getbits(ld, 11);
         if(syncExtensionType == 0x2b7) {
             uint8_t tmp_OTi = (uint8_t)faad_getbits(ld, 5);
             if(tmp_OTi == 5) {
-                mp4ASC->sbr_present_flag = (uint8_t)faad_get1bit(ld);
-                if(mp4ASC->sbr_present_flag) {
+                m_mp4ASC->sbr_present_flag = (uint8_t)faad_get1bit(ld);
+                if(m_mp4ASC->sbr_present_flag) {
                     uint8_t tmp;
                     /* Don't set OT to SBR until checked that it is actually there */
-                    mp4ASC->objectTypeIndex = tmp_OTi;
+                    m_mp4ASC->objectTypeIndex = tmp_OTi;
                     tmp = (uint8_t)faad_getbits(ld, 4);
                     /* check for downsampled SBR */
-                    if(tmp == mp4ASC->samplingFrequencyIndex) mp4ASC->downSampledSBR = 1;
-                    mp4ASC->samplingFrequencyIndex = tmp;
-                    if(mp4ASC->samplingFrequencyIndex == 15) { mp4ASC->samplingFrequency = (uint32_t)faad_getbits(ld, 24); }
-                    else { mp4ASC->samplingFrequency = get_sample_rate(mp4ASC->samplingFrequencyIndex); }
+                    if(tmp == m_mp4ASC->samplingFrequencyIndex) m_mp4ASC->downSampledSBR = 1;
+                    m_mp4ASC->samplingFrequencyIndex = tmp;
+                    if(m_mp4ASC->samplingFrequencyIndex == 15) { m_mp4ASC->samplingFrequency = (uint32_t)faad_getbits(ld, 24); }
+                    else { m_mp4ASC->samplingFrequency = get_sample_rate(m_mp4ASC->samplingFrequencyIndex); }
                 }
             }
         }
     }
     /* no SBR signalled, this could mean either implicit signalling or no SBR in this file */
     /* MPEG specification states: assume SBR on files with samplerate <= 24000 Hz */
-    if(mp4ASC->sbr_present_flag == (int8_t)-1) /* cannot be -1 on systems with uint8_t*/
+    if(m_mp4ASC->sbr_present_flag == (int8_t)-1) /* cannot be -1 on systems with uint8_t*/
     {
-        if(mp4ASC->samplingFrequency <= 24000) {
-            mp4ASC->samplingFrequency *= 2;
-            mp4ASC->forceUpSampling = 1;
+        if(m_mp4ASC->samplingFrequency <= 24000) {
+            m_mp4ASC->samplingFrequency *= 2;
+            m_mp4ASC->forceUpSampling = 1;
         }
-        else /* > 24000*/ { mp4ASC->downSampledSBR = 1; }
+        else /* > 24000*/ { m_mp4ASC->downSampledSBR = 1; }
     }
 #endif
     return result;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce, uint8_t short_form) {
+int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, program_config_t* pce, uint8_t short_form) {
     uint8_t   ret = 0;
     bitfile_t ld = {0,0,0,0,0,0,0,0,0}; // ld.bits_left = 0;
     faad_initbits(&ld, pBuffer, buffer_size);
     faad_byte_align(&ld);
-    ret = AudioSpecificConfigFrombitfile_t(&ld, mp4ASC, pce, buffer_size, short_form);
+    ret = AudioSpecificConfigFrombitfile(&ld, pce, buffer_size, short_form);
     return ret;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -8203,19 +8202,19 @@ static uint8_t middleBorder(sbr_info_t* sbr, uint8_t ch) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.1 */
-int8_t GASpecificConfig(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program_config_t* pce_out) {
+int8_t GASpecificConfig(bitfile_t* ld, program_config_t* pce_out) {
     program_config_t pce;
     /* 1024 or 960 */
-    mp4ASC->frameLengthFlag = faad_get1bit(ld);
+    m_mp4ASC->frameLengthFlag = faad_get1bit(ld);
 #ifndef ALLOW_SMALL_FRAMELENGTH
-    if(mp4ASC->frameLengthFlag == 1) return -3;
+    if(m_mp4ASC->frameLengthFlag == 1) return -3;
 #endif
-    mp4ASC->dependsOnCoreCoder = faad_get1bit(ld);
-    if(mp4ASC->dependsOnCoreCoder == 1) { mp4ASC->coreCoderDelay = (uint16_t)faad_getbits(ld, 14); }
-    mp4ASC->extensionFlag = faad_get1bit(ld);
-    if(mp4ASC->channelsConfiguration == 0) {
+    m_mp4ASC->dependsOnCoreCoder = faad_get1bit(ld);
+    if(m_mp4ASC->dependsOnCoreCoder == 1) { m_mp4ASC->coreCoderDelay = (uint16_t)faad_getbits(ld, 14); }
+    m_mp4ASC->extensionFlag = faad_get1bit(ld);
+    if(m_mp4ASC->channelsConfiguration == 0) {
         if(program_config_t_element(&pce, ld)) return -3;
-        // mp4ASC->channelsConfiguration = pce.channels;
+        // m_mp4ASC->channelsConfiguration = pce.channels;
         if(pce_out != NULL) memcpy(pce_out, &pce, sizeof(program_config_t));
         /*
         if (pce.num_valid_cc_elements)
@@ -8223,12 +8222,12 @@ int8_t GASpecificConfig(bitfile_t* ld, mp4AudioSpecificConfig_t* mp4ASC, program
         */
     }
 #ifdef ERROR_RESILIENCE
-    if(mp4ASC->extensionFlag == 1) {
+    if(m_mp4ASC->extensionFlag == 1) {
         /* Error resilience not supported yet */
-        if(mp4ASC->objectTypeIndex >= ER_OBJECT_START) {
-            mp4ASC->aacSectionDataResilienceFlag = faad_get1bit(ld);
-            mp4ASC->aacScalefactorDataResilienceFlag = faad_get1bit(ld);
-            mp4ASC->aacSpectralDataResilienceFlag = faad_get1bit(ld);
+        if(m_mp4ASC->objectTypeIndex >= ER_OBJECT_START) {
+            m_mp4ASC->aacSectionDataResilienceFlag = faad_get1bit(ld);
+            m_mp4ASC->aacScalefactorDataResilienceFlag = faad_get1bit(ld);
+            m_mp4ASC->aacSpectralDataResilienceFlag = faad_get1bit(ld);
         }
         /* 1 bit: extensionFlag3 */
         faad_getbits(ld, 1);
@@ -9484,7 +9483,7 @@ static uint32_t latmAudioMuxElement(latm_header_t* latm, bitfile_t* ld) {
         if(latm->version) ascLen = latm_get_value(ld);
         x1 = faad_get_processed_bits(ld);
 
-        if(AudioSpecificConfigFrombitfile_t(ld, m_mp4ASC_ame, &pce, 0, 1) < 0) {
+        if(AudioSpecificConfigFrombitfile(ld, &pce, 0, 1) < 0) {
             ret = 0;
             goto exit;
         }
