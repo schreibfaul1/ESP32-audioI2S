@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 28.07.2024
+ *  Updated on: 13.08.2024
 */
 
 
@@ -20,11 +20,14 @@ NeAACDecFrameInfo_t frameInfo;
 NeAACDecConfigurationPtr_t conf;
 bool f_decoderIsInit = false;
 bool f_firstCall = false;
+bool f_setRaWBlockParams = false;
 uint32_t aacSamplerate = 0;
 uint8_t aacChannels = 0;
+uint8_t aacProfile = 0;
 static uint16_t validSamples = 0;
 clock_t before;
 float compressionRatio = 1;
+mp4AudioSpecificConfig_t* mp4ASC;
 
 //----------------------------------------------------------------------------------------------------------------------
 bool AACDecoder_IsInit(){
@@ -35,9 +38,10 @@ bool AACDecoder_AllocateBuffers(){
     before = clock();
     hAac = NeAACDecOpen();
     conf = NeAACDecGetCurrentConfiguration(hAac);
-    NeAACDecSetConfiguration(hAac, conf);
+
     if(hAac) f_decoderIsInit = true;
     f_firstCall = false;
+    f_setRaWBlockParams = false;
     return f_decoderIsInit;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -75,11 +79,11 @@ int AACFindSyncWord(uint8_t *buf, int nBytes){
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
-int AACSetRawBlockParams(int copyLast, int nChans, int sampRateCore, int profile){
-    (void)copyLast;
-    (void)nChans;
-    (void)sampRateCore;
-    (void)profile;
+int AACSetRawBlockParams(int nChans, int sampRateCore, int profile){
+    f_setRaWBlockParams = true;
+    aacChannels = nChans;  // 1: Mono, 2: Stereo
+    aacSamplerate = sampRateCore; // 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
+    aacProfile = profile; //1: AAC Main, 2: AAC LC (Low Complexity), 3: AAC SSR (Scalable Sample Rate), 4: AAC LTP (Long Term Prediction)
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -104,10 +108,30 @@ int AACGetBitsPerSample(){
     return 16;
 }
 //----------------------------------------------------------------------------------------------------------------------
+void createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t samplingFrequencyIndex, uint8_t channelConfiguration) {
+    config[0] = (audioObjectType << 3) | (samplingFrequencyIndex >> 1);
+    config[1] = (samplingFrequencyIndex << 7) | (channelConfiguration << 3);
+}
+//----------------------------------------------------------------------------------------------------------------------
 int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     uint8_t* ob = (uint8_t*)outbuf;
     if (f_firstCall == false){
-        int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels);
+        if(f_setRaWBlockParams){ // set raw AAC values, e.g. for M4A config.
+            f_setRaWBlockParams = false;
+            conf->defSampleRate = aacSamplerate;
+            conf->outputFormat = FAAD_FMT_16BIT;
+            conf->useOldADTSFormat = 1;
+            conf->defObjectType = 2;
+            int8_t ret = NeAACDecSetConfiguration(hAac, conf);
+
+            uint8_t specificInfo[2];
+            createAudioSpecificConfig(specificInfo, aacProfile, get_sr_index(aacSamplerate), aacChannels);
+            int8_t err = NeAACDecInit2(hAac, specificInfo, 2, &aacSamplerate, &aacChannels);
+        }
+        else{
+            NeAACDecSetConfiguration(hAac, conf);
+            int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels);
+        }
         f_firstCall = true;
     }
 
