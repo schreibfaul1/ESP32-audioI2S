@@ -228,7 +228,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_PLL_160M;        // Select PLL_F160M as the default source clock
     m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_512;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    I2Sstart(0);
+    I2Sstart(m_i2s_num);
     m_sampleRate = 44100;
 
     if (internalDAC)  {
@@ -290,6 +290,7 @@ Audio::~Audio() {
         m_playlistBuff = NULL;
     }
 #if ESP_IDF_VERSION_MAJOR == 5
+    i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
 #else
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
@@ -4868,9 +4869,9 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     gpio_cfg.dout = (gpio_num_t)DOUT;
     gpio_cfg.mclk = (gpio_num_t)MCLK;
     gpio_cfg.ws = (gpio_num_t)LRC;
-    I2Sstop(0);
+    I2Sstop(m_i2s_num);
     result = i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg);
-    I2Sstart(0);
+    I2Sstart(m_i2s_num);
 #else
     m_pin_config.bck_io_num = BCLK;
     m_pin_config.ws_io_num = LRC; //  wclk = lrc
@@ -4979,10 +4980,10 @@ bool Audio::audioFileSeek(const float speed) {
 
     uint32_t srate = getSampleRate() * speed;
 #if ESP_IDF_VERSION_MAJOR == 5
-    I2Sstop(0);
+    I2Sstop(m_i2s_num);
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = srate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    I2Sstart(0);
+    I2Sstart(m_i2s_num);
 #else
     i2s_set_sample_rates((i2s_port_t)m_i2s_num, srate);
 #endif
@@ -5027,7 +5028,7 @@ void Audio::reconfigI2S(){
 
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
-    I2Sstart(0);
+    I2Sstart(m_i2s_num);
 #else
     m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
     i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
