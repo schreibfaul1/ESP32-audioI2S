@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12g
+ *  Version 3.0.12h
  *  Updated on: Aug 09.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -434,6 +434,9 @@ void Audio::setDefaults() {
     m_ID3Size = 0;
     m_haveNewFilePos = 0;
     m_validSamples = 0;
+    m_M4A_chConfig = 0;
+    m_M4A_objectType = 0;
+    m_M4A_sampleRate = 0;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2173,6 +2176,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             else if(objectType == 5) { AUDIO_INFO("AudioObjectType: AAC Spectral Band Replication"); }
             else if(objectType == 6) { AUDIO_INFO("AudioObjectType: AAC Scalable"); }
             else { AUDIO_INFO("unknown ObjectType %x, stop", objectType); stopSong();}
+            if(objectType < 7) m_M4A_objectType = objectType;
 
             const uint32_t samplingFrequencies[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
             uint8_t        sRate = (ASC & 0x0600) >> 7; // next 4 bits Sampling Frequencies
@@ -2183,6 +2187,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             if(chConfig == 1) AUDIO_INFO("Channel Configurations: front-center");
             if(chConfig == 2) AUDIO_INFO("Channel Configurations: front-left, front-right");
             if(chConfig > 2) { log_e("Channel Configurations with more than 2 channels is not allowed, stop!"); stopSong();}
+            if(chConfig < 3) m_M4A_chConfig = chConfig;
 
             uint8_t frameLengthFlag = (ASC & 0x04);
             uint8_t dependsOnCoreCoder = (ASC & 0x02);
@@ -2200,7 +2205,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             int srate = bigEndian(data + offset + 26, 4);   //
             setBitsPerSample(bps);
             setChannels(channel);
+            if(!m_M4A_chConfig) m_M4A_chConfig = channel;
             setSampleRate(srate);
+            m_M4A_sampleRate = srate;
             setBitrate(bps * channel * srate);
             AUDIO_INFO("ch; %i, bps: %i, sr: %i", channel, bps, srate);
             if(audioDataPos && getDatamode() == AUDIO_LOCALFILE) {
@@ -3200,7 +3207,7 @@ void Audio::processLocalFile() {
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
 
     static uint32_t ctime = 0;
-    const uint32_t  timeout = 2500;                          // ms
+    const uint32_t  timeout = 6500;                          // ms
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static bool     f_fileDataComplete;
     static uint32_t byteCounter; // count received data
@@ -4499,7 +4506,10 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 #ifndef AUDIO_I2S_DISABLE_AAC_DECODER
     if(m_codec == CODEC_AAC) { nextSync = AACFindSyncWord(data, len); }
     if(m_codec == CODEC_M4A) {
-        AACSetRawBlockParams(0, 2, 44100, 1);
+        if(!m_M4A_chConfig)m_M4A_chConfig = 2; // guard
+        if(!m_M4A_sampleRate)m_M4A_sampleRate = 44100;
+        if(!m_M4A_objectType)m_M4A_objectType = 2;
+        AACSetRawBlockParams(m_M4A_chConfig, m_M4A_sampleRate, m_M4A_objectType);
         m_f_playing = true;
         nextSync = 0;
     }
@@ -4896,7 +4906,7 @@ void Audio::printDecodeError(int r) {
     }
 #endif
 #ifndef AUDIO_I2S_DISABLE_AAC_DECODER
-    if(m_codec == CODEC_AAC) {
+    if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         e = AACGetErrorMessage(abs(r));
         AUDIO_INFO("AAC decode error %d : %s", r, e);
     }

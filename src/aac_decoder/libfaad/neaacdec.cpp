@@ -5127,7 +5127,8 @@ int8_t AudioSpecificConfigFrombitfile(bitfile_t* ld, program_config_t* pce, uint
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, program_config_t* pce, uint8_t short_form) {
     uint8_t   ret = 0;
-    bitfile_t ld = {0,0,0,0,0,0,0,0,0}; // ld.bits_left = 0;
+    bitfile_t ld;
+    memset(&ld, 0, sizeof(ld));
     faad_initbits(&ld, pBuffer, buffer_size);
     faad_byte_align(&ld);
     ret = AudioSpecificConfigFrombitfile(&ld, pce, buffer_size, short_form);
