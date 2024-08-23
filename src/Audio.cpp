@@ -197,7 +197,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 
 #define AUDIO_INFO(...)                     \
     {                                       \
-        sprintf(m_ibuff, __VA_ARGS__);      \
+        snprintf(m_ibuff, m_ibuffSize, __VA_ARGS__);      \
         if(audio_info) audio_info(m_ibuff); \
     }
 
@@ -532,13 +532,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     uint16_t lenHost = strlen(host);
 
-    if(lenHost >= 512 - 10) {
-        AUDIO_INFO("Hostaddress is too long");
-        stopSong();
-        xSemaphoreGive(mutex_playAudioData);
-        return false;
-    }
-
     int   idx = indexOf(host, "http");
     char* l_host = (char*)malloc(lenHost + 10);
     if(idx < 0) {
@@ -604,8 +597,16 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     //  AUDIO_INFO("Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
 
-    char rqh[strlen(h_host) + strlen(authorization) + 220]; // http request header
-    rqh[0] = '\0';
+    // allocate space for the request header
+    // 4 + len(extension) + 11 + 6 + len(hostwoext) + 2 + 16 + 16 + 37 + [25] + 26 = 143 (+ null terminator)
+    size_t rqh_alloc_len = strlen(hostwoext) + strlen(extension) + 145;
+    if (auth > 0) {
+        // + 21 + len(authorization) + 2
+        rqh_alloc_len += 23 + strlen(authorization);
+    }
+
+    char *rqh = (char*)malloc(rqh_alloc_len); // http request header
+    memset(rqh, '\0', rqh_alloc_len);
 
     strcat(rqh, "GET ");
     strcat(rqh, extension);
@@ -625,6 +626,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
     //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
+
+    const size_t rqh_real_len = strlen(rqh);
+    if (rqh_real_len >= rqh_alloc_len) {
+      AUDIO_INFO("connecttohost: rqh overflowed, real_len=%d, alloc_len=%d. sorry", rqh_real_len, rqh_alloc_len);
+    }
 
     bool res = true; // no need to reconnect if connection exists
 
@@ -678,6 +684,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
         m_lastHost[0] = 0;
+    }
+
+    if (rqh) {
+        free(rqh);
+        rqh = NULL;
     }
     if(hostwoext) {
         free(hostwoext);
