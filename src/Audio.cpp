@@ -644,6 +644,30 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     AUDIO_INFO("connect to: \"%s\" on port %d path \"%s\"", hostwoext, port, extension);
 
+    if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
+    if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
+    if(endsWith(extension, ".wav" )) m_expectedCodec  = CODEC_WAV;
+    if(endsWith(extension, ".m4a" )) m_expectedCodec  = CODEC_M4A;
+    if(endsWith(extension, ".ogg" )) m_expectedCodec  = CODEC_OGG;
+    if(endsWith(extension, ".flac")) m_expectedCodec  = CODEC_FLAC;
+    if(endsWith(extension, "-flac")) m_expectedCodec  = CODEC_FLAC;
+    if(endsWith(extension, ".opus")) m_expectedCodec  = CODEC_OPUS;
+    if(endsWith(extension, "/opus")) m_expectedCodec  = CODEC_OPUS;
+    if(endsWith(extension, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
+    if(endsWith(extension, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
+    if(endsWith(extension, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
+    if(endsWith(extension, ".m3u8")) {
+        m_expectedPlsFmt = FORMAT_M3U8;
+        if(audio_lasthost) audio_lasthost(host);
+    }
+
+    // free extension early, as it may be rather large
+    // & we need all the heap we can get for a eventual SSL connection
+    if(extension) {
+        free(extension);
+        extension = NULL;
+    }
+
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
     res = _client->connect(hostwoext, port);
     if(res) {
@@ -651,29 +675,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         strncpy(m_lastHost, l_host, 512);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
-    }
-    m_expectedCodec = CODEC_NONE;
-    m_expectedPlsFmt = FORMAT_NONE;
 
-    if(res) {
     //    log_i("connecttohost(): %s", rqh);
         _client->print(rqh);
-        if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
-        if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
-        if(endsWith(extension, ".wav" )) m_expectedCodec  = CODEC_WAV;
-        if(endsWith(extension, ".m4a" )) m_expectedCodec  = CODEC_M4A;
-        if(endsWith(extension, ".ogg" )) m_expectedCodec  = CODEC_OGG;
-        if(endsWith(extension, ".flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(extension, "-flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(extension, ".opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(extension, "/opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(extension, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
-        if(endsWith(extension, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
-        if(endsWith(extension, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
-        if(endsWith(extension, ".m3u8")) {
-            m_expectedPlsFmt = FORMAT_M3U8;
-            if(audio_lasthost) audio_lasthost(host);
-        }
+        
         setDatamode(HTTP_RESPONSE_HEADER); // Handle header
         m_streamType = ST_WEBSTREAM;
     }
@@ -684,6 +689,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
         m_lastHost[0] = 0;
+
+        m_expectedCodec = CODEC_NONE;
+        m_expectedPlsFmt = FORMAT_NONE;
     }
 
     if (rqh) {
@@ -693,10 +701,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(hostwoext) {
         free(hostwoext);
         hostwoext = NULL;
-    }
-    if(extension) {
-        free(extension);
-        extension = NULL;
     }
     if(l_host) {
         free(l_host);
