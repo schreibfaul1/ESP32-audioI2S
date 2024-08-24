@@ -551,15 +551,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     else m_f_ssl = false;
 
     // initializationsequence
-    int16_t  pos_slash = indexOf(host, "/", 10);;     // position of "/" in hostname
-    int16_t  pos_colon = indexOf(host, ":", 10);;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
+     uint16_t port = 80;     // port number
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = indexOf(host, "/", 10);
-    pos_colon     = indexOf(host, ":", 10); if(isalpha(host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(host, "&", 10);
+    int16_t pos_slash     = indexOf(host, "/", 10); // position of "/" in hostname
+    int16_t pos_colon     = indexOf(host, ":", 10); if(isalpha(host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    int16_t pos_ampersand = indexOf(host, "&", 10); // position of "&" in hostname
 
     char* hostwoext = NULL;
     char* extension = NULL;
