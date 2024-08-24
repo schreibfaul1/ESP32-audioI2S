@@ -424,16 +424,31 @@ private:
         }
         return hash;
 	  }
-    char* x_strdup(const char* str){
-        if(m_f_psramFound){
-            char* s = (char*)ps_malloc(strlen(str) + 1);
-            strcpy(s, str);
-            return s;
-        }
-        else{
-            return strdup(str);
-        }
+
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_malloc(uint16_t len) {
+        char* ps_str = NULL;
+        if(psramFound()){ps_str = (char*) ps_malloc(len);}
+        else             {ps_str = (char*)    malloc(len);}
+        return ps_str;
     }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_calloc(uint16_t len, uint8_t size) {
+        char* ps_str = NULL;
+        if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
+        else             {ps_str = (char*)    calloc(len, size);}
+        return ps_str;
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_strdup(const char* str) {
+        if(!str) return strdup(""); // better not to return NULL
+        char* ps_str = NULL;
+        if(psramFound()) { ps_str = (char*)ps_malloc(strlen(str) + 1); }
+        else { ps_str = (char*)malloc(strlen(str) + 1); }
+        strcpy(ps_str, str);
+        return ps_str;
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };

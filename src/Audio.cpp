@@ -188,7 +188,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_f_psramFound = psramInit();
     if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
     if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
-    m_lastHost = (char*)__malloc_heap_psram(512);
+    m_lastHost = (char*) x_ps_malloc(2048);
     m_outBuff = (int16_t*)__malloc_heap_psram(m_outbuffSize);
     m_chbuf = (char*)__malloc_heap_psram(m_chbufSize);
     m_ibuff = (char*)__malloc_heap_psram(m_ibuffSize);
@@ -519,77 +519,72 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
-    // user and pwd for authentification only, can be empty
+bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
+
+//    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
+//        |   |                                     |    |                              |
+//        |   |                                     |    |                              |             (query string)
+//    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+
+    if (host == NULL) {
+        AUDIO_INFO("Hostaddress is empty");
+        stopSong();
+        return false;
+    }
+
+    if (!startsWith(host, "https") && !startsWith(host, "http")) {
+        AUDIO_INFO("Hostaddress is not valid");
+        stopSong();
+        return false;
+    }
+
+    if (strlen(host) > 2048) {  // Google max length in Chrome DevTools
+        AUDIO_INFO("Hostaddress is too long");
+        stopSong();
+        return false;
+    }
 
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
 
-    if(host == NULL) {
-        AUDIO_INFO("Hostaddress is empty");
-        stopSong();
-        xSemaphoreGive(mutex_playAudioData);
-        return false;
-    }
-
-    uint16_t lenHost = strlen(host);
-
-    if(lenHost >= 512 - 10) {
-        AUDIO_INFO("Hostaddress is too long");
-        stopSong();
-        xSemaphoreGive(mutex_playAudioData);
-        return false;
-    }
-
-    int   idx = indexOf(host, "http");
-    char* l_host = (char*)malloc(lenHost + 10);
-    if(idx < 0) {
-        strcpy(l_host, "http://");
-        strcat(l_host, host);
-    }                                      // amend "http;//" if not found
-    else { strcpy(l_host, (host + idx)); } // trim left if necessary
-
-    char* h_host = NULL; // pointer of l_host without http:// or https://
-    if(startsWith(l_host, "https")) h_host = strdup(l_host + 8);
-    else h_host = strdup(l_host + 7);
+    setDefaults();
+    if(startsWith(host, "https")) m_f_ssl = true;
+    else m_f_ssl = false;
 
     // initializationsequence
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
+    int16_t  pos_slash = indexOf(host, "/", 10);;     // position of "/" in hostname
+    int16_t  pos_colon = indexOf(host, ":", 10);;     // position of ":" in hostname
     int16_t  pos_ampersand; // position of "&" in hostname
     uint16_t port = 80;     // port number
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = indexOf(h_host, "/", 0);
-    pos_colon = indexOf(h_host, ":", 0);
-    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(h_host, "&", 0);
+    pos_slash     = indexOf(host, "/", 10);
+    pos_colon     = indexOf(host, ":", 10); if(isalpha(host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = indexOf(host, "&", 10);
 
-    char* hostwoext = NULL; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    char* hostwoext = NULL;
+    char* extension = NULL;
+    uint16_t extLen = 0;
 
     if(pos_slash > 1) {
-        hostwoext = (char*)malloc(pos_slash + 1);
-        memcpy(hostwoext, h_host, pos_slash);
+        hostwoext = x_ps_malloc(pos_slash + 1);
+        memcpy(hostwoext, host, pos_slash);
         hostwoext[pos_slash] = '\0';
-        uint16_t extLen = urlencode_expected_len(h_host + pos_slash);
-        extension = (char*)malloc(extLen + 20);
-        memcpy(extension, h_host + pos_slash, extLen);
+        if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
+            port = atoi(host + pos_colon + 1);   // Get portnumber as integer
+            hostwoext[pos_colon] = '\0';         // Host without portnumber
+        }
+        extLen = urlencode_expected_len(host + pos_slash);
+        extension = x_ps_malloc(extLen + 20);
+        memcpy(extension, host + pos_slash, extLen);
         urlencode(extension, extLen, true);
     }
     else { // url has no extension
-        hostwoext = strdup(h_host);
-        extension = strdup("/");
+        hostwoext = x_ps_strdup(host);
+        extension = x_ps_strdup("/");
     }
 
-    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(h_host + pos_colon + 1); // Get portnumber as integer
-        hostwoext[pos_colon] = '\0';         // Host without portnumber
-    }
-
-    setDefaults(); // no need to stop clients if connection is established (default is true)
-
-    if(startsWith(l_host, "https")) m_f_ssl = true;
-    else m_f_ssl = false;
+    if (m_f_ssl) memmove(hostwoext, hostwoext + 8, strlen(hostwoext) - 8 + 1); // remove https://
+    else         memmove(hostwoext, hostwoext + 7, strlen(hostwoext) - 7 + 1); // remove http://
 
     // optional basic authorization
     uint16_t auth = strlen(user) + strlen(pwd);
@@ -605,8 +600,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     //  AUDIO_INFO("Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
 
-    char rqh[strlen(h_host) + strlen(authorization) + 220]; // http request header
-    rqh[0] = '\0';
+    char* rqh = x_ps_calloc(strlen(extension) + strlen(hostwoext) + strlen(authorization) + 220, 1); // http request header
 
     strcat(rqh, "GET ");
     strcat(rqh, extension);
@@ -643,7 +637,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     res = _client->connect(hostwoext, port);
     if(res) {
         uint32_t dt = millis() - t;
-        strcpy(m_lastHost, l_host);
+        strcpy(m_lastHost, host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
     }
@@ -673,13 +667,15 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         m_streamType = ST_WEBSTREAM;
     }
     else {
-        AUDIO_INFO("Request %s failed!", l_host);
+        AUDIO_INFO("Request %s failed!", host);
         if(audio_showstation) audio_showstation("");
         if(audio_showstreamtitle) audio_showstreamtitle("");
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
         m_lastHost[0] = 0;
     }
+
+    xSemaphoreGive(mutex_playAudioData);
     if(hostwoext) {
         free(hostwoext);
         hostwoext = NULL;
@@ -688,15 +684,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         free(extension);
         extension = NULL;
     }
-    if(l_host) {
-        free(l_host);
-        l_host = NULL;
+    if(rqh) {
+        free(rqh);
+        rqh = NULL;
     }
-    if(h_host) {
-        free(h_host);
-        h_host = NULL;
-    }
-    xSemaphoreGive(mutex_playAudioData);
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1262,7 +1253,7 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
         if(isUTF8 == true) return true; // is UTF-8, do nothing
     }
 
-    char* iso8859_1 = x_strdup(buff);
+    char* iso8859_1 = x_ps_strdup(buff);
     if(!iso8859_1){log_e("oom"); return false;}
 
     while(iso8859_1[in] != '\0'){
@@ -2604,7 +2595,7 @@ bool Audio::readPlayListData() {
             AUDIO_INFO("url is a webpage!");
             goto exit;
         }
-        if(strlen(pl) > 0) m_playlistContent.push_back(x_strdup(pl));
+        if(strlen(pl) > 0) m_playlistContent.push_back(x_ps_strdup(pl));
         if(!m_f_psramFound && m_playlistContent.size() == 101) {
             AUDIO_INFO("the number of lines in playlist > 100, for bigger playlist use PSRAM!");
             break;
