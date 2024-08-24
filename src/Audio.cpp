@@ -301,6 +301,7 @@ Audio::~Audio() {
     if(m_ibuff)       {free(m_ibuff);        m_ibuff        = NULL;}
     if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
 
+    stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
 }
 // clang-format on
