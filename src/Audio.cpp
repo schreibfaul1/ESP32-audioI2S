@@ -522,6 +522,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
     bool     res           = false; // return value
+    uint16_t lenHost       = 0;     // length of hostname
     uint16_t port          = 0;     // port number
     uint16_t authLen       = 0;     // length of authorization
     int16_t  pos_slash     = 0;     // position of "/" in hostname
@@ -550,6 +551,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     else                          {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     h_host = x_ps_strdup(host);
+    lenHost = strlen(h_host);
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(h_host, "/", 10); // position of "/" in hostname
@@ -580,7 +582,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
 
     setDefaults();
-    rqh = x_ps_calloc(strlen(h_host) + strlen(authorization) + 220, 1); // http request header
+    rqh = x_ps_calloc(lenHost + strlen(authorization) + 200, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
@@ -591,6 +593,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "\r\n");
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
+ //                    strcat(rqh, "User-Agent: Mozilla/5.0\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
