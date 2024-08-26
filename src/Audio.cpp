@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 26.2018
  *
- *  Version 3.0.12h
- *  Updated on: Aug 09.2024
+ *  Version 3.0.12i
+ *  Updated on: Aug 26.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -597,7 +597,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
                        strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); log_w("ssl"); }
+    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
     else        { _client = static_cast<WiFiClient*>(&client); }
 
     timestamp = millis();
