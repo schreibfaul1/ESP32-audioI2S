@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12h
- *  Updated on: Jul 29.2024
+ *  Version 3.0.12i
+ *  Updated on: Aug 26.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -199,6 +199,7 @@ private:
   void            processWebStreamHLS();
   void            playAudioData();
   bool            readPlayListData();
+  bool            setWebFilePos(uint32_t pos);
   const char*     parsePlaylist_M3U();
   const char*     parsePlaylist_PLS();
   const char*     parsePlaylist_ASX();
@@ -235,7 +236,6 @@ private:
   bool            initializeDecoder();
   esp_err_t       I2Sstart(uint8_t i2s_num);
   esp_err_t       I2Sstop(uint8_t i2s_num);
-  void            urlencode(char* buff, uint16_t buffLen, bool spacesOnly = false);
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
@@ -369,7 +369,7 @@ private:
         }
         return result;
     }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // some other functions
     size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
         uint64_t result = 0;
@@ -380,7 +380,7 @@ private:
         if(result > SIZE_MAX) {log_e("range overflow"); result = 0;} // overflow
         return (size_t)result;
     }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     bool b64encode(const char* source, uint16_t sourceLength, char* dest){
         size_t size = base64_encode_expected_len(sourceLength) + 1;
         char * buffer = (char *) malloc(size);
@@ -396,14 +396,33 @@ private:
         }
         return false;
     }
-    size_t urlencode_expected_len(const char* source){
-        size_t expectedLen = strlen(source);
-        for(int i = 0; i < strlen(source); i++) {
-            if(isalnum(source[i])){;}
-            else expectedLen += 2;
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* urlencode(const char* str, bool spacesOnly){
+        // Reserve memory for the result (3x the length of the input string, worst-case)
+        char *encoded = x_ps_malloc(strlen(str) * 3 + 1);
+        char *p_encoded = encoded;
+
+        if (encoded == NULL) {
+            return NULL;  // Memory allocation failed
         }
-        return expectedLen;
+
+        while (*str) {
+            // Adopt alphanumeric characters and secure characters directly
+            if (isalnum((unsigned char)*str)) {
+                *p_encoded++ = *str;
+            }
+            else if(spacesOnly && *str != 0x20) {
+                *p_encoded++ = *str;
+            }
+            else {
+                p_encoded += sprintf(p_encoded, "%%%02X", (unsigned char)*str);
+            }
+            str++;
+        }
+        *p_encoded = '\0';  // Null-terminieren
+        return encoded;
     }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     void vector_clear_and_shrink(vector<char*>&vec){
         uint size = vec.size();
         for (int i = 0; i < size; i++) {
@@ -415,6 +434,7 @@ private:
         vec.clear();
         vec.shrink_to_fit();
     }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
         if(str == NULL) return 0;
         uint32_t hash = 0;
@@ -424,16 +444,30 @@ private:
         }
         return hash;
 	  }
-    char* x_strdup(const char* str){
-        if(m_f_psramFound){
-            char* s = (char*)ps_malloc(strlen(str) + 1);
-            strcpy(s, str);
-            return s;
-        }
-        else{
-            return strdup(str);
-        }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_malloc(uint16_t len) {
+        char* ps_str = NULL;
+        if(psramFound()){ps_str = (char*) ps_malloc(len);}
+        else             {ps_str = (char*)    malloc(len);}
+        return ps_str;
     }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_calloc(uint16_t len, uint8_t size) {
+        char* ps_str = NULL;
+        if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
+        else             {ps_str = (char*)    calloc(len, size);}
+        return ps_str;
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* x_ps_strdup(const char* str) {
+        if(!str) return strdup(""); // better not to return NULL
+        char* ps_str = NULL;
+        if(psramFound()) { ps_str = (char*)ps_malloc(strlen(str) + 1); }
+        else { ps_str = (char*)malloc(strlen(str) + 1); }
+        strcpy(ps_str, str);
+        return ps_str;
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
@@ -520,6 +554,7 @@ private:
     uint8_t         m_vol_steps = 21;               // default
     double          m_limit_left = 0;               // limiter 0 ... 1, left channel
     double          m_limit_right = 0;              // limiter 0 ... 1, right channel
+    uint8_t         m_timeoutCounter = 0;           // timeout counter
     uint8_t         m_curve = 0;                    // volume characteristic
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels = 2;
