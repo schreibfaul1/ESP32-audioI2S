@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12i
- *  Updated on: Aug 26.2024
+ *  Version 3.0.12j
+ *  Updated on: Aug 27.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -278,23 +278,24 @@ private:
     }
 
 
-    void trim(char *s) {
-    //fb   trim in place
-        char *pe;
-        char *p = s;
-        while ( isspace(*p) ) p++; //left
-        pe = p; //right
-        while ( *pe != '\0' ) pe++;
-        do {
-            pe--;
-        } while ( (pe > p) && isspace(*pe) );
-        if (p == s) {
-            *++pe = '\0';
-        } else {  //move
-            while ( p <= pe ) *s++ = *p++;
-            *s = '\0';
-        }
+void trim(char *str) {
+    char *start = str;  // keep the original pointer
+    char *end;
+    while (isspace((unsigned char)*start)) start++; // find the first non-space character
+
+    if (*start == 0) {  // all characters were spaces
+        str[0] = '\0';  // return a empty string
+        return;
     }
+
+    end = start + strlen(start) - 1;  // find the end of the string
+
+    while (end > start && isspace((unsigned char)*end)) end--;
+    end[1] = '\0';  // Null-terminate the string after the last non-space character
+
+    // Move the trimmed string to the beginning of the memory area
+    memmove(str, start, strlen(start) + 1);  // +1 for '\0'
+}
 
     bool startsWith (const char* base, const char* str) {
     //fb

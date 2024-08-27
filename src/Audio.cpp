@@ -1,9 +1,9 @@
 /*
  * Audio.cpp
  *
- *  Created on: Oct 26.2018
+ *  Created on: Oct 27.2018
  *
- *  Version 3.0.12i
+ *  Version 3.0.12j
  *  Updated on: Aug 26.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -544,14 +544,16 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
 
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
-    if (!startsWith(host, "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
-    if(startsWith(host, "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
-    else                          {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
-
     h_host = x_ps_strdup(host);
+    trim(h_host);  // remove leading and trailing spaces
     lenHost = strlen(h_host);
+
+    if(!startsWith(h_host, "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
+
+    if(startsWith(h_host, "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
+    else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(h_host, "/", 10); // position of "/" in hostname
@@ -615,7 +617,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(res) {
         uint32_t dt = millis() - timestamp;
-        strcpy(m_lastHost, host);
+        strcpy(m_lastHost, h_host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
     }
