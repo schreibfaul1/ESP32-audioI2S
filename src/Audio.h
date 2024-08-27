@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12j
+ *  Version 3.0.12k
  *  Updated on: Aug 27.2024
  *      Author: Wolle (schreibfaul1)
  */
@@ -249,6 +249,10 @@ private:
 public:
   void            setAudioTaskCore(uint8_t coreID);
 private:
+  static const size_t STACK_SIZE = 3300;
+  StaticTask_t xTaskBuffer;
+  StackType_t xStack[STACK_SIZE];
+
   void            startAudioTask(); // starts a task for decode and play
   void            stopAudioTask();  // stops task for audio
   static void     taskWrapper(void *param);
