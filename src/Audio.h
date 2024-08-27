@@ -255,6 +255,10 @@ private:
   void            audioTask();
   void            performAudioTask();
 
+  inline static constexpr const size_t STACK_SIZE = 3300;
+  StaticTask_t xTaskBuffer;
+  StackType_t  xStack[STACK_SIZE];
+
   //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
   uint16_t readMetadata(uint16_t b, bool first = false);
   size_t   chunkedDataTransfer(uint8_t* bytes);

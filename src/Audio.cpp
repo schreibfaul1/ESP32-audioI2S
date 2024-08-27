@@ -6338,13 +6338,14 @@ void Audio::startAudioTask() {
 
     // xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
 
-    xTaskCreatePinnedToCore(
+    xTaskCreateStaticPinnedToCore(
         &Audio::taskWrapper,    /* Function to implement the task */
         "PeriodicTask",         /* Name of the task */
-        3300,                   /* Stack size in words */
+        STACK_SIZE,             /* Stack size in words */
         this,                   /* Task input parameter */
         2,                      /* Priority of the task */
-        &m_audioTaskHandle,     /* Task handle. */
+        xStack,                 /* Static stack handle */
+        &xTaskBuffer,           /* Task buffer. */
         m_audioTaskCoreId       /* Core where the task should run */
     );
 }
