@@ -1,10 +1,10 @@
 /*
  * Audio.cpp
  *
- *  Created on: Oct 26.2018
+ *  Created on: Oct 27.2018
  *
- *  Version 3.0.12h
- *  Updated on: Aug 09.2024
+ *  Version 3.0.12k
+ *  Updated on: Aug 26.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -198,7 +198,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_f_psramFound = psramInit();
     if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
     if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
-    m_lastHost = (char*)__malloc_heap_psram(512);
+    m_lastHost = (char*) x_ps_malloc(2048);
     m_outBuff = (int16_t*)__malloc_heap_psram(m_outbuffSize);
     m_chbuf = (char*)__malloc_heap_psram(m_chbufSize);
     m_ibuff = (char*)__malloc_heap_psram(m_ibuffSize);
@@ -207,7 +207,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 
 #define AUDIO_INFO(...)                     \
     {                                       \
-        sprintf(m_ibuff, __VA_ARGS__);      \
+        snprintf(m_ibuff, m_ibuffSize, __VA_ARGS__);      \
         if(audio_info) audio_info(m_ibuff); \
     }
 
@@ -311,6 +311,7 @@ Audio::~Audio() {
     if(m_ibuff)       {free(m_ibuff);        m_ibuff        = NULL;}
     if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
 
+    stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
 }
 // clang-format on
@@ -393,7 +394,7 @@ void Audio::setDefaults() {
     m_f_chunked = false; // Assume not chunked
     m_f_firstmetabyte = false;
     m_f_playing = false;
-    m_f_ssl = false;
+//    m_f_ssl = false;
     m_f_metadata = false;
     m_f_tts = false;
     m_f_firstCall = true;        // InitSequence for processWebstream and processLocalFile
@@ -538,153 +539,127 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
-    // user and pwd for authentification only, can be empty
+bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
+
+    bool     res           = false; // return value
+    uint16_t lenHost       = 0;     // length of hostname
+    uint16_t port          = 0;     // port number
+    uint16_t authLen       = 0;     // length of authorization
+    int16_t  pos_slash     = 0;     // position of "/" in hostname
+    int16_t  pos_colon     = 0;     // position of ":" in hostname
+    int16_t  pos_ampersand = 0;     // position of "&" in hostname
+    uint32_t timestamp     = 0;     // timeout surveillance
+    uint16_t hostwoext_begin = 0;
+
+    char*    authorization = NULL;  // authorization
+    char*    rqh           = NULL;  // request header
+    char*    toEncode      = NULL;  // temporary memory for base64 encoding
+    char*    h_host        = NULL;
+
+//    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
+//        |   |                                     |    |                              |
+//        |   |                                     |    |                              |             (query string)
+//    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
 
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
 
-    if(host == NULL) {
-        AUDIO_INFO("Hostaddress is empty");
-        stopSong();
-        xSemaphoreGive(mutex_playAudioData);
-        return false;
-    }
+    if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
+    if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
-    uint16_t lenHost = strlen(host);
+    h_host = x_ps_strdup(host);
+    trim(h_host);  // remove leading and trailing spaces
+    lenHost = strlen(h_host);
 
-    if(lenHost >= 512 - 10) {
-        AUDIO_INFO("Hostaddress is too long");
-        stopSong();
-        xSemaphoreGive(mutex_playAudioData);
-        return false;
-    }
+    if(!startsWith(h_host, "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
 
-    int   idx = indexOf(host, "http");
-    char* l_host = (char*)malloc(lenHost + 10);
-    if(idx < 0) {
-        strcpy(l_host, "http://");
-        strcat(l_host, host);
-    }                                      // amend "http;//" if not found
-    else { strcpy(l_host, (host + idx)); } // trim left if necessary
-
-    char* h_host = NULL; // pointer of l_host without http:// or https://
-    if(startsWith(l_host, "https")) h_host = strdup(l_host + 8);
-    else h_host = strdup(l_host + 7);
-
-    // initializationsequence
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
+    if(startsWith(h_host, "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
+    else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = indexOf(h_host, "/", 0);
-    pos_colon = indexOf(h_host, ":", 0);
-    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(h_host, "&", 0);
+    pos_slash     = indexOf(h_host, "/", 10); // position of "/" in hostname
+    pos_colon     = indexOf(h_host, ":", 10); if(isalpha(host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = indexOf(h_host, "&", 10); // position of "&" in hostname
 
-    char* hostwoext = NULL; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    if(pos_slash > 0) h_host[pos_slash] = '\0';
 
-    if(pos_slash > 1) {
-        hostwoext = (char*)malloc(pos_slash + 1);
-        memcpy(hostwoext, h_host, pos_slash);
-        hostwoext[pos_slash] = '\0';
-        uint16_t extLen = urlencode_expected_len(h_host + pos_slash);
-        extension = (char*)malloc(extLen + 20);
-        memcpy(extension, h_host + pos_slash, extLen);
-        urlencode(extension, extLen, true);
+    if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
+        port = atoi(host + pos_colon + 1);   // Get portnumber as integer
+        h_host[pos_colon] = '\0';
     }
-    else { // url has no extension
-        hostwoext = strdup(h_host);
-        extension = strdup("/");
-    }
-
-    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(h_host + pos_colon + 1); // Get portnumber as integer
-        hostwoext[pos_colon] = '\0';         // Host without portnumber
-    }
-
-    setDefaults(); // no need to stop clients if connection is established (default is true)
-
-    if(startsWith(l_host, "https")) m_f_ssl = true;
-    else m_f_ssl = false;
 
     // optional basic authorization
-    uint16_t auth = strlen(user) + strlen(pwd);
-    char     authorization[base64_encode_expected_len(auth + 1) + 1];
-    authorization[0] = '\0';
-    if(auth > 0) {
-        char toEncode[auth + 4];
+    if(strlen(user) > 0 && strlen(pwd) > 0) {
+        authLen = strlen(user) + strlen(pwd);
+        authorization = x_ps_calloc(base64_encode_expected_len(authLen + 1), 1);
+        if(!authorization) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+        toEncode = x_ps_calloc(authLen + 4, 1);
+        if(!toEncode) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
         strcpy(toEncode, user);
         strcat(toEncode, ":");
         strcat(toEncode, pwd);
         b64encode((const char*)toEncode, strlen(toEncode), authorization);
     }
-
-    //  AUDIO_INFO("Connect to \"%s\" on port %d, extension \"%s\"", hostwoext, port, extension);
-
-    char rqh[strlen(h_host) + strlen(authorization) + 220]; // http request header
-    rqh[0] = '\0';
-
-    strcat(rqh, "GET ");
-    strcat(rqh, extension);
-    strcat(rqh, " HTTP/1.1\r\n");
-    strcat(rqh, "Host: ");
-    strcat(rqh, hostwoext);
-    strcat(rqh, "\r\n");
-    strcat(rqh, "Icy-MetaData:1\r\n");
-    strcat(rqh, "Icy-MetaData:2\r\n");
-
-    if(auth > 0) {
-        strcat(rqh, "Authorization: Basic ");
-        strcat(rqh, authorization);
-        strcat(rqh, "\r\n");
+    else{
+        authorization = strdup("");
     }
 
-    strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
-    //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
-    strcat(rqh, "Connection: keep-alive\r\n\r\n");
+    setDefaults();
+    rqh = x_ps_calloc(lenHost + strlen(authorization) + 200, 1); // http request header
+    if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
-    bool res = true; // no need to reconnect if connection exists
+                       strcat(rqh, "GET /");
+    if(pos_slash > 0){ strcat(rqh, h_host + pos_slash + 1);}
+                       strcat(rqh, " HTTP/1.1\r\n");
+                       strcat(rqh, "Host: ");
+                       strcat(rqh, h_host + hostwoext_begin);
+                       strcat(rqh, "\r\n");
+                       strcat(rqh, "Icy-MetaData:1\r\n");
+                       strcat(rqh, "Icy-MetaData:2\r\n");
+ //                    strcat(rqh, "User-Agent: Mozilla/5.0\r\n");
+    if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
+                       strcat(rqh, authorization);
+                       strcat(rqh, "\r\n"); }
+                       strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
+                       strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) {
-        _client = static_cast<WiFiClient*>(&clientsecure);
-        if(port == 80) port = 443;
-    }
-    else { _client = static_cast<WiFiClient*>(&client); }
+    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
+    else        { _client = static_cast<WiFiClient*>(&client); }
 
-    uint32_t t = millis();
-
-    AUDIO_INFO("connect to: \"%s\" on port %d path \"%s\"", hostwoext, port, extension);
-
+    timestamp = millis();
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
-    res = _client->connect(hostwoext, port);
+
+    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", h_host + hostwoext_begin, port, h_host + pos_slash + 1);
+    res = _client->connect(h_host + hostwoext_begin, port);
+
+    if(pos_slash > 0) h_host[pos_slash] = '/';
+    if(pos_colon > 0) h_host[pos_colon] = ':';
+    strcpy(m_lastHost, h_host);
+
     if(res) {
-        uint32_t dt = millis() - t;
-        strcpy(m_lastHost, l_host);
+        uint32_t dt = millis() - timestamp;
+        strcpy(m_lastHost, h_host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
     }
+
     m_expectedCodec = CODEC_NONE;
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
-    //    log_i("connecttohost(): %s", rqh);
         _client->print(rqh);
-        if(endsWith(extension, ".mp3" )) m_expectedCodec  = CODEC_MP3;
-        if(endsWith(extension, ".aac" )) m_expectedCodec  = CODEC_AAC;
-        if(endsWith(extension, ".wav" )) m_expectedCodec  = CODEC_WAV;
-        if(endsWith(extension, ".m4a" )) m_expectedCodec  = CODEC_M4A;
-        if(endsWith(extension, ".ogg" )) m_expectedCodec  = CODEC_OGG;
-        if(endsWith(extension, ".flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(extension, "-flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(extension, ".opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(extension, "/opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(extension, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
-        if(endsWith(extension, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
-        if(endsWith(extension, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
-        if(endsWith(extension, ".m3u8")) {
+        if(endsWith(h_host, ".mp3" )) m_expectedCodec  = CODEC_MP3;
+        if(endsWith(h_host, ".aac" )) m_expectedCodec  = CODEC_AAC;
+        if(endsWith(h_host, ".wav" )) m_expectedCodec  = CODEC_WAV;
+        if(endsWith(h_host, ".m4a" )) m_expectedCodec  = CODEC_M4A;
+        if(endsWith(h_host, ".ogg" )) m_expectedCodec  = CODEC_OGG;
+        if(endsWith(h_host, ".flac")) m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host, "-flac")) m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host, ".opus")) m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host, "/opus")) m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
+        if(endsWith(h_host, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
+        if(endsWith(h_host, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
+        if(endsWith(h_host, ".m3u8")) {
             m_expectedPlsFmt = FORMAT_M3U8;
             if(audio_lasthost) audio_lasthost(host);
         }
@@ -692,30 +667,20 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         m_streamType = ST_WEBSTREAM;
     }
     else {
-        AUDIO_INFO("Request %s failed!", l_host);
+        AUDIO_INFO("Request %s failed!", host);
         if(audio_showstation) audio_showstation("");
         if(audio_showstreamtitle) audio_showstreamtitle("");
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
         m_lastHost[0] = 0;
     }
-    if(hostwoext) {
-        free(hostwoext);
-        hostwoext = NULL;
-    }
-    if(extension) {
-        free(extension);
-        extension = NULL;
-    }
-    if(l_host) {
-        free(l_host);
-        l_host = NULL;
-    }
-    if(h_host) {
-        free(h_host);
-        h_host = NULL;
-    }
+
+exit:
     xSemaphoreGive(mutex_playAudioData);
+    if(h_host)        {free(h_host); h_host = NULL;}
+    if(rqh)           {free(rqh); rqh = NULL;}
+    if(authorization) {free(authorization); authorization = NULL; }
+    if(toEncode)      {free(toEncode); toEncode = NULL; }
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -754,10 +719,7 @@ bool Audio::httpPrint(const char* host) {
         hostwoext = (char*)malloc(pos_slash + 1);
         memcpy(hostwoext, h_host, pos_slash);
         hostwoext[pos_slash] = '\0';
-        uint16_t extLen = urlencode_expected_len(h_host + pos_slash);
-        extension = (char*)malloc(extLen + 20);
-        memcpy(extension, h_host + pos_slash, extLen);
-        urlencode(extension, extLen, true);
+        extension = urlencode(h_host + pos_slash, true);
     }
     else { // url has no extension
         hostwoext = strdup(h_host);
@@ -961,15 +923,20 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     }
     memcpy(speechBuff, speech, speechLen);
     speechBuff[speechLen] = '\0';
-    urlencode(speechBuff, speechBuffLen);
+    char* urlStr = urlencode(speechBuff, false); // percent encoding
+    if(!urlStr) {
+        log_e("out of memory");
+        xSemaphoreGive(mutex_playAudioData);
+        return false;
+    }
 
-    char resp[strlen(speechBuff) + 200] = "";
+    char resp[strlen(urlStr) + 200] = "";
     strcat(resp, "GET ");
     strcat(resp, path);
     strcat(resp, "?ie=UTF-8&tl=");
     strcat(resp, lang);
     strcat(resp, "&client=tw-ob&q=");
-    strcat(resp, speechBuff);
+    strcat(resp, urlStr);
     strcat(resp, " HTTP/1.1\r\n");
     strcat(resp, "Host: ");
     strcat(resp, host);
@@ -982,6 +949,10 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     if(speechBuff) {
         free(speechBuff);
         speechBuff = NULL;
+    }
+    if(urlStr) {
+        free(urlStr);
+        urlStr = NULL;
     }
     _client = static_cast<WiFiClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
@@ -999,48 +970,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     setDatamode(HTTP_RESPONSE_HEADER);
     xSemaphoreGive(mutex_playAudioData);
     return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::urlencode(char* buff, uint16_t buffLen, bool spacesOnly) {
-    uint16_t len = strlen(buff);
-    uint8_t* tmpbuff = (uint8_t*)malloc(buffLen);
-    if(!tmpbuff) {
-        log_e("out of memory");
-        return;
-    }
-    char     c;
-    char     code0;
-    char     code1;
-    uint16_t j = 0;
-    for(int i = 0; i < len; i++) {
-        c = buff[i];
-        if(isalnum(c)) tmpbuff[j++] = c;
-        else if(spacesOnly) {
-            if(c == ' ') {
-                tmpbuff[j++] = '%';
-                tmpbuff[j++] = '2';
-                tmpbuff[j++] = '0';
-            }
-            else { tmpbuff[j++] = c; }
-        }
-        else {
-            code1 = (c & 0xf) + '0';
-            if((c & 0xf) > 9) code1 = (c & 0xf) - 10 + 'A';
-            c = (c >> 4) & 0xf;
-            code0 = c + '0';
-            if(c > 9) code0 = c - 10 + 'A';
-            tmpbuff[j++] = '%';
-            tmpbuff[j++] = code0;
-            tmpbuff[j++] = code1;
-        }
-        if(j == buffLen - 1) {
-            log_e("out of memory");
-            break;
-        }
-    }
-    memcpy(buff, tmpbuff, j);
-    buff[j] = '\0';
-    free(tmpbuff);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::showID3Tag(const char* tag, const char* value) {
@@ -1281,7 +1210,7 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
         if(isUTF8 == true) return true; // is UTF-8, do nothing
     }
 
-    char* iso8859_1 = x_strdup(buff);
+    char* iso8859_1 = x_ps_strdup(buff);
     if(!iso8859_1){log_e("oom"); return false;}
 
     while(iso8859_1[in] != '\0'){
@@ -2508,8 +2437,12 @@ void Audio::loop() {
             case AUDIO_LOCALFILE:
                 processLocalFile(); break;
             case HTTP_RESPONSE_HEADER:
+                static uint8_t count = 0;
                 if(!parseHttpResponseHeader()) {
-                    if(m_f_timeout) connecttohost(m_lastHost);
+                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; connecttohost(m_lastHost);}
+                }
+                else{
+                    count = 0;
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
@@ -2529,8 +2462,12 @@ void Audio::loop() {
 
         switch(getDatamode()) {
             case HTTP_RESPONSE_HEADER:
+                static uint8_t count = 0;
                 if(!parseHttpResponseHeader()) {
-                    if(m_f_timeout) connecttohost(m_lastHost);
+                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; connecttohost(m_lastHost);}
+                }
+                else{
+                    count = 0;
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
@@ -2635,7 +2572,7 @@ bool Audio::readPlayListData() {
             AUDIO_INFO("url is a webpage!");
             goto exit;
         }
-        if(strlen(pl) > 0) m_playlistContent.push_back(x_strdup(pl));
+        if(strlen(pl) > 0) m_playlistContent.push_back(x_ps_strdup(pl));
         if(!m_f_psramFound && m_playlistContent.size() == 101) {
             AUDIO_INFO("the number of lines in playlist > 100, for bigger playlist use PSRAM!");
             break;
@@ -5058,7 +4995,9 @@ bool Audio::setAudioPlayPosition(uint16_t sec) {
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
     uint32_t filepos = m_audioDataStart + (m_avr_bitrate * sec / 8);
-    return setFilePos(filepos);
+    if(m_datamode == AUDIO_LOCALFILE) return setFilePos(filepos);
+//    if(m_streamType == ST_WEBFILE) return setWebFilePos(filepos);
+    return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setVolumeSteps(uint8_t steps) {
@@ -5103,6 +5042,72 @@ bool Audio::setFilePos(uint32_t pos) {
     m_resumeFilePos = pos;  // used in processLocalFile()
     m_haveNewFilePos = pos; // used in computeAudioCurrentTime()
 
+    return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::setWebFilePos(uint32_t pos) {
+
+    int16_t  pos_slash;     // position of "/" in hostname
+    int16_t  pos_colon;     // position of ":" in hostname
+    int16_t  pos_ampersand; // position of "&" in hostname
+    uint16_t port = 80;     // port number
+
+    char*    hostwoext     = NULL;  // host without extension
+    char*    extension     = NULL;  // extension
+    char*    rqh           = NULL;  // request header
+
+    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
+    pos_slash     = indexOf(m_lastHost, "/", 10); // position of "/" in hostname
+    pos_colon     = indexOf(m_lastHost, ":", 10); if(isalpha(m_lastHost[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = indexOf(m_lastHost, "&", 10); // position of "&" in hostname
+
+    if(pos_slash > 1) {
+        hostwoext = x_ps_calloc(pos_slash + 1, 1);
+        if(!hostwoext) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+        memcpy(hostwoext, m_lastHost, pos_slash);
+        if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
+            port = atoi(m_lastHost + pos_colon + 1);   // Get portnumber as integer
+            (void) port;
+            hostwoext[pos_colon] = '\0';         // Host without portnumber
+        }
+        extension = urlencode(m_lastHost + pos_slash, true);
+    }
+    else { // url has no extension
+        hostwoext = x_ps_strdup(m_lastHost);
+        if(!hostwoext) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+        extension = x_ps_strdup("/");
+        if(!extension) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+    }
+    AUDIO_INFO("skip to position: %li", pos);
+
+    rqh = x_ps_calloc(strlen(extension) + strlen(hostwoext) + 60, 1);  // http request header
+    rqh[0] = '\0';
+
+    strcat(rqh, "GET ");
+    strcat(rqh, extension);
+    strcat(rqh, " HTTP/1.1\r\n");
+    strcat(rqh, "Host: ");
+    strcat(rqh, hostwoext);
+    strcat(rqh, "\r\n");
+    strcat(rqh, "Range: bytes="); itoa(pos, rqh + strlen(rqh), 10);
+    strcat(rqh, "-");
+    strcat(rqh, "\r\n\r\n");
+
+    _client->print(rqh);
+
+exit:
+    if(hostwoext) {
+        free(hostwoext);
+        hostwoext = NULL;
+    }
+    if(extension) {
+        free(extension);
+        extension = NULL;
+    }
+    if(rqh) {
+        free(rqh);
+        rqh = NULL;
+    }
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6460,15 +6465,15 @@ void Audio::startAudioTask() {
     }
     m_f_audioTaskIsRunning = true;
 
-    // xTaskCreate(&Audio::taskWrapper, "PeriodicTask", 3300, this, 4, &m_audioTaskHandle);
 
-    xTaskCreatePinnedToCore(
+    m_audioTaskHandle = xTaskCreateStaticPinnedToCore(
         &Audio::taskWrapper,    /* Function to implement the task */
         "PeriodicTask",         /* Name of the task */
-        3300,                   /* Stack size in words */
+        STACK_SIZE,             /* Stack size in words */
         this,                   /* Task input parameter */
         2,                      /* Priority of the task */
-        &m_audioTaskHandle,     /* Task handle. */
+        xStack,                 /* Task stack */
+        &xTaskBuffer,           /* Memory for the task's control block */
         m_audioTaskCoreId       /* Core where the task should run */
     );
 }

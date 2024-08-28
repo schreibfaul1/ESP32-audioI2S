@@ -1,3 +1,4 @@
+#include "Arduino.h"
 #include "neaacdec.h"
 #include <assert.h>
 #pragma GCC diagnostic warning "-Wall"
@@ -978,13 +979,8 @@ int8_t can_decode_ot(const uint8_t object_type) { /* Returns 0 if an object type
     return -1;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#ifdef ESP32_
-void* faad_malloc(size_t size) { return ps_malloc(size); }
-void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
-#else
 void* faad_malloc(size_t size) {return ps_malloc(size); }
 void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
-#endif
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const uint8_t Parity[256] = { // parity
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -1952,113 +1948,183 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
     uint32_t  bitsconsumed;
     uint16_t  frame_len;
     void*     sample_buffer;
-    uint32_t  startbit = 0, endbit = 0, payload_bits = 0;
+    uint32_t required_buffer_size = 0;
 
-    (void)startbit;
-    (void)endbit;
-    (void)payload_bits;
     if((hDecoder == NULL) || (hInfo == NULL) || (buffer == NULL)) { return NULL; } /* safety checks */
+
     frame_len = hDecoder->frameLength;
     memset(hInfo, 0, sizeof(NeAACDecFrameInfo_t));
     memset(hDecoder->internal_channel, 0, MAX_CHANNELS * sizeof(hDecoder->internal_channel[0]));
+
     /* check for some common metadata tag types in the bitstream. No need to return an error */
     /* ID3 */
     if(buffer_size >= 128) {
         if(memcmp(buffer, "TAG", 3) == 0) {
             /* found it */
             hInfo->bytesconsumed = 128; /* 128 bytes fixed size */
-            return NULL;                /* no error, but no output either */
+            /* no error, but no output either */
+            return NULL;
         }
     }
+
     faad_initbits(&ld, buffer, buffer_size); /* initialize the bitstream */
+    if(ld.error != 0) return NULL;
+
+#ifdef DRM
+    if(hDecoder->object_type == DRM_ER_LC) {
+        /* We do not support stereo right now */
+        if(0) //(hDecoder->channelConfiguration == 2)
+        {
+            hInfo->error = 28; // Throw CRC error
+            goto error;
+        }
+
+        faad_getbits(&ld, 8 DEBUGVAR(1, 1, "NeAACDecDecode(): skip CRC"));
+    }
+#endif
+
     if(hDecoder->adts_header_t_present) {
         adts_header_t adts;
+
         adts.old_format = hDecoder->config.useOldADTSFormat;
         if((hInfo->error = adts_frame(&adts, &ld)) > 0) goto error;
         /* MPEG2 does byte_alignment() here, but ADTS header is always multiple of 8 bits in MPEG2 so not needed to actually do it. */
     }
-    raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc); /* decode the complete bitstream */
+#ifdef DRM /* decode the complete bitstream */
+    if(/*(hDecoder->object_type == 6) ||*/ hDecoder->object_type == DRM_ER_LC) { DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc); }
+    else {
+#endif
+        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+#ifdef DRM
+    }
+#endif
+
     channels = hDecoder->fr_channels;
     if(hInfo->error > 0) goto error;
     if(channels == 0 || channels > MAX_CHANNELS) { /* safety check */
-        hInfo->error = 12;                         /* invalid number of channels */
+        /* invalid number of channels */
+        hInfo->error = 12;
         goto error;
     }
-    bitsconsumed = faad_get_processed_bits(&ld); /* no more bit reading after this */
+
+    /* no more bit reading after this */
+    bitsconsumed = faad_get_processed_bits(&ld);
     hInfo->bytesconsumed = bit2byte(bitsconsumed);
     if(ld.error) {
         hInfo->error = 14;
         goto error;
     }
-    if(!hDecoder->adts_header_t_present && !hDecoder->adif_header_t_present) {
+    if(!hDecoder->adts_header_t_present && !hDecoder->adif_header_t_present
+    )
+    {
         if(hDecoder->channelConfiguration == 0) hDecoder->channelConfiguration = channels;
-        if(channels == 8) { hDecoder->channelConfiguration = 7; } /* 7.1 */
-        if(channels == 7) { hDecoder->channelConfiguration = 0; } /* not a standard channelConfiguration */
+
+        if(channels == 8) /* 7.1 */
+            hDecoder->channelConfiguration = 7;
+        if(channels == 7) /* not a standard channelConfiguration */
+            hDecoder->channelConfiguration = 0;
     }
+
     if((channels == 5 || channels == 6) && hDecoder->config.downMatrix) {
         hDecoder->downMatrix = 1;
         output_channels = 2;
     }
     else { output_channels = channels; }
-#if(defined(PS_DEC))
+
+#if(defined(PS_DEC) || defined(DRM_PS))
     hDecoder->upMatrix = 0;
-    if(output_channels == 1) {  /* check if we have a mono file */
-        hDecoder->upMatrix = 1; /* upMatrix to 2 channels for implicit signalling of PS */
+    /* check if we have a mono file */
+    if(output_channels == 1) {
+        /* upMatrix to 2 channels for implicit signalling of PS */
+        hDecoder->upMatrix = 1;
         output_channels = 2;
     }
 #endif
-    create_channel_config(hDecoder, hInfo);                  /* Make a channel configuration based on either a PCE or a channelConfiguration */
-    hInfo->samples = frame_len * output_channels;            /* number of samples in this frame */
-    hInfo->channels = output_channels;                       /* number of channels in this frame */
-    hInfo->samplerate = get_sample_rate(hDecoder->sf_index); /* samplerate */
-    hInfo->object_type = hDecoder->object_type;              /* object type */
-    hInfo->sbr = NO_SBR;                                     /* sbr */
-    hInfo->header_type = RAW;                                /* header type */
+
+    /* Make a channel configuration based on either a PCE or a channelConfiguration */
+    if(!hDecoder->downMatrix && hDecoder->pce_set) {
+        /* In some codepath program_config_element result is ignored. */
+        if(hDecoder->pce.channels > MAX_CHANNELS) {
+            hInfo->error = 22;
+            return NULL;
+        }
+    }
+    create_channel_config(hDecoder, hInfo);
+
+    /* number of samples in this frame */
+    hInfo->samples = frame_len * output_channels;
+    /* number of channels in this frame */
+    hInfo->channels = output_channels;
+    /* samplerate */
+    hInfo->samplerate = get_sample_rate(hDecoder->sf_index);
+    /* object type */
+    hInfo->object_type = hDecoder->object_type;
+    /* sbr */
+    hInfo->sbr = NO_SBR;
+    /* header type */
+    hInfo->header_type = RAW;
     if(hDecoder->adif_header_t_present) hInfo->header_type = ADIF;
     if(hDecoder->adts_header_t_present) hInfo->header_type = ADTS;
-#if(defined(PS_DEC))
+
+#if(defined(PS_DEC) || defined(DRM_PS))
     hInfo->ps = hDecoder->ps_used_global;
-    hInfo->isPS = hDecoder->isPS;
 #endif
-    if(channels == 0) { /* check if frame has channel elements */
+
+    /* check if frame has channel elements */
+    if(channels == 0) {
         hDecoder->frame++;
         return NULL;
     }
-    /* allocate the buffer for the final samples */
-    if((hDecoder->sample_buffer == NULL) || (hDecoder->alloced_channels != output_channels)) {
+
+    {
         static const uint8_t str[] = {sizeof(int16_t), sizeof(int32_t), sizeof(int32_t), sizeof(float), sizeof(double), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), 0, 0, 0};
         uint8_t              stride = str[hDecoder->config.outputFormat - 1];
 #ifdef SBR_DEC
         if(((hDecoder->sbr_present_flag == 1) && (!hDecoder->downSampledSBR)) || (hDecoder->forceUpSampling == 1)) { stride = 2 * stride; }
 #endif
-        if(sample_buffer_size == 0) { /* check if we want to use internal sample_buffer */
+        required_buffer_size = frame_len * output_channels * stride;
+    }
+
+    /* check if we want to use internal sample_buffer */
+    if(sample_buffer_size == 0) {
+        /* allocate the buffer for the final samples */
+        if(hDecoder->sample_buffer_size != required_buffer_size) {
             if(hDecoder->sample_buffer) faad_free(hDecoder->sample_buffer);
             hDecoder->sample_buffer = NULL;
-            hDecoder->sample_buffer = faad_malloc(frame_len * output_channels * stride);
+            hDecoder->sample_buffer = faad_malloc(required_buffer_size);
+            hDecoder->sample_buffer_size = required_buffer_size;
         }
-        else if(sample_buffer_size < frame_len * output_channels * stride) {
-            hInfo->error = 27; /* provided sample buffer is not big enough */
-            return NULL;
-        }
-        hDecoder->alloced_channels = output_channels;
     }
+    else if(sample_buffer_size < required_buffer_size) {
+        /* provided sample buffer is not big enough */
+        hInfo->error = 27;
+        return NULL;
+    }
+
     if(sample_buffer_size == 0) { sample_buffer = hDecoder->sample_buffer; }
     else { sample_buffer = *sample_buffer2; }
+
 #ifdef SBR_DEC
     if((hDecoder->sbr_present_flag == 1) || (hDecoder->forceUpSampling == 1)) {
         uint8_t ele;
-        if(!hDecoder->downSampledSBR) { /* this data is different when SBR is used or when the data is upsampled */
+
+        /* this data is different when SBR is used or when the data is upsampled */
+        if(!hDecoder->downSampledSBR) {
             frame_len *= 2;
             hInfo->samples *= 2;
             hInfo->samplerate *= 2;
         }
-        for(ele = 0; ele < hDecoder->fr_ch_ele; ele++) { /* check if every element was provided with SBR data */
+
+        /* check if every element was provided with SBR data */
+        for(ele = 0; ele < hDecoder->fr_ch_ele; ele++) {
             if(hDecoder->sbr[ele] == NULL) {
                 hInfo->error = 25;
                 goto error;
             }
         }
-        if(hDecoder->sbr_present_flag == 1) { /* sbr */
+
+        /* sbr */
+        if(hDecoder->sbr_present_flag == 1) {
             hInfo->object_type = HE_AAC;
             hInfo->sbr = SBR_UPSAMPLED;
         }
@@ -2066,8 +2132,15 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
         if(hDecoder->downSampledSBR) { hInfo->sbr = SBR_DOWNSAMPLED; }
     }
 #endif
+
     sample_buffer = output_to_PCM(hDecoder, hDecoder->time_out, sample_buffer, output_channels, frame_len, hDecoder->config.outputFormat);
+
+#ifdef DRM
+    // conceal_output(hDecoder, frame_len, output_channels, sample_buffer);
+#endif
+
     hDecoder->postSeekResetFlag = 0;
+
     hDecoder->frame++;
 #ifdef LD_DEC
     if(hDecoder->object_type != LD) {
@@ -2080,8 +2153,11 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
         if(hDecoder->frame <= 0) hInfo->samples = 0;
     }
 #endif
+
     return sample_buffer;
+
 error:
+
     /* reset filterbank state */
     for(i = 0; i < MAX_CHANNELS; i++) {
         if(hDecoder->fb_intermed[i] != NULL) { memset(hDecoder->fb_intermed[i], 0, hDecoder->frameLength * sizeof(int32_t)); }
@@ -2091,6 +2167,11 @@ error:
         if(hDecoder->sbr[i] != NULL) { sbrReset(hDecoder->sbr[i]); }
     }
 #endif
+    /* cleanup */
+#ifdef ANALYSIS
+    fflush(stdout);
+#endif
+
     return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5130,6 +5211,7 @@ int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, program_conf
     bitfile_t ld;
     memset(&ld, 0, sizeof(ld));
     faad_initbits(&ld, pBuffer, buffer_size);
+    if (ld.error != 0) return -7;
     faad_byte_align(&ld);
     ret = AudioSpecificConfigFrombitfile(&ld, pce, buffer_size, short_form);
     return ret;
@@ -6517,7 +6599,7 @@ static uint8_t estimate_current_envelope(sbr_info_t* sbr, sbr_hfadj_info_t* adj,
             l_i = sbr->t_E[ch][l];
             u_i = sbr->t_E[ch][l + 1];
             div = (int32_t)(u_i - l_i);
-            if(div <= 0) {log_e("div %i", div); div = 1;}
+            if(div <= 0) {log_v("div %i", div); div = 1;}
             for(m = 0; m < sbr->M; m++) {
                 nrg = 0;
                 for(i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
@@ -8422,6 +8504,168 @@ static void decode_cpe(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, b
     hDecoder->fr_channels += 2;
     hDecoder->fr_ch_ele++;
 }
+
+
+/* Table 4.4.2 */
+/* An MPEG-4 Audio decoder is only required to follow the Program
+   Configuration Element in GASpecificConfig(). The decoder shall ignore
+   any Program Configuration Elements that may occur in raw data blocks.
+   PCEs transmitted in raw data blocks cannot be used to convey decoder
+   configuration information.
+*/
+static uint8_t program_config_element(program_config_t *pce, bitfile_t *ld)
+{
+    uint8_t i;
+
+    memset(pce, 0, sizeof(program_config_t));
+
+    pce->channels = 0;
+
+    pce->element_instance_tag = (uint8_t)faad_getbits(ld, 4
+        );
+
+    pce->object_type = (uint8_t)faad_getbits(ld, 2
+        );
+    pce->sf_index = (uint8_t)faad_getbits(ld, 4
+        );
+    pce->num_front_channel_elements = (uint8_t)faad_getbits(ld, 4
+        );
+    pce->num_side_channel_elements = (uint8_t)faad_getbits(ld, 4
+        );
+    pce->num_back_channel_elements = (uint8_t)faad_getbits(ld, 4
+        );
+    pce->num_lfe_channel_elements = (uint8_t)faad_getbits(ld, 2
+        );
+    pce->num_assoc_data_elements = (uint8_t)faad_getbits(ld, 3
+        );
+    pce->num_valid_cc_elements = (uint8_t)faad_getbits(ld, 4
+        );
+
+    pce->mono_mixdown_present = faad_get1bit(ld
+        );
+    if (pce->mono_mixdown_present == 1)
+    {
+        pce->mono_mixdown_element_number = (uint8_t)faad_getbits(ld, 4
+            );
+    }
+
+    pce->stereo_mixdown_present = faad_get1bit(ld
+        );
+    if (pce->stereo_mixdown_present == 1)
+    {
+        pce->stereo_mixdown_element_number = (uint8_t)faad_getbits(ld, 4
+            );
+    }
+
+    pce->matrix_mixdown_idx_present = faad_get1bit(ld
+       );
+    if (pce->matrix_mixdown_idx_present == 1)
+    {
+        pce->matrix_mixdown_idx = (uint8_t)faad_getbits(ld, 2
+            );
+        pce->pseudo_surround_enable = faad_get1bit(ld
+            );
+    }
+
+    for (i = 0; i < pce->num_front_channel_elements; i++)
+    {
+        pce->front_element_is_cpe[i] = faad_get1bit(ld
+            );
+        pce->front_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+            );
+
+        if (pce->front_element_is_cpe[i] & 1)
+        {
+            pce->cpe_channel[pce->front_element_tag_select[i]] = pce->channels;
+            pce->num_front_channels += 2;
+            pce->channels += 2;
+        } else {
+            pce->sce_channel[pce->front_element_tag_select[i]] = pce->channels;
+            pce->num_front_channels++;
+            pce->channels++;
+        }
+    }
+
+    for (i = 0; i < pce->num_side_channel_elements; i++)
+    {
+        pce->side_element_is_cpe[i] = faad_get1bit(ld
+            );
+        pce->side_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+            );
+
+        if (pce->side_element_is_cpe[i] & 1)
+        {
+            pce->cpe_channel[pce->side_element_tag_select[i]] = pce->channels;
+            pce->num_side_channels += 2;
+            pce->channels += 2;
+        } else {
+            pce->sce_channel[pce->side_element_tag_select[i]] = pce->channels;
+            pce->num_side_channels++;
+            pce->channels++;
+        }
+    }
+
+    for (i = 0; i < pce->num_back_channel_elements; i++)
+    {
+        pce->back_element_is_cpe[i] = faad_get1bit(ld
+            );
+        pce->back_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+            );
+
+        if (pce->back_element_is_cpe[i] & 1)
+        {
+            pce->cpe_channel[pce->back_element_tag_select[i]] = pce->channels;
+            pce->channels += 2;
+            pce->num_back_channels += 2;
+        } else {
+            pce->sce_channel[pce->back_element_tag_select[i]] = pce->channels;
+            pce->num_back_channels++;
+            pce->channels++;
+        }
+    }
+
+    for (i = 0; i < pce->num_lfe_channel_elements; i++)
+    {
+        pce->lfe_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+            );
+
+        pce->sce_channel[pce->lfe_element_tag_select[i]] = pce->channels;
+        pce->num_lfe_channels++;
+        pce->channels++;
+    }
+
+    for (i = 0; i < pce->num_assoc_data_elements; i++)
+        pce->assoc_data_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+        );
+
+    for (i = 0; i < pce->num_valid_cc_elements; i++)
+    {
+        pce->cc_element_is_ind_sw[i] = faad_get1bit(ld
+            );
+        pce->valid_cc_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4
+            );
+    }
+
+    faad_byte_align(ld);
+
+    pce->comment_field_bytes = (uint8_t)faad_getbits(ld, 8
+        );
+
+    for (i = 0; i < pce->comment_field_bytes; i++)
+    {
+        pce->comment_field_data[i] = (uint8_t)faad_getbits(ld, 8
+            );
+    }
+    pce->comment_field_data[i] = 0;
+
+    if (pce->channels > MAX_CHANNELS)
+        return 22;
+
+    return 0;
+}
+
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void raw_data_block(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitfile_t* ld, program_config_t* pce, drc_info_t* drc) {
     uint8_t id_syn_ele;
@@ -8431,61 +8675,77 @@ void raw_data_block(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitf
     hDecoder->fr_ch_ele = 0;
     hDecoder->first_syn_ele = 25;
     hDecoder->has_lfe = 0;
+
 #ifdef ERROR_RESILIENCE
     if(hDecoder->object_type < ER_OBJECT_START) {
 #endif
         /* Table 4.4.3: raw_data_block() */
         while((id_syn_ele = (uint8_t)faad_getbits(ld, LEN_SE_ID)) != ID_END) {
             switch(id_syn_ele) {
-            case ID_SCE:
-                ele_this_frame++;
-                if(hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
-                decode_sce_lfe(hDecoder, hInfo, ld, id_syn_ele);
-                if(hInfo->error > 0) return;
-                break;
-            case ID_CPE:
-                ele_this_frame++;
-                if(hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
-                decode_cpe(hDecoder, hInfo, ld, id_syn_ele);
-                if(hInfo->error > 0) return;
-                break;
-            case ID_LFE:
+                case ID_SCE:
+                    ele_this_frame++;
+                    if(hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
+                    decode_sce_lfe(hDecoder, hInfo, ld, id_syn_ele);
+                    if(hInfo->error > 0) return;
+                    break;
+                case ID_CPE:
+                    ele_this_frame++;
+                    if(hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
+                    decode_cpe(hDecoder, hInfo, ld, id_syn_ele);
+                    if(hInfo->error > 0) return;
+                    break;
+                case ID_LFE:
+#ifdef DRM
+                    hInfo->error = 32;
+#else
                 ele_this_frame++;
                 hDecoder->has_lfe++;
                 decode_sce_lfe(hDecoder, hInfo, ld, id_syn_ele);
-
-                if(hInfo->error > 0) return;
-                break;
-            case ID_CCE: /* not implemented yet, but skip the bits */
+#endif
+                    if(hInfo->error > 0) return;
+                    break;
+                case ID_CCE: /* not implemented yet, but skip the bits */
+#ifdef DRM
+                    hInfo->error = 32;
+#else
                 ele_this_frame++;
+    #ifdef COUPLING_DEC
+                hInfo->error = coupling_channel_element(hDecoder, ld);
+    #else
                 hInfo->error = 6;
-
-                if(hInfo->error > 0) return;
-                break;
-            case ID_DSE:
-                ele_this_frame++;
-                data_stream_element(hDecoder, ld);
-                break;
-            case ID_PCE:
-                if(ele_this_frame != 0) {
-                    hInfo->error = 31;
-                    return;
-                }
-                ele_this_frame++;
-                /* 14496-4: 5.6.4.1.2.1.3: */
-                /* program_config_turation_element()'s in access units shall be ignored */
-                program_config_t_element(pce, ld);
-                // if ((hInfo->error = program_config_t_element(pce, ld)) > 0)
-                //     return;
-                // hDecoder->pce_set = 1;
-                break;
-            case ID_FIL:
-                ele_this_frame++;
-                /* one sbr_info_t*_t describes a channel_element not a channel! */
-                /* if we encounter SBR data here: error */
-                /* SBR data will be read directly in the SCE/LFE/CPE element */
-                if((hInfo->error = fill_element(hDecoder, ld, drc, INVALID_SBR_ELEMENT)) > 0) return;
-                break;
+    #endif
+#endif
+                    if(hInfo->error > 0) return;
+                    break;
+                case ID_DSE:
+                    ele_this_frame++;
+                    data_stream_element(hDecoder, ld);
+                    break;
+                case ID_PCE:
+                    if(ele_this_frame != 0) {
+                        hInfo->error = 31;
+                        return;
+                    }
+                    ele_this_frame++;
+                    /* 14496-4: 5.6.4.1.2.1.3: */
+                    /* program_configuration_element()'s in access units shall be ignored */
+                    program_config_element(pce, ld);
+                    // if ((hInfo->error = program_config_element(pce, ld)) > 0)
+                    //     return;
+                    // hDecoder->pce_set = 1;
+                    break;
+                case ID_FIL:
+                    ele_this_frame++;
+                    /* one sbr_info describes a channel_element not a channel! */
+                    /* if we encounter SBR data here: error */
+                    /* SBR data will be read directly in the SCE/LFE/CPE element */
+                    if((hInfo->error = fill_element(hDecoder, ld, drc, INVALID_SBR_ELEMENT)) > 0)
+                        return;
+                    break;
+            }
+            if(ld->error != 0) {
+                hInfo->error = 32;
+                return;
             }
         }
 #ifdef ERROR_RESILIENCE
@@ -8493,64 +8753,82 @@ void raw_data_block(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* hInfo, bitf
     else {
         /* Table 262: er_raw_data_block() */
         switch(hDecoder->channelConfiguration) {
-        case 1:
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            break;
-        case 2:
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            break;
-        case 3:
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            break;
-        case 4:
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            break;
-        case 5:
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            break;
-        case 6:
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
-            if(hInfo->error > 0) return;
-            break;
-        case 7: /* 8 channels */
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_cpe(hDecoder, hInfo, ld, ID_CPE);
-            if(hInfo->error > 0) return;
-            decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
-            if(hInfo->error > 0) return;
-            break;
-        default: hInfo->error = 7; return;
+            case 1:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                break;
+            case 2:
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                break;
+            case 3:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                break;
+            case 4:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                break;
+            case 5:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                break;
+            case 6:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
+                if(hInfo->error > 0) return;
+                break;
+            case 7: /* 8 channels */
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if(hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
+                if(hInfo->error > 0) return;
+                break;
+            default: hInfo->error = 7; return;
         }
+    #if 0
+        cnt = bits_to_decode() / 8;
+        while (cnt >= 1)
+        {
+            cnt -= extension_payload(cnt);
+        }
+    #endif
     }
 #endif
+
     /* new in corrigendum 14496-3:2002 */
-    { faad_byte_align(ld); }
+#ifdef DRM
+    if(hDecoder->object_type != DRM_ER_LC
+    #if 0
+        && !hDecoder->latm_header_present
+    #endif
+    )
+#endif
+    {
+        faad_byte_align(ld);
+    }
+
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -8844,8 +9122,6 @@ static uint16_t data_stream_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Table 4.4.11 */
 static uint8_t fill_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, drc_info_t* drc, uint8_t sbr_ele) {
-    (void)hDecoder;
-    (void)sbr_ele;
     uint16_t count;
 #ifdef SBR_DEC
     uint8_t bs_extension_type;
@@ -8858,13 +9134,25 @@ static uint8_t fill_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, drc_info_
         if((bs_extension_type == EXT_SBR_DATA) || (bs_extension_type == EXT_SBR_DATA_CRC)) {
             if(sbr_ele == INVALID_SBR_ELEMENT) return 24;
             if(!hDecoder->sbr[sbr_ele]) {
-                hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR);
+                hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR
+    #ifdef DRM
+                                                       ,
+                                                       0
+    #endif
+                );
             }
             if(!hDecoder->sbr[sbr_ele]) return 19;
             hDecoder->sbr_present_flag = 1;
             /* parse the SBR data */
             hDecoder->sbr[sbr_ele]->ret = sbr_extension_data(ld, hDecoder->sbr[sbr_ele], count, hDecoder->postSeekResetFlag);
-    #if(defined(PS_DEC))
+    #if 0
+            if (hDecoder->sbr[sbr_ele]->ret > 0)
+            {
+                printf("%s\n", NeAACDecGetErrorMessage(hDecoder->sbr[sbr_ele]->ret));
+            }
+    #endif
+
+    #if(defined(PS_DEC) || defined(DRM_PS))
             if(hDecoder->sbr[sbr_ele]->ps_used) {
                 hDecoder->ps_used[sbr_ele] = 1;
                 /* set element independent flag to 1 as well */
@@ -8874,12 +9162,20 @@ static uint8_t fill_element(NeAACDecStruct_t* hDecoder, bitfile_t* ld, drc_info_
         }
         else {
 #endif
-            while(count > 0) { count -= extension_payload(ld, drc, count); }
+#ifndef DRM
+            while(count > 0) {
+                uint16_t payload_bytes = extension_payload(ld, drc, count);
+                if(payload_bytes <= count) { count -= payload_bytes; }
+                else { count = 0; }
+            }
+#else
+        (void)drc;
+        return 30;
+#endif
 #ifdef SBR_DEC
         }
 #endif
     }
-
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -10015,10 +10311,17 @@ uint8_t reconstruct_single_channel(NeAACDecStruct_t* hDecoder, ic_stream_t* ics,
     int32_t output_channels;
 
     /* always allocate 2 channels, PS can always "suddenly" turn up */
-
-    if(hDecoder->ps_used[hDecoder->fr_ch_ele]) output_channels = 2;
+#if ( (defined(DRM) && defined(DRM_PS)) )
+    output_channels = 2;
+#elif defined(PS_DEC)
+    if (hDecoder->ps_used[hDecoder->fr_ch_ele])
+        output_channels = 2;
     else
         output_channels = 1;
+#else
+    output_channels = 1;
+#endif
+
     if(hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 0) {
         /* element_output_channels not set yet */
         hDecoder->element_output_channels[hDecoder->fr_ch_ele] = output_channels;

@@ -519,6 +519,7 @@ typedef struct {
     uint16_t     frameLength;
     uint8_t      postSeekResetFlag;
     uint32_t     frame;
+    uint32_t     sample_buffer_size;
     uint8_t      downMatrix;
     uint8_t      upMatrix;
     uint8_t      first_syn_ele;

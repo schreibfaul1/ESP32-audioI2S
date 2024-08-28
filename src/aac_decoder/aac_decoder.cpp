@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 13.08.2024
+ *  Updated on: 28.08.2024
 */
 
 
@@ -15,9 +15,12 @@
 #include "libfaad/neaacdec.h"
 
 // Declaration of the required global variables
+
 NeAACDecHandle hAac;
 NeAACDecFrameInfo_t frameInfo;
 NeAACDecConfigurationPtr_t conf;
+const uint8_t  SYNCWORDH = 0xff; /* 12-bit syncword */
+const uint8_t  SYNCWORDL = 0xf0;
 bool f_decoderIsInit = false;
 bool f_firstCall = false;
 bool f_setRaWBlockParams = false;
@@ -74,9 +77,15 @@ uint8_t AACGetParametricStereo(){  // not used (0) or used (1)
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACFindSyncWord(uint8_t *buf, int nBytes){
-    (void) buf;
-    (void)nBytes;
-    return 0;
+    int i;
+
+    /* find byte-aligned syncword (12 bits = 0xFFF) */
+    for (i = 0; i < nBytes - 1; i++) {
+        if ( (buf[i+0] & SYNCWORDH) == SYNCWORDH && (buf[i+1] & SYNCWORDL) == SYNCWORDL )
+            return i;
+    }
+
+    return -1;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACSetRawBlockParams(int nChans, int sampRateCore, int profile){
