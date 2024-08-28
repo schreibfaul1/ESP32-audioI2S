@@ -1990,6 +1990,7 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
         if((hInfo->error = adts_frame(&adts, &ld)) > 0) goto error;
         /* MPEG2 does byte_alignment() here, but ADTS header is always multiple of 8 bits in MPEG2 so not needed to actually do it. */
     }
+
 #ifdef DRM /* decode the complete bitstream */
     if(/*(hDecoder->object_type == 6) ||*/ hDecoder->object_type == DRM_ER_LC) { DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc); }
     else {
