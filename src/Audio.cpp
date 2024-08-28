@@ -4954,7 +4954,7 @@ bool Audio::setWebFilePos(uint32_t pos) {
         extension = x_ps_strdup("/");
         if(!extension) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
     }
-    AUDIO_INFO("skip to position: %li", pos);
+    AUDIO_INFO("skip to position: %li", (long int)pos);
 
     rqh = x_ps_calloc(strlen(extension) + strlen(hostwoext) + 60, 1);  // http request header
     rqh[0] = '\0';
