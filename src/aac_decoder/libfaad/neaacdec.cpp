@@ -1,3 +1,4 @@
+#include "Arduino.h"
 #include "neaacdec.h"
 #include <assert.h>
 #pragma GCC diagnostic warning "-Wall"
@@ -978,13 +979,8 @@ int8_t can_decode_ot(const uint8_t object_type) { /* Returns 0 if an object type
     return -1;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#ifdef ESP32_
-void* faad_malloc(size_t size) { return ps_malloc(size); }
-void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
-#else
 void* faad_malloc(size_t size) {return ps_malloc(size); }
 void* faad_calloc(size_t a, size_t s) { return ps_calloc(a, s); }
-#endif
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const uint8_t Parity[256] = { // parity
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
