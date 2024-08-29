@@ -5,8 +5,8 @@
 Audio audio;
 WiFiMulti wifiMulti;
 
-String ssid =     "xxxx";
-String password = "xxxx";
+String ssid =     "xxx";
+String password = "xxx";
 
 #define I2S_LRC     26
 #define I2S_DOUT    25
@@ -25,6 +25,7 @@ void setup() {
 
 void loop(){
     audio.loop();
+    vTaskDelay(20);
 }
 
 // optional
