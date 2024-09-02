@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12k
- *  Updated on: Aug 26.2024
+ *  Version 3.0.12l
+ *  Updated on: Sep 02.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2288,7 +2288,8 @@ void Audio::playChunk() {
     esp_err_t err = ESP_OK;
     int i= 0;
 
-    count = 0;
+    if(count > 0) goto i2swrite;
+
     if(m_bitsPerSample == 8){
         int16_t s16_1 = 0;
         int16_t s16_2 = 0;
@@ -2360,19 +2361,22 @@ void Audio::playChunk() {
         }
     }
 
+i2swrite:
+
     validSamples = m_validSamples;
 
 
 #if(ESP_IDF_VERSION_MAJOR == 5)
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 160);
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 5);
 #else
-    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 160);
+    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 10);
 #endif
 
-    if(err != ESP_OK) goto exit;
+    if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
+    count += i2s_bytesConsumed / 2;
     if(m_validSamples < 0) { m_validSamples = 0; }
-    count += i2s_bytesConsumed / sampleSize;
+    if(m_validSamples == 0) { count = 0; }
 
 
 // ---- statistics, bytes written to I2S (every 10s)
@@ -6383,6 +6387,7 @@ void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
     xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    while(m_validSamples) { vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
     xSemaphoreGive(mutex_playAudioData);
 }
