@@ -2068,6 +2068,7 @@ static void* aac_frame_decode(NeAACDecStruct_t* hDecoder, NeAACDecFrameInfo_t* h
 
 #if(defined(PS_DEC) || defined(DRM_PS))
     hInfo->ps = hDecoder->ps_used_global;
+    hInfo->isPS = hDecoder->isPS;
 #endif
 
     /* check if frame has channel elements */
