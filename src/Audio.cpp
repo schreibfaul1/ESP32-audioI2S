@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12l
- *  Updated on: Sep 02.2024
+ *  Version 3.0.12m
+ *  Updated on: Sep 05.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -859,18 +859,19 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     char* afn = NULL; // audioFileName
     afn = strdup(audiofile.name());
 
-    uint8_t dotPos = lastIndexOf(afn, ".");
-    for(uint8_t i = dotPos + 1; i < strlen(afn); i++) { afn[i] = toLowerCase(afn[i]); }
+    int16_t dotPos = lastIndexOf(afn, ".");
+    if(dotPos > 0){ // #827
+        for(uint8_t i = dotPos + 1; i < strlen(afn); i++) { afn[i] = toLowerCase(afn[i]); }
 
-    if(endsWith(afn, ".mp3")) m_codec = CODEC_MP3; // m_codec is by default CODEC_NONE
-    if(endsWith(afn, ".m4a")) m_codec = CODEC_M4A;
-    if(endsWith(afn, ".aac")) m_codec = CODEC_AAC;
-    if(endsWith(afn, ".wav")) m_codec = CODEC_WAV;
-    if(endsWith(afn, ".flac")) m_codec = CODEC_FLAC;
-    if(endsWith(afn, ".opus")) m_codec = CODEC_OPUS;
-    if(endsWith(afn, ".ogg")) m_codec = CODEC_OGG;
-    if(endsWith(afn, ".oga")) m_codec = CODEC_OGG;
-
+        if(endsWith(afn, ".mp3")) m_codec = CODEC_MP3; // m_codec is by default CODEC_NONE
+        if(endsWith(afn, ".m4a")) m_codec = CODEC_M4A;
+        if(endsWith(afn, ".aac")) m_codec = CODEC_AAC;
+        if(endsWith(afn, ".wav")) m_codec = CODEC_WAV;
+        if(endsWith(afn, ".flac")) m_codec = CODEC_FLAC;
+        if(endsWith(afn, ".opus")) m_codec = CODEC_OPUS;
+        if(endsWith(afn, ".ogg")) m_codec = CODEC_OGG;
+        if(endsWith(afn, ".oga")) m_codec = CODEC_OGG;
+    }
     if(m_codec == CODEC_NONE) AUDIO_INFO("The %s format is not supported", afn + dotPos);
 
     if(afn) {
