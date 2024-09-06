@@ -3156,7 +3156,7 @@ void Audio::processLocalFile() {
     if(!(audiofile && m_f_running && getDatamode() == AUDIO_LOCALFILE)) return; // guard
 
     static uint32_t ctime = 0;
-    const uint32_t  timeout = 6500;                          // ms
+    const uint32_t  timeout = 8000;                          // ms
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static bool     f_fileDataComplete;
     static uint32_t byteCounter; // count received data
@@ -4732,6 +4732,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         case AUDIOLOG_OUT_OF_MEMORY: e = "Out of memory"; logLevel = 1; break;
         case AUDIOLOG_FILE_NOT_FOUND: e = "File doesn't exist: "; logLevel = 1; f = s; break;
         case AUDIOLOG_FILE_READ_ERR: e = "Failed to open file for reading"; logLevel = 1; break;
+        case AUDIOLOG_M4A_ATOM_NOT_FOUND: e= "m4a atom ilst not found: "; logLevel = 3; f = s; break;
 
         default: e = "UNKNOWN EVENT"; logLevel = 3; break;
     }
@@ -5987,69 +5988,70 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
     return false;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::seek_m4a_ilst() {
-    // ilist - item list atom, contains the metadata
+uint32_t Audio::find_m4a_atom(uint32_t fileSize, const char* atomName, uint32_t depth) {
 
-    /* atom hierarchy (example)_________________________________________________________________________________________
+    while (audiofile.position() < fileSize) {
+        uint32_t atomStart = audiofile.position(); // Position of the current atom
+        uint32_t atomSize;
+        char atomType[5] = {0};
+        audiofile.read((uint8_t*)&atomSize, 4);    // Read the atom size (4 bytes) and the atom type (4 bytes)
+        if(!atomSize) audiofile.read((uint8_t*)&atomSize, 4); // skip 4 byte offset field
+        audiofile.read((uint8_t*)atomType, 4);
 
-      ftyp -> moov -> udta -> meta -> ilst -> data
+        atomSize = bswap32(atomSize);              // Convert atom size from big-endian to little-endian
+        ///    log_w("%*sAtom '%s' found at position %u with size %u bytes", depth * 2, "", atomType, atomStart, atomSize);
+        if (strncmp(atomType, atomName, 4) == 0) return atomStart;
 
-      __________________________________________________________________________________________________________________*/
+        if (atomSize == 1) {                       // If the atom has a size of 1, an 'Extended Size' is used
+            uint64_t extendedSize;
+            audiofile.read((uint8_t*)&extendedSize, 8);
+            extendedSize = bswap64(extendedSize);
+        //    log_w("%*sExtended size: %llu bytes\n", depth * 2, "", extendedSize);
+            atomSize = (uint32_t)extendedSize;     // Limit to uint32_t for further processing
+        }
 
-    struct m4a_Atom {
-        int  pos;
-        int  size;
-        char name[5] = {0};
-    } atom, at, tmp;
-
-    // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
-    auto atomItems = [&](uint32_t startPos) { // lambda, inner function
-        char temp[5] = {0};
-        audiofile.seek(startPos);
-        audiofile.readBytes(temp, 4);
-        atom.size = bigEndian((uint8_t*)temp, 4);
-        if(!atom.size) atom.size = 4; // has no data, length is 0
-        audiofile.readBytes(atom.name, 4);
-        atom.name[4] = '\0';
-        atom.pos = startPos;
-        return atom;
-    };
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    boolean    found = false;
-    uint32_t   seekpos = 0;
-    uint32_t   filesize = getFileSize();
-    char       name[6][5] = {"moov", "udta", "meta", "ilst"};
-    const char info[12][6] = {"nam\0", "ART\0", "alb\0", "too\0", "cmt\0", "wrt\0", "tmpo\0", "trkn\0", "day\0", "cpil\0", "aART\0", "gen\0"};
-
+        // If the atom is a container, read the atoms contained in it recursively
+        if (strncmp(atomType, "moov", 4) == 0 || strncmp(atomType, "trak", 4) == 0 ||
+            strncmp(atomType, "mdia", 4) == 0 || strncmp(atomType, "minf", 4) == 0 ||
+            strncmp(atomType, "stbl", 4) == 0 || strncmp(atomType, "meta", 4) == 0 ||
+            strncmp(atomType, "udta", 4) == 0 )  {
+            // Go recursively into the atom, read the contents
+            uint32_t pos = find_m4a_atom(atomStart + atomSize,  atomName, depth + 1);
+            if(pos) return pos;
+        } else {
+            audiofile.seek(atomStart + atomSize);    // No container atom, jump to the next atom
+        }
+    }
+    return 0;
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadata
     if(!audiofile) return; // guard
-
-    at.pos = 0;
-    at.size = filesize;
-    seekpos = 0;
-
-    for(int i = 0; i < 4; i++) {
-        found = false;
-        while(seekpos < at.pos + at.size) {
-            tmp = atomItems(seekpos);
-            seekpos += tmp.size;
-            if(strcmp(tmp.name, name[i]) == 0) {
-                memcpy((void*)&at, (void*)&tmp, sizeof(tmp));
-                found = true;
-            }
-            //           log_i("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
-        }
-        if(!found) {
-            log_w("m4a atom ilst not found");
-            audiofile.seek(0);
-            return;
-        }
-        seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
+    audiofile.seek(0);
+    uint32_t fileSize = audiofile.size();
+    const char atomName[] = "ilst";
+    uint32_t atomStart = find_m4a_atom(fileSize, atomName);
+    if(!atomStart) {
+        printProcessLog(AUDIOLOG_M4A_ATOM_NOT_FOUND, "ilst");
+        audiofile.seek(0);
+        return;
     }
 
-    int len = tmp.size - 8;
+    uint32_t   seekpos = atomStart;
+    const char info[12][6] = {"nam\0", "ART\0", "alb\0", "too\0", "cmt\0", "wrt\0", "tmpo\0", "trkn\0", "day\0", "cpil\0", "aART\0", "gen\0"};
+
+    seekpos = atomStart;
+    char buff[4];
+    uint32_t len = 0;
+    audiofile.seek(seekpos);
+    audiofile.readBytes(buff, 4);
+    len = bigEndian((uint8_t*)buff, 4);
+    if(!len) {
+        audiofile.readBytes(buff, 4); // 4bytes offset filed
+        len = bigEndian((uint8_t*)buff, 4);
+    }
     if(len > 1024) len = 1024;
-    //    log_i("found at pos %i, len %i", seekpos, len);
+        log_w("found at pos %i, len %i", seekpos, len);
 
     uint8_t* data = (uint8_t*)calloc(len, sizeof(uint8_t));
     if(!data) {

@@ -185,7 +185,8 @@ private:
         #define ESP_ARDUINO_VERSION_PATCH 0
     #endif
 
-  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4, AUDIOLOG_ERR_UNKNOWN = -127 };
+  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4,
+                  AUDIOLOG_M4A_ATOM_NOT_FOUND = -5,  AUDIOLOG_ERR_UNKNOWN = -127 };
 
   void            UTF8toASCII(char* str);
   bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
@@ -244,6 +245,7 @@ private:
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
   void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
   bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+  uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
 
   //+++ create a T A S K  for playAudioData(), output via I2S +++
 public:
@@ -476,6 +478,28 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return ps_str;
     }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
+    uint32_t bswap32(uint32_t x) {
+        return ((x & 0xFF000000) >> 24) |
+               ((x & 0x00FF0000) >> 8)  |
+               ((x & 0x0000FF00) << 8)  |
+               ((x & 0x000000FF) << 24);
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// Function to reverse the byte order of a 64-bit value (big-endian to little-endian)
+    uint64_t bswap64(uint64_t x) {
+        return ((x & 0xFF00000000000000ULL) >> 56) |
+               ((x & 0x00FF000000000000ULL) >> 40) |
+               ((x & 0x0000FF0000000000ULL) >> 24) |
+               ((x & 0x000000FF00000000ULL) >> 8)  |
+               ((x & 0x00000000FF000000ULL) << 8)  |
+               ((x & 0x0000000000FF0000ULL) << 24) |
+               ((x & 0x000000000000FF00ULL) << 40) |
+               ((x & 0x00000000000000FFULL) << 56);
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
