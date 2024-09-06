@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12m
- *  Updated on: Sep 05.2024
+ *  Version 3.0.12n
+ *  Updated on: Sep 06.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -448,7 +448,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         stopSong();
         return false;
     }
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     m_f_ssl = true;
@@ -541,7 +541,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //        |   |                                     |    |                              |             (query string)
 //    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
 
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
@@ -819,7 +819,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
         return false;
     }
 
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY); // #3
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ); // #3
 
     m_fileStartPos = fileStartPos;
     setDefaults(); // free buffers an set defaults
@@ -888,7 +888,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang) {
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
@@ -1913,6 +1913,16 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_M4A_Header(uint8_t* data, size_t len) {
+
+    // Lambda function for Variant length determination
+    auto parse_variant_length = [](uint8_t *&ptr) -> int {
+        int length = 0;
+        do {
+            length = (length << 7) | (*ptr & 0x7F);  // Read the lower 7 bits of the current byte
+        } while (*(ptr++) & 0x80);  //Increment the pointer after each byte
+        return length;
+    };
+
     /*
          ftyp
            | - moov  -> trak -> ... -> mp4a contains raw block parameters
@@ -2041,29 +2051,44 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         if(specialIndexOf(data, "esds", len) > 0) {
             int      esds = specialIndexOf(data, "esds", len); // Packaging/Encapsulation And Setup Data
             uint8_t* pos = data + esds;
-            uint8_t  len_of_OD = *(pos + 12); // length of this OD (which includes the next 2 tags)
-            (void)len_of_OD;
-            uint8_t len_of_ESD = *(pos + 20); // length of this Elementary Stream Descriptor
-            (void)len_of_ESD;
-            uint8_t audioType = *(pos + 21);
+            pos += 8; // skip header
 
-            if     (audioType == (uint8_t)0x40) { AUDIO_INFO("AudioType: MPEG4 / Audio"); } // ObjectTypeIndication
-            else if(audioType == (uint8_t)0x66) { AUDIO_INFO("AudioType: MPEG2 / Audio"); }
-            else if(audioType == (uint8_t)0x69) { AUDIO_INFO("AudioType: MPEG2 / Audio Part 3"); } // Backward Compatible Audio
-            else if(audioType == (uint8_t)0x6B) { AUDIO_INFO("AudioType: MPEG1 / Audio"); }
-            else { AUDIO_INFO("unknown Audio Type %x", audioType); }
+            if(*pos == 0x03) {;} // Found ES Descriptor (Tag: 0x03)
+            pos++;
+            int es_descriptor_len = parse_variant_length(pos); (void)es_descriptor_len;
+            uint16_t es_id = (pos[0] << 8) | pos[1]; (void)es_id;
+            uint8_t flags = pos[2]; (void)flags;
+            pos += 3; // skip ES Descriptor data
 
-            uint8_t streamType = *(pos + 22);
-            streamType = streamType >> 2; // 6 bits
-            if(streamType != 5) { log_e("Streamtype is not audio!"); }
+            if (*pos == 0x04) {;}
+            pos++; // skip tag
 
-            uint32_t maxBr = bigEndian(pos + 26, 4); // max bitrate
+            int decoder_config_len = parse_variant_length(pos); (void)decoder_config_len;
+            uint8_t object_type_indication = pos[0];
+
+            if     (object_type_indication == (uint8_t)0x40) { AUDIO_INFO("AudioType: MPEG4 / Audio"); } // ObjectTypeIndication
+            else if(object_type_indication == (uint8_t)0x66) { AUDIO_INFO("AudioType: MPEG2 / Audio"); }
+            else if(object_type_indication == (uint8_t)0x69) { AUDIO_INFO("AudioType: MPEG2 / Audio Part 3"); } // Backward Compatible Audio
+            else if(object_type_indication == (uint8_t)0x6B) { AUDIO_INFO("AudioType: MPEG1 / Audio"); }
+            else { AUDIO_INFO("unknown Audio Type %x", object_type_indication); }
+
+            pos++;
+            uint8_t streamType = *pos >> 2;   // The upper 6 Bits are the StreamType
+            if(streamType != 0x05) { log_e("Streamtype is not audio!"); }
+            pos += 4; // ST + BufferSizeDB.
+            uint32_t maxBr = bigEndian(pos, 4); // max bitrate
+            pos += 4;
             AUDIO_INFO("max bitrate: %lu", (long unsigned int)maxBr);
 
-            uint32_t avrBr = bigEndian(pos + 30, 4); // avg bitrate
-            AUDIO_INFO("avr bitrate: %lu", (long unsigned int)avrBr);
+            uint32_t avrBr = bigEndian(pos, 4); // avg bitrate
+            pos += 4;
+            AUDIO_INFO("avg bitrate: %lu", (long unsigned int)avrBr);
 
-            uint16_t ASC = bigEndian(pos + 39, 2);
+            if ( *pos == 0x05) {;} // log_w("Found  DecoderSpecificInfo Tag (Tag: 0x05)")
+            pos++;
+            int decoder_specific_len = parse_variant_length((pos)); (void)decoder_specific_len;
+
+            uint16_t ASC = bigEndian(pos, 2);
 
             uint8_t objectType = ASC >> 11; // first 5 bits
 
@@ -2162,26 +2187,38 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    uint8_t extLen = 0;
     if(m_controlCounter == M4A_MDAT) {            // mdat
-        m_audioDataSize = bigEndian(data, 4) - 8; // length of this atom - strlen(M4A_MDAT)
-        AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
-        retvalue = 8;
-        headerSize += 8;
+        m_audioDataSize = bigEndian(data, 4); // length of this atom
+
+        // Extended Size
+        // 00 00 00 01 6D 64 61 74 00 00 00 00 00 00 16 64
+        //        0001  m  d  a  t                    5732
+
+        if(m_audioDataSize == 1){ // Extended Size
+            m_audioDataSize = bigEndian(data + 8, 8);
+            m_audioDataSize -= 16;
+            extLen = 8;
+        }
+        AUDIO_INFO("Audio-Length: %i", m_audioDataSize);
+        retvalue = 8 + extLen;
+        headerSize += 8 + extLen;
         m_controlCounter = M4A_AMRDY; // last step before starting the audio
         return 0;
     }
 
     if(m_controlCounter == M4A_AMRDY) { // almost ready
         m_audioDataStart = headerSize;
-        //        m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
-        if(getDatamode() == AUDIO_LOCALFILE) { AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength); }
-
+        if(getDatamode() == AUDIO_LOCALFILE) {
+            m_contentlength = headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
+            if(extLen) m_contentlength -= 16;
+            AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
+        }
         if(picLen) {
             size_t pos = audiofile.position();
             audio_id3image(audiofile, picPos, picLen);
             audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
         }
-
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
     }
@@ -2264,7 +2301,7 @@ uint32_t Audio::stopSong() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     bool retVal = false;
     if(getDatamode() == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM || m_streamType == ST_WEBFILE) {
         m_f_running = !m_f_running;
@@ -3252,10 +3289,7 @@ void Audio::processLocalFile() {
 exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
-        m_f_running = false;
-        m_streamType = ST_NONE;
-        audiofile.close();
-        AUDIO_INFO("Closing audio file \"%s\"", afn);
+        stopSong();
 
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
         if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
@@ -6333,7 +6367,7 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 void Audio::setAudioTaskCore(uint8_t coreID){  // Recommendation:If the ARDUINO RUNNING CORE is 1, the audio task should be core 0 or vice versa
     if(coreID > 1) return;
     stopAudioTask();
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     m_audioTaskCoreId = coreID;
     xSemaphoreGive(mutex_playAudioData);
     startAudioTask();
@@ -6387,7 +6421,7 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
-    xSemaphoreTake(mutex_playAudioData, portMAX_DELAY);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     while(m_validSamples) { vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
     xSemaphoreGive(mutex_playAudioData);

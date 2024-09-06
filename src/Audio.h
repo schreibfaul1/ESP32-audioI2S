@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12m
- *  Updated on: Sep 05.2024
+ *  Version 3.0.12n
+ *  Updated on: Sep 06.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -376,15 +376,18 @@ void trim(char *str) {
     }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // some other functions
-    size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
-        uint64_t result = 0;
-        if(numBytes < 1 || numBytes > 8) return 0;
-        for (int i = 0; i < numBytes; i++) {
-                result += *(base + i) << (numBytes -i - 1) * shiftLeft;
-        }
-        if(result > SIZE_MAX) {log_e("range overflow"); result = 0;} // overflow
-        return (size_t)result;
+uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
+    uint64_t result = 0;  // Use uint64_t for greater caching
+    if(numBytes < 1 || numBytes > 8) return 0;
+    for (int i = 0; i < numBytes; i++) {
+        result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); //Make sure the calculation is done correctly
     }
+    if(result > SIZE_MAX) {
+        log_e("range overflow");
+        return 0;
+    }
+    return result;
+}
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     bool b64encode(const char* source, uint16_t sourceLength, char* dest){
         size_t size = base64_encode_expected_len(sourceLength) + 1;
