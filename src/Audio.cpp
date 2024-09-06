@@ -6423,9 +6423,9 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     while(m_validSamples) {
         vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
-    xSemaphoreGiveRecursive(mutex_playAudioData);
+    xSemaphoreGive(mutex_playAudioData);
 }
