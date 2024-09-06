@@ -67,6 +67,7 @@ void AudioBuffer::changeMaxBlockSize(uint16_t mbs) {
 uint16_t AudioBuffer::getMaxBlockSize() { return m_maxBlockSize; }
 
 size_t AudioBuffer::freeSpace() {
+    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
         if(m_f_start) m_freeSpace = m_buffSize;
         else m_freeSpace = 0;
@@ -77,6 +78,7 @@ size_t AudioBuffer::freeSpace() {
     if(m_readPtr > m_writePtr) {
         m_freeSpace = m_readPtr - m_writePtr;
     }
+    xSemaphoreGiveRecursive(mutex_buffer);
     return m_freeSpace;
 }
 
@@ -448,7 +450,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         stopSong();
         return false;
     }
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     m_f_ssl = true;
@@ -514,7 +516,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         AUDIO_INFO("Request %s failed!", host);
         m_lastHost[0] = 0;
     }
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
 
@@ -541,7 +543,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //        |   |                                     |    |                              |             (query string)
 //    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
 
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
@@ -656,7 +658,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
 
 exit:
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     if(h_host)        {free(h_host); h_host = NULL;}
     if(rqh)           {free(rqh); rqh = NULL;}
     if(authorization) {free(authorization); authorization = NULL; }
@@ -819,7 +821,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
         return false;
     }
 
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ); // #3
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     m_fileStartPos = fileStartPos;
     setDefaults(); // free buffers an set defaults
@@ -827,7 +829,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     char *audioPath = (char *) __malloc_heap_psram(strlen(path) + 2);
     if(!audioPath){
         printProcessLog(AUDIOLOG_OUT_OF_MEMORY);
-        xSemaphoreGive(mutex_playAudioData);
+        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
     if(path[0] == '/'){strcpy(audioPath, path);}
@@ -837,7 +839,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
         UTF8toASCII(audioPath);
         if(!fs.exists(audioPath)){
             printProcessLog(AUDIOLOG_FILE_NOT_FOUND, audioPath);
-            xSemaphoreGive(mutex_playAudioData);
+            xSemaphoreGiveRecursive(mutex_playAudioData);
             free(audioPath);
             return false;
         }
@@ -849,7 +851,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     if(!audiofile) {
         printProcessLog(AUDIOLOG_FILE_READ_ERR, audioPath);
         free(audioPath);
-        xSemaphoreGive(mutex_playAudioData);
+        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
 
@@ -883,12 +885,12 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     bool ret = initializeDecoder();
     if(ret) m_f_running = true;
     else audiofile.close();
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     return ret;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttospeech(const char* speech, const char* lang) {
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     setDefaults();
     char host[] = "translate.google.com.vn";
@@ -899,7 +901,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     char* speechBuff = (char*)malloc(speechBuffLen);
     if(!speechBuff) {
         log_e("out of memory");
-        xSemaphoreGive(mutex_playAudioData);
+        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
     memcpy(speechBuff, speech, speechLen);
@@ -907,7 +909,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     char* urlStr = urlencode(speechBuff, false); // percent encoding
     if(!urlStr) {
         log_e("out of memory");
-        xSemaphoreGive(mutex_playAudioData);
+        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
 
@@ -939,7 +941,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     AUDIO_INFO("connect to \"%s\"", host);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
-        xSemaphoreGive(mutex_playAudioData);
+        xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
     _client->print(resp);
@@ -949,7 +951,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     m_f_ssl = false;
     m_f_tts = true;
     setDatamode(HTTP_RESPONSE_HEADER);
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2301,7 +2303,7 @@ uint32_t Audio::stopSong() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     bool retVal = false;
     if(getDatamode() == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM || m_streamType == ST_WEBFILE) {
         m_f_running = !m_f_running;
@@ -2311,7 +2313,7 @@ bool Audio::pauseResume() {
             m_validSamples = 0;
         }
     }
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6367,9 +6369,9 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 void Audio::setAudioTaskCore(uint8_t coreID){  // Recommendation:If the ARDUINO RUNNING CORE is 1, the audio task should be core 0 or vice versa
     if(coreID > 1) return;
     stopAudioTask();
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     m_audioTaskCoreId = coreID;
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
     startAudioTask();
 }
 
@@ -6421,8 +6423,9 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
-    while(m_validSamples) { vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
+    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    while(m_validSamples) {
+        vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGiveRecursive(mutex_playAudioData);
 }
