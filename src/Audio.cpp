@@ -394,6 +394,7 @@ void Audio::setDefaults() {
     m_f_m4aID3dataAreRead = false;
     m_f_stream = false;
     m_f_eof = false;
+    m_f_ID3v1TagFound = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -3129,15 +3130,11 @@ void Audio::processLocalFile() {
     static uint32_t ctime = 0;
     const uint32_t  timeout = 8000;                          // ms
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
-    static bool     f_fileDataComplete;
-    static uint32_t byteCounter; // count received data
     uint32_t        availableBytes = 0;
 
     if(m_f_firstCall) { // runs only one time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
-        f_fileDataComplete = false;
-        byteCounter = 0;
         ctime = millis();
         uint32_t pos = audiofile.position();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
@@ -3148,20 +3145,10 @@ void Audio::processLocalFile() {
         return;
     }
 
-    availableBytes = 256 * 1024; // set some large value
-
-    availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-    availableBytes = min(availableBytes, audiofile.size() - byteCounter);
-    if(m_contentlength) {
-        if(m_contentlength > getFilePos()) availableBytes = min(availableBytes, m_contentlength - getFilePos());
-    }
-    if(m_audioDataSize) { availableBytes = min(availableBytes, m_audioDataSize + m_audioDataStart - byteCounter); }
-
+    availableBytes = InBuff.writeSpace();
     int32_t bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
-    if(bytesAddedToBuffer > 0) {
-        byteCounter += bytesAddedToBuffer;
-        InBuff.bytesWritten(bytesAddedToBuffer);
-    }
+    if(bytesAddedToBuffer > 0) {InBuff.bytesWritten(bytesAddedToBuffer);}
+
     if(!m_f_stream) {
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
@@ -3182,14 +3169,8 @@ void Audio::processLocalFile() {
             return;
         }
         else {
-            if((InBuff.freeSpace() > maxFrameSize) && (m_fileSize - byteCounter) > maxFrameSize && availableBytes) {
-                // fill the buffer before playing
-                return;
-            }
-
             m_f_stream = true;
             AUDIO_INFO("stream ready");
-            if(m_f_Log) log_i("m_audioDataStart %d", m_audioDataStart);
         }
     }
 
@@ -3224,32 +3205,12 @@ void Audio::processLocalFile() {
 
         audiofile.seek(m_resumeFilePos);
         InBuff.resetBuffer();
-        byteCounter = m_resumeFilePos;
-        f_fileDataComplete = false; // #570
-
         m_resumeFilePos = -1;
         m_f_stream = false;
     }
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    //if(f_fileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
-    if(m_f_eof){
-        // if(InBuff.bufferFilled()) {
-        //     if(!readID3V1Tag()) {
-        //         if(m_validSamples) {
-        //             return;
-        //         }
-        //     }
-        // }
-
-        // if(m_f_loop && m_f_stream) {                                                                                      // eof
-        //     AUDIO_INFO("loop from: %lu to: %lu", (long unsigned int)getFilePos(), (long unsigned int)m_audioDataStart); // loop
-        //     setFilePos(m_audioDataStart);
-        //     if(m_codec == CODEC_FLAC) FLACDecoderReset();
-        //     m_audioCurrentTime = 0;
-        //     byteCounter = m_audioDataStart;
-        //     f_fileDataComplete = false;
-        //     return;
-        // } // loop
+    if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
+        if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
@@ -3275,8 +3236,6 @@ exit:
         m_codec = CODEC_NONE;
         return;
     }
-    if(byteCounter == audiofile.size()) { f_fileDataComplete = true; }
-    if(byteCounter == m_audioDataSize + m_audioDataStart) { f_fileDataComplete = true; }
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
@@ -3445,14 +3404,8 @@ void Audio::processWebFile() {
     }
 
     // end of webfile reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_webFileDataComplete && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {
-        if(InBuff.bufferFilled()) {
-            if(!readID3V1Tag()) {
-                if(m_validSamples) {
-                    return;
-                }
-            }
-        }
+    if(m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
+        if(m_f_ID3v1TagFound) readID3V1Tag();
 
         m_f_running = false;
         m_streamType = ST_NONE;
@@ -3736,6 +3689,12 @@ void Audio::playAudioData() {
         if(bytesDecoded > 0) {
             InBuff.bytesWasRead(bytesDecoded);
             m_sumBytesDecoded += bytesDecoded;
+        if(f_isFile && m_codec == CODEC_MP3){
+            log_e("%u bytes not decoded", m_audioDataSize - m_sumBytesDecoded );
+            if (m_audioDataSize - m_sumBytesDecoded == 128){m_f_ID3v1TagFound = true; m_f_eof = true; log_e("ID3v1 tag found");  return;}
+        }
+
+
             return;
         }
         if(bytesDecoded == 0) return; // syncword at pos0
