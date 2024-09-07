@@ -3315,8 +3315,6 @@ void Audio::processWebStream() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
-    static bool     f_webFileDataComplete;                   // all file data received
-    static uint32_t byteCounter;
     static uint32_t chunkSize;                               // chunkcount read from stream
     static size_t   audioDataCount;                          // counts the decoded audiodata only
 
@@ -3324,11 +3322,10 @@ void Audio::processWebFile() {
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_t0 = millis();
-        f_webFileDataComplete = false;
-        byteCounter = 0;
         chunkSize = 0;
         audioDataCount = 0;
         m_f_stream = false;
+        m_audioDataSize = m_contentlength;
     }
 
     if(!m_contentlength && !m_f_tts) {
@@ -3348,29 +3345,13 @@ void Audio::processWebFile() {
     }
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!f_webFileDataComplete && m_f_stream) {
-        if(streamDetection(availableBytes)) return;
-    }
-
-    availableBytes = min((uint32_t)InBuff.writeSpace(), availableBytes);
-    availableBytes = min(m_contentlength - byteCounter, availableBytes);
-    if(m_audioDataSize) availableBytes = min(m_audioDataSize - (byteCounter - m_audioDataStart), availableBytes);
-
+    if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
 
     if(bytesAddedToBuffer > 0) {
-        byteCounter += bytesAddedToBuffer; // Pull request #42
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
-    }
-
-    if(!m_f_stream && m_controlCounter == 100) {
-        if((InBuff.freeSpace() > maxFrameSize) && (byteCounter < m_contentlength)) return;
-        m_f_stream = true; // ready to play the audio data
-        uint16_t filltime = millis() - m_t0;
-        AUDIO_INFO("Webfile: stream ready, buffer filled in %d ms", filltime);
-        return;
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3384,22 +3365,16 @@ void Audio::processWebFile() {
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-        if(codec == CODEC_FLAC) {
-            m_codec = CODEC_FLAC;
-            initializeDecoder();
-            return;
-        }
-        if(codec == CODEC_OPUS) {
-            m_codec = CODEC_OPUS;
-            initializeDecoder();
-            return;
-        }
-        if(codec == CODEC_VORBIS) {
-            m_codec = CODEC_VORBIS;
-            initializeDecoder();
-            return;
-        }
-        stopSong();
+        if     (codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
+        else if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
+        else if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+        else {stopSong(); return;}
+    }
+
+    if(!m_f_stream && m_controlCounter == 100) {
+        m_f_stream = true; // ready to play the audio data
+        uint16_t filltime = millis() - m_t0;
+        AUDIO_INFO("Webfile: stream ready, buffer filled in %d ms", filltime);
         return;
     }
 
@@ -3426,10 +3401,6 @@ void Audio::processWebFile() {
         }
         return;
     }
-
-    if(byteCounter == m_contentlength) { f_webFileDataComplete = true; }
-    if(byteCounter - m_audioDataStart == m_audioDataSize) { f_webFileDataComplete = true; }
-
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
