@@ -630,6 +630,7 @@ private:
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
+    uint32_t        m_sumBytesDecoded = 0;          // used for streaming
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -637,6 +638,7 @@ private:
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
+    bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
@@ -656,6 +658,7 @@ private:
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
     bool            m_f_audioTaskIsRunning = false;
     bool            m_f_stream = false;             // stream ready for output?
+    bool            m_f_eof = false;                // end of file
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
