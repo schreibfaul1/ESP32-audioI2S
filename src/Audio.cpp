@@ -3346,6 +3346,7 @@ void Audio::processWebFile() {
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
+    availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
 
     if(bytesAddedToBuffer > 0) {
@@ -3660,17 +3661,13 @@ void Audio::playAudioData() {
         if(bytesDecoded > 0) {
             InBuff.bytesWasRead(bytesDecoded);
             m_sumBytesDecoded += bytesDecoded;
-        if(f_isFile && m_codec == CODEC_MP3){
-            log_e("%u bytes not decoded", m_audioDataSize - m_sumBytesDecoded );
-            if (m_audioDataSize - m_sumBytesDecoded == 128){m_f_ID3v1TagFound = true; m_f_eof = true; log_e("ID3v1 tag found");  return;}
-        }
-
-
+            if(f_isFile && m_codec == CODEC_MP3){
+                if (m_audioDataSize - m_sumBytesDecoded == 128){m_f_ID3v1TagFound = true; m_f_eof = true; return;}
+            }
             return;
         }
         if(bytesDecoded == 0) return; // syncword at pos0
     }
-
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
