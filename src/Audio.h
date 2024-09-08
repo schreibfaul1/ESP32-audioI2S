@@ -240,8 +240,6 @@ private:
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-  inline void     setDatamode(uint8_t dm) { m_datamode = dm; }
-  inline uint8_t  getDatamode() { return m_datamode; }
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
   void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
   bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
@@ -607,7 +605,7 @@ private:
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
-    uint16_t        m_datamode{0};                  // Statemaschine
+    uint16_t        m_dataMode{0};                  // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
