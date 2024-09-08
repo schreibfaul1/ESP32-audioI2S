@@ -3123,6 +3123,7 @@ void Audio::processLocalFile() {
     const uint32_t  timeout = 8000;                          // ms
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     uint32_t        availableBytes = 0;
+    static uint32_t byteCounter = 0;
 
     if(m_f_firstCall) { // runs only one time per connection, prepare for start
         m_f_firstCall = false;
@@ -3134,11 +3135,13 @@ void Audio::processLocalFile() {
         audiofile.seek(pos);
         m_audioDataSize = audiofile.size();
         if(m_resumeFilePos == 0) m_resumeFilePos = -1; // parkposition
+        byteCounter = 0;
         return;
     }
-
     availableBytes = InBuff.writeSpace();
+
     int32_t bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
+    if(bytesAddedToBuffer > 0) {byteCounter += bytesAddedToBuffer;}
     if(bytesAddedToBuffer > 0) {InBuff.bytesWritten(bytesAddedToBuffer);}
 
     if(!m_f_stream) {
@@ -3196,16 +3199,27 @@ void Audio::processLocalFile() {
         }
 
         audiofile.seek(m_resumeFilePos);
+        m_sumBytesDecoded = m_haveNewFilePos = m_resumeFilePos;
         InBuff.resetBuffer();
         m_resumeFilePos = -1;
         m_f_stream = false;
     }
+
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
+        if(m_f_loop){ // file loop
+            m_sumBytesDecoded = m_haveNewFilePos = m_audioDataStart;
+            audiofile.seek(m_audioDataStart);
+            InBuff.resetBuffer();
+            AUDIO_INFO("file loop");
+            m_f_eof = false;
+            return;
+        }
         if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
+log_w("");
         stopSong();
 
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
@@ -3470,7 +3484,7 @@ void Audio::processWebStreamTS() {
     }
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 150000) {
+            if(InBuff.bufferFilled() < 60000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
@@ -3617,8 +3631,7 @@ void Audio::playAudioData() {
 
     static bool f_isFile = false;
     bool lastFrame = false;
-    uint32_t bytesToBeDecoded = 0;
-    uint16_t blockSize = InBuff.getMaxBlockSize();
+    uint32_t bytesToDecode = 0;
 
     if(m_f_stream && m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
@@ -3629,17 +3642,16 @@ void Audio::playAudioData() {
     }
 
     if(m_validSamples) {playChunk(); return;}    // play samples first
+    if(m_f_eof) return;
 
     if(f_isFile) {
-        bytesToBeDecoded = m_audioDataSize - m_sumBytesDecoded;
+        bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
+        if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
         if(m_sumBytesDecoded >= m_audioDataSize) { m_f_eof = true; return; }
-        if(bytesToBeDecoded < blockSize) {lastFrame = true; blockSize = bytesToBeDecoded;}
     }
-    if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()){ // is intended to ensure that the decoder always receives a sufficiently large data packet
-       if(!lastFrame) return; // Exception: last packet
-    }
+    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return;
 
-    int bytesDecoded = sendBytes(InBuff.getReadPtr(), blockSize);
+    int bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
 
     if(bytesDecoded < 0) { // no syncword found or decode error, try next chunk
         uint8_t next = 200;
