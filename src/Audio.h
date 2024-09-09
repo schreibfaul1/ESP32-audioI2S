@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12n
- *  Updated on: Sep 06.2024
+ *  Version 3.0.12m
+ *  Updated on: Sep 09.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -658,6 +658,8 @@ private:
     bool            m_f_audioTaskIsRunning = false;
     bool            m_f_stream = false;             // stream ready for output?
     bool            m_f_eof = false;                // end of file
+    bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
+    bool            m_f_audioTaskIsDecoding = false;
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;

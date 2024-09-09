@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 20.05.2024
+ *  Updated on: 09.09.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -89,6 +89,13 @@ void OPUSDecoder_FreeBuffers(){
 void OPUSDecoder_ClearBuffers(){
     if(s_opusChbuf)        memset(s_opusChbuf, 0, 512);
     if(s_opusSegmentTable) memset(s_opusSegmentTable, 0, 256 * sizeof(int16_t));
+    s_frameCount = 0;
+    s_opusSegmentLength = 0;
+    s_opusValidSamples = 0;
+    s_opusSegmentTableSize = 0;
+    s_opusOggHeaderSize = 0;
+    s_opusSegmentTableRdPtr = -1;
+    s_opusCountCode = 0;
 }
 void OPUSsetDefaults(){
     s_f_opusParseOgg = false;

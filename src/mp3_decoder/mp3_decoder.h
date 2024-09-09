@@ -459,7 +459,7 @@ bool MP3Decoder_AllocateBuffers(void);
 bool MP3Decoder_IsInit();
 void MP3Decoder_FreeBuffers();
 int32_t  MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t useSize);
-void MP3GetLastFrameInfo();
+void     MP3GetLastFrameInfo();
 int32_t  MP3GetNextFrameInfo(uint8_t *buf);
 int32_t  MP3FindSyncWord(uint8_t *buf, int32_t nBytes);
 int32_t  MP3GetSampRate();
@@ -467,6 +467,8 @@ int32_t  MP3GetChannels();
 int32_t  MP3GetBitsPerSample();
 int32_t  MP3GetBitrate();
 int32_t  MP3GetOutputSamps();
+int32_t  MP3GetLayer();
+int32_t  MP3GetVersion();
 
 //internally used
 void MP3Decoder_ClearBuffer(void);

@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.05.2024
+ *  Updated on: 09.09.2024
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1321,6 +1321,8 @@ int32_t MP3GetChannels(){return m_MP3FrameInfo->nChans;}
 int32_t MP3GetBitsPerSample(){return m_MP3FrameInfo->bitsPerSample;}
 int32_t MP3GetBitrate(){return m_MP3FrameInfo->bitrate;}
 int32_t MP3GetOutputSamps(){return m_MP3FrameInfo->outputSamps;}
+int32_t MP3GetLayer(){return m_MP3FrameInfo->layer;}
+int32_t MP3GetVersion(){return m_MP3FrameInfo->version;}
 /***********************************************************************************************************************
  * Function:    MP3GetNextFrameInfo
  *
