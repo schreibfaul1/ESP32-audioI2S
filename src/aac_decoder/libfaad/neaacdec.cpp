@@ -9918,6 +9918,7 @@ uint8_t window_grouping_info(NeAACDecStruct_t* hDecoder, ic_stream_t* ics) {
         if(hDecoder->object_type == LD) {
             if(hDecoder->frameLength == 512) {
                 for(i = 0; i < ics->num_swb; i++) {
+log_e("i %i", i);
                     ics->sect_sfb_offset[0][i] = swb_offset_512_window[sf_index][i];
                     ics->swb_offset[i] = swb_offset_512_window[sf_index][i];
                 }

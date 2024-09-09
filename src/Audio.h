@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12k
- *  Updated on: Aug 27.2024
+ *  Version 3.0.12n
+ *  Updated on: Sep 09.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -185,7 +185,8 @@ private:
         #define ESP_ARDUINO_VERSION_PATCH 0
     #endif
 
-  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4, AUDIOLOG_ERR_UNKNOWN = -127 };
+  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4,
+                  AUDIOLOG_M4A_ATOM_NOT_FOUND = -5,  AUDIOLOG_ERR_UNKNOWN = -127 };
 
   void            UTF8toASCII(char* str);
   bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
@@ -239,11 +240,10 @@ private:
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-  inline void     setDatamode(uint8_t dm) { m_datamode = dm; }
-  inline uint8_t  getDatamode() { return m_datamode; }
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
   void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
   bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+  uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
 
   //+++ create a T A S K  for playAudioData(), output via I2S +++
 public:
@@ -376,15 +376,18 @@ void trim(char *str) {
     }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // some other functions
-    size_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8){
-        uint64_t result = 0;
-        if(numBytes < 1 || numBytes > 8) return 0;
-        for (int i = 0; i < numBytes; i++) {
-                result += *(base + i) << (numBytes -i - 1) * shiftLeft;
-        }
-        if(result > SIZE_MAX) {log_e("range overflow"); result = 0;} // overflow
-        return (size_t)result;
+uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
+    uint64_t result = 0;  // Use uint64_t for greater caching
+    if(numBytes < 1 || numBytes > 8) return 0;
+    for (int i = 0; i < numBytes; i++) {
+        result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); //Make sure the calculation is done correctly
     }
+    if(result > SIZE_MAX) {
+        log_e("range overflow");
+        return 0;
+    }
+    return result;
+}
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     bool b64encode(const char* source, uint16_t sourceLength, char* dest){
         size_t size = base64_encode_expected_len(sourceLength) + 1;
@@ -473,6 +476,28 @@ void trim(char *str) {
         return ps_str;
     }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
+    uint32_t bswap32(uint32_t x) {
+        return ((x & 0xFF000000) >> 24) |
+               ((x & 0x00FF0000) >> 8)  |
+               ((x & 0x0000FF00) << 8)  |
+               ((x & 0x000000FF) << 24);
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// Function to reverse the byte order of a 64-bit value (big-endian to little-endian)
+    uint64_t bswap64(uint64_t x) {
+        return ((x & 0xFF00000000000000ULL) >> 56) |
+               ((x & 0x00FF000000000000ULL) >> 40) |
+               ((x & 0x0000FF0000000000ULL) >> 24) |
+               ((x & 0x000000FF00000000ULL) >> 8)  |
+               ((x & 0x00000000FF000000ULL) << 8)  |
+               ((x & 0x0000000000FF0000ULL) << 24) |
+               ((x & 0x000000000000FF00ULL) << 40) |
+               ((x & 0x00000000000000FFULL) << 56);
+    }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
@@ -580,7 +605,7 @@ private:
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
-    uint16_t        m_datamode{0};                  // Statemaschine
+    uint16_t        m_dataMode{0};                  // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
@@ -603,6 +628,7 @@ private:
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
+    uint32_t        m_sumBytesDecoded = 0;          // used for streaming
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -610,7 +636,9 @@ private:
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
+    bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
+    bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
@@ -629,6 +657,9 @@ private:
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
     bool            m_f_audioTaskIsRunning = false;
     bool            m_f_stream = false;             // stream ready for output?
+    bool            m_f_eof = false;                // end of file
+    bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
+    bool            m_f_audioTaskIsDecoding = false;
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;

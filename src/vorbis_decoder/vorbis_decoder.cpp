@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 27.05.2024
+ *  Updated on: 09.09.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -108,7 +108,10 @@ void VORBISDecoder_FreeBuffers(){
 void VORBISDecoder_ClearBuffers(){
     if(s_vorbisChbuf) memset(s_vorbisChbuf, 0, 256);
     bitReader_clear();
-}
+    if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
+    if(s_vorbisSegmentTable) memset(s_vorbisSegmentTable, 0, 256);
+    s_vorbisSegmentTableSize = 0;
+    s_vorbisSegmentTableRdPtr = -1;}
 void VORBISsetDefaults(){
     s_pageNr = 0;
     s_f_vorbisNewSteamTitle = false;  // streamTitle
