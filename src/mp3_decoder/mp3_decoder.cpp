@@ -1321,8 +1321,8 @@ int32_t MP3GetChannels(){return m_MP3FrameInfo->nChans;}
 int32_t MP3GetBitsPerSample(){return m_MP3FrameInfo->bitsPerSample;}
 int32_t MP3GetBitrate(){return m_MP3FrameInfo->bitrate;}
 int32_t MP3GetOutputSamps(){return m_MP3FrameInfo->outputSamps;}
-int32_t MP3GetLayer(){return m_MP3FrameInfo->layer;}
-int32_t MP3GetVersion(){return m_MP3FrameInfo->version;}
+int32_t MP3GetLayer(){return m_MP3FrameInfo->layer;}     // 0: Reserviert, 1: Layer III, 2: Layer II, 3: Layer I
+int32_t MP3GetVersion(){return m_MP3FrameInfo->version;} // 0: MPEG-2.5, 1: Reserviert, 2: MPEG-2 (ISO/IEC 13818-3), 3: MPEG-1 (ISO/IEC 11172-3)
 /***********************************************************************************************************************
  * Function:    MP3GetNextFrameInfo
  *
