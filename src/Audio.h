@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12n
- *  Updated on: Sep 06.2024
+ *  Version 3.0.12m
+ *  Updated on: Sep 09.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -240,8 +240,6 @@ private:
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-  inline void     setDatamode(uint8_t dm) { m_datamode = dm; }
-  inline uint8_t  getDatamode() { return m_datamode; }
   inline uint32_t streamavail() { return _client ? _client->available() : 0; }
   void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
   bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
@@ -607,7 +605,7 @@ private:
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
-    uint16_t        m_datamode{0};                  // Statemaschine
+    uint16_t        m_dataMode{0};                  // Statemaschine
     int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
@@ -630,6 +628,7 @@ private:
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
+    uint32_t        m_sumBytesDecoded = 0;          // used for streaming
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -637,7 +636,9 @@ private:
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
+    bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
+    bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
@@ -656,6 +657,9 @@ private:
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
     bool            m_f_audioTaskIsRunning = false;
     bool            m_f_stream = false;             // stream ready for output?
+    bool            m_f_eof = false;                // end of file
+    bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
+    bool            m_f_audioTaskIsDecoding = false;
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
