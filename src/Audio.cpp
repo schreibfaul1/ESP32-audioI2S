@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12m
+ *  Version 3.0.12n
  *  Updated on: Sep 09.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2243,27 +2243,28 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::stopSong() {
-    uint32_t pos = 0;
-    if(m_f_running) {
-        m_f_running = false;
-        if(m_dataMode == AUDIO_LOCALFILE) {
-            m_streamType = ST_NONE;
-            pos = getFilePos() - inBufferFilled();
+    m_f_lockInBuffer = true; // wait for the decoding to finish
+        while(m_f_audioTaskIsDecoding) vTaskDelay(1);
+        uint32_t pos = 0;
+        if(m_f_running) {
+            m_f_running = false;
+            if(m_dataMode == AUDIO_LOCALFILE) {
+                m_streamType = ST_NONE;
+                pos = getFilePos() - inBufferFilled();
+            }
+            if(_client->connected()) _client->stop();
         }
-        if(_client->connected()) _client->stop();
-    }
-    if(audiofile) {
-        // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
-        AUDIO_INFO("Closing audio file \"%s\"", audiofile.name());
-        audiofile.close();
-    }
-    memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
-    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
-    m_validSamples = 0;
-    m_audioCurrentTime = 0;
-    m_audioFileDuration = 0;
-    m_codec = CODEC_NONE;
-
+        if(audiofile) {
+            // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
+            AUDIO_INFO("Closing audio file \"%s\"", audiofile.name());
+            audiofile.close();
+        }
+        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
+        m_validSamples = 0;
+        m_audioCurrentTime = 0;
+        m_audioFileDuration = 0;
+        m_codec = CODEC_NONE;
+    m_f_lockInBuffer = false;
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4409,7 +4410,7 @@ void Audio::setDecoderItems() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
-
+    if(!m_f_running) return 0; // guard
     int32_t     bytesLeft;
     static bool f_setDecodeParamsOnce = true;
     int         nextSync = 0;
