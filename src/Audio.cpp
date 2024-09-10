@@ -3224,7 +3224,6 @@ void Audio::processLocalFile() {
 #ifndef AUDIO_I2S_DISABLE_OPUS_DECODER
         if(m_codec == CODEC_OPUS){m_resumeFilePos = ogg_correctResumeFilePos(m_resumeFilePos);   if(m_resumeFilePos == -1) goto exit; OPUSDecoder_ClearBuffers();}
 #endif
-
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             audiofile.seek(m_resumeFilePos);
