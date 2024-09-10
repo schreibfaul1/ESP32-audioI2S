@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12n
- *  Updated on: Sep 09.2024
+ *  Version 3.0.12o
+ *  Updated on: Sep 10.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -4215,7 +4215,7 @@ void Audio::showstreamtitle(const char* ml) {
 
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            AUDIO_INFO("%s", sTit);
+            AUDIO_INFO("%.*s", m_ibuffSize, sTit);
             uint8_t pos = 12;                                                 // remove "StreamTitle="
             if(sTit[pos] == '\'') pos++;                                      // remove leading  \'
             if(sTit[strlen(sTit) - 1] == '\'') sTit[strlen(sTit) - 1] = '\0'; // remove trailing \'
@@ -4241,7 +4241,7 @@ void Audio::showstreamtitle(const char* ml) {
         }
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            AUDIO_INFO("%s", sUrl);
+            AUDIO_INFO("%.*s", m_ibuffSize, sUrl);
         }
         if(sUrl) {
             free(sUrl);

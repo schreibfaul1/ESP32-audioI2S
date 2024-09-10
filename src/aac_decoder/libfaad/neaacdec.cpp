@@ -9322,7 +9322,7 @@ static uint8_t section_data(NeAACDecStruct_t* hDecoder, ic_stream_t* ics, bitfil
             k += sect_len;
             i++;
         }
-        ics->num_sec[g] = i;
+        ((uint8_t*)ics->num_sec)[g] = i;
         /* the sum of all sect_len_incr elements for a given window group shall equal max_sfb */
         if(k != ics->max_sfb) { return 32; }
     }
