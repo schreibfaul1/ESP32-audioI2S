@@ -548,7 +548,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
-
+    m_vuLeft = m_vuRight = 0;
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
