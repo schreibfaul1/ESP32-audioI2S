@@ -841,7 +841,7 @@ static uint8_t ics_info(NeAACDecStruct *hDecoder, ic_stream *ics, bitfile *ld,
 #ifdef MAIN_DEC
                     ics->pred.predictor_reset_group_number =
 #endif
-                        (uint8_t)faad_getbits(ld, 5 DEBUGVAR(1,54,"ics_info(): pred.predictor_reset_group_number"));
+                        faad_getbits(ld, 5 DEBUGVAR(1,54,"ics_info(): pred.predictor_reset_group_number"));
                 }
 
                 for (sfb = 0; sfb < limit; sfb++)
@@ -2194,9 +2194,10 @@ static uint16_t extension_payload(bitfile *ld, drc_info *drc, uint16_t count)
                 DEBUGVAR(1,88,"extension_payload(): fill_byte")); /* must be '10100101' */
         }
         return count;
+        break;
     case EXT_DATA_ELEMENT:
-        data_element_version = (uint8_t)faad_getbits(ld, 4
-            DEBUGVAR(1,400,"extension_payload(): data_element_version"));
+        data_element_version = (uint8_t)faad_getbits(ld, 4   DEBUGVAR(1,400,"extension_payload(): data_element_version"));
+
         switch (data_element_version)
         {
         case ANC_DATA:
@@ -2215,10 +2216,14 @@ static uint16_t extension_payload(bitfile *ld, drc_info *drc, uint16_t count)
                     DEBUGVAR(1,402,"extension_payload(): data_element_byte"));
                 return (dataElementLength+loopCounter+1);
             }
+            /* fallthrough */
         default:
             align = 0;
+            break;
         }
+        /* fallthrough */
     case EXT_FIL:
+        /* fallthrough */
     default:
         faad_getbits(ld, align
             DEBUGVAR(1,88,"extension_payload(): fill_nibble"));
@@ -2630,7 +2635,7 @@ static uint32_t latmAudioMuxElement(latm_header *latm, bitfile *ld)
 uint32_t faad_latm_frame(latm_header *latm, bitfile *ld)
 {
     uint16_t len;
-    uint32_t initpos, endpos, firstpos, ret;
+    uint32_t initpos, endpos, firstpos, ret; (void)firstpos;
 
     firstpos = faad_get_processed_bits(ld);
     while (ld->bytes_left)

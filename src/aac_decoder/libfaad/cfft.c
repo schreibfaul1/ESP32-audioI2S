@@ -557,7 +557,7 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
 static inline void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
     uint16_t i;
     uint16_t k1, l1, l2;
-    uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1;
+    uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1; (void)idl1;
 
     nf = ifac[1];
     na = 0;
@@ -621,7 +621,7 @@ static inline void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint
 static inline void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
     uint16_t i;
     uint16_t k1, l1, l2;
-    uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1;
+    uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1; (void)idl1;
 
     nf = ifac[1];
     na = 0;

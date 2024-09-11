@@ -107,6 +107,7 @@ static inline uint32_t getdword(void *mem)
     return tmp;
 }
 
+static /*inline*/ uint32_t getdword_n(void *mem, int n); __unused
 /* reads only n bytes from the stream instead of the standard 4 */
 static /*inline*/ uint32_t getdword_n(void *mem, int n)
 {
@@ -115,9 +116,9 @@ static /*inline*/ uint32_t getdword_n(void *mem, int n)
     switch (n)
     {
     case 3:
-        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[2];
+        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[2]; [[fallthrough]];
     case 2:
-        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[1];
+        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[1]; [[fallthrough]];
     case 1:
         ((uint8_t*)&tmp)[3] = ((uint8_t*)mem)[0];
     default:
@@ -265,7 +266,7 @@ static inline void faad_flushbits_rev(bitfile *ld, uint32_t bits)
 //            ld->no_more_reading = 1;
     }
 }
-
+static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n DEBUGDEC); __unused
 static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n
                                         DEBUGDEC)
 {

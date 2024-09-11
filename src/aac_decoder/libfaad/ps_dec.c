@@ -252,8 +252,7 @@ static void hybrid_free(hyb_info *hyb)
         if (hyb->temp[i])
             faad_free(hyb->temp[i]);
     }
-    if (hyb->temp)
-        faad_free(hyb->temp);
+    if (hyb->temp){faad_free(hyb->temp);}
 
 	faad_free(hyb);
 }
@@ -1035,7 +1034,7 @@ static void ps_decorrelate(ps_info *ps, qmf_t X_left[38][64], qmf_t X_right[38][
                            qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32])
 {
     uint8_t gr, n, m, bk;
-    uint8_t temp_delay;
+    uint8_t temp_delay = 0; (void)temp_delay;
     uint8_t sb, maxsb;
     const complex_t *Phi_Fract_SubQmf;
     uint8_t temp_delay_ser[NO_ALLPASS_LINKS];
@@ -1382,6 +1381,7 @@ static void ps_decorrelate(ps_info *ps, qmf_t X_left[38][64], qmf_t X_right[38][
     }
 
 /* fixed point square root approximation */
+static real_t ps_sqrt(real_t value); __unused
 static real_t ps_sqrt(real_t value)
 {
     real_t root = 0;
@@ -1455,9 +1455,9 @@ static void ps_mix_phase(ps_info *ps, qmf_t X_left[38][64], qmf_t X_right[38][64
     uint8_t sb, maxsb;
     uint8_t env;
     uint8_t nr_ipdopd_par;
-    complex_t h11, h12, h21, h22;
-    complex_t H11, H12, H21, H22;
-    complex_t deltaH11, deltaH12, deltaH21, deltaH22;
+    complex_t h11 = {0}, h12 = {0}, h21 = {0}, h22 = {0};
+    complex_t H11 = {0}, H12 = {0}, H21 = {0}, H22 = {0};
+    complex_t deltaH11 = {0}, deltaH12 = {0}, deltaH21 = {0}, deltaH22 = {0};
     complex_t tempLeft;
     complex_t tempRight;
     complex_t phaseLeft;
@@ -1978,8 +1978,8 @@ ps_info *ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate)
 /* main Parametric Stereo decoding function */
 uint8_t ps_decode(ps_info *ps, qmf_t X_left[38][64], qmf_t X_right[38][64])
 {
-    qmf_t X_hybrid_left[32][32] = {{0}};
-    qmf_t X_hybrid_right[32][32] = {{0}};
+    qmf_t X_hybrid_left[32][32] = {{{0}}};
+    qmf_t X_hybrid_right[32][32] = {{{0}}};
 
     /* delta decoding of the bitstream data */
     ps_data_decode(ps);

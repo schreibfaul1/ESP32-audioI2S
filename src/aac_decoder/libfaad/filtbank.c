@@ -30,7 +30,7 @@
 
 #include "common.h"
 #include "structs.h"
-
+#include "Arduino.h"
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32_WCE
@@ -168,7 +168,7 @@ void ifilter_bank(fb_info *fb, uint8_t window_sequence, uint8_t window_shape,
 {
     int16_t i;
 //    ALIGN real_t transf_buf[2*1024] = {0};
-    real_t* transf_buf = ps_calloc(2*1024, sizeof(real_t));
+    real_t* transf_buf = (real_t*)ps_calloc(2*1024, sizeof(real_t));
 
     const real_t *window_long = NULL;
     const real_t *window_long_prev = NULL;

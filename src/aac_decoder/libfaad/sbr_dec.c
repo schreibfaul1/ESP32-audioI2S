@@ -33,7 +33,7 @@
 #include "structs.h"
 
 #ifdef SBR_DEC
-
+#include "Arduino.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -618,8 +618,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
     uint8_t l, k;
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    ALIGN qmf_t X_left[38][64] = {{0}};
-    ALIGN qmf_t X_right[38][64] = {{0}}; /* must set this to 0 */
+    ALIGN qmf_t X_left[38][64] = {{{0}}};
+    ALIGN qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
 
     if (sbr == NULL)
         return 20;
@@ -677,6 +677,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
 #endif
 
     /* subband synthesis */
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wstringop-overflow"
     if (downSampledSBR)
     {
         sbr_qmf_synthesis_32(sbr, sbr->qmfs[0], X_left, left_channel);
@@ -685,7 +687,7 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
         sbr_qmf_synthesis_64(sbr, sbr->qmfs[0], X_left, left_channel);
         sbr_qmf_synthesis_64(sbr, sbr->qmfs[1], X_right, right_channel);
     }
-
+    #pragma GCC diagnostic pop
     if (sbr->bs_header_flag)
         sbr->just_seeked = 0;
 

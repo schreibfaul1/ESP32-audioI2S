@@ -232,7 +232,7 @@ unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder,
     return 0;
 }
 
-
+static int latmCheck(latm_header *latm, bitfile *ld); __unused
 static int latmCheck(latm_header *latm, bitfile *ld)
 {
     uint32_t good=0, bad=0, bits, m;
@@ -872,7 +872,7 @@ static void* aac_frame_decode(NeAACDecStruct *hDecoder,
     uint32_t bitsconsumed;
     uint16_t frame_len;
     void *sample_buffer;
-    uint32_t startbit=0, endbit=0, payload_bits=0;
+    uint32_t startbit=0, endbit=0, payload_bits=0; (void)endbit; (void)startbit; (void)payload_bits;
 
 #ifdef PROFILE
     int64_t count = faad_get_ts();

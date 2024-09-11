@@ -58,7 +58,7 @@ uint8_t hf_adjustment(sbr_info *sbr, qmf_t Xsbr[MAX_NTSRHFG][64]
 #endif
                       ,uint8_t ch)
 {
-    ALIGN sbr_hfadj_info adj = {{{0}}};
+    sbr_hfadj_info adj = {0};
     uint8_t ret = 0;
 
     if (sbr->bs_frame_class[ch] == FIXFIX)

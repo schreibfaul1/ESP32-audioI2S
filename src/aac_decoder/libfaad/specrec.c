@@ -34,7 +34,7 @@
    - inverse quantization
    - applying scalefactors
 */
-
+#include "Arduino.h"
 #include "common.h"
 #include "structs.h"
 
@@ -425,9 +425,9 @@ uint8_t window_grouping_info(NeAACDecStruct *hDecoder, ic_stream *ics)
     }
 }
 
-/* iquant() *
+/* iquant() */
 /* output = sign(input)*abs(input)^(4/3) */
-/**/
+
 static inline real_t iquant(int16_t q, const real_t *tab, uint8_t *error)
 {
 #ifdef FIXED_POINT

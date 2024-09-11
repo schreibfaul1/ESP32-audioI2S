@@ -55,7 +55,7 @@ void AACDecoder_FreeBuffers(){
     f_decoderIsInit = false;
     f_firstCall = false;
     clock_t difference = clock() - before;
-    int msec = difference  / CLOCKS_PER_SEC;
+    int msec = difference  / CLOCKS_PER_SEC; (void)msec;
 //    printf("ms %li\n", difference);
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -134,15 +134,15 @@ int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
             conf->outputFormat = FAAD_FMT_16BIT;
             conf->useOldADTSFormat = 1;
             conf->defObjectType = 2;
-            int8_t ret = NeAACDecSetConfiguration(hAac, conf);
+            int8_t ret = NeAACDecSetConfiguration(hAac, conf); (void)ret;
 
             uint8_t specificInfo[2];
             createAudioSpecificConfig(specificInfo, aacProfile, get_sr_index(aacSamplerate), aacChannels);
-            int8_t err = NeAACDecInit2(hAac, specificInfo, 2, &aacSamplerate, &aacChannels);
+            int8_t err = NeAACDecInit2(hAac, specificInfo, 2, &aacSamplerate, &aacChannels);(void)err;
         }
         else{
             NeAACDecSetConfiguration(hAac, conf);
-            int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels);
+            int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels); (void)err;
         }
         f_firstCall = true;
     }
