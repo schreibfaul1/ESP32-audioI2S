@@ -457,14 +457,15 @@ uint8_t sbrDecodeCoupleFrame(sbr_info *sbr, real_t *left_chan, real_t *right_cha
 {
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    ALIGN qmf_t X[MAX_NTSR][64];
+    // qmf_t X[MAX_NTSR][64];
+    qmf_t (*X)[64] = ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
 
     if (sbr == NULL)
-        return 20;
+        {ret =  20; goto exit;}
 
     /* case can occur due to bit errors */
     if (sbr->id_aac != ID_CPE)
-        return 21;
+        {ret =  21; goto exit;}
 
     if (sbr->ret || (sbr->header_count == 0))
     {
@@ -507,9 +508,9 @@ uint8_t sbrDecodeCoupleFrame(sbr_info *sbr, real_t *left_chan, real_t *right_cha
     if (sbr->header_count != 0 && sbr->ret == 0)
     {
         ret = sbr_save_prev_data(sbr, 0);
-        if (ret) return ret;
+        if (ret) goto exit;
         ret = sbr_save_prev_data(sbr, 1);
-        if (ret) return ret;
+        if (ret) goto exit;
     }
 
     sbr_save_matrix(sbr, 0);
@@ -532,7 +533,10 @@ uint8_t sbrDecodeCoupleFrame(sbr_info *sbr, real_t *left_chan, real_t *right_cha
     }
 #endif
 
-    return 0;
+    ret = 0;
+exit:
+    if(X) free(X);
+    return ret;
 }
 
 uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
@@ -540,14 +544,15 @@ uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
 {
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    ALIGN qmf_t X[MAX_NTSR][64];
+    // ALIGN qmf_t X[MAX_NTSR][64];
+    qmf_t (*X)[64] = ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
 
     if (sbr == NULL)
-        return 20;
+        {ret = 20; goto exit;}
 
     /* case can occur due to bit errors */
     if (sbr->id_aac != ID_SCE && sbr->id_aac != ID_LFE)
-        return 21;
+        {ret = 21; goto exit;}
 
     if (sbr->ret || (sbr->header_count == 0))
     {
@@ -581,7 +586,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
     if (sbr->header_count != 0 && sbr->ret == 0)
     {
         ret = sbr_save_prev_data(sbr, 0);
-        if (ret) return ret;
+        if (ret) goto exit;
     }
 
     sbr_save_matrix(sbr, 0);
@@ -599,7 +604,11 @@ uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
     }
 #endif
 
-    return 0;
+    ret = 0;
+
+exit:
+    if(X) free(X);
+    return ret;
 }
 
 #if (defined(PS_DEC) || defined(DRM_PS))

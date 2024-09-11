@@ -167,7 +167,8 @@ void ifilter_bank(fb_info *fb, uint8_t window_sequence, uint8_t window_shape,
                   uint8_t object_type, uint16_t frame_len)
 {
     int16_t i;
-    ALIGN real_t transf_buf[2*1024] = {0};
+//    ALIGN real_t transf_buf[2*1024] = {0};
+    real_t* transf_buf = ps_calloc(2*1024, sizeof(real_t));
 
     const real_t *window_long = NULL;
     const real_t *window_long_prev = NULL;
@@ -329,6 +330,8 @@ void ifilter_bank(fb_info *fb, uint8_t window_sequence, uint8_t window_shape,
     count = faad_get_ts() - count;
     fb->cycles += count;
 #endif
+
+    if(transf_buf) free(transf_buf);
 }
 
 
@@ -339,7 +342,8 @@ void filter_bank_ltp(fb_info *fb, uint8_t window_sequence, uint8_t window_shape,
                      uint8_t object_type, uint16_t frame_len)
 {
     int16_t i;
-    ALIGN real_t windowed_buf[2*1024] = {0};
+    // ALIGN real_t windowed_buf[2*1024] = {0};
+    real_t* windowed_buf = ps_calloc(2 * 1024, sizeof(real_t));
 
     const real_t *window_long = NULL;
     const real_t *window_long_prev = NULL;
@@ -402,5 +406,6 @@ void filter_bank_ltp(fb_info *fb, uint8_t window_sequence, uint8_t window_shape,
         mdct(fb, windowed_buf, out_mdct, 2*nlong);
         break;
     }
+    if(windowed_buf) free(windowed_buf);
 }
 #endif

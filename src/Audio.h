@@ -249,7 +249,7 @@ private:
 public:
   void            setAudioTaskCore(uint8_t coreID);
 private:
-  static const size_t STACK_SIZE = 3300;
+  static const size_t STACK_SIZE = 3300 * 9;
   StaticTask_t xTaskBuffer;
   StackType_t xStack[STACK_SIZE];
 

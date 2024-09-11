@@ -885,13 +885,14 @@ static uint8_t allocate_channel_pair(NeAACDecStruct *hDecoder,
 
     return 0;
 }
-
+//____________________________________________________________________________________________________________________________________________________
 uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
                                    element *sce, int16_t *spec_data)
 {
     uint8_t retval;
     int output_channels;
-    ALIGN real_t spec_coef[1024];
+    // ALIGN real_t spec_coef[1024];
+    real_t* spec_coef = ps_malloc(1024 * sizeof(real_t));
 
 #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -933,23 +934,23 @@ uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
     {
         retval = allocate_single_channel(hDecoder, sce->channel, output_channels);
         if (retval > 0)
-            return retval;
+            goto exit;
 
         hDecoder->element_alloced[hDecoder->fr_ch_ele] = 1;
     }
 
     /* sanity check, CVE-2018-20199, CVE-2018-20360 */
     if(!hDecoder->time_out[sce->channel])
-        return 15;
+        {retval = 15; goto exit;}
     if(output_channels > 1 && !hDecoder->time_out[sce->channel+1])
-        return 15;
+        {retval = 15; goto exit;}
     if(!hDecoder->fb_intermed[sce->channel])
-        return 15;
+        {retval = 15; goto exit;}
 
     /* dequantisation and scaling */
     retval = quant_to_spec(hDecoder, ics, spec_data, spec_coef, hDecoder->frameLength);
     if (retval > 0)
-        return retval;
+        goto exit;
 
 #ifdef PROFILE
     count = faad_get_ts() - count;
@@ -966,7 +967,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
     if (hDecoder->object_type == MAIN)
     {
 		if (!hDecoder->pred_stat[sce->channel])
-			return 33;
+			{retval = 33; goto exit;} //return 33;
 
         /* intra channel prediction */
         ic_prediction(ics, spec_coef, hDecoder->pred_stat[sce->channel], hDecoder->frameLength,
@@ -1062,7 +1063,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
                 );
         }
         if (!hDecoder->sbr[ele])
-            return 19;
+            { retval = 19; goto exit;}
 
         if (sce->ics1.window_sequence == EIGHT_SHORT_SEQUENCE)
             hDecoder->sbr[ele]->maxAACLine = 8*min(sce->ics1.swb_offset[max(sce->ics1.max_sfb-1, 0)], sce->ics1.swb_offset_max);
@@ -1084,11 +1085,12 @@ uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
         }
 #endif
         if (retval > 0)
-            return retval;
+            goto exit;
     } else if (((hDecoder->sbr_present_flag == 1) || (hDecoder->forceUpSampling == 1))
         && !hDecoder->sbr_alloced[hDecoder->fr_ch_ele])
     {
-        return 23;
+        { retval = 23; goto exit; }
+
     }
 #endif
 
@@ -1106,15 +1108,23 @@ uint8_t reconstruct_single_channel(NeAACDecStruct *hDecoder, ic_stream *ics,
     }
 #endif
 
-    return 0;
-}
+    retval = 0;
 
+exit:
+    if(spec_coef){free(spec_coef);}
+    return retval;
+
+}
+//____________________________________________________________________________________________________________________________________________________
 uint8_t reconstruct_channel_pair(NeAACDecStruct *hDecoder, ic_stream *ics1, ic_stream *ics2,
                                  element *cpe, int16_t *spec_data1, int16_t *spec_data2)
 {
     uint8_t retval;
-    ALIGN real_t spec_coef1[1024];
-    ALIGN real_t spec_coef2[1024];
+    // ALIGN real_t spec_coef1[1024];
+    // ALIGN real_t spec_coef2[1024];
+
+    real_t* spec_coef1 = ps_malloc(1024 * sizeof(real_t));
+    real_t* spec_coef2 = ps_malloc(1024 * sizeof(real_t));
 
 #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -1123,24 +1133,24 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct *hDecoder, ic_stream *ics1, ic_s
     {
         retval = allocate_channel_pair(hDecoder, cpe->channel, (uint8_t)cpe->paired_channel);
         if (retval > 0)
-            return retval;
+            goto exit;
 
         hDecoder->element_alloced[hDecoder->fr_ch_ele] = 2;
     }
 
     /* sanity check, CVE-2018-20199, CVE-2018-20360 */
-    if(!hDecoder->time_out[cpe->channel] || !hDecoder->time_out[cpe->paired_channel])
-        return 15;
-    if(!hDecoder->fb_intermed[cpe->channel] || !hDecoder->fb_intermed[cpe->paired_channel])
-        return 15;
+    if(!hDecoder->time_out[cpe->channel] || !hDecoder->time_out[cpe->paired_channel]){ retval = 15; goto exit;}
+
+    if(!hDecoder->fb_intermed[cpe->channel] || !hDecoder->fb_intermed[cpe->paired_channel]){ retval = 15; goto exit;}
+
 
     /* dequantisation and scaling */
     retval = quant_to_spec(hDecoder, ics1, spec_data1, spec_coef1, hDecoder->frameLength);
     if (retval > 0)
-        return retval;
+        goto exit;
     retval = quant_to_spec(hDecoder, ics2, spec_data2, spec_coef2, hDecoder->frameLength);
     if (retval > 0)
-        return retval;
+        goto exit;
 
 #ifdef PROFILE
     count = faad_get_ts() - count;
@@ -1322,8 +1332,7 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct *hDecoder, ic_stream *ics1, ic_s
 #endif
                 );
         }
-        if (!hDecoder->sbr[ele])
-            return 19;
+        if (!hDecoder->sbr[ele]){ retval = 19; goto exit; }
 
         if (cpe->ics1.window_sequence == EIGHT_SHORT_SEQUENCE)
             hDecoder->sbr[ele]->maxAACLine = 8*min(cpe->ics1.swb_offset[max(cpe->ics1.max_sfb-1, 0)], cpe->ics1.swb_offset_max);
@@ -1333,14 +1342,22 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct *hDecoder, ic_stream *ics1, ic_s
         retval = sbrDecodeCoupleFrame(hDecoder->sbr[ele],
             hDecoder->time_out[ch0], hDecoder->time_out[ch1],
             hDecoder->postSeekResetFlag, hDecoder->downSampledSBR);
-        if (retval > 0)
-            return retval;
+        if (retval > 0){
+            goto exit;
+        }
     } else if (((hDecoder->sbr_present_flag == 1) || (hDecoder->forceUpSampling == 1))
         && !hDecoder->sbr_alloced[hDecoder->fr_ch_ele])
     {
-        return 23;
+        retval = 23;
+        goto exit;
     }
 #endif
 
-    return 0;
+    retval = 0;
+
+exit:
+    if(spec_coef1) free(spec_coef1);
+    if(spec_coef2) free(spec_coef2);
+    return retval;
+
 }

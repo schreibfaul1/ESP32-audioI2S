@@ -5,7 +5,7 @@
  *  Updated on: 28.08.2024
 */
 
-
+#include "Arduino.h"
 #include "aac_decoder.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -148,7 +148,6 @@ int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     }
 
     NeAACDecDecode2(hAac, &frameInfo, inbuf, *bytesLeft, (void**)&ob, 2048 * 2 * sizeof(int16_t));
-
     *bytesLeft -= frameInfo.bytesconsumed;
     validSamples = frameInfo.samples;
     int8_t err = 0 - frameInfo.error;
