@@ -166,7 +166,7 @@ static void ps_data_decode(ps_info *ps);
 static hyb_info *hybrid_init(uint8_t numTimeSlotsRate);
 static void channel_filter2(hyb_info *hyb, uint8_t frame_len, const real_t *filter,
                             qmf_t *buffer, qmf_t **X_hybrid);
-static void INLINE DCT3_4_unscaled(real_t *y, real_t *x);
+static void inline DCT3_4_unscaled(real_t *y, real_t *x);
 static void channel_filter8(hyb_info *hyb, uint8_t frame_len, const real_t *filter,
                             qmf_t *buffer, qmf_t **X_hybrid);
 static void hybrid_analysis(hyb_info *hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32],
@@ -346,7 +346,7 @@ static void channel_filter4(hyb_info *hyb, uint8_t frame_len, const real_t *filt
     }
 }
 
-static void INLINE DCT3_4_unscaled(real_t *y, real_t *x)
+static void inline DCT3_4_unscaled(real_t *y, real_t *x)
 {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8;
 
@@ -437,7 +437,7 @@ static void channel_filter8(hyb_info *hyb, uint8_t frame_len, const real_t *filt
     }
 }
 
-static void INLINE DCT3_6_unscaled(real_t *y, real_t *x)
+static void inline DCT3_6_unscaled(real_t *y, real_t *x)
 {
     real_t f0, f1, f2, f3, f4, f5, f6, f7;
 

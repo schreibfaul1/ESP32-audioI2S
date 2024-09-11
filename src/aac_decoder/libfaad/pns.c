@@ -86,7 +86,7 @@ static real_t const pow2_table[] =
    value. A suitable random number generator can be realized using one
    multiplication/accumulation per random value.
 */
-static INLINE void gen_rand_vector(real_t *spec, int16_t scale_factor, uint16_t size,
+static inline void gen_rand_vector(real_t *spec, int16_t scale_factor, uint16_t size,
                                    uint8_t sub,
                                    /* RNG states */ uint32_t *__r1, uint32_t *__r2)
 {

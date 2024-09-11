@@ -68,7 +68,7 @@ void ssr_filter_bank_end(fb_info *fb)
     if (fb) faad_free(fb);
 }
 
-static INLINE void imdct_ssr(fb_info *fb, real_t *in_data,
+static inline void imdct_ssr(fb_info *fb, real_t *in_data,
                              real_t *out_data, uint16_t len)
 {
     mdct_info *mdct;

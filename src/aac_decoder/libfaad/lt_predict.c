@@ -133,7 +133,7 @@ void lt_prediction(ic_stream *ics, ltp_info *ltp, real_t *spec,
 }
 
 #ifdef FIXED_POINT
-static INLINE int16_t real_to_int16(real_t sig_in)
+static inline int16_t real_to_int16(real_t sig_in)
 {
     if (sig_in >= 0)
     {
@@ -149,7 +149,7 @@ static INLINE int16_t real_to_int16(real_t sig_in)
     return (sig_in >> REAL_BITS);
 }
 #else
-static INLINE int16_t real_to_int16(real_t sig_in)
+static inline int16_t real_to_int16(real_t sig_in)
 {
     if (sig_in >= 0)
     {

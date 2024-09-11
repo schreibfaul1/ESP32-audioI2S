@@ -89,7 +89,7 @@ uint32_t faad_origbitbuffer_size(bitfile *ld);
 #endif
 
 /* circumvent memory alignment errors on ARM */
-static INLINE uint32_t getdword(void *mem)
+static inline uint32_t getdword(void *mem)
 {
     uint32_t tmp;
 #ifndef ARCH_IS_BIG_ENDIAN
@@ -108,7 +108,7 @@ static INLINE uint32_t getdword(void *mem)
 }
 
 /* reads only n bytes from the stream instead of the standard 4 */
-static /*INLINE*/ uint32_t getdword_n(void *mem, int n)
+static /*inline*/ uint32_t getdword_n(void *mem, int n)
 {
     uint32_t tmp = 0;
 #ifndef ARCH_IS_BIG_ENDIAN
@@ -140,7 +140,7 @@ static /*INLINE*/ uint32_t getdword_n(void *mem, int n)
     return tmp;
 }
 
-static INLINE uint32_t faad_showbits(bitfile *ld, uint32_t bits)
+static inline uint32_t faad_showbits(bitfile *ld, uint32_t bits)
 {
     if (bits <= ld->bits_left)
     {
@@ -153,7 +153,7 @@ static INLINE uint32_t faad_showbits(bitfile *ld, uint32_t bits)
     return ((ld->bufa & ((1<<ld->bits_left)-1)) << bits) | (ld->bufb >> (32 - bits));
 }
 
-static INLINE void faad_flushbits(bitfile *ld, uint32_t bits)
+static inline void faad_flushbits(bitfile *ld, uint32_t bits)
 {
     /* do nothing if error */
     if (ld->error != 0)
@@ -168,7 +168,7 @@ static INLINE void faad_flushbits(bitfile *ld, uint32_t bits)
 }
 
 /* return next n bits (right adjusted) */
-static /*INLINE*/ uint32_t faad_getbits(bitfile *ld, uint32_t n DEBUGDEC)
+static /*inline*/ uint32_t faad_getbits(bitfile *ld, uint32_t n DEBUGDEC)
 {
     uint32_t ret;
 
@@ -186,7 +186,7 @@ static /*INLINE*/ uint32_t faad_getbits(bitfile *ld, uint32_t n DEBUGDEC)
     return ret;
 }
 
-static INLINE uint8_t faad_get1bit(bitfile *ld DEBUGDEC)
+static inline uint8_t faad_get1bit(bitfile *ld DEBUGDEC)
 {
     uint8_t r;
 
@@ -208,7 +208,7 @@ static INLINE uint8_t faad_get1bit(bitfile *ld DEBUGDEC)
 }
 
 /* reversed bitreading routines */
-static INLINE uint32_t faad_showbits_rev(bitfile *ld, uint32_t bits)
+static inline uint32_t faad_showbits_rev(bitfile *ld, uint32_t bits)
 {
     uint8_t i;
     uint32_t B = 0;
@@ -236,7 +236,7 @@ static INLINE uint32_t faad_showbits_rev(bitfile *ld, uint32_t bits)
     }
 }
 
-static INLINE void faad_flushbits_rev(bitfile *ld, uint32_t bits)
+static inline void faad_flushbits_rev(bitfile *ld, uint32_t bits)
 {
     /* do nothing if error */
     if (ld->error != 0)
@@ -266,7 +266,7 @@ static INLINE void faad_flushbits_rev(bitfile *ld, uint32_t bits)
     }
 }
 
-static /*INLINE*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n
+static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n
                                         DEBUGDEC)
 {
     uint32_t ret;
@@ -391,7 +391,7 @@ typedef struct
 } bits_t;
 
 
-static INLINE uint32_t showbits_hcr(bits_t *ld, uint8_t bits)
+static inline uint32_t showbits_hcr(bits_t *ld, uint8_t bits)
 {
     if (bits == 0) return 0;
     if (ld->len <= 32)
@@ -414,7 +414,7 @@ static INLINE uint32_t showbits_hcr(bits_t *ld, uint8_t bits)
 }
 
 /* return 1 if position is outside of buffer, 0 otherwise */
-static INLINE int8_t flushbits_hcr( bits_t *ld, uint8_t bits)
+static inline int8_t flushbits_hcr( bits_t *ld, uint8_t bits)
 {
     ld->len -= bits;
 
@@ -427,13 +427,13 @@ static INLINE int8_t flushbits_hcr( bits_t *ld, uint8_t bits)
     }
 }
 
-static INLINE int8_t getbits_hcr(bits_t *ld, uint8_t n, uint32_t *result)
+static inline int8_t getbits_hcr(bits_t *ld, uint8_t n, uint32_t *result)
 {
     *result = showbits_hcr(ld, n);
     return flushbits_hcr(ld, n);
 }
 
-static INLINE int8_t get1bit_hcr(bits_t *ld, uint8_t *result)
+static inline int8_t get1bit_hcr(bits_t *ld, uint8_t *result)
 {
     uint32_t res;
     int8_t ret;

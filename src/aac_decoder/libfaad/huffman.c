@@ -42,8 +42,8 @@
 
 
 /* static function declarations */
-static INLINE void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len);
-static INLINE uint8_t huffman_getescape(bitfile *ld, int16_t *sp);
+static inline void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len);
+static inline uint8_t huffman_getescape(bitfile *ld, int16_t *sp);
 static uint8_t huffman_2step_quad(uint8_t cb, bitfile *ld, int16_t *sp);
 static uint8_t huffman_2step_quad_sign(uint8_t cb, bitfile *ld, int16_t *sp);
 static uint8_t huffman_2step_pair(uint8_t cb, bitfile *ld, int16_t *sp);
@@ -104,7 +104,7 @@ int hcb_2_quad_table_size[] = { 0, 114, 86, 0, 185, 0, 0, 0, 0, 0, 0, 0 };
 int hcb_2_pair_table_size[] = { 0, 0, 0, 0, 0, 0, 126, 0, 83, 0, 210, 373 };
 int hcb_bin_table_size[] = { 0, 0, 0, 161, 0, 161, 0, 127, 0, 337, 0, 0 };
 
-static INLINE void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len)
+static inline void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len)
 {
     uint8_t i;
 
@@ -121,7 +121,7 @@ static INLINE void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len)
     }
 }
 
-static INLINE uint8_t huffman_getescape(bitfile *ld, int16_t *sp)
+static inline uint8_t huffman_getescape(bitfile *ld, int16_t *sp)
 {
     uint8_t neg, i;
     int16_t j;

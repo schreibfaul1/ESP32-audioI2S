@@ -322,7 +322,7 @@ static uint16_t ps_extension(ps_info *ps, bitfile *ld,
                              const uint16_t num_bits_left);
 static void huff_data(bitfile *ld, const uint8_t dt, const uint8_t nr_par,
                       ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t *par);
-static INLINE int8_t ps_huff_dec(bitfile *ld, ps_huff_tab t_huff);
+static inline int8_t ps_huff_dec(bitfile *ld, ps_huff_tab t_huff);
 
 
 uint16_t ps_data(ps_info *ps, bitfile *ld, uint8_t *header)
@@ -534,7 +534,7 @@ static void huff_data(bitfile *ld, const uint8_t dt, const uint8_t nr_par,
 }
 
 /* binary search huffman decoding */
-static INLINE int8_t ps_huff_dec(bitfile *ld, ps_huff_tab t_huff)
+static inline int8_t ps_huff_dec(bitfile *ld, ps_huff_tab t_huff)
 {
     uint8_t bit;
     int16_t index = 0;

@@ -42,7 +42,7 @@
 #define RSQRT2 REAL_CONST(0.7071067811865475244) // 1/sqrt(2)
 
 
-static INLINE real_t get_sample(real_t **input, uint8_t channel, uint16_t sample,
+static inline real_t get_sample(real_t **input, uint8_t channel, uint16_t sample,
                                 uint8_t down_matrix, uint8_t *internal_channel)
 {
     if (!down_matrix)
@@ -441,7 +441,7 @@ void *output_to_PCM(NeAACDecStruct *hDecoder,
 #define DM_MUL FRAC_CONST(0.3203772410170407) // 1/(1+sqrt(2) + 1/sqrt(2))
 #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
 
-static INLINE real_t get_sample(real_t **input, uint8_t channel, uint16_t sample,
+static inline real_t get_sample(real_t **input, uint8_t channel, uint16_t sample,
                                 uint8_t down_matrix, uint8_t up_matrix,
                                 uint8_t *internal_channel)
 {
