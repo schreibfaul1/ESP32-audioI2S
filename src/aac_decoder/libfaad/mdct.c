@@ -8,7 +8,7 @@
 #else
 #include <assert.h>
 #endif
-
+#include "Arduino.h"
 #include "cfft.h"
 #include "mdct.h"
 #include "mdct_tab.h"
@@ -71,7 +71,8 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     real_t scale, b_scale = 0;
     #endif
 #endif
-    ALIGN complex_t Z1[512];
+    // ALIGN complex_t Z1[512];
+    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -140,13 +141,16 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     mdct->fft_cycles += count1;
     mdct->cycles += (count2 - count1);
 #endif
+
+    if(Z1) free(Z1);
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t k;
     complex_t       x;
-    ALIGN complex_t Z1[512];
+    // ALIGN complex_t Z1[512];
+    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -193,6 +197,7 @@ void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
         X_out[N2 + n] = -IM(x);
         X_out[N - 1 - n] = RE(x);
     }
+    if(Z1)free(Z1);
 }
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

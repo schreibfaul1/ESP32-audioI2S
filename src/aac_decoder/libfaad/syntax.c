@@ -482,7 +482,8 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
     uint8_t       retval = 0;
     element       sce = {0};
     ic_stream*    ics = &(sce.ics1);
-    ALIGN int16_t spec_data[1024] = {0};
+    // ALIGN int16_t spec_data[1024] = {0};
+    int16_t* spec_data = ps_calloc(1024, sizeof(int16_t));
 
     sce.element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG DEBUGVAR(1, 38, "single_lfe_channel_element(): element_instance_tag"));
 
@@ -491,10 +492,10 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
     sce.paired_channel = -1;
 
     retval = individual_channel_stream(hDecoder, &sce, ld, ics, 0, spec_data);
-    if (retval > 0) return retval;
+    if (retval > 0) goto exit;
 
     /* IS not allowed in single channel */
-    if (ics->is_used) return 32;
+    if (ics->is_used) {retval = 32; goto exit;}
 
 #ifdef SBR_DEC
     /* check if next bitstream element is a fill element */
@@ -503,21 +504,24 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
         faad_flushbits(ld, LEN_SE_ID);
 
         /* one sbr_info describes a channel_element not a channel! */
-        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { return retval; }
+        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
 
     /* noiseless coding is done, spectral reconstruction is done now */
     retval = reconstruct_single_channel(hDecoder, ics, &sce, spec_data);
-    if (retval > 0) return retval;
+    if (retval > 0) goto exit;
 
-    return 0;
+    retval = 0;
+exit:
+    if(spec_data) free(spec_data);
+    return retval;
 }
 
 /* Table 4.4.5 */
 static uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
-    //    ALIGN int16_t spec_data1[1024] = {0};
-    //    ALIGN int16_t spec_data2[1024] = {0};
+    // ALIGN int16_t spec_data1[1024] = {0};
+    // ALIGN int16_t spec_data2[1024] = {0};
     int16_t* spec_data1 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
     int16_t* spec_data2 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
 

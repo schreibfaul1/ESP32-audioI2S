@@ -5,7 +5,7 @@
 #include "structs.h"
 
 #ifdef SBR_DEC
-
+#include "Arduino.h"
 #include "sbr_syntax.h"
 #include "sbr_hfgen.h"
 #include "sbr_fbt.h"
@@ -28,9 +28,12 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
                    ,
                    uint8_t ch) {
     uint8_t         l, i, x;
-    ALIGN complex_t alpha_0[64], alpha_1[64];
+//    ALIGN complex_t alpha_0[64], alpha_1[64];
+    complex_t* alpha_0 = ps_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_1 = ps_malloc(64 * sizeof(complex_t));
     #ifdef SBR_LOW_POWER
-    ALIGN real_t rxx[64];
+    // ALIGN real_t rxx[64];
+    real_t* rxx = ps_malloc(64 * sizeof(real_t);)
     #endif
 
     uint8_t offset = sbr->tHFAdj;
@@ -126,6 +129,12 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
     }
 
     if (sbr->Reset) { limiter_frequency_table(sbr); }
+
+    if(alpha_0)free(alpha_0);
+    if(alpha_1)free(alpha_1);
+    #ifdef SBR_LOW_POWER
+    if(rxx)free(rxx);
+    #endif
 }
 
 typedef struct {

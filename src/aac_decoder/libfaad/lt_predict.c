@@ -27,7 +27,7 @@
 **
 ** $Id: lt_predict.c,v 1.27 2007/11/01 12:33:31 menno Exp $
 **/
-
+#include "Arduino.h"
 #include <stdint.h>
 #include "common.h"
 #include "structs.h"
@@ -75,8 +75,11 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
                    uint16_t frame_len) {
     uint8_t      sfb;
     uint16_t     bin, i, num_samples;
-    ALIGN real_t x_est[2048];
-    ALIGN real_t X_est[2048];
+    // ALIGN real_t x_est[2048];
+    // ALIGN real_t X_est[2048];
+
+    real_t* x_est = ps_malloc(2048 * sizeof(real_t));
+    real_t* X_est = ps_malloc(2048 * sizeof(real_t));
 
     if(ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
         if(ltp->data_present) {
@@ -111,6 +114,8 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
             }
         }
     }
+    if(x_est)free(x_est);
+    if(X_est)free(X_est);
 }
 #endif // LPT_DEC
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

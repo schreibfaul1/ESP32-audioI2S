@@ -618,15 +618,17 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
     uint8_t l, k;
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    ALIGN qmf_t X_left[38][64] = {{{0}}};
-    ALIGN qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
+    // ALIGN qmf_t X_left[38][64] = {{{0}}};
+    // ALIGN qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
+    qmf_t (*X_left)[64] = ps_calloc(38, 64 * sizeof(qmf_t));
+    qmf_t (*X_right)[64] = ps_calloc(38,   64 * sizeof(qmf_t));
 
     if (sbr == NULL)
-        return 20;
+        {ret = 20; goto exit;}
 
     /* case can occur due to bit errors */
     if (sbr->id_aac != ID_SCE && sbr->id_aac != ID_LFE)
-        return 21;
+        {ret = 21; goto exit;}
 
     if (sbr->ret || (sbr->header_count == 0))
     {
@@ -694,15 +696,18 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
     if (sbr->header_count != 0 && sbr->ret == 0)
     {
         ret = sbr_save_prev_data(sbr, 0);
-        if (ret) return ret;
+        if (ret) goto exit;
     }
 
     sbr_save_matrix(sbr, 0);
 
     sbr->frame++;
 
-    return 0;
+    ret = 0;
+exit:
+    if(X_left) free(X_left);
+    if(X_right)free(X_right);
+    return ret;
 }
 #endif
-
 #endif

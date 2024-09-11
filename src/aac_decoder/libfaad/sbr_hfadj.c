@@ -29,7 +29,7 @@
 **/
 
 /* High Frequency adjustment */
-
+#include "Arduino.h"
 #include "common.h"
 #include "structs.h"
 
@@ -498,10 +498,14 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
 
-    ALIGN real_t Q_M_lim[MAX_M];
-    ALIGN real_t G_lim[MAX_M];
+    // ALIGN real_t Q_M_lim[MAX_M];
+    // ALIGN real_t G_lim[MAX_M];
+    // ALIGN real_t S_M[MAX_M];
     ALIGN real_t G_boost;
-    ALIGN real_t S_M[MAX_M];
+
+    real_t* Q_M_lim = ps_malloc(MAX_M * sizeof(real_t));
+    real_t* G_lim = ps_malloc(MAX_M * sizeof(real_t));
+    real_t* S_M = ps_malloc(MAX_M * sizeof(real_t));
 
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
@@ -697,6 +701,9 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
         }
     }
+    if(Q_M_lim)free(Q_M_lim);
+    if(G_lim)free(G_lim);
+    if(S_M)free(S_M);
 }
 
     #else
