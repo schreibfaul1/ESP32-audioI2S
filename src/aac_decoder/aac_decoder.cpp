@@ -13,12 +13,13 @@
 #include <stdio.h>
 #include <time.h>
 #include "libfaad/neaacdec.h"
+#include "libfaad/common.h"
 
 // Declaration of the required global variables
 
 NeAACDecHandle hAac;
-NeAACDecFrameInfo_t frameInfo;
-NeAACDecConfigurationPtr_t conf;
+NeAACDecFrameInfo frameInfo;
+NeAACDecConfigurationPtr conf;
 const uint8_t  SYNCWORDH = 0xff; /* 12-bit syncword */
 const uint8_t  SYNCWORDL = 0xf0;
 bool f_decoderIsInit = false;
@@ -30,7 +31,7 @@ uint8_t aacProfile = 0;
 static uint16_t validSamples = 0;
 clock_t before;
 float compressionRatio = 1;
-mp4AudioSpecificConfig_t* mp4ASC;
+mp4AudioSpecificConfig* mp4ASC;
 
 //----------------------------------------------------------------------------------------------------------------------
 bool AACDecoder_IsInit(){
@@ -73,7 +74,7 @@ uint8_t AACGetSBR(){
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t AACGetParametricStereo(){  // not used (0) or used (1)
 //    log_w("frameInfo.ps %i", frameInfo.isPS);
-    return frameInfo.isPS;
+    return 0; //frameInfo.isPS;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACFindSyncWord(uint8_t *buf, int nBytes){
@@ -122,6 +123,8 @@ void createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t
     config[1] = (samplingFrequencyIndex << 7) | (channelConfiguration << 3);
 }
 //----------------------------------------------------------------------------------------------------------------------
+extern uint8_t get_sr_index(const uint32_t samplerate);
+
 int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     uint8_t* ob = (uint8_t*)outbuf;
     if (f_firstCall == false){
