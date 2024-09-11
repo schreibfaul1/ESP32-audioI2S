@@ -311,16 +311,12 @@ static void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc
             IM(t4) = RE(cc[ac + 1]) - RE(cc[ac + 3]);
             IM(t3) = IM(cc[ac + 3]) + IM(cc[ac + 1]);
             RE(t4) = IM(cc[ac + 3]) - IM(cc[ac + 1]);
-
             RE(ch[ah]) = RE(t2) + RE(t3);
             RE(ch[ah + 2 * l1]) = RE(t2) - RE(t3);
-
             IM(ch[ah]) = IM(t2) + IM(t3);
             IM(ch[ah + 2 * l1]) = IM(t2) - IM(t3);
-
             RE(ch[ah + l1]) = RE(t1) - RE(t4);
             RE(ch[ah + 3 * l1]) = RE(t1) + RE(t4);
-
             IM(ch[ah + l1]) = IM(t1) - IM(t4);
             IM(ch[ah + 3 * l1]) = IM(t1) + IM(t4);
         }
@@ -341,19 +337,14 @@ static void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc
                 IM(t4) = RE(cc[ac + i + ido]) - RE(cc[ac + i + 3 * ido]);
                 IM(t3) = IM(cc[ac + i + 3 * ido]) + IM(cc[ac + i + ido]);
                 RE(t4) = IM(cc[ac + i + 3 * ido]) - IM(cc[ac + i + ido]);
-
                 RE(c2) = RE(t1) - RE(t4);
                 RE(c4) = RE(t1) + RE(t4);
-
                 IM(c2) = IM(t1) - IM(t4);
                 IM(c4) = IM(t1) + IM(t4);
-
                 RE(ch[ah + i]) = RE(t2) + RE(t3);
                 RE(c3) = RE(t2) - RE(t3);
-
                 IM(ch[ah + i]) = IM(t2) + IM(t3);
                 IM(c3) = IM(t2) - IM(t3);
-
 #if 1
                 ComplexMult(&RE(ch[ah + i + l1 * ido]), &IM(ch[ah + i + l1 * ido]), RE(c2), IM(c2), RE(wa1[i]), IM(wa1[i]));
                 ComplexMult(&RE(ch[ah + i + 2 * l1 * ido]), &IM(ch[ah + i + 2 * l1 * ido]), RE(c3), IM(c3), RE(wa2[i]), IM(wa2[i]));
@@ -391,18 +382,14 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
                 IM(t4) = IM(cc[ac + 1]) - IM(cc[ac + 2]);
                 RE(t5) = RE(cc[ac]) - RE(cc[ac + 3]);
                 IM(t5) = IM(cc[ac]) - IM(cc[ac + 3]);
-
                 RE(ch[ah]) = RE(cc[ac - 1]) + RE(t2) + RE(t3);
                 IM(ch[ah]) = IM(cc[ac - 1]) + IM(t2) + IM(t3);
-
                 RE(c2) = RE(cc[ac - 1]) + MUL_F(RE(t2), tr11) + MUL_F(RE(t3), tr12);
                 IM(c2) = IM(cc[ac - 1]) + MUL_F(IM(t2), tr11) + MUL_F(IM(t3), tr12);
                 RE(c3) = RE(cc[ac - 1]) + MUL_F(RE(t2), tr12) + MUL_F(RE(t3), tr11);
                 IM(c3) = IM(cc[ac - 1]) + MUL_F(IM(t2), tr12) + MUL_F(IM(t3), tr11);
-
                 ComplexMult(&RE(c5), &RE(c4), ti11, ti12, RE(t5), RE(t4));
                 ComplexMult(&IM(c5), &IM(c4), ti11, ti12, IM(t5), IM(t4));
-
                 RE(ch[ah + l1]) = RE(c2) - IM(c5);
                 IM(ch[ah + l1]) = IM(c2) + RE(c5);
                 RE(ch[ah + 2 * l1]) = RE(c3) - IM(c4);
@@ -426,18 +413,14 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
                 IM(t4) = IM(cc[ac + 1]) - IM(cc[ac + 2]);
                 RE(t5) = RE(cc[ac]) - RE(cc[ac + 3]);
                 IM(t5) = IM(cc[ac]) - IM(cc[ac + 3]);
-
                 RE(ch[ah]) = RE(cc[ac - 1]) + RE(t2) + RE(t3);
                 IM(ch[ah]) = IM(cc[ac - 1]) + IM(t2) + IM(t3);
-
                 RE(c2) = RE(cc[ac - 1]) + MUL_F(RE(t2), tr11) + MUL_F(RE(t3), tr12);
                 IM(c2) = IM(cc[ac - 1]) + MUL_F(IM(t2), tr11) + MUL_F(IM(t3), tr12);
                 RE(c3) = RE(cc[ac - 1]) + MUL_F(RE(t2), tr12) + MUL_F(RE(t3), tr11);
                 IM(c3) = IM(cc[ac - 1]) + MUL_F(IM(t2), tr12) + MUL_F(IM(t3), tr11);
-
                 ComplexMult(&RE(c4), &RE(c5), ti12, ti11, RE(t5), RE(t4));
                 ComplexMult(&IM(c4), &IM(c5), ti12, ti11, IM(t5), IM(t4));
-
                 RE(ch[ah + l1]) = RE(c2) + IM(c5);
                 IM(ch[ah + l1]) = IM(c2) - RE(c5);
                 RE(ch[ah + 2 * l1]) = RE(c3) + IM(c4);
@@ -464,18 +447,14 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
                     IM(t4) = IM(cc[ac + ido]) - IM(cc[ac + 2 * ido]);
                     RE(t5) = RE(cc[ac]) - RE(cc[ac + 3 * ido]);
                     IM(t5) = IM(cc[ac]) - IM(cc[ac + 3 * ido]);
-
                     RE(ch[ah]) = RE(cc[ac - ido]) + RE(t2) + RE(t3);
                     IM(ch[ah]) = IM(cc[ac - ido]) + IM(t2) + IM(t3);
-
                     RE(c2) = RE(cc[ac - ido]) + MUL_F(RE(t2), tr11) + MUL_F(RE(t3), tr12);
                     IM(c2) = IM(cc[ac - ido]) + MUL_F(IM(t2), tr11) + MUL_F(IM(t3), tr12);
                     RE(c3) = RE(cc[ac - ido]) + MUL_F(RE(t2), tr12) + MUL_F(RE(t3), tr11);
                     IM(c3) = IM(cc[ac - ido]) + MUL_F(IM(t2), tr12) + MUL_F(IM(t3), tr11);
-
                     ComplexMult(&RE(c5), &RE(c4), ti11, ti12, RE(t5), RE(t4));
                     ComplexMult(&IM(c5), &IM(c4), ti11, ti12, IM(t5), IM(t4));
-
                     IM(d2) = IM(c2) + RE(c5);
                     IM(d3) = IM(c3) + RE(c4);
                     RE(d4) = RE(c3) + IM(c4);
@@ -513,18 +492,14 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
                     IM(t4) = IM(cc[ac + ido]) - IM(cc[ac + 2 * ido]);
                     RE(t5) = RE(cc[ac]) - RE(cc[ac + 3 * ido]);
                     IM(t5) = IM(cc[ac]) - IM(cc[ac + 3 * ido]);
-
                     RE(ch[ah]) = RE(cc[ac - ido]) + RE(t2) + RE(t3);
                     IM(ch[ah]) = IM(cc[ac - ido]) + IM(t2) + IM(t3);
-
                     RE(c2) = RE(cc[ac - ido]) + MUL_F(RE(t2), tr11) + MUL_F(RE(t3), tr12);
                     IM(c2) = IM(cc[ac - ido]) + MUL_F(IM(t2), tr11) + MUL_F(IM(t3), tr12);
                     RE(c3) = RE(cc[ac - ido]) + MUL_F(RE(t2), tr12) + MUL_F(RE(t3), tr11);
                     IM(c3) = IM(cc[ac - ido]) + MUL_F(IM(t2), tr12) + MUL_F(IM(t3), tr11);
-
                     ComplexMult(&RE(c4), &RE(c5), ti12, ti11, RE(t5), RE(t4));
                     ComplexMult(&IM(c4), &IM(c5), ti12, ti11, IM(t5), IM(t4));
-
                     IM(d2) = IM(c2) - RE(c5);
                     IM(d3) = IM(c3) - RE(c4);
                     RE(d4) = RE(c3) - IM(c4);
@@ -598,26 +573,21 @@ static inline void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
                 ix4 = ix3 + ido;
-
                 if(na == 0) passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
                 else passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
-
                 na = 1 - na;
                 break;
         }
-
         l1 = l2;
         iw += (ip - 1) * ido;
     }
-
     if(na == 0) return;
-
     for(i = 0; i < n; i++) {
         RE(c[i]) = RE(ch[i]);
         IM(c[i]) = IM(ch[i]);
     }
 }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static inline void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
     uint16_t i;
     uint16_t k1, l1, l2;
@@ -633,59 +603,49 @@ static inline void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint
         l2 = ip * l1;
         ido = n / l2;
         idl1 = ido * l1;
-
         switch(ip) {
             case 4:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
-
                 if(na == 0) passf4neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3]);
                 else passf4neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3]);
-
                 na = 1 - na;
                 break;
             case 2:
                 if(na == 0) passf2neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw]);
                 else passf2neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw]);
-
                 na = 1 - na;
                 break;
             case 3:
                 ix2 = iw + ido;
-
                 if(na == 0) passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], isign);
                 else passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], isign);
-
                 na = 1 - na;
                 break;
             case 5:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
                 ix4 = ix3 + ido;
-
                 if(na == 0) passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
                 else passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
-
                 na = 1 - na;
                 break;
         }
-
         l1 = l2;
         iw += (ip - 1) * ido;
     }
 
     if(na == 0) return;
-
     for(i = 0; i < n; i++) {
         RE(c[i]) = RE(ch[i]);
         IM(c[i]) = IM(ch[i]);
     }
 }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void cfftf(cfft_info* cfft, complex_t* c) { cfftf1neg(cfft->n, c, cfft->work, (const uint16_t*)cfft->ifac, (const complex_t*)cfft->tab, -1); }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void cfftb(cfft_info* cfft, complex_t* c) { cfftf1pos(cfft->n, c, cfft->work, (const uint16_t*)cfft->ifac, (const complex_t*)cfft->tab, +1); }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
     static uint16_t ntryh[4] = {3, 4, 2, 5};
 #ifndef FIXED_POINT
@@ -704,20 +664,15 @@ static void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
 
 startloop:
     j++;
-
     if(j <= 4) ntry = ntryh[j - 1];
     else ntry += 2;
-
     do {
         nq = nl / ntry;
         nr = nl - ntry * nq;
-
         if(nr != 0) goto startloop;
-
         nf++;
         ifac[nf + 1] = ntry;
         nl = nq;
-
         if(ntry == 2 && nf != 1) {
             for(i = 2; i <= nf; i++) {
                 ib = nf - i + 2;
@@ -726,22 +681,18 @@ startloop:
             ifac[2] = 2;
         }
     } while(nl != 1);
-
     ifac[0] = n;
     ifac[1] = nf;
-
 #ifndef FIXED_POINT
     argh = (real_t)2.0 * (real_t)M_PI / (real_t)n;
     i = 0;
     l1 = 1;
-
     for(k1 = 1; k1 <= nf; k1++) {
         ip = ifac[k1 + 1];
         ld = 0;
         l2 = l1 * ip;
         ido = n / l2;
         ipm = ip - 1;
-
         for(j = 0; j < ipm; j++) {
             i1 = i;
             RE(wa[i]) = 1.0;
@@ -749,7 +700,6 @@ startloop:
             ld += l1;
             fi = 0;
             argld = ld * argh;
-
             for(ii = 0; ii < ido; ii++) {
                 i++;
                 fi++;
@@ -761,7 +711,6 @@ startloop:
                 IM(wa[i]) = (real_t)-sin(arg);
     #endif
             }
-
             if(ip > 5) {
                 RE(wa[i1]) = RE(wa[i]);
                 IM(wa[i1]) = IM(wa[i]);
@@ -771,7 +720,7 @@ startloop:
     }
 #endif
 }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 cfft_info* cffti(uint16_t n) {
     cfft_info* cfft = (cfft_info*)faad_malloc(sizeof(cfft_info));
 
@@ -805,7 +754,7 @@ cfft_info* cffti(uint16_t n) {
 
     return cfft;
 }
-
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void cfftu(cfft_info* cfft) {
     if(cfft->work) faad_free(cfft->work);
 #ifndef FIXED_POINT
@@ -814,3 +763,4 @@ void cfftu(cfft_info* cfft) {
 
     if(cfft) faad_free(cfft);
 }
+//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
