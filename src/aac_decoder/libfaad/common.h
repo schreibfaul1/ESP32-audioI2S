@@ -49,7 +49,7 @@ extern "C" {
 /* use double precision */
 /* #define USE_DOUBLE_PRECISION */
 /* use fixed point reals */
-#define FIXED_POINT
+//#define FIXED_POINT
 //#define BIG_IQ_TABLE
 /* Use if target platform has address generators with autoincrement */
 //#define PREFER_POINTERS
@@ -248,7 +248,7 @@ char *strchr(), *strrchr();
   #define Q2_CONST(A) ((real_t)(A))
   #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
   /* Complex multiplication */
-  void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+  __unused static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
       *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
       *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
   }
@@ -269,14 +269,14 @@ char *strchr(), *strrchr();
         #ifndef HAVE_LRINTF
             #define HAS_LRINTF
   // from http://www.stereopsis.com/FPU.html
-  static inline int int32_t(float f) {
-      int i;
-      __asm__ __volatile__("flds %1        \n\t"
-                           "fistpl %0      \n\t"
-                           : "=m"(i)
-                           : "m"(f));
-      return i;
-  }
+  // static inline int int32_t(float f) {
+  //     int i;
+  //     __asm__ __volatile__("flds %1        \n\t"
+  //                          "fistpl %0      \n\t"
+  //                          : "=m"(i)
+  //                          : "m"(f));
+  //     return i;
+  // }
         #endif /* HAVE_LRINTF */
     #endif
     #ifdef __ICL /* only Intel C compiler has fmath ??? */

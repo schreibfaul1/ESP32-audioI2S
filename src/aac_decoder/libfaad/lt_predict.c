@@ -5,6 +5,7 @@
 #include "structs.h"
 #ifdef LTP_DEC
 #include <stdlib.h>
+#include <stdint.h>
 #include "syntax.h"
 #include "lt_predict.h"
 #include "filtbank.h"
@@ -109,7 +110,7 @@ static inline int16_t real_to_int16(real_t sig_in) {
         #endif
         if(sig_in <= -32768.0f) return -32768;
     }
-    return int32_t(sig_in);
+    return (int32_t)(sig_in);
 }
     #endif // FIXED_POINT
 #endif     // LPT_DEC
