@@ -858,13 +858,7 @@ static uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc
 
             if (!hDecoder->sbr[sbr_ele]) {
 
-                hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR
-
-    #ifdef DRM
-                                                       ,
-                                                       0
-    #endif
-                );
+                hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
 
             }
             if (!hDecoder->sbr[sbr_ele]) return 19;

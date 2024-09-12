@@ -194,12 +194,7 @@ typedef struct
     uint8_t bs_df_env[2][9];
     uint8_t bs_df_noise[2][3];
 } sbr_info;
-sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac,
-                        uint32_t sample_rate, uint8_t downSampledSBR
-#ifdef DRM
-                        , uint8_t IsDRM
-#endif
-                        );
+sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
 void sbrDecodeEnd(sbr_info *sbr);
 void sbrReset(sbr_info *sbr);
 uint8_t sbrDecodeCoupleFrame(sbr_info *sbr, real_t *left_chan, real_t *right_chan,

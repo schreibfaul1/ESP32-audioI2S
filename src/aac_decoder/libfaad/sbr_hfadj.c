@@ -52,13 +52,7 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64]
-    #ifdef SBR_LOW_POWER
-                      ,
-                      real_t* deg /* aliasing degree */
-    #endif
-                      ,
-                      uint8_t ch) {
+uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t* deg /* aliasing degree */, uint8_t ch) {
     sbr_hfadj_info adj = {0};
     uint8_t        ret = 0;
 

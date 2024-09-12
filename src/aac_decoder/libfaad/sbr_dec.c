@@ -42,13 +42,7 @@
 /* static function declarations */
 static uint8_t sbr_save_prev_data(sbr_info *sbr, uint8_t ch);
 static void sbr_save_matrix(sbr_info *sbr, uint8_t ch);
-sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac,
-                        uint32_t sample_rate, uint8_t downSampledSBR
-#ifdef DRM
-						, uint8_t IsDRM
-#endif
-                        )
-{
+sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM){
     sbr_info *sbr = (sbr_info*)faad_malloc(sizeof(sbr_info));
     memset(sbr, 0, sizeof(sbr_info));
     /* save id of the parent element */
@@ -264,9 +258,7 @@ static uint8_t sbr_process_channel(sbr_info *sbr, real_t *channel_buf, qmf_t X[M
 {
     int16_t k, l;
     uint8_t ret = 0;
-#ifdef SBR_LOW_POWER
     ALIGN real_t deg[64];
-#endif
 #ifdef DRM
     if (sbr->Is_DRM_SBR)
     {
@@ -297,11 +289,7 @@ static uint8_t sbr_process_channel(sbr_info *sbr, real_t *channel_buf, qmf_t X[M
 #if 1
         /* insert high frequencies here */
         /* hf generation using patching */
-        hf_generation(sbr, sbr->Xsbr[ch], sbr->Xsbr[ch]
-#ifdef SBR_LOW_POWER
-            ,deg
-#endif
-            ,ch);
+        hf_generation(sbr, sbr->Xsbr[ch], sbr->Xsbr[ch], deg, ch);
 #endif
 #if 0 //def SBR_LOW_POWER
         for (l = sbr->t_E[ch][0]; l < sbr->t_E[ch][sbr->L_E[ch]]; l++)
@@ -314,11 +302,7 @@ static uint8_t sbr_process_channel(sbr_info *sbr, real_t *channel_buf, qmf_t X[M
 #endif
 #if 1
         /* hf adjustment */
-        ret = hf_adjustment(sbr, sbr->Xsbr[ch]
-#ifdef SBR_LOW_POWER
-            ,deg
-#endif
-            ,ch);
+        ret = hf_adjustment(sbr, sbr->Xsbr[ch], deg, ch);
 #endif
         if (ret > 0)
         {

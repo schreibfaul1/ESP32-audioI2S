@@ -785,12 +785,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
         int ch = sce->channel;
         /* following case can happen when forceUpSampling == 1 */
         if (hDecoder->sbr[ele] == NULL) {
-            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR
-    #ifdef DRM
-                                               ,
-                                               0
-    #endif
-            );
+            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
         }
         if (!hDecoder->sbr[ele]) {
             retval = 19;
@@ -985,12 +980,7 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
         int ch1 = cpe->paired_channel;
         /* following case can happen when forceUpSampling == 1 */
         if (hDecoder->sbr[ele] == NULL) {
-            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR
-    #ifdef DRM
-                                               ,
-                                               0
-    #endif
-            );
+            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
         }
         if (!hDecoder->sbr[ele]) {
             retval = 19;
