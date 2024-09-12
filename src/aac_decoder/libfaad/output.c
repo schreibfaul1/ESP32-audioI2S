@@ -14,7 +14,7 @@
 
 
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t* internal_channel) {
     if(!down_matrix) return input[internal_channel[channel]][sample];
@@ -23,7 +23,7 @@ static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample
     else { return DM_MUL * (input[internal_channel[2]][sample] + input[internal_channel[0]][sample] * RSQRT2 + input[internal_channel[4]][sample] * RSQRT2); }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
     #ifndef HAS_LRINTF
         #define CLIP(sample, max, min)          \
@@ -47,7 +47,7 @@ static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample
 
     #define CONV(a, b) ((a << 1) | (b & 0x1))
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer) {
     uint8_t  ch, ch1;
@@ -105,7 +105,7 @@ static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer) {
     uint8_t  ch, ch1;
@@ -168,7 +168,7 @@ static void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static void to_PCM_32bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer) {
     uint8_t  ch, ch1;
@@ -231,7 +231,7 @@ static void to_PCM_32bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static void to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float32_t** sample_buffer) {
     uint8_t  ch, ch1;
@@ -276,7 +276,7 @@ static void to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 static void to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer) {
     uint8_t  ch, ch1;
@@ -321,7 +321,7 @@ static void to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t chan
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
     int16_t*   short_sample_buffer = (int16_t*)sample_buffer;
@@ -350,12 +350,12 @@ void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffe
     return sample_buffer;
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //#ifdef FIXED_POINT
     #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
     #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
 //#endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
 static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel) {
     if(up_matrix == 1) return input[internal_channel[0]][sample];
@@ -376,7 +376,7 @@ static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample
     }
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
 void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
     uint8_t  ch;

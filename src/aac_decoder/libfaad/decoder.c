@@ -60,7 +60,7 @@ uint16_t dbg_count;
 /* function declarations */
 void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size);
 void  create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string) {
     const char* libfaadName = "2.20.1";
     const char* libCopyright = " Copyright 2002-2004: Ahead Software AG\n"
@@ -72,12 +72,12 @@ int NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_
 
     return 0;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* NeAACDecGetErrorMessage(unsigned const char errcode) {
     if(errcode >= NUM_ERROR_MESSAGES) return NULL;
     return err_msg[errcode];
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 unsigned long NeAACDecGetCapabilities(void) {
     uint32_t cap = 0;
 
@@ -102,10 +102,10 @@ unsigned long NeAACDecGetCapabilities(void) {
 
     return cap;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const unsigned char mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x72, 0x20, 0x65, 0x20, 0x6e, 0x20, 0x20, 0x20, 0x74,
                              0x20, 0x68, 0x20, 0x67, 0x20, 0x69, 0x20, 0x72, 0x20, 0x79, 0x20, 0x70, 0x20, 0x6f, 0x20, 0x63};
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 NeAACDecHandle      NeAACDecOpen(void) {
     uint8_t         i;
     NeAACDecStruct* hDecoder = NULL;
@@ -157,7 +157,7 @@ NeAACDecHandle      NeAACDecOpen(void) {
     hDecoder->drc = drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
     return hDecoder;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if(hDecoder) {
@@ -168,7 +168,7 @@ NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecode
 
     return NULL;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if(hDecoder && config) {
@@ -194,7 +194,7 @@ unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigu
     }
     return 0;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 __unused int latmCheck(latm_header* latm, bitfile* ld) {
     uint32_t good = 0, bad = 0, bits, m;
 
@@ -212,7 +212,7 @@ __unused int latmCheck(latm_header* latm, bitfile* ld) {
     }
     return (good > 0);
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, unsigned long buffer_size, unsigned long* samplerate, unsigned char* channels) {
     uint32_t        bits = 0;
     int32_t         ret = 0;
@@ -339,7 +339,7 @@ exit:
     }
     return ret;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Init the library using a DecoderSpecificInfo */
 char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned long SizeOfDecoderSpecificInfo, unsigned long* samplerate, unsigned char* channels) {
     NeAACDecStruct*        hDecoder = (NeAACDecStruct*)hpDecoder;
@@ -404,7 +404,7 @@ char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned lo
 
     return 0;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, unsigned long samplerate, unsigned char channels) {
     NeAACDecStruct** hDecoder = (NeAACDecStruct**)hpDecoder;
@@ -440,7 +440,7 @@ char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, unsigned long samplerate, unsign
     return 0;
 }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeAACDecClose(NeAACDecHandle hpDecoder) {
     uint8_t         i;
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
@@ -485,7 +485,7 @@ void NeAACDecClose(NeAACDecHandle hpDecoder) {
 #endif
     if(hDecoder) faad_free(hDecoder);
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeAACDecPostSeekReset(NeAACDecHandle hpDecoder, long frame) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if(hDecoder) {
@@ -494,7 +494,7 @@ void NeAACDecPostSeekReset(NeAACDecHandle hpDecoder, long frame) {
         if(frame != -1) hDecoder->frame = frame;
     }
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo) {
     hInfo->num_front_channels = 0;
     hInfo->num_side_channels = 0;
@@ -688,12 +688,12 @@ void create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo) {
         }
     }
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     return aac_frame_decode(hDecoder, hInfo, buffer, buffer_size, NULL, 0);
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer, unsigned long sample_buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if((sample_buffer == NULL) || (sample_buffer_size == 0)) {
@@ -703,14 +703,14 @@ void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsign
 
     return aac_frame_decode(hDecoder, hInfo, buffer, buffer_size, sample_buffer, sample_buffer_size);
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 
     #define ERROR_STATE_INIT 6
 
 void conceal_output(NeAACDecStruct* hDecoder, uint16_t frame_len, uint8_t out_ch, void* sample_buffer) { return; }
 #endif
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size) {
     uint16_t i;
     uint8_t  channels = 0;
@@ -1012,4 +1012,4 @@ error:
 #endif
     return NULL;
 }
-//————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
