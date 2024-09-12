@@ -738,7 +738,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
             hInfo->error = 28; // Throw CRC error
             goto error;
         }
-        faad_getbits(&ld, 8 DEBUGVAR(1, 1, "NeAACDecDecode(): skip CRC"));
+        faad_getbits(&ld, 8);
     }
 #endif
     if(hDecoder->adts_header_present) {

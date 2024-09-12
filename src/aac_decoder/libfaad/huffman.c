@@ -24,7 +24,7 @@ static void vcb11_check_LAV(uint8_t cb, int16_t *sp);
 int8_t huffman_scale_factor(bitfile* ld) {
     uint16_t offset = 0;
     while(hcb_sf[offset][1]) {
-        uint8_t b = faad_get1bit(ld DEBUGVAR(1, 255, "huffman_scale_factor()"));
+        uint8_t b = faad_get1bit(ld);
         offset += hcb_sf[offset][b];
         if(offset > 240) {
             /* printf("ERROR: offset into hcb_sf = %d >240!\n", offset); */
@@ -53,7 +53,7 @@ static inline void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
     uint8_t i;
     for(i = 0; i < len; i++) {
         if(sp[i]) {
-            if(faad_get1bit(ld DEBUGVAR(1, 5, "huffman_sign_bits(): sign bit")) & 1) { sp[i] = -sp[i]; }
+            if(faad_get1bit(ld) & 1) { sp[i] = -sp[i]; }
         }
     }
 }
@@ -72,10 +72,10 @@ static inline uint8_t huffman_getescape(bitfile* ld, int16_t* sp) {
         neg = 0;
     }
     for(i = 4; i < 16; i++) {
-        if(faad_get1bit(ld DEBUGVAR(1, 6, "huffman_getescape(): escape size")) == 0) { break; }
+        if(faad_get1bit(ld) == 0) { break; }
     }
     if(i >= 16) return 10;
-    off = (int16_t)faad_getbits(ld, i DEBUGVAR(1, 9, "huffman_getescape(): escape"));
+    off = (int16_t)faad_getbits(ld, i);
     j = off | (1 << i);
     if(neg) j = -j;
     *sp = j;
@@ -147,7 +147,7 @@ static uint8_t huffman_2step_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
 static uint8_t huffman_binary_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint16_t offset = 0;
     while(!hcb3[offset].is_leaf) {
-        uint8_t b = faad_get1bit(ld DEBUGVAR(1, 255, "huffman_spectral_data():3"));
+        uint8_t b = faad_get1bit(ld);
         offset += hcb3[offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {
@@ -171,7 +171,7 @@ static uint8_t huffman_binary_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
 static uint8_t huffman_binary_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint16_t offset = 0;
     while(!hcb_bin_table[cb][offset].is_leaf) {
-        uint8_t b = faad_get1bit(ld DEBUGVAR(1, 255, "huffman_spectral_data():9"));
+        uint8_t b = faad_get1bit(ld);
         offset += hcb_bin_table[cb][offset].data[b];
     }
     if(offset > hcb_bin_table_size[cb]) {

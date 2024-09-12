@@ -118,15 +118,15 @@ void sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
         if (sbr->bs_df_env[ch][env] == 0) {
             if ((sbr->bs_coupling == 1) && (ch == 1)) {
                 if (sbr->amp_res[ch]) {
-                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 5 DEBUGVAR(1, 272, "sbr_envelope(): bs_data_env")) << delta);
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 5) << delta);
                 } else {
-                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6 DEBUGVAR(1, 273, "sbr_envelope(): bs_data_env")) << delta);
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6) << delta);
                 }
             } else {
                 if (sbr->amp_res[ch]) {
-                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6 DEBUGVAR(1, 274, "sbr_envelope(): bs_data_env")) << delta);
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6) << delta);
                 } else {
-                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 7 DEBUGVAR(1, 275, "sbr_envelope(): bs_data_env")) << delta);
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 7) << delta);
                 }
             }
 
@@ -159,9 +159,9 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     for (noise = 0; noise < sbr->L_Q[ch]; noise++) {
         if (sbr->bs_df_noise[ch][noise] == 0) {
             if ((sbr->bs_coupling == 1) && (ch == 1)) {
-                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5 DEBUGVAR(1, 276, "sbr_noise(): bs_data_noise")) << delta);
+                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5) << delta);
             } else {
-                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5 DEBUGVAR(1, 277, "sbr_noise(): bs_data_noise")) << delta);
+                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5) << delta);
             }
             for (band = 1; band < sbr->N_Q; band++) { sbr->Q[ch][band][noise] = (sbr_huff_dec(ld, f_huff) << delta); }
         } else {

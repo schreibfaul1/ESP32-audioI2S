@@ -62,18 +62,18 @@ static int8_t rvlc_huffman_esc(bitfile* ld_esc, int8_t direction);
 #ifdef ERROR_RESILIENCE
 uint8_t rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
     uint8_t bits = 9;
-    ics->sf_concealment = faad_get1bit(ld DEBUGVAR(1, 149, "rvlc_scale_factor_data(): sf_concealment"));
-    ics->rev_global_gain = (uint8_t)faad_getbits(ld, 8 DEBUGVAR(1, 150, "rvlc_scale_factor_data(): rev_global_gain"));
+    ics->sf_concealment = faad_get1bit(ld);
+    ics->rev_global_gain = (uint8_t)faad_getbits(ld, 8);
     if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) bits = 11;
     /* the number of bits used for the huffman codewords */
-    ics->length_of_rvlc_sf = (uint16_t)faad_getbits(ld, bits DEBUGVAR(1, 151, "rvlc_scale_factor_data(): length_of_rvlc_sf"));
+    ics->length_of_rvlc_sf = (uint16_t)faad_getbits(ld, bits);
     if (ics->noise_used) {
-        ics->dpcm_noise_nrg = (uint16_t)faad_getbits(ld, 9 DEBUGVAR(1, 152, "rvlc_scale_factor_data(): dpcm_noise_nrg"));
+        ics->dpcm_noise_nrg = (uint16_t)faad_getbits(ld, 9);
         ics->length_of_rvlc_sf -= 9;
     }
-    ics->sf_escapes_present = faad_get1bit(ld DEBUGVAR(1, 153, "rvlc_scale_factor_data(): sf_escapes_present"));
-    if (ics->sf_escapes_present) { ics->length_of_rvlc_escapes = (uint8_t)faad_getbits(ld, 8 DEBUGVAR(1, 154, "rvlc_scale_factor_data(): length_of_rvlc_escapes")); }
-    if (ics->noise_used) { ics->dpcm_noise_last_position = (uint16_t)faad_getbits(ld, 9 DEBUGVAR(1, 155, "rvlc_scale_factor_data(): dpcm_noise_last_position")); }
+    ics->sf_escapes_present = faad_get1bit(ld);
+    if (ics->sf_escapes_present) { ics->length_of_rvlc_escapes = (uint8_t)faad_getbits(ld, 8); }
+    if (ics->noise_used) { ics->dpcm_noise_last_position = (uint16_t)faad_getbits(ld, 9); }
     return 0;
 }
 #endif // ERROR_RESILIENCE
@@ -88,14 +88,14 @@ uint8_t rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
     //    bitfile ld_rvlc_sf_rev, ld_rvlc_esc_rev;
     if (ics->length_of_rvlc_sf > 0) {
         /* We read length_of_rvlc_sf bits here to put it in a seperate bitfile. */
-        rvlc_sf_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_sf DEBUGVAR(1, 156, "rvlc_decode_scale_factors(): bitbuffer: length_of_rvlc_sf"));
+        rvlc_sf_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_sf);
         faad_initbits(&ld_rvlc_sf, (void*)rvlc_sf_buffer, bit2byte(ics->length_of_rvlc_sf));
         //        faad_initbits_rev(&ld_rvlc_sf_rev, (void*)rvlc_sf_buffer,
         //            ics->length_of_rvlc_sf);
     }
     if (ics->sf_escapes_present) {
         /* We read length_of_rvlc_escapes bits here to put it in a seperate bitfile. */
-        rvlc_esc_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_escapes DEBUGVAR(1, 157, "rvlc_decode_scale_factors(): bitbuffer: length_of_rvlc_escapes"));
+        rvlc_esc_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_escapes);
         faad_initbits(&ld_rvlc_esc, (void*)rvlc_esc_buffer, bit2byte(ics->length_of_rvlc_escapes));
         //        faad_initbits_rev(&ld_rvlc_esc_rev, (void*)rvlc_esc_buffer,
         //            ics->length_of_rvlc_escapes);
@@ -318,18 +318,18 @@ static int8_t rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction)
     rvlc_huff_table* h = book_rvlc;
     i = h->len;
     if (direction > 0)
-        cw = faad_getbits(ld_sf, i DEBUGVAR(1, 0, ""));
+        cw = faad_getbits(ld_sf, i);
     else
-        cw = faad_getbits_rev(ld_sf, i DEBUGVAR(1, 0, ""));
+        cw = faad_getbits_rev(ld_sf, i);
     while ((cw != h->cw) && (i < 10)) {
         h++;
         j = h->len - i;
         i += j;
         cw <<= j;
         if (direction > 0)
-            cw |= faad_getbits(ld_sf, j DEBUGVAR(1, 0, ""));
+            cw |= faad_getbits(ld_sf, j);
         else
-            cw |= faad_getbits_rev(ld_sf, j DEBUGVAR(1, 0, ""));
+            cw |= faad_getbits_rev(ld_sf, j);
     }
     index = h->index;
     if (index == +ESC_VAL) {
@@ -359,18 +359,18 @@ static int8_t rvlc_huffman_esc(bitfile* ld, int8_t direction) {
     rvlc_huff_table* h = book_escape;
     i = h->len;
     if (direction > 0)
-        cw = faad_getbits(ld, i DEBUGVAR(1, 0, ""));
+        cw = faad_getbits(ld, i);
     else
-        cw = faad_getbits_rev(ld, i DEBUGVAR(1, 0, ""));
+        cw = faad_getbits_rev(ld, i);
     while ((cw != h->cw) && (i < 21)) {
         h++;
         j = h->len - i;
         i += j;
         cw <<= j;
         if (direction > 0)
-            cw |= faad_getbits(ld, j DEBUGVAR(1, 0, ""));
+            cw |= faad_getbits(ld, j);
         else
-            cw |= faad_getbits_rev(ld, j DEBUGVAR(1, 0, ""));
+            cw |= faad_getbits_rev(ld, j);
     }
     return h->index;
 }

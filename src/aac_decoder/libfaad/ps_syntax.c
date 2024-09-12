@@ -336,14 +336,14 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
     *header = 0;
     /* check for new PS header */
-    if (faad_get1bit(ld DEBUGVAR(1, 1000, "ps_data(): enable_ps_header"))) {
+    if (faad_get1bit(ld)) {
         *header = 1;
         ps->header_read = 1;
         ps->use34hybrid_bands = 0;
         /* Inter-channel Intensity Difference (IID) parameters enabled */
-        ps->enable_iid = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1001, "ps_data(): enable_iid"));
+        ps->enable_iid = (uint8_t)faad_get1bit(ld);
         if (ps->enable_iid) {
-            ps->iid_mode = (uint8_t)faad_getbits(ld, 3 DEBUGVAR(1, 1002, "ps_data(): iid_mode"));
+            ps->iid_mode = (uint8_t)faad_getbits(ld, 3);
             ps->nr_iid_par = nr_iid_par_tab[ps->iid_mode];
             ps->nr_ipdopd_par = nr_ipdopd_par_tab[ps->iid_mode];
             if (ps->iid_mode == 2 || ps->iid_mode == 5) ps->use34hybrid_bands = 1;
@@ -351,29 +351,29 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
             ps->ipd_mode = ps->iid_mode;
         }
         /* Inter-channel Coherence (ICC) parameters enabled */
-        ps->enable_icc = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1003, "ps_data(): enable_icc"));
+        ps->enable_icc = (uint8_t)faad_get1bit(ld);
         if (ps->enable_icc) {
-            ps->icc_mode = (uint8_t)faad_getbits(ld, 3 DEBUGVAR(1, 1004, "ps_data(): icc_mode"));
+            ps->icc_mode = (uint8_t)faad_getbits(ld, 3);
             ps->nr_icc_par = nr_icc_par_tab[ps->icc_mode];
             if (ps->icc_mode == 2 || ps->icc_mode == 5) ps->use34hybrid_bands = 1;
         }
         /* PS extension layer enabled */
-        ps->enable_ext = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1005, "ps_data(): enable_ext"));
+        ps->enable_ext = (uint8_t)faad_get1bit(ld);
     }
     /* we are here, but no header has been read yet */
     if (ps->header_read == 0) {
         ps->ps_data_available = 0;
         return 1;
     }
-    ps->frame_class = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1006, "ps_data(): frame_class"));
-    tmp = (uint8_t)faad_getbits(ld, 2 DEBUGVAR(1, 1007, "ps_data(): num_env_idx"));
+    ps->frame_class = (uint8_t)faad_get1bit(ld);
+    tmp = (uint8_t)faad_getbits(ld, 2);
     ps->num_env = num_env_tab[ps->frame_class][tmp];
     if (ps->frame_class) {
-        for (n = 1; n < ps->num_env + 1; n++) { ps->border_position[n] = (uint8_t)faad_getbits(ld, 5 DEBUGVAR(1, 1008, "ps_data(): border_position")) + 1; }
+        for (n = 1; n < ps->num_env + 1; n++) { ps->border_position[n] = (uint8_t)faad_getbits(ld, 5) + 1; }
     }
     if (ps->enable_iid) {
         for (n = 0; n < ps->num_env; n++) {
-            ps->iid_dt[n] = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1009, "ps_data(): iid_dt"));
+            ps->iid_dt[n] = (uint8_t)faad_get1bit(ld);
             /* iid_data */
             if (ps->iid_mode < 3) {
                 huff_data(ld, ps->iid_dt[n], ps->nr_iid_par, t_huff_iid_def, f_huff_iid_def, ps->iid_index[n]);
@@ -384,22 +384,22 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
     }
     if (ps->enable_icc) {
         for (n = 0; n < ps->num_env; n++) {
-            ps->icc_dt[n] = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1010, "ps_data(): icc_dt"));
+            ps->icc_dt[n] = (uint8_t)faad_get1bit(ld);
             /* icc_data */
             huff_data(ld, ps->icc_dt[n], ps->nr_icc_par, t_huff_icc, f_huff_icc, ps->icc_index[n]);
         }
     }
     if (ps->enable_ext) {
         uint16_t num_bits_left;
-        uint16_t cnt = (uint16_t)faad_getbits(ld, 4 DEBUGVAR(1, 1011, "ps_data(): ps_extension_size"));
-        if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8 DEBUGVAR(1, 1012, "ps_data(): esc_count")); }
+        uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
+        if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
         num_bits_left = 8 * cnt;
         while (num_bits_left > 7) {
-            uint8_t ps_extension_id = (uint8_t)faad_getbits(ld, 2 DEBUGVAR(1, 1013, "ps_data(): ps_extension_size"));
+            uint8_t ps_extension_id = (uint8_t)faad_getbits(ld, 2);
             num_bits_left -= 2;
             num_bits_left -= ps_extension(ps, ld, ps_extension_id, num_bits_left);
         }
-        faad_getbits(ld, num_bits_left DEBUGVAR(1, 1014, "ps_data(): fill_bits"));
+        faad_getbits(ld, num_bits_left);
     }
     bits = (uint16_t)faad_get_processed_bits(ld) - bits;
     ps->ps_data_available = 1;
@@ -412,18 +412,18 @@ uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, c
     uint8_t  n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
     if (ps_extension_id == 0) {
-        ps->enable_ipdopd = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1015, "ps_extension(): enable_ipdopd"));
+        ps->enable_ipdopd = (uint8_t)faad_get1bit(ld);
         if (ps->enable_ipdopd) {
             for (n = 0; n < ps->num_env; n++) {
-                ps->ipd_dt[n] = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1016, "ps_extension(): ipd_dt"));
+                ps->ipd_dt[n] = (uint8_t)faad_get1bit(ld);
                 /* ipd_data */
                 huff_data(ld, ps->ipd_dt[n], ps->nr_ipdopd_par, t_huff_ipd, f_huff_ipd, ps->ipd_index[n]);
-                ps->opd_dt[n] = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1017, "ps_extension(): opd_dt"));
+                ps->opd_dt[n] = (uint8_t)faad_get1bit(ld);
                 /* opd_data */
                 huff_data(ld, ps->opd_dt[n], ps->nr_ipdopd_par, t_huff_opd, f_huff_opd, ps->opd_index[n]);
             }
         }
-        faad_get1bit(ld DEBUGVAR(1, 1018, "ps_extension(): reserved_ps"));
+        faad_get1bit(ld);
     }
     /* return number of bits read */
     bits = (uint16_t)faad_get_processed_bits(ld) - bits;
