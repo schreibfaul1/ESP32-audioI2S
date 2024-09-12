@@ -1347,14 +1347,14 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
 #ifdef SBR_DEC
 static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     real_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
-    int8_t phi_re[] = {1, 0, -1, 0};
-    int8_t phi_im[] = {0, 1, 0, -1};
+    int8_t phi_re[] = {1, 0, -1, 0}; (void)h_smooth;
+    int8_t phi_im[] = {0, 1, 0, -1}; (void)phi_im;
     uint8_t  m, l, i, n;
     uint16_t fIndexNoise = 0;
     uint8_t  fIndexSine = 0;
     uint8_t  assembly_reset = 0;
     real_t G_filt, Q_filt;
-    uint8_t h_SL;
+    uint8_t h_SL; (void)h_SL;
     if (sbr->Reset == 1) {
         assembly_reset = 1;
         fIndexNoise = 0;

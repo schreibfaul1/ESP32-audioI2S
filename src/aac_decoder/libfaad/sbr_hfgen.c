@@ -43,7 +43,7 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
     /* actual HF generation */
     for (i = 0; i < sbr->noPatches; i++) {
         for (x = 0; x < sbr->patchNoSubbands[i]; x++) {
-            real_t  a0_r, a0_i, a1_r, a1_i;
+            real_t  a0_r, a0_i, a1_r, a1_i; (void)a0_i; (void)a1_i;
             real_t  bw, bw2;
             uint8_t q, p, k, g;
             /* find the low and high band for patching */

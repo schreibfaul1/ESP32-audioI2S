@@ -62,7 +62,7 @@ extern "C" {
 
 #define ERROR_RESILIENCE
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
-#define SSR_DEC // Allow decoding of SSR profile AAC
+//#define SSR_DEC // Allow decoding of SSR profile AAC
 #define LTP_DEC // Allow decoding of LTP (Long Term Prediction) profile AAC
 #define LD_DEC // Allow decoding of LD (Low Delay) profile AAC
 //#define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)

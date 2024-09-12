@@ -55,6 +55,8 @@ uint16_t dbg_count;
 /* function declarations */
 void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size);
 void  create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
+void ssr_filter_bank_end(fb_info *fb);
+fb_info *ssr_filter_bank_init(uint16_t frame_len);
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string) {
     const char* libfaadName = "2.20.1";

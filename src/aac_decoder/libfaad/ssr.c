@@ -34,6 +34,9 @@
 #include "filtbank.h"
 #include "ssr.h"
 #include "ssr_fb.h"
+
+void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) ;
+
 #endif // SSR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
@@ -65,7 +68,7 @@ void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t win
 #endif // SSR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-static void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len) {
+void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
     real_t   gc_function[2 * 1024 / SSR_BANDS];
     if (window_sequence != EIGHT_SHORT_SEQUENCE) {
@@ -90,7 +93,7 @@ static void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t
 #endif // SSR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-static void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len) {
+void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
     uint16_t len_area1, len_area2; (void)len_area1; (void)len_area2;
     int32_t  aloc[10]; (void)aloc;

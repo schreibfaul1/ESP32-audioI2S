@@ -51,7 +51,7 @@ void ssr_filter_bank_end(fb_info* fb) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 static inline void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
-    mdct_info* mdct;
+    mdct_info* mdct = {0};
     switch (len) {
         case 512: mdct = fb->mdct2048; break;
         case 64: mdct = fb->mdct256; break;
@@ -72,13 +72,13 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
     real_t* window_short_prev;
     uint16_t nlong = frame_len;
     uint16_t nshort = frame_len / 8;
-    uint16_t trans = nshort / 2;
+    uint16_t trans = nshort / 2; (void)trans;
     uint16_t nflat_ls = (nlong - nshort) / 2;
     transf_buf = (real_t*)faad_malloc(2 * nlong * sizeof(real_t));
-    window_long = fb->long_window[window_shape];
-    window_long_prev = fb->long_window[window_shape_prev];
-    window_short = fb->short_window[window_shape];
-    window_short_prev = fb->short_window[window_shape_prev];
+    window_long = (real_t*)fb->long_window[window_shape];
+    window_long_prev = (real_t*)fb->long_window[window_shape_prev];
+    window_short = (real_t*)fb->short_window[window_shape];
+    window_short_prev = (real_t*)fb->short_window[window_shape_prev];
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
             imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);

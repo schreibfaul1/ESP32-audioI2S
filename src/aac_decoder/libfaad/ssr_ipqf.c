@@ -3,7 +3,7 @@
 #ifdef SSR_DEC
 #include "ssr.h"
 #include "ssr_ipqf.h"
-static real_t** app_pqfbuf;
+//static real_t** app_pqfbuf; 
 static real_t **pp_q0, **pp_t0, **pp_t1;
 
 
