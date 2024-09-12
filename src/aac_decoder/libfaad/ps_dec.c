@@ -2,7 +2,7 @@
 #include "common.h"
 
 #ifdef PS_DEC
-
+#include "Arduino.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "ps_dec.h"
@@ -1586,8 +1586,10 @@ ps_info* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
 #ifdef PS_DEC
 /* main Parametric Stereo decoding function */
 uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
-    qmf_t X_hybrid_left[32][32] = {{{0}}};
-    qmf_t X_hybrid_right[32][32] = {{{0}}};
+    // qmf_t X_hybrid_left[32][32] = {{{0}}};
+    // qmf_t X_hybrid_right[32][32] = {{{0}}};
+    qmf_t (*X_hybrid_left)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
+    qmf_t (*X_hybrid_right)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
     /* delta decoding of the bitstream data */
     ps_data_decode(ps);
     /* set up some parameters depending on filterbank type */
@@ -1617,6 +1619,8 @@ uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     /* hybrid synthesis, to rebuild the SBR QMF matrices */
     hybrid_synthesis((hyb_info*)ps->hyb, X_left, X_hybrid_left, ps->use34hybrid_bands, ps->numTimeSlotsRate);
     hybrid_synthesis((hyb_info*)ps->hyb, X_right, X_hybrid_right, ps->use34hybrid_bands, ps->numTimeSlotsRate);
+    if(X_hybrid_left) free(X_hybrid_left);
+    if(X_hybrid_right) free(X_hybrid_right);
     return 0;
 }
 #endif //  PS_DEC

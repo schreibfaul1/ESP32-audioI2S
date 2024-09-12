@@ -25,7 +25,7 @@ uint8_t get_sr_index(const uint32_t samplerate) {
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Returns the sample rate based on the sample rate index */
 uint32_t get_sample_rate(const uint8_t sr_index) {
-    static const uint32_t sample_rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000};
+    const uint32_t sample_rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000};
 
     if(sr_index < 12) return sample_rates[sr_index];
 
@@ -33,7 +33,7 @@ uint32_t get_sample_rate(const uint8_t sr_index) {
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t max_pred_sfb(const uint8_t sr_index) {
-    static const uint8_t pred_sfb_max[] = {33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34};
+    const uint8_t pred_sfb_max[] = {33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34};
 
     if(sr_index < 12) return pred_sfb_max[sr_index];
 
@@ -47,7 +47,7 @@ uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uin
      * 3    SSR long window
      * 4    SSR short window
      */
-    static const uint8_t tns_sbf_max[][4] = {{31, 9, 28, 7},  /* 96000 */
+    const uint8_t tns_sbf_max[][4] = {{31, 9, 28, 7},  /* 96000 */
                                              {31, 9, 28, 7},  /* 88200 */
                                              {34, 10, 27, 7}, /* 64000 */
                                              {40, 14, 26, 6}, /* 48000 */
@@ -135,14 +135,14 @@ void faad_free(void* b) {
 }
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const uint8_t Parity[256] = { // parity
+const uint8_t Parity[256] = { // parity
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
     1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
     1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
 
-static uint32_t __r1 __attribute__((unused)) = 1;
-static uint32_t __r2 __attribute__((unused)) = 1;
+uint32_t __r1 __attribute__((unused)) = 1;
+uint32_t __r2 __attribute__((unused)) = 1;
 
 /*
  *  This is a simple random number generator with good quality for audio purposes.
@@ -185,7 +185,7 @@ uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2) {
     return (*__r1 = (t3 >> 1) | t1) ^ (*__r2 = (t4 + t4) | t2);
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static uint32_t ones32(uint32_t x) {
+uint32_t ones32(uint32_t x) {
     x -= ((x >> 1) & 0x55555555);
     x = (((x >> 2) & 0x33333333) + (x & 0x33333333));
     x = (((x >> 4) + x) & 0x0f0f0f0f);
@@ -195,7 +195,7 @@ static uint32_t ones32(uint32_t x) {
     return (x & 0x0000003f);
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static uint32_t floor_log2(uint32_t x) {
+uint32_t floor_log2(uint32_t x) {
 #if 1
     x |= (x >> 1);
     x |= (x >> 2);
@@ -239,7 +239,7 @@ uint32_t wl_min_lzc(uint32_t x) {
     /* just take the maximum number of bits for interpolation */
     #define INTERP_BITS (REAL_BITS - TABLE_BITS)
 
-static const real_t pow2_tab[] = {
+const real_t pow2_tab[] = {
     REAL_CONST(1.000000000000000), REAL_CONST(1.010889286051701), REAL_CONST(1.021897148654117), REAL_CONST(1.033024879021228), REAL_CONST(1.044273782427414), REAL_CONST(1.055645178360557),
     REAL_CONST(1.067140400676824), REAL_CONST(1.078760797757120), REAL_CONST(1.090507732665258), REAL_CONST(1.102382583307841), REAL_CONST(1.114386742595892), REAL_CONST(1.126521618608242),
     REAL_CONST(1.138788634756692), REAL_CONST(1.151189229952983), REAL_CONST(1.163724858777578), REAL_CONST(1.176396991650281), REAL_CONST(1.189207115002721), REAL_CONST(1.202156731452703),
@@ -252,7 +252,7 @@ static const real_t pow2_tab[] = {
     REAL_CONST(1.794709075003107), REAL_CONST(1.814252175500399), REAL_CONST(1.834008086409342), REAL_CONST(1.853979125083386), REAL_CONST(1.874167634110300), REAL_CONST(1.894575981586966),
     REAL_CONST(1.915206561397147), REAL_CONST(1.936061793492294), REAL_CONST(1.957144124175400), REAL_CONST(1.978456026387951), REAL_CONST(2.000000000000000)};
 
-static const real_t log2_tab[] = {
+const real_t log2_tab[] = {
     REAL_CONST(0.000000000000000), REAL_CONST(0.022367813028455), REAL_CONST(0.044394119358453), REAL_CONST(0.066089190457772), REAL_CONST(0.087462841250339), REAL_CONST(0.108524456778169),
     REAL_CONST(0.129283016944966), REAL_CONST(0.149747119504682), REAL_CONST(0.169925001442312), REAL_CONST(0.189824558880017), REAL_CONST(0.209453365628950), REAL_CONST(0.228818690495881),
     REAL_CONST(0.247927513443585), REAL_CONST(0.266786540694901), REAL_CONST(0.285402218862248), REAL_CONST(0.303780748177103), REAL_CONST(0.321928094887362), REAL_CONST(0.339850002884625),

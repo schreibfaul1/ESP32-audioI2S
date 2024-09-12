@@ -74,7 +74,7 @@ uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64]
     }
 
     ret = estimate_current_envelope(sbr, &adj, Xsbr, ch);
-    if (ret > 0) return 1;
+    if (ret > 0) {ret = 1; goto exit;}
 
     calculate_gain(sbr, &adj, ch);
 
@@ -85,7 +85,10 @@ uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64]
 
     hf_assembly(sbr, &adj, Xsbr, ch);
 
-    return 0;
+    ret = 0;
+
+exit:
+    return ret;
 }
 
 static uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t current_band) {
@@ -217,9 +220,9 @@ static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf
 }
 
     #ifdef FIXED_POINT
-        #define EPS (1) /* smallest number available in fixed point */
+        #define _EPS (1) /* smallest number available in fixed point */
     #else
-        #define EPS (1e-12)
+        #define _EPS (1e-12)
     #endif
 
     #ifdef FIXED_POINT
@@ -678,7 +681,7 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
 
             /* calculate the final gain */
             /* G_boost: [0..2.51188643] */
-            G_boost = acc1 - log2_int(den /*+ EPS*/);
+            G_boost = acc1 - log2_int(den /*+ _EPS*/);
             G_boost = min(G_boost, REAL_CONST(1.328771237) /* log2(1.584893192 ^ 2) */);
 
             for (m = ml1; m < ml2; m++) {
@@ -999,13 +1002,13 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
             acc1 += QUANTISE2INT(pow2(-10 + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch)));
 
-            acc1 = QUANTISE2REAL(log2(EPS + acc1));
+            acc1 = QUANTISE2REAL(log2(_EPS + acc1));
 
             /* calculate the maximum gain */
             /* ratio of the energy of the original signal and the energy
              * of the HF generated signal
              */
-            G_max = acc1 - QUANTISE2REAL(log2(EPS + acc2)) + QUANTISE2REAL(limGain[sbr->bs_limiter_gains]);
+            G_max = acc1 - QUANTISE2REAL(log2(_EPS + acc2)) + QUANTISE2REAL(limGain[sbr->bs_limiter_gains]);
             G_max = min(G_max, QUANTISE2REAL(limGain[3]));
 
             for (m = ml1; m < ml2; m++) {
@@ -1121,7 +1124,7 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
 
             /* calculate the final gain */
             /* G_boost: [0..2.51188643] */
-            G_boost = acc1 - QUANTISE2REAL(log2(den + EPS));
+            G_boost = acc1 - QUANTISE2REAL(log2(den + _EPS));
             G_boost = min(G_boost, QUANTISE2REAL(1.328771237) /* log2(1.584893192 ^ 2) */);
 
             for (m = ml1; m < ml2; m++) {
@@ -1199,7 +1202,7 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             /* ratio of the energy of the original signal and the energy
              * of the HF generated signal
              */
-            G_max = ((EPS + acc1) / (EPS + acc2)) * limGain[sbr->bs_limiter_gains];
+            G_max = ((_EPS + acc1) / (_EPS + acc2)) * limGain[sbr->bs_limiter_gains];
             G_max = min(G_max, 1e10);
 
             for (m = ml1; m < ml2; m++) {
@@ -1291,7 +1294,7 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
 
             /* G_boost: [0..2.51188643] */
-            G_boost = (acc1 + EPS) / (den + EPS);
+            G_boost = (acc1 + _EPS) / (den + _EPS);
             G_boost = min(G_boost, 2.51188643 /* 1.584893192 ^ 2 */);
 
             for (m = ml1; m < ml2; m++) {
@@ -1390,13 +1393,13 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
             }
 
             /* G_target: fixed point */
-            if ((E_total_est + EPS) == 0) {
+            if ((E_total_est + _EPS) == 0) {
                 G_target = 0;
             } else {
         #ifdef FIXED_POINT
-                G_target = (((int64_t)(E_total)) << Q2_BITS) / (E_total_est + EPS);
+                G_target = (((int64_t)(E_total)) << Q2_BITS) / (E_total_est + _EPS);
         #else
-                G_target = E_total / (E_total_est + EPS);
+                G_target = E_total / (E_total_est + _EPS);
         #endif
             }
             acc = 0;
@@ -1422,13 +1425,13 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
             }
 
             /* acc: fixed point */
-            if (acc + EPS == 0) {
+            if (acc + _EPS == 0) {
                 acc = 0;
             } else {
         #ifdef FIXED_POINT
-                acc = (((int64_t)(E_total)) << Q2_BITS) / (acc + EPS);
+                acc = (((int64_t)(E_total)) << Q2_BITS) / (acc + _EPS);
         #else
-                acc = E_total / (acc + EPS);
+                acc = E_total / (acc + _EPS);
         #endif
             }
             for (m = sbr->f_group[l][(k << 1)]; m < sbr->f_group[l][(k << 1) + 1]; m++) {

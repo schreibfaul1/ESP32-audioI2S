@@ -162,8 +162,8 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
     uint16_t numberOfSegments, numberOfSets, numberOfCodewords;
     // codeword_t codeword[512];
     // bits_t     segment[512];
-    codeword_t* codeword = ps_malloc(sizeof(codeword_t) * 512);
-    bits_t* segment = ps_malloc(sizeof(bits_t) * 512);
+    codeword_t* codeword = (codeword_t*)ps_malloc(sizeof(codeword_t) * 512);
+    bits_t* segment = (bits_t*)ps_malloc(sizeof(bits_t) * 512);
     uint16_t sp_offset[8];
     uint16_t g, i, sortloop, set, bitsread;
     /*uint16_t bitsleft, codewordsleft*/;

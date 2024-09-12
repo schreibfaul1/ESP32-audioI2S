@@ -8,21 +8,21 @@
 #include "cfft_tab.h"
 
 
-/* static function declarations */
-static void passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
-static void passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
-static void passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign);
-static void passf4pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
-static void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
-static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
-                   const int8_t isign);
-static void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
+/* function declarations */
+void passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
+void passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
+void passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign);
+void passf4pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
+void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
+void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
+                  const int8_t isign);
+void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
 
 /*----------------------------------------------------------------------
    passf2, passf3, passf4, passf5. Complex FFT passes fwd and bwd.
   ----------------------------------------------------------------------*/
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa) {
+void passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa) {
     uint16_t i, k, ah, ac;
 
     if(ido == 1) {
@@ -60,7 +60,7 @@ static void passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa) {
+void passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa) {
     uint16_t i, k, ah, ac;
 
     if(ido == 1) {
@@ -98,7 +98,7 @@ static void passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign) {
+void passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign) {
     static real_t taur = FRAC_CONST(-0.5);
     static real_t taui = FRAC_CONST(0.866025403784439);
     uint16_t      i, k, ac, ah;
@@ -218,7 +218,7 @@ static void passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf4pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3) {
+void passf4pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3) {
     uint16_t i, k, ac, ah;
 
     if(ido == 1) {
@@ -293,7 +293,7 @@ static void passf4pos(const uint16_t ido, const uint16_t l1, const complex_t* cc
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3) {
+void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3) {
     uint16_t i, k, ac, ah;
 
     if(ido == 1) {
@@ -359,7 +359,7 @@ static void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
+void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
                    const int8_t isign) {
     static real_t tr11 = FRAC_CONST(0.309016994374947);
     static real_t ti11 = FRAC_CONST(0.951056516295154);
@@ -529,7 +529,7 @@ static void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
 /*----------------------------------------------------------------------
    cfftf1, cfftf, cfftb, cffti1, cffti. Complex FFTs.
   ----------------------------------------------------------------------*/
-static inline void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
+void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
     uint16_t i;
     uint16_t k1, l1, l2;
     uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1; (void)idl1;
@@ -588,7 +588,7 @@ static inline void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static inline void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
+void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign) {
     uint16_t i;
     uint16_t k1, l1, l2;
     uint16_t na, nf, ip, iw, ix2, ix3, ix4, ido, idl1; (void)idl1;
@@ -646,7 +646,7 @@ void cfftf(cfft_info* cfft, complex_t* c) { cfftf1neg(cfft->n, c, cfft->work, (c
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void cfftb(cfft_info* cfft, complex_t* c) { cfftf1pos(cfft->n, c, cfft->work, (const uint16_t*)cfft->ifac, (const complex_t*)cfft->tab, +1); }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
+void cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
     static uint16_t ntryh[4] = {3, 4, 2, 5};
 #ifndef FIXED_POINT
     real_t   arg, argh, argld, fi;

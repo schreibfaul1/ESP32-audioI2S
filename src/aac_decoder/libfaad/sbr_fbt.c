@@ -504,9 +504,11 @@ void limiter_frequency_table(sbr_info* sbr) {
     }
     printf("\n");
     #endif
-    for (s = 1; s < 4; s++) {
-        int32_t limTable[100 /*TODO*/] = {0};
-        uint8_t patchBorders[64 /*??*/] = {0};
+    int32_t* limTable = (int32_t*)faad_malloc(100 * sizeof(int32_t));
+    uint8_t* patchBorders = (uint8_t*)faad_malloc(64 * sizeof(uint8_t));
+    for(s = 1; s < 4; s++) {
+        memset(limTable, 0, 100 * sizeof(int32_t));
+        memset(patchBorders, 0, 64 * sizeof(uint8_t));
 
     #if 0
         limBands = limiterBandsPerOctave[s - 1];
@@ -523,7 +525,7 @@ void limiter_frequency_table(sbr_info* sbr) {
         nrLim = sbr->noPatches + sbr->N_low - 1;
 
         if (nrLim < 0) // TODO: BIG FAT PROBLEM
-            return;
+            goto exit;
     restart:
         if (k <= nrLim) {
             real_t nOctaves;
@@ -591,5 +593,10 @@ void limiter_frequency_table(sbr_info* sbr) {
         printf("\n");
     #endif
     }
+exit:
+    if(limTable) free(limTable);
+    if(patchBorders) free(patchBorders);
+
+
 }
 #endif // SBR_DEC

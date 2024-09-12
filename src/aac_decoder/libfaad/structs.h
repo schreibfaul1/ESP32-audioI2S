@@ -304,10 +304,8 @@ typedef struct
 {
     uint8_t channel;
     int16_t paired_channel;
-
     uint8_t element_instance_tag;
     uint8_t common_window;
-
     ic_stream ics1;
     ic_stream ics2;
 } element; /* syntax element (SCE, CPE, LFE) */

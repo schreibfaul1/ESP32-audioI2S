@@ -649,7 +649,7 @@ static uint16_t sbr_extension(bitfile* ld, sbr_info* sbr, uint8_t bs_extension_i
 }
 
 /* table 12 */
-static void sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+void sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t n;
 
     for (n = 0; n < sbr->N_high; n++) { sbr->bs_add_harmonic[ch][n] = faad_get1bit(ld DEBUGVAR(1, 278, "sinusoidal_coding(): bs_add_harmonic")); }

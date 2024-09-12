@@ -22,7 +22,7 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* binary search huffman tables */
-static const int8_t f_huffman_sa[][2] = {
+const int8_t f_huffman_sa[][2] = {
     {/*0*/ -15, 1},           /* index 0: 1 bits:  x */
     {2, 3},                   /* index 1: 2 bits:  1x */
     {/*7*/ -8, 4},            /* index 2: 3 bits:  10x */
@@ -41,7 +41,7 @@ static const int8_t f_huffman_sa[][2] = {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const int8_t t_huffman_sa[][2] = {
+const int8_t t_huffman_sa[][2] = {
     {/*0*/ -15, 1},          /* index 0: 1 bits: x */
     {2, 3},                  /* index 1: 2 bits: 1x */
     {/*-1*/ -16, /*1*/ -14}, /* index 2: 3 bits: 10x */
@@ -60,7 +60,7 @@ static const int8_t t_huffman_sa[][2] = {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const int8_t f_huffman_pan[][2] = {
+const int8_t f_huffman_pan[][2] = {
     {/*0*/ -15, 1},             /* index 0: 1 bits: x */
     {/*-1*/ -16, 2},            /* index 1: 2 bits: 1x */
     {/*1*/ -14, 3},             /* index 2: 3 bits: 11x */
@@ -93,7 +93,7 @@ static const int8_t f_huffman_pan[][2] = {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const int8_t t_huffman_pan[][2] = {
+const int8_t t_huffman_pan[][2] = {
     {/*0*/ -15, 1},             /* index 0: 1 bits: x */
     {/*-1*/ -16, 2},            /* index 1: 2 bits: 1x */
     {/*1*/ -14, 3},             /* index 2: 3 bits: 11x */
@@ -127,7 +127,7 @@ static const int8_t t_huffman_pan[][2] = {
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* There are 3 classes in the standard but the last 2 are identical */
-static const real_t sa_quant[8][2] = {
+const real_t sa_quant[8][2] = {
     {FRAC_CONST(0.0000), FRAC_CONST(0.0000)}, {FRAC_CONST(0.0501), FRAC_CONST(0.1778)}, {FRAC_CONST(0.0706), FRAC_CONST(0.2818)}, {FRAC_CONST(0.0995), FRAC_CONST(0.4467)},
     {FRAC_CONST(0.1399), FRAC_CONST(0.5623)}, {FRAC_CONST(0.1957), FRAC_CONST(0.7079)}, {FRAC_CONST(0.2713), FRAC_CONST(0.8913)}, {FRAC_CONST(0.3699), FRAC_CONST(1.0000)},
 };
@@ -136,7 +136,7 @@ static const real_t sa_quant[8][2] = {
 #ifdef DRM
     /* We don't need the actual quantizer values */
     #if 0
-static const real_t pan_quant[8][5] =
+const real_t pan_quant[8][5] =
 {
     { COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000) },
     { COEF_CONST(0.1661), COEF_CONST(0.1661), COEF_CONST(0.3322), COEF_CONST(0.3322), COEF_CONST(0.3322) },
@@ -152,7 +152,7 @@ static const real_t pan_quant[8][5] =
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(pan_quant[x][y] */
-static const real_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000)},
+const real_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000)},
                                            {REAL_CONST(1.1220021), REAL_CONST(1.1220021), REAL_CONST(1.2589312), REAL_CONST(1.2589312), REAL_CONST(1.2589312)},
                                            {REAL_CONST(1.2589312), REAL_CONST(1.2589312), REAL_CONST(1.5849090), REAL_CONST(1.7783016), REAL_CONST(1.7783016)},
                                            {REAL_CONST(1.4125481), REAL_CONST(1.5849090), REAL_CONST(1.9952921), REAL_CONST(2.8184461), REAL_CONST(3.1623565)},
@@ -164,7 +164,7 @@ static const real_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1.
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(-pan_quant[x][y] */
-static const real_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1)},
+const real_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1)},
                                            {REAL_CONST(0.8912487), REAL_CONST(0.8912487), REAL_CONST(0.7943242), REAL_CONST(0.7943242), REAL_CONST(0.7943242)},
                                            {REAL_CONST(0.7943242), REAL_CONST(0.7943242), REAL_CONST(0.6309511), REAL_CONST(0.5623344), REAL_CONST(0.5623344)},
                                            {REAL_CONST(0.7079405), REAL_CONST(0.6309511), REAL_CONST(0.5011797), REAL_CONST(0.3548054), REAL_CONST(0.3162199)},
@@ -176,7 +176,7 @@ static const real_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_C
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(pan_quant[x][y]/30) */
-static const real_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
+const real_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
                                               {COEF_CONST(1.003845098), COEF_CONST(1.003845098), COEF_CONST(1.007704982), COEF_CONST(1.007704982), COEF_CONST(1.007704982)},
                                               {COEF_CONST(1.007704982), COEF_CONST(1.007704982), COEF_CONST(1.01546933), COEF_CONST(1.019373909), COEF_CONST(1.019373909)},
                                               {COEF_CONST(1.011579706), COEF_CONST(1.01546933), COEF_CONST(1.023293502), COEF_CONST(1.035142941), COEF_CONST(1.039123167)},
@@ -188,7 +188,7 @@ static const real_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), COE
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(-pan_quant[x][y]/30) */
-static const real_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
+const real_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
                                               {COEF_CONST(0.99616963), COEF_CONST(0.99616963), COEF_CONST(0.992353931), COEF_CONST(0.992353931), COEF_CONST(0.99235393)},
                                               {COEF_CONST(0.992353931), COEF_CONST(0.992353931), COEF_CONST(0.984766325), COEF_CONST(0.980994305), COEF_CONST(0.980994305)},
                                               {COEF_CONST(0.988552848), COEF_CONST(0.984766325), COEF_CONST(0.977236734), COEF_CONST(0.966050157), COEF_CONST(0.962349827)},
@@ -199,7 +199,7 @@ static const real_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), COE
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const real_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1),    FRAC_CONST(1),   FRAC_CONST(0.95), FRAC_CONST(0.9), FRAC_CONST(0.85), FRAC_CONST(0.8), FRAC_CONST(0.75),
+const real_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1),    FRAC_CONST(1),   FRAC_CONST(0.95), FRAC_CONST(0.9), FRAC_CONST(0.85), FRAC_CONST(0.8), FRAC_CONST(0.75),
                                                  FRAC_CONST(0.7), FRAC_CONST(0.65), FRAC_CONST(0.6), FRAC_CONST(0.55), FRAC_CONST(0.5), FRAC_CONST(0.45), FRAC_CONST(0.4), FRAC_CONST(0.35),
                                                  FRAC_CONST(0.3), FRAC_CONST(0.25), FRAC_CONST(0.2), FRAC_CONST(0.15), FRAC_CONST(0.1), FRAC_CONST(0.05), FRAC_CONST(0),   FRAC_CONST(0),
                                                  FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),
@@ -208,7 +208,7 @@ static const real_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1),
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const real_t sa_sqrt_1_minus[8][2] = {{FRAC_CONST(1), FRAC_CONST(1)},
+const real_t sa_sqrt_1_minus[8][2] = {{FRAC_CONST(1), FRAC_CONST(1)},
                                              {FRAC_CONST(0.998744206), FRAC_CONST(0.984066644)},
                                              {FRAC_CONST(0.997504707), FRAC_CONST(0.959473168)},
                                              {FRAC_CONST(0.995037562), FRAC_CONST(0.894683804)},
@@ -219,23 +219,23 @@ static const real_t sa_sqrt_1_minus[8][2] = {{FRAC_CONST(1), FRAC_CONST(1)},
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const uint8_t sa_freq_scale[9] = {0, 1, 2, 3, 5, 7, 10, 13, 23};
-static const uint8_t pan_freq_scale[21] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 22, 26, 32, 64};
-static const uint8_t pan_quant_class[20] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4};
+const uint8_t sa_freq_scale[9] = {0, 1, 2, 3, 5, 7, 10, 13, 23};
+const uint8_t pan_freq_scale[21] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 22, 26, 32, 64};
+const uint8_t pan_quant_class[20] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4};
 /* Inverse mapping lookup */
-static const uint8_t pan_inv_freq[64] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18,
+const uint8_t pan_inv_freq[64] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18,
                                          19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19};
-static const uint8_t sa_inv_freq[MAX_SA_BAND] = {0, 1, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
-static const real_t filter_coeff[] = {FRAC_CONST(0.65143905754106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
-static const uint8_t delay_length[3] = {3, 4, 5};
-static const real_t delay_fraction[] = {FRAC_CONST(0.43), FRAC_CONST(0.75), FRAC_CONST(0.347)};
-static const real_t peak_decay = FRAC_CONST(0.76592833836465);
-static const real_t smooth_coeff = FRAC_CONST(0.25);
+const uint8_t sa_inv_freq[MAX_SA_BAND] = {0, 1, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
+const real_t filter_coeff[] = {FRAC_CONST(0.65143905754106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
+const uint8_t delay_length[3] = {3, 4, 5};
+const real_t delay_fraction[] = {FRAC_CONST(0.43), FRAC_CONST(0.75), FRAC_CONST(0.347)};
+const real_t peak_decay = FRAC_CONST(0.76592833836465);
+const real_t smooth_coeff = FRAC_CONST(0.25);
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* Please note that these are the same tables as in plain PS */
-static const complex_t Q_Fract_allpass_Qmf[][3] = {
+const complex_t Q_Fract_allpass_Qmf[][3] = {
     {{FRAC_CONST(0.7804303765), FRAC_CONST(0.6252426505)}, {FRAC_CONST(0.3826834261), FRAC_CONST(0.9238795042)}, {FRAC_CONST(0.8550928831), FRAC_CONST(0.5184748173)}},
     {{FRAC_CONST(-0.4399392009), FRAC_CONST(0.8980275393)}, {FRAC_CONST(-0.9238795042), FRAC_CONST(-0.3826834261)}, {FRAC_CONST(-0.0643581524), FRAC_CONST(0.9979268909)}},
     {{FRAC_CONST(-0.9723699093), FRAC_CONST(-0.2334454209)}, {FRAC_CONST(0.9238795042), FRAC_CONST(-0.3826834261)}, {FRAC_CONST(-0.9146071672), FRAC_CONST(0.4043435752)}},
@@ -303,7 +303,7 @@ static const complex_t Q_Fract_allpass_Qmf[][3] = {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const complex_t Phi_Fract_Qmf[] = {
+const complex_t Phi_Fract_Qmf[] = {
     {FRAC_CONST(0.8181497455), FRAC_CONST(0.5750052333)},   {FRAC_CONST(-0.2638730407), FRAC_CONST(0.9645574093)},  {FRAC_CONST(-0.9969173074), FRAC_CONST(0.0784590989)},
     {FRAC_CONST(-0.4115143716), FRAC_CONST(-0.9114032984)}, {FRAC_CONST(0.7181262970), FRAC_CONST(-0.6959127784)},  {FRAC_CONST(0.8980275989), FRAC_CONST(0.4399391711)},
     {FRAC_CONST(-0.1097343117), FRAC_CONST(0.9939609766)},  {FRAC_CONST(-0.9723699093), FRAC_CONST(0.2334453613)},  {FRAC_CONST(-0.5490227938), FRAC_CONST(-0.8358073831)},
@@ -329,10 +329,10 @@ static const complex_t Phi_Fract_Qmf[] = {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-/* static function declarations */
-static void   drm_ps_sa_element(drm_ps_info* ps, bitfile* ld);
-static void   drm_ps_pan_element(drm_ps_info* ps, bitfile* ld);
-static int8_t huff_dec(bitfile* ld, drm_ps_huff_tab huff);
+/* function declarations */
+void   drm_ps_sa_element(drm_ps_info* ps, bitfile* ld);
+void   drm_ps_pan_element(drm_ps_info* ps, bitfile* ld);
+int8_t huff_dec(bitfile* ld, drm_ps_huff_tab huff);
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
@@ -349,7 +349,7 @@ uint16_t drm_ps_data(drm_ps_info* ps, bitfile* ld) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_ps_sa_element(drm_ps_info* ps, bitfile* ld) {
+void drm_ps_sa_element(drm_ps_info* ps, bitfile* ld) {
     drm_ps_huff_tab huff;
     uint8_t         band;
     ps->bs_sa_dt_flag = faad_get1bit(ld);
@@ -360,7 +360,7 @@ static void drm_ps_sa_element(drm_ps_info* ps, bitfile* ld) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_ps_pan_element(drm_ps_info* ps, bitfile* ld) {
+void drm_ps_pan_element(drm_ps_info* ps, bitfile* ld) {
     drm_ps_huff_tab huff;
     uint8_t         band;
     ps->bs_pan_dt_flag = faad_get1bit(ld);
@@ -372,7 +372,7 @@ static void drm_ps_pan_element(drm_ps_info* ps, bitfile* ld) {
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* binary search huffman decoding */
-static int8_t huff_dec(bitfile* ld, drm_ps_huff_tab huff) {
+int8_t huff_dec(bitfile* ld, drm_ps_huff_tab huff) {
     uint8_t bit;
     int16_t index = 0;
     while(index >= 0) {
@@ -384,7 +384,7 @@ static int8_t huff_dec(bitfile* ld, drm_ps_huff_tab huff) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static int8_t sa_delta_clip(drm_ps_info* ps, int8_t i) {
+int8_t sa_delta_clip(drm_ps_info* ps, int8_t i) {
     if(i < 0) {
         /*  printf(" SAminclip %d", i); */
         ps->sa_decode_error = 1;
@@ -400,7 +400,7 @@ static int8_t sa_delta_clip(drm_ps_info* ps, int8_t i) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static int8_t pan_delta_clip(drm_ps_info* ps, int8_t i) {
+int8_t pan_delta_clip(drm_ps_info* ps, int8_t i) {
     if(i < -7) {
         /* printf(" PANminclip %d", i); */
         ps->pan_decode_error = 1;
@@ -416,7 +416,7 @@ static int8_t pan_delta_clip(drm_ps_info* ps, int8_t i) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_ps_delta_decode(drm_ps_info* ps) {
+void drm_ps_delta_decode(drm_ps_info* ps) {
     uint8_t band;
     if(ps->bs_enable_sa) {
         if(ps->bs_sa_dt_flag && !ps->g_last_had_sa) {
@@ -470,7 +470,7 @@ static void drm_ps_delta_decode(drm_ps_info* ps) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
+void drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
     uint8_t   s, b, k;
     complex_t qfrac, tmp0, tmp, in, R0;
     real_t    peakdiff;
@@ -549,7 +549,7 @@ static void drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
+void drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     uint8_t s, b, ifreq, qclass;
     real_t  sa_map[MAX_SA_BAND], sa_dir_map[MAX_SA_BAND], k_sa_map[MAX_SA_BAND], k_sa_dir_map[MAX_SA_BAND];
     real_t  new_dir_map, new_sa_map;
@@ -602,7 +602,7 @@ static void drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_righ
 #endif
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static void drm_add_pan(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
+void drm_add_pan(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     uint8_t s, b, qclass, ifreq;
     real_t  tmp, coeff1, coeff2;
     real_t  pan_base[MAX_PAN_BAND];

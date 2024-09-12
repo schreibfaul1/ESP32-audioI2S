@@ -480,18 +480,19 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
 /* Table 4.4.9 */
 static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag) {
     uint8_t       retval = 0;
-    element       sce = {0};
-    ic_stream*    ics = &(sce.ics1);
+//  element       sce = {0};
+    element* sce = (element*)ps_calloc(1, sizeof(element));
+    ic_stream*    ics = &(sce->ics1);
     // ALIGN int16_t spec_data[1024] = {0};
     int16_t* spec_data = ps_calloc(1024, sizeof(int16_t));
 
-    sce.element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG DEBUGVAR(1, 38, "single_lfe_channel_element(): element_instance_tag"));
+    sce->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG DEBUGVAR(1, 38, "single_lfe_channel_element(): element_instance_tag"));
 
-    *tag = sce.element_instance_tag;
-    sce.channel = channel;
-    sce.paired_channel = -1;
+    *tag = sce->element_instance_tag;
+    sce->channel = channel;
+    sce->paired_channel = -1;
 
-    retval = individual_channel_stream(hDecoder, &sce, ld, ics, 0, spec_data);
+    retval = individual_channel_stream(hDecoder, sce, ld, ics, 0, spec_data);
     if (retval > 0) goto exit;
 
     /* IS not allowed in single channel */
@@ -509,12 +510,13 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
 #endif
 
     /* noiseless coding is done, spectral reconstruction is done now */
-    retval = reconstruct_single_channel(hDecoder, ics, &sce, spec_data);
+    retval = reconstruct_single_channel(hDecoder, ics, sce, spec_data);
     if (retval > 0) goto exit;
 
     retval = 0;
 exit:
     if(spec_data) free(spec_data);
+    if(sce)free(sce);
     return retval;
 }
 
@@ -524,21 +526,21 @@ static uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8
     // ALIGN int16_t spec_data2[1024] = {0};
     int16_t* spec_data1 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
     int16_t* spec_data2 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
-
-    element    cpe = {0};
-    ic_stream* ics1 = &(cpe.ics1);
-    ic_stream* ics2 = &(cpe.ics2);
+    // element    cpe = {0};
+    element* cpe = (element*)ps_calloc(1, sizeof(element));
+    ic_stream* ics1 = &(cpe->ics1);
+    ic_stream* ics2 = &(cpe->ics2);
     uint8_t    result;
 
-    cpe.channel = channels;
-    cpe.paired_channel = channels + 1;
+    cpe->channel = channels;
+    cpe->paired_channel = channels + 1;
 
-    cpe.element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG DEBUGVAR(1, 39, "channel_pair_element(): element_instance_tag"));
-    *tag = cpe.element_instance_tag;
+    cpe->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG DEBUGVAR(1, 39, "channel_pair_element(): element_instance_tag"));
+    *tag = cpe->element_instance_tag;
 
-    if ((cpe.common_window = faad_get1bit(ld DEBUGVAR(1, 40, "channel_pair_element(): common_window"))) & 1) {
+    if ((cpe->common_window = faad_get1bit(ld DEBUGVAR(1, 40, "channel_pair_element(): common_window"))) & 1) {
         /* both channels have common ics information */
-        if ((result = ics_info(hDecoder, ics1, ld, cpe.common_window)) > 0) goto exit;
+        if ((result = ics_info(hDecoder, ics1, ld, cpe->common_window)) > 0) goto exit;
 
         ics1->ms_mask_present = (uint8_t)faad_getbits(ld, 2 DEBUGVAR(1, 41, "channel_pair_element(): ms_mask_present"));
         if (ics1->ms_mask_present == 3) {
@@ -576,10 +578,10 @@ static uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8
         ics1->ms_mask_present = 0;
     }
 
-    if ((result = individual_channel_stream(hDecoder, &cpe, ld, ics1, 0, spec_data1)) > 0) { goto exit; }
+    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics1, 0, spec_data1)) > 0) { goto exit; }
 
 #ifdef ERROR_RESILIENCE
-    if (cpe.common_window && (hDecoder->object_type >= ER_OBJECT_START) && (ics1->predictor_data_present)) {
+    if (cpe->common_window && (hDecoder->object_type >= ER_OBJECT_START) && (ics1->predictor_data_present)) {
         if ((
     #ifdef LTP_DEC
                 ics1->ltp2.data_present =
@@ -596,7 +598,7 @@ static uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8
     }
 #endif
 
-    if ((result = individual_channel_stream(hDecoder, &cpe, ld, ics2, 0, spec_data2)) > 0) { goto exit; }
+    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics2, 0, spec_data2)) > 0) { goto exit; }
 
 #ifdef SBR_DEC
     /* check if next bitstream element is a fill element */
@@ -610,7 +612,7 @@ static uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8
 #endif
 
     /* noiseless coding is done, spectral reconstruction is done now */
-    if ((result = reconstruct_channel_pair(hDecoder, ics1, ics2, &cpe, spec_data1, spec_data2)) > 0) { goto exit; }
+    if ((result = reconstruct_channel_pair(hDecoder, ics1, ics2, cpe, spec_data1, spec_data2)) > 0) { goto exit; }
 
     result = 0;
 
@@ -623,6 +625,7 @@ exit:
         free(spec_data2);
         spec_data2 = NULL;
     }
+    if(cpe)free(cpe);
 
     return result;
 }

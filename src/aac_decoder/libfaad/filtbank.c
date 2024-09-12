@@ -104,7 +104,7 @@ void filter_bank_end(fb_info* fb) {
     }
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static inline void imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 #ifdef LD_DEC
     mdct_info* mdct = NULL;
 
@@ -122,7 +122,7 @@ static inline void imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, ui
 }
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-static inline void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct = NULL;
 
     switch(len) {
