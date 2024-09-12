@@ -125,11 +125,7 @@ typedef struct
 // int hcb_2_pair_table_size[];
 // int hcb_bin_table_size[];
 
-#include "hcb_1.h"
-#include "hcb_2.h"
-#include "hcb_3.h"
-#include "hcb_4.h"
-#include "hcb_5.h"
+
 
 
 #include "hcb_sf.h"
