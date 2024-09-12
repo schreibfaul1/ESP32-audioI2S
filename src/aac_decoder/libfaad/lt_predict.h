@@ -27,20 +27,14 @@
 **
 ** $Id: lt_predict.h,v 1.20 2007/11/01 12:33:31 menno Exp $
 **/
-
 #ifdef LTP_DEC
-
 #ifndef __LT_PREDICT_H__
 #define __LT_PREDICT_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #include "filtbank.h"
-
 uint8_t is_ltp_ot(uint8_t object_type);
-
 void lt_prediction(ic_stream *ics,
                    ltp_info *ltp,
                    real_t *spec,
@@ -51,16 +45,13 @@ void lt_prediction(ic_stream *ics,
                    uint8_t sr_index,
                    uint8_t object_type,
                    uint16_t frame_len);
-
 void lt_update_state(int16_t *lt_pred_stat,
                      real_t *time,
                      real_t *overlap,
                      uint16_t frame_len,
                      uint8_t object_type);
-
 #ifdef __cplusplus
 }
 #endif
 #endif
-
 #endif

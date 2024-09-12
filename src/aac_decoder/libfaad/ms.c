@@ -1,7 +1,5 @@
-
 #include "common.h"
 #include "structs.h"
-
 #include "syntax.h"
 #include "ms.h"
 #include "is.h"
@@ -13,7 +11,6 @@ void ms_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
     uint16_t nshort = frame_len / 8;
     uint16_t i, k;
     real_t   tmp;
-
     if(ics->ms_mask_present >= 1) {
         for(g = 0; g < ics->num_window_groups; g++) {
             for(b = 0; b < ics->window_group_length[g]; b++) {

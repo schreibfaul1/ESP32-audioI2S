@@ -1,20 +1,13 @@
-
 #include "common.h"
-
 #ifdef SBR_DEC
-
 #ifdef _MSC_VER
 #pragma warning(disable:4305)
 #pragma warning(disable:4244)
 #endif
-
-
 #include "sbr_dct.h"
-
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-
 void DCT4_32(int32_t* y, int32_t* x) {
     // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE "\n");
     int32_t* f = (int32_t*)faad_malloc(397 * sizeof(int32_t));
@@ -806,7 +799,6 @@ void DST4_32(int32_t* y, int32_t* x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-
 void DCT2_16_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
@@ -818,7 +810,6 @@ void DCT2_16_unscaled(real_t* y, real_t* x) {
     real_t f79, f80, f81, f82, f83, f84, f85, f86, f87, f88;
     real_t f89, f90, f91, f92, f95, f96, f97, f98, f101, f102;
     real_t f103, f104, f107, f108, f109, f110;
-
     f0 = x[0] - x[15];
     f1 = x[0] + x[15];
     f2 = x[1] - x[14];
@@ -938,7 +929,6 @@ void DCT2_16_unscaled(real_t* y, real_t* x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-
 void DCT4_16(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
@@ -955,7 +945,6 @@ void DCT4_16(real_t* y, real_t* x) {
     real_t f121, f122, f123, f124, f125, f126, f127, f128, f130, f132;
     real_t f134, f136, f138, f140, f142, f144, f145, f148, f149, f152;
     real_t f153, f156, f157;
-
     f0 = x[0] + x[15];
     f1 = MUL_C(COEF_CONST(1.0478631305325901), x[0]);
     f2 = MUL_F(FRAC_CONST(-0.9987954562051724), f0);
@@ -1122,7 +1111,6 @@ void DCT4_16(real_t* y, real_t* x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-
 void DCT3_32_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
@@ -1152,7 +1140,6 @@ void DCT3_32_unscaled(real_t* y, real_t* x) {
     real_t f251, f252, f253, f254, f255, f256, f257, f258, f259, f260;
     real_t f261, f262, f263, f264, f265, f266, f267, f268, f269, f270;
     real_t f271, f272;
-
     f0 = MUL_F(x[16], FRAC_CONST(0.7071067811865476));
     f1 = x[0] - f0;
     f2 = x[0] + f0;
@@ -1491,7 +1478,6 @@ void DCT2_32_unscaled(real_t* y, real_t* x) {
     real_t f249, f250, f253, f254, f255, f256, f259, f260, f261, f262;
     real_t f265, f266, f267, f268, f271, f272, f273, f274, f277, f278;
     real_t f279, f280, f283, f284, f285, f286;
-
     f0 = x[0] - x[31];
     f1 = x[0] + x[31];
     f2 = x[1] - x[30];
@@ -1782,32 +1768,26 @@ void DCT2_32_unscaled(real_t* y, real_t* x) {
     y[15] = f285 - f284;
     y[17] = f286 - f285;
 }
-
     #endif // SBR_LOW_POWER
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-
         #define n     32
         #define log2n 5
-
 // w_array_real[i] = cos(2*M_PI*i/32)
 static const real_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
                                       FRAC_CONST(0.707106765732237),  FRAC_CONST(0.555570210304169),  FRAC_CONST(0.382683402077046),  FRAC_CONST(0.195090284503576),
                                       FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090370246552), FRAC_CONST(-0.382683482845162), FRAC_CONST(-0.555570282993553),
                                       FRAC_CONST(-0.707106827549476), FRAC_CONST(-0.831469651765257), FRAC_CONST(-0.923879561784627), FRAC_CONST(-0.980785296392607)};
-
 // w_array_imag[i] = sin(-2*M_PI*i/32)
 static const real_t w_array_imag[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090327375064), FRAC_CONST(-0.382683442461104), FRAC_CONST(-0.555570246648862),
                                       FRAC_CONST(-0.707106796640858), FRAC_CONST(-0.831469627480512), FRAC_CONST(-0.923879545057005), FRAC_CONST(-0.980785287864940),
                                       FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.980785270809601), FRAC_CONST(-0.923879511601754), FRAC_CONST(-0.831469578911016),
                                       FRAC_CONST(-0.707106734823616), FRAC_CONST(-0.555570173959476), FRAC_CONST(-0.382683361692986), FRAC_CONST(-0.195090241632088)};
-
 // FFT decimation in frequency
 // 4*16*2+16=128+16=144 multiplications
 // 6*16*2+10*8+4*16*2=192+80+128=400 additions
-
     #endif // SBR_LOW_POWER
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1817,7 +1797,6 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     real_t   w_real, w_imag;                                     // For faster access
     real_t   point1_real, point1_imag, point2_real, point2_imag; // For faster access
     uint32_t j, i, i2, w_index;                                  // Counters
-
     // First 2 stages of 32 point FFT decimation in frequency
     // 4*16*2=64*2=128 multiplications
     // 6*16*2=96*2=192 additions
@@ -1828,18 +1807,14 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 16;
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         w_real = w_array_real[i];
         w_imag = w_array_imag[i];
-
         // temp1 = x[i] - x[i2]
         point1_real -= point2_real;
         point1_imag -= point2_imag;
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * w
         Real[i2] = (MUL_F(point1_real, w_real) - MUL_F(point1_imag, w_imag));
         Imag[i2] = (MUL_F(point1_real, w_imag) + MUL_F(point1_imag, w_real));
@@ -1848,46 +1823,37 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     for (j = 0, w_index = 0; j < 8; j++, w_index += 2) {
         w_real = w_array_real[w_index];
         w_imag = w_array_imag[w_index];
-
         i = j;
         point1_real = Real[i];
         point1_imag = Imag[i];
         i2 = i + 8;
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // temp1 = x[i] - x[i2]
         point1_real -= point2_real;
         point1_imag -= point2_imag;
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * w
         Real[i2] = (MUL_F(point1_real, w_real) - MUL_F(point1_imag, w_imag));
         Imag[i2] = (MUL_F(point1_real, w_imag) + MUL_F(point1_imag, w_real));
-
         i = j + 16;
         point1_real = Real[i];
         point1_imag = Imag[i];
         i2 = i + 8;
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // temp1 = x[i] - x[i2]
         point1_real -= point2_real;
         point1_imag -= point2_imag;
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * w
         Real[i2] = (MUL_F(point1_real, w_real) - MUL_F(point1_imag, w_imag));
         Imag[i2] = (MUL_F(point1_real, w_imag) + MUL_F(point1_imag, w_real));
     }
-
     // Stage 3 of 32 point FFT decimation in frequency
     // 2*4*2=16 multiplications
     // 4*4*2+6*4*2=10*8=80 additions
@@ -1895,14 +1861,11 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // out[i1] = point1 + point2
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // out[i2] = point1 - point2
         Real[i2] = point1_real - point2_real;
         Imag[i2] = point1_imag - point2_imag;
@@ -1913,18 +1876,14 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // temp1 = x[i] - x[i2]
         point1_real -= point2_real;
         point1_imag -= point2_imag;
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * w
         Real[i2] = MUL_F(point1_real + point1_imag, w_real);
         Imag[i2] = MUL_F(point1_imag - point1_real, w_real);
@@ -1933,14 +1892,11 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // x[i] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * (-i)
         Real[i2] = point1_imag - point2_imag;
         Imag[i2] = point2_real - point1_real;
@@ -1951,37 +1907,29 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // temp1 = x[i] - x[i2]
         point1_real -= point2_real;
         point1_imag -= point2_imag;
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * w
         Real[i2] = MUL_F(point1_real - point1_imag, w_real);
         Imag[i2] = MUL_F(point1_real + point1_imag, w_real);
     }
-
     // Stage 4 of 32 point FFT decimation in frequency (no multiplications)
     // 16*4=64 additions
     for (i = 0; i < n; i += 4) {
         i2 = i + 2;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // x[i1] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = x[i] - x[i2]
         Real[i2] = point1_real - point2_real;
         Imag[i2] = point1_imag - point2_imag;
@@ -1990,38 +1938,30 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         i2 = i + 2;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // x[i] = x[i] + x[i2]
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // x[i2] = (x[i] - x[i2]) * (-i)
         Real[i2] = point1_imag - point2_imag;
         Imag[i2] = point2_real - point1_real;
     }
-
     // Stage 5 of 32 point FFT decimation in frequency (no multiplications)
     // 16*4=64 additions
     for (i = 0; i < n; i += 2) {
         i2 = i + 1;
         point1_real = Real[i];
         point1_imag = Imag[i];
-
         point2_real = Real[i2];
         point2_imag = Imag[i2];
-
         // out[i1] = point1 + point2
         Real[i] += point2_real;
         Imag[i] += point2_imag;
-
         // out[i2] = point1 - point2
         Real[i2] = point1_real - point2_real;
         Imag[i2] = point1_imag - point2_imag;
     }
-
         #ifdef REORDER_IN_FFT
     FFTReorder(Real, Imag);
         #endif // #ifdef REORDER_IN_FFT
@@ -2031,10 +1971,8 @@ static void fft_dif(real_t* Real, real_t* Imag) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-
         #undef n
         #undef log2n
-
 static const real_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),
                                      COEF_CONST(0.998118102550507),
                                      COEF_CONST(0.993906974792480),
@@ -2227,8 +2165,6 @@ static const real_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),
                                      COEF_CONST(0.842446029186249),
                                      COEF_CONST(0.897167563438416),
                                      COEF_CONST(0.949727773666382)};
-
-
     #endif // SBR_LOW_POWER
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2239,7 +2175,6 @@ void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out
     // Tables with bit reverse values for 5 bits, bit reverse of i at i-th position
     const uint8_t bit_rev_tab[32] = {0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31};
     uint32_t      i, i_rev;
-
     /* Step 2: modulate */
     // 3*32=96 multiplications
     // 3*32=96 additions
@@ -2251,10 +2186,8 @@ void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out
         in_real[i] = MUL_C(x_im, dct4_64_tab[i + 64]) + tmp;
         in_imag[i] = MUL_C(x_re, dct4_64_tab[i + 32]) + tmp;
     }
-
     /* Step 3: FFT, but with output in bit reverse order */
     fft_dif(in_real, in_imag);
-
     /* Step 4: modulate + bitreverse reordering */
     // 3*31+2=95 multiplications
     // 3*31+2=95 additions
@@ -2263,7 +2196,6 @@ void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out
         i_rev = bit_rev_tab[i];
         x_re = in_real[i_rev];
         x_im = in_imag[i_rev];
-
         tmp = MUL_C(x_re + x_im, dct4_64_tab[i + 3 * 32]);
         out_real[i] = MUL_C(x_im, dct4_64_tab[i + 5 * 32]) + tmp;
         out_imag[i] = MUL_C(x_re, dct4_64_tab[i + 4 * 32]) + tmp;

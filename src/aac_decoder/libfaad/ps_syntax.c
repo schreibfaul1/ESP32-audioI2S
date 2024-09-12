@@ -33,16 +33,16 @@
 #include "ps_dec.h"
 /* type definitaions */
 typedef const int8_t (*ps_huff_tab)[2];
-/* static data tables */
-static const uint8_t nr_iid_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
-static const uint8_t nr_ipdopd_par_tab[] = {5, 11, 17, 5, 11, 17, 0, 0};
-static const uint8_t nr_icc_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
-static const uint8_t num_env_tab[][4] = {{0, 1, 2, 4}, {1, 2, 3, 4}};
+/* data tables */
+const uint8_t nr_iid_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
+const uint8_t nr_ipdopd_par_tab[] = {5, 11, 17, 5, 11, 17, 0, 0};
+const uint8_t nr_icc_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
+const uint8_t num_env_tab[][4] = {{0, 1, 2, 4}, {1, 2, 3, 4}};
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* binary lookup huffman tables */
-static const int8_t f_huff_iid_def[][2] = {
+const int8_t f_huff_iid_def[][2] = {
     {/*0*/ -31, 1},             /* index 0: 1 bits: x */
     {2, 3},                     /* index 1: 2 bits: 1x */
     {/*1*/ -30, /*-1*/ -32},    /* index 2: 3 bits: 10x */
@@ -75,7 +75,7 @@ static const int8_t f_huff_iid_def[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t t_huff_iid_def[][2] = {
+const int8_t t_huff_iid_def[][2] = {
     {/*0*/ -31, 1},             /* index 0: 1 bits: x */
     {/*-1*/ -32, 2},            /* index 1: 2 bits: 1x */
     {/*1*/ -30, 3},             /* index 2: 3 bits: 11x */
@@ -108,7 +108,7 @@ static const int8_t t_huff_iid_def[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t f_huff_iid_fine[][2] = {
+const int8_t f_huff_iid_fine[][2] = {
     {1, /*0*/ -31},             /* index 0: 1 bits: x */
     {2, 3},                     /* index 1: 2 bits: 0x */
     {4, /*-1*/ -32},            /* index 2: 3 bits: 00x */
@@ -173,7 +173,7 @@ static const int8_t f_huff_iid_fine[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t t_huff_iid_fine[][2] = {
+const int8_t t_huff_iid_fine[][2] = {
     {1, /*0*/ -31},             /* index 0: 1 bits: x */
     {/*1*/ -30, 2},             /* index 1: 2 bits: 0x */
     {3, /*-1*/ -32},            /* index 2: 3 bits: 01x */
@@ -238,7 +238,7 @@ static const int8_t t_huff_iid_fine[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t f_huff_icc[][2] = {
+const int8_t f_huff_icc[][2] = {
     {/*0*/ -31, 1},          /* index 0: 1 bits: x */
     {/*1*/ -30, 2},          /* index 1: 2 bits: 1x */
     {/*-1*/ -32, 3},         /* index 2: 3 bits: 11x */
@@ -257,7 +257,7 @@ static const int8_t f_huff_icc[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t t_huff_icc[][2] = {
+const int8_t t_huff_icc[][2] = {
     {/*0*/ -31, 1},         /* index 0: 1 bits: x */
     {/*1*/ -30, 2},         /* index 1: 2 bits: 1x */
     {/*-1*/ -32, 3},        /* index 2: 3 bits: 11x */
@@ -276,7 +276,7 @@ static const int8_t t_huff_icc[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t f_huff_ipd[][2] = {
+const int8_t f_huff_ipd[][2] = {
     {1, /*0*/ -31},         /* index 0: 1 bits: x */
     {2, 3},                 /* index 1: 2 bits: 0x */
     {/*1*/ -30, 4},         /* index 2: 3 bits: 00x */
@@ -288,7 +288,7 @@ static const int8_t f_huff_ipd[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t t_huff_ipd[][2] = {
+const int8_t t_huff_ipd[][2] = {
     {1, /*0*/ -31},         /* index 0: 1 bits: x */
     {2, 3},                 /* index 1: 2 bits: 0x */
     {4, 5},                 /* index 2: 3 bits: 00x */
@@ -300,7 +300,7 @@ static const int8_t t_huff_ipd[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t f_huff_opd[][2] = {
+const int8_t f_huff_opd[][2] = {
     {1, /*0*/ -31},         /* index 0: 1 bits: x */
     {2, 3},                 /* index 1: 2 bits: 0x */
     {/*7*/ -24, /*1*/ -30}, /* index 2: 3 bits: 00x */
@@ -312,7 +312,7 @@ static const int8_t f_huff_opd[][2] = {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int8_t t_huff_opd[][2] = {
+const int8_t t_huff_opd[][2] = {
     {1, /*0*/ -31},         /* index 0: 1 bits: x */
     {2, 3},                 /* index 1: 2 bits: 0x */
     {4, 5},                 /* index 2: 3 bits: 00x */
@@ -325,8 +325,8 @@ static const int8_t t_huff_opd[][2] = {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* static function declarations */
-static uint16_t      ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left);
-static void          huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par);
+uint16_t      ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left);
+void          huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par);
 static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff);
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -408,7 +408,7 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
+uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
     uint8_t  n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
     if (ps_extension_id == 0) {
@@ -432,21 +432,6 @@ static uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extensio
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-/* read huffman data coded in either the frequency or the time direction */
-static void huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
-    uint8_t n;
-    if (dt) {
-        /* coded in time direction */
-        for (n = 0; n < nr_par; n++) { par[n] = ps_huff_dec(ld, t_huff); }
-    } else {
-        /* coded in frequency direction */
-        par[0] = ps_huff_dec(ld, f_huff);
-        for (n = 1; n < nr_par; n++) { par[n] = ps_huff_dec(ld, f_huff); }
-    }
-}
-#endif //  PS_DEC
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
 /* binary search huffman decoding */
 static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff) {
     uint8_t bit;
@@ -458,4 +443,19 @@ static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff) {
     return index + 31;
 }
 #endif // PS_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef PS_DEC
+/* read huffman data coded in either the frequency or the time direction */
+void huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
+    uint8_t n;
+    if (dt) {
+        /* coded in time direction */
+        for (n = 0; n < nr_par; n++) { par[n] = ps_huff_dec(ld, t_huff); }
+    } else {
+        /* coded in frequency direction */
+        par[0] = ps_huff_dec(ld, f_huff);
+        for (n = 1; n < nr_par; n++) { par[n] = ps_huff_dec(ld, f_huff); }
+    }
+}
+#endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -46,9 +46,12 @@ static void    calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch);
     #ifdef SBR_LOW_POWER
 static void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch);
 static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch);
-    #endif
+    #endif // SBR_LOW_POWER
 static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch);
 
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
 uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64]
     #ifdef SBR_LOW_POWER
                       ,

@@ -27,24 +27,18 @@
 **
 ** $Id: sbr_e_nf.h,v 1.18 2007/11/01 12:33:35 menno Exp $
 **/
-
 #ifndef __SBR_E_NF_H__
 #define __SBR_E_NF_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
 void extract_envelope_data(sbr_info *sbr, uint8_t ch);
 void extract_noise_floor_data(sbr_info *sbr, uint8_t ch);
 #ifndef FIXED_POINT
 void envelope_noise_dequantisation(sbr_info *sbr, uint8_t ch);
 void unmap_envelope_noise(sbr_info *sbr);
 #endif
-
 #ifdef __cplusplus
 }
 #endif
 #endif
-

@@ -1,7 +1,5 @@
-
 #include "common.h"
 #include "structs.h"
-
 #include <stdlib.h>
 #ifdef _WIN32_WCE
 #define assert(x)
@@ -19,7 +17,6 @@ mdct_info* faad_mdct_init(uint16_t N) {
     mdct->N = N;
     /* NOTE: For "small framelengths" in FIXED_POINT the coefficients need to be
      * scaled by sqrt("(nearest power of 2) > N" / N) */
-
     /* RE(mdct->sincos[k]) = scale*(real_t)(cos(2.0*M_PI*(k+1./8.) / (real_t)N));
      * IM(mdct->sincos[k]) = scale*(real_t)(sin(2.0*M_PI*(k+1./8.) / (real_t)N)); */
     /* scale is 1 for fixed point, sqrt(N) for floating point */
@@ -41,10 +38,8 @@ mdct_info* faad_mdct_init(uint16_t N) {
         case 64: mdct->sincos = (complex_t*)mdct_tab_64; break;
 #endif
     }
-
     /* initialise fft */
     mdct->cfft = cffti(N / 4);
-
 #ifdef PROFILE
     mdct->cycles = 0;
     mdct->fft_cycles = 0;
@@ -141,7 +136,6 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     mdct->fft_cycles += count1;
     mdct->cycles += (count2 - count1);
 #endif
-
     if(Z1) free(Z1);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -156,7 +150,6 @@ void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t N2 = N >> 1;
     uint16_t N4 = N >> 2;
     uint16_t N8 = N >> 3;
-
     #ifndef FIXED_POINT
     real_t scale = REAL_CONST(N);
     #else

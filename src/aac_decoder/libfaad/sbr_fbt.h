@@ -35,18 +35,12 @@
 extern "C" {
 #endif
 
-uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode,
-                           uint32_t sample_rate);
-uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate,
-                          uint8_t k0);
-uint8_t master_frequency_table_fs0(sbr_info *sbr, uint8_t k0, uint8_t k2,
-                                   uint8_t bs_alter_scale);
-uint8_t master_frequency_table(sbr_info *sbr, uint8_t k0, uint8_t k2,
-                               uint8_t bs_freq_scale, uint8_t bs_alter_scale);
-uint8_t derived_frequency_table(sbr_info *sbr, uint8_t bs_xover_band,
-                                uint8_t k2);
-void limiter_frequency_table(sbr_info *sbr);
-
+uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uint32_t sample_rate);
+uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0);
+uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale);
+uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale);
+uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2);
+void    limiter_frequency_table(sbr_info* sbr);
 
 #ifdef __cplusplus
 }

@@ -1,48 +1,16 @@
-/*
-** FAAD2 - Freeware Advanced Audio (AAC) Decoder including SBR decoding
-** Copyright (C) 2003-2005 M. Bakker, Nero AG, http://www.nero.com
-**
-** This program is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with this program; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-**
-** Any non-GPL usage of this software or parts of this software is strictly
-** forbidden.
-**
-** The "appropriate copyright message" mentioned in section 2c of the GPLv2
-** must read: "Code from FAAD2 is copyright (c) Nero AG, www.nero.com"
-**
-** Commercial non-GPL licensing of this software is possible.
-** For more info contact Nero AG through Mpeg4AAClicense@nero.com.
-**
-** $Id: lt_predict.c,v 1.27 2007/11/01 12:33:31 menno Exp $
-**/
+
 #include "Arduino.h"
 #include <stdint.h>
 #include "common.h"
 #include "structs.h"
-
 #ifdef LTP_DEC
-
 #include <stdlib.h>
 #include "syntax.h"
 #include "lt_predict.h"
 #include "filtbank.h"
 #include "tns.h"
-
 /* static function declarations */
 static int16_t real_to_int16(real_t sig_in);
-
 #endif // LPT_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -60,16 +28,15 @@ uint8_t is_ltp_ot(uint8_t object_type) {
         return 1;
     }
     #endif
-
     return 0;
 }
 #endif // LPT_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-ALIGN static const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
-                                         REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
+ALIGN const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
+                                  REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
 #endif // LPT_DEC
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                    uint16_t frame_len) {
@@ -77,18 +44,14 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
     uint16_t     bin, i, num_samples;
     // ALIGN real_t x_est[2048];
     // ALIGN real_t X_est[2048];
-
     real_t* x_est = ps_malloc(2048 * sizeof(real_t));
     real_t* X_est = ps_malloc(2048 * sizeof(real_t));
-
     if(ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
         if(ltp->data_present) {
             num_samples = frame_len << 1;
-
             for(i = 0; i < num_samples; i++) {
                 /* The extra lookback M (N/2 for LD, 0 for LTP) is handled
                    in the buffer updating */
-
     #if 0
                 x_est[i] = MUL_R_C(lt_pred_stat[num_samples + i - ltp->lag],
                     codebook[ltp->coef]);
@@ -99,16 +62,12 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
                 x_est[i] = (real_t)lt_pred_stat[num_samples + i - ltp->lag] * codebook[ltp->coef];
     #endif
             }
-
             filter_bank_ltp(fb, ics->window_sequence, win_shape, win_shape_prev, x_est, X_est, object_type, frame_len);
-
             tns_encode_frame(ics, &(ics->tns), sr_index, object_type, X_est, frame_len);
-
             for(sfb = 0; sfb < ltp->last_band; sfb++) {
                 if(ltp->long_used[sfb]) {
                     uint16_t low = ics->swb_offset[sfb];
                     uint16_t high = min(ics->swb_offset[sfb + 1], ics->swb_offset_max);
-
                     for(bin = low; bin < high; bin++) { spec[bin] += X_est[bin]; }
                 }
             }
@@ -130,7 +89,6 @@ static inline int16_t real_to_int16(real_t sig_in) {
         sig_in += -(1 << (REAL_BITS - 1));
         if(sig_in <= REAL_CONST(-32768)) return -32768;
     }
-
     return (sig_in >> REAL_BITS);
 }
     #endif // FIXED_POINT
@@ -151,7 +109,6 @@ static inline int16_t real_to_int16(real_t sig_in) {
         #endif
         if(sig_in <= -32768.0f) return -32768;
     }
-
     return int32_t(sig_in);
 }
     #endif // FIXED_POINT
@@ -160,7 +117,6 @@ static inline int16_t real_to_int16(real_t sig_in) {
 #ifdef LTP_DEC
 void lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type) {
     uint16_t i;
-
     /*
      * The reference point for index i and the content of the buffer
      * lt_pred_stat are arranged so that lt_pred_stat(0 ... N/2 - 1) contains the

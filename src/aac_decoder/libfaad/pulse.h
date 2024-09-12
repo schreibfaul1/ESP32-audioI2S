@@ -27,16 +27,12 @@
 **
 ** $Id: pulse.h,v 1.20 2007/11/01 12:33:34 menno Exp $
 **/
-
 #ifndef __PULSE_H__
 #define __PULSE_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 uint8_t pulse_decode(ic_stream *ics, int16_t *spec_coef, uint16_t framelen);
-
 #ifdef __cplusplus
 }
 #endif

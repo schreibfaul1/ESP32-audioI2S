@@ -27,29 +27,20 @@
 **
 ** $Id: rvlc.h,v 1.17 2007/11/01 12:33:34 menno Exp $
 **/
-
 #ifndef __RVLC_SCF_H__
 #define __RVLC_SCF_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 typedef struct
 {
     int8_t index;
     uint8_t len;
     uint32_t cw;
 } rvlc_huff_table;
-
-
 #define ESC_VAL 7
-
-
 uint8_t rvlc_scale_factor_data(ic_stream *ics, bitfile *ld);
 uint8_t rvlc_decode_scale_factors(ic_stream *ics, bitfile *ld);
-
-
 #ifdef __cplusplus
 }
 #endif

@@ -27,53 +27,42 @@
 **
 ** $Id: sbr_dec.h,v 1.39 2007/11/01 12:33:34 menno Exp $
 **/
-
 #ifndef __SBR_DEC_H__
 #define __SBR_DEC_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #ifdef PS_DEC
 #include "ps_dec.h"
 #endif
 #ifdef DRM_PS
 #include "drm_dec.h"
 #endif
-
 /* MAX_NTSRHFG: maximum of number_time_slots * rate + HFGen. 16*2+8 */
 #define MAX_NTSRHFG 40
 #define MAX_NTSR    32 /* max number_time_slots * rate, ok for DRM and not DRM mode */
-
 /* MAX_M: maximum value for M */
 #define MAX_M       49
 /* MAX_L_E: maximum value for L_E */
 #define MAX_L_E      5
-
 typedef struct {
     real_t *x;
     int16_t x_index;
     uint8_t channels;
 } qmfa_info;
-
 typedef struct {
     real_t *v;
     int16_t v_index;
     uint8_t channels;
 } qmfs_info;
-
 typedef struct
 {
     uint32_t sample_rate;
     uint32_t maxAACLine;
-
     uint8_t rate;
     uint8_t just_seeked;
     uint8_t ret;
-
     uint8_t amp_res[2];
-
     uint8_t k0;
     uint8_t kx;
     uint8_t M;
@@ -83,7 +72,6 @@ typedef struct
     uint8_t N_Q;
     uint8_t N_L[4];
     uint8_t n[2];
-
     uint8_t f_master[64];
     uint8_t f_table_res[2][64];
     uint8_t f_table_noise[64];
@@ -92,27 +80,21 @@ typedef struct
     uint8_t f_group[5][64];
     uint8_t N_G[5];
 #endif
-
     uint8_t table_map_k_to_g[64];
-
     uint8_t abs_bord_lead[2];
     uint8_t abs_bord_trail[2];
     uint8_t n_rel_lead[2];
     uint8_t n_rel_trail[2];
-
     uint8_t L_E[2];
     uint8_t L_E_prev[2];
     uint8_t L_Q[2];
-
     uint8_t t_E[2][MAX_L_E+1];
     uint8_t t_Q[2][3];
     uint8_t f[2][MAX_L_E+1];
     uint8_t f_prev[2];
-
     real_t *G_temp_prev[2][5];
     real_t *Q_temp_prev[2][5];
     int8_t GQ_ringbuf_index[2];
-
     int16_t E[2][64][MAX_L_E];
     int16_t E_prev[2][64];
 #ifndef FIXED_POINT
@@ -125,62 +107,48 @@ typedef struct
     real_t Q_div2[2][64][2];
 #endif
     int32_t Q_prev[2][64];
-
     int8_t l_A[2];
     int8_t l_A_prev[2];
-
     uint8_t bs_invf_mode[2][MAX_L_E];
     uint8_t bs_invf_mode_prev[2][MAX_L_E];
     real_t bwArray[2][64];
     real_t bwArray_prev[2][64];
-
     uint8_t noPatches;
     uint8_t patchNoSubbands[64];
     uint8_t patchStartSubband[64];
-
     uint8_t bs_add_harmonic[2][64];
     uint8_t bs_add_harmonic_prev[2][64];
-
     uint16_t index_noise_prev[2];
     uint8_t psi_is_prev[2];
-
     uint8_t bs_start_freq_prev;
     uint8_t bs_stop_freq_prev;
     uint8_t bs_xover_band_prev;
     uint8_t bs_freq_scale_prev;
     uint8_t bs_alter_scale_prev;
     uint8_t bs_noise_bands_prev;
-
     int8_t prevEnvIsShort[2];
-
     int8_t kx_prev;
     uint8_t bsco;
     uint8_t bsco_prev;
     uint8_t M_prev;
     uint16_t frame_len;
-
     uint8_t Reset;
     uint32_t frame;
     uint32_t header_count;
-
     uint8_t id_aac;
     qmfa_info *qmfa[2];
     qmfs_info *qmfs[2];
-
     qmf_t Xsbr[2][MAX_NTSRHFG][64];
-
 #ifdef DRM
     uint8_t Is_DRM_SBR;
 #ifdef DRM_PS
     drm_ps_info *drm_ps;
 #endif
 #endif
-
     uint8_t numTimeSlotsRate;
     uint8_t numTimeSlots;
     uint8_t tHFGen;
     uint8_t tHFAdj;
-
 #ifdef PS_DEC
     ps_info *ps;
 #endif
@@ -188,7 +156,6 @@ typedef struct
     uint8_t ps_used;
     uint8_t psResetFlag;
 #endif
-
     /* to get it compiling */
     /* we'll see during the coding of all the tools, whether
        these are all used or not.
@@ -227,7 +194,6 @@ typedef struct
     uint8_t bs_df_env[2][9];
     uint8_t bs_df_noise[2][3];
 } sbr_info;
-
 sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac,
                         uint32_t sample_rate, uint8_t downSampledSBR
 #ifdef DRM
@@ -236,7 +202,6 @@ sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac,
                         );
 void sbrDecodeEnd(sbr_info *sbr);
 void sbrReset(sbr_info *sbr);
-
 uint8_t sbrDecodeCoupleFrame(sbr_info *sbr, real_t *left_chan, real_t *right_chan,
                              const uint8_t just_seeked, const uint8_t downSampledSBR);
 uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
@@ -245,10 +210,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info *sbr, real_t *channel,
 uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *right_channel,
                                const uint8_t just_seeked, const uint8_t downSampledSBR);
 #endif
-
-
 #ifdef __cplusplus
 }
 #endif
 #endif
-

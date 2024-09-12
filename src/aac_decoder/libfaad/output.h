@@ -27,21 +27,17 @@
 **
 ** $Id: output.h,v 1.26 2009/01/26 23:51:15 menno Exp $
 **/
-
 #ifndef __OUTPUT_H__
 #define __OUTPUT_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 void* output_to_PCM(NeAACDecStruct *hDecoder,
                     real_t **input,
                     void *samplebuffer,
                     uint8_t channels,
                     uint16_t frame_len,
                     uint8_t format);
-
 #ifdef __cplusplus
 }
 #endif
