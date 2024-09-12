@@ -20,9 +20,17 @@ static void flt_round(float32_t* pf) {
         tmp |= (uint32_t)0x00010000; /* insert 1 lsb */
         tmp2 = tmp;                  /* add 1 lsb and elided one */
         tmp &= (uint32_t)0xff800000; /* extract exponent and sign */
-        *pf = *(float32_t*)&tmp1 + *(float32_t*)&tmp2 - *(float32_t*)&tmp;
+    //  *pf = *(float32_t*)&tmp1 + *(float32_t*)&tmp2 - *(float32_t*)&tmp;  // [-Wstrict-aliasing]
+        float32_t f1, f2, f3;
+        memcpy(&f1, &tmp1, sizeof(float32_t));
+        memcpy(&f2, &tmp2, sizeof(float32_t));
+        memcpy(&f3, &tmp, sizeof(float32_t));
+        *pf = f1 + f2 - f3;
     }
-    else { *pf = *(float32_t*)&tmp; }
+    else {
+    //  *pf = *(float32_t*)&tmp;  // [-Wstrict-aliasing]
+        memcpy(pf, &tmp, sizeof(float32_t));
+    }
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -37,7 +45,7 @@ static int16_t quant_pred(float32_t x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
 static float32_t inv_quant_pred(int16_t q) {
-    float32_t x;
+    float32_t x = 0.0f;
     uint32_t* tmp = (uint32_t*)&x;
     *tmp = ((uint32_t)q) << 16;
     return x;

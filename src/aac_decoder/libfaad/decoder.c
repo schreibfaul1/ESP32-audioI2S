@@ -99,7 +99,7 @@ const unsigned char mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x7
 NeAACDecHandle      NeAACDecOpen(void) {
     uint8_t         i;
     NeAACDecStruct* hDecoder = NULL;
-    if((hDecoder = (NeAACDecStruct*)faad_malloc(sizeof(NeAACDecStruct))) == NULL) return NULL;
+    if((hDecoder = (NeAACDecStruct*)ps_calloc(1, sizeof(NeAACDecStruct))) == NULL) return NULL;
     memset(hDecoder, 0, sizeof(NeAACDecStruct));
     hDecoder->cmes = mes;
     hDecoder->config.outputFormat = FAAD_FMT_16BIT;
