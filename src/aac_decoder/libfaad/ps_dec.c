@@ -825,8 +825,10 @@ static void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][
     const complex_t* Phi_Fract_SubQmf;
     uint8_t          temp_delay_ser[NO_ALLPASS_LINKS];
     real_t           P_SmoothPeakDecayDiffNrg, nrg;
-    real_t           P[32][34];
-    real_t           G_TransientRatio[32][34] = {{0}};
+    // real_t           P[32][34];
+    real_t (*P)[34] = malloc(32 * sizeof(real_t[34]));
+    // real_t           G_TransientRatio[32][34] = {{0}};
+    real_t (*G_TransientRatio)[34] = ps_calloc(32, sizeof(real_t[34]));
     complex_t        inputLeft;
 
     /* chose hybrid filterbank: 20 or 34 band case */
@@ -1068,6 +1070,9 @@ static void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][
     /* update delay indices */
     ps->saved_delay = temp_delay;
     for(m = 0; m < NO_ALLPASS_LINKS; m++) ps->delay_buf_index_ser[m] = temp_delay_ser[m];
+
+    if(P)free(P);
+    if(G_TransientRatio)free(G_TransientRatio);
 }
 #endif //  PS_DEC
 //————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1591,7 +1596,9 @@ uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     qmf_t (*X_hybrid_left)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
     qmf_t (*X_hybrid_right)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
     /* delta decoding of the bitstream data */
+
     ps_data_decode(ps);
+
     /* set up some parameters depending on filterbank type */
     if(ps->use34hybrid_bands) {
         ps->group_border = (uint8_t*)group_border34;
@@ -1609,16 +1616,22 @@ uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
         ps->nr_par_bands = 20;
         ps->decay_cutoff = 3;
     }
+
     /* Perform further analysis on the lowest subbands to get a higher frequency resolution */
     hybrid_analysis((hyb_info*)ps->hyb, X_left, X_hybrid_left, ps->use34hybrid_bands, ps->numTimeSlotsRate);
+
     /* decorrelate mono signal */
+
     ps_decorrelate(ps, X_left, X_right, X_hybrid_left, X_hybrid_right);
+
     /* apply mixing and phase parameters */
+
     ps_mix_phase(ps, X_left, X_right, X_hybrid_left, X_hybrid_right);
 
     /* hybrid synthesis, to rebuild the SBR QMF matrices */
     hybrid_synthesis((hyb_info*)ps->hyb, X_left, X_hybrid_left, ps->use34hybrid_bands, ps->numTimeSlotsRate);
     hybrid_synthesis((hyb_info*)ps->hyb, X_right, X_hybrid_right, ps->use34hybrid_bands, ps->numTimeSlotsRate);
+
     if(X_hybrid_left) free(X_hybrid_left);
     if(X_hybrid_right) free(X_hybrid_right);
     return 0;

@@ -27,17 +27,12 @@
 **
 ** $Id: ps_syntax.c,v 1.11 2007/11/01 12:33:33 menno Exp $
 **/
-
 #include "common.h"
-
 #ifdef PS_DEC
-
 #include "bits.h"
 #include "ps_dec.h"
-
 /* type definitaions */
 typedef const int8_t (*ps_huff_tab)[2];
-
 /* static data tables */
 static const uint8_t nr_iid_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
 static const uint8_t nr_ipdopd_par_tab[] = {5, 11, 17, 5, 11, 17, 0, 0};
@@ -339,7 +334,6 @@ static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff);
 uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
     uint8_t  tmp, n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
-
     *header = 0;
     /* check for new PS header */
     if (faad_get1bit(ld DEBUGVAR(1, 1000, "ps_data(): enable_ps_header"))) {
@@ -417,7 +411,6 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
 static uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
     uint8_t  n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
-
     if (ps_extension_id == 0) {
         ps->enable_ipdopd = (uint8_t)faad_get1bit(ld DEBUGVAR(1, 1015, "ps_extension(): enable_ipdopd"));
         if (ps->enable_ipdopd) {
@@ -442,7 +435,6 @@ static uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extensio
 /* read huffman data coded in either the frequency or the time direction */
 static void huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
     uint8_t n;
-
     if (dt) {
         /* coded in time direction */
         for (n = 0; n < nr_par; n++) { par[n] = ps_huff_dec(ld, t_huff); }

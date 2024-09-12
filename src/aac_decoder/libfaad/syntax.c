@@ -244,6 +244,7 @@ static void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, b
     hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
 
     /* decode the element */
+
     hInfo->error = single_lfe_channel_element(hDecoder, ld, channels, &tag);
 
     /* map output channels position to internal data channels */
@@ -318,7 +319,6 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     hDecoder->fr_ch_ele = 0;
     hDecoder->first_syn_ele = 25;
     hDecoder->has_lfe = 0;
-
 #ifdef ERROR_RESILIENCE
     if (hDecoder->object_type < ER_OBJECT_START) {
 #endif
@@ -362,7 +362,9 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
                     break;
                 case ID_DSE:
                     ele_this_frame++;
+
                     data_stream_element(hDecoder, ld);
+
                     break;
                 case ID_PCE:
                     if (ele_this_frame != 0) {
@@ -372,7 +374,9 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
                     ele_this_frame++;
                     /* 14496-4: 5.6.4.1.2.1.3: */
                     /* program_configuration_element()'s in access units shall be ignored */
+
                     program_config_element(pce, ld);
+
                     // if ((hInfo->error = program_config_element(pce, ld)) > 0)
                     //     return;
                     // hDecoder->pce_set = 1;
@@ -392,9 +396,11 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
                     break;
             }
         }
+
 #ifdef ERROR_RESILIENCE
     } else {
         /* Table 262: er_raw_data_block() */
+
         switch (hDecoder->channelConfiguration) {
 
             case 1:
@@ -450,6 +456,7 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
                 if (hInfo->error > 0) return;
                 break;
             default: hInfo->error = 7; return;
+
         }
     #if 0
         cnt = bits_to_decode() / 8;
@@ -491,7 +498,6 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
     *tag = sce->element_instance_tag;
     sce->channel = channel;
     sce->paired_channel = -1;
-
     retval = individual_channel_stream(hDecoder, sce, ld, ics, 0, spec_data);
     if (retval > 0) goto exit;
 
@@ -510,7 +516,9 @@ static uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld,
 #endif
 
     /* noiseless coding is done, spectral reconstruction is done now */
+
     retval = reconstruct_single_channel(hDecoder, ics, sce, spec_data);
+
     if (retval > 0) goto exit;
 
     retval = 0;
@@ -837,28 +845,34 @@ static uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc
 #endif
 
     count = (uint16_t)faad_getbits(ld, 4 DEBUGVAR(1, 65, "fill_element(): count"));
+
     if (count == 15) { count += (uint16_t)faad_getbits(ld, 8 DEBUGVAR(1, 66, "fill_element(): extra count")) - 1; }
 
     if (count > 0) {
 #ifdef SBR_DEC
+
         bs_extension_type = (uint8_t)faad_showbits(ld, 4);
 
         if ((bs_extension_type == EXT_SBR_DATA) || (bs_extension_type == EXT_SBR_DATA_CRC)) {
             if (sbr_ele == INVALID_SBR_ELEMENT) return 24;
 
             if (!hDecoder->sbr[sbr_ele]) {
+
                 hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR
+
     #ifdef DRM
                                                        ,
                                                        0
     #endif
                 );
+
             }
             if (!hDecoder->sbr[sbr_ele]) return 19;
 
             hDecoder->sbr_present_flag = 1;
 
             /* parse the SBR data */
+
             hDecoder->sbr[sbr_ele]->ret = sbr_extension_data(ld, hDecoder->sbr[sbr_ele], count, hDecoder->postSeekResetFlag);
 
     #if 0

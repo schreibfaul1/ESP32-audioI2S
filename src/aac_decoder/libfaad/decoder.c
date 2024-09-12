@@ -30,7 +30,7 @@
 
 #include "common.h"
 #include "structs.h"
-
+#include "Arduino.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -822,6 +822,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
     else {
 #endif
         raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+
 #ifdef DRM
     }
 #endif
@@ -884,7 +885,6 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
 #endif
     /* Make a channel configuration based on either a PCE or a channelConfiguration */
     create_channel_config(hDecoder, hInfo);
-
     /* number of samples in this frame */
     hInfo->samples = frame_len * output_channels;
     /* number of channels in this frame */

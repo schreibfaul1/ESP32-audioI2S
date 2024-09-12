@@ -134,6 +134,7 @@ sbr_info *sbrDecodeInit(uint16_t framelength, uint8_t id_aac,
     } else {
         /* mono */
         uint8_t j;
+
         sbr->qmfa[0] = qmfa_init(32);
         sbr->qmfs[0] = qmfs_init((downSampledSBR)?32:64);
         sbr->qmfs[1] = NULL;
@@ -649,7 +650,9 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
 
     if (sbr->qmfs[1] == NULL)
     {
+
         sbr->qmfs[1] = qmfs_init((downSampledSBR)?32:64);
+
     }
 
     sbr->ret += sbr_process_channel(sbr, left_channel, X_left, 0, dont_process, downSampledSBR);
@@ -672,7 +675,9 @@ uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *righ
     } else {
 #endif
 #ifdef PS_DEC
+
         ps_decode(sbr->ps, X_left, X_right);
+
 #endif
 #ifdef DRM_PS
     }

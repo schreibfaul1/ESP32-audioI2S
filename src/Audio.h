@@ -248,8 +248,9 @@ private:
   //+++ create a T A S K  for playAudioData(), output via I2S +++
 public:
   void            setAudioTaskCore(uint8_t coreID);
+  uint32_t        getHighWatermark();
 private:
-  static const size_t STACK_SIZE = 3300 * 9;
+  static const size_t STACK_SIZE = 3300 * 2;
   StaticTask_t xTaskBuffer;
   StackType_t xStack[STACK_SIZE];
 
