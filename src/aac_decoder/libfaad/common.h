@@ -59,17 +59,20 @@ extern "C" {
 #ifdef __BFIN__
 #define FIXED_POINT
 #endif
+
 #define ERROR_RESILIENCE
-/* Allow decoding of MAIN profile AAC */
-#define MAIN_DEC
-/* Allow decoding of SSR profile AAC */
-//#define SSR_DEC
-/* Allow decoding of LTP profile AAC */
-#define LTP_DEC
-/* Allow decoding of LD profile AAC */
-#define LD_DEC
-/* Allow decoding of Digital Radio Mondiale (DRM) */
-#ifdef DRM_SUPPORT
+#define MAIN_DEC // Allow decoding of MAIN profile AAC
+//#define SSR_DEC // Allow decoding of SSR profile AAC
+#define LTP_DEC // Allow decoding of LTP (Long Term Prediction) profile AAC
+#define LD_DEC // Allow decoding of LD (Low Delay) profile AAC
+// #define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
+#define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
+//#define SBR_LOW_POWER
+#define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
+#define ALLOW_SMALL_FRAMELENGTH
+
+
+#ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
 #define DRM
 #define DRM_PS
 #endif
@@ -82,7 +85,7 @@ extern "C" {
 #define LTP_DEC
 #endif
 #endif
-#define ALLOW_SMALL_FRAMELENGTH
+
 // Define LC_ONLY_DECODER if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
 //#define LC_ONLY_DECODER
 #ifdef LC_ONLY_DECODER
@@ -95,9 +98,7 @@ extern "C" {
   #undef ALLOW_SMALL_FRAMELENGTH
   #undef ERROR_RESILIENCE
 #endif
-#define SBR_DEC
-//#define SBR_LOW_POWER
-#define PS_DEC
+
 #ifdef SBR_LOW_POWER
 #undef PS_DEC
 #endif

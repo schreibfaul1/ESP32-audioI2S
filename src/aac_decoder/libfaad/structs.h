@@ -142,7 +142,6 @@ typedef struct {
     /* maximum of 16 PCEs */
     program_config pce[16];
 } adif_header;
-
 typedef struct {
     uint8_t  last_band;
     uint8_t  data_present;
@@ -160,7 +159,6 @@ typedef struct {
     uint8_t predictor_reset_group_number;
     uint8_t prediction_used[MAX_SFB];
 } pred_info;
-
 typedef struct {
     uint8_t number_pulse;
     uint8_t pulse_start_sfb;
@@ -182,7 +180,6 @@ typedef struct {
     uint8_t alevcode[4][8][8];
     uint8_t aloccode[4][8][8];
 } ssr_info;
-
 typedef struct {
     uint8_t    max_sfb;
     uint8_t    num_swb;
@@ -234,7 +231,6 @@ typedef struct {
     ic_stream ics1;
     ic_stream ics2;
 } element; /* syntax element (SCE, CPE, LFE) */
-
 typedef struct {
     int      inited;
     int      version, versionA;

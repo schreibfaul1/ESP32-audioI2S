@@ -31,7 +31,7 @@
 /* Binary search huffman table HCB_3 */
 
 
-static hcb_bin_quad hcb3[] = {
+const hcb_bin_quad hcb3[] = {
     { /*  0 */ 0, {  1,  2, 0, 0 } },
     { /*  1 */ 1, {  0,  0, 0, 0 } }, /* 0 */
     { /*  2 */ 0, {  1,  2, 0, 0 } },
