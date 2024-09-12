@@ -22,13 +22,8 @@ void ssr_decode(ssr_info *ssr, fb_info *fb, uint8_t window_sequence,
                 real_t ipqf_buffer[SSR_BANDS][96/4],
                 real_t *prev_fmd, uint16_t frame_len);
 
-
-static void ssr_gain_control(ssr_info *ssr, real_t *data, real_t *output,
-                             real_t *overlap, real_t *prev_fmd, uint8_t band,
-                             uint8_t window_sequence, uint16_t frame_len);
-static void ssr_gc_function(ssr_info *ssr, real_t *prev_fmd,
-                            real_t *gc_function, uint8_t window_sequence,
-                            uint16_t frame_len);
+static void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len);
+static void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
 
 #endif
 #ifdef __cplusplus

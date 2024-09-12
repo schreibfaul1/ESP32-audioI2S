@@ -613,23 +613,23 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
     }
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR) {
-        if (hDecoder->ssr_overlap[cpe->channel] == NULL) {
-            hDecoder->ssr_overlap[cpe->channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
-            memset(hDecoder->ssr_overlap[cpe->channel], 0, 2 * hDecoder->frameLength * sizeof(real_t));
+        if (hDecoder->ssr_overlap[channel] == NULL) {
+            hDecoder->ssr_overlap[channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
+            memset(hDecoder->ssr_overlap[channel], 0, 2 * hDecoder->frameLength * sizeof(real_t));
         }
-        if (hDecoder->ssr_overlap[cpe->paired_channel] == NULL) {
-            hDecoder->ssr_overlap[cpe->paired_channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
-            memset(hDecoder->ssr_overlap[cpe->paired_channel], 0, 2 * hDecoder->frameLength * sizeof(real_t));
+        if (hDecoder->ssr_overlap[paired_channel] == NULL) {
+            hDecoder->ssr_overlap[paired_channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
+            memset(hDecoder->ssr_overlap[paired_channel], 0, 2 * hDecoder->frameLength * sizeof(real_t));
         }
-        if (hDecoder->prev_fmd[cpe->channel] == NULL) {
+        if (hDecoder->prev_fmd[channel] == NULL) {
             uint16_t k;
-            hDecoder->prev_fmd[cpe->channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
-            for (k = 0; k < 2 * hDecoder->frameLength; k++) hDecoder->prev_fmd[cpe->channel][k] = REAL_CONST(-1);
+            hDecoder->prev_fmd[channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
+            for (k = 0; k < 2 * hDecoder->frameLength; k++) hDecoder->prev_fmd[channel][k] = REAL_CONST(-1);
         }
-        if (hDecoder->prev_fmd[cpe->paired_channel] == NULL) {
+        if (hDecoder->prev_fmd[paired_channel] == NULL) {
             uint16_t k;
-            hDecoder->prev_fmd[cpe->paired_channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
-            for (k = 0; k < 2 * hDecoder->frameLength; k++) hDecoder->prev_fmd[cpe->paired_channel][k] = REAL_CONST(-1);
+            hDecoder->prev_fmd[paired_channel] = (real_t*)faad_malloc(2 * hDecoder->frameLength * sizeof(real_t));
+            for (k = 0; k < 2 * hDecoder->frameLength; k++) hDecoder->prev_fmd[paired_channel][k] = REAL_CONST(-1);
         }
     }
 #endif

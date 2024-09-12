@@ -54,6 +54,7 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
                 /* The extra lookback M (N/2 for LD, 0 for LTP) is handled
                    in the buffer updating */
     #if 0
+                #define MUL_R_C(A,B) ((A)*(B))
                 x_est[i] = MUL_R_C(lt_pred_stat[num_samples + i - ltp->lag],
                     codebook[ltp->coef]);
     #else

@@ -25,7 +25,7 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
     complex_t* alpha_1 = ps_malloc(64 * sizeof(complex_t));
     #ifdef SBR_LOW_POWER
     // ALIGN real_t rxx[64];
-    real_t* rxx = ps_malloc(64 * sizeof(real_t);)
+    real_t* rxx = ps_malloc(64 * sizeof(real_t));
     #endif
         uint8_t offset = sbr->tHFAdj;
     uint8_t     first = sbr->t_E[ch][0];

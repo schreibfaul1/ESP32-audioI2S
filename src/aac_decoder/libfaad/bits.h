@@ -251,7 +251,8 @@ static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n
 #endif
     return ret;
 }
-#ifdef DRM
+
+
 /* CRC lookup table for G8 polynome in DRM standard */
 static const uint8_t crc_table_G8[256] = {
     0x0, 0x1d, 0x3a, 0x27, 0x74, 0x69, 0x4e, 0x53,
@@ -287,52 +288,11 @@ static const uint8_t crc_table_G8[256] = {
     0x7f, 0x62, 0x45, 0x58, 0xb, 0x16, 0x31, 0x2c,
     0x97, 0x8a, 0xad, 0xb0, 0xe3, 0xfe, 0xd9, 0xc4,
 };
-__unused uint8_t faad_check_CRC(bitfile *ld, uint16_t len)
-{
-    int bytes, rem;
-    unsigned int CRC;
-    unsigned int r=255;  /* Initialize to all ones */
-    /* CRC polynome used x^8 + x^4 + x^3 + x^2 +1 */
-#define GPOLY 0435
-    faad_rewindbits(ld);
-    CRC = (unsigned int) ~faad_getbits(ld, 8) & 0xFF;          /* CRC is stored inverted */
-    bytes = len >> 3;
-    rem = len & 0x7;
-    for (; bytes > 0; bytes--)
-    {
-        r = crc_table_G8[( r ^ faad_getbits(ld, 8) ) & 0xFF];
-    }
-    for (; rem > 0; rem--)
-    {
-        r = ( (r << 1) ^ (( ( faad_get1bit(ld)  & 1) ^ ((r >> 7) & 1)) * GPOLY )) & 0xFF;
-    }
-    if (r != CRC)
-  //  if (0)
-    {
-        return 28;
-    } else {
-        return 0;
-    }
-}
-__unused uint8_t tabFlipbits[256] = {
-    0,128,64,192,32,160,96,224,16,144,80,208,48,176,112,240,
-    8,136,72,200,40,168,104,232,24,152,88,216,56,184,120,248,
-    4,132,68,196,36,164,100,228,20,148,84,212,52,180,116,244,
-    12,140,76,204,44,172,108,236,28,156,92,220,60,188,124,252,
-    2,130,66,194,34,162,98,226,18,146,82,210,50,178,114,242,
-    10,138,74,202,42,170,106,234,26,154,90,218,58,186,122,250,
-    6,134,70,198,38,166,102,230,22,150,86,214,54,182,118,246,
-    14,142,78,206,46,174,110,238,30,158,94,222,62,190,126,254,
-    1,129,65,193,33,161,97,225,17,145,81,209,49,177,113,241,
-    9,137,73,201,41,169,105,233,25,153,89,217,57,185,121,249,
-    5,133,69,197,37,165,101,229,21,149,85,213,53,181,117,245,
-    13,141,77,205,45,173,109,237,29,157,93,221,61,189,125,253,
-    3,131,67,195,35,163,99,227,19,147,83,211,51,179,115,243,
-    11,139,75,203,43,171,107,235,27,155,91,219,59,187,123,251,
-    7,135,71,199,39,167,103,231,23,151,87,215,55,183,119,247,
-    15,143,79,207,47,175,111,239,31,159,95,223,63,191,127,255
-};
-#endif
+
+
+
+
+
 #ifdef ERROR_RESILIENCE
 /* Modified bit reading functions for HCR */
 typedef struct

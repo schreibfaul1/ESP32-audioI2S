@@ -21,6 +21,9 @@
 #include "sbr_syntax.h"
 #endif
 #include "mp4.h"
+
+extern uint8_t tabFlipbits[256];
+uint8_t faad_check_CRC(bitfile* ld, uint16_t len);
 /* static function declarations */
 static void    decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele);
 static void    decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele);
@@ -809,14 +812,14 @@ static void gain_control_data(bitfile* ld, ic_stream* ics) {
 #ifdef DRM
 /* Table 4.4.13 ASME */
 void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
-    uint8_t       retval = 0;
+    uint8_t       retval = 0; (void)retval;
     uint8_t       channels = hDecoder->fr_channels = 0;
-    uint8_t       ch;
+    uint8_t       ch; (void)ch;
     uint8_t       this_layer_stereo = (hDecoder->channelConfiguration > 1) ? 1 : 0;
     element       cpe = {0};
     ic_stream*    ics1 = &(cpe.ics1);
     ic_stream*    ics2 = &(cpe.ics2);
-    int16_t*      spec_data;
+    int16_t*      spec_data; (void)spec_data;
     ALIGN int16_t spec_data1[1024] = {0};
     ALIGN int16_t spec_data2[1024] = {0};
     hDecoder->fr_ch_ele = 0;
@@ -953,8 +956,8 @@ void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* 
 /* Table 4.4.15 */
 static int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo) {
     uint8_t    retval = 0;
-    uint8_t    ch;
-    ic_stream* ics;
+    uint8_t    ch; (void)ch;
+    ic_stream* ics;(void)ics;
     uint8_t    ics_reserved_bit;
     ics_reserved_bit = faad_get1bit(ld DEBUGVAR(1, 300, "aac_scalable_main_header(): ics_reserved_bits"));
     if (ics_reserved_bit != 0) return 32;
@@ -1198,10 +1201,10 @@ static uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* l
 static uint8_t decode_scale_factors(ic_stream* ics, bitfile* ld) {
     uint8_t g, sfb;
     int16_t t;
-    int8_t  noise_pcm_flag = 1;
+    int8_t  noise_pcm_flag = 1; (void)noise_pcm_flag;
     int16_t scale_factor = ics->global_gain;
     int16_t is_position = 0;
-    int16_t noise_energy = ics->global_gain - 90;
+    int16_t noise_energy = ics->global_gain - 90; (void)noise_energy;
     for (g = 0; g < ics->num_window_groups; g++) {
         for (sfb = 0; sfb < ics->max_sfb; sfb++) {
             switch (ics->sfb_cb[g][sfb]) {
@@ -1432,7 +1435,7 @@ static uint8_t spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* 
     return 0;
 }
 /* Table 4.4.30 */
-static uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
+__unused uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
     uint16_t i, n, dataElementLength;
     uint8_t  dataElementLengthPart;
     uint8_t  align = 4, data_element_version, loopCounter;

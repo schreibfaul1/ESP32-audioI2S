@@ -69,7 +69,7 @@ static void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t
     uint16_t i;
     real_t   gc_function[2 * 1024 / SSR_BANDS];
     if (window_sequence != EIGHT_SHORT_SEQUENCE) {
-        ssr_gc_function(ssr, &prev_fmd[band * frame_len * 2], gc_function, window_sequence, band, frame_len);
+        ssr_gc_function(ssr, &prev_fmd[band * frame_len * 2], gc_function, window_sequence, frame_len);
         for (i = 0; i < frame_len * 2; i++) data[band * frame_len * 2 + i] *= gc_function[i];
         for (i = 0; i < frame_len; i++) { output[band * frame_len + i] = overlap[band * frame_len + i] + data[band * frame_len * 2 + i]; }
         for (i = 0; i < frame_len; i++) { overlap[band * frame_len + i] = data[band * frame_len * 2 + frame_len + i]; }
@@ -90,11 +90,11 @@ static void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t
 #endif // SSR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-static void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint8_t band, uint16_t frame_len) {
+static void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
-    uint16_t len_area1, len_area2;
-    int32_t  aloc[10];
-    real_t   alev[10];
+    uint16_t len_area1, len_area2; (void)len_area1; (void)len_area2;
+    int32_t  aloc[10]; (void)aloc;
+    real_t   alev[10]; (void)alev;
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
             len_area1 = frame_len / SSR_BANDS;
