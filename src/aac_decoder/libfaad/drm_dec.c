@@ -1,21 +1,15 @@
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include "common.h"
-
 #ifdef DRM
-
 #include "sbr_dec.h"
 #include "drm_dec.h"
 #include "bits.h"
-
 /* constants */
 #define DECAY_CUTOFF         3
 #define DECAY_SLOPE          0.05f
-
 /* type definitaions */
 typedef const int8_t (*drm_ps_huff_tab)[2];
 #endif
@@ -491,7 +485,6 @@ void drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
         for(s = 0; s < NUM_OF_SUBSAMPLES; s++) {
             const real_t gamma = REAL_CONST(1.5);
             const real_t sigma = REAL_CONST(1.5625);
-
             RE(in) = QMF_RE(X[s][b]);
             IM(in) = QMF_IM(X[s][b]);
     #ifdef FIXED_POINT
@@ -553,34 +546,26 @@ void drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][6
     uint8_t s, b, ifreq, qclass;
     real_t  sa_map[MAX_SA_BAND], sa_dir_map[MAX_SA_BAND], k_sa_map[MAX_SA_BAND], k_sa_dir_map[MAX_SA_BAND];
     real_t  new_dir_map, new_sa_map;
-
     if(ps->bs_enable_sa) {
         /* Instead of dequantization and mapping, we use an inverse mapping
            to look up all the values we need */
         for(b = 0; b < sa_freq_scale[DRM_NUM_SA_BANDS]; b++) {
             const real_t inv_f_num_of_subsamples = FRAC_CONST(0.03333333333);
-
             ifreq = sa_inv_freq[b];
             qclass = (b != 0);
-
             sa_map[b] = sa_quant[ps->g_prev_sa_index[ifreq]][qclass];
             new_sa_map = sa_quant[ps->g_sa_index[ifreq]][qclass];
-
             k_sa_map[b] = MUL_F(inv_f_num_of_subsamples, (new_sa_map - sa_map[b]));
-
             sa_dir_map[b] = sa_sqrt_1_minus[ps->g_prev_sa_index[ifreq]][qclass];
             new_dir_map = sa_sqrt_1_minus[ps->g_sa_index[ifreq]][qclass];
-
             k_sa_dir_map[b] = MUL_F(inv_f_num_of_subsamples, (new_dir_map - sa_dir_map[b]));
         }
-
         for(s = 0; s < NUM_OF_SUBSAMPLES; s++) {
             for(b = 0; b < sa_freq_scale[DRM_NUM_SA_BANDS]; b++) {
                 QMF_RE(X_right[s][b]) = MUL_F(QMF_RE(X_left[s][b]), sa_dir_map[b]) - MUL_F(QMF_RE(ps->SA[s][b]), sa_map[b]);
                 QMF_IM(X_right[s][b]) = MUL_F(QMF_IM(X_left[s][b]), sa_dir_map[b]) - MUL_F(QMF_IM(ps->SA[s][b]), sa_map[b]);
                 QMF_RE(X_left[s][b]) = MUL_F(QMF_RE(X_left[s][b]), sa_dir_map[b]) + MUL_F(QMF_RE(ps->SA[s][b]), sa_map[b]);
                 QMF_IM(X_left[s][b]) = MUL_F(QMF_IM(X_left[s][b]), sa_dir_map[b]) + MUL_F(QMF_IM(ps->SA[s][b]), sa_map[b]);
-
                 sa_map[b] += k_sa_map[b];
                 sa_dir_map[b] += k_sa_dir_map[b];
             }
@@ -608,17 +593,14 @@ void drm_add_pan(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     real_t  pan_base[MAX_PAN_BAND];
     real_t  pan_delta[MAX_PAN_BAND];
     qmf_t   temp_l, temp_r;
-
     if(ps->bs_enable_pan) {
         for(b = 0; b < NUM_OF_QMF_CHANNELS; b++) {
             /* Instead of dequantization, 20->64 mapping and 2^G(x,y) we do an
                inverse mapping 64->20 and look up the 2^G(x,y) values directly */
             ifreq = pan_inv_freq[b];
             qclass = pan_quant_class[ifreq];
-
             if(ps->g_prev_pan_index[ifreq] >= 0) { pan_base[b] = pan_pow_2_pos[ps->g_prev_pan_index[ifreq]][qclass]; }
             else { pan_base[b] = pan_pow_2_neg[-ps->g_prev_pan_index[ifreq]][qclass]; }
-
             /* 2^((a-b)/30) = 2^(a/30) * 1/(2^(b/30)) */
             /* a en b can be negative so we may need to inverse parts */
             if(ps->g_pan_index[ifreq] >= 0) {
@@ -630,25 +612,20 @@ void drm_add_pan(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
                 else { pan_delta[b] = MUL_C(pan_pow_2_30_neg[-ps->g_pan_index[ifreq]][qclass], pan_pow_2_30_pos[-ps->g_prev_pan_index[ifreq]][qclass]); }
             }
         }
-
         for(s = 0; s < NUM_OF_SUBSAMPLES; s++) {
             /* PAN always uses all 64 channels */
             for(b = 0; b < NUM_OF_QMF_CHANNELS; b++) {
                 tmp = pan_base[b];
-
                 coeff2 = DIV_R(REAL_CONST(2.0), (REAL_CONST(1.0) + tmp));
                 coeff1 = MUL_R(coeff2, tmp);
-
                 QMF_RE(temp_l) = QMF_RE(X_left[s][b]);
                 QMF_IM(temp_l) = QMF_IM(X_left[s][b]);
                 QMF_RE(temp_r) = QMF_RE(X_right[s][b]);
                 QMF_IM(temp_r) = QMF_IM(X_right[s][b]);
-
                 QMF_RE(X_left[s][b]) = MUL_R(QMF_RE(temp_l), coeff1);
                 QMF_IM(X_left[s][b]) = MUL_R(QMF_IM(temp_l), coeff1);
                 QMF_RE(X_right[s][b]) = MUL_R(QMF_RE(temp_r), coeff2);
                 QMF_IM(X_right[s][b]) = MUL_R(QMF_IM(temp_r), coeff2);
-
                 /* 2^(a+k*b) = 2^a * 2^b * ... * 2^b */
                 /*                   ^^^^^^^^^^^^^^^ k times */
                 pan_base[b] = MUL_C(pan_base[b], pan_delta[b]);
@@ -700,15 +677,12 @@ uint8_t drm_ps_decode(drm_ps_info* ps, uint8_t guess, qmf_t X_left[38][64], qmf_
     drm_add_ambiance(ps, X_left, X_right);
     if(ps->bs_enable_sa) {
         ps->g_last_had_sa = 1;
-
         memcpy(ps->g_prev_sa_index, ps->g_sa_index, sizeof(int8_t) * DRM_NUM_SA_BANDS);
     }
     else { ps->g_last_had_sa = 0; }
     if(ps->bs_enable_pan) {
         drm_add_pan(ps, X_left, X_right);
-
         ps->g_last_had_pan = 1;
-
         memcpy(ps->g_prev_pan_index, ps->g_pan_index, sizeof(int8_t) * DRM_NUM_PAN_BANDS);
     }
     else { ps->g_last_had_pan = 0; }

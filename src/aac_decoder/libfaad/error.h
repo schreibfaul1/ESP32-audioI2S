@@ -27,17 +27,13 @@
 **
 ** $Id: error.h,v 1.27 2008/09/19 23:31:40 menno Exp $
 **/
-
 #ifndef __ERROR_H__
 #define __ERROR_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #define NUM_ERROR_MESSAGES 34
 extern const char *err_msg[];
-
 #ifdef __cplusplus
 }
 #endif

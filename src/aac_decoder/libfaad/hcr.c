@@ -1,13 +1,10 @@
 #include "Arduino.h"
 #include "common.h"
 #include "structs.h"
-
 #include <stdlib.h>
 #include <string.h>
-
 #include "specrec.h"
 #include "huffman.h"
-
 /* ISO/IEC 14496-3/Amd.1
  * 8.5.3.3: Huffman Codeword Reordering for AAC spectral data (HCR)
  *
@@ -20,26 +17,21 @@
  * with the writing direction alternating.
  * Data length is not increased.
 */
-
 #ifdef ERROR_RESILIENCE
-
 /* 8.5.3.3.1 Pre-sorting */
-
 #define NUM_CB      6
 #define NUM_CB_ER   22
 #define MAX_CB      32
 #define VCB11_FIRST 16
 #define VCB11_LAST  31
-
-static const uint8_t PreSortCB_STD[NUM_CB] = {11, 9, 7, 5, 3, 1};
-static const uint8_t PreSortCB_ER[NUM_CB_ER] = {11, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 9, 7, 5, 3, 1};
+const uint8_t PreSortCB_STD[NUM_CB] = {11, 9, 7, 5, 3, 1};
+const uint8_t PreSortCB_ER[NUM_CB_ER] = {11, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 9, 7, 5, 3, 1};
 /* 8.5.3.3.2 Derivation of segment width */
-static const uint8_t maxCwLen[MAX_CB] = {0, 11, 9, 20, 16, 13, 11, 14, 12, 17, 14, 49, 0, 0, 0, 0, 14, 17, 21, 21, 25, 25, 29, 29, 29, 29, 33, 33, 33, 37, 37, 41};
+const uint8_t maxCwLen[MAX_CB] = {0, 11, 9, 20, 16, 13, 11, 14, 12, 17, 14, 49, 0, 0, 0, 0, 14, 17, 21, 21, 25, 25, 29, 29, 29, 29, 33, 33, 33, 37, 37, 41};
 #define segmentWidth(cb) min(maxCwLen[cb], ics->length_of_longest_codeword)
 /* bit-twiddling helpers */
-static const uint8_t  S[] = {1, 2, 4, 8, 16};
-static const uint32_t B[] = {0x55555555, 0x33333333, 0x0F0F0F0F, 0x00FF00FF, 0x0000FFFF};
-
+const uint8_t  S[] = {1, 2, 4, 8, 16};
+const uint32_t B[] = {0x55555555, 0x33333333, 0x0F0F0F0F, 0x00FF00FF, 0x0000FFFF};
 typedef struct {
     uint8_t  cb;
     uint8_t  decoded;
@@ -49,22 +41,20 @@ typedef struct {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* rewind and reverse */
 /* 32 bit version */
-static uint32_t rewrev_word(uint32_t v, const uint8_t len) {
+uint32_t rewrev_word(uint32_t v, const uint8_t len) {
     /* 32 bit reverse */
     v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
     v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
     v = ((v >> S[2]) & B[2]) | ((v << S[2]) & ~B[2]);
     v = ((v >> S[3]) & B[3]) | ((v << S[3]) & ~B[3]);
     v = ((v >> S[4]) & B[4]) | ((v << S[4]) & ~B[4]);
-
     /* shift off low bits */
     v >>= (32 - len);
-
     return v;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* 64 bit version */
-static void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
+void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
     if(len <= 32) {
         *hi = 0;
         *lo = rewrev_word(*lo, len);
@@ -90,15 +80,14 @@ static void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* bits_t version */
-static void rewrev_bits(bits_t* bits) {
+void rewrev_bits(bits_t* bits) {
     if(bits->len == 0) return;
     rewrev_lword(&bits->bufb, &bits->bufa, bits->len);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* merge bits of a to b */
-static void concat_bits(bits_t* b, bits_t* a) {
+void concat_bits(bits_t* b, bits_t* a) {
     uint32_t bl, bh, al, ah;
-
     if(a->len == 0) return;
     al = a->bufa;
     ah = a->bufb;
@@ -119,11 +108,10 @@ static void concat_bits(bits_t* b, bits_t* a) {
     /* merge */
     b->bufa = bl | al;
     b->bufb = bh | ah;
-
     b->len += a->len;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static uint8_t is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
+uint8_t is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
     /* only want spectral data CB's */
     if((this_sec_CB > ZERO_HCB && this_sec_CB <= ESC_HCB) || (this_sec_CB >= VCB11_FIRST && this_sec_CB <= VCB11_LAST)) {
         if(this_CB < ESC_HCB) {
@@ -138,7 +126,7 @@ static uint8_t is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
+void read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
     segment->len = segwidth;
     if(segwidth > 32) {
         segment->bufb = faad_getbits(ld, segwidth - 32);
@@ -150,7 +138,7 @@ static void read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static void fill_in_codeword(codeword_t* codeword, uint16_t index, uint16_t sp, uint8_t cb) {
+void fill_in_codeword(codeword_t* codeword, uint16_t index, uint16_t sp, uint8_t cb) {
     codeword[index].sp_offset = sp;
     codeword[index].cb = cb;
     codeword[index].decoded = 0;
@@ -288,23 +276,18 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
         }
         for(i = 0; i < numberOfSegments; i++) rewrev_bits(&segment[i]);
     }
-
     #if 0 // Seems to give false errors
     bitsleft = 0;
     for (i = 0; i < numberOfSegments && !bitsleft; i++)
         bitsleft += segment[i].len;
-
     if (bitsleft) {ret = 10; goto exit;}
     codewordsleft = 0;
     for (i = 0; (i < numberOfCodewords - numberOfSegments) && (!codewordsleft); i++)
         if (!codeword[i].decoded)
                 codewordsleft++;
-
     if (codewordsleft) {ret = 10; goto exit;}
     #endif
-
     ret = 0;
-
 exit:
     if(codeword) free(codeword);
     if(segment) free(segment);

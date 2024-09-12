@@ -27,19 +27,14 @@
 **
 ** $Id: is.h,v 1.20 2007/11/01 12:33:31 menno Exp $
 **/
-
 #ifndef __IS_H__
 #define __IS_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #include "syntax.h"
-
 void is_decode(ic_stream *ics, ic_stream *icsr, real_t *l_spec, real_t *r_spec,
                uint16_t frame_len);
-
 static inline int8_t is_intensity(ic_stream *ics, uint8_t group, uint8_t sfb)
 {
     switch (ics->sfb_cb[group][sfb])
@@ -52,15 +47,12 @@ static inline int8_t is_intensity(ic_stream *ics, uint8_t group, uint8_t sfb)
         return 0;
     }
 }
-
 static inline int8_t invert_intensity(ic_stream *ics, uint8_t group, uint8_t sfb)
 {
     if (ics->ms_mask_present == 1)
         return (1-2*ics->ms_used[group][sfb]);
     return 1;
 }
-
-
 #ifdef __cplusplus
 }
 #endif

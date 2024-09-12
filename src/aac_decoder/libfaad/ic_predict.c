@@ -1,8 +1,6 @@
 #include "common.h"
 #include "structs.h"
-
 #ifdef MAIN_DEC
-
 #include "syntax.h"
 #include "ic_predict.h"
 #include "pns.h"
@@ -12,7 +10,6 @@
 static void flt_round(float32_t* pf) {
     int32_t  flg;
     uint32_t tmp, tmp1, tmp2;
-
     tmp = *(uint32_t*)pf;
     flg = tmp & (uint32_t)0x00008000;
     tmp &= (uint32_t)0xffff0000;
@@ -23,7 +20,6 @@ static void flt_round(float32_t* pf) {
         tmp |= (uint32_t)0x00010000; /* insert 1 lsb */
         tmp2 = tmp;                  /* add 1 lsb and elided one */
         tmp &= (uint32_t)0xff800000; /* extract exponent and sign */
-
         *pf = *(float32_t*)&tmp1 + *(float32_t*)&tmp2 - *(float32_t*)&tmp;
     }
     else { *pf = *(float32_t*)&tmp; }
@@ -34,9 +30,7 @@ static void flt_round(float32_t* pf) {
 static int16_t quant_pred(float32_t x) {
     int16_t   q;
     uint32_t* tmp = (uint32_t*)&x;
-
     q = (int16_t)(*tmp >> 16);
-
     return q;
 }
 #endif
@@ -46,7 +40,6 @@ static float32_t inv_quant_pred(int16_t q) {
     float32_t x;
     uint32_t* tmp = (uint32_t*)&x;
     *tmp = ((uint32_t)q) << 16;
-
     return x;
 }
 #endif
@@ -59,11 +52,9 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
     float32_t predictedvalue;
     real_t    e0, e1;
     real_t    k1, k2;
-
     real_t r[2];
     real_t COR[2];
     real_t VAR[2];
-
     r[0] = inv_quant_pred(state->r[0]);
     r[1] = inv_quant_pred(state->r[1]);
     COR[0] = inv_quant_pred(state->COR[0]);
@@ -80,7 +71,6 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
     }
     else { k1 = REAL_CONST(0); }
     #else
-
     {
         #define B 0.953125
         real_t    c = COR[0];
@@ -94,7 +84,6 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
         }
     }
     #endif
-
     if(pred) {
     #if 1
         tmp = state->VAR[1];
@@ -121,7 +110,6 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
         flt_round(&predictedvalue);
         *output = input + predictedvalue;
     }
-
     /* calculate new state data */
     e0 = *output;
     e1 = e0 - k1 * r[0];
@@ -156,7 +144,6 @@ static void reset_pred_state(pred_state* state) {
 void pns_reset_pred_state(ic_stream* ics, pred_state* state) {
     uint8_t  sfb, g, b;
     uint16_t i, offs, offs2;
-
     /* prediction only for long blocks */
     if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) return;
     for(g = 0; g < ics->num_window_groups; g++) {
@@ -165,7 +152,6 @@ void pns_reset_pred_state(ic_stream* ics, pred_state* state) {
                 if(is_noise(ics, g, sfb)) {
                     offs = ics->swb_offset[sfb];
                     offs2 = min(ics->swb_offset[sfb + 1], ics->swb_offset_max);
-
                     for(i = offs; i < offs2; i++) reset_pred_state(&state[i]);
                 }
             }
@@ -186,13 +172,11 @@ void reset_all_predictors(pred_state* state, uint16_t frame_len) {
 void ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t frame_len, uint8_t sf_index) {
     uint8_t  sfb;
     uint16_t bin;
-
     if(ics->window_sequence == EIGHT_SHORT_SEQUENCE) { reset_all_predictors(state, frame_len); }
     else {
         for(sfb = 0; sfb < max_pred_sfb(sf_index); sfb++) {
             uint16_t low = ics->swb_offset[sfb];
             uint16_t high = min(ics->swb_offset[sfb + 1], ics->swb_offset_max);
-
             for(bin = low; bin < high; bin++) { ic_predict(&state[bin], spec[bin], &spec[bin], (ics->predictor_data_present && ics->pred.prediction_used[sfb])); }
         }
         if(ics->predictor_data_present) {

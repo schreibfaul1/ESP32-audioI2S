@@ -27,22 +27,15 @@
 **
 ** $Id: drc.h,v 1.22 2007/11/01 12:33:30 menno Exp $
 **/
-
 #ifndef __DRC_H__
 #define __DRC_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #define DRC_REF_LEVEL 20*4 /* -20 dB */
-
-
 drc_info *drc_init(real_t cut, real_t boost);
 void drc_end(drc_info *drc);
 void drc_decode(drc_info *drc, real_t *spec);
-
-
 #ifdef __cplusplus
 }
 #endif

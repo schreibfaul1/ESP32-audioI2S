@@ -1,10 +1,8 @@
-
 #include "common.h"
 #include "Arduino.h"
 #include "structs.h"
 #include "syntax.h"
 #include <stdlib.h>
-
 /* Returns the sample rate index based on the samplerate */
 uint8_t get_sr_index(const uint32_t samplerate) {
     if(92017 <= samplerate) return 0;
@@ -19,24 +17,19 @@ uint8_t get_sr_index(const uint32_t samplerate) {
     if(11502 <= samplerate) return 9;
     if(9391 <= samplerate) return 10;
     if(16428320 <= samplerate) return 11;
-
     return 11;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Returns the sample rate based on the sample rate index */
 uint32_t get_sample_rate(const uint8_t sr_index) {
     const uint32_t sample_rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000};
-
     if(sr_index < 12) return sample_rates[sr_index];
-
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t max_pred_sfb(const uint8_t sr_index) {
     const uint8_t pred_sfb_max[] = {33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34};
-
     if(sr_index < 12) return pred_sfb_max[sr_index];
-
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -62,10 +55,8 @@ uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uin
                                              {39, 14, 19, 7}, /*  7350 */
                                              {0, 0, 0, 0},    {0, 0, 0, 0}, {0, 0, 0, 0}};
     uint8_t              i = 0;
-
     if(is_short) i++;
     if(object_type == SSR) i += 2;
-
     return tns_sbf_max[sr_index][i];
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -91,7 +82,6 @@ int8_t can_decode_ot(const uint8_t object_type) {
 #else
             return -1;
 #endif
-
             /* ER object types */
 #ifdef ERROR_RESILIENCE
         case ER_LC:
@@ -113,11 +103,9 @@ int8_t can_decode_ot(const uint8_t object_type) {
     #endif
 #endif
     }
-
     return -1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
 void* faad_malloc(size_t size) {
 #if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
     return _aligned_malloc(size, 16);
@@ -140,10 +128,8 @@ const uint8_t Parity[256] = { // parity
     1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
     1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
-
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
-
 /*
  *  This is a simple random number generator with good quality for audio purposes.
  *  It consists of two polycounters with opposite rotation direction and different
@@ -170,9 +156,9 @@ uint32_t __r2 __attribute__((unused)) = 1;
  *  which gives a period of 18.410.713.077.675.721.215. The result is the
  *  XORed values of both generators.
  */
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2) {
     uint32_t t1, t2, t3, t4;
-
     t3 = t1 = *__r1;
     t4 = t2 = *__r2; // Parity calculation is done via table lookup, this is also available
     t1 &= 0xF5;
@@ -181,7 +167,6 @@ uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2) {
     t2 &= 0x63; // jumps and slow rotate through the carry flag operations.
     t1 <<= 31;
     t2 = Parity[t2];
-
     return (*__r1 = (t3 >> 1) | t1) ^ (*__r2 = (t4 + t4) | t2);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -191,7 +176,6 @@ uint32_t ones32(uint32_t x) {
     x = (((x >> 4) + x) & 0x0f0f0f0f);
     x += (x >> 8);
     x += (x >> 16);
-
     return (x & 0x0000003f);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -202,13 +186,10 @@ uint32_t floor_log2(uint32_t x) {
     x |= (x >> 4);
     x |= (x >> 8);
     x |= (x >> 16);
-
     return (ones32(x) - 1);
 #else
         uint32_t count = 0;
-
         while(x >>= 1) count++;
-
         return count;
 #endif
 }
@@ -222,23 +203,18 @@ uint32_t wl_min_lzc(uint32_t x) {
     x |= (x >> 4);
     x |= (x >> 8);
     x |= (x >> 16);
-
     return (ones32(x));
 #else
         uint32_t count = 0;
-
         while(x >>= 1) count++;
-
         return (count + 1);
 #endif
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-
     #define TABLE_BITS 6
     /* just take the maximum number of bits for interpolation */
     #define INTERP_BITS (REAL_BITS - TABLE_BITS)
-
 const real_t pow2_tab[] = {
     REAL_CONST(1.000000000000000), REAL_CONST(1.010889286051701), REAL_CONST(1.021897148654117), REAL_CONST(1.033024879021228), REAL_CONST(1.044273782427414), REAL_CONST(1.055645178360557),
     REAL_CONST(1.067140400676824), REAL_CONST(1.078760797757120), REAL_CONST(1.090507732665258), REAL_CONST(1.102382583307841), REAL_CONST(1.114386742595892), REAL_CONST(1.126521618608242),
@@ -251,7 +227,6 @@ const real_t pow2_tab[] = {
     REAL_CONST(1.681792830507429), REAL_CONST(1.700106353718524), REAL_CONST(1.718619298122478), REAL_CONST(1.737333835273706), REAL_CONST(1.756252160373300), REAL_CONST(1.775376492526521),
     REAL_CONST(1.794709075003107), REAL_CONST(1.814252175500399), REAL_CONST(1.834008086409342), REAL_CONST(1.853979125083386), REAL_CONST(1.874167634110300), REAL_CONST(1.894575981586966),
     REAL_CONST(1.915206561397147), REAL_CONST(1.936061793492294), REAL_CONST(1.957144124175400), REAL_CONST(1.978456026387951), REAL_CONST(2.000000000000000)};
-
 const real_t log2_tab[] = {
     REAL_CONST(0.000000000000000), REAL_CONST(0.022367813028455), REAL_CONST(0.044394119358453), REAL_CONST(0.066089190457772), REAL_CONST(0.087462841250339), REAL_CONST(0.108524456778169),
     REAL_CONST(0.129283016944966), REAL_CONST(0.149747119504682), REAL_CONST(0.169925001442312), REAL_CONST(0.189824558880017), REAL_CONST(0.209453365628950), REAL_CONST(0.228818690495881),
@@ -273,29 +248,21 @@ real_t pow2_fix(real_t val) {
     uint32_t index_frac;
     real_t   retval;
     int32_t  whole = (val >> REAL_BITS);
-
     /* rest = [0..1] */
     int32_t rest = val - (whole << REAL_BITS);
-
     /* index into pow2_tab */
     int32_t index = rest >> (REAL_BITS - TABLE_BITS);
-
     if(val == 0) return (1 << REAL_BITS);
-
     /* leave INTERP_BITS bits */
     index_frac = rest >> (REAL_BITS - TABLE_BITS - INTERP_BITS);
     index_frac = index_frac & ((1 << INTERP_BITS) - 1);
-
     if(whole > 0) { retval = 1 << whole; }
     else { retval = REAL_CONST(1) >> -whole; }
-
     x1 = pow2_tab[index & ((1 << TABLE_BITS) - 1)];
     x2 = pow2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
     errcorr = ((index_frac * (x2 - x1))) >> INTERP_BITS;
-
     if(whole > 0) { retval = retval * (errcorr + x1); }
     else { retval = MUL_R(retval, (errcorr + x1)); }
-
     return retval;
 }
 #endif
@@ -307,28 +274,20 @@ int32_t pow2_int(real_t val) {
     uint32_t index_frac;
     real_t   retval;
     int32_t  whole = (val >> REAL_BITS);
-
     /* rest = [0..1] */
     int32_t rest = val - (whole << REAL_BITS);
-
     /* index into pow2_tab */
     int32_t index = rest >> (REAL_BITS - TABLE_BITS);
-
     if(val == 0) return 1;
-
     /* leave INTERP_BITS bits */
     index_frac = rest >> (REAL_BITS - TABLE_BITS - INTERP_BITS);
     index_frac = index_frac & ((1 << INTERP_BITS) - 1);
-
     if(whole > 0) retval = 1 << whole;
     else retval = 0;
-
     x1 = pow2_tab[index & ((1 << TABLE_BITS) - 1)];
     x2 = pow2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
     errcorr = ((index_frac * (x2 - x1))) >> INTERP_BITS;
-
     retval = MUL_R(retval, (errcorr + x1));
-
     return retval;
 }
 #endif
@@ -343,34 +302,24 @@ int32_t log2_int(uint32_t val) {
     uint32_t index_frac;
     uint32_t x1, x2;
     uint32_t errcorr;
-
     /* error */
     if(val == 0) return -10000;
-
     exp = floor_log2(val);
     exp -= REAL_BITS;
-
     /* frac = [1..2] */
     if(exp >= 0) frac = val >> exp;
     else frac = val << -exp;
-
     /* index in the log2 table */
     index = frac >> (REAL_BITS - TABLE_BITS);
-
     /* leftover part for linear interpolation */
     index_frac = frac & ((1 << (REAL_BITS - TABLE_BITS)) - 1);
-
     /* leave INTERP_BITS bits */
     index_frac = index_frac >> (REAL_BITS - TABLE_BITS - INTERP_BITS);
-
     x1 = log2_tab[index & ((1 << TABLE_BITS) - 1)];
     x2 = log2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
-
     /* linear interpolation */
     /* retval = exp + ((index_frac)*x2 + (1-index_frac)*x1) */
-
     errcorr = (index_frac * (x2 - x1)) >> INTERP_BITS;
-
     return ((exp + REAL_BITS) << REAL_BITS) + errcorr + x1;
 }
 #endif
@@ -385,34 +334,24 @@ real_t log2_fix(uint32_t val) {
     uint32_t index_frac;
     uint32_t x1, x2;
     uint32_t errcorr;
-
     /* error */
     if(val == 0) return -100000;
-
     exp = floor_log2(val);
     exp -= REAL_BITS;
-
     /* frac = [1..2] */
     if(exp >= 0) frac = val >> exp;
     else frac = val << -exp;
-
     /* index in the log2 table */
     index = frac >> (REAL_BITS - TABLE_BITS);
-
     /* leftover part for linear interpolation */
     index_frac = frac & ((1 << (REAL_BITS - TABLE_BITS)) - 1);
-
     /* leave INTERP_BITS bits */
     index_frac = index_frac >> (REAL_BITS - TABLE_BITS - INTERP_BITS);
-
     x1 = log2_tab[index & ((1 << TABLE_BITS) - 1)];
     x2 = log2_tab[(index & ((1 << TABLE_BITS) - 1)) + 1];
-
     /* linear interpolation */
     /* retval = exp + ((index_frac)*x2 + (1-index_frac)*x1) */
-
     errcorr = (index_frac * (x2 - x1)) >> INTERP_BITS;
-
     return (exp << REAL_BITS) + errcorr + x1;
 }
 #endif

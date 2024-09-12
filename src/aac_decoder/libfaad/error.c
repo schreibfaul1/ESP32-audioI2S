@@ -27,10 +27,8 @@
 **
 ** $Id: error.c,v 1.33 2008/09/19 23:31:39 menno Exp $
 **/
-
 #include "common.h"
 #include "error.h"
-
 const char *err_msg[] = {
     "No error",
     "Gain control not yet implemented",
@@ -67,4 +65,3 @@ const char *err_msg[] = {
     "Bitstream value not allowed by specification",
 	"MAIN prediction not initialised"
 };
-

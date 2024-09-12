@@ -1,17 +1,12 @@
-
 #include "common.h"
 #include "structs.h"
-
 #include <stdlib.h>
 #ifdef ANALYSIS
 #include <stdio.h>
 #endif
-
 #include "bits.h"
 #include "huffman.h"
 #include "codebook/hcb.h"
-
-
 /* static function declarations */
 static inline void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len);
 static inline uint8_t huffman_getescape(bitfile *ld, int16_t *sp);
@@ -50,14 +45,12 @@ uint8_t hcbN[] = {0, 5, 5, 0, 5, 0, 5, 0, 5, 0, 6, 5};
 uint8_t unsigned_cb[] = {
     0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
-
 int hcb_2_quad_table_size[] = {0, 114, 86, 0, 185, 0, 0, 0, 0, 0, 0, 0};
 int hcb_2_pair_table_size[] = {0, 0, 0, 0, 0, 0, 126, 0, 83, 0, 210, 373};
 int hcb_bin_table_size[] = {0, 0, 0, 161, 0, 161, 0, 127, 0, 337, 0, 0};
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static inline void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
     uint8_t i;
-
     for(i = 0; i < len; i++) {
         if(sp[i]) {
             if(faad_get1bit(ld DEBUGVAR(1, 5, "huffman_sign_bits(): sign bit")) & 1) { sp[i] = -sp[i]; }
@@ -206,7 +199,6 @@ static int16_t huffman_codebook(uint8_t i) {
 static void vcb11_check_LAV(uint8_t cb, int16_t* sp) {
     static const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
     uint16_t              max = 0;
-
     if(cb < 16 || cb > 31) return;
     max = vcb11_LAV_tab[cb - 16];
     if((abs(sp[0]) > max) || (abs(sp[1]) > max)) {
@@ -260,7 +252,6 @@ uint8_t huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp) {
             uint8_t err = huffman_2step_pair_sign(11, ld, sp);
             if(!err) err = huffman_getescape(ld, &sp[0]);
             if(!err) err = huffman_getescape(ld, &sp[1]);
-
             /* check LAV (Largest Absolute Value) */
             /* this finds errors in the ESCAPE signal */
             vcb11_check_LAV(cb, sp);
@@ -284,7 +275,6 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
     uint16_t offset = 0;
     uint8_t  extra_bits;
     uint8_t  i, vcb11 = 0;
-
     switch(cb) {
         case 1: /* 2-step method for data quadruples */
         case 2:
@@ -306,7 +296,6 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
             sp[2] = hcb_2_quad_table[cb][offset].v;
             sp[3] = hcb_2_quad_table[cb][offset].w;
             break;
-
         case 6: /* 2-step method for data pairs */
         case 8:
         case 10:
@@ -328,7 +317,6 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
         case 29:
         case 30:
         case 31:
-
             if(cb >= 16) {
                 /* store the virtual codebook */
                 vcb11 = cb;

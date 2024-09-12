@@ -27,25 +27,18 @@
 **
 ** $Id: ic_predict.h,v 1.23 2007/11/01 12:33:31 menno Exp $
 **/
-
 #ifdef MAIN_DEC
-
 #ifndef __IC_PREDICT_H__
 #define __IC_PREDICT_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #define ALPHA      REAL_CONST(0.90625)
 #define A          REAL_CONST(0.953125)
-
-
 void pns_reset_pred_state(ic_stream *ics, pred_state *state);
 void reset_all_predictors(pred_state *state, uint16_t frame_len);
 void ic_prediction(ic_stream *ics, real_t *spec, pred_state *state,
                    uint16_t frame_len, uint8_t sf_index);
-
 ALIGN static const real_t mnt_table[128] = {
     COEF_CONST(0.9531250000), COEF_CONST(0.9453125000),
     COEF_CONST(0.9375000000), COEF_CONST(0.9296875000),
@@ -112,7 +105,6 @@ ALIGN static const real_t mnt_table[128] = {
     COEF_CONST(0.4843750000), COEF_CONST(0.4824218750),
     COEF_CONST(0.4804687500), COEF_CONST(0.4785156250)
 };
-
 ALIGN static const real_t exp_table[128] = {
     COEF_CONST(0.50000000000000000000000000000000000000000000000000),
     COEF_CONST(0.25000000000000000000000000000000000000000000000000),
@@ -243,10 +235,8 @@ ALIGN static const real_t exp_table[128] = {
     COEF_CONST(0.0 /* 0000000000000000000000000000000000000587747175411 "floating point underflow" */),
     COEF_CONST(0.0)
 };
-
 #ifdef __cplusplus
 }
 #endif
-#endif
-
+#endif // MAIN_DEC
 #endif

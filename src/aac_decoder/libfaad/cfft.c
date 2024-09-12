@@ -305,10 +305,10 @@ void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, compl
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
                    const int8_t isign) {
-    static real_t tr11 = FRAC_CONST(0.309016994374947);
-    static real_t ti11 = FRAC_CONST(0.951056516295154);
-    static real_t tr12 = FRAC_CONST(-0.809016994374947);
-    static real_t ti12 = FRAC_CONST(0.587785252292473);
+    real_t tr11 = FRAC_CONST(0.309016994374947);
+    real_t ti11 = FRAC_CONST(0.951056516295154);
+    real_t tr12 = FRAC_CONST(-0.809016994374947);
+    real_t ti12 = FRAC_CONST(0.587785252292473);
     uint16_t      i, k, ac, ah;
     complex_t     c2, c3, c4, c5, d3, d4, d5, d2, t2, t3, t4, t5;
     if(ido == 1) {

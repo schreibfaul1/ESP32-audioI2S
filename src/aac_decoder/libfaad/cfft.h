@@ -27,29 +27,21 @@
 **
 ** $Id: cfft.h,v 1.24 2007/11/01 12:33:29 menno Exp $
 **/
-
 #ifndef __CFFT_H__
 #define __CFFT_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct
-{
-    uint16_t n;
-    uint16_t ifac[15];
-    complex_t *work;
-    complex_t *tab;
+typedef struct {
+    uint16_t   n;
+    uint16_t   ifac[15];
+    complex_t* work;
+    complex_t* tab;
 } cfft_info;
-
-
-void cfftf(cfft_info *cfft, complex_t *c);
-void cfftb(cfft_info *cfft, complex_t *c);
-cfft_info *cffti(uint16_t n);
-void cfftu(cfft_info *cfft);
-
-
+void       cfftf(cfft_info* cfft, complex_t* c);
+void       cfftb(cfft_info* cfft, complex_t* c);
+cfft_info* cffti(uint16_t n);
+void       cfftu(cfft_info* cfft);
 #ifdef __cplusplus
 }
 #endif

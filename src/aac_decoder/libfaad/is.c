@@ -1,12 +1,10 @@
-
 #include "common.h"
 #include "structs.h"
-
 #include "syntax.h"
 #include "is.h"
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-static real_t pow05_table[] = {
+real_t pow05_table[] = {
     COEF_CONST(1.68179283050743), /* 0.5^(-3/4) */
     COEF_CONST(1.41421356237310), /* 0.5^(-2/4) */
     COEF_CONST(1.18920711500272), /* 0.5^(-1/4) */
@@ -25,10 +23,8 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
 #else
     int32_t exp, frac;
 #endif
-
     uint16_t nshort = frame_len / 8;
     uint8_t  group = 0;
-
     for(g = 0; g < icsr->num_window_groups; g++) {
         /* Do intensity stereo decoding */
         for(b = 0; b < icsr->window_group_length[g]; b++) {
@@ -42,14 +38,12 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
                     ics->pred.prediction_used[sfb] = 0;
                     icsr->pred.prediction_used[sfb] = 0;
 #endif
-
 #ifndef FIXED_POINT
                     scale = (real_t)pow(0.5, (0.25 * icsr->scale_factors[g][sfb]));
 #else
                     exp = icsr->scale_factors[g][sfb] >> 2;
                     frac = icsr->scale_factors[g][sfb] & 3;
 #endif
-
                     /* Scale from left to right channel,
                        do not touch left channel */
                     for(i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb + 1], ics->swb_offset_max); i++) {
