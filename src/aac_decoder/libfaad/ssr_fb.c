@@ -1,9 +1,6 @@
-
 #include "common.h"
 #include "structs.h"
-
 #ifdef SSR_DEC
-
 #include <string.h>
 #include <stdlib.h>
 #include "syntax.h"
@@ -11,66 +8,76 @@
 #include "mdct.h"
 #include "ssr_fb.h"
 #include "ssr_win.h"
+#endif
 
-                      fb_info* ssr_filter_bank_init(uint16_t frame_len) {
+fb_info *ssr_filter_bank_init(uint16_t frame_len);
+void ssr_filter_bank_end(fb_info *fb);
+
+/*non overlapping inverse filterbank */
+void ssr_ifilter_bank(fb_info *fb,
+                      uint8_t window_sequence,
+                      uint8_t window_shape,
+                      uint8_t window_shape_prev,
+                      real_t *freq_in,
+                      real_t *time_out,
+                      uint16_t frame_len);
+
+
+
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SSR_DEC
+fb_info* ssr_filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
-
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
-
     /* normal */
     fb->mdct256 = faad_mdct_init(2 * nshort);
     fb->mdct2048 = faad_mdct_init(2 * frame_len);
-
     fb->long_window[0] = sine_long_256;
     fb->short_window[0] = sine_short_32;
     fb->long_window[1] = kbd_long_256;
     fb->short_window[1] = kbd_short_32;
-
     return fb;
 }
-
+#endif
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SSR_DEC
 void ssr_filter_bank_end(fb_info* fb) {
     faad_mdct_end(fb->mdct256);
     faad_mdct_end(fb->mdct2048);
-
     if (fb) faad_free(fb);
 }
-
+#endif
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SSR_DEC
 static inline void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct;
-
     switch (len) {
         case 512: mdct = fb->mdct2048; break;
         case 64: mdct = fb->mdct256; break;
     }
-
     faad_imdct(mdct, in_data, out_data);
 }
-
+#endif
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SSR_DEC
 /* NON-overlapping inverse filterbank for use with SSR */
 void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
     int16_t i;
     real_t* transf_buf;
-
     real_t* window_long;
     real_t* window_long_prev;
     real_t* window_short;
     real_t* window_short_prev;
-
     uint16_t nlong = frame_len;
     uint16_t nshort = frame_len / 8;
     uint16_t trans = nshort / 2;
-
     uint16_t nflat_ls = (nlong - nshort) / 2;
-
     transf_buf = (real_t*)faad_malloc(2 * nlong * sizeof(real_t));
-
     window_long = fb->long_window[window_shape];
     window_long_prev = fb->long_window[window_shape_prev];
     window_short = fb->short_window[window_shape];
     window_short_prev = fb->short_window[window_shape_prev];
-
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
             imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
@@ -79,7 +86,6 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
                 time_out[nlong + i] = MUL_R_C(transf_buf[nlong + i], window_long[nlong - 1 - i]);
             }
             break;
-
         case LONG_START_SEQUENCE:
             imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nlong; i++) time_out[i] = MUL_R_C(transf_buf[i], window_long_prev[i]);
@@ -87,7 +93,6 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             for (i = 0; i < nshort; i++) time_out[nlong + nflat_ls + i] = MUL_R_C(transf_buf[nlong + nflat_ls + i], window_short[nshort - i - 1]);
             for (i = 0; i < nflat_ls; i++) time_out[nlong + nflat_ls + nshort + i] = 0;
             break;
-
         case EIGHT_SHORT_SEQUENCE:
             imdct_ssr(fb, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0, 2 * nshort);
             imdct_ssr(fb, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1, 2 * nshort);
@@ -116,7 +121,6 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
                 time_out[i + 15 * nshort] = MUL_R_C(transf_buf[nshort * 15 + i], window_short[i]);
             }
             break;
-
         case LONG_STOP_SEQUENCE:
             imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nflat_ls; i++) time_out[i] = 0;
@@ -125,8 +129,7 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             for (i = 0; i < nlong; i++) time_out[nlong + i] = MUL_R_C(transf_buf[nlong + i], window_long[nlong - 1 - i]);
             break;
     }
-
     faad_free(transf_buf);
 }
-
 #endif
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

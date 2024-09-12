@@ -433,6 +433,7 @@ typedef struct
 #endif
 	latm_header latm_config;
 	const unsigned char *cmes;
+    uint8_t              isPS;
 } NeAACDecStruct;
 
 

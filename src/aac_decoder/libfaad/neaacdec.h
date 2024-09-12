@@ -30,8 +30,10 @@
 #ifndef __NEAACDEC_H__
 #define __NEAACDEC_H__
 #ifdef __cplusplus
+
 extern "C" {
 #endif /* __cplusplus */
+#include <stdint.h>
 #if 1
 /* MACROS FOR BACKWARDS COMPATIBILITY */
 /* structs */
@@ -168,6 +170,7 @@ typedef struct NeAACDecFrameInfo
     unsigned char channel_position[64];
     /* PS: 0: off, 1: on */
     unsigned char ps;
+    uint8_t  isPS;
 } NeAACDecFrameInfo;
 NEAACDECAPI const char* NeAACDecGetErrorMessage(unsigned char errcode);
 NEAACDECAPI unsigned long NeAACDecGetCapabilities(void);

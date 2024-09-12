@@ -1,32 +1,4 @@
-/*
-** FAAD2 - Freeware Advanced Audio (AAC) Decoder including SBR decoding
-** Copyright (C) 2003-2005 M. Bakker, Nero AG, http://www.nero.com
-**
-** This program is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with this program; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-**
-** Any non-GPL usage of this software or parts of this software is strictly
-** forbidden.
-**
-** The "appropriate copyright message" mentioned in section 2c of the GPLv2
-** must read: "Code from FAAD2 is copyright (c) Nero AG, www.nero.com"
-**
-** Commercial non-GPL licensing of this software is possible.
-** For more info contact Nero AG through Mpeg4AAClicense@nero.com.
-**
-** $Id: specrec.c,v 1.63 2010/06/04 20:47:56 menno Exp $
-**/
+
 /*
   Spectral reconstruction:
    - grouping/sectioning
@@ -53,15 +25,16 @@
 #include "ssr.h"
 #include "ssr_fb.h"
 #endif
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* static function declarations */
 static uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len);
 #ifdef LD_DEC
 ALIGN static const uint8_t num_swb_512_window[] = {0, 0, 0, 36, 36, 37, 31, 31, 0, 0, 0, 0};
 ALIGN static const uint8_t num_swb_480_window[] = {0, 0, 0, 35, 35, 37, 30, 30, 0, 0, 0, 0};
 #endif
-ALIGN static const uint8_t num_swb_960_window[] = {40, 40, 45, 49, 49, 49, 46, 46, 42, 42, 42, 40};
-ALIGN static const uint8_t num_swb_1024_window[] = {41, 41, 47, 49, 49, 51, 47, 47, 43, 43, 43, 40};
-ALIGN static const uint8_t num_swb_128_window[] = {12, 12, 12, 14, 14, 14, 15, 15, 15, 15, 15, 15};
+ALIGN static const uint8_t  num_swb_960_window[] = {40, 40, 45, 49, 49, 49, 46, 46, 42, 42, 42, 40};
+ALIGN static const uint8_t  num_swb_1024_window[] = {41, 41, 47, 49, 49, 51, 47, 47, 43, 43, 43, 40};
+ALIGN static const uint8_t  num_swb_128_window[] = {12, 12, 12, 14, 14, 14, 15, 15, 15, 15, 15, 15};
 ALIGN static const uint16_t swb_offset_1024_96[] = {0,   4,   8,   12,  16,  20,  24,  28,  32,  36,  40,  44,  48,  52,  56,  64,  72,  80,  88,  96,  108,
                                                     120, 132, 144, 156, 172, 188, 212, 240, 276, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024};
 ALIGN static const uint16_t swb_offset_128_96[] = {0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 92, 128};
@@ -91,13 +64,13 @@ ALIGN static const uint16_t swb_offset_1024_24[] = {0,   4,   8,   12,  16,  20,
 ALIGN static const uint16_t swb_offset_512_24[] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 52, 60, 68, 80, 92, 104, 120, 140, 164, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512};
 ALIGN static const uint16_t swb_offset_480_24[] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 52, 60, 68, 80, 92, 104, 120, 140, 164, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480};
 #endif
-ALIGN static const uint16_t swb_offset_128_24[] = {0, 4, 8, 12, 16, 20, 24, 28, 36, 44, 52, 64, 76, 92, 108, 128};
-ALIGN static const uint16_t swb_offset_1024_16[] = {0,   8,   16,  24,  32,  40,  48,  56,  64,  72,  80,  88,  100, 112, 124, 136, 148, 160, 172, 184, 196, 212,
-                                                    228, 244, 260, 280, 300, 320, 344, 368, 396, 424, 456, 492, 532, 572, 616, 664, 716, 772, 832, 896, 960, 1024};
-ALIGN static const uint16_t swb_offset_128_16[] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 60, 72, 88, 108, 128};
-ALIGN static const uint16_t swb_offset_1024_8[] = {0,   12,  24,  36,  48,  60,  72,  84,  96,  108, 120, 132, 144, 156, 172, 188, 204, 220, 236, 252, 268,
-                                                   288, 308, 328, 348, 372, 396, 420, 448, 476, 508, 544, 580, 620, 664, 712, 764, 820, 880, 944, 1024};
-ALIGN static const uint16_t swb_offset_128_8[] = {0, 4, 8, 12, 16, 20, 24, 28, 36, 44, 52, 60, 72, 88, 108, 128};
+ALIGN static const uint16_t  swb_offset_128_24[] = {0, 4, 8, 12, 16, 20, 24, 28, 36, 44, 52, 64, 76, 92, 108, 128};
+ALIGN static const uint16_t  swb_offset_1024_16[] = {0,   8,   16,  24,  32,  40,  48,  56,  64,  72,  80,  88,  100, 112, 124, 136, 148, 160, 172, 184, 196, 212,
+                                                     228, 244, 260, 280, 300, 320, 344, 368, 396, 424, 456, 492, 532, 572, 616, 664, 716, 772, 832, 896, 960, 1024};
+ALIGN static const uint16_t  swb_offset_128_16[] = {0, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 60, 72, 88, 108, 128};
+ALIGN static const uint16_t  swb_offset_1024_8[] = {0,   12,  24,  36,  48,  60,  72,  84,  96,  108, 120, 132, 144, 156, 172, 188, 204, 220, 236, 252, 268,
+                                                    288, 308, 328, 348, 372, 396, 420, 448, 476, 508, 544, 580, 620, 664, 712, 764, 820, 880, 944, 1024};
+ALIGN static const uint16_t  swb_offset_128_8[] = {0, 4, 8, 12, 16, 20, 24, 28, 36, 44, 52, 60, 72, 88, 108, 128};
 ALIGN static const uint16_t* swb_offset_1024_window[] = {
     swb_offset_1024_96, /* 96000 */
     swb_offset_1024_96, /* 88200 */
@@ -112,6 +85,7 @@ ALIGN static const uint16_t* swb_offset_1024_window[] = {
     swb_offset_1024_16, /* 11025 */
     swb_offset_1024_8   /* 8000  */
 };
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LD_DEC
 ALIGN static const uint16_t* swb_offset_512_window[] = {
     0,                 /* 96000 */
@@ -127,6 +101,9 @@ ALIGN static const uint16_t* swb_offset_512_window[] = {
     0,                 /* 11025 */
     0                  /* 8000  */
 };
+#endif // LD_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef LD_DEC
 ALIGN static const uint16_t* swb_offset_480_window[] = {
     0,                 /* 96000 */
     0,                 /* 88200 */
@@ -141,7 +118,8 @@ ALIGN static const uint16_t* swb_offset_480_window[] = {
     0,                 /* 11025 */
     0                  /* 8000  */
 };
-#endif
+#endif // LD_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 ALIGN static const uint16_t* swb_offset_128_window[] = {
     swb_offset_128_96, /* 96000 */
     swb_offset_128_96, /* 88200 */
@@ -156,6 +134,7 @@ ALIGN static const uint16_t* swb_offset_128_window[] = {
     swb_offset_128_16, /* 11025 */
     swb_offset_128_8   /* 8000  */
 };
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #define bit_set(A, B) ((A) & (1 << (B)))
 /* 4.5.2.3.4 */
 /*
@@ -265,6 +244,7 @@ uint8_t window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* ics) {
         default: return 32;
     }
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* iquant() */
 /* output = sign(input)*abs(input)^(4/3) */
 static inline real_t iquant(int16_t q, const real_t* tab, uint8_t* error) {
@@ -318,6 +298,7 @@ static inline real_t iquant(int16_t q, const real_t* tab, uint8_t* error) {
     }
 #endif
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
 ALIGN static const real_t pow2sf_tab[] = {2.9802322387695313E-008,
                                           5.9604644775390625E-008,
@@ -384,28 +365,19 @@ ALIGN static const real_t pow2sf_tab[] = {2.9802322387695313E-008,
                                           137438953472.0,
                                           274877906944.0};
 #endif
-/* quant_to_spec: perform dequantisation and scaling
- * and in case of short block it also does the deinterleaving
- */
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* quant_to_spec: perform dequantisation and scaling and in case of short block it also does the deinterleaving */
 /*
-  For ONLY_LONG_SEQUENCE windows (num_window_groups = 1,
-  window_group_length[0] = 1) the spectral data is in ascending spectral
-  order.
-  For the EIGHT_SHORT_SEQUENCE window, the spectral order depends on the
-  grouping in the following manner:
+  For ONLY_LONG_SEQUENCE windows (num_window_groups = 1,  window_group_length[0] = 1) the spectral data is in ascending spectral order.
+  For the EIGHT_SHORT_SEQUENCE window, the spectral order depends on the grouping in the following manner:
   - Groups are ordered sequentially
-  - Within a group, a scalefactor band consists of the spectral data of all
-    grouped SHORT_WINDOWs for the associated scalefactor window band. To
-    clarify via example, the length of a group is in the range of one to eight
-    SHORT_WINDOWs.
-  - If there are eight groups each with length one (num_window_groups = 8,
-    window_group_length[0..7] = 1), the result is a sequence of eight spectra,
+  - Within a group, a scalefactor band consists of the spectral data of all grouped SHORT_WINDOWs for the associated scalefactor window band. To
+    clarify via example, the length of a group is in the range of one to eight SHORT_WINDOWs.
+  - If there are eight groups each with length one (num_window_groups = 8, window_group_length[0..7] = 1), the result is a sequence of eight spectra,
     each in ascending spectral order.
-  - If there is only one group with length eight (num_window_groups = 1,
-    window_group_length[0] = 8), the result is that spectral data of all eight
+  - If there is only one group with length eight (num_window_groups = 1, window_group_length[0] = 8), the result is that spectral data of all eight
     SHORT_WINDOWs is interleaved by scalefactor window bands.
-  - Within a scalefactor window band, the coefficients are in ascending
-    spectral order.
+  - Within a scalefactor window band, the coefficients are in ascending spectral order.
 */
 static uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len) {
     ALIGN static const real_t pow2_table[] = {
@@ -414,9 +386,9 @@ static uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* 
         COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
     };
     const real_t* tab = iq_table;
-    uint8_t  g, sfb, win;
-    uint16_t width, bin, k, gindex, wa, wb;
-    uint8_t  error = 0; /* Init error flag */
+    uint8_t       g, sfb, win;
+    uint16_t      width, bin, k, gindex, wa, wb;
+    uint8_t       error = 0; /* Init error flag */
 #ifndef FIXED_POINT
     real_t scf;
 #endif
@@ -510,6 +482,7 @@ static uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* 
     }
     return error;
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t output_channels) {
     int mul = 1;
 #ifdef MAIN_DEC
@@ -583,6 +556,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
 #endif
     return 0;
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t paired_channel) {
     int mul = 1;
 #ifdef MAIN_DEC
@@ -661,7 +635,7 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
 #endif
     return 0;
 }
-//____________________________________________________________________________________________________________________________________________________
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
     uint8_t retval;
     int     output_channels;
@@ -784,9 +758,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
         int ele = hDecoder->fr_ch_ele;
         int ch = sce->channel;
         /* following case can happen when forceUpSampling == 1 */
-        if (hDecoder->sbr[ele] == NULL) {
-            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
-        }
+        if (hDecoder->sbr[ele] == NULL) { hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0); }
         if (!hDecoder->sbr[ele]) {
             retval = 19;
             goto exit;
@@ -799,10 +771,10 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
     #if (defined(PS_DEC) || defined(DRM_PS))
         if (hDecoder->ps_used[ele] == 0) {
     #endif
-            retval = sbrDecodeSingleFrame(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR);
+            retval = sbrDecodeSingleFrame(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR); hDecoder->isPS = 0;
     #if (defined(PS_DEC) || defined(DRM_PS))
         } else {
-            retval = sbrDecodeSingleFramePS(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->time_out[ch + 1], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR);
+            retval = sbrDecodeSingleFramePS(hDecoder->sbr[ele], hDecoder->time_out[ch], hDecoder->time_out[ch + 1], hDecoder->postSeekResetFlag, hDecoder->downSampledSBR); hDecoder->isPS = 1;
         }
     #endif
         if (retval > 0) goto exit;
@@ -828,7 +800,7 @@ exit:
     if (spec_coef) { free(spec_coef); }
     return retval;
 }
-//____________________________________________________________________________________________________________________________________________________
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, element* cpe, int16_t* spec_data1, int16_t* spec_data2) {
     uint8_t retval;
     // ALIGN real_t spec_coef1[1024];
@@ -900,7 +872,8 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
             //printf("0x%.8X\n", spec_coef2[i]);
         }
     }
-#endif
+#endif // 0
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
@@ -979,9 +952,7 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
         int ch0 = cpe->channel;
         int ch1 = cpe->paired_channel;
         /* following case can happen when forceUpSampling == 1 */
-        if (hDecoder->sbr[ele] == NULL) {
-            hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
-        }
+        if (hDecoder->sbr[ele] == NULL) { hDecoder->sbr[ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0); }
         if (!hDecoder->sbr[ele]) {
             retval = 19;
             goto exit;
@@ -1003,3 +974,4 @@ exit:
     if (spec_coef2) free(spec_coef2);
     return retval;
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

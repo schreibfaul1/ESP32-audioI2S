@@ -74,7 +74,7 @@ uint8_t AACGetSBR(){
 //----------------------------------------------------------------------------------------------------------------------
 uint8_t AACGetParametricStereo(){  // not used (0) or used (1)
 //    log_w("frameInfo.ps %i", frameInfo.isPS);
-    return 0; //frameInfo.isPS;
+    return frameInfo.isPS;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACFindSyncWord(uint8_t *buf, int nBytes){

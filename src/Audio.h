@@ -250,7 +250,7 @@ public:
   void            setAudioTaskCore(uint8_t coreID);
   uint32_t        getHighWatermark();
 private:
-  static const size_t STACK_SIZE = 3300 * 2;
+  static const size_t STACK_SIZE = 3300;
   StaticTask_t xTaskBuffer;
   StackType_t xStack[STACK_SIZE];
 

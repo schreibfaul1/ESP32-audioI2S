@@ -1,45 +1,12 @@
-/*
-** FAAD2 - Freeware Advanced Audio (AAC) Decoder including SBR decoding
-** Copyright (C) 2003-2005 M. Bakker, Nero AG, http://www.nero.com
-**
-** This program is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License as published by
-** the Free Software Foundation; either version 2 of the License, or
-** (at your option) any later version.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with this program; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-**
-** Any non-GPL usage of this software or parts of this software is strictly
-** forbidden.
-**
-** The "appropriate copyright message" mentioned in section 2c of the GPLv2
-** must read: "Code from FAAD2 is copyright (c) Nero AG, www.nero.com"
-**
-** Commercial non-GPL licensing of this software is possible.
-** For more info contact Nero AG through Mpeg4AAClicense@nero.com.
-**
-** $Id: sbr_hfadj.c,v 1.23 2008/09/19 22:50:20 menno Exp $
-**/
 
 /* High Frequency adjustment */
 #include "Arduino.h"
 #include "common.h"
 #include "structs.h"
-
 #ifdef SBR_DEC
-
 #include "sbr_syntax.h"
 #include "sbr_hfadj.h"
-
 #include "sbr_noise.h"
-
 /* static function declarations */
 static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch);
 static void    calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch);
@@ -48,14 +15,13 @@ static void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, ui
 static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch);
     #endif // SBR_LOW_POWER
 static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch);
-
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t* deg /* aliasing degree */, uint8_t ch) {
-    sbr_hfadj_info adj = {0};
+    // sbr_hfadj_info adj = {0};
+    sbr_hfadj_info* adj = (sbr_hfadj_info*)ps_calloc(1, sizeof(sbr_hfadj_info));
     uint8_t        ret = 0;
-
     if (sbr->bs_frame_class[ch] == FIXFIX) {
         sbr->l_A[ch] = -1;
     } else if (sbr->bs_frame_class[ch] == VARFIX) {
@@ -69,25 +35,22 @@ uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t* deg /*
         else
             sbr->l_A[ch] = sbr->L_E[ch] + 1 - sbr->bs_pointer[ch];
     }
-
-    ret = estimate_current_envelope(sbr, &adj, Xsbr, ch);
+    ret = estimate_current_envelope(sbr, adj, Xsbr, ch);
     if (ret > 0) {ret = 1; goto exit;}
-
-    calculate_gain(sbr, &adj, ch);
-
+    calculate_gain(sbr, adj, ch);
     #ifdef SBR_LOW_POWER
-    calc_gain_groups(sbr, &adj, deg, ch);
-    aliasing_reduction(sbr, &adj, deg, ch);
+    calc_gain_groups(sbr, adj, deg, ch);
+    aliasing_reduction(sbr, adj, deg, ch);
     #endif
-
-    hf_assembly(sbr, &adj, Xsbr, ch);
-
+    hf_assembly(sbr, adj, Xsbr, ch);
     ret = 0;
-
 exit:
+    if(adj)free(adj);
     return ret;
 }
-
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
 static uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t current_band) {
     if (sbr->f[ch][l] == HI_RES) {
         /* in case of using f_table_high we just have 1 to 1 mapping
@@ -96,18 +59,15 @@ static uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t curren
         if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][current_band] && sbr->bs_add_harmonic_flag_prev[ch])) { return sbr->bs_add_harmonic[ch][current_band]; }
     } else {
         uint8_t b, lb, ub;
-
         /* in case of f_table_low we check if any of the HI_RES bands
          * within this LO_RES band has bs_add_harmonic[l][k] turned on
          * (note that borders in the LO_RES table are also present in
          * the HI_RES table)
          */
-
         /* find first HI_RES band in current LO_RES band */
         lb = 2 * current_band - ((sbr->N_high & 1) ? 1 : 0);
         /* find first HI_RES band in next LO_RES band */
         ub = 2 * (current_band + 1) - ((sbr->N_high & 1) ? 1 : 0);
-
         /* check all HI_RES bands in current LO_RES band for sinusoid */
         for (b = lb; b < ub; b++) {
             if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][b] && sbr->bs_add_harmonic_flag_prev[ch])) {
@@ -115,28 +75,23 @@ static uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t curren
             }
         }
     }
-
     return 0;
 }
-
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
 static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     uint8_t m, l, j, k, k_l, k_h, p;
     real_t  nrg, div;
-
     if (sbr->bs_interpol_freq == 1) {
         for (l = 0; l < sbr->L_E[ch]; l++) {
             uint8_t i, l_i, u_i;
-
             l_i = sbr->t_E[ch][l];
             u_i = sbr->t_E[ch][l + 1];
-
             div = (real_t)(u_i - l_i);
-
             if (div == 0) div = 1;
-
             for (m = 0; m < sbr->M; m++) {
                 nrg = 0;
-
                 for (i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
     #ifdef FIXED_POINT
         #ifdef SBR_LOW_POWER
@@ -153,7 +108,6 @@ static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf
                         ;
     #endif
                 }
-
                 sbr->E_curr[ch][m][l] = nrg / div;
     #ifdef SBR_LOW_POWER
         #ifdef FIXED_POINT
@@ -169,18 +123,13 @@ static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf
             for (p = 0; p < sbr->n[sbr->f[ch][l]]; p++) {
                 k_l = sbr->f_table_res[sbr->f[ch][l]][p];
                 k_h = sbr->f_table_res[sbr->f[ch][l]][p + 1];
-
                 for (k = k_l; k < k_h; k++) {
                     uint8_t i, l_i, u_i;
                     nrg = 0;
-
                     l_i = sbr->t_E[ch][l];
                     u_i = sbr->t_E[ch][l + 1];
-
                     div = (real_t)((u_i - l_i) * (k_h - k_l));
-
                     if (div == 0) div = 1;
-
                     for (i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
                         for (j = k_l; j < k_h; j++) {
     #ifdef FIXED_POINT
@@ -199,7 +148,6 @@ static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf
     #endif
                         }
                     }
-
                     sbr->E_curr[ch][k - sbr->kx][l] = nrg / div;
     #ifdef SBR_LOW_POWER
         #ifdef FIXED_POINT
@@ -212,18 +160,20 @@ static uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf
             }
         }
     }
-
     return 0;
 }
-
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
     #ifdef FIXED_POINT
         #define _EPS (1) /* smallest number available in fixed point */
     #else
         #define _EPS (1e-12)
     #endif
-
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
     #ifdef FIXED_POINT
-
 /* log2 values of [0..63] */
 static const real_t log2_int_tab[] = {LOG2_MIN_INF,
                                       REAL_CONST(0.000000000000000),
@@ -289,12 +239,20 @@ static const real_t log2_int_tab[] = {LOG2_MIN_INF,
                                       REAL_CONST(5.930737337562887),
                                       REAL_CONST(5.954196310386876),
                                       REAL_CONST(5.977279923499916)};
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static const real_t pan_log2_tab[] = {REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312), REAL_CONST(0.087462841250339),
                                       REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878), REAL_CONST(0.002815015607054),
                                       REAL_CONST(0.001408194392808), REAL_CONST(0.000704269011247), REAL_CONST(0.000352177480301), REAL_CONST(0.000176099486443), REAL_CONST(0.000088052430122),
                                       REAL_CONST(0.000044026886827), REAL_CONST(0.000022013611360), REAL_CONST(0.000011006847667)};
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
@@ -302,10 +260,8 @@ static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
         uint8_t amp1 = (sbr->amp_res[1]) ? 0 : 1;
         real_t  tmp = (7 << REAL_BITS) + (sbr->E[0][k][l] << (REAL_BITS - amp0));
         real_t  pan;
-
         /* E[1] should always be even so shifting is OK */
         uint8_t E = sbr->E[1][k][l] >> amp1;
-
         if (ch == 0) {
             if (E > 12) {
                 /* negative */
@@ -323,24 +279,24 @@ static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
                 pan = pan_log2_tab[E - 12] + ((E - 12) << REAL_BITS);
             }
         }
-
         /* tmp / pan in log2 */
         return tmp - pan;
     } else {
         uint8_t amp = (sbr->amp_res[ch]) ? 0 : 1;
-
         return (6 << REAL_BITS) + (sbr->E[ch][k][l] << (REAL_BITS - amp));
     }
 }
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
         real_t tmp = (7 << REAL_BITS) - (sbr->Q[0][k][l] << REAL_BITS);
         real_t pan;
-
         uint8_t Q = sbr->Q[1][k][l];
-
         if (ch == 0) {
             if (Q > 12) {
                 /* negative */
@@ -358,14 +314,17 @@ static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
                 pan = pan_log2_tab[Q - 12] + ((Q - 12) << REAL_BITS);
             }
         }
-
         /* tmp / pan in log2 */
         return tmp - pan;
     } else {
         return (6 << REAL_BITS) - (sbr->Q[ch][k][l] << REAL_BITS);
     }
 }
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.044383447617292), REAL_CONST(0.169768601655960), REAL_CONST(0.583090126514435), REAL_CONST(1.570089221000671), REAL_CONST(3.092446088790894), REAL_CONST(4.733354568481445),
      REAL_CONST(6.022367954254150), REAL_CONST(6.692092418670654), REAL_CONST(6.924463272094727), REAL_CONST(6.989034175872803), REAL_CONST(7.005646705627441), REAL_CONST(7.009829998016357),
@@ -460,7 +419,11 @@ static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000),
      REAL_CONST(0.000000000000000), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634),
      REAL_CONST(0.000000171982634)}};
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
                                       REAL_CONST(1.584962500721156), REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312),
                                       REAL_CONST(0.087462841250339), REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878),
@@ -468,7 +431,11 @@ static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(
                                       REAL_CONST(0.000088052430122), REAL_CONST(0.000044026886827), REAL_CONST(0.000022013611360), REAL_CONST(0.000011006847667), REAL_CONST(0.000005503434331),
                                       REAL_CONST(0.000002751719790), REAL_CONST(0.000001375860551), REAL_CONST(0.000000687930439), REAL_CONST(0.000000343965261), REAL_CONST(0.000000171982641),
                                       REAL_CONST(0.000000000000000)};
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
@@ -489,36 +456,32 @@ static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) 
         }
     }
 }
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
 static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static real_t limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
     uint8_t       m, l, k;
-
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-
     // ALIGN real_t Q_M_lim[MAX_M];
     // ALIGN real_t G_lim[MAX_M];
     // ALIGN real_t S_M[MAX_M];
     ALIGN real_t G_boost;
-
     real_t* Q_M_lim = ps_malloc(MAX_M * sizeof(real_t));
     real_t* G_lim = ps_malloc(MAX_M * sizeof(real_t));
     real_t* S_M = ps_malloc(MAX_M * sizeof(real_t));
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-
         real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
-
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
-
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
-
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
             real_t  Q_M = 0;
             real_t  G_max;
@@ -527,77 +490,61 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             real_t  acc2 = 0;
             uint8_t current_res_band_size = 0;
             uint8_t Q_M_size = 0;
-
             uint8_t ml1, ml2;
-
             /* bounds of current limiter bands */
             ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
             ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
-
             if (ml1 > MAX_M) ml1 = MAX_M;
-
             if (ml2 > MAX_M) ml2 = MAX_M;
-
             /* calculate the accumulated E_orig and E_curr over the limiter band */
             for (m = ml1; m < ml2; m++) {
                 if ((m + sbr->kx) < sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
                     current_res_band_size++;
                 } else {
                     acc1 += pow2_int(-REAL_CONST(10) + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch));
-
                     current_res_band++;
                     current_res_band_size = 1;
                 }
-
                 acc2 += sbr->E_curr[ch][m][l];
             }
             acc1 += pow2_int(-REAL_CONST(10) + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch));
-
             if (acc1 == 0)
                 acc1 = LOG2_MIN_INF;
             else
                 acc1 = log2_int(acc1);
-
             /* calculate the maximum gain */
             /* ratio of the energy of the original signal and the energy
              * of the HF generated signal
              */
             G_max = acc1 - log2_int(acc2) + limGain[sbr->bs_limiter_gains];
             G_max = min(G_max, limGain[3]);
-
             for (m = ml1; m < ml2; m++) {
                 real_t  G;
                 real_t  E_curr, E_orig;
                 real_t  Q_orig, Q_orig_plus1;
                 uint8_t S_index_mapped;
-
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
                     /* step to next noise band */
                     current_f_noise_band++;
                 }
-
                 /* check if m is on a resolution band border */
                 if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
                     /* accumulate a whole range of equal Q_Ms */
                     if (Q_M_size > 0) den += pow2_int(log2_int_tab[Q_M_size] + Q_M);
                     Q_M_size = 0;
-
                     /* step to next resolution band */
                     current_res_band2++;
-
                     /* if we move to a new resolution band, we should check if we are
                      * going to add a sinusoid in this band
                      */
                     S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
                 }
-
                 /* check if m is on a HI_RES band border */
                 if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
                     /* step to next HI_RES band */
                     current_hi_res_band++;
                 }
-
                 /* find S_index_mapped
                  * S_index_mapped can only be 1 for the m in the middle of the
                  * current HI_RES band
@@ -608,23 +555,19 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
                         S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
                 }
-
                 /* find bitstream parameters */
                 if (sbr->E_curr[ch][m][l] == 0)
                     E_curr = LOG2_MIN_INF;
                 else
                     E_curr = log2_int(sbr->E_curr[ch][m][l]);
                 E_orig = -REAL_CONST(10) + find_log2_E(sbr, current_res_band2, l, ch);
-
                 Q_orig = find_log2_Q(sbr, current_f_noise_band, current_t_noise_band, ch);
                 Q_orig_plus1 = find_log2_Qplus1(sbr, current_f_noise_band, current_t_noise_band, ch);
-
                 /* Q_M only depends on E_orig and Q_div2:
                  * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
                  * a change of current res band (HI or LO)
                  */
                 Q_M = E_orig + Q_orig - Q_orig_plus1;
-
                 /* S_M only depends on E_orig, Q_div and S_index_mapped:
                  * S_index_mapped can only be non-zero once per HI_RES band
                  */
@@ -632,11 +575,9 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     S_M[m] = LOG2_MIN_INF; /* -inf */
                 } else {
                     S_M[m] = E_orig - Q_orig_plus1;
-
                     /* accumulate sinusoid part of the total energy */
                     den += pow2_int(S_M[m]);
                 }
-
                 /* calculate gain */
                 /* ratio of the energy of the original signal and the energy
                  * of the HF generated signal
@@ -651,36 +592,29 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     /* G = G * Q/(1+Q) */
                     G += Q_orig - Q_orig_plus1;
                 }
-
                 /* limit the additional noise energy level */
                 /* and apply the limiter */
                 if (G_max > G) {
                     Q_M_lim[m] = Q_M;
                     G_lim[m] = G;
-
                     if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { Q_M_size++; }
                 } else {
                     /* G > G_max */
                     Q_M_lim[m] = Q_M + G_max - G;
                     G_lim[m] = G_max;
-
                     /* accumulate limited Q_M */
                     if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { den += pow2_int(Q_M_lim[m]); }
                 }
-
                 /* accumulate the total energy */
                 /* E_curr changes for every m so we do need to accumulate every m */
                 den += pow2_int(E_curr + G_lim[m]);
             }
-
             /* accumulate last range of equal Q_Ms */
             if (Q_M_size > 0) { den += pow2_int(log2_int_tab[Q_M_size] + Q_M); }
-
             /* calculate the final gain */
             /* G_boost: [0..2.51188643] */
             G_boost = acc1 - log2_int(den /*+ _EPS*/);
             G_boost = min(G_boost, REAL_CONST(1.328771237) /* log2(1.584893192 ^ 2) */);
-
             for (m = ml1; m < ml2; m++) {
                     /* apply compensation to gain, noise floor sf's and sinusoid levels */
         #ifndef SBR_LOW_POWER
@@ -692,7 +626,6 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                 adj->G_lim_boost[l][m] = pow2_fix(G_lim[m] + G_boost);
         #endif
                 adj->Q_M_lim_boost[l][m] = pow2_fix((Q_M_lim[m] + G_boost) >> 1);
-
                 if (S_M[m] != LOG2_MIN_INF) {
                     adj->S_M_boost[l][m] = pow2_int((S_M[m] + G_boost) >> 1);
                 } else {
@@ -705,33 +638,34 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     if(G_lim)free(G_lim);
     if(S_M)free(S_M);
 }
-
-    #else
-
-    // #define LOG2_TEST
-
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-
             #define LOG2_MIN_INF -100000
-
 __inline float pow2(float val) {
     return pow(2.0, val);
 }
 __inline float log2(float val) {
     return log(val) / log(2.0);
 }
-
             #define RB 14
-
 float QUANTISE2REAL(float val) {
     __int32 ival = (__int32)(val * (1 << RB));
     return (float)ival / (float)((1 << RB));
 }
-
 float QUANTISE2INT(float val) {
     return floor(val);
 }
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 /* log2 values of [0..63] */
 static const real_t log2_int_tab[] = {LOG2_MIN_INF,      0.000000000000000, 1.000000000000000, 1.584962500721156, 2.000000000000000, 2.321928094887362, 2.584962500721156, 2.807354922057604,
                                       3.000000000000000, 3.169925001442313, 3.321928094887363, 3.459431618637297, 3.584962500721156, 3.700439718141092, 3.807354922057604, 3.906890595608519,
@@ -741,11 +675,16 @@ static const real_t log2_int_tab[] = {LOG2_MIN_INF,      0.000000000000000, 1.00
                                       5.321928094887363, 5.357552004618084, 5.392317422778761, 5.426264754702098, 5.459431618637297, 5.491853096329675, 5.523561956057013, 5.554588851677637,
                                       5.584962500721156, 5.614709844115208, 5.643856189774724, 5.672425341971495, 5.700439718141093, 5.727920454563200, 5.754887502163469, 5.781359713524660,
                                       5.807354922057605, 5.832890014164742, 5.857980995127572, 5.882643049361842, 5.906890595608518, 5.930737337562887, 5.954196310386876, 5.977279923499916};
-
 static const real_t pan_log2_tab[] = {1.000000000000000, 0.584962500721156, 0.321928094887362, 0.169925001442312, 0.087462841250339, 0.044394119358453,
                                       0.022367813028455, 0.011227255423254, 0.005624549193878, 0.002815015607054, 0.001408194392808, 0.000704269011247,
                                       0.000352177480301, 0.000176099486443, 0.000088052430122, 0.000044026886827, 0.000022013611360, 0.000011006847667};
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
@@ -753,9 +692,7 @@ static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
         real_t amp1 = (sbr->amp_res[1]) ? 1.0 : 0.5;
         float  tmp = QUANTISE2REAL(7.0 + (real_t)sbr->E[0][k][l] * amp0);
         float  pan;
-
         int E = (int)(sbr->E[1][k][l] * amp1);
-
         if (ch == 0) {
             if (E > 12) {
                 /* negative */
@@ -773,24 +710,26 @@ static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
                 pan = QUANTISE2REAL(pan_log2_tab[E - 12] + (E - 12));
             }
         }
-
         /* tmp / pan in log2 */
         return QUANTISE2REAL(tmp - pan);
     } else {
         real_t amp = (sbr->amp_res[ch]) ? 1.0 : 0.5;
-
         return QUANTISE2REAL(6.0 + (real_t)sbr->E[ch][k][l] * amp);
     }
 }
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
         float tmp = QUANTISE2REAL(7.0 - (real_t)sbr->Q[0][k][l]);
         float pan;
-
         int Q = (int)(sbr->Q[1][k][l]);
-
         if (ch == 0) {
             if (Q > 12) {
                 /* negative */
@@ -808,14 +747,19 @@ static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
                 pan = QUANTISE2REAL(pan_log2_tab[Q - 12] + (Q - 12));
             }
         }
-
         /* tmp / pan in log2 */
         return QUANTISE2REAL(tmp - pan);
     } else {
         return QUANTISE2REAL(6.0 - (real_t)sbr->Q[ch][k][l]);
     }
 }
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.044383447617292), REAL_CONST(0.169768601655960), REAL_CONST(0.583090126514435), REAL_CONST(1.570089221000671), REAL_CONST(3.092446088790894), REAL_CONST(4.733354568481445),
      REAL_CONST(6.022367954254150), REAL_CONST(6.692092418670654), REAL_CONST(6.924463272094727), REAL_CONST(6.989034175872803), REAL_CONST(7.005646705627441), REAL_CONST(7.009829998016357),
@@ -910,7 +854,13 @@ static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000), REAL_CONST(0.000000000000000),
      REAL_CONST(0.000000000000000), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634), REAL_CONST(0.000000171982634),
      REAL_CONST(0.000000171982634)}};
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
                                       REAL_CONST(1.584962500721156), REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312),
                                       REAL_CONST(0.087462841250339), REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878),
@@ -918,7 +868,13 @@ static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(
                                       REAL_CONST(0.000088052430122), REAL_CONST(0.000044026886827), REAL_CONST(0.000022013611360), REAL_CONST(0.000011006847667), REAL_CONST(0.000005503434331),
                                       REAL_CONST(0.000002751719790), REAL_CONST(0.000001375860551), REAL_CONST(0.000000687930439), REAL_CONST(0.000000343965261), REAL_CONST(0.000000171982641),
                                       REAL_CONST(0.000000000000000)};
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
@@ -939,32 +895,31 @@ static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) 
         }
     }
 }
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
 static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static real_t limGain[] = {-1.0, 0.0, 1.0, 33.219};
     uint8_t       m, l, k;
-
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-
     ALIGN real_t Q_M_lim[MAX_M];
     ALIGN real_t G_lim[MAX_M];
     ALIGN real_t G_boost;
     ALIGN real_t S_M[MAX_M];
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-
         real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
-
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
-
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
-
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
             real_t  Q_M = 0;
             real_t  G_max;
@@ -973,74 +928,58 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             real_t  acc2 = 0;
             uint8_t current_res_band_size = 0;
             uint8_t Q_M_size = 0;
-
             uint8_t ml1, ml2;
-
             /* bounds of current limiter bands */
             ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
             ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
-
             if (ml1 > MAX_M) ml1 = MAX_M;
-
             if (ml2 > MAX_M) ml2 = MAX_M;
-
             /* calculate the accumulated E_orig and E_curr over the limiter band */
             for (m = ml1; m < ml2; m++) {
                 if ((m + sbr->kx) < sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
                     current_res_band_size++;
                 } else {
                     acc1 += QUANTISE2INT(pow2(-10 + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch)));
-
                     current_res_band++;
                     current_res_band_size = 1;
                 }
-
                 acc2 += QUANTISE2INT(sbr->E_curr[ch][m][l] / 1024.0);
             }
             acc1 += QUANTISE2INT(pow2(-10 + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch)));
-
             acc1 = QUANTISE2REAL(log2(_EPS + acc1));
-
             /* calculate the maximum gain */
             /* ratio of the energy of the original signal and the energy
              * of the HF generated signal
              */
             G_max = acc1 - QUANTISE2REAL(log2(_EPS + acc2)) + QUANTISE2REAL(limGain[sbr->bs_limiter_gains]);
             G_max = min(G_max, QUANTISE2REAL(limGain[3]));
-
             for (m = ml1; m < ml2; m++) {
                 real_t  G;
                 real_t  E_curr, E_orig;
                 real_t  Q_orig, Q_orig_plus1;
                 uint8_t S_index_mapped;
-
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
                     /* step to next noise band */
                     current_f_noise_band++;
                 }
-
                 /* check if m is on a resolution band border */
                 if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
                     /* accumulate a whole range of equal Q_Ms */
                     if (Q_M_size > 0) den += QUANTISE2INT(pow2(log2_int_tab[Q_M_size] + Q_M));
                     Q_M_size = 0;
-
                     /* step to next resolution band */
                     current_res_band2++;
-
                     /* if we move to a new resolution band, we should check if we are
                      * going to add a sinusoid in this band
                      */
                     S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
                 }
-
                 /* check if m is on a HI_RES band border */
                 if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
                     /* step to next HI_RES band */
                     current_hi_res_band++;
                 }
-
                 /* find S_index_mapped
                  * S_index_mapped can only be 1 for the m in the middle of the
                  * current HI_RES band
@@ -1051,23 +990,19 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
                         S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
                 }
-
                 /* find bitstream parameters */
                 if (sbr->E_curr[ch][m][l] == 0)
                     E_curr = LOG2_MIN_INF;
                 else
                     E_curr = -10 + log2(sbr->E_curr[ch][m][l]);
                 E_orig = -10 + find_log2_E(sbr, current_res_band2, l, ch);
-
                 Q_orig = find_log2_Q(sbr, current_f_noise_band, current_t_noise_band, ch);
                 Q_orig_plus1 = find_log2_Qplus1(sbr, current_f_noise_band, current_t_noise_band, ch);
-
                 /* Q_M only depends on E_orig and Q_div2:
                  * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
                  * a change of current res band (HI or LO)
                  */
                 Q_M = E_orig + Q_orig - Q_orig_plus1;
-
                 /* S_M only depends on E_orig, Q_div and S_index_mapped:
                  * S_index_mapped can only be non-zero once per HI_RES band
                  */
@@ -1075,11 +1010,9 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     S_M[m] = LOG2_MIN_INF; /* -inf */
                 } else {
                     S_M[m] = E_orig - Q_orig_plus1;
-
                     /* accumulate sinusoid part of the total energy */
                     den += pow2(S_M[m]);
                 }
-
                 /* calculate gain */
                 /* ratio of the energy of the original signal and the energy
                  * of the HF generated signal
@@ -1094,36 +1027,29 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     /* G = G * Q/(1+Q) */
                     G += Q_orig - Q_orig_plus1;
                 }
-
                 /* limit the additional noise energy level */
                 /* and apply the limiter */
                 if (G_max > G) {
                     Q_M_lim[m] = QUANTISE2REAL(Q_M);
                     G_lim[m] = QUANTISE2REAL(G);
-
                     if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { Q_M_size++; }
                 } else {
                     /* G > G_max */
                     Q_M_lim[m] = QUANTISE2REAL(Q_M) + G_max - QUANTISE2REAL(G);
                     G_lim[m] = G_max;
-
                     /* accumulate limited Q_M */
                     if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { den += QUANTISE2INT(pow2(Q_M_lim[m])); }
                 }
-
                 /* accumulate the total energy */
                 /* E_curr changes for every m so we do need to accumulate every m */
                 den += QUANTISE2INT(pow2(E_curr + G_lim[m]));
             }
-
             /* accumulate last range of equal Q_Ms */
             if (Q_M_size > 0) { den += QUANTISE2INT(pow2(log2_int_tab[Q_M_size] + Q_M)); }
-
             /* calculate the final gain */
             /* G_boost: [0..2.51188643] */
             G_boost = acc1 - QUANTISE2REAL(log2(den + _EPS));
             G_boost = min(G_boost, QUANTISE2REAL(1.328771237) /* log2(1.584893192 ^ 2) */);
-
             for (m = ml1; m < ml2; m++) {
                         /* apply compensation to gain, noise floor sf's and sinusoid levels */
             #ifndef SBR_LOW_POWER
@@ -1135,7 +1061,6 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                 adj->G_lim_boost[l][m] = QUANTISE2REAL(pow2(G_lim[m] + G_boost));
             #endif
                 adj->Q_M_lim_boost[l][m] = QUANTISE2REAL(pow2((Q_M_lim[m] + 10 + G_boost) / 2.0));
-
                 if (S_M[m] != LOG2_MIN_INF) {
                     adj->S_M_boost[l][m] = QUANTISE2REAL(pow2((S_M[m] + 10 + G_boost) / 2.0));
                 } else {
@@ -1145,91 +1070,76 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         }
     }
 }
-
-        #else
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifndef LOG2_TEST
 static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     static real_t limGain[] = {0.5, 1.0, 2.0, 1e10};
     uint8_t       m, l, k;
-
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-
     ALIGN real_t Q_M_lim[MAX_M];
     ALIGN real_t G_lim[MAX_M];
     ALIGN real_t G_boost;
     ALIGN real_t S_M[MAX_M];
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-
         real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
-
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
-
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
-
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
             real_t  G_max;
             real_t  den = 0;
             real_t  acc1 = 0;
             real_t  acc2 = 0;
-            uint8_t current_res_band_size = 0;
-
+            uint8_t current_res_band_size = 0; (void)current_res_band_size;
             uint8_t ml1, ml2;
-
             ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
             ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
-
             if (ml1 > MAX_M) ml1 = MAX_M;
-
             if (ml2 > MAX_M) ml2 = MAX_M;
-
             /* calculate the accumulated E_orig and E_curr over the limiter band */
             for (m = ml1; m < ml2; m++) {
                 if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) { current_res_band++; }
                 acc1 += sbr->E_orig[ch][current_res_band][l];
                 acc2 += sbr->E_curr[ch][m][l];
             }
-
             /* calculate the maximum gain */
             /* ratio of the energy of the original signal and the energy
              * of the HF generated signal
              */
             G_max = ((_EPS + acc1) / (_EPS + acc2)) * limGain[sbr->bs_limiter_gains];
             G_max = min(G_max, 1e10);
-
             for (m = ml1; m < ml2; m++) {
                 real_t  Q_M, G;
                 real_t  Q_div, Q_div2;
                 uint8_t S_index_mapped;
-
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
                     /* step to next noise band */
                     current_f_noise_band++;
                 }
-
                 /* check if m is on a resolution band border */
                 if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
                     /* step to next resolution band */
                     current_res_band2++;
-
                     /* if we move to a new resolution band, we should check if we are
                      * going to add a sinusoid in this band
                      */
                     S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
                 }
-
                 /* check if m is on a HI_RES band border */
                 if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
                     /* step to next HI_RES band */
                     current_hi_res_band++;
                 }
-
                 /* find S_index_mapped
                  * S_index_mapped can only be 1 for the m in the middle of the
                  * current HI_RES band
@@ -1240,19 +1150,15 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
                         S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
                 }
-
                 /* Q_div: [0..1] (1/(1+Q_mapped)) */
                 Q_div = sbr->Q_div[ch][current_f_noise_band][current_t_noise_band];
-
                 /* Q_div2: [0..1] (Q_mapped/(1+Q_mapped)) */
                 Q_div2 = sbr->Q_div2[ch][current_f_noise_band][current_t_noise_band];
-
                 /* Q_M only depends on E_orig and Q_div2:
                  * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
                  * a change of current noise band
                  */
                 Q_M = sbr->E_orig[ch][current_res_band2][l] * Q_div2;
-
                 /* S_M only depends on E_orig, Q_div and S_index_mapped:
                  * S_index_mapped can only be non-zero once per HI_RES band
                  */
@@ -1260,11 +1166,9 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     S_M[m] = 0;
                 } else {
                     S_M[m] = sbr->E_orig[ch][current_res_band2][l] * Q_div;
-
                     /* accumulate sinusoid part of the total energy */
                     den += S_M[m];
                 }
-
                 /* calculate gain */
                 /* ratio of the energy of the original signal and the energy
                  * of the HF generated signal
@@ -1274,7 +1178,6 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     G *= Q_div;
                 else if (S_mapped == 1)
                     G *= Q_div2;
-
                 /* limit the additional noise energy level */
                 /* and apply the limiter */
                 if (G_max > G) {
@@ -1284,16 +1187,13 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                     Q_M_lim[m] = Q_M * G_max / G;
                     G_lim[m] = G_max;
                 }
-
                 /* accumulate the total energy */
                 den += sbr->E_curr[ch][m][l] * G_lim[m];
                 if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) den += Q_M_lim[m];
             }
-
             /* G_boost: [0..2.51188643] */
             G_boost = (acc1 + _EPS) / (den + _EPS);
             G_boost = min(G_boost, 2.51188643 /* 1.584893192 ^ 2 */);
-
             for (m = ml1; m < ml2; m++) {
                         /* apply compensation to gain, noise floor sf's and sinusoid levels */
             #ifndef SBR_LOW_POWER
@@ -1305,7 +1205,6 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
                 adj->G_lim_boost[l][m] = G_lim[m] * G_boost;
             #endif
                 adj->Q_M_lim_boost[l][m] = sqrt(Q_M_lim[m] * G_boost);
-
                 if (S_M[m] != 0) {
                     adj->S_M_boost[l][m] = sqrt(S_M[m] * G_boost);
                 } else {
@@ -1315,31 +1214,27 @@ static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         }
     }
 }
-        #endif // log2_test
-
-    #endif
-
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 static void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
     uint8_t l, k, i;
     uint8_t grouping;
     uint8_t S_mapped;
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_res_band = 0;
         i = 0;
         grouping = 0;
-
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band);
-
         for (k = sbr->kx; k < sbr->kx + sbr->M - 1; k++) {
             if (k == sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
                 /* step to next resolution band */
                 current_res_band++;
-
                 S_mapped = get_S_mapped(sbr, ch, l, current_res_band);
             }
-
             if (deg[k + 1] && S_mapped == 0) {
                 if (grouping == 0) {
                     sbr->f_group[l][i] = k;
@@ -1358,24 +1253,24 @@ static void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, ui
                 }
             }
         }
-
         if (grouping) {
             sbr->f_group[l][i] = sbr->kx + sbr->M;
             i++;
         }
-
         sbr->N_G[l] = (uint8_t)(i >> 1);
     }
 }
-
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
 static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
     uint8_t l, k, m;
     real_t  E_total, E_total_est, G_target, acc;
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         for (k = 0; k < sbr->N_G[l]; k++) {
             E_total_est = E_total = 0;
-
             for (m = sbr->f_group[l][k << 1]; m < sbr->f_group[l][(k << 1) + 1]; m++) {
                 /* E_curr: integer */
                 /* G_lim_boost: fixed point */
@@ -1388,7 +1283,6 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
                 E_total += sbr->E_curr[ch][m - sbr->kx][l] * adj->G_lim_boost[l][m - sbr->kx];
         #endif
             }
-
             /* G_target: fixed point */
             if ((E_total_est + _EPS) == 0) {
                 G_target = 0;
@@ -1400,19 +1294,15 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
         #endif
             }
             acc = 0;
-
             for (m = sbr->f_group[l][(k << 1)]; m < sbr->f_group[l][(k << 1) + 1]; m++) {
                 real_t alpha;
-
                 /* alpha: (COEF) fixed point */
                 if (m < sbr->kx + sbr->M - 1) {
                     alpha = max(deg[m], deg[m + 1]);
                 } else {
                     alpha = deg[m];
                 }
-
                 adj->G_lim_boost[l][m - sbr->kx] = MUL_C(alpha, G_target) + MUL_C((COEF_CONST(1) - alpha), adj->G_lim_boost[l][m - sbr->kx]);
-
                     /* acc: integer */
         #ifdef FIXED_POINT
                 acc += MUL_Q2(adj->G_lim_boost[l][m - sbr->kx], sbr->E_curr[ch][m - sbr->kx][l]);
@@ -1420,7 +1310,6 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
                 acc += adj->G_lim_boost[l][m - sbr->kx] * sbr->E_curr[ch][m - sbr->kx][l];
         #endif
             }
-
             /* acc: fixed point */
             if (acc + _EPS == 0) {
                 acc = 0;
@@ -1440,7 +1329,6 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
             }
         }
     }
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
             for (m = sbr->f_table_lim[sbr->bs_limiter_bands][k]; m < sbr->f_table_lim[sbr->bs_limiter_bands][k + 1]; m++) {
@@ -1453,22 +1341,20 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
         }
     }
 }
-    #endif
-
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
 static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
-    static real_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
-    static int8_t phi_re[] = {1, 0, -1, 0};
-    static int8_t phi_im[] = {0, 1, 0, -1};
-
+    real_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
+    int8_t phi_re[] = {1, 0, -1, 0};
+    int8_t phi_im[] = {0, 1, 0, -1};
     uint8_t  m, l, i, n;
     uint16_t fIndexNoise = 0;
     uint8_t  fIndexSine = 0;
     uint8_t  assembly_reset = 0;
-
     real_t G_filt, Q_filt;
-
     uint8_t h_SL;
-
     if (sbr->Reset == 1) {
         assembly_reset = 1;
         fIndexNoise = 0;
@@ -1476,17 +1362,14 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
         fIndexNoise = sbr->index_noise_prev[ch];
     }
     fIndexSine = sbr->psi_is_prev[ch];
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t no_noise = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 1 : 0;
-
     #ifdef SBR_LOW_POWER
         h_SL = 0;
     #else
         h_SL = (sbr->bs_smoothing_mode == 1) ? 0 : 4;
         h_SL = (no_noise ? 0 : h_SL);
     #endif
-
         if (assembly_reset) {
             for (n = 0; n < 4; n++) {
                 memcpy(sbr->G_temp_prev[ch][n], adj->G_lim_boost[l], sbr->M * sizeof(real_t));
@@ -1496,23 +1379,18 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
             sbr->GQ_ringbuf_index[ch] = 4;
             assembly_reset = 0;
         }
-
         for (i = sbr->t_E[ch][l]; i < sbr->t_E[ch][l + 1]; i++) {
     #ifdef SBR_LOW_POWER
             uint8_t i_min1, i_plus1;
             uint8_t sinusoids = 0;
     #endif
-
             /* load new values into ringbuffer */
             memcpy(sbr->G_temp_prev[ch][sbr->GQ_ringbuf_index[ch]], adj->G_lim_boost[l], sbr->M * sizeof(real_t));
             memcpy(sbr->Q_temp_prev[ch][sbr->GQ_ringbuf_index[ch]], adj->Q_M_lim_boost[l], sbr->M * sizeof(real_t));
-
             for (m = 0; m < sbr->M; m++) {
                 qmf_t psi;
-
                 G_filt = 0;
                 Q_filt = 0;
-
     #ifndef SBR_LOW_POWER
                 if (h_SL != 0) {
                     uint8_t ri = sbr->GQ_ringbuf_index[ch];
@@ -1530,12 +1408,9 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
     #ifndef SBR_LOW_POWER
                 }
     #endif
-
                 Q_filt = (adj->S_M_boost[l][m] != 0 || no_noise) ? 0 : Q_filt;
-
                 /* add noise to the output */
                 fIndexNoise = (fIndexNoise + 1) & 511;
-
                 /* the smoothed gain values are applied to Xsbr */
                 /* V is defined, not calculated */
     #ifndef FIXED_POINT
@@ -1555,7 +1430,6 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
                 QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = MUL_R(G_filt, QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx])) + MUL_F(Q_filt, IM(V[fIndexNoise]));
         #endif
     #endif
-
                 {
                     int8_t rev = (((m + sbr->kx) & 1) ? -1 : 1);
                     QMF_RE(psi) = adj->S_M_boost[l][m] * phi_re[fIndexSine];
@@ -1564,7 +1438,6 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
     #else
                     QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += QMF_RE(psi);
     #endif
-
     #ifndef SBR_LOW_POWER
                     QMF_IM(psi) = rev * adj->S_M_boost[l][m] * phi_im[fIndexSine];
         #ifdef FIXED_POINT
@@ -1573,10 +1446,8 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
                     QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += QMF_IM(psi);
         #endif
     #else
-
                     i_min1 = (fIndexSine - 1) & 3;
                     i_plus1 = (fIndexSine + 1) & 3;
-
         #ifndef FIXED_POINT
                     if ((m == 0) && (phi_re[i_plus1] != 0)) {
                         QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx - 1]) += (rev * phi_re[i_plus1] * MUL_F(adj->S_M_boost[l][0], FRAC_CONST(0.00815)));
@@ -1608,22 +1479,19 @@ static void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRH
                         if (m + sbr->kx < 64) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx + 1]) += (rev * phi_re[i_min1] * MUL_F((adj->S_M_boost[l][m] << REAL_BITS), FRAC_CONST(0.00815))); }
                     }
         #endif
-
                     if (adj->S_M_boost[l][m] != 0) sinusoids++;
     #endif
                 }
             }
-
             fIndexSine = (fIndexSine + 1) & 3;
-
             /* update the ringbuffer index used for filtering G and Q with h_smooth */
             sbr->GQ_ringbuf_index[ch]++;
             if (sbr->GQ_ringbuf_index[ch] >= 5) sbr->GQ_ringbuf_index[ch] = 0;
         }
     }
-
     sbr->index_noise_prev[ch] = fIndexNoise;
     sbr->psi_is_prev[ch] = fIndexSine;
 }
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-#endif
