@@ -29,12 +29,15 @@
 **/
 #ifndef __FIXED_H__
 #define __FIXED_H__
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 #if defined(_WIN32_WCE) && defined(_ARM_)
+
 #include <cmnintrin.h>
 #endif
+#include "Arduino.h"
 #define COEF_BITS 28
 #define COEF_PRECISION (1 << COEF_BITS)
 #define REAL_BITS 14 // MAXIMUM OF 14 FOR FIXED POINT SBR
@@ -228,7 +231,7 @@ void ComplexMult(real_t *y1, real_t *y2,
          "%0 = (a0 += a1);\n\t"                          \
          : "=d" (__xxo) : "d" (X), "d" (Y) : "A0","A1"); __xxo; })
 #else
-  #define _MulHigh(A,B) (real_t)(((int64_t)(A)*(int64_t)(B)+(1 << (FRAC_SIZE-1))) >> FRAC_SIZE)
+ #define _MulHigh(A,B) (real_t)(((int64_t)(A)*(int64_t)(B)+(1 << (FRAC_SIZE-1))) >> FRAC_SIZE)
   #define MUL_F(A,B) (real_t)(((int64_t)(A)*(int64_t)(B)+(1 << (FRAC_BITS-1))) >> FRAC_BITS)
 #endif
 #endif
@@ -236,12 +239,18 @@ void ComplexMult(real_t *y1, real_t *y2,
   #define MUL_SHIFT6(A,B) (real_t)(((int64_t)(A)*(int64_t)(B)+(1 << (6-1))) >> 6)
   #define MUL_SHIFT23(A,B) (real_t)(((int64_t)(A)*(int64_t)(B)+(1 << (23-1))) >> 23)
 /* Complex multiplication */
-static inline void ComplexMult(real_t *y1, real_t *y2,
-    real_t x1, real_t x2, real_t c1, real_t c2)
-{
-    *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2))<<(FRAC_SIZE-FRAC_BITS);
-    *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2))<<(FRAC_SIZE-FRAC_BITS);
-}
+
+
+  static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
+      *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
+      *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
+       static uint32_t i = 0;
+      i++;
+      if(i==1000000){
+        i=0;
+        log_w("1000000");
+      }
+  }
 #endif
 #ifdef __cplusplus
 }

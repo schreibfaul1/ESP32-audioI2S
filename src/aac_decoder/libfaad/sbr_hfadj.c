@@ -1333,7 +1333,7 @@ static void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, 
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
             for (m = sbr->f_table_lim[sbr->bs_limiter_bands][k]; m < sbr->f_table_lim[sbr->bs_limiter_bands][k + 1]; m++) {
         #ifdef FIXED_POINT
-                adj->G_lim_boost[l][m] = SBR_SQRT_Q2(adj->G_lim_boost[l][m]);
+                adj->G_lim_boost[l][m] = sqrt(adj->G_lim_boost[l][m]);
         #else
                 adj->G_lim_boost[l][m] = sqrt(adj->G_lim_boost[l][m]);
         #endif

@@ -133,13 +133,13 @@ static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTS
     uint8_t offset = sbr->tHFAdj;
         #ifdef FIXED_POINT
     const real_t rel = FRAC_CONST(0.999999); // 1 / (1 + 1e-6f);
-    uint32_t     maxi = 0;
-    uint32_t     pow2, exp;
+    uint32_t     maxi = 0; (void)maxi;
+    uint32_t     pow2, exp;(void)pow2;
         #else
     const real_t rel = 1 / (1 + 1e-6f);
         #endif
         #ifdef FIXED_POINT
-    mask = 0;
+    uint32_t mask = 0;
     for (j = (offset - 2); j < (len + offset); j++) {
         real_t x;
         x = QMF_RE(buffer[j][bd]) >> REAL_BITS;

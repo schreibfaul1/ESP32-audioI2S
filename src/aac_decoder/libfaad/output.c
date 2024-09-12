@@ -351,6 +351,8 @@ void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffe
 //#endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
+    #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
+    #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
 static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel) {
     if(up_matrix == 1) return input[internal_channel[0]][sample];
     if(!down_matrix) return input[internal_channel[channel]][sample];

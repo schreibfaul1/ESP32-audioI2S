@@ -60,6 +60,7 @@ extern "C" {
 #define FIXED_POINT
 #endif
 
+#define FIXED_POINT
 #define ERROR_RESILIENCE
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
 //#define SSR_DEC // Allow decoding of SSR profile AAC
@@ -67,7 +68,7 @@ extern "C" {
 #define LD_DEC // Allow decoding of LD (Low Delay) profile AAC
 //#define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
 #define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
-#define SBR_LOW_POWER
+//#define SBR_LOW_POWER
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
 
@@ -249,6 +250,7 @@ char *strchr(), *strrchr();
   #define Q2_CONST(A) ((real_t)(A))
   #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
   /* Complex multiplication */
+  
   __unused static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
       *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
       *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);

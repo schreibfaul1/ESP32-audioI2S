@@ -33,6 +33,9 @@
 extern "C" {
 #endif
 #include "bits.h"
+#include "common.h"
+#include <stdint.h>
+#include <stdint-gcc.h>
 #define EXTENSION_ID_PS 2
 #define MAX_PS_ENVELOPES 5
 #define NO_ALLPASS_LINKS 3
