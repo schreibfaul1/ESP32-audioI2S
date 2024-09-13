@@ -5,20 +5,22 @@
  *  Updated on: 28.08.2024
 */
 
-
+#include "Arduino.h"
 #include "aac_decoder.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include "libfaad/common.h"
 #include "libfaad/neaacdec.h"
+
 
 // Declaration of the required global variables
 
 NeAACDecHandle hAac;
-NeAACDecFrameInfo_t frameInfo;
-NeAACDecConfigurationPtr_t conf;
+NeAACDecFrameInfo frameInfo;
+NeAACDecConfigurationPtr conf;
 const uint8_t  SYNCWORDH = 0xff; /* 12-bit syncword */
 const uint8_t  SYNCWORDL = 0xf0;
 bool f_decoderIsInit = false;
@@ -30,7 +32,7 @@ uint8_t aacProfile = 0;
 static uint16_t validSamples = 0;
 clock_t before;
 float compressionRatio = 1;
-mp4AudioSpecificConfig_t* mp4ASC;
+mp4AudioSpecificConfig* mp4ASC;
 
 //----------------------------------------------------------------------------------------------------------------------
 bool AACDecoder_IsInit(){
@@ -54,7 +56,7 @@ void AACDecoder_FreeBuffers(){
     f_decoderIsInit = false;
     f_firstCall = false;
     clock_t difference = clock() - before;
-    int msec = difference  / CLOCKS_PER_SEC;
+    int msec = difference  / CLOCKS_PER_SEC; (void)msec;
 //    printf("ms %li\n", difference);
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -122,6 +124,8 @@ void createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t
     config[1] = (samplingFrequencyIndex << 7) | (channelConfiguration << 3);
 }
 //----------------------------------------------------------------------------------------------------------------------
+extern uint8_t get_sr_index(const uint32_t samplerate);
+
 int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     uint8_t* ob = (uint8_t*)outbuf;
     if (f_firstCall == false){
@@ -131,21 +135,20 @@ int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
             conf->outputFormat = FAAD_FMT_16BIT;
             conf->useOldADTSFormat = 1;
             conf->defObjectType = 2;
-            int8_t ret = NeAACDecSetConfiguration(hAac, conf);
+            int8_t ret = NeAACDecSetConfiguration(hAac, conf); (void)ret;
 
             uint8_t specificInfo[2];
             createAudioSpecificConfig(specificInfo, aacProfile, get_sr_index(aacSamplerate), aacChannels);
-            int8_t err = NeAACDecInit2(hAac, specificInfo, 2, &aacSamplerate, &aacChannels);
+            int8_t err = NeAACDecInit2(hAac, specificInfo, 2, &aacSamplerate, &aacChannels);(void)err;
         }
         else{
             NeAACDecSetConfiguration(hAac, conf);
-            int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels);
+            int8_t err = NeAACDecInit(hAac, inbuf, *bytesLeft, &aacSamplerate, &aacChannels); (void)err;
         }
         f_firstCall = true;
     }
 
     NeAACDecDecode2(hAac, &frameInfo, inbuf, *bytesLeft, (void**)&ob, 2048 * 2 * sizeof(int16_t));
-
     *bytesLeft -= frameInfo.bytesconsumed;
     validSamples = frameInfo.samples;
     int8_t err = 0 - frameInfo.error;
