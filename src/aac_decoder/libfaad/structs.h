@@ -622,3 +622,10 @@ typedef struct {
     uint16_t sp_offset;
     bits_t   bits;
 } codeword_t;
+
+typedef struct
+{
+    int8_t index;
+    uint8_t len;
+    uint32_t cw;
+} rvlc_huff_table;

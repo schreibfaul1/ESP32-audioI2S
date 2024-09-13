@@ -32,6 +32,7 @@
 #define HAVE_STDLIB_H   1
 #define HAVE_STRING_H   1
 #define HAVE_INTTYPES_H 1
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,7 +40,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include "neaacdec.h"
+//#include "neaacdec.h"
 
 
 

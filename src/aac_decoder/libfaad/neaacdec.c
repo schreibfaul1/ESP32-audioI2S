@@ -7216,5 +7216,2213 @@ exit:
     if (spec_coef2) free(spec_coef2);
     return retval;
 }
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* TNS decoding for one channel and frame */
+void tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
+    uint8_t  w, f, tns_order;
+    int8_t   inc;
+    int16_t  size;
+    uint16_t bottom, top, start, end;
+    uint16_t nshort = frame_len / 8;
+    real_t   lpc[TNS_MAX_ORDER + 1];
+
+    if (!ics->tns_data_present) return;
+
+    for (w = 0; w < ics->num_windows; w++) {
+        bottom = ics->num_swb;
+
+        for (f = 0; f < tns->n_filt[w]; f++) {
+            top = bottom;
+            bottom = max(top - tns->length[w][f], 0);
+            tns_order = min(tns->order[w][f], TNS_MAX_ORDER);
+            if (!tns_order) continue;
+            tns_decode_coef(tns_order, tns->coef_res[w] + 3, tns->coef_compress[w][f], tns->coef[w][f], lpc);
+            start = min(bottom, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            start = min(start, ics->max_sfb);
+            start = min(ics->swb_offset[start], ics->swb_offset_max);
+            end = min(top, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            end = min(end, ics->max_sfb);
+            end = min(ics->swb_offset[end], ics->swb_offset_max);
+            size = end - start;
+            if (size <= 0) continue;
+            if (tns->direction[w][f]) {
+                inc = -1;
+                start = end - 1;
+            } else {
+                inc = 1;
+            }
+            tns_ar_filter(&spec[(w * nshort) + start], size, inc, lpc, tns_order);
+        }
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* TNS encoding for one channel and frame */
+void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
+    uint8_t  w, f, tns_order;
+    int8_t   inc;
+    int16_t  size;
+    uint16_t bottom, top, start, end;
+    uint16_t nshort = frame_len / 8;
+    real_t   lpc[TNS_MAX_ORDER + 1];
+
+    if (!ics->tns_data_present) return;
+    for (w = 0; w < ics->num_windows; w++) {
+        bottom = ics->num_swb;
+        for (f = 0; f < tns->n_filt[w]; f++) {
+            top = bottom;
+            bottom = max(top - tns->length[w][f], 0);
+            tns_order = min(tns->order[w][f], TNS_MAX_ORDER);
+            if (!tns_order) continue;
+            tns_decode_coef(tns_order, tns->coef_res[w] + 3, tns->coef_compress[w][f], tns->coef[w][f], lpc);
+            start = min(bottom, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            start = min(start, ics->max_sfb);
+            start = min(ics->swb_offset[start], ics->swb_offset_max);
+            end = min(top, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            end = min(end, ics->max_sfb);
+            end = min(ics->swb_offset[end], ics->swb_offset_max);
+            size = end - start;
+            if (size <= 0) continue;
+            if (tns->direction[w][f]) {
+                inc = -1;
+                start = end - 1;
+            } else {
+                inc = 1;
+            }
+            tns_ma_filter(&spec[(w * nshort) + start], size, inc, lpc, tns_order);
+        }
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Decoder transmitted coefficients for one TNS filter */
+void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a) {
+    uint8_t i, m;
+    real_t  tmp2[TNS_MAX_ORDER + 1], b[TNS_MAX_ORDER + 1];
+
+    /* Conversion to signed integer */
+    for (i = 0; i < order; i++) {
+        if (coef_compress == 0) {
+            if (coef_res_bits == 3) {
+                tmp2[i] = tns_coef_0_3[coef[i]];
+            } else {
+                tmp2[i] = tns_coef_0_4[coef[i]];
+            }
+        } else {
+            if (coef_res_bits == 3) {
+                tmp2[i] = tns_coef_1_3[coef[i]];
+            } else {
+                tmp2[i] = tns_coef_1_4[coef[i]];
+            }
+        }
+    }
+    /* Conversion to LPC coefficients */
+    a[0] = COEF_CONST(1.0);
+    for (m = 1; m <= order; m++) {
+        for (i = 1; i < m; i++) /* loop only while i<m */
+            b[i] = a[i] + MUL_C(tmp2[m - 1], a[m - i]);
+
+        for (i = 1; i < m; i++) /* loop only while i<m */
+            a[i] = b[i];
+
+        a[m] = tmp2[m - 1]; /* changed */
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
+    /*
+     - Simple all-pole filter of order "order" defined by y(n) = x(n) - lpc[1]*y(n-1) - ... - lpc[order]*y(n-order)
+     - The state variables of the filter are initialized to zero every time
+     - The output data is written over the input data ("in-place operation")
+     - An input vector of "size" samples is processed and the index increment to the next data sample is given by "inc"
+    */
+
+    uint8_t  j;
+    uint16_t i;
+    real_t   y;
+    /* state is stored as a double ringbuffer */
+    real_t state[2 * TNS_MAX_ORDER] = {0};
+    int8_t state_index = 0;
+
+    for (i = 0; i < size; i++) {
+        y = *spectrum;
+        for (j = 0; j < order; j++) y -= MUL_C(state[state_index + j], lpc[j + 1]);
+        /* double ringbuffer state */
+        state_index--;
+        if (state_index < 0) state_index = order - 1;
+        state[state_index] = state[state_index + order] = y;
+        *spectrum = y;
+        spectrum += inc;
+// #define TNS_PRINT
+#ifdef TNS_PRINT
+        // printf("%d\n", y);
+        printf("0x%.8X\n", y);
+#endif
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
+    /*
+     - Simple all-zero filter of order "order" defined by y(n) =  x(n) + a(2)*x(n-1) + ... + a(order+1)*x(n-order)
+     - The state variables of the filter are initialized to zero every time
+     - The output data is written over the input data ("in-place operation")
+     - An input vector of "size" samples is processed and the index increment to the next data sample is given by "inc"
+    */
+
+    uint8_t  j;
+    uint16_t i;
+    real_t   y;
+    /* state is stored as a double ringbuffer */
+    real_t state[2 * TNS_MAX_ORDER] = {0};
+    int8_t state_index = 0;
+
+    for (i = 0; i < size; i++) {
+        y = *spectrum;
+        for (j = 0; j < order; j++) y += MUL_C(state[state_index + j], lpc[j + 1]);
+        /* double ringbuffer state */
+        state_index--;
+        if (state_index < 0) state_index = order - 1;
+        state[state_index] = state[state_index + order] = *spectrum;
+        *spectrum = y;
+        spectrum += inc;
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.1 */
+int8_t GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce_out) {
+    program_config pce;
+    /* 1024 or 960 */
+    mp4ASC->frameLengthFlag = faad_get1bit(ld);
+#ifndef ALLOW_SMALL_FRAMELENGTH
+    if (mp4ASC->frameLengthFlag == 1) return -3;
+#endif
+    mp4ASC->dependsOnCoreCoder = faad_get1bit(ld);
+    if (mp4ASC->dependsOnCoreCoder == 1) { mp4ASC->coreCoderDelay = (uint16_t)faad_getbits(ld, 14); }
+    mp4ASC->extensionFlag = faad_get1bit(ld);
+    if (mp4ASC->channelsConfiguration == 0) {
+        if (program_config_element(&pce, ld)) return -3;
+        // mp4ASC->channelsConfiguration = pce.channels;
+        if (pce_out != NULL) memcpy(pce_out, &pce, sizeof(program_config));
+        /*
+        if (pce.num_valid_cc_elements)
+            return -3;
+        */
+    }
+#ifdef ERROR_RESILIENCE
+    if (mp4ASC->extensionFlag == 1) {
+        /* Error resilience not supported yet */
+        if (mp4ASC->objectTypeIndex >= ER_OBJECT_START) {
+            mp4ASC->aacSectionDataResilienceFlag = faad_get1bit(ld);
+            mp4ASC->aacScalefactorDataResilienceFlag = faad_get1bit(ld);
+            mp4ASC->aacSpectralDataResilienceFlag = faad_get1bit(ld);
+        }
+        /* 1 bit: extensionFlag3 */
+        faad_getbits(ld, 1);
+    }
+#endif
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.2 */
+/* An MPEG-4 Audio decoder is only required to follow the Program Configuration Element in GASpecificConfig(). The decoder shall ignore
+   any Program Configuration Elements that may occur in raw data blocks. PCEs transmitted in raw data blocks cannot be used to convey decoder
+   configuration information.
+*/
+uint8_t program_config_element(program_config* pce, bitfile* ld) {
+    uint8_t i;
+    memset(pce, 0, sizeof(program_config));
+    pce->channels = 0;
+    pce->element_instance_tag = (uint8_t)faad_getbits(ld, 4);
+    pce->object_type = (uint8_t)faad_getbits(ld, 2);
+    pce->sf_index = (uint8_t)faad_getbits(ld, 4);
+    pce->num_front_channel_elements = (uint8_t)faad_getbits(ld, 4);
+    pce->num_side_channel_elements = (uint8_t)faad_getbits(ld, 4);
+    pce->num_back_channel_elements = (uint8_t)faad_getbits(ld, 4);
+    pce->num_lfe_channel_elements = (uint8_t)faad_getbits(ld, 2);
+    pce->num_assoc_data_elements = (uint8_t)faad_getbits(ld, 3);
+    pce->num_valid_cc_elements = (uint8_t)faad_getbits(ld, 4);
+    pce->mono_mixdown_present = faad_get1bit(ld);
+    if (pce->mono_mixdown_present == 1) { pce->mono_mixdown_element_number = (uint8_t)faad_getbits(ld, 4); }
+    pce->stereo_mixdown_present = faad_get1bit(ld);
+    if (pce->stereo_mixdown_present == 1) { pce->stereo_mixdown_element_number = (uint8_t)faad_getbits(ld, 4); }
+    pce->matrix_mixdown_idx_present = faad_get1bit(ld);
+    if (pce->matrix_mixdown_idx_present == 1) {
+        pce->matrix_mixdown_idx = (uint8_t)faad_getbits(ld, 2);
+        pce->pseudo_surround_enable = faad_get1bit(ld);
+    }
+    for (i = 0; i < pce->num_front_channel_elements; i++) {
+        pce->front_element_is_cpe[i] = faad_get1bit(ld);
+        pce->front_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+        if (pce->front_element_is_cpe[i] & 1) {
+            pce->cpe_channel[pce->front_element_tag_select[i]] = pce->channels;
+            pce->num_front_channels += 2;
+            pce->channels += 2;
+        } else {
+            pce->sce_channel[pce->front_element_tag_select[i]] = pce->channels;
+            pce->num_front_channels++;
+            pce->channels++;
+        }
+    }
+    for (i = 0; i < pce->num_side_channel_elements; i++) {
+        pce->side_element_is_cpe[i] = faad_get1bit(ld);
+        pce->side_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+        if (pce->side_element_is_cpe[i] & 1) {
+            pce->cpe_channel[pce->side_element_tag_select[i]] = pce->channels;
+            pce->num_side_channels += 2;
+            pce->channels += 2;
+        } else {
+            pce->sce_channel[pce->side_element_tag_select[i]] = pce->channels;
+            pce->num_side_channels++;
+            pce->channels++;
+        }
+    }
+    for (i = 0; i < pce->num_back_channel_elements; i++) {
+        pce->back_element_is_cpe[i] = faad_get1bit(ld);
+        pce->back_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+        if (pce->back_element_is_cpe[i] & 1) {
+            pce->cpe_channel[pce->back_element_tag_select[i]] = pce->channels;
+            pce->channels += 2;
+            pce->num_back_channels += 2;
+        } else {
+            pce->sce_channel[pce->back_element_tag_select[i]] = pce->channels;
+            pce->num_back_channels++;
+            pce->channels++;
+        }
+    }
+    for (i = 0; i < pce->num_lfe_channel_elements; i++) {
+        pce->lfe_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+        pce->sce_channel[pce->lfe_element_tag_select[i]] = pce->channels;
+        pce->num_lfe_channels++;
+        pce->channels++;
+    }
+    for (i = 0; i < pce->num_assoc_data_elements; i++) pce->assoc_data_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+    for (i = 0; i < pce->num_valid_cc_elements; i++) {
+        pce->cc_element_is_ind_sw[i] = faad_get1bit(ld);
+        pce->valid_cc_element_tag_select[i] = (uint8_t)faad_getbits(ld, 4);
+    }
+    faad_byte_align(ld);
+    pce->comment_field_bytes = (uint8_t)faad_getbits(ld, 8);
+    for (i = 0; i < pce->comment_field_bytes; i++) { pce->comment_field_data[i] = (uint8_t)faad_getbits(ld, 8); }
+    pce->comment_field_data[i] = 0;
+    if (pce->channels > MAX_CHANNELS) return 22;
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
+    uint8_t channels = hDecoder->fr_channels;
+    uint8_t tag = 0;
+    if (channels + 1 > MAX_CHANNELS) {
+        hInfo->error = 12;
+        return;
+    }
+    if (hDecoder->fr_ch_ele + 1 > MAX_SYNTAX_ELEMENTS) {
+        hInfo->error = 13;
+        return;
+    }
+    /* for SCE hDecoder->element_output_channels[] is not set here because this
+       can become 2 when some form of Parametric Stereo coding is used
+    */
+    if (hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
+        /* element inconsistency */
+        hInfo->error = 21;
+        return;
+    }
+    /* save the syntax element id */
+    hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
+    /* decode the element */
+    hInfo->error = single_lfe_channel_element(hDecoder, ld, channels, &tag);
+    /* map output channels position to internal data channels */
+    if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 2) {
+        /* this might be faulty when pce_set is true */
+        hDecoder->internal_channel[channels] = channels;
+        hDecoder->internal_channel[channels + 1] = channels + 1;
+    } else {
+        if (hDecoder->pce_set)
+            hDecoder->internal_channel[hDecoder->pce.sce_channel[tag]] = channels;
+        else
+            hDecoder->internal_channel[channels] = channels;
+    }
+    hDecoder->fr_channels += hDecoder->element_output_channels[hDecoder->fr_ch_ele];
+    hDecoder->fr_ch_ele++;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
+    uint8_t channels = hDecoder->fr_channels;
+    uint8_t tag = 0;
+    if (channels + 2 > MAX_CHANNELS) {
+        hInfo->error = 12;
+        return;
+    }
+    if (hDecoder->fr_ch_ele + 1 > MAX_SYNTAX_ELEMENTS) {
+        hInfo->error = 13;
+        return;
+    }
+    /* for CPE the number of output channels is always 2 */
+    if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 0) {
+        /* element_output_channels not set yet */
+        hDecoder->element_output_channels[hDecoder->fr_ch_ele] = 2;
+    } else if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] != 2) {
+        /* element inconsistency */
+        hInfo->error = 21;
+        return;
+    }
+    if (hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
+        /* element inconsistency */
+        hInfo->error = 21;
+        return;
+    }
+    /* save the syntax element id */
+    hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
+    /* decode the element */
+    hInfo->error = channel_pair_element(hDecoder, ld, channels, &tag);
+    /* map output channel position to internal data channels */
+    if (hDecoder->pce_set) {
+        hDecoder->internal_channel[hDecoder->pce.cpe_channel[tag]] = channels;
+        hDecoder->internal_channel[hDecoder->pce.cpe_channel[tag] + 1] = channels + 1;
+    } else {
+        hDecoder->internal_channel[channels] = channels;
+        hDecoder->internal_channel[channels + 1] = channels + 1;
+    }
+    hDecoder->fr_channels += 2;
+    hDecoder->fr_ch_ele++;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+    uint8_t id_syn_ele;
+    uint8_t ele_this_frame = 0;
+    hDecoder->fr_channels = 0;
+    hDecoder->fr_ch_ele = 0;
+    hDecoder->first_syn_ele = 25;
+    hDecoder->has_lfe = 0;
+#ifdef ERROR_RESILIENCE
+    if (hDecoder->object_type < ER_OBJECT_START) {
+#endif
+        /* Table 4.4.3: raw_data_block() */
+        while ((id_syn_ele = (uint8_t)faad_getbits(ld, LEN_SE_ID)) != ID_END) {
+            switch (id_syn_ele) {
+                case ID_SCE:
+                    ele_this_frame++;
+                    if (hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
+                    decode_sce_lfe(hDecoder, hInfo, ld, id_syn_ele);
+                    if (hInfo->error > 0) return;
+                    break;
+                case ID_CPE:
+                    ele_this_frame++;
+                    if (hDecoder->first_syn_ele == 25) hDecoder->first_syn_ele = id_syn_ele;
+                    decode_cpe(hDecoder, hInfo, ld, id_syn_ele);
+                    if (hInfo->error > 0) return;
+                    break;
+                case ID_LFE:
+#ifdef DRM
+                    hInfo->error = 32;
+#else
+                ele_this_frame++;
+                hDecoder->has_lfe++;
+                decode_sce_lfe(hDecoder, hInfo, ld, id_syn_ele);
+#endif
+                    if (hInfo->error > 0) return;
+                    break;
+                case ID_CCE: /* not implemented yet, but skip the bits */
+#ifdef DRM
+                    hInfo->error = 32;
+#else
+                ele_this_frame++;
+    #ifdef COUPLING_DEC
+                hInfo->error = coupling_channel_element(hDecoder, ld);
+    #else
+                hInfo->error = 6;
+    #endif
+#endif
+                    if (hInfo->error > 0) return;
+                    break;
+                case ID_DSE:
+                    ele_this_frame++;
+                    data_stream_element(hDecoder, ld);
+                    break;
+                case ID_PCE:
+                    if (ele_this_frame != 0) {
+                        hInfo->error = 31;
+                        return;
+                    }
+                    ele_this_frame++;
+                    /* 14496-4: 5.6.4.1.2.1.3: */
+                    /* program_configuration_element()'s in access units shall be ignored */
+                    program_config_element(pce, ld);
+                    // if ((hInfo->error = program_config_element(pce, ld)) > 0)
+                    //     return;
+                    // hDecoder->pce_set = 1;
+                    break;
+                case ID_FIL:
+                    ele_this_frame++;
+                    /* one sbr_info describes a channel_element not a channel! */
+                    /* if we encounter SBR data here: error */
+                    /* SBR data will be read directly in the SCE/LFE/CPE element */
+                    if ((hInfo->error = fill_element(hDecoder, ld, drc
+#ifdef SBR_DEC
+                                                     ,
+                                                     INVALID_SBR_ELEMENT
+#endif
+                                                     )) > 0)
+                        return;
+                    break;
+            }
+        }
+#ifdef ERROR_RESILIENCE
+    } else {
+        /* Table 262: er_raw_data_block() */
+        switch (hDecoder->channelConfiguration) {
+            case 1:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                break;
+            case 2:
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                break;
+            case 3:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                break;
+            case 4:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                break;
+            case 5:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                break;
+            case 6:
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
+                if (hInfo->error > 0) return;
+                break;
+            case 7: /* 8 channels */
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_SCE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_cpe(hDecoder, hInfo, ld, ID_CPE);
+                if (hInfo->error > 0) return;
+                decode_sce_lfe(hDecoder, hInfo, ld, ID_LFE);
+                if (hInfo->error > 0) return;
+                break;
+            default: hInfo->error = 7; return;
+        }
+    #if 0
+        cnt = bits_to_decode() / 8;
+        while (cnt >= 1)
+        {
+            cnt -= extension_payload(cnt);
+        }
+    #endif
+    }
+#endif
+    /* new in corrigendum 14496-3:2002 */
+#ifdef DRM
+    if (hDecoder->object_type != DRM_ER_LC
+    #if 0
+        && !hDecoder->latm_header_present
+    #endif
+    )
+#endif
+    {
+        faad_byte_align(ld);
+    }
+    return;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.4 and */
+/* Table 4.4.9 */
+uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag) {
+    uint8_t retval = 0;
+    //  element       sce = {0};
+    element*   sce = (element*)ps_calloc(1, sizeof(element));
+    ic_stream* ics = &(sce->ics1);
+    // ALIGN int16_t spec_data[1024] = {0};
+    int16_t* spec_data = ps_calloc(1024, sizeof(int16_t));
+    sce->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG);
+    *tag = sce->element_instance_tag;
+    sce->channel = channel;
+    sce->paired_channel = -1;
+    retval = individual_channel_stream(hDecoder, sce, ld, ics, 0, spec_data);
+    if (retval > 0) goto exit;
+    /* IS not allowed in single channel */
+    if (ics->is_used) {
+        retval = 32;
+        goto exit;
+    }
+#ifdef SBR_DEC
+    /* check if next bitstream element is a fill element */
+    /* if so, read it now so SBR decoding can be done in case of a file with SBR */
+    if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
+        faad_flushbits(ld, LEN_SE_ID);
+        /* one sbr_info describes a channel_element not a channel! */
+        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
+    }
+#endif
+    /* noiseless coding is done, spectral reconstruction is done now */
+    retval = reconstruct_single_channel(hDecoder, ics, sce, spec_data);
+    if (retval > 0) goto exit;
+    retval = 0;
+exit:
+    if (spec_data) free(spec_data);
+    if (sce) free(sce);
+    return retval;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.5 */
+uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
+    // ALIGN int16_t spec_data1[1024] = {0};
+    // ALIGN int16_t spec_data2[1024] = {0};
+    int16_t* spec_data1 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
+    int16_t* spec_data2 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
+    // element    cpe = {0};
+    element*   cpe = (element*)ps_calloc(1, sizeof(element));
+    ic_stream* ics1 = &(cpe->ics1);
+    ic_stream* ics2 = &(cpe->ics2);
+    uint8_t    result;
+    cpe->channel = channels;
+    cpe->paired_channel = channels + 1;
+    cpe->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG);
+    *tag = cpe->element_instance_tag;
+    if ((cpe->common_window = faad_get1bit(ld) & 1)) {
+        /* both channels have common ics information */
+        if ((result = ics_info(hDecoder, ics1, ld, cpe->common_window)) > 0) goto exit;
+        ics1->ms_mask_present = (uint8_t)faad_getbits(ld, 2);
+        if (ics1->ms_mask_present == 3) {
+            /* bitstream error */
+            result = 32;
+            goto exit;
+        }
+        if (ics1->ms_mask_present == 1) {
+            uint8_t g, sfb;
+            for (g = 0; g < ics1->num_window_groups; g++) {
+                for (sfb = 0; sfb < ics1->max_sfb; sfb++) { ics1->ms_used[g][sfb] = faad_get1bit(ld); }
+            }
+        }
+#ifdef ERROR_RESILIENCE
+        if ((hDecoder->object_type >= ER_OBJECT_START) && (ics1->predictor_data_present)) {
+            if ((
+    #ifdef LTP_DEC
+                    ics1->ltp.data_present =
+    #endif
+                        faad_get1bit(ld)) &
+                1) {
+    #ifdef LTP_DEC
+                if ((result = ltp_data(hDecoder, ics1, &(ics1->ltp), ld)) > 0) { goto exit; }
+    #else
+                result = 26;
+                goto exit; // return 26;
+    #endif
+            }
+        }
+#endif
+        memcpy(ics2, ics1, sizeof(ic_stream));
+    } else {
+        ics1->ms_mask_present = 0;
+    }
+    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics1, 0, spec_data1)) > 0) { goto exit; }
+#ifdef ERROR_RESILIENCE
+    if (cpe->common_window && (hDecoder->object_type >= ER_OBJECT_START) && (ics1->predictor_data_present)) {
+        if ((
+    #ifdef LTP_DEC
+                ics1->ltp2.data_present =
+    #endif
+                    faad_get1bit(ld)) &
+            1) {
+    #ifdef LTP_DEC
+            if ((result = ltp_data(hDecoder, ics1, &(ics1->ltp2), ld)) > 0) { goto exit; }
+    #else
+            result = 26;
+            goto exit; // return 26;
+    #endif
+        }
+    }
+#endif
+    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics2, 0, spec_data2)) > 0) { goto exit; }
+#ifdef SBR_DEC
+    /* check if next bitstream element is a fill element */
+    /* if so, read it now so SBR decoding can be done in case of a file with SBR */
+    if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
+        faad_flushbits(ld, LEN_SE_ID);
+        /* one sbr_info describes a channel_element not a channel! */
+        if ((result = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
+    }
+#endif
+    /* noiseless coding is done, spectral reconstruction is done now */
+    if ((result = reconstruct_channel_pair(hDecoder, ics1, ics2, cpe, spec_data1, spec_data2)) > 0) { goto exit; }
+    result = 0;
+exit:
+    if (spec_data1) {
+        free(spec_data1);
+        spec_data1 = NULL;
+    }
+    if (spec_data2) {
+        free(spec_data2);
+        spec_data2 = NULL;
+    }
+    if (cpe) free(cpe);
+    return result;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.6 */
+uint8_t ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t common_window) {
+    uint8_t retval = 0;
+    uint8_t ics_reserved_bit;
+    ics_reserved_bit = faad_get1bit(ld);
+    if (ics_reserved_bit != 0) return 32;
+    ics->window_sequence = (uint8_t)faad_getbits(ld, 2);
+    ics->window_shape = faad_get1bit(ld);
+#ifdef LD_DEC
+    /* No block switching in LD */
+    if ((hDecoder->object_type == LD) && (ics->window_sequence != ONLY_LONG_SEQUENCE)) return 32;
+#endif
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        ics->max_sfb = (uint8_t)faad_getbits(ld, 4);
+        ics->scale_factor_grouping = (uint8_t)faad_getbits(ld, 7);
+    } else {
+        ics->max_sfb = (uint8_t)faad_getbits(ld, 6);
+    }
+    /* get the grouping information */
+    if ((retval = window_grouping_info(hDecoder, ics)) > 0) return retval;
+    /* should be an error */
+    /* check the range of max_sfb */
+    if (ics->max_sfb > ics->num_swb) return 16;
+    if (ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
+        if ((ics->predictor_data_present = faad_get1bit(ld)) & 1) {
+            if (hDecoder->object_type == MAIN) /* MPEG2 style AAC predictor */
+            {
+                uint8_t sfb;
+                uint8_t limit = min(ics->max_sfb, max_pred_sfb(hDecoder->sf_index));
+#ifdef MAIN_DEC
+                ics->pred.limit = limit;
+#endif
+                if ((
+#ifdef MAIN_DEC
+                        ics->pred.predictor_reset =
+#endif
+                            faad_get1bit(ld)) &
+                    1) {
+#ifdef MAIN_DEC
+                    ics->pred.predictor_reset_group_number =
+#endif
+                        faad_getbits(ld, 5);
+                }
+                for (sfb = 0; sfb < limit; sfb++) {
+#ifdef MAIN_DEC
+                    ics->pred.prediction_used[sfb] =
+#endif
+                        faad_get1bit(ld);
+                }
+            }
+#ifdef LTP_DEC
+            else { /* Long Term Prediction */
+                if (hDecoder->object_type < ER_OBJECT_START) {
+                    if ((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
+                        if ((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) { return retval; }
+                    }
+                    if (common_window) {
+                        if ((ics->ltp2.data_present = faad_get1bit(ld)) & 1) {
+                            if ((retval = ltp_data(hDecoder, ics, &(ics->ltp2), ld)) > 0) { return retval; }
+                        }
+                    }
+                }
+    #ifdef ERROR_RESILIENCE
+                if (!common_window && (hDecoder->object_type >= ER_OBJECT_START)) {
+                    if ((ics->ltp.data_present = faad_get1bit(ld)) & 1) {
+                        if ((retval = ltp_data(hDecoder, ics, &(ics->ltp), ld)) > 0) { return retval; }
+                    }
+                }
+    #endif
+            }
+#endif
+        }
+    }
+    return retval;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.7 */
+uint8_t pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld) {
+    uint8_t i;
+    pul->number_pulse = (uint8_t)faad_getbits(ld, 2);
+    pul->pulse_start_sfb = (uint8_t)faad_getbits(ld, 6);
+    /* check the range of pulse_start_sfb */
+    if (pul->pulse_start_sfb > ics->num_swb) return 16;
+    for (i = 0; i < pul->number_pulse + 1; i++) {
+        pul->pulse_offset[i] = (uint8_t)faad_getbits(ld, 5);
+#if 0
+        printf("%d\n", pul->pulse_offset[i]);
+#endif
+        pul->pulse_amp[i] = (uint8_t)faad_getbits(ld, 4);
+#if 0
+        printf("%d\n", pul->pulse_amp[i]);
+#endif
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef COUPLING_DEC
+/* Table 4.4.8: Currently just for skipping the bits... */
+uint8_t coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld) {
+    uint8_t   c, result = 0;
+    uint8_t   ind_sw_cce_flag = 0;
+    uint8_t   num_gain_element_lists = 0;
+    uint8_t   num_coupled_elements = 0;
+    element   el_empty = {0};
+    ic_stream ics_empty = {0};
+    int16_t   sh_data[1024];
+    c = faad_getbits(ld, LEN_TAG);
+    ind_sw_cce_flag = faad_get1bit(ld);
+    num_coupled_elements = faad_getbits(ld, 3);
+    for (c = 0; c < num_coupled_elements + 1; c++) {
+        uint8_t cc_target_is_cpe, cc_target_tag_select;
+        num_gain_element_lists++;
+        cc_target_is_cpe = faad_get1bit(ld);
+        cc_target_tag_select = faad_getbits(ld, 4);
+        if (cc_target_is_cpe) {
+            uint8_t cc_l = faad_get1bit(ld);
+            uint8_t cc_r = faad_get1bit(ld);
+            if (cc_l && cc_r) num_gain_element_lists++;
+        }
+    }
+    faad_get1bit(ld);
+    faad_get1bit(ld);
+    faad_getbits(ld, 2);
+    if ((result = individual_channel_stream(hDecoder, &el_empty, ld, &ics_empty, 0, sh_data)) > 0) { return result; }
+    /* IS not allowed in single channel */
+    if (ics->is_used) return 32;
+    for (c = 1; c < num_gain_element_lists; c++) {
+        uint8_t cge;
+        if (ind_sw_cce_flag) {
+            cge = 1;
+        } else {
+            cge = faad_get1bit(ld);
+        }
+        if (cge) {
+            huffman_scale_factor(ld);
+        } else {
+            uint8_t g, sfb;
+            for (g = 0; g < ics_empty.num_window_groups; g++) {
+                for (sfb = 0; sfb < ics_empty.max_sfb; sfb++) {
+                    if (ics_empty.sfb_cb[g][sfb] != ZERO_HCB) huffman_scale_factor(ld);
+                }
+            }
+        }
+    }
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.10 */
+uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
+    uint8_t  byte_aligned;
+    uint16_t i, count;
+    /* element_instance_tag = */ faad_getbits(ld, LEN_TAG);
+    byte_aligned = faad_get1bit(ld);
+    count = (uint16_t)faad_getbits(ld, 8);
+    if (count == 255) { count += (uint16_t)faad_getbits(ld, 8); }
+    if (byte_aligned) faad_byte_align(ld);
+    for (i = 0; i < count; i++) { faad_getbits(ld, LEN_BYTE); }
+    return count;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.11 */
+uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc
+#ifdef SBR_DEC
+                            ,
+                            uint8_t sbr_ele
+#endif
+) {
+    uint16_t count;
+#ifdef SBR_DEC
+    uint8_t bs_extension_type;
+#endif
+    count = (uint16_t)faad_getbits(ld, 4);
+    if (count == 15) { count += (uint16_t)faad_getbits(ld, 8) - 1; }
+    if (count > 0) {
+#ifdef SBR_DEC
+        bs_extension_type = (uint8_t)faad_showbits(ld, 4);
+        if ((bs_extension_type == EXT_SBR_DATA) || (bs_extension_type == EXT_SBR_DATA_CRC)) {
+            if (sbr_ele == INVALID_SBR_ELEMENT) return 24;
+            if (!hDecoder->sbr[sbr_ele]) {
+                hDecoder->sbr[sbr_ele] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[sbr_ele], 2 * get_sample_rate(hDecoder->sf_index), hDecoder->downSampledSBR, 0);
+            }
+            if (!hDecoder->sbr[sbr_ele]) return 19;
+            hDecoder->sbr_present_flag = 1;
+            /* parse the SBR data */
+            hDecoder->sbr[sbr_ele]->ret = sbr_extension_data(ld, hDecoder->sbr[sbr_ele], count, hDecoder->postSeekResetFlag);
+    #if 0
+            if (hDecoder->sbr[sbr_ele]->ret > 0)
+            {
+                printf("%s\n", NeAACDecGetErrorMessage(hDecoder->sbr[sbr_ele]->ret));
+            }
+    #endif
+    #if (defined(PS_DEC) || defined(DRM_PS))
+            if (hDecoder->sbr[sbr_ele]->ps_used) {
+                hDecoder->ps_used[sbr_ele] = 1;
+                /* set element independent flag to 1 as well */
+                hDecoder->ps_used_global = 1;
+            }
+    #endif
+        } else {
+#endif
+#ifndef DRM
+            while (count > 0) { count -= extension_payload(ld, drc, count); }
+#else
+        return 30;
+#endif
+#ifdef SBR_DEC
+        }
+#endif
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.12 */
+#ifdef SSR_DEC
+static void gain_control_data(bitfile* ld, ic_stream* ics) {
+    uint8_t   bd, wd, ad;
+    ssr_info* ssr = &(ics->ssr);
+    ssr->max_band = (uint8_t)faad_getbits(ld, 2);
+    if (ics->window_sequence == ONLY_LONG_SEQUENCE) {
+        for (bd = 1; bd <= ssr->max_band; bd++) {
+            for (wd = 0; wd < 1; wd++) {
+                ssr->adjust_num[bd][wd] = (uint8_t)faad_getbits(ld, 3);
+                for (ad = 0; ad < ssr->adjust_num[bd][wd]; ad++) {
+                    ssr->alevcode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 5);
+                }
+            }
+        }
+    } else if (ics->window_sequence == LONG_START_SEQUENCE) {
+        for (bd = 1; bd <= ssr->max_band; bd++) {
+            for (wd = 0; wd < 2; wd++) {
+                ssr->adjust_num[bd][wd] = (uint8_t)faad_getbits(ld, 3);
+                for (ad = 0; ad < ssr->adjust_num[bd][wd]; ad++) {
+                    ssr->alevcode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    if (wd == 0) {
+                        ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    } else {
+                        ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 2);
+                    }
+                }
+            }
+        }
+    } else if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        for (bd = 1; bd <= ssr->max_band; bd++) {
+            for (wd = 0; wd < 8; wd++) {
+                ssr->adjust_num[bd][wd] = (uint8_t)faad_getbits(ld, 3);
+                for (ad = 0; ad < ssr->adjust_num[bd][wd]; ad++) {
+                    ssr->alevcode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 2);
+                }
+            }
+        }
+    } else if (ics->window_sequence == LONG_STOP_SEQUENCE) {
+        for (bd = 1; bd <= ssr->max_band; bd++) {
+            for (wd = 0; wd < 2; wd++) {
+                ssr->adjust_num[bd][wd] = (uint8_t)faad_getbits(ld, 3);
+                for (ad = 0; ad < ssr->adjust_num[bd][wd]; ad++) {
+                    ssr->alevcode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    if (wd == 0) {
+                        ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 4);
+                    } else {
+                        ssr->aloccode[bd][wd][ad] = (uint8_t)faad_getbits(ld, 5);
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef DRM
+/* Table 4.4.13 ASME */
+void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+    uint8_t retval = 0;
+    (void)retval;
+    uint8_t channels = hDecoder->fr_channels = 0;
+    uint8_t ch;
+    (void)ch;
+    uint8_t    this_layer_stereo = (hDecoder->channelConfiguration > 1) ? 1 : 0;
+    element    cpe = {0};
+    ic_stream* ics1 = &(cpe.ics1);
+    ic_stream* ics2 = &(cpe.ics2);
+    int16_t*   spec_data;
+    (void)spec_data;
+    ALIGN int16_t spec_data1[1024] = {0};
+    ALIGN int16_t spec_data2[1024] = {0};
+    hDecoder->fr_ch_ele = 0;
+    hInfo->error = DRM_aac_scalable_main_header(hDecoder, ics1, ics2, ld, this_layer_stereo);
+    if (hInfo->error > 0) return;
+    cpe.common_window = 1;
+    if (this_layer_stereo) {
+        hDecoder->element_id[0] = ID_CPE;
+        if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 0) hDecoder->element_output_channels[hDecoder->fr_ch_ele] = 2;
+    } else {
+        hDecoder->element_id[0] = ID_SCE;
+    }
+    if (this_layer_stereo) {
+        cpe.channel = 0;
+        cpe.paired_channel = 1;
+    }
+    /* Stereo2 / Mono1 */
+    ics1->tns_data_present = faad_get1bit(ld);
+    #if defined(LTP_DEC)
+    ics1->ltp.data_present = faad_get1bit(ld);
+    #elif defined(DRM)
+    if (faad_get1bit(ld)) {
+        hInfo->error = 26;
+        return;
+    }
+    #else
+    faad_get1bit(ld);
+    #endif
+    hInfo->error = side_info(hDecoder, &cpe, ld, ics1, 1);
+    if (hInfo->error > 0) return;
+    if (this_layer_stereo) {
+        /* Stereo3 */
+        ics2->tns_data_present = faad_get1bit(ld);
+    #ifdef LTP_DEC
+        ics1->ltp.data_present =
+    #endif
+            faad_get1bit(ld);
+        hInfo->error = side_info(hDecoder, &cpe, ld, ics2, 1);
+        if (hInfo->error > 0) return;
+    }
+    /* Stereo4 / Mono2 */
+    if (ics1->tns_data_present) tns_data(ics1, &(ics1->tns), ld);
+    if (this_layer_stereo) {
+        /* Stereo5 */
+        if (ics2->tns_data_present) tns_data(ics2, &(ics2->tns), ld);
+    }
+    #ifdef DRM
+    /* CRC check */
+    if (hDecoder->object_type == DRM_ER_LC) {
+        if ((hInfo->error = (uint8_t)faad_check_CRC(ld, (uint16_t)faad_get_processed_bits(ld) - 8)) > 0) return;
+    }
+    #endif
+    /* Stereo6 / Mono3 */
+    /* error resilient spectral data decoding */
+    if ((hInfo->error = reordered_spectral_data(hDecoder, ics1, ld, spec_data1)) > 0) { return; }
+    if (this_layer_stereo) {
+        /* Stereo7 */
+        /* error resilient spectral data decoding */
+        if ((hInfo->error = reordered_spectral_data(hDecoder, ics2, ld, spec_data2)) > 0) { return; }
+    }
+    #ifdef DRM
+        #ifdef SBR_DEC
+    /* In case of DRM we need to read the SBR info before channel reconstruction */
+    if ((hDecoder->sbr_present_flag == 1) && (hDecoder->object_type == DRM_ER_LC)) {
+        bitfile  ld_sbr = {0};
+        uint32_t i;
+        uint16_t count = 0;
+        uint8_t* revbuffer;
+        uint8_t* prevbufstart;
+        uint8_t* pbufend;
+        /* all forward bitreading should be finished at this point */
+        uint32_t bitsconsumed = faad_get_processed_bits(ld);
+        uint32_t buffer_size = faad_origbitbuffer_size(ld);
+        uint8_t* buffer = (uint8_t*)faad_origbitbuffer(ld);
+        if (bitsconsumed + 8 > buffer_size * 8) {
+            hInfo->error = 14;
+            return;
+        }
+        if (!hDecoder->sbr[0]) { hDecoder->sbr[0] = sbrDecodeInit(hDecoder->frameLength, hDecoder->element_id[0], 2 * get_sample_rate(hDecoder->sf_index), 0 /* ds SBR */, 1); }
+        if (!hDecoder->sbr[0]) {
+            hInfo->error = 19;
+            return;
+        }
+        /* Reverse bit reading of SBR data in DRM audio frame */
+        revbuffer = (uint8_t*)faad_malloc(buffer_size * sizeof(uint8_t));
+        prevbufstart = revbuffer;
+        pbufend = &buffer[buffer_size - 1];
+        for (i = 0; i < buffer_size; i++) *prevbufstart++ = tabFlipbits[*pbufend--];
+        /* Set SBR data */
+        /* consider 8 bits from AAC-CRC */
+        /* SBR buffer size is original buffer size minus AAC buffer size */
+        count = (uint16_t)bit2byte(buffer_size * 8 - bitsconsumed);
+        faad_initbits(&ld_sbr, revbuffer, count);
+        hDecoder->sbr[0]->sample_rate = get_sample_rate(hDecoder->sf_index);
+        hDecoder->sbr[0]->sample_rate *= 2;
+        faad_getbits(&ld_sbr, 8); /* Skip 8-bit CRC */
+        hDecoder->sbr[0]->ret = sbr_extension_data(&ld_sbr, hDecoder->sbr[0], count, hDecoder->postSeekResetFlag);
+            #if (defined(PS_DEC) || defined(DRM_PS))
+        if (hDecoder->sbr[0]->ps_used) {
+            hDecoder->ps_used[0] = 1;
+            hDecoder->ps_used_global = 1;
+        }
+            #endif
+        if (ld_sbr.error) { hDecoder->sbr[0]->ret = 1; }
+        /* check CRC */
+        /* no need to check it if there was already an error */
+        if (hDecoder->sbr[0]->ret == 0) hDecoder->sbr[0]->ret = (uint8_t)faad_check_CRC(&ld_sbr, (uint16_t)faad_get_processed_bits(&ld_sbr) - 8);
+        /* SBR data was corrupted, disable it until the next header */
+        if (hDecoder->sbr[0]->ret != 0) { hDecoder->sbr[0]->header_count = 0; }
+        faad_endbits(&ld_sbr);
+        if (revbuffer) faad_free(revbuffer);
+    }
+        #endif
+    #endif
+    if (this_layer_stereo) {
+        hInfo->error = reconstruct_channel_pair(hDecoder, ics1, ics2, &cpe, spec_data1, spec_data2);
+        if (hInfo->error > 0) return;
+    } else {
+        hInfo->error = reconstruct_single_channel(hDecoder, ics1, &cpe, spec_data1);
+        if (hInfo->error > 0) return;
+    }
+    /* map output channels position to internal data channels */
+    if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 2) {
+        /* this might be faulty when pce_set is true */
+        hDecoder->internal_channel[channels] = channels;
+        hDecoder->internal_channel[channels + 1] = channels + 1;
+    } else {
+        hDecoder->internal_channel[channels] = channels;
+    }
+    hDecoder->fr_channels += hDecoder->element_output_channels[hDecoder->fr_ch_ele];
+    hDecoder->fr_ch_ele++;
+    return;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.15 */
+int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo) {
+    uint8_t retval = 0;
+    uint8_t ch;
+    (void)ch;
+    ic_stream* ics;
+    (void)ics;
+    uint8_t ics_reserved_bit;
+    ics_reserved_bit = faad_get1bit(ld);
+    if (ics_reserved_bit != 0) return 32;
+    ics1->window_sequence = (uint8_t)faad_getbits(ld, 2);
+    ics1->window_shape = faad_get1bit(ld);
+    if (ics1->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        ics1->max_sfb = (uint8_t)faad_getbits(ld, 4);
+        ics1->scale_factor_grouping = (uint8_t)faad_getbits(ld, 7);
+    } else {
+        ics1->max_sfb = (uint8_t)faad_getbits(ld, 6);
+    }
+    /* get the grouping information */
+    if ((retval = window_grouping_info(hDecoder, ics1)) > 0) return retval;
+    /* should be an error */
+    /* check the range of max_sfb */
+    if (ics1->max_sfb > ics1->num_swb) return 16;
+    if (this_layer_stereo) {
+        ics1->ms_mask_present = (uint8_t)faad_getbits(ld, 2);
+        if (ics1->ms_mask_present == 3) {
+            /* bitstream error */
+            return 32;
+        }
+        if (ics1->ms_mask_present == 1) {
+            uint8_t g, sfb;
+            for (g = 0; g < ics1->num_window_groups; g++) {
+                for (sfb = 0; sfb < ics1->max_sfb; sfb++) { ics1->ms_used[g][sfb] = faad_get1bit(ld); }
+            }
+        }
+        memcpy(ics2, ics1, sizeof(ic_stream));
+    } else {
+        ics1->ms_mask_present = 0;
+    }
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag) {
+    uint8_t result;
+    ics->global_gain = (uint8_t)faad_getbits(ld, 8);
+    if (!ele->common_window && !scal_flag) {
+        if ((result = ics_info(hDecoder, ics, ld, ele->common_window)) > 0) return result;
+    }
+    if ((result = section_data(hDecoder, ics, ld)) > 0) return result;
+    if ((result = scale_factor_data(hDecoder, ics, ld)) > 0) return result;
+    if (!scal_flag) {
+        /**
+         **  NOTE: It could be that pulse data is available in scalable AAC too,
+         **        as said in Amendment 1, this could be only the case for ER AAC,
+         **        though. (have to check this out later)
+         **/
+        /* get pulse data */
+        if ((ics->pulse_data_present = faad_get1bit(ld)) & 1) {
+            if ((result = pulse_data(ics, &(ics->pul), ld)) > 0) return result;
+        }
+        /* get tns data */
+        if ((ics->tns_data_present = faad_get1bit(ld)) & 1) {
+#ifdef ERROR_RESILIENCE
+            if (hDecoder->object_type < ER_OBJECT_START)
+#endif
+                tns_data(ics, &(ics->tns), ld);
+        }
+        /* get gain control data */
+        if ((ics->gain_control_data_present = faad_get1bit(ld)) & 1) {
+#ifdef SSR_DEC
+            if (hDecoder->object_type != SSR)
+                return 1;
+            else
+                gain_control_data(ld, ics);
+#else
+            return 1;
+#endif
+        }
+    }
+#ifdef ERROR_RESILIENCE
+    if (hDecoder->aacSpectralDataResilienceFlag) {
+        ics->length_of_reordered_spectral_data = (uint16_t)faad_getbits(ld, 14);
+        if (hDecoder->channelConfiguration == 2) {
+            if (ics->length_of_reordered_spectral_data > 6144) ics->length_of_reordered_spectral_data = 6144;
+        } else {
+            if (ics->length_of_reordered_spectral_data > 12288) ics->length_of_reordered_spectral_data = 12288;
+        }
+        ics->length_of_longest_codeword = (uint8_t)faad_getbits(ld, 6);
+        if (ics->length_of_longest_codeword >= 49) ics->length_of_longest_codeword = 49;
+    }
+    /* RVLC spectral data is put here */
+    if (hDecoder->aacScalefactorDataResilienceFlag) {
+        if ((result = rvlc_decode_scale_factors(ics, ld)) > 0) return result;
+    }
+#endif
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.24 */
+uint8_t individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag, int16_t* spec_data) {
+    uint8_t result;
+    result = side_info(hDecoder, ele, ld, ics, scal_flag);
+    if (result > 0) return result;
+    if (hDecoder->object_type >= ER_OBJECT_START) {
+        if (ics->tns_data_present) tns_data(ics, &(ics->tns), ld);
+    }
+#ifdef DRM
+    /* CRC check */
+    if (hDecoder->object_type == DRM_ER_LC) {
+        if ((result = (uint8_t)faad_check_CRC(ld, (uint16_t)faad_get_processed_bits(ld) - 8)) > 0) return result;
+    }
+#endif
+#ifdef ERROR_RESILIENCE
+    if (hDecoder->aacSpectralDataResilienceFlag) {
+        /* error resilient spectral data decoding */
+        if ((result = reordered_spectral_data(hDecoder, ics, ld, spec_data)) > 0) { return result; }
+    } else {
+#endif
+        /* decode the spectral data */
+        if ((result = spectral_data(hDecoder, ics, ld, spec_data)) > 0) { return result; }
+#ifdef ERROR_RESILIENCE
+    }
+#endif
+    /* pulse coding reconstruction */
+    if (ics->pulse_data_present) {
+        if (ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
+            if ((result = pulse_decode(ics, spec_data, hDecoder->frameLength)) > 0) return result;
+        } else {
+            return 2; /* pulse coding not allowed for short blocks */
+        }
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.25 */
+uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
+    uint8_t g;
+    uint8_t sect_esc_val, sect_bits;
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE)
+        sect_bits = 3;
+    else
+        sect_bits = 5;
+    sect_esc_val = (1 << sect_bits) - 1;
+#if 0
+    printf("\ntotal sfb %d\n", ics->max_sfb);
+    printf("   sect    top     cb\n");
+#endif
+    for (g = 0; g < ics->num_window_groups; g++) {
+        uint8_t k = 0;
+        uint8_t i = 0;
+        while (k < ics->max_sfb) {
+#ifdef ERROR_RESILIENCE
+            uint8_t vcb11 = 0;
+#endif
+            uint8_t  sfb;
+            uint8_t  sect_len_incr;
+            uint16_t sect_len = 0;
+            uint8_t  sect_cb_bits = 4;
+            /* if "faad_getbits" detects error and returns "0", "k" is never
+               incremented and we cannot leave the while loop */
+            if (ld->error != 0) return 14;
+#ifdef ERROR_RESILIENCE
+            if (hDecoder->aacSectionDataResilienceFlag) sect_cb_bits = 5;
+#endif
+            ics->sect_cb[g][i] = (uint8_t)faad_getbits(ld, sect_cb_bits);
+            if (ics->sect_cb[g][i] == 12) return 32;
+#if 0
+            printf("%d\n", ics->sect_cb[g][i]);
+#endif
+#ifndef DRM
+            if (ics->sect_cb[g][i] == NOISE_HCB) ics->noise_used = 1;
+#else
+            /* PNS not allowed in DRM */
+            if (ics->sect_cb[g][i] == NOISE_HCB) return 29;
+#endif
+            if (ics->sect_cb[g][i] == INTENSITY_HCB2 || ics->sect_cb[g][i] == INTENSITY_HCB) ics->is_used = 1;
+#ifdef ERROR_RESILIENCE
+            if (hDecoder->aacSectionDataResilienceFlag) {
+                if ((ics->sect_cb[g][i] == 11) || ((ics->sect_cb[g][i] >= 16) && (ics->sect_cb[g][i] <= 32))) { vcb11 = 1; }
+            }
+            if (vcb11) {
+                sect_len_incr = 1;
+            } else {
+#endif
+                sect_len_incr = (uint8_t)faad_getbits(ld, sect_bits);
+#ifdef ERROR_RESILIENCE
+            }
+#endif
+            while ((sect_len_incr == sect_esc_val) /* &&
+                (k+sect_len < ics->max_sfb)*/)
+            {
+                sect_len += sect_len_incr;
+                sect_len_incr = (uint8_t)faad_getbits(ld, sect_bits);
+            }
+            sect_len += sect_len_incr;
+            ics->sect_start[g][i] = k;
+            ics->sect_end[g][i] = k + sect_len;
+#if 0
+            printf("%d\n", ics->sect_start[g][i]);
+#endif
+#if 0
+            printf("%d\n", ics->sect_end[g][i]);
+#endif
+            if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+                if (k + sect_len > 8 * 15) return 15;
+                if (i >= 8 * 15) return 15;
+            } else {
+                if (k + sect_len > MAX_SFB) return 15;
+                if (i >= MAX_SFB) return 15;
+            }
+            for (sfb = k; sfb < k + sect_len; sfb++) {
+                ics->sfb_cb[g][sfb] = ics->sect_cb[g][i];
+#if 0
+                printf("%d\n", ics->sfb_cb[g][sfb]);
+#endif
+            }
+#if 0
+            printf(" %6d %6d %6d\n",
+                i,
+                ics->sect_end[g][i],
+                ics->sect_cb[g][i]);
+#endif
+            k += sect_len;
+            i++;
+        }
+        ics->num_sec[g] = i;
+        /* the sum of all sect_len_incr elements for a given window
+         * group shall equal max_sfb */
+        if (k != ics->max_sfb) { return 32; }
+#if 0
+        printf("%d\n", ics->num_sec[g]);
+#endif
+    }
+#if 0
+    printf("\n");
+#endif
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*  decode_scale_factors() decodes the scalefactors from the bitstream
+ * All scalefactors (and also the stereo positions and pns energies) are transmitted using Huffman coded DPCM relative to the previous active
+ * scalefactor (respectively previous stereo position or previous pns energy, see subclause 4.6.2 and 4.6.3). The first active scalefactor is
+ * differentially coded relative to the global gain.
+ */
+uint8_t decode_scale_factors(ic_stream* ics, bitfile* ld) {
+    uint8_t g, sfb;
+    int16_t t;
+    int8_t  noise_pcm_flag = 1;
+    (void)noise_pcm_flag;
+    int16_t scale_factor = ics->global_gain;
+    int16_t is_position = 0;
+    int16_t noise_energy = ics->global_gain - 90;
+    (void)noise_energy;
+    for (g = 0; g < ics->num_window_groups; g++) {
+        for (sfb = 0; sfb < ics->max_sfb; sfb++) {
+            switch (ics->sfb_cb[g][sfb]) {
+                case ZERO_HCB: /* zero book */
+                    ics->scale_factors[g][sfb] = 0;
+// #define SF_PRINT
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
+                    break;
+                case INTENSITY_HCB: /* intensity books */
+                case INTENSITY_HCB2:
+                    /* decode intensity position */
+                    t = huffman_scale_factor(ld);
+                    is_position += (t - 60);
+                    ics->scale_factors[g][sfb] = is_position;
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
+                    break;
+                case NOISE_HCB: /* noise books */
+#ifndef DRM
+                    /* decode noise energy */
+                    if (noise_pcm_flag) {
+                        noise_pcm_flag = 0;
+                        t = (int16_t)faad_getbits(ld, 9) - 256;
+                    } else {
+                        t = huffman_scale_factor(ld);
+                        t -= 60;
+                    }
+                    noise_energy += t;
+                    ics->scale_factors[g][sfb] = noise_energy;
+    #ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+    #endif
+#else
+                    /* PNS not allowed in DRM */
+                    return 29;
+#endif
+                    break;
+                default: /* spectral books */
+                    /* ics->scale_factors[g][sfb] must be between 0 and 255 */
+                    ics->scale_factors[g][sfb] = 0;
+                    /* decode scale factor */
+                    t = huffman_scale_factor(ld);
+                    scale_factor += (t - 60);
+                    if (scale_factor < 0 || scale_factor > 255) return 4;
+                    ics->scale_factors[g][sfb] = scale_factor;
+#ifdef SF_PRINT
+                    printf("%d\n", ics->scale_factors[g][sfb]);
+#endif
+                    break;
+            }
+        }
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.26 */
+uint8_t scale_factor_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
+    uint8_t ret = 0;
+#ifdef PROFILE
+    int64_t count = faad_get_ts();
+#endif
+#ifdef ERROR_RESILIENCE
+    if (!hDecoder->aacScalefactorDataResilienceFlag) {
+#endif
+        ret = decode_scale_factors(ics, ld);
+#ifdef ERROR_RESILIENCE
+    } else {
+        /* In ER AAC the parameters for RVLC are seperated from the actual
+           data that holds the scale_factors.
+           Strangely enough, 2 parameters for HCR are put inbetween them.
+        */
+        ret = rvlc_scale_factor_data(ics, ld);
+    }
+#endif
+#ifdef PROFILE
+    count = faad_get_ts() - count;
+    hDecoder->scalefac_cycles += count;
+#endif
+    return ret;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.27 */
+void tns_data(ic_stream* ics, tns_info* tns, bitfile* ld) {
+    uint8_t w, filt, i, start_coef_bits = 0, coef_bits;
+    uint8_t n_filt_bits = 2;
+    uint8_t length_bits = 6;
+    uint8_t order_bits = 5;
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        n_filt_bits = 1;
+        length_bits = 4;
+        order_bits = 3;
+    }
+    for (w = 0; w < ics->num_windows; w++) {
+        tns->n_filt[w] = (uint8_t)faad_getbits(ld, n_filt_bits);
+#if 0
+        printf("%d\n", tns->n_filt[w]);
+#endif
+        if (tns->n_filt[w]) {
+            if ((tns->coef_res[w] = faad_get1bit(ld)) & 1) {
+                start_coef_bits = 4;
+            } else {
+                start_coef_bits = 3;
+            }
+#if 0
+            printf("%d\n", tns->coef_res[w]);
+#endif
+        }
+        for (filt = 0; filt < tns->n_filt[w]; filt++) {
+            tns->length[w][filt] = (uint8_t)faad_getbits(ld, length_bits);
+#if 0
+            printf("%d\n", tns->length[w][filt]);
+#endif
+            tns->order[w][filt] = (uint8_t)faad_getbits(ld, order_bits);
+#if 0
+            printf("%d\n", tns->order[w][filt]);
+#endif
+            if (tns->order[w][filt]) {
+                tns->direction[w][filt] = faad_get1bit(ld);
+#if 0
+                printf("%d\n", tns->direction[w][filt]);
+#endif
+                tns->coef_compress[w][filt] = faad_get1bit(ld);
+#if 0
+                printf("%d\n", tns->coef_compress[w][filt]);
+#endif
+                coef_bits = start_coef_bits - tns->coef_compress[w][filt];
+                for (i = 0; i < tns->order[w][filt]; i++) {
+                    tns->coef[w][filt][i] = (uint8_t)faad_getbits(ld, coef_bits);
+#if 0
+                    printf("%d\n", tns->coef[w][filt][i]);
+#endif
+                }
+            }
+        }
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef LTP_DEC
+/* Table 4.4.28 */
+uint8_t ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfile* ld) {
+    uint8_t sfb, w;
+    ltp->lag = 0;
+    #ifdef LD_DEC
+    if (hDecoder->object_type == LD) {
+        ltp->lag_update = (uint8_t)faad_getbits(ld, 1);
+        if (ltp->lag_update) { ltp->lag = (uint16_t)faad_getbits(ld, 10); }
+    } else {
+    #endif
+        ltp->lag = (uint16_t)faad_getbits(ld, 11);
+    #ifdef LD_DEC
+    }
+    #endif
+    /* Check length of lag */
+    if (ltp->lag > (hDecoder->frameLength << 1)) return 18;
+    ltp->coef = (uint8_t)faad_getbits(ld, 3);
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
+        for (w = 0; w < ics->num_windows; w++) {
+            if ((ltp->short_used[w] = faad_get1bit(ld)) & 1) {
+                ltp->short_lag_present[w] = faad_get1bit(ld);
+                if (ltp->short_lag_present[w]) { ltp->short_lag[w] = (uint8_t)faad_getbits(ld, 4); }
+            }
+        }
+    } else {
+        ltp->last_band = (ics->max_sfb < MAX_LTP_SFB ? ics->max_sfb : MAX_LTP_SFB);
+        for (sfb = 0; sfb < ltp->last_band; sfb++) { ltp->long_used[sfb] = faad_get1bit(ld); }
+    }
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.29 */
+uint8_t spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data) {
+    int8_t   i;
+    uint8_t  g;
+    uint16_t inc, k, p = 0;
+    uint8_t  groups = 0;
+    uint8_t  sect_cb;
+    uint8_t  result;
+    uint16_t nshort = hDecoder->frameLength / 8;
+#ifdef PROFILE
+    int64_t count = faad_get_ts();
+#endif
+    for (g = 0; g < ics->num_window_groups; g++) {
+        p = groups * nshort;
+        for (i = 0; i < ics->num_sec[g]; i++) {
+            sect_cb = ics->sect_cb[g][i];
+            inc = (sect_cb >= FIRST_PAIR_HCB) ? 2 : 4;
+            switch (sect_cb) {
+                case ZERO_HCB:
+                case NOISE_HCB:
+                case INTENSITY_HCB:
+                case INTENSITY_HCB2:
+// #define SD_PRINT
+#ifdef SD_PRINT
+                {
+                    int j;
+                    for (j = ics->sect_sfb_offset[g][ics->sect_start[g][i]]; j < ics->sect_sfb_offset[g][ics->sect_end[g][i]]; j++) { printf("%d\n", 0); }
+                }
+#endif
+// #define SFBO_PRINT
+#ifdef SFBO_PRINT
+                    printf("%d\n", ics->sect_sfb_offset[g][ics->sect_start[g][i]]);
+#endif
+                    p += (ics->sect_sfb_offset[g][ics->sect_end[g][i]] - ics->sect_sfb_offset[g][ics->sect_start[g][i]]);
+                    break;
+                default:
+#ifdef SFBO_PRINT
+                    printf("%d\n", ics->sect_sfb_offset[g][ics->sect_start[g][i]]);
+#endif
+                    for (k = ics->sect_sfb_offset[g][ics->sect_start[g][i]]; k < ics->sect_sfb_offset[g][ics->sect_end[g][i]]; k += inc) {
+                        if ((result = huffman_spectral_data(sect_cb, ld, &spectral_data[p])) > 0) return result;
+#ifdef SD_PRINT
+                        {
+                            int j;
+                            for (j = p; j < p + inc; j++) { printf("%d\n", spectral_data[j]); }
+                        }
+#endif
+                        p += inc;
+                    }
+                    break;
+            }
+        }
+        groups += ics->window_group_length[g];
+    }
+#ifdef PROFILE
+    count = faad_get_ts() - count;
+    hDecoder->spectral_cycles += count;
+#endif
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.30 */
+uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
+    uint16_t i, n, dataElementLength;
+    uint8_t  dataElementLengthPart;
+    uint8_t  align = 4, data_element_version, loopCounter;
+    uint8_t  extension_type = (uint8_t)faad_getbits(ld, 4);
+    switch (extension_type) {
+        case EXT_DYNAMIC_RANGE:
+            drc->present = 1;
+            n = dynamic_range_info(ld, drc);
+            return n;
+        case EXT_FILL_DATA:
+            /* fill_nibble = */ faad_getbits(ld, 4); /* must be '0000' */
+            for (i = 0; i < count - 1; i++) {        /* fill_byte[i] = */
+                faad_getbits(ld, 8);                 /* must be '10100101' */
+            }
+            return count;
+            break;
+        case EXT_DATA_ELEMENT:
+            data_element_version = (uint8_t)faad_getbits(ld, 4);
+            switch (data_element_version) {
+                case ANC_DATA:
+                    loopCounter = 0;
+                    dataElementLength = 0;
+                    do {
+                        dataElementLengthPart = (uint8_t)faad_getbits(ld, 8);
+                        dataElementLength += dataElementLengthPart;
+                        loopCounter++;
+                    } while (dataElementLengthPart == 255);
+                    for (i = 0; i < dataElementLength; i++) {
+                        /* data_element_byte[i] = */ faad_getbits(ld, 8);
+                        return (dataElementLength + loopCounter + 1);
+                    }
+                    /* fallthrough */
+                default: align = 0; break;
+            }
+            /* fallthrough */
+        case EXT_FIL:
+            /* fallthrough */
+        default:
+            faad_getbits(ld, align);
+            for (i = 0; i < count - 1; i++) { /* other_bits[i] = */
+                faad_getbits(ld, 8);
+            }
+            return count;
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.31 */
+uint8_t dynamic_range_info(bitfile* ld, drc_info* drc) {
+    uint8_t i, n = 1;
+    uint8_t band_incr;
+    drc->num_bands = 1;
+    if (faad_get1bit(ld) & 1) {
+        drc->pce_instance_tag = (uint8_t)faad_getbits(ld, 4);
+        /* drc->drc_tag_reserved_bits = */ faad_getbits(ld, 4);
+        n++;
+    }
+    drc->excluded_chns_present = faad_get1bit(ld);
+    if (drc->excluded_chns_present == 1) { n += excluded_channels(ld, drc); }
+    if (faad_get1bit(ld)) {
+        band_incr = (uint8_t)faad_getbits(ld, 4);
+        /* drc->drc_bands_reserved_bits = */ faad_getbits(ld, 4);
+        n++;
+        drc->num_bands += band_incr;
+        for (i = 0; i < drc->num_bands; i++) {
+            drc->band_top[i] = (uint8_t)faad_getbits(ld, 8);
+            n++;
+        }
+    }
+    if (faad_get1bit(ld) & 1) {
+        drc->prog_ref_level = (uint8_t)faad_getbits(ld, 7);
+        /* drc->prog_ref_level_reserved_bits = */ faad_get1bit(ld);
+        n++;
+    }
+    for (i = 0; i < drc->num_bands; i++) {
+        drc->dyn_rng_sgn[i] = faad_get1bit(ld);
+        drc->dyn_rng_ctl[i] = (uint8_t)faad_getbits(ld, 7);
+        n++;
+    }
+    return n;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 4.4.32 */
+uint8_t excluded_channels(bitfile* ld, drc_info* drc) {
+    uint8_t i, n = 0;
+    uint8_t num_excl_chan = 7;
+    for (i = 0; i < 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
+    n++;
+    while ((drc->additional_excluded_chns[n - 1] = faad_get1bit(ld)) == 1) {
+        if (i >= MAX_CHANNELS - num_excl_chan - 7) return n;
+        for (i = num_excl_chan; i < num_excl_chan + 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
+        n++;
+        num_excl_chan += 7;
+    }
+    return n;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Annex A: Audio Interchange Formats */
+/* Table 1.A.2 */
+void get_adif_header(adif_header* adif, bitfile* ld) {
+    uint8_t i;
+    /* adif_id[0] = */ faad_getbits(ld, 8);
+    /* adif_id[1] = */ faad_getbits(ld, 8);
+    /* adif_id[2] = */ faad_getbits(ld, 8);
+    /* adif_id[3] = */ faad_getbits(ld, 8);
+    adif->copyright_id_present = faad_get1bit(ld);
+    if (adif->copyright_id_present) {
+        for (i = 0; i < 72 / 8; i++) { adif->copyright_id[i] = (int8_t)faad_getbits(ld, 8); }
+        adif->copyright_id[i] = 0;
+    }
+    adif->original_copy = faad_get1bit(ld);
+    adif->home = faad_get1bit(ld);
+    adif->bitstream_type = faad_get1bit(ld);
+    adif->bitrate = faad_getbits(ld, 23);
+    adif->num_program_config_elements = (uint8_t)faad_getbits(ld, 4);
+    for (i = 0; i < adif->num_program_config_elements + 1; i++) {
+        if (adif->bitstream_type == 0) {
+            adif->adif_buffer_fullness = faad_getbits(ld, 20);
+        } else {
+            adif->adif_buffer_fullness = 0;
+        }
+        program_config_element(&adif->pce[i], ld);
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 1.A.5 */
+uint8_t adts_frame(adts_header* adts, bitfile* ld) {
+    /* faad_byte_align(ld); */
+    if (adts_fixed_header(adts, ld)) return 5;
+    adts_variable_header(adts, ld);
+    adts_error_check(adts, ld);
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 1.A.6 */
+uint8_t adts_fixed_header(adts_header* adts, bitfile* ld) {
+    uint16_t i;
+    uint8_t  sync_err = 1;
+    /* try to recover from sync errors */
+    for (i = 0; i < 768; i++) {
+        adts->syncword = (uint16_t)faad_showbits(ld, 12);
+        if (adts->syncword != 0xFFF) {
+            faad_getbits(ld, 8);
+        } else {
+            sync_err = 0;
+            faad_getbits(ld, 12);
+            break;
+        }
+    }
+    if (sync_err) return 5;
+    adts->id = faad_get1bit(ld);
+    adts->layer = (uint8_t)faad_getbits(ld, 2);
+    adts->protection_absent = faad_get1bit(ld);
+    adts->profile = (uint8_t)faad_getbits(ld, 2);
+    adts->sf_index = (uint8_t)faad_getbits(ld, 4);
+    adts->private_bit = faad_get1bit(ld);
+    adts->channel_configuration = (uint8_t)faad_getbits(ld, 3);
+    adts->original = faad_get1bit(ld);
+    adts->home = faad_get1bit(ld);
+    if (adts->old_format == 1) {
+        /* Removed in corrigendum 14496-3:2002 */
+        if (adts->id == 0) { adts->emphasis = (uint8_t)faad_getbits(ld, 2); }
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 1.A.7 */
+void adts_variable_header(adts_header* adts, bitfile* ld) {
+    adts->copyright_identification_bit = faad_get1bit(ld);
+    adts->copyright_identification_start = faad_get1bit(ld);
+    adts->aac_frame_length = (uint16_t)faad_getbits(ld, 13);
+    adts->adts_buffer_fullness = (uint16_t)faad_getbits(ld, 11);
+    adts->no_raw_data_blocks_in_frame = (uint8_t)faad_getbits(ld, 2);
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* Table 1.A.8 */
+void adts_error_check(adts_header* adts, bitfile* ld) {
+    if (adts->protection_absent == 0) { adts->crc_check = (uint16_t)faad_getbits(ld, 16); }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* LATM parsing functions */
+uint32_t latm_get_value(bitfile* ld) {
+    uint32_t l, value;
+    uint8_t  bytesForValue;
+    bytesForValue = (uint8_t)faad_getbits(ld, 2);
+    value = 0;
+    for (l = 0; l < bytesForValue; l++) value = (value << 8) | (uint8_t)faad_getbits(ld, 8);
+    return value;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t latmParsePayload(latm_header* latm, bitfile* ld) {
+    // assuming there's only one program with a single layer and 1 subFrame,
+    // allStreamsSametimeframing is set,
+    uint32_t framelen;
+    uint8_t  tmp;
+    // this should be the payload length field for the current configuration
+    framelen = 0;
+    if (latm->framelen_type == 0) {
+        do {
+            tmp = (uint8_t)faad_getbits(ld, 8);
+            framelen += tmp;
+        } while (tmp == 0xff);
+    } else if (latm->framelen_type == 1)
+        framelen = latm->frameLength;
+    return framelen;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t latmAudioMuxElement(latm_header* latm, bitfile* ld) {
+    uint32_t               ascLen, asc_bits = 0;
+    uint32_t               x1, y1, m, n, i;
+    program_config         pce;
+    mp4AudioSpecificConfig mp4ASC;
+    latm->useSameStreamMux = (uint8_t)faad_getbits(ld, 1);
+    if (!latm->useSameStreamMux) {
+        // parseSameStreamMuxConfig
+        latm->version = (uint8_t)faad_getbits(ld, 1);
+        if (latm->version) latm->versionA = (uint8_t)faad_getbits(ld, 1);
+        if (latm->versionA) {
+            // dunno the payload format for versionA
+            fprintf(stderr, "versionA not supported\n");
+            return 0;
+        }
+        if (latm->version) // read taraBufferFullness
+            latm_get_value(ld);
+        latm->allStreamsSameTimeFraming = (uint8_t)faad_getbits(ld, 1);
+        latm->numSubFrames = (uint8_t)faad_getbits(ld, 6) + 1;
+        latm->numPrograms = (uint8_t)faad_getbits(ld, 4) + 1;
+        latm->numLayers = faad_getbits(ld, 3) + 1;
+        if (latm->numPrograms > 1 || !latm->allStreamsSameTimeFraming || latm->numSubFrames > 1 || latm->numLayers > 1) {
+            fprintf(stderr, "\r\nUnsupported LATM configuration: %d programs/ %d subframes, %d layers, allstreams: %d\n", latm->numPrograms, latm->numSubFrames, latm->numLayers,
+                    latm->allStreamsSameTimeFraming);
+            return 0;
+        }
+        ascLen = 0;
+        if (latm->version) ascLen = latm_get_value(ld);
+        x1 = faad_get_processed_bits(ld);
+        if (AudioSpecificConfigFromBitfile(ld, &mp4ASC, &pce, 0, 1) < 0) return 0;
+        // horrid hack to unread the ASC bits and store them in latm->ASC
+        // the correct code would rely on an ideal faad_ungetbits()
+        y1 = faad_get_processed_bits(ld);
+        if ((y1 - x1) <= MAX_ASC_BYTES * 8) {
+            faad_rewindbits(ld);
+            m = x1;
+            while (m > 0) {
+                n = min(m, 32);
+                faad_getbits(ld, n);
+                m -= n;
+            }
+            i = 0;
+            m = latm->ASCbits = y1 - x1;
+            while (m > 0) {
+                n = min(m, 8);
+                latm->ASC[i++] = (uint8_t)faad_getbits(ld, n);
+                m -= n;
+            }
+        }
+        asc_bits = y1 - x1;
+        if (ascLen > asc_bits) faad_getbits(ld, ascLen - asc_bits);
+        latm->framelen_type = (uint8_t)faad_getbits(ld, 3);
+        if (latm->framelen_type == 0) {
+            latm->frameLength = 0;
+            faad_getbits(ld, 8); // buffer fullness for frame_len_type==0, useless
+        } else if (latm->framelen_type == 1) {
+            latm->frameLength = faad_getbits(ld, 9);
+            if (latm->frameLength == 0) {
+                fprintf(stderr, "Invalid frameLength: 0\r\n");
+                return 0;
+            }
+            latm->frameLength = (latm->frameLength + 20) * 8;
+        } else { // hellish CELP or HCVX stuff, discard
+            fprintf(stderr, "Unsupported CELP/HCVX framelentype: %d\n", latm->framelen_type);
+            return 0;
+        }
+        latm->otherDataLenBits = 0;
+        if (faad_getbits(ld, 1)) { // other data present
+            int esc, tmp;
+            if (latm->version)
+                latm->otherDataLenBits = latm_get_value(ld);
+            else
+                do {
+                    esc = faad_getbits(ld, 1);
+                    tmp = faad_getbits(ld, 8);
+                    latm->otherDataLenBits = (latm->otherDataLenBits << 8) + tmp;
+                } while (esc);
+        }
+        if (faad_getbits(ld, 1)) // crc
+            faad_getbits(ld, 8);
+        latm->inited = 1;
+    }
+    // read payload
+    if (latm->inited)
+        return latmParsePayload(latm, ld);
+    else
+        return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t faad_latm_frame(latm_header* latm, bitfile* ld) {
+    uint16_t len;
+    uint32_t initpos, endpos, firstpos, ret;
+    (void)firstpos;
+    firstpos = faad_get_processed_bits(ld);
+    while (ld->bytes_left) {
+        faad_byte_align(ld);
+        if (faad_showbits(ld, 11) != 0x2B7) {
+            faad_getbits(ld, 8);
+            continue;
+        }
+        faad_getbits(ld, 11);
+        len = faad_getbits(ld, 13);
+        if (!len) continue;
+        initpos = faad_get_processed_bits(ld);
+        ret = latmAudioMuxElement(latm, ld);
+        endpos = faad_get_processed_bits(ld);
+        if (ret > 0) return (len * 8) - (endpos - initpos);
+        // faad_getbits(ld, initpos-endpos); //go back to initpos, but is valid a getbits(-N) ?
+    }
+    return 0xFFFFFFFF;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+uint8_t rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
+    uint8_t bits = 9;
+    ics->sf_concealment = faad_get1bit(ld);
+    ics->rev_global_gain = (uint8_t)faad_getbits(ld, 8);
+    if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) bits = 11;
+    /* the number of bits used for the huffman codewords */
+    ics->length_of_rvlc_sf = (uint16_t)faad_getbits(ld, bits);
+    if (ics->noise_used) {
+        ics->dpcm_noise_nrg = (uint16_t)faad_getbits(ld, 9);
+        ics->length_of_rvlc_sf -= 9;
+    }
+    ics->sf_escapes_present = faad_get1bit(ld);
+    if (ics->sf_escapes_present) { ics->length_of_rvlc_escapes = (uint8_t)faad_getbits(ld, 8); }
+    if (ics->noise_used) { ics->dpcm_noise_last_position = (uint16_t)faad_getbits(ld, 9); }
+    return 0;
+}
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+uint8_t rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
+    uint8_t  result;
+    uint8_t  intensity_used = 0;
+    uint8_t* rvlc_sf_buffer = NULL;
+    uint8_t* rvlc_esc_buffer = NULL;
+    bitfile  ld_rvlc_sf, ld_rvlc_esc;
+    //    bitfile ld_rvlc_sf_rev, ld_rvlc_esc_rev;
+    if (ics->length_of_rvlc_sf > 0) {
+        /* We read length_of_rvlc_sf bits here to put it in a seperate bitfile. */
+        rvlc_sf_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_sf);
+        faad_initbits(&ld_rvlc_sf, (void*)rvlc_sf_buffer, bit2byte(ics->length_of_rvlc_sf));
+        //        faad_initbits_rev(&ld_rvlc_sf_rev, (void*)rvlc_sf_buffer,
+        //            ics->length_of_rvlc_sf);
+    }
+    if (ics->sf_escapes_present) {
+        /* We read length_of_rvlc_escapes bits here to put it in a seperate bitfile. */
+        rvlc_esc_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_escapes);
+        faad_initbits(&ld_rvlc_esc, (void*)rvlc_esc_buffer, bit2byte(ics->length_of_rvlc_escapes));
+        //        faad_initbits_rev(&ld_rvlc_esc_rev, (void*)rvlc_esc_buffer,
+        //            ics->length_of_rvlc_escapes);
+    }
+    /* decode the rvlc scale factors and escapes */
+    result = rvlc_decode_sf_forward(ics, &ld_rvlc_sf, &ld_rvlc_esc, &intensity_used);
+    //    result = rvlc_decode_sf_reverse(ics, &ld_rvlc_sf_rev,
+    //        &ld_rvlc_esc_rev, intensity_used);
+    if (rvlc_esc_buffer) faad_free(rvlc_esc_buffer);
+    if (rvlc_sf_buffer) faad_free(rvlc_sf_buffer);
+    if (ics->length_of_rvlc_sf > 0) faad_endbits(&ld_rvlc_sf);
+    if (ics->sf_escapes_present) faad_endbits(&ld_rvlc_esc);
+    return result;
+}
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used) {
+    int8_t g, sfb;
+    int8_t t = 0;
+    int8_t error = 0;
+    int8_t noise_pcm_flag = 1;
+    int16_t scale_factor = ics->global_gain;
+    int16_t is_position = 0;
+    int16_t noise_energy = ics->global_gain - 90 - 256;
+    #ifdef PRINT_RVLC
+    printf("\nglobal_gain: %d\n", ics->global_gain);
+    #endif
+    for (g = 0; g < ics->num_window_groups; g++) {
+        for (sfb = 0; sfb < ics->max_sfb; sfb++) {
+            if (error) {
+                ics->scale_factors[g][sfb] = 0;
+            } else {
+                switch (ics->sfb_cb[g][sfb]) {
+                    case ZERO_HCB: /* zero book */ ics->scale_factors[g][sfb] = 0; break;
+                    case INTENSITY_HCB: /* intensity books */
+                    case INTENSITY_HCB2:
+                        *intensity_used = 1;
+                        /* decode intensity position */
+                        t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+                        is_position += t;
+                        ics->scale_factors[g][sfb] = is_position;
+                        break;
+                    case NOISE_HCB: /* noise books */
+                        /* decode noise energy */
+                        if (noise_pcm_flag) {
+                            int16_t n = ics->dpcm_noise_nrg;
+                            noise_pcm_flag = 0;
+                            noise_energy += n;
+                        } else {
+                            t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+                            noise_energy += t;
+                        }
+                        ics->scale_factors[g][sfb] = noise_energy;
+                        break;
+                    default: /* spectral books */
+                        /* decode scale factor */
+                        t = rvlc_huffman_sf(ld_sf, ld_esc, +1);
+                        scale_factor += t;
+                        if (scale_factor < 0) return 4;
+                        ics->scale_factors[g][sfb] = scale_factor;
+                        break;
+                }
+    #ifdef PRINT_RVLC
+                printf("%3d:%4d%4d\n", sfb, ics->sfb_cb[g][sfb], ics->scale_factors[g][sfb]);
+    #endif
+                if (t == 99) { error = 1; }
+            }
+        }
+    }
+    #ifdef PRINT_RVLC
+    printf("\n\n");
+    #endif
+    return 0;
+}
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+    #if 0 // not used right now, doesn't work correctly yet
+static uint8_t rvlc_decode_sf_reverse(ic_stream *ics, bitfile *ld_sf, bitfile *ld_esc,
+                                      uint8_t intensity_used)
+{
+    int8_t g, sfb;
+    int8_t t = 0;
+    int8_t error = 0;
+    int8_t noise_pcm_flag = 1, is_pcm_flag = 1, sf_pcm_flag = 1;
+    int16_t scale_factor = ics->rev_global_gain;
+    int16_t is_position = 0;
+    int16_t noise_energy = ics->rev_global_gain;
+        #ifdef PRINT_RVLC
+    printf("\nrev_global_gain: %d\n", ics->rev_global_gain);
+        #endif
+    if (intensity_used)
+    {
+        is_position = rvlc_huffman_sf(ld_sf, ld_esc, -1);
+        #ifdef PRINT_RVLC
+        printf("is_position: %d\n", is_position);
+        #endif
+    }
+    for (g = ics->num_window_groups-1; g >= 0; g--)
+    {
+        for (sfb = ics->max_sfb-1; sfb >= 0; sfb--)
+        {
+            if (error)
+            {
+                ics->scale_factors[g][sfb] = 0;
+            } else {
+                switch (ics->sfb_cb[g][sfb])
+                {
+                case ZERO_HCB: /* zero book */
+                    ics->scale_factors[g][sfb] = 0;
+                    break;
+                case INTENSITY_HCB: /* intensity books */
+                case INTENSITY_HCB2:
+                    if (is_pcm_flag)
+                    {
+                        is_pcm_flag = 0;
+                        ics->scale_factors[g][sfb] = is_position;
+                    } else {
+                        t = rvlc_huffman_sf(ld_sf, ld_esc, -1);
+                        is_position -= t;
+                        ics->scale_factors[g][sfb] = (uint8_t)is_position;
+                    }
+                    break;
+                case NOISE_HCB: /* noise books */
+                    /* decode noise energy */
+                    if (noise_pcm_flag)
+                    {
+                        noise_pcm_flag = 0;
+                        noise_energy = ics->dpcm_noise_last_position;
+                    } else {
+                        t = rvlc_huffman_sf(ld_sf, ld_esc, -1);
+                        noise_energy -= t;
+                    }
+                    ics->scale_factors[g][sfb] = (uint8_t)noise_energy;
+                    break;
+                default: /* spectral books */
+                    if (sf_pcm_flag || (sfb == 0))
+                    {
+                        sf_pcm_flag = 0;
+                        if (sfb == 0)
+                            scale_factor = ics->global_gain;
+                    } else {
+                        /* decode scale factor */
+                        t = rvlc_huffman_sf(ld_sf, ld_esc, -1);
+                        scale_factor -= t;
+                    }
+                    if (scale_factor < 0)
+                        return 4;
+                    ics->scale_factors[g][sfb] = (uint8_t)scale_factor;
+                    break;
+                }
+        #ifdef PRINT_RVLC
+                printf("%3d:%4d%4d\n", sfb, ics->sfb_cb[g][sfb],
+                    ics->scale_factors[g][sfb]);
+        #endif
+                if (t == 99)
+                {
+                    error = 1;
+                }
+            }
+        }
+    }
+        #ifdef PRINT_RVLC
+    printf("\n\n");
+        #endif
+    return 0;
+}
+    #endif // 0
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+/* index == 99 means not allowed codeword */
+static rvlc_huff_table book_rvlc[] = {
+    /*index  length  codeword */
+    {0, 1, 0},    /*         0 */
+    {-1, 3, 5},   /*       101 */
+    {1, 3, 7},    /*       111 */
+    {-2, 4, 9},   /*      1001 */
+    {-3, 5, 17},  /*     10001 */
+    {2, 5, 27},   /*     11011 */
+    {-4, 6, 33},  /*    100001 */
+    {99, 6, 50},  /*    110010 */
+    {3, 6, 51},   /*    110011 */
+    {99, 6, 52},  /*    110100 */
+    {-7, 7, 65},  /*   1000001 */
+    {99, 7, 96},  /*   1100000 */
+    {99, 7, 98},  /*   1100010 */
+    {7, 7, 99},   /*   1100011 */
+    {4, 7, 107},  /*   1101011 */
+    {-5, 8, 129}, /*  10000001 */
+    {99, 8, 194}, /*  11000010 */
+    {5, 8, 195},  /*  11000011 */
+    {99, 8, 212}, /*  11010100 */
+    {99, 9, 256}, /* 100000000 */
+    {-6, 9, 257}, /* 100000001 */
+    {99, 9, 426}, /* 110101010 */
+    {6, 9, 427},  /* 110101011 */
+    {99, 10, 0}   /* Shouldn't come this far */
+};
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+static rvlc_huff_table book_escape[] = {
+    /*index  length  codeword */
+    {1, 2, 0},        {0, 2, 2},        {3, 3, 2},        {2, 3, 6},        {4, 4, 14},       {7, 5, 13},       {6, 5, 15},       {5, 5, 31},       {11, 6, 24},      {10, 6, 25},
+    {9, 6, 29},       {8, 6, 61},       {13, 7, 56},      {12, 7, 120},     {15, 8, 114},     {14, 8, 242},     {17, 9, 230},     {16, 9, 486},     {19, 10, 463},    {18, 10, 974},
+    {22, 11, 925},    {20, 11, 1950},   {21, 11, 1951},   {23, 12, 1848},   {25, 13, 3698},   {24, 14, 7399},   {26, 15, 14797},  {49, 19, 236736}, {50, 19, 236737}, {51, 19, 236738},
+    {52, 19, 236739}, {53, 19, 236740}, {27, 20, 473482}, {28, 20, 473483}, {29, 20, 473484}, {30, 20, 473485}, {31, 20, 473486}, {32, 20, 473487}, {33, 20, 473488}, {34, 20, 473489},
+    {35, 20, 473490}, {36, 20, 473491}, {37, 20, 473492}, {38, 20, 473493}, {39, 20, 473494}, {40, 20, 473495}, {41, 20, 473496}, {42, 20, 473497}, {43, 20, 473498}, {44, 20, 473499},
+    {45, 20, 473500}, {46, 20, 473501}, {47, 20, 473502}, {48, 20, 473503}, {99, 21, 0} /* Shouldn't come this far */
+};
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+int8_t rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction) {
+    uint8_t          i, j;
+    int8_t           index;
+    uint32_t         cw;
+    rvlc_huff_table* h = book_rvlc;
+    i = h->len;
+    if (direction > 0)
+        cw = faad_getbits(ld_sf, i);
+    else
+        cw = faad_getbits_rev(ld_sf, i);
+    while ((cw != h->cw) && (i < 10)) {
+        h++;
+        j = h->len - i;
+        i += j;
+        cw <<= j;
+        if (direction > 0)
+            cw |= faad_getbits(ld_sf, j);
+        else
+            cw |= faad_getbits_rev(ld_sf, j);
+    }
+    index = h->index;
+    if (index == +ESC_VAL) {
+        int8_t esc = rvlc_huffman_esc(ld_esc, direction);
+        if (esc == 99) return 99;
+        index += esc;
+    #ifdef PRINT_RVLC
+        printf("esc: %d - ", esc);
+    #endif
+    }
+    if (index == -ESC_VAL) {
+        int8_t esc = rvlc_huffman_esc(ld_esc, direction);
+        if (esc == 99) return 99;
+        index -= esc;
+    #ifdef PRINT_RVLC
+        printf("esc: %d - ", esc);
+    #endif
+    }
+    return index;
+}
+#endif // ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+int8_t rvlc_huffman_esc(bitfile* ld, int8_t direction) {
+    uint8_t          i, j;
+    uint32_t         cw;
+    rvlc_huff_table* h = book_escape;
+    i = h->len;
+    if (direction > 0)
+        cw = faad_getbits(ld, i);
+    else
+        cw = faad_getbits_rev(ld, i);
+    while ((cw != h->cw) && (i < 21)) {
+        h++;
+        j = h->len - i;
+        i += j;
+        cw <<= j;
+        if (direction > 0)
+            cw |= faad_getbits(ld, j);
+        else
+            cw |= faad_getbits_rev(ld, j);
+    }
+    return h->index;
+}
+#endif //ERROR_RESILIENCE
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

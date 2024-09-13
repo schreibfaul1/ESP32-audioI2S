@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include "syntax.h"
 #include "lt_predict.h"
-#include "tns.h"
+
 /* static function declarations */
 static int16_t real_to_int16(real_t sig_in);
 #endif // LPT_DEC

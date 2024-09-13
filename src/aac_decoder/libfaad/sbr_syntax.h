@@ -36,29 +36,6 @@ extern "C" {
 #endif
 
 
-#define T_HFGEN 8
-#define T_HFADJ 2
-
-#define EXT_SBR_DATA     13
-#define EXT_SBR_DATA_CRC 14
-
-#define FIXFIX 0
-#define FIXVAR 1
-#define VARFIX 2
-#define VARVAR 3
-
-#define LO_RES 0
-#define HI_RES 1
-
-#define NO_TIME_SLOTS_960 15
-#define NO_TIME_SLOTS     16
-#define RATE              2
-
-#define NOISE_FLOOR_OFFSET 6
-
-
-uint8_t sbr_extension_data(bitfile *ld, sbr_info *sbr, uint16_t cnt,
-                           uint8_t resetFlag);
 
 #ifdef __cplusplus
 }

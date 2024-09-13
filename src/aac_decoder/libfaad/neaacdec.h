@@ -29,42 +29,16 @@
 **/
 #ifndef __NEAACDEC_H__
 #define __NEAACDEC_H__
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 #include <stdint.h>
-#include  <stdint.h>
+#include <stdint.h>
 #include "structs.h"
 #include "common.h"
 #include "fixed.h"
-#if 1
-/* MACROS FOR BACKWARDS COMPATIBILITY */
-/* structs */
-// #define faacDecHandle                  NeAACDecHandle
-// #define faacDecConfiguration           NeAACDecConfiguration
-// #define faacDecConfigurationPtr        NeAACDecConfigurationPtr
-// #define faacDecFrameInfo               NeAACDecFrameInfo
-// /* functions */
-// #define faacDecGetErrorMessage         NeAACDecGetErrorMessage
-// #define faacDecSetConfiguration        NeAACDecSetConfiguration
-// #define faacDecGetCurrentConfiguration NeAACDecGetCurrentConfiguration
-// #define faacDecInit                    NeAACDecInit
-// #define faacDecInit2                   NeAACDecInit2
-// #define faacDecInitDRM                 NeAACDecInitDRM
-// #define faacDecPostSeekReset           NeAACDecPostSeekReset
-// #define faacDecOpen                    NeAACDecOpen
-// #define faacDecClose                   NeAACDecClose
-// #define faacDecDecode                  NeAACDecDecode
-// #define AudioSpecificConfig            NeAACDecAudioSpecificConfig
-#endif
-#ifdef _WIN32
-  #pragma pack(push, 8)
-  #define NEAACDECAPI __declspec(dllexport)
-#elif defined(__GNUC__) && __GNUC__ >= 4
-  #define NEAACDECAPI __attribute__((visibility("default")))
-#else
-  #define NEAACDECAPI
-#endif
+
 #ifndef FAAD2_VERSION
   #define FAAD2_VERSION "unknown"
 #endif
@@ -168,45 +142,6 @@ typedef struct NeAACDecFrameInfo
     unsigned char ps;
     uint8_t  isPS;
 } NeAACDecFrameInfo;
-// NEAACDECAPI const char* NeAACDecGetErrorMessage(unsigned char errcode);
-// NEAACDECAPI unsigned long NeAACDecGetCapabilities(void);
-// NEAACDECAPI NeAACDecHandle NeAACDecOpen(void);
-// NEAACDECAPI NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hDecoder);
-// NEAACDECAPI unsigned char NeAACDecSetConfiguration(NeAACDecHandle hDecoder,
-//                                                    NeAACDecConfigurationPtr config);
-// /* Init the library based on info from the AAC file (ADTS/ADIF) */
-// NEAACDECAPI long NeAACDecInit(NeAACDecHandle hDecoder,
-//                               unsigned char *buffer,
-//                               unsigned long buffer_size,
-//                               unsigned long *samplerate,
-//                               unsigned char *channels);
-// /* Init the library using a DecoderSpecificInfo */
-// NEAACDECAPI char NeAACDecInit2(NeAACDecHandle hDecoder,
-//                                unsigned char *pBuffer,
-//                                unsigned long SizeOfDecoderSpecificInfo,
-//                                unsigned long *samplerate,
-//                                unsigned char *channels);
-// /* Init the library for DRM */
-// NEAACDECAPI char NeAACDecInitDRM(NeAACDecHandle *hDecoder, unsigned long samplerate,
-//                                  unsigned char channels);
-// NEAACDECAPI void NeAACDecPostSeekReset(NeAACDecHandle hDecoder, long frame);
-// NEAACDECAPI void NeAACDecClose(NeAACDecHandle hDecoder);
-// NEAACDECAPI void* NeAACDecDecode(NeAACDecHandle hDecoder,
-//                                  NeAACDecFrameInfo *hInfo,
-//                                  unsigned char *buffer,
-//                                  unsigned long buffer_size);
-// NEAACDECAPI void* NeAACDecDecode2(NeAACDecHandle hDecoder,
-//                                   NeAACDecFrameInfo *hInfo,
-//                                   unsigned char *buffer,
-//                                   unsigned long buffer_size,
-//                                   void **sample_buffer,
-//                                   unsigned long sample_buffer_size);
-// NEAACDECAPI char NeAACDecAudioSpecificConfig(unsigned char *pBuffer,
-//                                              unsigned long buffer_size,
-//                                              mp4AudioSpecificConfig *mp4ASC);
-// /* Get version and copyright strings */
-// NEAACDECAPI int NeAACDecGetVersion(const char **faad_id_string,
-//                                    const char **faad_copyright_string);
 
 drc_info*                drc_init(real_t cut, real_t boost);
 void                     drc_end(drc_info* drc);
@@ -321,7 +256,62 @@ uint8_t is_ltp_ot(uint8_t object_type);
 void    lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                       uint16_t frame_len);
 void    lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type);
-
+void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a);
+void tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order);
+void tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order);
+uint8_t faad_check_CRC(bitfile* ld, uint16_t len);
+/* static function declarations */
+void    decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele);
+void    decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele);
+uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag);
+uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag);
+#ifdef COUPLING_DEC
+uint8_t coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld);
+#endif
+uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld);
+uint8_t  program_config_element(program_config* pce, bitfile* ld);
+uint8_t  fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc,  uint8_t sbr_ele);
+uint8_t individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag, int16_t* spec_data);
+uint8_t ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t common_window);
+uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld);
+uint8_t scale_factor_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld);
+#ifdef SSR_DEC
+void gain_control_data(bitfile* ld, ic_stream* ics);
+#endif
+uint8_t  spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data);
+uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count);
+uint8_t  pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld);
+void     tns_data(ic_stream* ics, tns_info* tns, bitfile* ld);
+#ifdef LTP_DEC
+uint8_t ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfile* ld);
+#endif
+uint8_t adts_fixed_header(adts_header* adts, bitfile* ld);
+void    adts_variable_header(adts_header* adts, bitfile* ld);
+void    adts_error_check(adts_header* adts, bitfile* ld);
+uint8_t dynamic_range_info(bitfile* ld, drc_info* drc);
+uint8_t excluded_channels(bitfile* ld, drc_info* drc);
+uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag);
+int8_t GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce);
+uint8_t adts_frame(adts_header* adts, bitfile* ld);
+void    get_adif_header(adif_header* adif, bitfile* ld);
+void    raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc);
+uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data);
+#ifdef DRM
+int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo);
+#endif
+void dct4_kernel(real_t * in_real, real_t * in_imag, real_t * out_real, real_t * out_imag);
+void DCT3_32_unscaled(real_t *y, real_t *x);
+void DCT4_32(real_t *y, real_t *x);
+void DST4_32(real_t *y, real_t *x);
+void DCT2_32_unscaled(real_t *y, real_t *x);
+void DCT4_16(real_t *y, real_t *x);
+void DCT2_16_unscaled(real_t *y, real_t *x);
+uint8_t rvlc_scale_factor_data(ic_stream *ics, bitfile *ld);
+uint8_t rvlc_decode_scale_factors(ic_stream *ics, bitfile *ld);
+uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t resetFlag);
+int8_t rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction);
+int8_t rvlc_huffman_esc(bitfile* ld_esc, int8_t direction);
+uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used);
 
 #ifdef __cplusplus
 }

@@ -57,6 +57,7 @@
 #define BYTE_NUMBIT_LD  3
 #define bit2byte(a) ((a+7)>>BYTE_NUMBIT_LD)
 #define NUM_ERROR_MESSAGES 34
+#define ESC_VAL 7
 #ifdef DRM
 #define DECAY_CUTOFF         3
 #define DECAY_SLOPE          0.05f
@@ -73,8 +74,88 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define VCB11_LAST  31
 #define ALPHA      REAL_CONST(0.90625)
 #define A          REAL_CONST(0.953125)
+#define TNS_MAX_ORDER 20
+#define MAIN       1
+#define LC         2
+#define SSR        3
+#define LTP        4
+#define HE_AAC     5
+#define LD        23
+#define ER_LC     17
+#define ER_LTP    19
+#define DRM_ER_LC 27 /* special object type for DRM */
+/* header types */
+#define RAW        0
+#define ADIF       1
+#define ADTS       2
+#define LATM       3
+/* SBR signalling */
+#define NO_SBR           0
+#define SBR_UPSAMPLED    1
+#define SBR_DOWNSAMPLED  2
+#define NO_SBR_UPSAMPLED 3
+/* DRM channel definitions */
+#define DRMCH_MONO          1
+#define DRMCH_STEREO        2
+#define DRMCH_SBR_MONO      3
+#define DRMCH_SBR_STEREO    4
+#define DRMCH_SBR_PS_STEREO 5
+/* First object type that has ER */
+#define ER_OBJECT_START 17
+/* Bitstream */
+#define LEN_SE_ID 3
+#define LEN_TAG   4
+#define LEN_BYTE  8
+#define EXT_FIL            0
+#define EXT_FILL_DATA      1
+#define EXT_DATA_ELEMENT   2
+#define EXT_DYNAMIC_RANGE 11
+#define ANC_DATA           0
+/* Syntax elements */
+#define ID_SCE 0x0
+#define ID_CPE 0x1
+#define ID_CCE 0x2
+#define ID_LFE 0x3
+#define ID_DSE 0x4
+#define ID_PCE 0x5
+#define ID_FIL 0x6
+#define ID_END 0x7
+#define INVALID_ELEMENT_ID 255
 
+#define ONLY_LONG_SEQUENCE   0x0
+#define LONG_START_SEQUENCE  0x1
+#define EIGHT_SHORT_SEQUENCE 0x2
+#define LONG_STOP_SEQUENCE   0x3
 
+#define ZERO_HCB       0
+#define FIRST_PAIR_HCB 5
+#define ESC_HCB        11
+#define QUAD_LEN       4
+#define PAIR_LEN       2
+#define NOISE_HCB      13
+#define INTENSITY_HCB2 14
+#define INTENSITY_HCB  15
+
+#define INVALID_SBR_ELEMENT 255
+#define T_HFGEN 8
+#define T_HFADJ 2
+
+#define EXT_SBR_DATA     13
+#define EXT_SBR_DATA_CRC 14
+
+#define FIXFIX 0
+#define FIXVAR 1
+#define VARFIX 2
+#define VARVAR 3
+
+#define LO_RES 0
+#define HI_RES 1
+
+#define NO_TIME_SLOTS_960 15
+#define NO_TIME_SLOTS     16
+#define RATE              2
+
+#define NOISE_FLOOR_OFFSET 6
 
 
 #ifdef FIXED_POINT  /* int32_t */

@@ -10,11 +10,11 @@
 #include "structs.h"
 #include <string.h>
 #include <stdlib.h>
-#include "specrec.h"
+
 #include "syntax.h"
 #include "iq_table.h"
 
-#include "tns.h"
+
 #include "lt_predict.h"
 
 #ifdef SSR_DEC
