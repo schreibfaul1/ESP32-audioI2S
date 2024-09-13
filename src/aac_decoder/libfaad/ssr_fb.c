@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include "syntax.h"
-#include "filtbank.h"
 #include "mdct.h"
 #include "ssr_fb.h"
 #include "ssr_win.h"

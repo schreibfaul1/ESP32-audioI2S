@@ -9,7 +9,6 @@
 #else
 #include <assert.h>
 #endif
-#include "filtbank.h"
 #include "syntax.h"
 #include "kbd_win.h"
 #include "sine_win.h"

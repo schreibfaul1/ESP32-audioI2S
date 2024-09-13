@@ -11,11 +11,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include "specrec.h"
-#include "filtbank.h"
 #include "syntax.h"
 #include "iq_table.h"
-#include "ms.h"
-#include "is.h"
+
 #include "pns.h"
 #include "tns.h"
 #include "lt_predict.h"

@@ -33,7 +33,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "filtbank.h"
 uint8_t is_ltp_ot(uint8_t object_type);
 void lt_prediction(ic_stream *ics,
                    ltp_info *ltp,

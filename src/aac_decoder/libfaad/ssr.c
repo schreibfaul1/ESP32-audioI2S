@@ -31,7 +31,6 @@
 #include "structs.h"
 #ifdef SSR_DEC
 #include "syntax.h"
-#include "filtbank.h"
 #include "ssr.h"
 #include "ssr_fb.h"
 

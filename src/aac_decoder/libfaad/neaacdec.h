@@ -270,8 +270,17 @@ void  cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
 drc_info *drc_init(real_t cut, real_t boost);
 void drc_end(drc_info *drc);
 void drc_decode(drc_info *drc, real_t *spec);
-
-
+fb_info* filter_bank_init(uint16_t frame_len);
+void     filter_bank_end(fb_info* fb);
+void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len);
+void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len);
+void ms_decode(ic_stream *ics, ic_stream *icsr, real_t *l_spec, real_t *r_spec, uint16_t frame_len);
+void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len);
+int8_t is_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
+uint8_t is_noise(ic_stream *ics, uint8_t group, uint8_t sfb);
+void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
+                /* RNG states */ uint32_t* __r1, uint32_t* __r2);
+int8_t invert_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
 
 
 

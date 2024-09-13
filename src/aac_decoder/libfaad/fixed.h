@@ -57,6 +57,17 @@
 #define BYTE_NUMBIT_LD  3
 #define bit2byte(a) ((a+7)>>BYTE_NUMBIT_LD)
 #define NUM_ERROR_MESSAGES 34
+#ifdef DRM
+#define DECAY_CUTOFF         3
+#define DECAY_SLOPE          0.05f
+/* type definitaions */
+typedef const int8_t (*drm_ps_huff_tab)[2];
+#endif
+
+
+
+
+
 
 
 #ifdef FIXED_POINT  /* int32_t */

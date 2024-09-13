@@ -10,7 +10,6 @@ extern "C" {
 #define SSR_BANDS 4
 #define PQFTAPS 96
 #include "syntax.h"
-#include "filtbank.h"
 #include "ssr.h"
 #include "structs.h"
 
