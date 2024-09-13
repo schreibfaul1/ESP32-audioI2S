@@ -197,7 +197,7 @@ void faad_resetbits(bitfile* ld, int bits) {
     //        ld->error = 1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t* faad_getbitbuffer(bitfile* ld, uint32_t bits DEBUGDEC) {
+uint8_t* faad_getbitbuffer(bitfile* ld, uint32_t bits) {
     int          i;
     unsigned int temp;
     int          bytes = bits >> 3;

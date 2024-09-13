@@ -73,8 +73,7 @@ uint32_t faad_get_processed_bits(bitfile *ld);
 void faad_flushbits_ex(bitfile *ld, uint32_t bits);
 void faad_rewindbits(bitfile *ld);
 void faad_resetbits(bitfile *ld, int bits);
-uint8_t *faad_getbitbuffer(bitfile *ld, uint32_t bits
-                       DEBUGDEC);
+uint8_t *faad_getbitbuffer(bitfile *ld, uint32_t bits);
 #ifdef DRM
 void *faad_origbitbuffer(bitfile *ld);
 uint32_t faad_origbitbuffer_size(bitfile *ld);
@@ -152,8 +151,7 @@ static inline void faad_flushbits(bitfile *ld, uint32_t bits)
     }
 }
 /* return next n bits (right adjusted) */
-static /*inline*/ uint32_t faad_getbits(bitfile *ld, uint32_t n DEBUGDEC)
-{
+static /*inline*/ uint32_t faad_getbits(bitfile *ld, uint32_t n){
     uint32_t ret;
     if (n == 0)
         return 0;
@@ -165,7 +163,7 @@ static /*inline*/ uint32_t faad_getbits(bitfile *ld, uint32_t n DEBUGDEC)
 #endif
     return ret;
 }
-static inline uint8_t faad_get1bit(bitfile *ld DEBUGDEC)
+static inline uint8_t faad_get1bit(bitfile *ld)
 {
     uint8_t r;
     if (ld->bits_left > 0)
@@ -236,9 +234,8 @@ static inline void faad_flushbits_rev(bitfile *ld, uint32_t bits)
 //            ld->no_more_reading = 1;
     }
 }
-static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n DEBUGDEC); __unused
-static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n
-                                        DEBUGDEC)
+static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n); __unused
+static /*inline*/ uint32_t faad_getbits_rev(bitfile *ld, uint32_t n)
 {
     uint32_t ret;
     if (n == 0)
