@@ -9,18 +9,6 @@
 #include "ssr_win.h"
 #endif
 
-fb_info *ssr_filter_bank_init(uint16_t frame_len);
-void ssr_filter_bank_end(fb_info *fb);
-
-/*non overlapping inverse filterbank */
-void ssr_ifilter_bank(fb_info *fb,
-                      uint8_t window_sequence,
-                      uint8_t window_shape,
-                      uint8_t window_shape_prev,
-                      real_t *freq_in,
-                      real_t *time_out,
-                      uint16_t frame_len);
-
 
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -303,9 +303,14 @@ uint8_t drm_ps_decode(drm_ps_info *ps, uint8_t guess, qmf_t X_left[38][64], qmf_
 int8_t huffman_scale_factor(bitfile *ld);
 uint8_t huffman_spectral_data(uint8_t cb, bitfile *ld, int16_t *sp);
 int8_t huffman_spectral_data_2(uint8_t cb, bits_t *ld, int16_t *sp);
-
-
-
+fb_info* ssr_filter_bank_init(uint16_t frame_len);
+void     ssr_filter_bank_end(fb_info* fb);
+void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
+int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint8_t short_form);
+int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t bsize, uint8_t short_form);
+void pns_reset_pred_state(ic_stream* ics, pred_state* state);
+void reset_all_predictors(pred_state* state, uint16_t frame_len);
+void ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t frame_len, uint8_t sf_index);
 
 
 

@@ -615,3 +615,10 @@ typedef struct {
     uint32_t bufb;
     int8_t   len;
 } bits_t;
+
+typedef struct {
+    uint8_t  cb;
+    uint8_t  decoded;
+    uint16_t sp_offset;
+    bits_t   bits;
+} codeword_t;

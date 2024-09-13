@@ -66,8 +66,13 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define FLOAT_SCALE (1.0f/(1<<15))
 #define DM_MUL REAL_CONST(0.3203772410170407) // 1/(1+sqrt(2) + 1/sqrt(2))
 #define RSQRT2 REAL_CONST(0.7071067811865475244) // 1/sqrt(2)
-
-
+#define NUM_CB      6
+#define NUM_CB_ER   22
+#define MAX_CB      32
+#define VCB11_FIRST 16
+#define VCB11_LAST  31
+#define ALPHA      REAL_CONST(0.90625)
+#define A          REAL_CONST(0.953125)
 
 
 

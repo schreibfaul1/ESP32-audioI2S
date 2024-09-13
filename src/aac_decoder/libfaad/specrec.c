@@ -14,10 +14,9 @@
 #include "syntax.h"
 #include "iq_table.h"
 
-#include "pns.h"
 #include "tns.h"
 #include "lt_predict.h"
-#include "ic_predict.h"
+
 #ifdef SSR_DEC
 #include "ssr.h"
 #include "ssr_fb.h"
