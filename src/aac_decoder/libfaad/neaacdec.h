@@ -281,6 +281,30 @@ uint8_t is_noise(ic_stream *ics, uint8_t group, uint8_t sfb);
 void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
                 /* RNG states */ uint32_t* __r1, uint32_t* __r2);
 int8_t invert_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
+void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* samplebuffer, uint8_t channels, uint16_t frame_len, uint8_t format);
+uint8_t pulse_decode(ic_stream *ics, int16_t *spec_coef, uint16_t framelen);
+void gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2);
+void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len);
+uint8_t huffman_getescape(bitfile *ld, int16_t *sp);
+uint8_t huffman_2step_quad(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_2step_quad_sign(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_2step_pair(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_2step_pair_sign(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_binary_quad(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_binary_quad_sign(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_binary_pair(uint8_t cb, bitfile *ld, int16_t *sp);
+uint8_t huffman_binary_pair_sign(uint8_t cb, bitfile *ld, int16_t *sp);
+int16_t huffman_codebook(uint8_t i);
+void vcb11_check_LAV(uint8_t cb, int16_t *sp);
+uint16_t drm_ps_data(drm_ps_info *ps, bitfile *ld);
+drm_ps_info *drm_ps_init(void);
+void drm_ps_free(drm_ps_info *ps);
+uint8_t drm_ps_decode(drm_ps_info *ps, uint8_t guess, qmf_t X_left[38][64], qmf_t X_right[38][64]);
+int8_t huffman_scale_factor(bitfile *ld);
+uint8_t huffman_spectral_data(uint8_t cb, bitfile *ld, int16_t *sp);
+int8_t huffman_spectral_data_2(uint8_t cb, bits_t *ld, int16_t *sp);
+
+
 
 
 

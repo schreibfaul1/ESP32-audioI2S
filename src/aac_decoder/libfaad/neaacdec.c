@@ -36,8 +36,6 @@
 #include "sbr_dec.h"
 #include "mp4.h"
 #include "syntax.h"
-#include "output.h"
-
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char *err_msg[] = {
@@ -2530,4 +2528,1175 @@ uint8_t is_noise(ic_stream* ics, uint8_t group, uint8_t sfb) {
     if (ics->sfb_cb[group][sfb] == NOISE_HCB) return 1;
     return 0;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t* internal_channel) {
+    if(!down_matrix) return input[internal_channel[channel]][sample];
+    if(channel == 0) { return DM_MUL * (input[internal_channel[1]][sample] + input[internal_channel[0]][sample] * RSQRT2 + input[internal_channel[3]][sample] * RSQRT2); }
+    else { return DM_MUL * (input[internal_channel[2]][sample] + input[internal_channel[0]][sample] * RSQRT2 + input[internal_channel[4]][sample] * RSQRT2); }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+    #ifndef HAS_LRINTF
+        #define CLIP(sample, max, min)          \
+            if(sample >= 0.0f) {                \
+                sample += 0.5f;                 \
+                if(sample >= max) sample = max; \
+            }                                   \
+            else {                              \
+                sample += -0.5f;                \
+                if(sample <= min) sample = min; \
+            }
+    #else
+        #define CLIP(sample, max, min)          \
+            if(sample >= 0.0f) {                \
+                if(sample >= max) sample = max; \
+            }                                   \
+            else {                              \
+                if(sample <= min) sample = min; \
+            }
+    #endif
+    #define CONV(a, b) ((a << 1) | (b & 0x1))
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer) {
+    uint8_t  ch, ch1;
+    uint16_t i;
+
+    switch (CONV(channels, hDecoder->downMatrix)) {
+        case CONV(1, 0):
+        case CONV(1, 1):
+            for (i = 0; i < frame_len; i++) {
+                real_t inp = input[hDecoder->internal_channel[0]][i];
+
+                CLIP(inp, 32767.0f, -32768.0f);
+
+                (*sample_buffer)[i] = (int16_t)lrintf(inp);
+            }
+            break;
+        case CONV(2, 0):
+            if (hDecoder->upMatrix) {
+                ch = hDecoder->internal_channel[0];
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+
+                    CLIP(inp0, 32767.0f, -32768.0f);
+
+                    (*sample_buffer)[(i * 2) + 0] = (int16_t)lrintf(inp0);
+                    (*sample_buffer)[(i * 2) + 1] = (int16_t)lrintf(inp0);
+                }
+            } else {
+                ch = hDecoder->internal_channel[0];
+                ch1 = hDecoder->internal_channel[1];
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    real_t inp1 = input[ch1][i];
+
+                    CLIP(inp0, 32767.0f, -32768.0f);
+                    CLIP(inp1, 32767.0f, -32768.0f);
+
+                    (*sample_buffer)[(i * 2) + 0] = (int16_t)lrintf(inp0);
+                    (*sample_buffer)[(i * 2) + 1] = (int16_t)lrintf(inp1);
+                }
+            }
+            break;
+        default:
+            for (ch = 0; ch < channels; ch++) {
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
+
+                    CLIP(inp, 32767.0f, -32768.0f);
+
+                    (*sample_buffer)[(i * channels) + ch] = (int16_t)lrintf(inp);
+                }
+            }
+            break;
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t **sample_buffer) {
+    uint8_t  ch, ch1;
+    uint16_t i;
+
+    switch (CONV(channels, hDecoder->downMatrix)) {
+        case CONV(1, 0):
+        case CONV(1, 1):
+            for (i = 0; i < frame_len; i++) {
+                real_t inp = input[hDecoder->internal_channel[0]][i];
+
+                inp *= 256.0f;
+                CLIP(inp, 8388607.0f, -8388608.0f);
+
+                (*sample_buffer)[i] = (int32_t)lrintf(inp);
+            }
+            break;
+        case CONV(2, 0):
+            if (hDecoder->upMatrix) {
+                ch = hDecoder->internal_channel[0];
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+
+                    inp0 *= 256.0f;
+                    CLIP(inp0, 8388607.0f, -8388608.0f);
+
+                    (*sample_buffer)[(i * 2) + 0] = (int32_t)lrintf(inp0);
+                    (*sample_buffer)[(i * 2) + 1] = (int32_t)lrintf(inp0);
+                }
+            } else {
+                ch = hDecoder->internal_channel[0];
+                ch1 = hDecoder->internal_channel[1];
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    real_t inp1 = input[ch1][i];
+
+                    inp0 *= 256.0f;
+                    inp1 *= 256.0f;
+                    CLIP(inp0, 8388607.0f, -8388608.0f);
+                    CLIP(inp1, 8388607.0f, -8388608.0f);
+
+                    (*sample_buffer)[(i * 2) + 0] = (int32_t)lrintf(inp0);
+                    (*sample_buffer)[(i * 2) + 1] = (int32_t)lrintf(inp1);
+                }
+            }
+            break;
+        default:
+            for (ch = 0; ch < channels; ch++) {
+                for (i = 0; i < frame_len; i++) {
+                    real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
+
+                    inp *= 256.0f;
+                    CLIP(inp, 8388607.0f, -8388608.0f);
+
+                    (*sample_buffer)[(i * channels) + ch] = (int32_t)lrintf(inp);
+                }
+            }
+            break;
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
+                         uint8_t channels, uint16_t frame_len,
+                         int32_t **sample_buffer)
+{
+    uint8_t ch, ch1;
+    uint16_t i;
+
+    switch (CONV(channels,hDecoder->downMatrix))
+    {
+    case CONV(1,0):
+    case CONV(1,1):
+        for(i = 0; i < frame_len; i++)
+        {
+            real_t inp = input[hDecoder->internal_channel[0]][i];
+
+            inp *= 65536.0f;
+            CLIP(inp, 2147483647.0f, -2147483648.0f);
+
+            (*sample_buffer)[i] = (int32_t)lrintf(inp);
+        }
+        break;
+    case CONV(2,0):
+        if (hDecoder->upMatrix)
+        {
+            ch = hDecoder->internal_channel[0];
+            for(i = 0; i < frame_len; i++)
+            {
+                real_t inp0 = input[ch][i];
+
+                inp0 *= 65536.0f;
+                CLIP(inp0, 2147483647.0f, -2147483648.0f);
+
+                (*sample_buffer)[(i*2)+0] = (int32_t)lrintf(inp0);
+                (*sample_buffer)[(i*2)+1] = (int32_t)lrintf(inp0);
+            }
+        } else {
+            ch  = hDecoder->internal_channel[0];
+            ch1 = hDecoder->internal_channel[1];
+            for(i = 0; i < frame_len; i++)
+            {
+                real_t inp0 = input[ch ][i];
+                real_t inp1 = input[ch1][i];
+
+                inp0 *= 65536.0f;
+                inp1 *= 65536.0f;
+                CLIP(inp0, 2147483647.0f, -2147483648.0f);
+                CLIP(inp1, 2147483647.0f, -2147483648.0f);
+
+                (*sample_buffer)[(i*2)+0] = (int32_t)lrintf(inp0);
+                (*sample_buffer)[(i*2)+1] = (int32_t)lrintf(inp1);
+            }
+        }
+        break;
+    default:
+        for (ch = 0; ch < channels; ch++)
+        {
+            for(i = 0; i < frame_len; i++)
+            {
+                real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
+
+                inp *= 65536.0f;
+                CLIP(inp, 2147483647.0f, -2147483648.0f);
+
+                (*sample_buffer)[(i*channels)+ch] = (int32_t)lrintf(inp);
+            }
+        }
+        break;
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+static void to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float32_t** sample_buffer) {
+    uint8_t  ch, ch1;
+    uint16_t i;
+    switch(CONV(channels, hDecoder->downMatrix)) {
+        case CONV(1, 0):
+        case CONV(1, 1):
+            for(i = 0; i < frame_len; i++) {
+                real_t inp = input[hDecoder->internal_channel[0]][i];
+                (*sample_buffer)[i] = inp * FLOAT_SCALE;
+            }
+            break;
+        case CONV(2, 0):
+            if(hDecoder->upMatrix) {
+                ch = hDecoder->internal_channel[0];
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    (*sample_buffer)[(i * 2) + 0] = inp0 * FLOAT_SCALE;
+                    (*sample_buffer)[(i * 2) + 1] = inp0 * FLOAT_SCALE;
+                }
+            }
+            else {
+                ch = hDecoder->internal_channel[0];
+                ch1 = hDecoder->internal_channel[1];
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    real_t inp1 = input[ch1][i];
+                    (*sample_buffer)[(i * 2) + 0] = inp0 * FLOAT_SCALE;
+                    (*sample_buffer)[(i * 2) + 1] = inp1 * FLOAT_SCALE;
+                }
+            }
+            break;
+        default:
+            for(ch = 0; ch < channels; ch++) {
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
+                    (*sample_buffer)[(i * channels) + ch] = inp * FLOAT_SCALE;
+                }
+            }
+            break;
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+static void to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer) {
+    uint8_t  ch, ch1;
+    uint16_t i;
+    switch(CONV(channels, hDecoder->downMatrix)) {
+        case CONV(1, 0):
+        case CONV(1, 1):
+            for(i = 0; i < frame_len; i++) {
+                real_t inp = input[hDecoder->internal_channel[0]][i];
+                (*sample_buffer)[i] = (double)inp * FLOAT_SCALE;
+            }
+            break;
+        case CONV(2, 0):
+            if(hDecoder->upMatrix) {
+                ch = hDecoder->internal_channel[0];
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    (*sample_buffer)[(i * 2) + 0] = (double)inp0 * FLOAT_SCALE;
+                    (*sample_buffer)[(i * 2) + 1] = (double)inp0 * FLOAT_SCALE;
+                }
+            }
+            else {
+                ch = hDecoder->internal_channel[0];
+                ch1 = hDecoder->internal_channel[1];
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp0 = input[ch][i];
+                    real_t inp1 = input[ch1][i];
+                    (*sample_buffer)[(i * 2) + 0] = (double)inp0 * FLOAT_SCALE;
+                    (*sample_buffer)[(i * 2) + 1] = (double)inp1 * FLOAT_SCALE;
+                }
+            }
+            break;
+        default:
+            for(ch = 0; ch < channels; ch++) {
+                for(i = 0; i < frame_len; i++) {
+                    real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
+                    (*sample_buffer)[(i * channels) + ch] = (double)inp * FLOAT_SCALE;
+                }
+            }
+            break;
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
+    int16_t*   short_sample_buffer = (int16_t*)sample_buffer;
+    int32_t*   int_sample_buffer = (int32_t*)sample_buffer;
+    float32_t* float_sample_buffer = (float32_t*)sample_buffer;
+    double*    double_sample_buffer = (double*)sample_buffer;
+    #ifdef PROFILE
+    int64_t count = faad_get_ts();
+    #endif
+    /* Copy output to a standard PCM buffer */
+    switch(format) {
+        case FAAD_FMT_16BIT: to_PCM_16bit(hDecoder, input, channels, frame_len, &short_sample_buffer); break;
+        case FAAD_FMT_24BIT: to_PCM_24bit(hDecoder, input, channels, frame_len, &int_sample_buffer); break;
+        case FAAD_FMT_32BIT: to_PCM_32bit(hDecoder, input, channels, frame_len, &int_sample_buffer); break;
+        case FAAD_FMT_FLOAT: to_PCM_float(hDecoder, input, channels, frame_len, &float_sample_buffer); break;
+        case FAAD_FMT_DOUBLE: to_PCM_double(hDecoder, input, channels, frame_len, &double_sample_buffer); break;
+    }
+    #ifdef PROFILE
+    count = faad_get_ts() - count;
+    hDecoder->output_cycles += count;
+    #endif
+    return sample_buffer;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//#ifdef FIXED_POINT
+//    #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
+//    #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
+//#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef FIXED_POINT
+    #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
+    #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
+static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel) {
+    if(up_matrix == 1) return input[internal_channel[0]][sample];
+    if(!down_matrix) return input[internal_channel[channel]][sample];
+    if(channel == 0) {
+        real_t C = MUL_F(input[internal_channel[0]][sample], RSQRT2);
+        real_t L_S = MUL_F(input[internal_channel[3]][sample], RSQRT2);
+        real_t cum = input[internal_channel[1]][sample] + C + L_S;
+        return MUL_F(cum, DM_MUL);
+    }
+    else {
+        real_t C = MUL_F(input[internal_channel[0]][sample], RSQRT2);
+        real_t R_S = MUL_F(input[internal_channel[4]][sample], RSQRT2);
+        real_t cum = input[internal_channel[2]][sample] + C + R_S;
+        return MUL_F(cum, DM_MUL);
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef FIXED_POINT
+void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
+    uint8_t  ch;
+    uint16_t i;
+    int16_t* short_sample_buffer = (int16_t*)sample_buffer;
+    int32_t* int_sample_buffer = (int32_t*)sample_buffer;
+    /* Copy output to a standard PCM buffer */
+    for(ch = 0; ch < channels; ch++) {
+        switch(format) {
+            case FAAD_FMT_16BIT:
+                for(i = 0; i < frame_len; i++) {
+                    int32_t tmp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->upMatrix, hDecoder->internal_channel);
+                    if(tmp >= 0) {
+                        tmp += (1 << (REAL_BITS - 1));
+                        if(tmp >= REAL_CONST(32767)) { tmp = REAL_CONST(32767); }
+                    }
+                    else {
+                        tmp += -(1 << (REAL_BITS - 1));
+                        if(tmp <= REAL_CONST(-32768)) { tmp = REAL_CONST(-32768); }
+                    }
+                    tmp >>= REAL_BITS;
+                    short_sample_buffer[(i * channels) + ch] = (int16_t)tmp;
+                }
+                break;
+            case FAAD_FMT_24BIT:
+                for(i = 0; i < frame_len; i++) {
+                    int32_t tmp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->upMatrix, hDecoder->internal_channel);
+                    if(tmp >= 0) {
+                        tmp += (1 << (REAL_BITS - 9));
+                        tmp >>= (REAL_BITS - 8);
+                        if(tmp >= 8388607) { tmp = 8388607; }
+                    }
+                    else {
+                        tmp += -(1 << (REAL_BITS - 9));
+                        tmp >>= (REAL_BITS - 8);
+                        if(tmp <= -8388608) { tmp = -8388608; }
+                    }
+                    int_sample_buffer[(i * channels) + ch] = (int32_t)tmp;
+                }
+                break;
+            case FAAD_FMT_32BIT:
+                for(i = 0; i < frame_len; i++) {
+                    int32_t tmp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->upMatrix, hDecoder->internal_channel);
+                    if(tmp >= 0) {
+                        tmp += (1 << (16 - REAL_BITS - 1));
+                        tmp <<= (16 - REAL_BITS);
+                    }
+                    else {
+                        tmp += -(1 << (16 - REAL_BITS - 1));
+                        tmp <<= (16 - REAL_BITS);
+                    }
+                    int_sample_buffer[(i * channels) + ch] = (int32_t)tmp;
+                }
+                break;
+            case FAAD_FMT_FIXED:
+                for(i = 0; i < frame_len; i++) {
+                    real_t tmp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->upMatrix, hDecoder->internal_channel);
+                    int_sample_buffer[(i * channels) + ch] = (int32_t)tmp;
+                }
+                break;
+        }
+    }
+    return sample_buffer;
+}
+#endif //FIXED_POINT
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* The function gen_rand_vector(addr, size) generates a vector of length <size> with signed random values of average energy MEAN_NRG per random
+   value. A suitable random number generator can be realized using one multiplication/accumulation per random value.*/
+void gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
+#ifndef FIXED_POINT
+    uint16_t i;
+    real_t   energy = 0.0;
+    real_t   scale = (real_t)1.0 / (real_t)size;
+    for (i = 0; i < size; i++) {
+        real_t tmp = scale * (real_t)(int32_t)ne_rng(__r1, __r2);
+        spec[i] = tmp;
+        energy += tmp * tmp;
+    }
+    scale = (real_t)1.0 / (real_t)sqrt(energy);
+    scale *= (real_t)pow(2.0, 0.25 * scale_factor);
+    for (i = 0; i < size; i++) { spec[i] *= scale; }
+#else
+    uint16_t i;
+    real_t   energy = 0, scale;
+    int32_t  exp, frac;
+    for (i = 0; i < size; i++) {
+        /* this can be replaced by a 16 bit random generator!!!! */
+        real_t tmp = (int32_t)ne_rng(__r1, __r2);
+        if (tmp < 0)
+            tmp = -(tmp & ((1 << (REAL_BITS - 1)) - 1));
+        else
+            tmp = (tmp & ((1 << (REAL_BITS - 1)) - 1));
+        energy += MUL_R(tmp, tmp);
+        spec[i] = tmp;
+    }
+    energy = fp_sqrt(energy);
+    if (energy > 0) {
+        scale = DIV(REAL_CONST(1), energy);
+        exp = scale_factor >> 2;
+        frac = scale_factor & 3;
+        /* IMDCT pre-scaling */
+        exp -= sub;
+        if (exp < 0)
+            scale >>= -exp;
+        else
+            scale <<= exp;
+        if (frac) scale = MUL_C(scale, pow2_table[frac]);
+        for (i = 0; i < size; i++) { spec[i] = MUL_R(spec[i], scale); }
+    }
+#endif
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
+                /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
+    uint8_t  g, sfb, b;
+    uint16_t size, offs;
+    uint8_t  group = 0;
+    uint16_t nshort = frame_len >> 3;
+    uint8_t sub = 0;
+#ifdef FIXED_POINT
+    /* IMDCT scaling */
+    if(object_type == LD) { sub = 9 /*9*/; }
+    else {
+        if(ics_left->window_sequence == EIGHT_SHORT_SEQUENCE) sub = 7 /*7*/;
+        else sub = 10 /*10*/;
+    }
+#endif
+    for(g = 0; g < ics_left->num_window_groups; g++) {
+        /* Do perceptual noise substitution decoding */
+        for(b = 0; b < ics_left->window_group_length[g]; b++) {
+            for(sfb = 0; sfb < ics_left->max_sfb; sfb++) {
+                uint32_t r1_dep = 0, r2_dep = 0;
+                if(is_noise(ics_left, g, sfb)) {
+#ifdef LTP_DEC
+                    /* Simultaneous use of LTP and PNS is not prevented in the
+                       syntax. If both LTP, and PNS are enabled on the same
+                       scalefactor band, PNS takes precedence, and no prediction
+                       is applied to this band.
+                    */
+                    ics_left->ltp.long_used[sfb] = 0;
+                    ics_left->ltp2.long_used[sfb] = 0;
+#endif
+#ifdef MAIN_DEC
+                    /* For scalefactor bands coded using PNS the corresponding
+                       predictors are switched to "off".
+                    */
+                    ics_left->pred.prediction_used[sfb] = 0;
+#endif
+                    offs = ics_left->swb_offset[sfb];
+                    size = min(ics_left->swb_offset[sfb + 1], ics_left->swb_offset_max) - offs;
+                    r1_dep = *__r1;
+                    r2_dep = *__r2;
+                    /* Generate random vector */
+                    gen_rand_vector(&spec_left[(group * nshort) + offs], ics_left->scale_factors[g][sfb], size, sub, __r1, __r2);
+                }
+                /* From the spec:
+                   If the same scalefactor band and group is coded by perceptual noise
+                   substitution in both channels of a channel pair, the correlation of
+                   the noise signal can be controlled by means of the ms_used field: While
+                   the default noise generation process works independently for each channel
+                   (separate generation of random vectors), the same random vector is used
+                   for both channels if ms_used[] is set for a particular scalefactor band
+                   and group. In this case, no M/S stereo coding is carried out (because M/S
+                   stereo coding and noise substitution coding are mutually exclusive).
+                   If the same scalefactor band and group is coded by perceptual noise
+                   substitution in only one channel of a channel pair the setting of ms_used[]
+                   is not evaluated.
+                */
+                if((ics_right != NULL) && is_noise(ics_right, g, sfb)) {
+#ifdef LTP_DEC
+                    /* See comment above. */
+                    ics_right->ltp.long_used[sfb] = 0;
+                    ics_right->ltp2.long_used[sfb] = 0;
+#endif
+#ifdef MAIN_DEC
+                    /* See comment above. */
+                    ics_right->pred.prediction_used[sfb] = 0;
+#endif
+                    if(channel_pair && is_noise(ics_left, g, sfb) && (((ics_left->ms_mask_present == 1) && (ics_left->ms_used[g][sfb])) || (ics_left->ms_mask_present == 2))) {
+                        /*uint16_t c;*/
+                        offs = ics_right->swb_offset[sfb];
+                        size = min(ics_right->swb_offset[sfb + 1], ics_right->swb_offset_max) - offs;
+                        /* Generate random vector dependent on left channel*/
+                        gen_rand_vector(&spec_right[(group * nshort) + offs], ics_right->scale_factors[g][sfb], size, sub, &r1_dep, &r2_dep);
+                    }
+                    else /*if (ics_left->ms_mask_present == 0)*/ {
+                        offs = ics_right->swb_offset[sfb];
+                        size = min(ics_right->swb_offset[sfb + 1], ics_right->swb_offset_max) - offs;
+                        /* Generate random vector */
+                        gen_rand_vector(&spec_right[(group * nshort) + offs], ics_right->scale_factors[g][sfb], size, sub, __r1, __r2);
+                    }
+                }
+            } /* sfb */
+            group++;
+        } /* b */
+    } /* g */
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t huffman_scale_factor(bitfile* ld) {
+    uint16_t offset = 0;
+    while(hcb_sf[offset][1]) {
+        uint8_t b = faad_get1bit(ld);
+        offset += hcb_sf[offset][b];
+        if(offset > 240) {
+            /* printf("ERROR: offset into hcb_sf = %d >240!\n", offset); */
+            return -1;
+        }
+    }
+    return hcb_sf[offset][0];
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const hcb* hcb_table[] = {0, hcb1_1, hcb2_1, 0, hcb4_1, 0, hcb6_1, 0, hcb8_1, 0, hcb10_1, hcb11_1};
+const hcb_2_quad* hcb_2_quad_table[] = {0, hcb1_2, hcb2_2, 0, hcb4_2, 0, 0, 0, 0, 0, 0, 0};
+const hcb_2_pair* hcb_2_pair_table[] = {0, 0, 0, 0, 0, 0, hcb6_2, 0, hcb8_2, 0, hcb10_2, hcb11_2};
+const hcb_bin_pair* hcb_bin_table[] = {0, 0, 0, 0, 0, hcb5, 0, hcb7, 0, hcb9, 0, 0};
+uint8_t hcbN[] = {0, 5, 5, 0, 5, 0, 5, 0, 5, 0, 6, 5};
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* defines whether a huffman codebook is unsigned or not */
+/* Table 4.6.2 */
+uint8_t unsigned_cb[] = {
+    0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+int hcb_2_quad_table_size[] = {0, 114, 86, 0, 185, 0, 0, 0, 0, 0, 0, 0};
+int hcb_2_pair_table_size[] = {0, 0, 0, 0, 0, 0, 126, 0, 83, 0, 210, 373};
+int hcb_bin_table_size[] = {0, 0, 0, 161, 0, 161, 0, 127, 0, 337, 0, 0};
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
+    uint8_t i;
+    for(i = 0; i < len; i++) {
+        if(sp[i]) {
+            if(faad_get1bit(ld) & 1) { sp[i] = -sp[i]; }
+        }
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_getescape(bitfile* ld, int16_t* sp) {
+    uint8_t neg, i;
+    int16_t j;
+    int16_t off;
+    int16_t x = *sp;
+    if(x < 0) {
+        if(x != -16) return 0;
+        neg = 1;
+    }
+    else {
+        if(x != 16) return 0;
+        neg = 0;
+    }
+    for(i = 4; i < 16; i++) {
+        if(faad_get1bit(ld) == 0) { break; }
+    }
+    if(i >= 16) return 10;
+    off = (int16_t)faad_getbits(ld, i);
+    j = off | (1 << i);
+    if(neg) j = -j;
+    *sp = j;
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_2step_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint32_t cw;
+    uint16_t offset = 0;
+    uint8_t  extra_bits;
+    cw = faad_showbits(ld, hcbN[cb]);
+    offset = hcb_table[cb][cw].offset;
+    extra_bits = hcb_table[cb][cw].extra_bits;
+    if(extra_bits) {
+        /* we know for sure it's more than hcbN[cb] bits long */
+        faad_flushbits(ld, hcbN[cb]);
+        offset += (uint16_t)faad_showbits(ld, extra_bits);
+        faad_flushbits(ld, hcb_2_quad_table[cb][offset].bits - hcbN[cb]);
+    }
+    else { faad_flushbits(ld, hcb_2_quad_table[cb][offset].bits); }
+    if(offset > hcb_2_quad_table_size[cb]) {
+        /* printf("ERROR: offset into hcb_2_quad_table = %d >%d!\n", offset,
+           hcb_2_quad_table_size[cb]); */
+        return 10;
+    }
+    sp[0] = hcb_2_quad_table[cb][offset].x;
+    sp[1] = hcb_2_quad_table[cb][offset].y;
+    sp[2] = hcb_2_quad_table[cb][offset].v;
+    sp[3] = hcb_2_quad_table[cb][offset].w;
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_2step_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint8_t err = huffman_2step_quad(cb, ld, sp);
+    huffman_sign_bits(ld, sp, QUAD_LEN);
+    return err;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_2step_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint32_t cw;
+    uint16_t offset = 0;
+    uint8_t  extra_bits;
+    cw = faad_showbits(ld, hcbN[cb]);
+    offset = hcb_table[cb][cw].offset;
+    extra_bits = hcb_table[cb][cw].extra_bits;
+    if(extra_bits) {
+        /* we know for sure it's more than hcbN[cb] bits long */
+        faad_flushbits(ld, hcbN[cb]);
+        offset += (uint16_t)faad_showbits(ld, extra_bits);
+        faad_flushbits(ld, hcb_2_pair_table[cb][offset].bits - hcbN[cb]);
+    }
+    else { faad_flushbits(ld, hcb_2_pair_table[cb][offset].bits); }
+    if(offset > hcb_2_pair_table_size[cb]) {
+        /* printf("ERROR: offset into hcb_2_pair_table = %d >%d!\n", offset,
+           hcb_2_pair_table_size[cb]); */
+        return 10;
+    }
+    sp[0] = hcb_2_pair_table[cb][offset].x;
+    sp[1] = hcb_2_pair_table[cb][offset].y;
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_2step_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint8_t err = huffman_2step_pair(cb, ld, sp);
+    huffman_sign_bits(ld, sp, PAIR_LEN);
+    return err;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_binary_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint16_t offset = 0;
+    while(!hcb3[offset].is_leaf) {
+        uint8_t b = faad_get1bit(ld);
+        offset += hcb3[offset].data[b];
+    }
+    if(offset > hcb_bin_table_size[cb]) {
+        /* printf("ERROR: offset into hcb_bin_table = %d >%d!\n", offset,
+           hcb_bin_table_size[cb]); */
+        return 10;
+    }
+    sp[0] = hcb3[offset].data[0];
+    sp[1] = hcb3[offset].data[1];
+    sp[2] = hcb3[offset].data[2];
+    sp[3] = hcb3[offset].data[3];
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_binary_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint8_t err = huffman_binary_quad(cb, ld, sp);
+    huffman_sign_bits(ld, sp, QUAD_LEN);
+    return err;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_binary_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint16_t offset = 0;
+    while(!hcb_bin_table[cb][offset].is_leaf) {
+        uint8_t b = faad_get1bit(ld);
+        offset += hcb_bin_table[cb][offset].data[b];
+    }
+    if(offset > hcb_bin_table_size[cb]) {
+        /* printf("ERROR: offset into hcb_bin_table = %d >%d!\n", offset,
+           hcb_bin_table_size[cb]); */
+        return 10;
+    }
+    sp[0] = hcb_bin_table[cb][offset].data[0];
+    sp[1] = hcb_bin_table[cb][offset].data[1];
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_binary_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+    uint8_t err = huffman_binary_pair(cb, ld, sp);
+    huffman_sign_bits(ld, sp, PAIR_LEN);
+    return err;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int16_t huffman_codebook(uint8_t i) {
+    static const uint32_t data = 16428320;
+    if(i == 0) return (int16_t)(data >> 16) & 0xFFFF;
+    else return (int16_t)data & 0xFFFF;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void vcb11_check_LAV(uint8_t cb, int16_t* sp) {
+    static const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
+    uint16_t              max = 0;
+    if(cb < 16 || cb > 31) return;
+    max = vcb11_LAV_tab[cb - 16];
+    if((abs(sp[0]) > max) || (abs(sp[1]) > max)) {
+        sp[0] = 0;
+        sp[1] = 0;
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp) {
+    switch(cb) {
+        case 1: /* 2-step method for data quadruples */
+        case 2: return huffman_2step_quad(cb, ld, sp);
+        case 3: /* binary search for data quadruples */ return huffman_binary_quad_sign(cb, ld, sp);
+        case 4: /* 2-step method for data quadruples */ return huffman_2step_quad_sign(cb, ld, sp);
+        case 5: /* binary search for data pairs */ return huffman_binary_pair(cb, ld, sp);
+        case 6: /* 2-step method for data pairs */ return huffman_2step_pair(cb, ld, sp);
+        case 7: /* binary search for data pairs */
+        case 9: return huffman_binary_pair_sign(cb, ld, sp);
+        case 8: /* 2-step method for data pairs */
+        case 10: return huffman_2step_pair_sign(cb, ld, sp);
+        case 12: {
+            uint8_t err = huffman_2step_pair(11, ld, sp);
+            sp[0] = huffman_codebook(0);
+            sp[1] = huffman_codebook(1);
+            return err;
+        }
+        case 11: {
+            uint8_t err = huffman_2step_pair_sign(11, ld, sp);
+            if(!err) err = huffman_getescape(ld, &sp[0]);
+            if(!err) err = huffman_getescape(ld, &sp[1]);
+            return err;
+        }
+#ifdef ERROR_RESILIENCE
+        /* VCB11 uses codebook 11 */
+        case 16:
+        case 17:
+        case 18:
+        case 19:
+        case 20:
+        case 21:
+        case 22:
+        case 23:
+        case 24:
+        case 25:
+        case 26:
+        case 27:
+        case 28:
+        case 29:
+        case 30:
+        case 31: {
+            uint8_t err = huffman_2step_pair_sign(11, ld, sp);
+            if(!err) err = huffman_getescape(ld, &sp[0]);
+            if(!err) err = huffman_getescape(ld, &sp[1]);
+            /* check LAV (Largest Absolute Value) */
+            /* this finds errors in the ESCAPE signal */
+            vcb11_check_LAV(cb, sp);
+            return err;
+        }
+#endif
+        default:
+            /* Non existent codebook number, something went wrong */
+            return 11;
+    }
+    return 0;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+/* Special version of huffman_spectral_data
+Will not read from a bitfile but a bits_t structure.
+Will keep track of the bits decoded and return the number of bits remaining.
+Do not read more than ld->len, return -1 if codeword would be longer */
+int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
+    uint32_t cw;
+    uint16_t offset = 0;
+    uint8_t  extra_bits;
+    uint8_t  i, vcb11 = 0;
+    switch(cb) {
+        case 1: /* 2-step method for data quadruples */
+        case 2:
+        case 4:
+            cw = showbits_hcr(ld, hcbN[cb]);
+            offset = hcb_table[cb][cw].offset;
+            extra_bits = hcb_table[cb][cw].extra_bits;
+            if(extra_bits) {
+                /* we know for sure it's more than hcbN[cb] bits long */
+                if(flushbits_hcr(ld, hcbN[cb])) return -1;
+                offset += (uint16_t)showbits_hcr(ld, extra_bits);
+                if(flushbits_hcr(ld, hcb_2_quad_table[cb][offset].bits - hcbN[cb])) return -1;
+            }
+            else {
+                if(flushbits_hcr(ld, hcb_2_quad_table[cb][offset].bits)) return -1;
+            }
+            sp[0] = hcb_2_quad_table[cb][offset].x;
+            sp[1] = hcb_2_quad_table[cb][offset].y;
+            sp[2] = hcb_2_quad_table[cb][offset].v;
+            sp[3] = hcb_2_quad_table[cb][offset].w;
+            break;
+        case 6: /* 2-step method for data pairs */
+        case 8:
+        case 10:
+        case 11:
+        /* VCB11 uses codebook 11 */
+        case 16:
+        case 17:
+        case 18:
+        case 19:
+        case 20:
+        case 21:
+        case 22:
+        case 23:
+        case 24:
+        case 25:
+        case 26:
+        case 27:
+        case 28:
+        case 29:
+        case 30:
+        case 31:
+            if(cb >= 16) {
+                /* store the virtual codebook */
+                vcb11 = cb;
+                cb = 11;
+            }
+            cw = showbits_hcr(ld, hcbN[cb]);
+            offset = hcb_table[cb][cw].offset;
+            extra_bits = hcb_table[cb][cw].extra_bits;
+            if(extra_bits) {
+                /* we know for sure it's more than hcbN[cb] bits long */
+                if(flushbits_hcr(ld, hcbN[cb])) return -1;
+                offset += (uint16_t)showbits_hcr(ld, extra_bits);
+                if(flushbits_hcr(ld, hcb_2_pair_table[cb][offset].bits - hcbN[cb])) return -1;
+            }
+            else {
+                if(flushbits_hcr(ld, hcb_2_pair_table[cb][offset].bits)) return -1;
+            }
+            sp[0] = hcb_2_pair_table[cb][offset].x;
+            sp[1] = hcb_2_pair_table[cb][offset].y;
+            break;
+        case 3: /* binary search for data quadruples */
+            while(!hcb3[offset].is_leaf) {
+                uint8_t b;
+                if(get1bit_hcr(ld, &b)) return -1;
+                offset += hcb3[offset].data[b];
+            }
+            sp[0] = hcb3[offset].data[0];
+            sp[1] = hcb3[offset].data[1];
+            sp[2] = hcb3[offset].data[2];
+            sp[3] = hcb3[offset].data[3];
+            break;
+        case 5: /* binary search for data pairs */
+        case 7:
+        case 9:
+            while(!hcb_bin_table[cb][offset].is_leaf) {
+                uint8_t b;
+                if(get1bit_hcr(ld, &b)) return -1;
+                offset += hcb_bin_table[cb][offset].data[b];
+            }
+            sp[0] = hcb_bin_table[cb][offset].data[0];
+            sp[1] = hcb_bin_table[cb][offset].data[1];
+            break;
+    }
+    /* decode sign bits */
+    if(unsigned_cb[cb]) {
+        for(i = 0; i < ((cb < FIRST_PAIR_HCB) ? QUAD_LEN : PAIR_LEN); i++) {
+            if(sp[i]) {
+                uint8_t b;
+                if(get1bit_hcr(ld, &b)) return -1;
+                if(b != 0) { sp[i] = -sp[i]; }
+            }
+        }
+    }
+    /* decode huffman escape bits */
+    if((cb == ESC_HCB) || (cb >= 16)) {
+        uint8_t k;
+        for(k = 0; k < 2; k++) {
+            if((sp[k] == 16) || (sp[k] == -16)) {
+                uint8_t  neg, i;
+                int32_t  j;
+                uint32_t off;
+                neg = (sp[k] < 0) ? 1 : 0;
+                for(i = 4;; i++) {
+                    uint8_t b;
+                    if(get1bit_hcr(ld, &b)) return -1;
+                    if(b == 0) break;
+                }
+                if(getbits_hcr(ld, i, &off)) return -1;
+                j = off + (1 << i);
+                sp[k] = (int16_t)((neg) ? -j : j);
+            }
+        }
+        if(vcb11 != 0) {
+            /* check LAV (Largest Absolute Value) */
+            /* this finds errors in the ESCAPE signal */
+            vcb11_check_LAV(vcb11, sp);
+        }
+    }
+    return ld->len;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len) {
+    uint8_t  g, sfb, b;
+    uint16_t i;
+#ifndef FIXED_POINT
+    real_t scale;
+#else
+    int32_t exp, frac;
+#endif
+    uint16_t nshort = frame_len / 8;
+    uint8_t  group = 0;
+    for(g = 0; g < icsr->num_window_groups; g++) {
+        /* Do intensity stereo decoding */
+        for(b = 0; b < icsr->window_group_length[g]; b++) {
+            for(sfb = 0; sfb < icsr->max_sfb; sfb++) {
+                if(is_intensity(icsr, g, sfb)) {
+#ifdef MAIN_DEC
+                    /* For scalefactor bands coded in intensity stereo the
+                       corresponding predictors in the right channel are
+                       switched to "off".
+                     */
+                    ics->pred.prediction_used[sfb] = 0;
+                    icsr->pred.prediction_used[sfb] = 0;
+#endif
+#ifndef FIXED_POINT
+                    scale = (real_t)pow(0.5, (0.25 * icsr->scale_factors[g][sfb]));
+#else
+                    exp = icsr->scale_factors[g][sfb] >> 2;
+                    frac = icsr->scale_factors[g][sfb] & 3;
+#endif
+                    /* Scale from left to right channel,
+                       do not touch left channel */
+                    for(i = icsr->swb_offset[sfb]; i < min(icsr->swb_offset[sfb + 1], ics->swb_offset_max); i++) {
+#ifndef FIXED_POINT
+                        r_spec[(group * nshort) + i] = MUL_R(l_spec[(group * nshort) + i], scale);
+#else
+                        if(exp < 0) r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] << -exp;
+                        else r_spec[(group * nshort) + i] = l_spec[(group * nshort) + i] >> exp;
+                        r_spec[(group * nshort) + i] = MUL_C(r_spec[(group * nshort) + i], pow05_table[frac + 3]);
+#endif
+                        if(is_intensity(icsr, g, sfb) != invert_intensity(ics, g, sfb)) r_spec[(group * nshort) + i] = -r_spec[(group * nshort) + i];
+                    }
+                }
+            }
+            group++;
+        }
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+mdct_info* faad_mdct_init(uint16_t N) {
+    mdct_info* mdct = (mdct_info*)faad_malloc(sizeof(mdct_info));
+    assert(N % 8 == 0);
+    mdct->N = N;
+    /* NOTE: For "small framelengths" in FIXED_POINT the coefficients need to be
+     * scaled by sqrt("(nearest power of 2) > N" / N) */
+    /* RE(mdct->sincos[k]) = scale*(real_t)(cos(2.0*M_PI*(k+1./8.) / (real_t)N));
+     * IM(mdct->sincos[k]) = scale*(real_t)(sin(2.0*M_PI*(k+1./8.) / (real_t)N)); */
+    /* scale is 1 for fixed point, sqrt(N) for floating point */
+    switch(N) {
+        case 2048: mdct->sincos = (complex_t*)mdct_tab_2048; break;
+        case 256: mdct->sincos = (complex_t*)mdct_tab_256; break;
+#ifdef LD_DEC
+        case 1024: mdct->sincos = (complex_t*)mdct_tab_1024; break;
+#endif
+#ifdef ALLOW_SMALL_FRAMELENGTH
+        case 1920: mdct->sincos = (complex_t*)mdct_tab_1920; break;
+        case 240: mdct->sincos = (complex_t*)mdct_tab_240; break;
+    #ifdef LD_DEC
+        case 960: mdct->sincos = (complex_t*)mdct_tab_960; break;
+    #endif
+#endif
+#ifdef SSR_DEC
+        case 512: mdct->sincos = (complex_t*)mdct_tab_512; break;
+        case 64: mdct->sincos = (complex_t*)mdct_tab_64; break;
+#endif
+    }
+    /* initialise fft */
+    mdct->cfft = cffti(N / 4);
+#ifdef PROFILE
+    mdct->cycles = 0;
+    mdct->fft_cycles = 0;
+#endif
+    return mdct;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void faad_mdct_end(mdct_info* mdct) {
+    if(mdct != NULL) {
+#ifdef PROFILE
+        printf("MDCT[%.4d]:         %I64d cycles\n", mdct->N, mdct->cycles);
+        printf("CFFT[%.4d]:         %I64d cycles\n", mdct->N / 4, mdct->fft_cycles);
+#endif
+        cfftu(mdct->cfft);
+        faad_free(mdct);
+    }
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
+    uint16_t k;
+    complex_t x;
+#ifdef ALLOW_SMALL_FRAMELENGTH
+    #ifdef FIXED_POINT
+    real_t scale, b_scale = 0;
+    #endif
+#endif
+    // ALIGN complex_t Z1[512];
+    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
+    complex_t*      sincos = mdct->sincos;
+    uint16_t N = mdct->N;
+    uint16_t N2 = N >> 1;
+    uint16_t N4 = N >> 2;
+    uint16_t N8 = N >> 3;
+#ifdef PROFILE
+    int64_t count1, count2 = faad_get_ts();
+#endif
+#ifdef ALLOW_SMALL_FRAMELENGTH
+    #ifdef FIXED_POINT
+    /* detect non-power of 2 */
+    if(N & (N - 1)) {
+        /* adjust scale for non-power of 2 MDCT */
+        /* 2048/1920 */
+        b_scale = 1;
+        scale = COEF_CONST(1.0666666666666667);
+    }
+    #endif
+#endif
+    /* pre-IFFT complex multiplication */
+    for(k = 0; k < N4; k++) { ComplexMult(&IM(Z1[k]), &RE(Z1[k]), X_in[2 * k], X_in[N2 - 1 - 2 * k], RE(sincos[k]), IM(sincos[k])); }
+#ifdef PROFILE
+    count1 = faad_get_ts();
+#endif
+    /* complex IFFT, any non-scaling FFT can be used here */
+    cfftb(mdct->cfft, Z1);
+#ifdef PROFILE
+    count1 = faad_get_ts() - count1;
+#endif
+    /* post-IFFT complex multiplication */
+    for(k = 0; k < N4; k++) {
+        RE(x) = RE(Z1[k]);
+        IM(x) = IM(Z1[k]);
+        ComplexMult(&IM(Z1[k]), &RE(Z1[k]), IM(x), RE(x), RE(sincos[k]), IM(sincos[k]));
+#ifdef ALLOW_SMALL_FRAMELENGTH
+    #ifdef FIXED_POINT
+        /* non-power of 2 MDCT scaling */
+        if(b_scale) {
+            RE(Z1[k]) = MUL_C(RE(Z1[k]), scale);
+            IM(Z1[k]) = MUL_C(IM(Z1[k]), scale);
+        }
+    #endif
+#endif
+    }
+    /* reordering */
+    for(k = 0; k < N8; k += 2) {
+        X_out[2 * k] = IM(Z1[N8 + k]);
+        X_out[2 + 2 * k] = IM(Z1[N8 + 1 + k]);
+        X_out[1 + 2 * k] = -RE(Z1[N8 - 1 - k]);
+        X_out[3 + 2 * k] = -RE(Z1[N8 - 2 - k]);
+        X_out[N4 + 2 * k] = RE(Z1[k]);
+        X_out[N4 + +2 + 2 * k] = RE(Z1[1 + k]);
+        X_out[N4 + 1 + 2 * k] = -IM(Z1[N4 - 1 - k]);
+        X_out[N4 + 3 + 2 * k] = -IM(Z1[N4 - 2 - k]);
+        X_out[N2 + 2 * k] = RE(Z1[N8 + k]);
+        X_out[N2 + +2 + 2 * k] = RE(Z1[N8 + 1 + k]);
+        X_out[N2 + 1 + 2 * k] = -IM(Z1[N8 - 1 - k]);
+        X_out[N2 + 3 + 2 * k] = -IM(Z1[N8 - 2 - k]);
+        X_out[N2 + N4 + 2 * k] = -IM(Z1[k]);
+        X_out[N2 + N4 + 2 + 2 * k] = -IM(Z1[1 + k]);
+        X_out[N2 + N4 + 1 + 2 * k] = RE(Z1[N4 - 1 - k]);
+        X_out[N2 + N4 + 3 + 2 * k] = RE(Z1[N4 - 2 - k]);
+    }
+#ifdef PROFILE
+    count2 = faad_get_ts() - count2;
+    mdct->fft_cycles += count1;
+    mdct->cycles += (count2 - count1);
+#endif
+    if(Z1) free(Z1);
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef LTP_DEC
+void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
+    uint16_t k;
+    complex_t       x;
+    // ALIGN complex_t Z1[512];
+    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
+    complex_t*      sincos = mdct->sincos;
+    uint16_t N = mdct->N;
+    uint16_t N2 = N >> 1;
+    uint16_t N4 = N >> 2;
+    uint16_t N8 = N >> 3;
+    #ifndef FIXED_POINT
+    real_t scale = REAL_CONST(N);
+    #else
+    real_t scale = REAL_CONST(4.0 / N);
+    #endif
+    #ifdef ALLOW_SMALL_FRAMELENGTH
+        #ifdef FIXED_POINT
+    /* detect non-power of 2 */
+    if(N & (N - 1)) {
+        /* adjust scale for non-power of 2 MDCT */
+        /* *= sqrt(2048/1920) */
+        scale = MUL_C(scale, COEF_CONST(1.0327955589886444));
+    }
+        #endif
+    #endif
+    /* pre-FFT complex multiplication */
+    for(k = 0; k < N8; k++) {
+        uint16_t n = k << 1;
+        RE(x) = X_in[N - N4 - 1 - n] + X_in[N - N4 + n];
+        IM(x) = X_in[N4 + n] - X_in[N4 - 1 - n];
+        ComplexMult(&RE(Z1[k]), &IM(Z1[k]), RE(x), IM(x), RE(sincos[k]), IM(sincos[k]));
+        RE(Z1[k]) = MUL_R(RE(Z1[k]), scale);
+        IM(Z1[k]) = MUL_R(IM(Z1[k]), scale);
+        RE(x) = X_in[N2 - 1 - n] - X_in[n];
+        IM(x) = X_in[N2 + n] + X_in[N - 1 - n];
+        ComplexMult(&RE(Z1[k + N8]), &IM(Z1[k + N8]), RE(x), IM(x), RE(sincos[k + N8]), IM(sincos[k + N8]));
+        RE(Z1[k + N8]) = MUL_R(RE(Z1[k + N8]), scale);
+        IM(Z1[k + N8]) = MUL_R(IM(Z1[k + N8]), scale);
+    }
+    /* complex FFT, any non-scaling FFT can be used here  */
+    cfftf(mdct->cfft, Z1);
+    /* post-FFT complex multiplication */
+    for(k = 0; k < N4; k++) {
+        uint16_t n = k << 1;
+        ComplexMult(&RE(x), &IM(x), RE(Z1[k]), IM(Z1[k]), RE(sincos[k]), IM(sincos[k]));
+        X_out[n] = -RE(x);
+        X_out[N2 - 1 - n] = IM(x);
+        X_out[N2 + n] = -IM(x);
+        X_out[N - 1 - n] = RE(x);
+    }
+    if(Z1)free(Z1);
+}
+#endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

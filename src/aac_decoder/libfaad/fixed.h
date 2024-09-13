@@ -63,7 +63,9 @@
 /* type definitaions */
 typedef const int8_t (*drm_ps_huff_tab)[2];
 #endif
-
+#define FLOAT_SCALE (1.0f/(1<<15))
+#define DM_MUL REAL_CONST(0.3203772410170407) // 1/(1+sqrt(2) + 1/sqrt(2))
+#define RSQRT2 REAL_CONST(0.7071067811865475244) // 1/sqrt(2)
 
 
 
@@ -107,6 +109,41 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
     *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
     *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
 }
+#define DIV(A, B) (((int64_t)A << REAL_BITS) / B)
+#define step(shift)                                  \
+    if ((0x40000000l >> shift) + root <= value) {    \
+        value -= (0x40000000l >> shift) + root;      \
+        root = (root >> 1) | (0x40000000l >> shift); \
+    } else {                                         \
+        root = root >> 1;                            \
+    }
+real_t fp_sqrt(real_t value) {
+    real_t root = 0;
+    step(0);
+    step(2);
+    step(4);
+    step(6);
+    step(8);
+    step(10);
+    step(12);
+    step(14);
+    step(16);
+    step(18);
+    step(20);
+    step(22);
+    step(24);
+    step(26);
+    step(28);
+    step(30);
+    if (root < value) ++root;
+    root <<= (REAL_BITS / 2);
+    return root;
+}
+real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
+
+
+
+
 #endif // FIXED_POINT
 
 #ifndef FIXED_POINT

@@ -9,7 +9,7 @@
 #include <string.h>
 #include "syntax.h"
 #include "specrec.h"
-#include "huffman.h"
+
 
 #include "pulse.h"
 

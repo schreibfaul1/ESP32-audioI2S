@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "specrec.h"
-#include "huffman.h"
+
 /* ISO/IEC 14496-3/Amd.1
  * 8.5.3.3: Huffman Codeword Reordering for AAC spectral data (HCR)
  *

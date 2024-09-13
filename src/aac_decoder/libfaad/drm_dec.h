@@ -37,10 +37,7 @@ extern "C" {
 
 
 #ifdef DRM
-uint16_t drm_ps_data(drm_ps_info *ps, bitfile *ld);
-drm_ps_info *drm_ps_init(void);
-void drm_ps_free(drm_ps_info *ps);
-uint8_t drm_ps_decode(drm_ps_info *ps, uint8_t guess, qmf_t X_left[38][64], qmf_t X_right[38][64]);
+
 #endif // DRM
 #ifdef __cplusplus
 }
