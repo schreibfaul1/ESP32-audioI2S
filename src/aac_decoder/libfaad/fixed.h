@@ -152,6 +152,7 @@ real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF
 #endif // FIXED_POINT
 
 #ifndef FIXED_POINT
+    #define IQ_TABLE_SIZE 8192
     #define DIV_R(A, B) ((A) / (B))
     #define DIV_C(A, B) ((A) / (B))
 
