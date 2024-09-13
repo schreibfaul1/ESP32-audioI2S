@@ -6,7 +6,7 @@
 #ifdef SBR_DEC
 
 #include "sbr_syntax.h"
-#include "syntax.h"
+
 #include "sbr_huff.h"
 #include "sbr_fbt.h"
 #include "sbr_tf_grid.h"

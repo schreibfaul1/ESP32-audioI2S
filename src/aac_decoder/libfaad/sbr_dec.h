@@ -62,10 +62,7 @@ typedef struct {
 } qmfs_info;
 
 
-#if (defined(PS_DEC) || defined(DRM_PS))
-uint8_t sbrDecodeSingleFramePS(sbr_info *sbr, real_t *left_channel, real_t *right_channel,
-                               const uint8_t just_seeked, const uint8_t downSampledSBR);
-#endif
+
 #ifdef __cplusplus
 }
 #endif

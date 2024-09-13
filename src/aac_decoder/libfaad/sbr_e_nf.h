@@ -32,12 +32,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-void extract_envelope_data(sbr_info *sbr, uint8_t ch);
-void extract_noise_floor_data(sbr_info *sbr, uint8_t ch);
-#ifndef FIXED_POINT
-void envelope_noise_dequantisation(sbr_info *sbr, uint8_t ch);
-void unmap_envelope_noise(sbr_info *sbr);
-#endif
+
+
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -40,7 +40,8 @@ extern "C" {
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-//#include "neaacdec.h"
+
+
 
 
 
@@ -258,6 +259,91 @@ void     faad_free(void* b);
 #ifndef min
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
+
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* defines if an object type can be decoded by this library or not */
+__unused static uint8_t ObjectTypesTable[32] = {
+    0, /*  0 NULL */
+#ifdef MAIN_DEC
+    1, /*  1 AAC Main */
+#else
+    0, /*  1 AAC Main */
+#endif
+    1, /*  2 AAC LC */
+#ifdef SSR_DEC
+    1, /*  3 AAC SSR */
+#else
+    0, /*  3 AAC SSR */
+#endif
+#ifdef LTP_DEC
+    1, /*  4 AAC LTP */
+#else
+    0, /*  4 AAC LTP */
+#endif
+#ifdef SBR_DEC
+    1, /*  5 SBR */
+#else
+    0, /*  5 SBR */
+#endif
+    0, /*  6 AAC Scalable */
+    0, /*  7 TwinVQ */
+    0, /*  8 CELP */
+    0, /*  9 HVXC */
+    0, /* 10 Reserved */
+    0, /* 11 Reserved */
+    0, /* 12 TTSI */
+    0, /* 13 Main synthetic */
+    0, /* 14 Wavetable synthesis */
+    0, /* 15 General MIDI */
+    0, /* 16 Algorithmic Synthesis and Audio FX */
+/* MPEG-4 Version 2 */
+#ifdef ERROR_RESILIENCE
+    1, /* 17 ER AAC LC */
+    0, /* 18 (Reserved) */
+    #ifdef LTP_DEC
+    1, /* 19 ER AAC LTP */
+    #else
+    0, /* 19 ER AAC LTP */
+    #endif
+    0, /* 20 ER AAC scalable */
+    0, /* 21 ER TwinVQ */
+    0, /* 22 ER BSAC */
+    #ifdef LD_DEC
+    1, /* 23 ER AAC LD */
+    #else
+    0, /* 23 ER AAC LD */
+    #endif
+    0, /* 24 ER CELP */
+    0, /* 25 ER HVXC */
+    0, /* 26 ER HILN */
+    0, /* 27 ER Parametric */
+#else  /* No ER defined */
+    0, /* 17 ER AAC LC */
+    0, /* 18 (Reserved) */
+    0, /* 19 ER AAC LTP */
+    0, /* 20 ER AAC scalable */
+    0, /* 21 ER TwinVQ */
+    0, /* 22 ER BSAC */
+    0, /* 23 ER AAC LD */
+    0, /* 24 ER CELP */
+    0, /* 25 ER HVXC */
+    0, /* 26 ER HILN */
+    0, /* 27 ER Parametric */
+#endif
+    0, /* 28 (Reserved) */
+#ifdef PS_DEC
+    1, /* 29 AAC LC + SBR + PS */
+#else
+    0, /* 29 AAC LC + SBR + PS */
+#endif
+    0, /* 30 (Reserved) */
+    0  /* 31 (Reserved) */
+};
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+
 
 #ifdef __cplusplus
 }

@@ -38,6 +38,7 @@ extern "C" {
 #include "structs.h"
 #include "common.h"
 #include "fixed.h"
+#include "tables.h"
 
 #ifndef FAAD2_VERSION
   #define FAAD2_VERSION "unknown"
@@ -312,6 +313,34 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t res
 int8_t rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction);
 int8_t rvlc_huffman_esc(bitfile* ld_esc, int8_t direction);
 uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used);
+#ifdef DRM
+void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc);
+#endif
+uint32_t faad_latm_frame(latm_header *latm, bitfile *ld);
+#ifdef SSR_DEC
+void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
+                real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len);
+ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len);
+ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
+#endif
+void extract_envelope_data(sbr_info *sbr, uint8_t ch);
+void extract_noise_floor_data(sbr_info *sbr, uint8_t ch);
+#ifndef FIXED_POINT
+void envelope_noise_dequantisation(sbr_info *sbr, uint8_t ch);
+void unmap_envelope_noise(sbr_info *sbr);
+#endif
+void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+mdct_info *faad_mdct_init(uint16_t N);
+void faad_mdct_end(mdct_info *mdct);
+void faad_imdct(mdct_info *mdct, real_t *X_in, real_t *X_out);
+void faad_mdct(mdct_info *mdct, real_t *X_in, real_t *X_out);
+#if (defined(PS_DEC) || defined(DRM_PS))
+uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
+#endif
+void unmap_envelope_noise(sbr_info* sbr);
+
+
+
 
 #ifdef __cplusplus
 }

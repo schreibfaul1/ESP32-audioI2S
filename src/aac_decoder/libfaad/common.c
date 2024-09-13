@@ -1,7 +1,6 @@
 #include "common.h"
 #include "Arduino.h"
 #include "structs.h"
-#include "syntax.h"
 #include <stdlib.h>
 /* Returns the sample rate index based on the samplerate */
 uint8_t get_sr_index(const uint32_t samplerate) {

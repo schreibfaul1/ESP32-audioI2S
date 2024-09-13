@@ -58,6 +58,8 @@
 #define bit2byte(a) ((a+7)>>BYTE_NUMBIT_LD)
 #define NUM_ERROR_MESSAGES 34
 #define ESC_VAL 7
+#define SSR_BANDS 4
+#define PQFTAPS 96
 #ifdef DRM
 #define DECAY_CUTOFF         3
 #define DECAY_SLOPE          0.05f

@@ -8,7 +8,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "sbr_dct.h"
+
 #include "sbr_qmf.h"
 #include "sbr_qmf_c.h"
 #include "sbr_syntax.h"
