@@ -32,7 +32,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define NUM_ERROR_MESSAGES 34
+
 extern const char *err_msg[];
 #ifdef __cplusplus
 }

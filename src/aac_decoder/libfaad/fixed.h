@@ -56,6 +56,7 @@
 #define BYTE_NUMBIT     8
 #define BYTE_NUMBIT_LD  3
 #define bit2byte(a) ((a+7)>>BYTE_NUMBIT_LD)
+#define NUM_ERROR_MESSAGES 34
 
 
 #ifdef FIXED_POINT  /* int32_t */

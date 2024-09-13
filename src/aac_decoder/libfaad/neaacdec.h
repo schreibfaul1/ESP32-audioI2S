@@ -251,7 +251,9 @@ char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned lo
 unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
 void NeAACDecClose(NeAACDecHandle hpDecoder);
 NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
-
+void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size);
+void  create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
+void ssr_filter_bank_end(fb_info *fb);
 
 #ifdef __cplusplus
 }
