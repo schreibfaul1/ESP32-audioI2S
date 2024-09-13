@@ -34,9 +34,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "bits.h"
-
 #define MAIN       1
 #define LC         2
 #define SSR        3

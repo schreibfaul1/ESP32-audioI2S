@@ -32,7 +32,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "bits.h"
 #include <stdint.h>
 #include "common.h"
 

@@ -32,7 +32,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "bits.h"
 #include "neaacdec.h"
 int8_t AudioSpecificConfig2(uint8_t *pBuffer,
                             uint32_t buffer_size,

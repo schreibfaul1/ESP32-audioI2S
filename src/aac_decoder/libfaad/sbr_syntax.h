@@ -35,7 +35,6 @@
 extern "C" {
 #endif
 
-#include "bits.h"
 
 #define T_HFGEN 8
 #define T_HFADJ 2

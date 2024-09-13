@@ -6,7 +6,6 @@
 #ifdef SBR_DEC
 
 #include "sbr_syntax.h"
-#include "bits.h"
 #include "sbr_huff.h"
 #include "sbr_e_nf.h"
 

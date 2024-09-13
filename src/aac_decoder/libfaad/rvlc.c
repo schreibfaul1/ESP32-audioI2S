@@ -43,7 +43,6 @@
 #include "structs.h"
 #include <stdlib.h>
 #include "syntax.h"
-#include "bits.h"
 #include "rvlc.h"
 #ifdef ERROR_RESILIENCE
 //#define PRINT_RVLC

@@ -7,7 +7,7 @@
 #ifdef DRM
 #include "sbr_dec.h"
 #include "drm_dec.h"
-#include "bits.h"
+
 /* constants */
 #define DECAY_CUTOFF         3
 #define DECAY_SLOPE          0.05f

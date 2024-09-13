@@ -10,7 +10,7 @@
 #include "syntax.h"
 #include "specrec.h"
 #include "huffman.h"
-#include "bits.h"
+
 #include "pulse.h"
 
 #include "drc.h"

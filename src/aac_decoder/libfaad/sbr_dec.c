@@ -34,7 +34,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "syntax.h"
-#include "bits.h"
+
 #include "sbr_syntax.h"
 #include "sbr_qmf.h"
 #include "sbr_hfgen.h"

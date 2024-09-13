@@ -29,7 +29,7 @@
 **/
 #include "common.h"
 #ifdef PS_DEC
-#include "bits.h"
+
 #include "ps_dec.h"
 /* type definitaions */
 typedef const int8_t (*ps_huff_tab)[2];

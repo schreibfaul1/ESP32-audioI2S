@@ -4,7 +4,6 @@
 #ifdef ANALYSIS
 #include <stdio.h>
 #endif
-#include "bits.h"
 #include "huffman.h"
 #include "hcb_sf.h"
 /* static function declarations */

@@ -71,7 +71,7 @@ extern "C" {
     #define DRM_PS
 #endif
 
-#ifdef LD_DEC // LD can't do without LTP
+#ifdef LD_DEC /* LD can't do without LTP */
     #ifndef ERROR_RESILIENCE
         #define ERROR_RESILIENCE
     #endif

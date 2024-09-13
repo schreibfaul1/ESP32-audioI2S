@@ -31,7 +31,7 @@
 #include "structs.h"
 #include <stdlib.h>
 #include <stdint-gcc.h>
-#include "bits.h"
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const uint8_t tabFlipbits[256] = {0, 128, 64, 192, 32, 160, 96,  224, 16, 144, 80, 208, 48, 176, 112, 240, 8,  136, 72, 200, 40, 168, 104, 232, 24, 152, 88, 216, 56, 184, 120, 248,
                                      4, 132, 68, 196, 36, 164, 100, 228, 20, 148, 84, 212, 52, 180, 116, 244, 12, 140, 76, 204, 44, 172, 108, 236, 28, 156, 92, 220, 60, 188, 124, 252,
@@ -375,7 +375,6 @@ int8_t get1bit_hcr(bits_t* ld, uint8_t* result) {
 }
 #endif /*ERROR_RESILIENCE*/
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
 uint8_t faad_get1bit(bitfile* ld) {
     uint8_t r;
     if (ld->bits_left > 0) {
@@ -392,7 +391,7 @@ uint8_t faad_get1bit(bitfile* ld) {
 #endif
     return r;
 }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t faad_getbits(bitfile *ld, uint32_t n){
     uint32_t ret;
     if (n == 0)
@@ -405,48 +404,7 @@ uint32_t faad_getbits(bitfile *ld, uint32_t n){
 #endif
     return ret;
 }
-
-// uint32_t faad_showbits_rev(bitfile* ld, uint32_t bits) {
-//     uint8_t  i;
-//     uint32_t B = 0;
-//     if (bits <= ld->bits_left) {
-//         for (i = 0; i < bits; i++) {
-//             if (ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
-//         }
-//         return B;
-//     } else {
-//         for (i = 0; i < ld->bits_left; i++) {
-//             if (ld->bufa & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - i - 1));
-//         }
-//         for (i = 0; i < bits - ld->bits_left; i++) {
-//             if (ld->bufb & (1 << (i + (32 - ld->bits_left)))) B |= (1 << (bits - ld->bits_left - i - 1));
-//         }
-//         return B;
-//     }
-// }
-// void faad_flushbits_rev(bitfile* ld, uint32_t bits) {
-//     /* do nothing if error */
-//     if (ld->error != 0) return;
-//     if (bits < ld->bits_left) {
-//         ld->bits_left -= bits;
-//     } else {
-//         uint32_t tmp;
-//         ld->bufa = ld->bufb;
-//         tmp = getdword(ld->start);
-//         ld->bufb = tmp;
-//         ld->start--;
-//         ld->bits_left += (32 - bits);
-//         if (ld->bytes_left < 4) {
-//             ld->error = 1;
-//             ld->bytes_left = 0;
-//         } else {
-//             ld->bytes_left -= 4;
-//         }
-//         //        if (ld->bytes_left == 0)
-//         //            ld->no_more_reading = 1;
-//     }
-// }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t getdword(void *mem)
 {
     uint32_t tmp;
@@ -463,7 +421,7 @@ uint32_t getdword(void *mem)
 #endif
     return tmp;
 }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* reads only n bytes from the stream instead of the standard 4 */
 uint32_t getdword_n(void *mem, int n)
 {
@@ -495,28 +453,4 @@ uint32_t getdword_n(void *mem, int n)
 #endif
     return tmp;
 }
-
-// void faad_flushbits(bitfile *ld, uint32_t bits)
-// {
-//     /* do nothing if error */
-//     if (ld->error != 0)
-//         return;
-//     if (bits < ld->bits_left)
-//     {
-//         ld->bits_left -= bits;
-//     } else {
-//         faad_flushbits_ex(ld, bits);
-//     }
-// }
-
-// uint32_t faad_showbits(bitfile *ld, uint32_t bits)
-// {
-//     if (bits <= ld->bits_left)
-//     {
-//         //return (ld->bufa >> (ld->bits_left - bits)) & bitmask[bits];
-//         return (ld->bufa << (32 - ld->bits_left)) >> (32 - bits);
-//     }
-//     bits -= ld->bits_left;
-//     //return ((ld->bufa & bitmask[ld->bits_left]) << bits) | (ld->bufb >> (32 - bits));
-//     return ((ld->bufa & ((1<<ld->bits_left)-1)) << bits) | (ld->bufb >> (32 - bits));
-// }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

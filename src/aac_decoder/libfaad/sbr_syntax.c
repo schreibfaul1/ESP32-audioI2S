@@ -11,7 +11,6 @@
 #include "sbr_fbt.h"
 #include "sbr_tf_grid.h"
 #include "sbr_e_nf.h"
-#include "bits.h"
 #ifdef PS_DEC
 #include "ps_dec.h"
 #endif
