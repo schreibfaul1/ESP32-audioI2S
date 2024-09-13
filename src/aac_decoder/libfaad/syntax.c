@@ -13,7 +13,6 @@
 
 #include "pulse.h"
 
-#include "drc.h"
 #ifdef ERROR_RESILIENCE
 #include "rvlc.h"
 #endif

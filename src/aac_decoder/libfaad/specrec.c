@@ -18,7 +18,6 @@
 #include "is.h"
 #include "pns.h"
 #include "tns.h"
-#include "drc.h"
 #include "lt_predict.h"
 #include "ic_predict.h"
 #ifdef SSR_DEC

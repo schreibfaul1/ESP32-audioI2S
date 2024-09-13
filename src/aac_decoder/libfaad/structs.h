@@ -29,7 +29,6 @@
 **/
 
 #pragma once
-#include "cfft.h"
 #include "sbr_dec.h"
 #include "common.h"
 #include "fixed.h"
@@ -47,6 +46,12 @@
 /* used to save the prediction state */
 
 
+typedef struct {
+    uint16_t   n;
+    uint16_t   ifac[15];
+    complex_t* work;
+    complex_t* tab;
+} cfft_info;
 
 typedef struct {
     int16_t r[2];
