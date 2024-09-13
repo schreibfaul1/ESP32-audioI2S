@@ -250,11 +250,12 @@ typedef float real_t;
         #define COEF_CONST(A) ((real_t)(A))
         #define Q2_CONST(A)   ((real_t)(A))
         #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
-/* Complex multiplication */
-static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
-    *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
-    *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
-}
+    /* Complex multiplication */
+        static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+            *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
+            *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
+        }
+
     #endif                                  /* USE_DOUBLE_PRECISION */
 #endif                                      // FIXED_POINT
 

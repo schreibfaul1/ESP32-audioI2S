@@ -3805,6 +3805,7 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef FIXED_POINT
 real_t fp_sqrt(real_t value) {
     real_t root = 0;
     step(0);
@@ -3827,6 +3828,7 @@ real_t fp_sqrt(real_t value) {
     root <<= (REAL_BITS / 2);
     return root;
 }
+#endif /*FIXED_POINT*/
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 mdct_info* faad_mdct_init(uint16_t N) {
     mdct_info* mdct = (mdct_info*)faad_malloc(sizeof(mdct_info));
