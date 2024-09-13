@@ -158,6 +158,11 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define RATE              2
 
 #define NOISE_FLOOR_OFFSET 6
+#ifdef PS_DEC
+#define NEGATE_IPD_MASK            (0x1000)
+#define DECAY_SLOPE                FRAC_CONST(0.05)
+#define COEF_SQRT2                 COEF_CONST(1.4142135623731)
+#endif //  PS_DEC
 
 
 #ifdef FIXED_POINT  /* int32_t */

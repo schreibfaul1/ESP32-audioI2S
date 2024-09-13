@@ -629,3 +629,16 @@ typedef struct
     uint8_t len;
     uint32_t cw;
 } rvlc_huff_table;
+
+// ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef PS_DEC
+/* type definitions */
+typedef struct {
+    uint8_t frame_len;
+    uint8_t resolution20[3];
+    uint8_t resolution34[5];
+    qmf_t*  work;
+    qmf_t** buffer;
+    qmf_t** temp;
+} hyb_info;
+#endif //  PS_DEC

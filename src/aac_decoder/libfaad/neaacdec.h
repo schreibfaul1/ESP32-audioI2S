@@ -338,7 +338,7 @@ void faad_mdct(mdct_info *mdct, real_t *X_in, real_t *X_out);
 uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
 #endif
 void unmap_envelope_noise(sbr_info* sbr);
-
+int16_t real_to_int16(real_t sig_in);
 
 
 
