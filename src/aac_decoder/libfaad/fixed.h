@@ -163,6 +163,13 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define DECAY_SLOPE                FRAC_CONST(0.05)
 #define COEF_SQRT2                 COEF_CONST(1.4142135623731)
 #endif //  PS_DEC
+#define MAX_NTSRHFG 40/* MAX_NTSRHFG: maximum of number_time_slots * rate + HFGen. 16*2+8 */
+#define MAX_NTSR    32 /* max number_time_slots * rate, ok for DRM and not DRM mode */
+#define MAX_M       49/* MAX_M: maximum value for M */
+#define MAX_L_E      5/* MAX_L_E: maximum value for L_E */
+
+
+
 
 
 #ifdef FIXED_POINT  /* int32_t */

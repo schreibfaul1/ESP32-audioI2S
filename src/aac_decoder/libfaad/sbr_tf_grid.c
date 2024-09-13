@@ -11,12 +11,11 @@
 #include "sbr_syntax.h"
 #include "sbr_tf_grid.h"
 
-
-/* static function declarations */
-#if 0
+    /* static function declarations */
+    #if 0
 static int16_t rel_bord_lead(sbr_info *sbr, uint8_t ch, uint8_t l);
 static int16_t rel_bord_trail(sbr_info *sbr, uint8_t ch, uint8_t l);
-#endif
+    #endif
 static uint8_t middleBorder(sbr_info* sbr, uint8_t ch);
 
 /* function constructs new time border vector */

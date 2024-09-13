@@ -339,7 +339,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* righ
 #endif
 void unmap_envelope_noise(sbr_info* sbr);
 int16_t real_to_int16(real_t sig_in);
-
+uint8_t sbr_save_prev_data(sbr_info* sbr, uint8_t ch);
+void    sbr_save_matrix(sbr_info* sbr, uint8_t ch);
 
 
 #ifdef __cplusplus

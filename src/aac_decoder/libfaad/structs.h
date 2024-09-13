@@ -29,7 +29,7 @@
 **/
 
 #pragma once
-#include "sbr_dec.h"
+
 #include "common.h"
 #include "fixed.h"
 
@@ -375,6 +375,16 @@ typedef struct
     complex_t opd_prev[20][2];
 } ps_info;
 
+typedef struct {
+    real_t *x;
+    int16_t x_index;
+    uint8_t channels;
+} qmfa_info;
+typedef struct {
+    real_t *v;
+    int16_t v_index;
+    uint8_t channels;
+} qmfs_info;
 typedef struct{
     uint32_t sample_rate;
     uint32_t maxAACLine;
@@ -642,3 +652,4 @@ typedef struct {
     qmf_t** temp;
 } hyb_info;
 #endif //  PS_DEC
+
