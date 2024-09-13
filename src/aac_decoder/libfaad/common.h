@@ -46,21 +46,11 @@ extern "C" {
 #define ALIGN
 #endif
 /* COMPILE TIME DEFINITIONS */
-/* use double precision */
-/* #define USE_DOUBLE_PRECISION */
-/* use fixed point reals */
-//#define FIXED_POINT
-//#define BIG_IQ_TABLE
-/* Use if target platform has address generators with autoincrement */
-//#define PREFER_POINTERS
-#ifdef _WIN32_WCE
-#define FIXED_POINT
-#endif
-#ifdef __BFIN__
-#define FIXED_POINT
-#endif
 
-#define FIXED_POINT
+//#define PREFER_POINTERS // Use if target platform has address generators with autoincrement
+//#define BIG_IQ_TABLE
+#define USE_DOUBLE_PRECISION // use double precision
+#define FIXED_POINT // use fixed point reals
 #define ERROR_RESILIENCE
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
 //#define SSR_DEC // Allow decoding of SSR profile AAC
@@ -71,6 +61,9 @@ extern "C" {
 //#define SBR_LOW_POWER
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
+
+
+
 
 
 #ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
@@ -251,7 +244,7 @@ char *strchr(), *strrchr();
   #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
   /* Complex multiplication */
   
-  __unused static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
       *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
       *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
   }
