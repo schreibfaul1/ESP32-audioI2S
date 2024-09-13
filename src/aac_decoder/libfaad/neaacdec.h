@@ -29,7 +29,6 @@
 **/
 #ifndef __NEAACDEC_H__
 #define __NEAACDEC_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,7 +38,6 @@ extern "C" {
 #include "common.h"
 #include "fixed.h"
 #include "tables.h"
-
 #ifndef FAAD2_VERSION
   #define FAAD2_VERSION "unknown"
 #endif
@@ -97,7 +95,6 @@ extern "C" {
 /* A decode call can eat up to FAAD_MIN_STREAMSIZE bytes per decoded channel,
    so at least so much bytes per channel should be available in this stream */
 #define FAAD_MIN_STREAMSIZE 768 /* 6144 bits/channel */
-
 typedef void *NeAACDecHandle;
 typedef struct mp4AudioSpecificConfig
 {
@@ -119,7 +116,6 @@ typedef struct mp4AudioSpecificConfig
     char forceUpSampling;
     char downSampledSBR;
 } mp4AudioSpecificConfig;
-
 typedef struct NeAACDecFrameInfo
 {
     unsigned long bytesconsumed;
@@ -143,7 +139,6 @@ typedef struct NeAACDecFrameInfo
     unsigned char ps;
     uint8_t  isPS;
 } NeAACDecFrameInfo;
-
 drc_info*                drc_init(real_t cut, real_t boost);
 void                     drc_end(drc_info* drc);
 void                     drc_decode(drc_info* drc, real_t* spec);
@@ -386,18 +381,19 @@ qmfa_info* qmfa_init(uint8_t channels);
 void       qmfa_end(qmfa_info* qmfa);
 qmfs_info* qmfs_init(uint8_t channels);
 void       qmfs_end(qmfs_info* qmfs);
-
 void sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const real_t* input, qmf_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx);
 void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output);
 void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output);
 uint8_t envelope_time_border_vector(sbr_info *sbr, uint8_t ch);
 void noise_floor_time_border_vector(sbr_info *sbr, uint8_t ch);
 void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t *deg, uint8_t ch);
-
-
-
-
-
+void sbr_envelope(bitfile *ld, sbr_info *sbr, uint8_t ch);
+void sbr_noise(bitfile *ld, sbr_info *sbr, uint8_t ch);
+uint8_t middleBorder(sbr_info* sbr, uint8_t ch);
+#ifdef SSR_DEC
+static real_t **pp_q0, **pp_t0, **pp_t1;
+void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+#endif
 #ifdef __cplusplus
 }
 #endif

@@ -32,9 +32,6 @@
 #include <stdint-gcc.h>
 #include "neaacdec.h"
 #include "structs.h"
-
-
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char *err_msg[] = {
     "No error",
@@ -2520,7 +2517,6 @@ int8_t invert_intensity(ic_stream* ics, uint8_t group, uint8_t sfb) {
     return 1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t is_noise(ic_stream* ics, uint8_t group, uint8_t sfb) {
     if (ics->sfb_cb[group][sfb] == NOISE_HCB) return 1;
@@ -2563,15 +2559,12 @@ static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample
 static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer) {
     uint8_t  ch, ch1;
     uint16_t i;
-
     switch (CONV(channels, hDecoder->downMatrix)) {
         case CONV(1, 0):
         case CONV(1, 1):
             for (i = 0; i < frame_len; i++) {
                 real_t inp = input[hDecoder->internal_channel[0]][i];
-
                 CLIP(inp, 32767.0f, -32768.0f);
-
                 (*sample_buffer)[i] = (int16_t)lrintf(inp);
             }
             break;
@@ -2580,9 +2573,7 @@ static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
                 ch = hDecoder->internal_channel[0];
                 for (i = 0; i < frame_len; i++) {
                     real_t inp0 = input[ch][i];
-
                     CLIP(inp0, 32767.0f, -32768.0f);
-
                     (*sample_buffer)[(i * 2) + 0] = (int16_t)lrintf(inp0);
                     (*sample_buffer)[(i * 2) + 1] = (int16_t)lrintf(inp0);
                 }
@@ -2592,10 +2583,8 @@ static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
                 for (i = 0; i < frame_len; i++) {
                     real_t inp0 = input[ch][i];
                     real_t inp1 = input[ch1][i];
-
                     CLIP(inp0, 32767.0f, -32768.0f);
                     CLIP(inp1, 32767.0f, -32768.0f);
-
                     (*sample_buffer)[(i * 2) + 0] = (int16_t)lrintf(inp0);
                     (*sample_buffer)[(i * 2) + 1] = (int16_t)lrintf(inp1);
                 }
@@ -2605,9 +2594,7 @@ static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
             for (ch = 0; ch < channels; ch++) {
                 for (i = 0; i < frame_len; i++) {
                     real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
-
                     CLIP(inp, 32767.0f, -32768.0f);
-
                     (*sample_buffer)[(i * channels) + ch] = (int16_t)lrintf(inp);
                 }
             }
@@ -2620,16 +2607,13 @@ static void to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t chann
 void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t **sample_buffer) {
     uint8_t  ch, ch1;
     uint16_t i;
-
     switch (CONV(channels, hDecoder->downMatrix)) {
         case CONV(1, 0):
         case CONV(1, 1):
             for (i = 0; i < frame_len; i++) {
                 real_t inp = input[hDecoder->internal_channel[0]][i];
-
                 inp *= 256.0f;
                 CLIP(inp, 8388607.0f, -8388608.0f);
-
                 (*sample_buffer)[i] = (int32_t)lrintf(inp);
             }
             break;
@@ -2638,10 +2622,8 @@ void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, ui
                 ch = hDecoder->internal_channel[0];
                 for (i = 0; i < frame_len; i++) {
                     real_t inp0 = input[ch][i];
-
                     inp0 *= 256.0f;
                     CLIP(inp0, 8388607.0f, -8388608.0f);
-
                     (*sample_buffer)[(i * 2) + 0] = (int32_t)lrintf(inp0);
                     (*sample_buffer)[(i * 2) + 1] = (int32_t)lrintf(inp0);
                 }
@@ -2651,12 +2633,10 @@ void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, ui
                 for (i = 0; i < frame_len; i++) {
                     real_t inp0 = input[ch][i];
                     real_t inp1 = input[ch1][i];
-
                     inp0 *= 256.0f;
                     inp1 *= 256.0f;
                     CLIP(inp0, 8388607.0f, -8388608.0f);
                     CLIP(inp1, 8388607.0f, -8388608.0f);
-
                     (*sample_buffer)[(i * 2) + 0] = (int32_t)lrintf(inp0);
                     (*sample_buffer)[(i * 2) + 1] = (int32_t)lrintf(inp1);
                 }
@@ -2666,10 +2646,8 @@ void to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, ui
             for (ch = 0; ch < channels; ch++) {
                 for (i = 0; i < frame_len; i++) {
                     real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
-
                     inp *= 256.0f;
                     CLIP(inp, 8388607.0f, -8388608.0f);
-
                     (*sample_buffer)[(i * channels) + ch] = (int32_t)lrintf(inp);
                 }
             }
@@ -2685,7 +2663,6 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
 {
     uint8_t ch, ch1;
     uint16_t i;
-
     switch (CONV(channels,hDecoder->downMatrix))
     {
     case CONV(1,0):
@@ -2693,10 +2670,8 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
         for(i = 0; i < frame_len; i++)
         {
             real_t inp = input[hDecoder->internal_channel[0]][i];
-
             inp *= 65536.0f;
             CLIP(inp, 2147483647.0f, -2147483648.0f);
-
             (*sample_buffer)[i] = (int32_t)lrintf(inp);
         }
         break;
@@ -2707,10 +2682,8 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
             for(i = 0; i < frame_len; i++)
             {
                 real_t inp0 = input[ch][i];
-
                 inp0 *= 65536.0f;
                 CLIP(inp0, 2147483647.0f, -2147483648.0f);
-
                 (*sample_buffer)[(i*2)+0] = (int32_t)lrintf(inp0);
                 (*sample_buffer)[(i*2)+1] = (int32_t)lrintf(inp0);
             }
@@ -2721,12 +2694,10 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
             {
                 real_t inp0 = input[ch ][i];
                 real_t inp1 = input[ch1][i];
-
                 inp0 *= 65536.0f;
                 inp1 *= 65536.0f;
                 CLIP(inp0, 2147483647.0f, -2147483648.0f);
                 CLIP(inp1, 2147483647.0f, -2147483648.0f);
-
                 (*sample_buffer)[(i*2)+0] = (int32_t)lrintf(inp0);
                 (*sample_buffer)[(i*2)+1] = (int32_t)lrintf(inp1);
             }
@@ -2738,10 +2709,8 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
             for(i = 0; i < frame_len; i++)
             {
                 real_t inp = get_sample(input, ch, i, hDecoder->downMatrix, hDecoder->internal_channel);
-
                 inp *= 65536.0f;
                 CLIP(inp, 2147483647.0f, -2147483648.0f);
-
                 (*sample_buffer)[(i*channels)+ch] = (int32_t)lrintf(inp);
             }
         }
@@ -7223,12 +7192,9 @@ void tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
     uint16_t bottom, top, start, end;
     uint16_t nshort = frame_len / 8;
     real_t   lpc[TNS_MAX_ORDER + 1];
-
     if (!ics->tns_data_present) return;
-
     for (w = 0; w < ics->num_windows; w++) {
         bottom = ics->num_swb;
-
         for (f = 0; f < tns->n_filt[w]; f++) {
             top = bottom;
             bottom = max(top - tns->length[w][f], 0);
@@ -7262,7 +7228,6 @@ void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
     uint16_t bottom, top, start, end;
     uint16_t nshort = frame_len / 8;
     real_t   lpc[TNS_MAX_ORDER + 1];
-
     if (!ics->tns_data_present) return;
     for (w = 0; w < ics->num_windows; w++) {
         bottom = ics->num_swb;
@@ -7295,7 +7260,6 @@ void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
 void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a) {
     uint8_t i, m;
     real_t  tmp2[TNS_MAX_ORDER + 1], b[TNS_MAX_ORDER + 1];
-
     /* Conversion to signed integer */
     for (i = 0; i < order; i++) {
         if (coef_compress == 0) {
@@ -7317,10 +7281,8 @@ void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress
     for (m = 1; m <= order; m++) {
         for (i = 1; i < m; i++) /* loop only while i<m */
             b[i] = a[i] + MUL_C(tmp2[m - 1], a[m - i]);
-
         for (i = 1; i < m; i++) /* loop only while i<m */
             a[i] = b[i];
-
         a[m] = tmp2[m - 1]; /* changed */
     }
 }
@@ -7332,14 +7294,12 @@ void tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uin
      - The output data is written over the input data ("in-place operation")
      - An input vector of "size" samples is processed and the index increment to the next data sample is given by "inc"
     */
-
     uint8_t  j;
     uint16_t i;
     real_t   y;
     /* state is stored as a double ringbuffer */
     real_t state[2 * TNS_MAX_ORDER] = {0};
     int8_t state_index = 0;
-
     for (i = 0; i < size; i++) {
         y = *spectrum;
         for (j = 0; j < order; j++) y -= MUL_C(state[state_index + j], lpc[j + 1]);
@@ -7364,14 +7324,12 @@ void tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uin
      - The output data is written over the input data ("in-place operation")
      - An input vector of "size" samples is processed and the index increment to the next data sample is given by "inc"
     */
-
     uint8_t  j;
     uint16_t i;
     real_t   y;
     /* state is stored as a double ringbuffer */
     real_t state[2 * TNS_MAX_ORDER] = {0};
     int8_t state_index = 0;
-
     for (i = 0; i < size; i++) {
         y = *spectrum;
         for (j = 0; j < order; j++) y += MUL_C(state[state_index + j], lpc[j + 1]);
@@ -10526,7 +10484,6 @@ void ps_data_decode(ps_info* ps) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 extern const complex_t Phi_Fract_Qmf[] ;
-
 /* decorrelate the mono signal using an allpass filter */
 void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
     uint8_t gr, n, m, bk;
@@ -12031,14 +11988,12 @@ void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out
 #ifdef SBR_DEC
 void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
     uint8_t l, k;
-
     for (l = 0; l < sbr->L_E[ch]; l++) {
         if (sbr->bs_df_env[ch][l] == 0) {
             for (k = 1; k < sbr->n[sbr->f[ch][l]]; k++) {
                 sbr->E[ch][k][l] = sbr->E[ch][k - 1][l] + sbr->E[ch][k][l];
                 if (sbr->E[ch][k][l] < 0) sbr->E[ch][k][l] = 0;
             }
-
         } else { /* bs_df_env == 1 */
             uint8_t g = (l == 0) ? sbr->f_prev[ch] : sbr->f[ch][l - 1];
             int16_t E_prev;
@@ -12048,12 +12003,10 @@ void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
                         E_prev = sbr->E_prev[ch][k];
                     else
                         E_prev = sbr->E[ch][k][l - 1];
-
                     sbr->E[ch][k][l] = E_prev + sbr->E[ch][k][l];
                 }
             } else if ((g == 1) && (sbr->f[ch][l] == 0)) {
                 uint8_t i;
-
                 for (k = 0; k < sbr->n[sbr->f[ch][l]]; k++) {
                     for (i = 0; i < sbr->N_high; i++) {
                         if (sbr->f_table_res[HI_RES][i] == sbr->f_table_res[LO_RES][k]) {
@@ -12065,10 +12018,8 @@ void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
                         }
                     }
                 }
-
             } else if ((g == 0) && (sbr->f[ch][l] == 1)) {
                 uint8_t i;
-
                 for (k = 0; k < sbr->n[sbr->f[ch][l]]; k++) {
                     for (i = 0; i < sbr->N_low; i++) {
                         if ((sbr->f_table_res[LO_RES][i] <= sbr->f_table_res[HI_RES][k]) && (sbr->f_table_res[HI_RES][k] < sbr->f_table_res[LO_RES][i + 1])) {
@@ -12089,7 +12040,6 @@ void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
 #ifdef SBR_DEC
 void extract_noise_floor_data(sbr_info* sbr, uint8_t ch) {
     uint8_t l, k;
-
     for (l = 0; l < sbr->L_Q[ch]; l++) {
         if (sbr->bs_df_noise[ch][l] == 0) {
             for (k = 1; k < sbr->N_Q; k++) { sbr->Q[ch][k][l] = sbr->Q[ch][k][l] + sbr->Q[ch][k - 1][l]; }
@@ -12168,7 +12118,6 @@ void envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch) {
         int16_t exp;
         uint8_t l, k;
         uint8_t amp = (sbr->amp_res[ch]) ? 0 : 1;
-
         for (l = 0; l < sbr->L_E[ch]; l++) {
             for (k = 0; k < sbr->n[sbr->f[ch][l]]; k++) {
                 /* +6 for the *64 and -10 for the /32 in the synthesis QMF (fixed)
@@ -12204,7 +12153,6 @@ void unmap_envelope_noise(sbr_info* sbr) {
     uint8_t l, k;
     uint8_t amp0 = (sbr->amp_res[0]) ? 0 : 1;
     uint8_t amp1 = (sbr->amp_res[1]) ? 0 : 1;
-
     for (l = 0; l < sbr->L_E[0]; l++) {
         for (k = 0; k < sbr->n[sbr->f[0][l]]; k++) {
             /* +6: * 64 ; +1: * 2 ; */
@@ -12479,7 +12427,6 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
     int32_t* vDk1 = (int32_t*) ps_calloc(64, sizeof(int32_t));
     int32_t* vk0  = (int32_t*) ps_calloc(64, sizeof(int32_t));
     int32_t* vk1  = (int32_t*) ps_calloc(64, sizeof(int32_t));
-
     uint8_t temp1[] = {6, 5, 4};
     real_t  q, qk;
     int32_t A_1;
@@ -13506,12 +13453,10 @@ typedef const int8_t (*sbr_huff_tab)[2];
 int16_t sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff) {
     uint8_t bit;
     int16_t index = 0;
-
     while (index >= 0) {
         bit = (uint8_t)faad_get1bit(ld);
         index = t_huff[index][bit];
     }
-
     return index + 64;
 }
 #endif /*SBR_DEC*/
@@ -13522,12 +13467,10 @@ void sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t      env, band;
     int8_t       delta = 0;
     sbr_huff_tab t_huff, f_huff;
-
     if ((sbr->L_E[ch] == 1) && (sbr->bs_frame_class[ch] == FIXFIX))
         sbr->amp_res[ch] = 0;
     else
         sbr->amp_res[ch] = sbr->bs_amp_res;
-
     if ((sbr->bs_coupling) && (ch == 1)) {
         delta = 1;
         if (sbr->amp_res[ch]) {
@@ -13577,7 +13520,6 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t      noise, band;
     int8_t       delta = 0;
     sbr_huff_tab t_huff, f_huff;
-
     if ((sbr->bs_coupling == 1) && (ch == 1)) {
         delta = 1;
         t_huff = t_huffman_noise_bal_3_0dB;
@@ -13613,7 +13555,6 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     printf("%d\n", sbr->bs_xover_band_prev);
     printf("%d\n\n", sbr->bs_noise_bands_prev);
     #endif
-
     /* if these are different from the previous frame: Reset = 1 */
     if ((sbr->bs_start_freq != sbr->bs_start_freq_prev) || (sbr->bs_stop_freq != sbr->bs_stop_freq_prev) || (sbr->bs_freq_scale != sbr->bs_freq_scale_prev) ||
         (sbr->bs_alter_scale != sbr->bs_alter_scale_prev) || (sbr->bs_xover_band != sbr->bs_xover_band_prev) || (sbr->bs_noise_bands != sbr->bs_noise_bands_prev)) {
@@ -13621,7 +13562,6 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     } else {
         sbr->Reset = 0;
     }
-
     sbr->bs_start_freq_prev = sbr->bs_start_freq;
     sbr->bs_stop_freq_prev = sbr->bs_stop_freq;
     sbr->bs_freq_scale_prev = sbr->bs_freq_scale;
@@ -13635,11 +13575,9 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 uint8_t calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band) {
     uint8_t result = 0;
     uint8_t k2;
-
     /* calculate the Master Frequency Table */
     sbr->k0 = qmf_start_channel(start_freq, samplerate_mode, sbr->sample_rate);
     k2 = qmf_stop_channel(stop_freq, sbr->sample_rate, sbr->k0);
-
     /* check k0 and k2 */
     if (sbr->sample_rate >= 48000) {
         if ((k2 - sbr->k0) > 32) result += 1;
@@ -13648,16 +13586,13 @@ uint8_t calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, ui
     } else { /* (sbr->sample_rate == 44100) */
         if ((k2 - sbr->k0) > 45) result += 1;
     }
-
     if (freq_scale == 0) {
         result += master_frequency_table_fs0(sbr, sbr->k0, k2, alter_scale);
     } else {
         result += master_frequency_table(sbr, sbr->k0, k2, freq_scale, alter_scale);
     }
     result += derived_frequency_table(sbr, xover_band, k2);
-
     result = (result > 0) ? 1 : 0;
-
     return result;
 }
 #endif /*SBR_DEC*/
@@ -13669,24 +13604,19 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psR
     uint16_t num_align_bits = 0;
     uint16_t num_sbr_bits1 = (uint16_t)faad_get_processed_bits(ld);
     uint16_t num_sbr_bits2;
-
     uint8_t saved_start_freq, saved_samplerate_mode;
     uint8_t saved_stop_freq, saved_freq_scale;
     uint8_t saved_alter_scale, saved_xover_band;
-
     #if (defined(PS_DEC) || defined(DRM_PS))
     if (psResetFlag) sbr->psResetFlag = psResetFlag;
     #endif
-
     #ifdef DRM
     if (!sbr->Is_DRM_SBR)
     #endif
     {
         uint8_t bs_extension_type = (uint8_t)faad_getbits(ld, 4);
-
         if (bs_extension_type == EXT_SBR_DATA_CRC) { sbr->bs_sbr_crc_bits = (uint16_t)faad_getbits(ld, 10); }
     }
-
     /* save old header values, in case the new ones are corrupted */
     saved_start_freq = sbr->bs_start_freq;
     saved_samplerate_mode = sbr->bs_samplerate_mode;
@@ -13694,27 +13624,20 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psR
     saved_freq_scale = sbr->bs_freq_scale;
     saved_alter_scale = sbr->bs_alter_scale;
     saved_xover_band = sbr->bs_xover_band;
-
     sbr->bs_header_flag = faad_get1bit(ld);
-
     if (sbr->bs_header_flag) sbr_header(ld, sbr);
-
     /* Reset? */
     sbr_reset(sbr);
-
     /* first frame should have a header */
     // if (!(sbr->frame == 0 && sbr->bs_header_flag == 0))
     if (sbr->header_count != 0) {
         if (sbr->Reset || (sbr->bs_header_flag && sbr->just_seeked)) {
             uint8_t rt = calc_sbr_tables(sbr, sbr->bs_start_freq, sbr->bs_stop_freq, sbr->bs_samplerate_mode, sbr->bs_freq_scale, sbr->bs_alter_scale, sbr->bs_xover_band);
-
             /* if an error occured with the new header values revert to the old ones */
             if (rt > 0) { result += calc_sbr_tables(sbr, saved_start_freq, saved_stop_freq, saved_samplerate_mode, saved_freq_scale, saved_alter_scale, saved_xover_band); }
         }
-
         if (result == 0) {
             result = sbr_data(ld, sbr);
-
             /* sbr_data() returning an error means that there was an error in
                envelope_time_border_vector().
                In this case the old time border vector is saved and all the previous
@@ -13724,45 +13647,37 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psR
             if ((result > 0) && (sbr->Reset || (sbr->bs_header_flag && sbr->just_seeked))) {
                 result += calc_sbr_tables(sbr, saved_start_freq, saved_stop_freq, saved_samplerate_mode, saved_freq_scale, saved_alter_scale, saved_xover_band);
             }
-
             /* we should be able to safely set result to 0 now, */
             /* but practise indicates this doesn't work well */
         }
     } else {
         result = 1;
     }
-
     num_sbr_bits2 = (uint16_t)faad_get_processed_bits(ld) - num_sbr_bits1;
-
     /* check if we read more bits then were available for sbr */
     if (8 * cnt < num_sbr_bits2) {
         faad_resetbits(ld, num_sbr_bits1 + 8 * cnt);
         num_sbr_bits2 = 8 * cnt;
-
     #ifdef PS_DEC
         /* turn off PS for the unfortunate case that we randomly read some
          * PS data that looks correct */
         sbr->ps_used = 0;
     #endif
-
         /* Make sure it doesn't decode SBR in this frame, or we'll get glitches */
         return 1;
     }
-
     #ifdef DRM
     if (!sbr->Is_DRM_SBR)
     #endif
     {
         /* -4 does not apply, bs_extension_type is re-read in this function */
         num_align_bits = 8 * cnt /*- 4*/ - num_sbr_bits2;
-
         while (num_align_bits > 7) {
             faad_getbits(ld, 8);
             num_align_bits -= 8;
         }
         faad_getbits(ld, num_align_bits);
     }
-
     return result;
 }
 #endif /*SBR_DEC*/
@@ -13771,11 +13686,8 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psR
 /* table 3 */
 void sbr_header(bitfile* ld, sbr_info* sbr) {
     uint8_t bs_header_extra_1, bs_header_extra_2;
-
     sbr->header_count++;
-
     sbr->bs_amp_res = faad_get1bit(ld);
-
     /* bs_start_freq and bs_stop_freq must define a fequency band that does
        not exceed 48 channels */
     sbr->bs_start_freq = (uint8_t)faad_getbits(ld, 4);
@@ -13784,7 +13696,6 @@ void sbr_header(bitfile* ld, sbr_info* sbr) {
     faad_getbits(ld, 2);
     bs_header_extra_1 = (uint8_t)faad_get1bit(ld);
     bs_header_extra_2 = (uint8_t)faad_get1bit(ld);
-
     if (bs_header_extra_1) {
         sbr->bs_freq_scale = (uint8_t)faad_getbits(ld, 2);
         sbr->bs_alter_scale = (uint8_t)faad_get1bit(ld);
@@ -13795,7 +13706,6 @@ void sbr_header(bitfile* ld, sbr_info* sbr) {
         sbr->bs_alter_scale = 1;
         sbr->bs_noise_bands = 2;
     }
-
     if (bs_header_extra_2) {
         sbr->bs_limiter_bands = (uint8_t)faad_getbits(ld, 2);
         sbr->bs_limiter_gains = (uint8_t)faad_getbits(ld, 2);
@@ -13808,7 +13718,6 @@ void sbr_header(bitfile* ld, sbr_info* sbr) {
         sbr->bs_interpol_freq = 1;
         sbr->bs_smoothing_mode = 1;
     }
-
     #if 0
     /* print the header to screen */
     printf("bs_amp_res: %d\n", sbr->bs_amp_res);
@@ -13837,32 +13746,23 @@ void sbr_header(bitfile* ld, sbr_info* sbr) {
 /* table 5 */
 uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
     uint8_t result;
-
     if (faad_get1bit(ld)) { faad_getbits(ld, 4); }
-
     #ifdef DRM
     /* bs_coupling, from sbr_channel_pair_base_element(bs_amp_res) */
     if (sbr->Is_DRM_SBR) { faad_get1bit(ld); }
     #endif
-
     if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
-
     sbr_dtdf(ld, sbr, 0);
     invf_mode(ld, sbr, 0);
     sbr_envelope(ld, sbr, 0);
     sbr_noise(ld, sbr, 0);
-
     #ifndef FIXED_POINT
     envelope_noise_dequantisation(sbr, 0);
     #endif
-
     memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
-
     sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
     if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
-
     sbr->bs_extended_data = faad_get1bit(ld);
-
     if (sbr->bs_extended_data) {
         uint16_t nr_bits_left;
     #if (defined(PS_DEC) || defined(DRM_PS))
@@ -13870,14 +13770,11 @@ uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
     #endif
         uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
         if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
-
         nr_bits_left = 8 * cnt;
         while (nr_bits_left > 7) {
             uint16_t tmp_nr_bits = 0;
-
             sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
             tmp_nr_bits += 2;
-
             /* allow only 1 PS extension element per extension data */
     #if (defined(PS_DEC) || defined(DRM_PS))
         #if (defined(PS_DEC) && defined(DRM_PS))
@@ -13905,19 +13802,14 @@ uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
                 }
             }
     #endif
-
             tmp_nr_bits += sbr_extension(ld, sbr, sbr->bs_extension_id, nr_bits_left);
-
             /* check if the data read is bigger than the number of available bits */
             if (tmp_nr_bits > nr_bits_left) return 1;
-
             nr_bits_left -= tmp_nr_bits;
         }
-
         /* Corrigendum */
         if (nr_bits_left > 0) { faad_getbits(ld, nr_bits_left); }
     }
-
     return 0;
 }
 #endif /*SBR_DEC*/
@@ -13926,47 +13818,36 @@ uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
 /* table 6 */
 uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
     uint8_t n, result;
-
     if (faad_get1bit(ld)) {
         faad_getbits(ld, 4);
         faad_getbits(ld, 4);
     }
-
     sbr->bs_coupling = faad_get1bit(ld);
-
     if (sbr->bs_coupling) {
         if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
-
         /* need to copy some data from left to right */
         sbr->bs_frame_class[1] = sbr->bs_frame_class[0];
         sbr->L_E[1] = sbr->L_E[0];
         sbr->L_Q[1] = sbr->L_Q[0];
         sbr->bs_pointer[1] = sbr->bs_pointer[0];
-
         for (n = 0; n <= sbr->L_E[0]; n++) {
             sbr->t_E[1][n] = sbr->t_E[0][n];
             sbr->f[1][n] = sbr->f[0][n];
         }
         for (n = 0; n <= sbr->L_Q[0]; n++) sbr->t_Q[1][n] = sbr->t_Q[0][n];
-
         sbr_dtdf(ld, sbr, 0);
         sbr_dtdf(ld, sbr, 1);
         invf_mode(ld, sbr, 0);
-
         /* more copying */
         for (n = 0; n < sbr->N_Q; n++) sbr->bs_invf_mode[1][n] = sbr->bs_invf_mode[0][n];
-
         sbr_envelope(ld, sbr, 0);
         sbr_noise(ld, sbr, 0);
         sbr_envelope(ld, sbr, 1);
         sbr_noise(ld, sbr, 1);
-
         memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
         memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
-
         sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
         if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
-
         sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
         if (sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
     } else {
@@ -13974,10 +13855,8 @@ uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
         uint8_t saved_L_E = sbr->L_E[0];
         uint8_t saved_L_Q = sbr->L_Q[0];
         uint8_t saved_frame_class = sbr->bs_frame_class[0];
-
         for (n = 0; n < saved_L_E; n++) saved_t_E[n] = sbr->t_E[0][n];
         for (n = 0; n < saved_L_Q; n++) saved_t_Q[n] = sbr->t_Q[0][n];
-
         if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
         if ((result = sbr_grid(ld, sbr, 1)) > 0) {
             /* restore first channel data as well */
@@ -13986,7 +13865,6 @@ uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
             sbr->L_Q[0] = saved_L_Q;
             for (n = 0; n < 6; n++) sbr->t_E[0][n] = saved_t_E[n];
             for (n = 0; n < 3; n++) sbr->t_Q[0][n] = saved_t_Q[n];
-
             return result;
         }
         sbr_dtdf(ld, sbr, 0);
@@ -13997,47 +13875,36 @@ uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
         sbr_envelope(ld, sbr, 1);
         sbr_noise(ld, sbr, 0);
         sbr_noise(ld, sbr, 1);
-
         memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
         memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
-
         sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
         if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
-
         sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
         if (sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
     }
     #ifndef FIXED_POINT
     envelope_noise_dequantisation(sbr, 0);
     envelope_noise_dequantisation(sbr, 1);
-
     if (sbr->bs_coupling) unmap_envelope_noise(sbr);
     #endif
-
     sbr->bs_extended_data = faad_get1bit(ld);
     if (sbr->bs_extended_data) {
         uint16_t nr_bits_left;
         uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
         if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
-
         nr_bits_left = 8 * cnt;
         while (nr_bits_left > 7) {
             uint16_t tmp_nr_bits = 0;
-
             sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
             tmp_nr_bits += 2;
             tmp_nr_bits += sbr_extension(ld, sbr, sbr->bs_extension_id, nr_bits_left);
-
             /* check if the data read is bigger than the number of available bits */
             if (tmp_nr_bits > nr_bits_left) return 1;
-
             nr_bits_left -= tmp_nr_bits;
         }
-
         /* Corrigendum */
         if (nr_bits_left > 0) { faad_getbits(ld, nr_bits_left); }
     }
-
     return 0;
 }
 #endif /*SBR_DEC*/
@@ -14049,9 +13916,7 @@ uint8_t sbr_data(bitfile* ld, sbr_info* sbr) {
     #if 0
     sbr->bs_samplerate_mode = faad_get1bit(ld);
     #endif
-
     sbr->rate = (sbr->bs_samplerate_mode) ? 2 : 1;
-
     switch (sbr->id_aac) {
         case ID_SCE:
             if ((result = sbr_single_channel_element(ld, sbr)) > 0) return result;
@@ -14060,7 +13925,6 @@ uint8_t sbr_data(bitfile* ld, sbr_info* sbr) {
             if ((result = sbr_channel_pair_element(ld, sbr)) > 0) return result;
             break;
     }
-
     return 0;
 }
 #endif /*SBR_DEC*/
@@ -14085,90 +13949,68 @@ uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t saved_L_E = sbr->L_E[ch];
     uint8_t saved_L_Q = sbr->L_Q[ch];
     uint8_t saved_frame_class = sbr->bs_frame_class[ch];
-
     sbr->bs_frame_class[ch] = (uint8_t)faad_getbits(ld, 2);
-
     switch (sbr->bs_frame_class[ch]) {
         case FIXFIX:
             i = (uint8_t)faad_getbits(ld, 2);
-
             bs_num_env = min(1 << i, 5);
-
             i = (uint8_t)faad_get1bit(ld);
             for (env = 0; env < bs_num_env; env++) sbr->f[ch][env] = i;
-
             sbr->abs_bord_lead[ch] = 0;
             sbr->abs_bord_trail[ch] = sbr->numTimeSlots;
             sbr->n_rel_lead[ch] = bs_num_env - 1;
             sbr->n_rel_trail[ch] = 0;
             break;
-
         case FIXVAR:
             bs_abs_bord = (uint8_t)faad_getbits(ld, 2) + sbr->numTimeSlots;
             bs_num_env = (uint8_t)faad_getbits(ld, 2) + 1;
-
             for (rel = 0; rel < bs_num_env - 1; rel++) { sbr->bs_rel_bord[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
             i = sbr_log2(bs_num_env + 1);
             sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
-
             for (env = 0; env < bs_num_env; env++) { sbr->f[ch][bs_num_env - env - 1] = (uint8_t)faad_get1bit(ld); }
-
             sbr->abs_bord_lead[ch] = 0;
             sbr->abs_bord_trail[ch] = bs_abs_bord;
             sbr->n_rel_lead[ch] = 0;
             sbr->n_rel_trail[ch] = bs_num_env - 1;
             break;
-
         case VARFIX:
             bs_abs_bord = (uint8_t)faad_getbits(ld, 2);
             bs_num_env = (uint8_t)faad_getbits(ld, 2) + 1;
-
             for (rel = 0; rel < bs_num_env - 1; rel++) { sbr->bs_rel_bord[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
             i = sbr_log2(bs_num_env + 1);
             sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
-
             for (env = 0; env < bs_num_env; env++) { sbr->f[ch][env] = (uint8_t)faad_get1bit(ld); }
-
             sbr->abs_bord_lead[ch] = bs_abs_bord;
             sbr->abs_bord_trail[ch] = sbr->numTimeSlots;
             sbr->n_rel_lead[ch] = bs_num_env - 1;
             sbr->n_rel_trail[ch] = 0;
             break;
-
         case VARVAR:
             bs_abs_bord = (uint8_t)faad_getbits(ld, 2);
             bs_abs_bord_1 = (uint8_t)faad_getbits(ld, 2) + sbr->numTimeSlots;
             sbr->bs_num_rel_0[ch] = (uint8_t)faad_getbits(ld, 2);
             sbr->bs_num_rel_1[ch] = (uint8_t)faad_getbits(ld, 2);
-
             bs_num_env = min(5, sbr->bs_num_rel_0[ch] + sbr->bs_num_rel_1[ch] + 1);
-
             for (rel = 0; rel < sbr->bs_num_rel_0[ch]; rel++) { sbr->bs_rel_bord_0[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
             for (rel = 0; rel < sbr->bs_num_rel_1[ch]; rel++) { sbr->bs_rel_bord_1[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
             i = sbr_log2(sbr->bs_num_rel_0[ch] + sbr->bs_num_rel_1[ch] + 2);
             sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
-
             for (env = 0; env < bs_num_env; env++) { sbr->f[ch][env] = (uint8_t)faad_get1bit(ld); }
-
             sbr->abs_bord_lead[ch] = bs_abs_bord;
             sbr->abs_bord_trail[ch] = bs_abs_bord_1;
             sbr->n_rel_lead[ch] = sbr->bs_num_rel_0[ch];
             sbr->n_rel_trail[ch] = sbr->bs_num_rel_1[ch];
             break;
     }
-
     if (sbr->bs_frame_class[ch] == VARVAR)
         sbr->L_E[ch] = min(bs_num_env, 5);
     else
         sbr->L_E[ch] = min(bs_num_env, 4);
-
     if (sbr->L_E[ch] <= 0) return 1;
-
     if (sbr->L_E[ch] > 1)
         sbr->L_Q[ch] = 2;
     else
         sbr->L_Q[ch] = 1;
-
     /* TODO: this code can probably be integrated into the code above! */
     if ((result = envelope_time_border_vector(sbr, ch)) > 0) {
         sbr->bs_frame_class[ch] = saved_frame_class;
@@ -14177,14 +14019,12 @@ uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
         return result;
     }
     noise_floor_time_border_vector(sbr, ch);
-
     #if 0
     for (env = 0; env < bs_num_env; env++)
     {
         printf("freq_res[ch:%d][env:%d]: %d\n", ch, env, sbr->f[ch][env]);
     }
     #endif
-
     return 0;
 }
 #endif /*SBR_DEC*/
@@ -14193,16 +14033,12 @@ uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 /* table 8 */
 void sbr_dtdf(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t i;
-
     for (i = 0; i < sbr->L_E[ch]; i++) { sbr->bs_df_env[ch][i] = faad_get1bit(ld); }
-
     for (i = 0; i < sbr->L_Q[ch]; i++) { sbr->bs_df_noise[ch][i] = faad_get1bit(ld); }
 }
-
 /* table 9 */
 void invf_mode(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t n;
-
     for (n = 0; n < sbr->N_Q; n++) { sbr->bs_invf_mode[ch][n] = (uint8_t)faad_getbits(ld, 2); }
 }
 #endif /*SBR_DEC*/
@@ -14213,19 +14049,15 @@ uint16_t sbr_extension(bitfile* ld, sbr_info* sbr, uint8_t bs_extension_id, uint
     uint8_t  header;
     uint16_t ret;
     #endif
-
     switch (bs_extension_id) {
     #ifdef PS_DEC
         case EXTENSION_ID_PS:
             if (!sbr->ps) { sbr->ps = ps_init(get_sr_index(sbr->sample_rate), sbr->numTimeSlotsRate); }
             if (sbr->psResetFlag) { sbr->ps->header_read = 0; }
             ret = ps_data(sbr->ps, ld, &header);
-
             /* enable PS if and only if: a header has been decoded */
             if (sbr->ps_used == 0 && header == 1) { sbr->ps_used = 1; }
-
             if (header == 1) { sbr->psResetFlag = 0; }
-
             return ret;
     #endif
     #ifdef DRM_PS
@@ -14243,7 +14075,6 @@ uint16_t sbr_extension(bitfile* ld, sbr_info* sbr, uint8_t bs_extension_id, uint
 /* table 12 */
 void sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t n;
-
     for (n = 0; n < sbr->N_high; n++) { sbr->bs_add_harmonic[ch][n] = faad_get1bit(ld); }
 }
 #endif /*SBR_DEC*/
@@ -14395,8 +14226,6 @@ uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr
 }
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
 static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
@@ -14496,7 +14325,7 @@ static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
-static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static real_t limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
     uint8_t       m, l, k;
@@ -14796,17 +14625,6 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-typedef struct {
-    complex_t r01;
-    complex_t r02;
-    complex_t r11;
-    complex_t r12;
-    complex_t r22;
-    real_t    det;
-} acorr_coef;
-#endif // SBR_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
     real_t  r01 = 0, r02 = 0, r11 = 0;
@@ -14861,7 +14679,7 @@ static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTS
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
+void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
     real_t r01r = 0, r01i = 0, r02r = 0, r02i = 0, r11r = 0;
     real_t temp1_r, temp1_i, temp2_r, temp2_i, temp3_r, temp3_i, temp4_r, temp4_i, temp5_r, temp5_i;
         #ifdef FIXED_POINT
@@ -14973,7 +14791,7 @@ static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTS
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
     /* calculate linear prediction coefficients using the covariance method */
-static void calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
+void calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
     real_t     tmp;
     acorr_coef ac;
     auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
@@ -15084,7 +14902,7 @@ void calc_aliasing_degree(sbr_info* sbr, real_t* rxx, real_t* deg) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* FIXED POINT: bwArray = COEF */
-static real_t mapNewBw(uint8_t invf_mode, uint8_t invf_mode_prev) {
+real_t mapNewBw(uint8_t invf_mode, uint8_t invf_mode_prev) {
     switch (invf_mode) {
         case 1:                      /* LOW */
             if (invf_mode_prev == 0) /* NONE */
@@ -15163,5 +14981,592 @@ void patch_construction(sbr_info* sbr) {
     sbr->noPatches = min(sbr->noPatches, 5);
 }
 #endif // SBR_DEC
-
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* function constructs new time border vector */
+/* first build into temp vector to be able to use previous vector on error */
+uint8_t envelope_time_border_vector(sbr_info* sbr, uint8_t ch) {
+    uint8_t l, border, temp;
+    uint8_t t_E_temp[6] = {0};
+    t_E_temp[0] = sbr->rate * sbr->abs_bord_lead[ch];
+    t_E_temp[sbr->L_E[ch]] = sbr->rate * sbr->abs_bord_trail[ch];
+    switch (sbr->bs_frame_class[ch]) {
+        case FIXFIX:
+            switch (sbr->L_E[ch]) {
+                case 4:
+                    temp = (sbr->numTimeSlots / 4);
+                    t_E_temp[3] = sbr->rate * 3 * temp;
+                    t_E_temp[2] = sbr->rate * 2 * temp;
+                    t_E_temp[1] = sbr->rate * temp;
+                    break;
+                case 2: t_E_temp[1] = sbr->rate * (sbr->numTimeSlots / 2); break;
+                default: break;
+            }
+            break;
+        case FIXVAR:
+            if (sbr->L_E[ch] > 1) {
+                int8_t i = sbr->L_E[ch];
+                border = sbr->abs_bord_trail[ch];
+                for (l = 0; l < (sbr->L_E[ch] - 1); l++) {
+                    if (border < sbr->bs_rel_bord[ch][l]) return 1;
+                    border -= sbr->bs_rel_bord[ch][l];
+                    t_E_temp[--i] = sbr->rate * border;
+                }
+            }
+            break;
+        case VARFIX:
+            if (sbr->L_E[ch] > 1) {
+                int8_t i = 1;
+                border = sbr->abs_bord_lead[ch];
+                for (l = 0; l < (sbr->L_E[ch] - 1); l++) {
+                    border += sbr->bs_rel_bord[ch][l];
+                    if (sbr->rate * border + sbr->tHFAdj > sbr->numTimeSlotsRate + sbr->tHFGen) return 1;
+                    t_E_temp[i++] = sbr->rate * border;
+                }
+            }
+            break;
+        case VARVAR:
+            if (sbr->bs_num_rel_0[ch]) {
+                int8_t i = 1;
+                border = sbr->abs_bord_lead[ch];
+                for (l = 0; l < sbr->bs_num_rel_0[ch]; l++) {
+                    border += sbr->bs_rel_bord_0[ch][l];
+                    if (sbr->rate * border + sbr->tHFAdj > sbr->numTimeSlotsRate + sbr->tHFGen) return 1;
+                    t_E_temp[i++] = sbr->rate * border;
+                }
+            }
+            if (sbr->bs_num_rel_1[ch]) {
+                int8_t i = sbr->L_E[ch];
+                border = sbr->abs_bord_trail[ch];
+                for (l = 0; l < sbr->bs_num_rel_1[ch]; l++) {
+                    if (border < sbr->bs_rel_bord_1[ch][l]) return 1;
+                    border -= sbr->bs_rel_bord_1[ch][l];
+                    t_E_temp[--i] = sbr->rate * border;
+                }
+            }
+            break;
+    }
+    /* no error occured, we can safely use this t_E vector */
+    for (l = 0; l < 6; l++) { sbr->t_E[ch][l] = t_E_temp[l]; }
+    return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void noise_floor_time_border_vector(sbr_info* sbr, uint8_t ch) {
+    sbr->t_Q[ch][0] = sbr->t_E[ch][0];
+    if (sbr->L_E[ch] == 1) {
+        sbr->t_Q[ch][1] = sbr->t_E[ch][1];
+        sbr->t_Q[ch][2] = 0;
+    } else {
+        uint8_t index = middleBorder(sbr, ch);
+        sbr->t_Q[ch][1] = sbr->t_E[ch][index];
+        sbr->t_Q[ch][2] = sbr->t_E[ch][sbr->L_E[ch]];
+    }
+}
+    #if 0
+static int16_t rel_bord_lead(sbr_info *sbr, uint8_t ch, uint8_t l)
+{
+    uint8_t i;
+    int16_t acc = 0;
+    switch (sbr->bs_frame_class[ch])
+    {
+    case FIXFIX:
+        return sbr->numTimeSlots/sbr->L_E[ch];
+    case FIXVAR:
+        return 0;
+    case VARFIX:
+        for (i = 0; i < l; i++)
+        {
+            acc += sbr->bs_rel_bord[ch][i];
+        }
+        return acc;
+    case VARVAR:
+        for (i = 0; i < l; i++)
+        {
+            acc += sbr->bs_rel_bord_0[ch][i];
+        }
+        return acc;
+    }
+    return 0;
+}
+static int16_t rel_bord_trail(sbr_info *sbr, uint8_t ch, uint8_t l)
+{
+    uint8_t i;
+    int16_t acc = 0;
+    switch (sbr->bs_frame_class[ch])
+    {
+    case FIXFIX:
+    case VARFIX:
+        return 0;
+    case FIXVAR:
+        for (i = 0; i < l; i++)
+        {
+            acc += sbr->bs_rel_bord[ch][i];
+        }
+        return acc;
+    case VARVAR:
+        for (i = 0; i < l; i++)
+        {
+            acc += sbr->bs_rel_bord_1[ch][i];
+        }
+        return acc;
+    }
+    return 0;
+}
+    #endif /*0*/
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint8_t middleBorder(sbr_info* sbr, uint8_t ch) {
+    int8_t retval = 0;
+    switch (sbr->bs_frame_class[ch]) {
+        case FIXFIX: retval = sbr->L_E[ch] / 2; break;
+        case VARFIX:
+            if (sbr->bs_pointer[ch] == 0)
+                retval = 1;
+            else if (sbr->bs_pointer[ch] == 1)
+                retval = sbr->L_E[ch] - 1;
+            else
+                retval = sbr->bs_pointer[ch] - 1;
+            break;
+        case FIXVAR:
+        case VARVAR:
+            if (sbr->bs_pointer[ch] > 1)
+                retval = sbr->L_E[ch] + 1 - sbr->bs_pointer[ch];
+            else
+                retval = sbr->L_E[ch] - 1;
+            break;
+    }
+    return (retval > 0) ? retval : 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+qmfs_info* qmfs_init(uint8_t channels) {
+    qmfs_info* qmfs = (qmfs_info*)faad_malloc(sizeof(qmfs_info));
+    /* v is a double ringbuffer */
+    qmfs->v = (real_t*)faad_malloc(2 * channels * 20 * sizeof(real_t));
+    memset(qmfs->v, 0, 2 * channels * 20 * sizeof(real_t));
+    qmfs->v_index = 0;
+    qmfs->channels = channels;
+    return qmfs;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void qmfs_end(qmfs_info* qmfs) {
+    if (qmfs) {
+        if (qmfs->v) faad_free(qmfs->v);
+        faad_free(qmfs);
+    }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
+    ALIGN real_t x[16];
+    ALIGN real_t y[16];
+    int32_t      n, k, out = 0;
+    uint8_t      l;
+    /* qmf subsample l */
+    for (l = 0; l < sbr->numTimeSlotsRate; l++) {
+        /* shift buffers */
+        /* we are not shifting v, it is a double ringbuffer */
+        // memmove(qmfs->v + 64, qmfs->v, (640-64)*sizeof(real_t));
+        /* calculate 64 samples */
+        for (k = 0; k < 16; k++) {
+        #ifdef FIXED_POINT
+            y[k] = (QMF_RE(X[l][k]) - QMF_RE(X[l][31 - k]));
+            x[k] = (QMF_RE(X[l][k]) + QMF_RE(X[l][31 - k]));
+        #else
+            y[k] = (QMF_RE(X[l][k]) - QMF_RE(X[l][31 - k])) / 32.0;
+            x[k] = (QMF_RE(X[l][k]) + QMF_RE(X[l][31 - k])) / 32.0;
+        #endif
+        }
+        /* even n samples */
+        DCT2_16_unscaled(x, x);
+        /* odd n samples */
+        DCT4_16(y, y);
+        for (n = 8; n < 24; n++) {
+            qmfs->v[qmfs->v_index + n * 2] = qmfs->v[qmfs->v_index + 640 + n * 2] = x[n - 8];
+            qmfs->v[qmfs->v_index + n * 2 + 1] = qmfs->v[qmfs->v_index + 640 + n * 2 + 1] = y[n - 8];
+        }
+        for (n = 0; n < 16; n++) { qmfs->v[qmfs->v_index + n] = qmfs->v[qmfs->v_index + 640 + n] = qmfs->v[qmfs->v_index + 32 - n]; }
+        qmfs->v[qmfs->v_index + 48] = qmfs->v[qmfs->v_index + 640 + 48] = 0;
+        for (n = 1; n < 16; n++) { qmfs->v[qmfs->v_index + 48 + n] = qmfs->v[qmfs->v_index + 640 + 48 + n] = -qmfs->v[qmfs->v_index + 48 - n]; }
+        /* calculate 32 output samples and window */
+        for (k = 0; k < 32; k++) {
+            output[out++] = MUL_F(qmfs->v[qmfs->v_index + k], qmf_c[2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 96 + k], qmf_c[64 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 128 + k], qmf_c[128 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 224 + k], qmf_c[192 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 256 + k], qmf_c[256 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 352 + k], qmf_c[320 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 384 + k], qmf_c[384 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 480 + k], qmf_c[448 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 512 + k], qmf_c[512 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 608 + k], qmf_c[576 + 2 * k]);
+        }
+        /* update the ringbuffer index */
+        qmfs->v_index -= 64;
+        if (qmfs->v_index < 0) qmfs->v_index = (640 - 64);
+    }
+}
+    #endif /*SBR_LOW_POWER*/
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
+    ALIGN real_t x[64];
+    ALIGN real_t y[64];
+    int32_t      n, k, out = 0;
+    uint8_t      l;
+    /* qmf subsample l */
+    for (l = 0; l < sbr->numTimeSlotsRate; l++) {
+        /* shift buffers */
+        /* we are not shifting v, it is a double ringbuffer */
+        // memmove(qmfs->v + 128, qmfs->v, (1280-128)*sizeof(real_t));
+        /* calculate 128 samples */
+        for (k = 0; k < 32; k++) {
+        #ifdef FIXED_POINT
+            y[k] = (QMF_RE(X[l][k]) - QMF_RE(X[l][63 - k]));
+            x[k] = (QMF_RE(X[l][k]) + QMF_RE(X[l][63 - k]));
+        #else
+            y[k] = (QMF_RE(X[l][k]) - QMF_RE(X[l][63 - k])) / 32.0;
+            x[k] = (QMF_RE(X[l][k]) + QMF_RE(X[l][63 - k])) / 32.0;
+        #endif
+        }
+        /* even n samples */
+        DCT2_32_unscaled(x, x);
+        /* odd n samples */
+        DCT4_32(y, y);
+        for (n = 16; n < 48; n++) {
+            qmfs->v[qmfs->v_index + n * 2] = qmfs->v[qmfs->v_index + 1280 + n * 2] = x[n - 16];
+            qmfs->v[qmfs->v_index + n * 2 + 1] = qmfs->v[qmfs->v_index + 1280 + n * 2 + 1] = y[n - 16];
+        }
+        for (n = 0; n < 32; n++) { qmfs->v[qmfs->v_index + n] = qmfs->v[qmfs->v_index + 1280 + n] = qmfs->v[qmfs->v_index + 64 - n]; }
+        qmfs->v[qmfs->v_index + 96] = qmfs->v[qmfs->v_index + 1280 + 96] = 0;
+        for (n = 1; n < 32; n++) { qmfs->v[qmfs->v_index + 96 + n] = qmfs->v[qmfs->v_index + 1280 + 96 + n] = -qmfs->v[qmfs->v_index + 96 - n]; }
+        /* calculate 64 output samples and window */
+        for (k = 0; k < 64; k++) {
+            output[out++] = MUL_F(qmfs->v[qmfs->v_index + k], qmf_c[k]) + MUL_F(qmfs->v[qmfs->v_index + 192 + k], qmf_c[64 + k]) + MUL_F(qmfs->v[qmfs->v_index + 256 + k], qmf_c[128 + k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 256 + 192 + k], qmf_c[128 + 64 + k]) + MUL_F(qmfs->v[qmfs->v_index + 512 + k], qmf_c[256 + k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 512 + 192 + k], qmf_c[256 + 64 + k]) + MUL_F(qmfs->v[qmfs->v_index + 768 + k], qmf_c[384 + k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 768 + 192 + k], qmf_c[384 + 64 + k]) + MUL_F(qmfs->v[qmfs->v_index + 1024 + k], qmf_c[512 + k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 1024 + 192 + k], qmf_c[512 + 64 + k]);
+        }
+        /* update the ringbuffer index */
+        qmfs->v_index -= 128;
+        if (qmfs->v_index < 0) qmfs->v_index = (1280 - 128);
+    }
+}
+    #endif /*SBR_LOW_POWER*/
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef SBR_LOW_POWER
+void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
+    ALIGN real_t x1[32], x2[32];
+        #ifndef FIXED_POINT
+    real_t scale = 1.f / 64.f;
+        #endif
+    int32_t n, k, out = 0;
+    uint8_t l;
+    /* qmf subsample l */
+    for (l = 0; l < sbr->numTimeSlotsRate; l++) {
+        /* shift buffer v */
+        /* buffer is not shifted, we are using a ringbuffer */
+        // memmove(qmfs->v + 64, qmfs->v, (640-64)*sizeof(real_t));
+        /* calculate 64 samples */
+        /* complex pre-twiddle */
+        for (k = 0; k < 32; k++) {
+            x1[k] = MUL_F(QMF_RE(X[l][k]), RE(qmf32_pre_twiddle[k])) - MUL_F(QMF_IM(X[l][k]), IM(qmf32_pre_twiddle[k]));
+            x2[k] = MUL_F(QMF_IM(X[l][k]), RE(qmf32_pre_twiddle[k])) + MUL_F(QMF_RE(X[l][k]), IM(qmf32_pre_twiddle[k]));
+        #ifndef FIXED_POINT
+            x1[k] *= scale;
+            x2[k] *= scale;
+        #else
+            x1[k] >>= 1;
+            x2[k] >>= 1;
+        #endif
+        }
+        /* transform */
+        DCT4_32(x1, x1);
+        DST4_32(x2, x2);
+        for (n = 0; n < 32; n++) {
+            qmfs->v[qmfs->v_index + n] = qmfs->v[qmfs->v_index + 640 + n] = -x1[n] + x2[n];
+            qmfs->v[qmfs->v_index + 63 - n] = qmfs->v[qmfs->v_index + 640 + 63 - n] = x1[n] + x2[n];
+        }
+        /* calculate 32 output samples and window */
+        for (k = 0; k < 32; k++) {
+            output[out++] = MUL_F(qmfs->v[qmfs->v_index + k], qmf_c[2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 96 + k], qmf_c[64 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 128 + k], qmf_c[128 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 224 + k], qmf_c[192 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 256 + k], qmf_c[256 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 352 + k], qmf_c[320 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 384 + k], qmf_c[384 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 480 + k], qmf_c[448 + 2 * k]) + MUL_F(qmfs->v[qmfs->v_index + 512 + k], qmf_c[512 + 2 * k]) +
+                            MUL_F(qmfs->v[qmfs->v_index + 608 + k], qmf_c[576 + 2 * k]);
+        }
+        /* update ringbuffer index */
+        qmfs->v_index -= 64;
+        if (qmfs->v_index < 0) qmfs->v_index = (640 - 64);
+    }
+}
+    #endif /*SBR_LOW_POWER*/
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef SBR_LOW_POWER
+void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
+        //    ALIGN real_t x1[64], x2[64];
+        #ifndef SBR_LOW_POWER
+    ALIGN real_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
+    ALIGN real_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32];
+        #endif
+    qmf_t*  pX;
+    real_t *pring_buffer_1, *pring_buffer_3;
+        //    real_t * ptemp_1, * ptemp_2;
+        #ifdef PREFER_POINTERS
+    // These pointers are used if target platform has autoinc address generators
+    real_t *      pring_buffer_2, *pring_buffer_4;
+    real_t *      pring_buffer_5, *pring_buffer_6;
+    real_t *      pring_buffer_7, *pring_buffer_8;
+    real_t *      pring_buffer_9, *pring_buffer_10;
+    const real_t *pqmf_c_1, *pqmf_c_2, *pqmf_c_3, *pqmf_c_4;
+    const real_t *pqmf_c_5, *pqmf_c_6, *pqmf_c_7, *pqmf_c_8;
+    const real_t *pqmf_c_9, *pqmf_c_10;
+        #endif // #ifdef PREFER_POINTERS
+        #ifndef FIXED_POINT
+    real_t scale = 1.f / 64.f;
+        #endif
+    int32_t n, k, out = 0;
+    uint8_t l;
+    /* qmf subsample l */
+    for (l = 0; l < sbr->numTimeSlotsRate; l++) {
+            /* shift buffer v */
+            /* buffer is not shifted, we use double ringbuffer */
+            // memmove(qmfs->v + 128, qmfs->v, (1280-128)*sizeof(real_t));
+            /* calculate 128 samples */
+        #ifndef FIXED_POINT
+        pX = X[l];
+        in_imag1[31] = scale * QMF_RE(pX[1]);
+        in_real1[0] = scale * QMF_RE(pX[0]);
+        in_imag2[31] = scale * QMF_IM(pX[63 - 1]);
+        in_real2[0] = scale * QMF_IM(pX[63 - 0]);
+        for (k = 1; k < 31; k++) {
+            in_imag1[31 - k] = scale * QMF_RE(pX[2 * k + 1]);
+            in_real1[k] = scale * QMF_RE(pX[2 * k]);
+            in_imag2[31 - k] = scale * QMF_IM(pX[63 - (2 * k + 1)]);
+            in_real2[k] = scale * QMF_IM(pX[63 - (2 * k)]);
+        }
+        in_imag1[0] = scale * QMF_RE(pX[63]);
+        in_real1[31] = scale * QMF_RE(pX[62]);
+        in_imag2[0] = scale * QMF_IM(pX[63 - 63]);
+        in_real2[31] = scale * QMF_IM(pX[63 - 62]);
+        #else
+        pX = X[l];
+        in_imag1[31] = QMF_RE(pX[1]) >> 1;
+        in_real1[0] = QMF_RE(pX[0]) >> 1;
+        in_imag2[31] = QMF_IM(pX[62]) >> 1;
+        in_real2[0] = QMF_IM(pX[63]) >> 1;
+        for (k = 1; k < 31; k++) {
+            in_imag1[31 - k] = QMF_RE(pX[2 * k + 1]) >> 1;
+            in_real1[k] = QMF_RE(pX[2 * k]) >> 1;
+            in_imag2[31 - k] = QMF_IM(pX[63 - (2 * k + 1)]) >> 1;
+            in_real2[k] = QMF_IM(pX[63 - (2 * k)]) >> 1;
+        }
+        in_imag1[0] = QMF_RE(pX[63]) >> 1;
+        in_real1[31] = QMF_RE(pX[62]) >> 1;
+        in_imag2[0] = QMF_IM(pX[0]) >> 1;
+        in_real2[31] = QMF_IM(pX[1]) >> 1;
+        #endif
+        // dct4_kernel is DCT_IV without reordering which is done before and after FFT
+        dct4_kernel(in_real1, in_imag1, out_real1, out_imag1);
+        dct4_kernel(in_real2, in_imag2, out_real2, out_imag2);
+        pring_buffer_1 = qmfs->v + qmfs->v_index;
+        pring_buffer_3 = pring_buffer_1 + 1280;
+        #ifdef PREFER_POINTERS
+        pring_buffer_2 = pring_buffer_1 + 127;
+        pring_buffer_4 = pring_buffer_1 + (1280 + 127);
+        #endif // #ifdef PREFER_POINTERS
+        //        ptemp_1 = x1;
+        //        ptemp_2 = x2;
+        #ifdef PREFER_POINTERS
+        for (n = 0; n < 32; n++) {
+            // real_t x1 = *ptemp_1++;
+            // real_t x2 = *ptemp_2++;
+            //  pring_buffer_3 and pring_buffer_4 are needed only for double ring buffer
+            *pring_buffer_1++ = *pring_buffer_3++ = out_real2[n] - out_real1[n];
+            *pring_buffer_2-- = *pring_buffer_4-- = out_real2[n] + out_real1[n];
+            // x1 = *ptemp_1++;
+            // x2 = *ptemp_2++;
+            *pring_buffer_1++ = *pring_buffer_3++ = out_imag2[31 - n] + out_imag1[31 - n];
+            *pring_buffer_2-- = *pring_buffer_4-- = out_imag2[31 - n] - out_imag1[31 - n];
+        }
+        #else // #ifdef PREFER_POINTERS
+        for (n = 0; n < 32; n++) {
+            // pring_buffer_3 and pring_buffer_4 are needed only for double ring buffer
+            pring_buffer_1[2 * n] = pring_buffer_3[2 * n] = out_real2[n] - out_real1[n];
+            pring_buffer_1[127 - 2 * n] = pring_buffer_3[127 - 2 * n] = out_real2[n] + out_real1[n];
+            pring_buffer_1[2 * n + 1] = pring_buffer_3[2 * n + 1] = out_imag2[31 - n] + out_imag1[31 - n];
+            pring_buffer_1[127 - (2 * n + 1)] = pring_buffer_3[127 - (2 * n + 1)] = out_imag2[31 - n] - out_imag1[31 - n];
+        }
+        #endif // #ifdef PREFER_POINTERS
+        pring_buffer_1 = qmfs->v + qmfs->v_index;
+        #ifdef PREFER_POINTERS
+        pring_buffer_2 = pring_buffer_1 + 192;
+        pring_buffer_3 = pring_buffer_1 + 256;
+        pring_buffer_4 = pring_buffer_1 + (256 + 192);
+        pring_buffer_5 = pring_buffer_1 + 512;
+        pring_buffer_6 = pring_buffer_1 + (512 + 192);
+        pring_buffer_7 = pring_buffer_1 + 768;
+        pring_buffer_8 = pring_buffer_1 + (768 + 192);
+        pring_buffer_9 = pring_buffer_1 + 1024;
+        pring_buffer_10 = pring_buffer_1 + (1024 + 192);
+        pqmf_c_1 = qmf_c;
+        pqmf_c_2 = qmf_c + 64;
+        pqmf_c_3 = qmf_c + 128;
+        pqmf_c_4 = qmf_c + 192;
+        pqmf_c_5 = qmf_c + 256;
+        pqmf_c_6 = qmf_c + 320;
+        pqmf_c_7 = qmf_c + 384;
+        pqmf_c_8 = qmf_c + 448;
+        pqmf_c_9 = qmf_c + 512;
+        pqmf_c_10 = qmf_c + 576;
+        #endif // #ifdef PREFER_POINTERS
+        /* calculate 64 output samples and window */
+        for (k = 0; k < 64; k++) {
+        #ifdef PREFER_POINTERS
+            output[out++] = MUL_F(*pring_buffer_1++, *pqmf_c_1++) + MUL_F(*pring_buffer_2++, *pqmf_c_2++) + MUL_F(*pring_buffer_3++, *pqmf_c_3++) + MUL_F(*pring_buffer_4++, *pqmf_c_4++) +
+                            MUL_F(*pring_buffer_5++, *pqmf_c_5++) + MUL_F(*pring_buffer_6++, *pqmf_c_6++) + MUL_F(*pring_buffer_7++, *pqmf_c_7++) + MUL_F(*pring_buffer_8++, *pqmf_c_8++) +
+                            MUL_F(*pring_buffer_9++, *pqmf_c_9++) + MUL_F(*pring_buffer_10++, *pqmf_c_10++);
+        #else  // #ifdef PREFER_POINTERS
+            output[out++] = MUL_F(pring_buffer_1[k + 0], qmf_c[k + 0]) + MUL_F(pring_buffer_1[k + 192], qmf_c[k + 64]) + MUL_F(pring_buffer_1[k + 256], qmf_c[k + 128]) +
+                            MUL_F(pring_buffer_1[k + (256 + 192)], qmf_c[k + 192]) + MUL_F(pring_buffer_1[k + 512], qmf_c[k + 256]) + MUL_F(pring_buffer_1[k + (512 + 192)], qmf_c[k + 320]) +
+                            MUL_F(pring_buffer_1[k + 768], qmf_c[k + 384]) + MUL_F(pring_buffer_1[k + (768 + 192)], qmf_c[k + 448]) + MUL_F(pring_buffer_1[k + 1024], qmf_c[k + 512]) +
+                            MUL_F(pring_buffer_1[k + (1024 + 192)], qmf_c[k + 576]);
+        #endif // #ifdef PREFER_POINTERS
+        }
+        /* update ringbuffer index */
+        qmfs->v_index -= 128;
+        if (qmfs->v_index < 0) qmfs->v_index = (1280 - 128);
+    }
+}
+    #endif /*SBR_LOW_POWER*/
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+qmfa_info* qmfa_init(uint8_t channels) {
+    qmfa_info* qmfa = (qmfa_info*)faad_malloc(sizeof(qmfa_info));
+    /* x is implemented as double ringbuffer */
+    qmfa->x = (real_t*)faad_malloc(2 * channels * 10 * sizeof(real_t));
+    memset(qmfa->x, 0, 2 * channels * 10 * sizeof(real_t));
+    /* ringbuffer index */
+    qmfa->x_index = 0;
+    qmfa->channels = channels;
+    return qmfa;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void qmfa_end(qmfa_info* qmfa) {
+    if (qmfa) {
+        if (qmfa->x) faad_free(qmfa->x);
+        faad_free(qmfa);
+    }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const real_t* input, qmf_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx) {
+    ALIGN real_t u[64];
+    #ifndef SBR_LOW_POWER
+    ALIGN real_t in_real[32], in_imag[32], out_real[32], out_imag[32];
+    #else
+    ALIGN real_t y[32];
+    #endif
+    uint32_t in = 0;
+    uint8_t  l;
+    /* qmf subsample l */
+    for (l = 0; l < sbr->numTimeSlotsRate; l++) {
+        int16_t n;
+        /* shift input buffer x */
+        /* input buffer is not shifted anymore, x is implemented as double ringbuffer */
+        // memmove(qmfa->x + 32, qmfa->x, (320-32)*sizeof(real_t));
+        /* add new samples to input buffer x */
+        for (n = 32 - 1; n >= 0; n--) {
+    #ifdef FIXED_POINT
+            qmfa->x[qmfa->x_index + n] = qmfa->x[qmfa->x_index + n + 320] = (input[in++]) >> 4;
+    #else
+            qmfa->x[qmfa->x_index + n] = qmfa->x[qmfa->x_index + n + 320] = input[in++];
+    #endif
+        }
+        /* window and summation to create array u */
+        for (n = 0; n < 64; n++) {
+            u[n] = MUL_F(qmfa->x[qmfa->x_index + n], qmf_c[2 * n]) + MUL_F(qmfa->x[qmfa->x_index + n + 64], qmf_c[2 * (n + 64)]) + MUL_F(qmfa->x[qmfa->x_index + n + 128], qmf_c[2 * (n + 128)]) +
+                   MUL_F(qmfa->x[qmfa->x_index + n + 192], qmf_c[2 * (n + 192)]) + MUL_F(qmfa->x[qmfa->x_index + n + 256], qmf_c[2 * (n + 256)]);
+        }
+        /* update ringbuffer index */
+        qmfa->x_index -= 32;
+        if (qmfa->x_index < 0) qmfa->x_index = (320 - 32);
+            /* calculate 32 subband samples by introducing X */
+    #ifdef SBR_LOW_POWER
+        y[0] = u[48];
+        for (n = 1; n < 16; n++) y[n] = u[n + 48] + u[48 - n];
+        for (n = 16; n < 32; n++) y[n] = -u[n - 16] + u[48 - n];
+        DCT3_32_unscaled(u, y);
+        for (n = 0; n < 32; n++) {
+            if (n < kx) {
+        #ifdef FIXED_POINT
+                QMF_RE(X[l + offset][n]) = u[n] /*<< 1*/;
+        #else
+                QMF_RE(X[l + offset][n]) = 2. * u[n];
+        #endif
+            } else {
+                QMF_RE(X[l + offset][n]) = 0;
+            }
+        }
+    #else
+        // Reordering of data moved from DCT_IV to here
+        in_imag[31] = u[1];
+        in_real[0] = u[0];
+        for (n = 1; n < 31; n++) {
+            in_imag[31 - n] = u[n + 1];
+            in_real[n] = -u[64 - n];
+        }
+        in_imag[0] = u[32];
+        in_real[31] = -u[33];
+        // dct4_kernel is DCT_IV without reordering which is done before and after FFT
+        dct4_kernel(in_real, in_imag, out_real, out_imag);
+        // Reordering of data moved from DCT_IV to here
+        for (n = 0; n < 16; n++) {
+            if (2 * n + 1 < kx) {
+        #ifdef FIXED_POINT
+                QMF_RE(X[l + offset][2 * n]) = out_real[n];
+                QMF_IM(X[l + offset][2 * n]) = out_imag[n];
+                QMF_RE(X[l + offset][2 * n + 1]) = -out_imag[31 - n];
+                QMF_IM(X[l + offset][2 * n + 1]) = -out_real[31 - n];
+        #else
+                QMF_RE(X[l + offset][2 * n]) = 2. * out_real[n];
+                QMF_IM(X[l + offset][2 * n]) = 2. * out_imag[n];
+                QMF_RE(X[l + offset][2 * n + 1]) = -2. * out_imag[31 - n];
+                QMF_IM(X[l + offset][2 * n + 1]) = -2. * out_real[31 - n];
+        #endif
+            } else {
+                if (2 * n < kx) {
+        #ifdef FIXED_POINT
+                    QMF_RE(X[l + offset][2 * n]) = out_real[n];
+                    QMF_IM(X[l + offset][2 * n]) = out_imag[n];
+        #else
+                    QMF_RE(X[l + offset][2 * n]) = 2. * out_real[n];
+                    QMF_IM(X[l + offset][2 * n]) = 2. * out_imag[n];
+        #endif
+                } else {
+                    QMF_RE(X[l + offset][2 * n]) = 0;
+                    QMF_IM(X[l + offset][2 * n]) = 0;
+                }
+                QMF_RE(X[l + offset][2 * n + 1]) = 0;
+                QMF_IM(X[l + offset][2 * n + 1]) = 0;
+            }
+        }
+    #endif
+    }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -30,8 +30,6 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-function"
 #include "common.h"
-
-
 #define ZERO_HCB       0
 #define FIRST_PAIR_HCB 5
 #define ESC_HCB        11
@@ -123,12 +121,10 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define ID_FIL 0x6
 #define ID_END 0x7
 #define INVALID_ELEMENT_ID 255
-
 #define ONLY_LONG_SEQUENCE   0x0
 #define LONG_START_SEQUENCE  0x1
 #define EIGHT_SHORT_SEQUENCE 0x2
 #define LONG_STOP_SEQUENCE   0x3
-
 #define ZERO_HCB       0
 #define FIRST_PAIR_HCB 5
 #define ESC_HCB        11
@@ -137,26 +133,20 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define NOISE_HCB      13
 #define INTENSITY_HCB2 14
 #define INTENSITY_HCB  15
-
 #define INVALID_SBR_ELEMENT 255
 #define T_HFGEN 8
 #define T_HFADJ 2
-
 #define EXT_SBR_DATA     13
 #define EXT_SBR_DATA_CRC 14
-
 #define FIXFIX 0
 #define FIXVAR 1
 #define VARFIX 2
 #define VARVAR 3
-
 #define LO_RES 0
 #define HI_RES 1
-
 #define NO_TIME_SLOTS_960 15
 #define NO_TIME_SLOTS     16
 #define RATE              2
-
 #define NOISE_FLOOR_OFFSET 6
 #ifdef PS_DEC
 #define NEGATE_IPD_MASK            (0x1000)
@@ -174,10 +164,6 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
         #define _EPS (1e-12)
     #endif
 #endif // SBR_DEC
-
-
-
-
 #ifdef FIXED_POINT  /* int32_t */
     #include "Arduino.h"
     #define COEF_BITS      28
@@ -209,7 +195,6 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
     #define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
     #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
     #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
-
 /* Complex multiplication */
 static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
     *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
@@ -246,17 +231,11 @@ real_t fp_sqrt(real_t value) {
     return root;
 }
 real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
-
-
-
-
 #endif // FIXED_POINT
-
 #ifndef FIXED_POINT
     #define IQ_TABLE_SIZE 8192
     #define DIV_R(A, B) ((A) / (B))
     #define DIV_C(A, B) ((A) / (B))
-
     #ifdef USE_DOUBLE_PRECISION  /* double */
         typedef double real_t;
         #include <math.h>
@@ -272,7 +251,6 @@ real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF
         #define COEF_CONST(A) ((real_t)(A))
         #define Q2_CONST(A)   ((real_t)(A))
         #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
-
     #else /* Normal floating point operation */
         typedef float real_t;
         #define MUL_R(A, B)   ((A) * (B))
@@ -283,15 +261,12 @@ real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF
         #define Q2_CONST(A)   ((real_t)(A))
         #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
         /* Complex multiplication */
-
         static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
             *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
             *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
         }
     #endif /* USE_DOUBLE_PRECISION */
 #endif // FIXED_POINT
-
-
 #ifdef SBR_LOW_POWER
     #define qmf_t     real_t
     #define QMF_RE(A) (A)
@@ -301,7 +276,6 @@ real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF
     #define QMF_RE(A) RE(A)
     #define QMF_IM(A) IM(A)
 #endif
-
 typedef real_t complex_t[2];
 #define RE(A) A[0]
 #define IM(A) A[1]

@@ -27,15 +27,9 @@
 **
 ** $Id: structs.h,v 1.49 2009/01/26 23:51:15 menno Exp $
 **/
-
 #pragma once
-
 #include "common.h"
 #include "fixed.h"
-
-
-
-
 #define MAX_CHANNELS        64
 #define MAX_SYNTAX_ELEMENTS 48
 #define MAX_WINDOW_GROUPS    8
@@ -44,15 +38,12 @@
 #define MAX_LTP_SFB_S        8
 #define MAX_ASC_BYTES 64
 /* used to save the prediction state */
-
-
 typedef struct {
     uint16_t   n;
     uint16_t   ifac[15];
     complex_t* work;
     complex_t* tab;
 } cfft_info;
-
 typedef struct {
     int16_t r[2];
     int16_t COR[2];
@@ -261,7 +252,6 @@ typedef struct {
     uint8_t  ASC[MAX_ASC_BYTES];
     uint32_t ASCbits;
 } latm_header;
-
 typedef struct NeAACDecConfiguration
 {
     unsigned char defObjectType;
@@ -271,7 +261,6 @@ typedef struct NeAACDecConfiguration
     unsigned char useOldADTSFormat;
     unsigned char dontUpSampleImplicitSBR;
 } NeAACDecConfiguration, *NeAACDecConfigurationPtr;
-
 typedef struct
 {
     uint8_t drm_ps_data_available;
@@ -299,7 +288,6 @@ typedef struct
     real_t prev_peakdiff[MAX_SA_BAND];
     real_t peakdecay_fast[MAX_SA_BAND];
 } drm_ps_info;
-
 typedef struct
 {
     /* bitstream parameters */
@@ -374,7 +362,6 @@ typedef struct
     complex_t ipd_prev[20][2];
     complex_t opd_prev[20][2];
 } ps_info;
-
 typedef struct {
     real_t *x;
     int16_t x_index;
@@ -509,7 +496,6 @@ typedef struct{
     uint8_t bs_df_env[2][9];
     uint8_t bs_df_noise[2][3];
 } sbr_info;
-
 typedef struct {
     uint8_t adts_header_present;
     uint8_t adif_header_present;
@@ -568,20 +554,17 @@ typedef struct {
     const unsigned char* cmes;
     uint8_t              isPS;
 } NeAACDecStruct;
-
 /* 1st step table */
 typedef struct {
     uint8_t offset;
     uint8_t extra_bits;
 } hcb;
-
 /* 2nd step table with quadruple data */
 typedef struct {
     uint8_t bits;
     int8_t  x;
     int8_t  y;
 } hcb_2_pair;
-
 typedef struct {
     uint8_t bits;
     int8_t  x;
@@ -589,18 +572,15 @@ typedef struct {
     int8_t  v;
     int8_t  w;
 } hcb_2_quad;
-
 /* binary search table */
 typedef struct {
     uint8_t is_leaf;
     int8_t  data[4];
 } hcb_bin_quad;
-
 typedef struct {
     uint8_t is_leaf;
     int8_t  data[2];
 } hcb_bin_pair;
-
 typedef struct _bitfile {
     /* bit input */
     uint32_t    bufa;
@@ -617,29 +597,24 @@ typedef struct _bitfile {
 #ifdef ERROR_RESILIENCE
 /* Modified bit reading functions for HCR */
 #endif /*ERROR_RESILIENCE*/
-
-
 typedef struct {
     /* bit input */
     uint32_t bufa;
     uint32_t bufb;
     int8_t   len;
 } bits_t;
-
 typedef struct {
     uint8_t  cb;
     uint8_t  decoded;
     uint16_t sp_offset;
     bits_t   bits;
 } codeword_t;
-
 typedef struct
 {
     int8_t index;
     uint8_t len;
     uint32_t cw;
 } rvlc_huff_table;
-
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* type definitions */
@@ -657,3 +632,14 @@ typedef struct {
     real_t Q_M_lim_boost[MAX_L_E][MAX_M];
     real_t S_M_boost[MAX_L_E][MAX_M];
 } sbr_hfadj_info;
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+typedef struct {
+    complex_t r01;
+    complex_t r02;
+    complex_t r11;
+    complex_t r12;
+    complex_t r22;
+    real_t    det;
+} acorr_coef;
+#endif // SBR_DEC

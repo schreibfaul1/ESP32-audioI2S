@@ -32,26 +32,18 @@
 #define HAVE_STDLIB_H   1
 #define HAVE_STRING_H   1
 #define HAVE_INTTYPES_H 1
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-
-
-
 #if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
     #define ALIGN __declspec(align(16))
 #else
     #define ALIGN
 #endif
 /* COMPILE TIME DEFINITIONS */
-
 // #define PREFER_POINTERS // Use if target platform has address generators with autoincrement
 // #define BIG_IQ_TABLE
 // #define USE_DOUBLE_PRECISION // use double precision
@@ -67,12 +59,10 @@ extern "C" {
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
 // #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
-
 #ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
     #define DRM
     #define DRM_PS
 #endif
-
 #ifdef LD_DEC /* LD can't do without LTP */
     #ifndef ERROR_RESILIENCE
         #define ERROR_RESILIENCE
@@ -81,7 +71,6 @@ extern "C" {
         #define LTP_DEC
     #endif
 #endif
-
 #ifdef LC_ONLY_DECODER
     #undef LD_DEC
     #undef LTP_DEC
@@ -92,17 +81,14 @@ extern "C" {
     #undef ALLOW_SMALL_FRAMELENGTH
     #undef ERROR_RESILIENCE
 #endif
-
 #ifdef SBR_LOW_POWER
     #undef PS_DEC
 #endif
-
 #ifdef FIXED_POINT /*  No MAIN decoding */
     #ifdef MAIN_DEC
         #undef MAIN_DEC
     #endif
 #endif // FIXED_POINT
-
 #ifdef DRM
     #ifndef ALLOW_SMALL_FRAMELENGTH
         #define ALLOW_SMALL_FRAMELENGTH
@@ -112,10 +98,7 @@ extern "C" {
     #undef MAIN_DEC
     #undef SSR_DEC
 #endif
-
-
 /* END COMPILE TIME DEFINITIONS */
-
 #include <stdio.h>
 #if HAVE_SYS_TYPES_H
     #include <sys/types.h>
@@ -124,7 +107,6 @@ extern "C" {
     #include <sys/stat.h>
 #endif
 #if STDC_HEADERS
-
 #else
     #if HAVE_STDLIB_H
         #include <stdlib.h>
@@ -168,7 +150,6 @@ typedef signed char    int8_t;
 typedef float float32_t;
 #endif
 #if STDC_HEADERS
-
 #else
     #if !HAVE_STRCHR
         #define strchr  index
@@ -180,7 +161,6 @@ char *strchr(), *strrchr();
         #define memmove(d, s, n) bcopy((s), (d), (n))
     #endif
 #endif
-
 #ifdef WORDS_BIGENDIAN
     #define ARCH_IS_BIG_ENDIAN
 #endif
@@ -222,13 +202,11 @@ char *strchr(), *strrchr();
     #ifdef HAVE_SQRTF
         #define sqrt sqrtf
     #endif
-
 #endif
 #ifndef HAS_LRINTF
 /* standard cast */
 // #define int32_t(f) ((int32_t)(f))
 #endif
-
 /* common functions */
 uint8_t  cpu_has_sse(void);
 uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
@@ -247,19 +225,15 @@ uint32_t get_sample_rate(const uint8_t sr_index);
 int8_t   can_decode_ot(const uint8_t object_type);
 void*    faad_malloc(size_t size);
 void     faad_free(void* b);
-
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
-
-
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 #ifndef min
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* defines if an object type can be decoded by this library or not */
 __unused static uint8_t ObjectTypesTable[32] = {
@@ -340,11 +314,6 @@ __unused static uint8_t ObjectTypesTable[32] = {
     0  /* 31 (Reserved) */
 };
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-
-
-
-
 #ifdef __cplusplus
 }
 #endif
