@@ -32,10 +32,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "analysis.h"
-#ifdef ANALYSIS
-#include <stdio.h>
-#endif
+
 #define BYTE_NUMBIT     8
 #define BYTE_NUMBIT_LD  3
 //#define bit2byte(a) ((a+7)/BYTE_NUMBIT)

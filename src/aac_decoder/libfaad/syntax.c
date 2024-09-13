@@ -12,7 +12,7 @@
 #include "huffman.h"
 #include "bits.h"
 #include "pulse.h"
-#include "analysis.h"
+
 #include "drc.h"
 #ifdef ERROR_RESILIENCE
 #include "rvlc.h"
