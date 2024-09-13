@@ -6,7 +6,7 @@
 #endif
 #include "bits.h"
 #include "huffman.h"
-#include "codebook/hcb.h"
+#include "hcb_sf.h"
 /* static function declarations */
 static inline void huffman_sign_bits(bitfile *ld, int16_t *sp, uint8_t len);
 static inline uint8_t huffman_getescape(bitfile *ld, int16_t *sp);

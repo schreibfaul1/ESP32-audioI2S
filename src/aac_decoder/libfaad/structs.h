@@ -305,3 +305,35 @@ typedef struct {
     const unsigned char* cmes;
     uint8_t              isPS;
 } NeAACDecStruct;
+
+/* 1st step table */
+typedef struct {
+    uint8_t offset;
+    uint8_t extra_bits;
+} hcb;
+
+/* 2nd step table with quadruple data */
+typedef struct {
+    uint8_t bits;
+    int8_t  x;
+    int8_t  y;
+} hcb_2_pair;
+
+typedef struct {
+    uint8_t bits;
+    int8_t  x;
+    int8_t  y;
+    int8_t  v;
+    int8_t  w;
+} hcb_2_quad;
+
+/* binary search table */
+typedef struct {
+    uint8_t is_leaf;
+    int8_t  data[4];
+} hcb_bin_quad;
+
+typedef struct {
+    uint8_t is_leaf;
+    int8_t  data[2];
+} hcb_bin_pair;

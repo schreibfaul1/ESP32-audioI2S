@@ -32,12 +32,17 @@
 #include "common.h"
 
 
+#define ZERO_HCB       0
+#define FIRST_PAIR_HCB 5
+#define ESC_HCB        11
+#define QUAD_LEN       4
+#define PAIR_LEN       2
+#define NOISE_HCB      13
+#define INTENSITY_HCB2 14
+#define INTENSITY_HCB  15
 
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #ifdef FIXED_POINT  /* int32_t */
     #include "Arduino.h"
@@ -126,11 +131,4 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
     #define QMF_RE(A) RE(A)
     #define QMF_IM(A) IM(A)
 #endif
-
-
-
-#ifdef __cplusplus
-}
-#endif
-
 
