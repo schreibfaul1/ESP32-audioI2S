@@ -34,6 +34,7 @@
 extern "C" {
 #endif /* __cplusplus */
 #include <stdint.h>
+#include "structs.h"
 #if 1
 /* MACROS FOR BACKWARDS COMPATIBILITY */
 /* structs */
@@ -140,15 +141,7 @@ typedef struct mp4AudioSpecificConfig
     char forceUpSampling;
     char downSampledSBR;
 } mp4AudioSpecificConfig;
-typedef struct NeAACDecConfiguration
-{
-    unsigned char defObjectType;
-    unsigned long defSampleRate;
-    unsigned char outputFormat;
-    unsigned char downMatrix;
-    unsigned char useOldADTSFormat;
-    unsigned char dontUpSampleImplicitSBR;
-} NeAACDecConfiguration, *NeAACDecConfigurationPtr;
+
 typedef struct NeAACDecFrameInfo
 {
     unsigned long bytesconsumed;
@@ -211,9 +204,19 @@ NEAACDECAPI char NeAACDecAudioSpecificConfig(unsigned char *pBuffer,
 /* Get version and copyright strings */
 NEAACDECAPI int NeAACDecGetVersion(const char **faad_id_string,
                                    const char **faad_copyright_string);
-#ifdef _WIN32
-  #pragma pack(pop)
-#endif
+
+
+drc_info *drc_init(real_t cut, real_t boost);
+void drc_end(drc_info *drc);
+void drc_decode(drc_info *drc, real_t *spec);
+sbr_info* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
+void      sbrDecodeEnd(sbr_info* sbr);
+void      sbrReset(sbr_info* sbr);
+uint8_t   sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR);
+uint8_t   sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
+
+
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

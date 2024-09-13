@@ -64,7 +64,7 @@ extern "C" {
 #define LD_DEC  // Allow decoding of LD (Low Delay) profile AAC
 // #define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
 #define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
-#define SBR_LOW_POWER 2
+#define SBR_LOW_POWER
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
 // #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
@@ -229,9 +229,7 @@ char *strchr(), *strrchr();
 /* standard cast */
 // #define int32_t(f) ((int32_t)(f))
 #endif
-typedef real_t complex_t[2];
-#define RE(A) A[0]
-#define IM(A) A[1]
+
 /* common functions */
 uint8_t  cpu_has_sse(void);
 uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);

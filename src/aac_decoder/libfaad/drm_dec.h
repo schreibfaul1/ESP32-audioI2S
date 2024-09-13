@@ -35,42 +35,8 @@ extern "C" {
 #include "bits.h"
 #include <stdint.h>
 #include "common.h"
-#define DRM_PARAMETRIC_STEREO    0
-#define DRM_NUM_SA_BANDS         8
-#define DRM_NUM_PAN_BANDS       20
-#define NUM_OF_LINKS             3
-#define NUM_OF_QMF_CHANNELS     64
-#define NUM_OF_SUBSAMPLES       30
-#define MAX_SA_BAND             46
-#define MAX_PAN_BAND            64
-#define MAX_DELAY                5
-typedef struct
-{
-    uint8_t drm_ps_data_available;
-    uint8_t bs_enable_sa;
-    uint8_t bs_enable_pan;
-    uint8_t bs_sa_dt_flag;
-    uint8_t bs_pan_dt_flag;
-    uint8_t g_last_had_sa;
-    uint8_t g_last_had_pan;
-    int8_t bs_sa_data[DRM_NUM_SA_BANDS];
-    int8_t bs_pan_data[DRM_NUM_PAN_BANDS];
-    int8_t g_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_pan_index[DRM_NUM_PAN_BANDS];
-    int8_t g_prev_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_prev_pan_index[DRM_NUM_PAN_BANDS];
-    int8_t sa_decode_error;
-    int8_t pan_decode_error;
-    int8_t g_last_good_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_last_good_pan_index[DRM_NUM_PAN_BANDS];
-    qmf_t SA[NUM_OF_SUBSAMPLES][MAX_SA_BAND];
-    complex_t d_buff[2][MAX_SA_BAND];
-    complex_t d2_buff[NUM_OF_LINKS][MAX_DELAY][MAX_SA_BAND];
-    uint8_t delay_buf_index_ser[NUM_OF_LINKS];
-    real_t prev_nrg[MAX_SA_BAND];
-    real_t prev_peakdiff[MAX_SA_BAND];
-    real_t peakdecay_fast[MAX_SA_BAND];
-} drm_ps_info;
+
+
 #ifdef DRM
 uint16_t drm_ps_data(drm_ps_info *ps, bitfile *ld);
 drm_ps_info *drm_ps_init(void);

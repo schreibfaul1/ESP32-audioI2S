@@ -40,7 +40,19 @@
 #define NOISE_HCB      13
 #define INTENSITY_HCB2 14
 #define INTENSITY_HCB  15
-
+#define DRC_REF_LEVEL 20*4 /* -20 dB */
+#define DRM_PARAMETRIC_STEREO    0
+#define DRM_NUM_SA_BANDS         8
+#define DRM_NUM_PAN_BANDS       20
+#define NUM_OF_LINKS             3
+#define NUM_OF_QMF_CHANNELS     64
+#define NUM_OF_SUBSAMPLES       30
+#define MAX_SA_BAND             46
+#define MAX_PAN_BAND            64
+#define MAX_DELAY                5
+#define EXTENSION_ID_PS 2
+#define MAX_PS_ENVELOPES 5
+#define NO_ALLPASS_LINKS 3
 
 
 
@@ -132,3 +144,6 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
     #define QMF_IM(A) IM(A)
 #endif
 
+typedef real_t complex_t[2];
+#define RE(A) A[0]
+#define IM(A) A[1]
