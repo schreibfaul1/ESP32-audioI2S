@@ -167,7 +167,13 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #define MAX_NTSR    32 /* max number_time_slots * rate, ok for DRM and not DRM mode */
 #define MAX_M       49/* MAX_M: maximum value for M */
 #define MAX_L_E      5/* MAX_L_E: maximum value for L_E */
-
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
+        #define _EPS (1) /* smallest number available in fixed point */
+    #else
+        #define _EPS (1e-12)
+    #endif
+#endif // SBR_DEC
 
 
 

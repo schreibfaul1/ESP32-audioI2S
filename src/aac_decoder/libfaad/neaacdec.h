@@ -341,6 +341,61 @@ void unmap_envelope_noise(sbr_info* sbr);
 int16_t real_to_int16(real_t sig_in);
 uint8_t sbr_save_prev_data(sbr_info* sbr, uint8_t ch);
 void    sbr_save_matrix(sbr_info* sbr, uint8_t ch);
+fb_info *ssr_filter_bank_init(uint16_t frame_len);
+void ssr_filter_bank_end(fb_info *fb);
+void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
+int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1);
+void     sbr_header(bitfile* ld, sbr_info* sbr);
+uint8_t  calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band);
+uint8_t  sbr_data(bitfile* ld, sbr_info* sbr);
+uint16_t sbr_extension(bitfile* ld, sbr_info* sbr, uint8_t bs_extension_id, uint16_t num_bits_left);
+uint8_t  sbr_single_channel_element(bitfile* ld, sbr_info* sbr);
+uint8_t  sbr_channel_pair_element(bitfile* ld, sbr_info* sbr);
+uint8_t  sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch);
+void     sbr_dtdf(bitfile* ld, sbr_info* sbr, uint8_t ch);
+void     invf_mode(bitfile* ld, sbr_info* sbr, uint8_t ch);
+void     sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch);
+uint8_t hf_adjustment(sbr_info *sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t *deg, uint8_t ch);
+uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uint32_t sample_rate);
+uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0);
+uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale);
+uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale);
+uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2);
+void    limiter_frequency_table(sbr_info* sbr);
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void calc_prediction_coef_lp(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, real_t* rxx);
+void calc_aliasing_degree(sbr_info* sbr, real_t* rxx, real_t* deg);
+    #else  // SBR_LOW_POWER
+void calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k);
+    #endif // SBR_LOW_POWER
+void calc_chirp_factors(sbr_info* sbr, uint8_t ch);
+void patch_construction(sbr_info* sbr);
+#endif // SBR_DEC
+#ifdef SBR_DEC
+uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch);
+void    calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch);
+    #ifdef SBR_LOW_POWER
+void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch);
+void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch);
+    #endif // SBR_LOW_POWER
+void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch);
+#endif // SBR_DEC
+uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t current_band);
+qmfa_info* qmfa_init(uint8_t channels);
+void       qmfa_end(qmfa_info* qmfa);
+qmfs_info* qmfs_init(uint8_t channels);
+void       qmfs_end(qmfs_info* qmfs);
+
+void sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const real_t* input, qmf_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx);
+void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output);
+void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output);
+uint8_t envelope_time_border_vector(sbr_info *sbr, uint8_t ch);
+void noise_floor_time_border_vector(sbr_info *sbr, uint8_t ch);
+void hf_generation(sbr_info *sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t *deg, uint8_t ch);
+
+
+
 
 
 #ifdef __cplusplus

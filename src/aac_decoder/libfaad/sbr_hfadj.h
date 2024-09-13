@@ -35,15 +35,9 @@
 extern "C" {
 #endif
 
-typedef struct
-{
-    real_t G_lim_boost[MAX_L_E][MAX_M];
-    real_t Q_M_lim_boost[MAX_L_E][MAX_M];
-    real_t S_M_boost[MAX_L_E][MAX_M];
-} sbr_hfadj_info;
 
 
-uint8_t hf_adjustment(sbr_info *sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t *deg, uint8_t ch);
+
 
 
 #ifdef __cplusplus

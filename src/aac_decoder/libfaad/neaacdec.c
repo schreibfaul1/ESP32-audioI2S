@@ -12238,3 +12238,2930 @@ void unmap_envelope_noise(sbr_info* sbr) {
 }
     #endif // FIXED_POINT
 #endif //  SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* calculate the start QMF channel for the master frequency band table parameter is also called k0 */
+uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uint32_t sample_rate) {
+    const uint8_t startMinTable[12] = {7, 7, 10, 11, 12, 16, 16, 17, 24, 32, 35, 48};
+    const uint8_t offsetIndexTable[12] = {5, 5, 4, 4, 4, 3, 2, 1, 0, 6, 6, 6};
+    const int8_t  offset[7][16] = {{-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7}, {-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13},
+                                   {-5, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 16},  {-6, -4, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 16},
+                                   {-4, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 16, 20},  {-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 16, 20, 24},
+                                   {0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 16, 20, 24, 28, 33}};
+    uint8_t       startMin = startMinTable[get_sr_index(sample_rate)];
+    uint8_t       offsetIndex = offsetIndexTable[get_sr_index(sample_rate)];
+    #if 0 /* replaced with table (startMinTable) */
+    if (sample_rate >= 64000)
+    {
+        startMin = (uint8_t)((5000.*128.)/(float)sample_rate + 0.5);
+    } else if (sample_rate < 32000) {
+        startMin = (uint8_t)((3000.*128.)/(float)sample_rate + 0.5);
+    } else {
+        startMin = (uint8_t)((4000.*128.)/(float)sample_rate + 0.5);
+    }
+    #endif
+    if (bs_samplerate_mode) {
+        return startMin + offset[offsetIndex][bs_start_freq];
+    #if 0 /* replaced by offsetIndexTable */
+        switch (sample_rate)
+        {
+        case 16000:
+            return startMin + offset[0][bs_start_freq];
+        case 22050:
+            return startMin + offset[1][bs_start_freq];
+        case 24000:
+            return startMin + offset[2][bs_start_freq];
+        case 32000:
+            return startMin + offset[3][bs_start_freq];
+        default:
+            if (sample_rate > 64000)
+            {
+                return startMin + offset[5][bs_start_freq];
+            } else { /* 44100 <= sample_rate <= 64000 */
+                return startMin + offset[4][bs_start_freq];
+            }
+        }
+    #endif
+    } else {
+        return startMin + offset[6][bs_start_freq];
+    }
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+static int longcmp(const void* a, const void* b) {
+    return ((int)(*(int32_t*)a - *(int32_t*)b));
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* calculate the stop QMF channel for the master frequency band table */
+/* parameter is also called k2 */
+uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0) {
+    if (bs_stop_freq == 15) {
+        return min(64, k0 * 3);
+    } else if (bs_stop_freq == 14) {
+        return min(64, k0 * 2);
+    } else {
+        const uint8_t stopMinTable[12] = {13, 15, 20, 21, 23, 32, 32, 35, 48, 64, 70, 96};
+        const int8_t  offset[12][14] = {
+            {0, 2, 4, 6, 8, 11, 14, 18, 22, 26, 31, 37, 44, 51}, {0, 2, 4, 6, 8, 11, 14, 18, 22, 26, 31, 36, 42, 49},     {0, 2, 4, 6, 8, 11, 14, 17, 21, 25, 29, 34, 39, 44},
+            {0, 2, 4, 6, 8, 11, 14, 17, 20, 24, 28, 33, 38, 43}, {0, 2, 4, 6, 8, 11, 14, 17, 20, 24, 28, 32, 36, 41},     {0, 2, 4, 6, 8, 10, 12, 14, 17, 20, 23, 26, 29, 32},
+            {0, 2, 4, 6, 8, 10, 12, 14, 17, 20, 23, 26, 29, 32}, {0, 1, 3, 5, 7, 9, 11, 13, 15, 17, 20, 23, 26, 29},      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16},
+            {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},          {0, -1, -2, -3, -4, -5, -6, -6, -6, -6, -6, -6, -6, -6}, {0, -3, -6, -9, -12, -15, -18, -20, -22, -24, -26, -28, -30, -32}};
+    #if 0
+        uint8_t i;
+        int32_t stopDk[13], stopDk_t[14], k2;
+    #endif
+        uint8_t stopMin = stopMinTable[get_sr_index(sample_rate)];
+    #if 0 /* replaced by table lookup */
+        if (sample_rate >= 64000)
+        {
+            stopMin = (uint8_t)((10000.*128.)/(float)sample_rate + 0.5);
+        } else if (sample_rate < 32000) {
+            stopMin = (uint8_t)((6000.*128.)/(float)sample_rate + 0.5);
+        } else {
+            stopMin = (uint8_t)((8000.*128.)/(float)sample_rate + 0.5);
+        }
+    #endif
+    #if 0 /* replaced by table lookup */
+        /* diverging power series */
+        for (i = 0; i <= 13; i++)
+        {
+            stopDk_t[i] = (int32_t)(stopMin*pow(64.0/stopMin, i/13.0) + 0.5);
+        }
+        for (i = 0; i < 13; i++)
+        {
+            stopDk[i] = stopDk_t[i+1] - stopDk_t[i];
+        }
+        /* needed? */
+        qsort(stopDk, 13, sizeof(stopDk[0]), longcmp);
+        k2 = stopMin;
+        for (i = 0; i < bs_stop_freq; i++)
+        {
+            k2 += stopDk[i];
+        }
+        return min(64, k2);
+    #endif
+        /* bs_stop_freq <= 13 */
+        return min(64, stopMin + offset[get_sr_index(sample_rate)][min(bs_stop_freq, 13)]);
+    }
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* calculate the master frequency table from k0, k2, bs_freq_scale  and bs_alter_scale version for bs_freq_scale = 0*/
+uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale) {
+    int8_t   incr;
+    uint8_t  k;
+    uint8_t  dk;
+    uint32_t nrBands, k2Achieved;
+    int32_t  k2Diff, vDk[64] = {0};
+    /* mft only defined for k2 > k0 */
+    if (k2 <= k0) {
+        sbr->N_master = 0;
+        return 1;
+    }
+    dk = bs_alter_scale ? 2 : 1;
+    #if 0 /* replaced by float-less design */
+    nrBands = 2 * (int32_t)((float)(k2-k0)/(dk*2) + (-1+dk)/2.0f);
+    #else
+    if (bs_alter_scale) {
+        nrBands = (((k2 - k0 + 2) >> 2) << 1);
+    } else {
+        nrBands = (((k2 - k0) >> 1) << 1);
+    }
+    #endif
+    nrBands = min(nrBands, 63);
+    if (nrBands <= 0) return 1;
+    k2Achieved = k0 + nrBands * dk;
+    k2Diff = k2 - k2Achieved;
+    for (k = 0; k < nrBands; k++) vDk[k] = dk;
+    if (k2Diff) {
+        incr = (k2Diff > 0) ? -1 : 1;
+        k = (uint8_t)((k2Diff > 0) ? (nrBands - 1) : 0);
+        while (k2Diff != 0) {
+            vDk[k] -= incr;
+            k += incr;
+            k2Diff += incr;
+        }
+    }
+    sbr->f_master[0] = k0;
+    for (k = 1; k <= nrBands; k++) sbr->f_master[k] = (uint8_t)(sbr->f_master[k - 1] + vDk[k - 1]);
+    sbr->N_master = (uint8_t)nrBands;
+    sbr->N_master = (min(sbr->N_master, 64));
+    #if 0
+    printf("f_master[%d]: ", nrBands);
+    for (k = 0; k <= nrBands; k++)
+    {
+        printf("%d ", sbr->f_master[k]);
+    }
+    printf("\n");
+    #endif
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/*  This function finds the number of bands using this formula:   bands * log(a1/a0)/log(2.0) + 0.5*/
+int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
+    #ifdef FIXED_POINT
+    /* table with log2() values */
+    const real_t log2Table[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(1.0000000000), COEF_CONST(1.5849625007), COEF_CONST(2.0000000000), COEF_CONST(2.3219280949),
+                                         COEF_CONST(2.5849625007), COEF_CONST(2.8073549221), COEF_CONST(3.0000000000), COEF_CONST(3.1699250014), COEF_CONST(3.3219280949), COEF_CONST(3.4594316186),
+                                         COEF_CONST(3.5849625007), COEF_CONST(3.7004397181), COEF_CONST(3.8073549221), COEF_CONST(3.9068905956), COEF_CONST(4.0000000000), COEF_CONST(4.0874628413),
+                                         COEF_CONST(4.1699250014), COEF_CONST(4.2479275134), COEF_CONST(4.3219280949), COEF_CONST(4.3923174228), COEF_CONST(4.4594316186), COEF_CONST(4.5235619561),
+                                         COEF_CONST(4.5849625007), COEF_CONST(4.6438561898), COEF_CONST(4.7004397181), COEF_CONST(4.7548875022), COEF_CONST(4.8073549221), COEF_CONST(4.8579809951),
+                                         COEF_CONST(4.9068905956), COEF_CONST(4.9541963104), COEF_CONST(5.0000000000), COEF_CONST(5.0443941194), COEF_CONST(5.0874628413), COEF_CONST(5.1292830169),
+                                         COEF_CONST(5.1699250014), COEF_CONST(5.2094533656), COEF_CONST(5.2479275134), COEF_CONST(5.2854022189), COEF_CONST(5.3219280949), COEF_CONST(5.3575520046),
+                                         COEF_CONST(5.3923174228), COEF_CONST(5.4262647547), COEF_CONST(5.4594316186), COEF_CONST(5.4918530963), COEF_CONST(5.5235619561), COEF_CONST(5.5545888517),
+                                         COEF_CONST(5.5849625007), COEF_CONST(5.6147098441), COEF_CONST(5.6438561898), COEF_CONST(5.6724253420), COEF_CONST(5.7004397181), COEF_CONST(5.7279204546),
+                                         COEF_CONST(5.7548875022), COEF_CONST(5.7813597135), COEF_CONST(5.8073549221), COEF_CONST(5.8328900142), COEF_CONST(5.8579809951), COEF_CONST(5.8826430494),
+                                         COEF_CONST(5.9068905956), COEF_CONST(5.9307373376), COEF_CONST(5.9541963104), COEF_CONST(5.9772799235), COEF_CONST(6.0)};
+    real_t              r0 = log2Table[a0]; /* coef */
+    real_t              r1 = log2Table[a1]; /* coef */
+    real_t              r2 = (r1 - r0);     /* coef */
+    if (warp) r2 = MUL_C(r2, COEF_CONST(1.0 / 1.3));
+    /* convert r2 to real and then multiply and round */
+    r2 = (r2 >> (COEF_BITS - REAL_BITS)) * bands + (1 << (REAL_BITS - 1));
+    return (r2 >> REAL_BITS);
+    #else
+    real_t div = (real_t)log(2.0);
+    if (warp) div *= (real_t)1.3;
+    return (int32_t)(bands * log((float)a1 / (float)a0) / div + 0.5);
+    #endif
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+real_t find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
+    #ifdef FIXED_POINT
+    /* table with log() values */
+    const real_t logTable[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(0.6931471806), COEF_CONST(1.0986122887), COEF_CONST(1.3862943611), COEF_CONST(1.6094379124),
+                                        COEF_CONST(1.7917594692), COEF_CONST(1.9459101491), COEF_CONST(2.0794415417), COEF_CONST(2.1972245773), COEF_CONST(2.3025850930), COEF_CONST(2.3978952728),
+                                        COEF_CONST(2.4849066498), COEF_CONST(2.5649493575), COEF_CONST(2.6390573296), COEF_CONST(2.7080502011), COEF_CONST(2.7725887222), COEF_CONST(2.8332133441),
+                                        COEF_CONST(2.8903717579), COEF_CONST(2.9444389792), COEF_CONST(2.9957322736), COEF_CONST(3.0445224377), COEF_CONST(3.0910424534), COEF_CONST(3.1354942159),
+                                        COEF_CONST(3.1780538303), COEF_CONST(3.2188758249), COEF_CONST(3.2580965380), COEF_CONST(3.2958368660), COEF_CONST(3.3322045102), COEF_CONST(3.3672958300),
+                                        COEF_CONST(3.4011973817), COEF_CONST(3.4339872045), COEF_CONST(3.4657359028), COEF_CONST(3.4965075615), COEF_CONST(3.5263605246), COEF_CONST(3.5553480615),
+                                        COEF_CONST(3.5835189385), COEF_CONST(3.6109179126), COEF_CONST(3.6375861597), COEF_CONST(3.6635616461), COEF_CONST(3.6888794541), COEF_CONST(3.7135720667),
+                                        COEF_CONST(3.7376696183), COEF_CONST(3.7612001157), COEF_CONST(3.7841896339), COEF_CONST(3.8066624898), COEF_CONST(3.8286413965), COEF_CONST(3.8501476017),
+                                        COEF_CONST(3.8712010109), COEF_CONST(3.8918202981), COEF_CONST(3.9120230054), COEF_CONST(3.9318256327), COEF_CONST(3.9512437186), COEF_CONST(3.9702919136),
+                                        COEF_CONST(3.9889840466), COEF_CONST(4.0073331852), COEF_CONST(4.0253516907), COEF_CONST(4.0430512678), COEF_CONST(4.0604430105), COEF_CONST(4.0775374439),
+                                        COEF_CONST(4.0943445622), COEF_CONST(4.1108738642), COEF_CONST(4.1271343850), COEF_CONST(4.1431347264), COEF_CONST(4.158883083)};
+    /* standard Taylor polynomial coefficients for exp(x) around 0 */
+    /* a polynomial around x=1 is more precise, as most values are around 1.07,
+       but this is just fine already */
+    static const real_t c1 = COEF_CONST(1.0);
+    static const real_t c2 = COEF_CONST(1.0 / 2.0);
+    static const real_t c3 = COEF_CONST(1.0 / 6.0);
+    static const real_t c4 = COEF_CONST(1.0 / 24.0);
+    real_t r0 = logTable[a0];      /* coef */
+    real_t r1 = logTable[a1];      /* coef */
+    real_t r2 = (r1 - r0) / bands; /* coef */
+    real_t rexp = c1 + MUL_C((c1 + MUL_C((c2 + MUL_C((c3 + MUL_C(c4, r2)), r2)), r2)), r2);
+    return (rexp >> (COEF_BITS - REAL_BITS)); /* real */
+    #else
+    return (real_t)pow((real_t)a1 / (real_t)a0, 1.0 / (real_t)bands);
+    #endif
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/*   version for bs_freq_scale > 0*/
+uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
+    uint8_t k, bands, twoRegions;
+    uint8_t k1, ret = 0;
+    uint8_t nrBand0, nrBand1;
+    // int32_t vDk0[64] = {0}, vDk1[64] = {0};
+    // int32_t vk0[64] = {0}, vk1[64] = {0};
+    int32_t* vDk0 = (int32_t*) ps_calloc(64, sizeof(int32_t));
+    int32_t* vDk1 = (int32_t*) ps_calloc(64, sizeof(int32_t));
+    int32_t* vk0  = (int32_t*) ps_calloc(64, sizeof(int32_t));
+    int32_t* vk1  = (int32_t*) ps_calloc(64, sizeof(int32_t));
+
+    uint8_t temp1[] = {6, 5, 4};
+    real_t  q, qk;
+    int32_t A_1;
+    #ifdef FIXED_POINT
+    real_t rk2, rk0;
+    #endif
+    /* mft only defined for k2 > k0 */
+    if (k2 <= k0) {
+        sbr->N_master = 0;
+        ret =  1;
+        goto exit;
+    }
+    bands = temp1[bs_freq_scale - 1];
+    #ifdef FIXED_POINT
+    rk0 = (real_t)k0 << REAL_BITS;
+    rk2 = (real_t)k2 << REAL_BITS;
+    if (rk2 > MUL_C(rk0, COEF_CONST(2.2449)))
+    #else
+    if ((float)k2 / (float)k0 > 2.2449)
+    #endif
+    {
+        twoRegions = 1;
+        k1 = k0 << 1;
+    } else {
+        twoRegions = 0;
+        k1 = k2;
+    }
+    nrBand0 = (uint8_t)(2 * find_bands(0, bands, k0, k1));
+    nrBand0 = min(nrBand0, 63);
+    if (nrBand0 <= 0) {ret = 1; goto exit;}
+    q = find_initial_power(nrBand0, k0, k1);
+    #ifdef FIXED_POINT
+    qk = (real_t)k0 << REAL_BITS;
+    // A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
+    A_1 = k0;
+    #else
+    qk = REAL_CONST(k0);
+    A_1 = (int32_t)(qk + .5);
+    #endif
+    for (k = 0; k <= nrBand0; k++) {
+        int32_t A_0 = A_1;
+    #ifdef FIXED_POINT
+        qk = MUL_R(qk, q);
+        A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
+    #else
+        qk *= q;
+        A_1 = (int32_t)(qk + 0.5);
+    #endif
+        vDk0[k] = A_1 - A_0;
+    }
+    /* needed? */
+    qsort(vDk0, nrBand0, sizeof(vDk0[0]), longcmp);
+    vk0[0] = k0;
+    for (k = 1; k <= nrBand0; k++) {
+        vk0[k] = vk0[k - 1] + vDk0[k - 1];
+        if (vDk0[k - 1] == 0) {ret = 1; goto exit;}
+    }
+    if (!twoRegions) {
+        for (k = 0; k <= nrBand0; k++) sbr->f_master[k] = (uint8_t)vk0[k];
+        sbr->N_master = nrBand0;
+        sbr->N_master = min(sbr->N_master, 64);
+        ret = 0;
+        goto exit;
+    }
+    nrBand1 = (uint8_t)(2 * find_bands(1 /* warped */, bands, k1, k2));
+    nrBand1 = min(nrBand1, 63);
+    q = find_initial_power(nrBand1, k1, k2);
+    #ifdef FIXED_POINT
+    qk = (real_t)k1 << REAL_BITS;
+    // A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
+    A_1 = k1;
+    #else
+    qk = REAL_CONST(k1);
+    A_1 = (int32_t)(qk + .5);
+    #endif
+    for (k = 0; k <= nrBand1 - 1; k++) {
+        int32_t A_0 = A_1;
+    #ifdef FIXED_POINT
+        qk = MUL_R(qk, q);
+        A_1 = (int32_t)((qk + REAL_CONST(0.5)) >> REAL_BITS);
+    #else
+        qk *= q;
+        A_1 = (int32_t)(qk + 0.5);
+    #endif
+        vDk1[k] = A_1 - A_0;
+    }
+    if (vDk1[0] < vDk0[nrBand0 - 1]) {
+        int32_t change;
+        /* needed? */
+        qsort(vDk1, nrBand1 + 1, sizeof(vDk1[0]), longcmp);
+        change = vDk0[nrBand0 - 1] - vDk1[0];
+        vDk1[0] = vDk0[nrBand0 - 1];
+        vDk1[nrBand1 - 1] = vDk1[nrBand1 - 1] - change;
+    }
+    /* needed? */
+    qsort(vDk1, nrBand1, sizeof(vDk1[0]), longcmp);
+    vk1[0] = k1;
+    for (k = 1; k <= nrBand1; k++) {
+        vk1[k] = vk1[k - 1] + vDk1[k - 1];
+        if (vDk1[k - 1] == 0) {ret = 1; goto exit;}
+    }
+    sbr->N_master = nrBand0 + nrBand1;
+    sbr->N_master = min(sbr->N_master, 64);
+    for (k = 0; k <= nrBand0; k++) { sbr->f_master[k] = (uint8_t)vk0[k]; }
+    for (k = nrBand0 + 1; k <= sbr->N_master; k++) { sbr->f_master[k] = (uint8_t)vk1[k - nrBand0]; }
+    #if 0
+    printf("f_master[%d]: ", sbr->N_master);
+    for (k = 0; k <= sbr->N_master; k++)
+    {
+        printf("%d ", sbr->f_master[k]);
+    }
+    printf("\n");
+    #endif
+    ret = 0;
+exit:
+    if(vDk0)free(vDk0);
+    if(vDk1)free(vDk1);
+    if(vk0) free(vk0);
+    if(vk1) free(vk1);
+    return ret;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* calculate the derived frequency border tables from f_master */
+uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2) {
+    uint8_t  k, i;
+    uint32_t minus;
+    /* The following relation shall be satisfied: bs_xover_band < N_Master */
+    if (sbr->N_master <= bs_xover_band) return 1;
+    sbr->N_high = sbr->N_master - bs_xover_band;
+    sbr->N_low = (sbr->N_high >> 1) + (sbr->N_high - ((sbr->N_high >> 1) << 1));
+    sbr->n[0] = sbr->N_low;
+    sbr->n[1] = sbr->N_high;
+    for (k = 0; k <= sbr->N_high; k++) { sbr->f_table_res[HI_RES][k] = sbr->f_master[k + bs_xover_band]; }
+    sbr->M = sbr->f_table_res[HI_RES][sbr->N_high] - sbr->f_table_res[HI_RES][0];
+    if (sbr->M > MAX_M) return 1;
+    sbr->kx = sbr->f_table_res[HI_RES][0];
+    if (sbr->kx > 32) return 1;
+    if (sbr->kx + sbr->M > 64) return 1;
+    minus = (sbr->N_high & 1) ? 1 : 0;
+    for (k = 0; k <= sbr->N_low; k++) {
+        if (k == 0)
+            i = 0;
+        else
+            i = (uint8_t)(2 * k - minus);
+        sbr->f_table_res[LO_RES][k] = sbr->f_table_res[HI_RES][i];
+    }
+    #if 0
+    printf("bs_freq_scale: %d\n", sbr->bs_freq_scale);
+    printf("bs_limiter_bands: %d\n", sbr->bs_limiter_bands);
+    printf("f_table_res[HI_RES][%d]: ", sbr->N_high);
+    for (k = 0; k <= sbr->N_high; k++)
+    {
+        printf("%d ", sbr->f_table_res[HI_RES][k]);
+    }
+    printf("\n");
+    #endif
+    #if 0
+    printf("f_table_res[LO_RES][%d]: ", sbr->N_low);
+    for (k = 0; k <= sbr->N_low; k++)
+    {
+        printf("%d ", sbr->f_table_res[LO_RES][k]);
+    }
+    printf("\n");
+    #endif
+    sbr->N_Q = 0;
+    if (sbr->bs_noise_bands == 0) {
+        sbr->N_Q = 1;
+    } else {
+    #if 0
+        sbr->N_Q = max(1, (int32_t)(sbr->bs_noise_bands*(log(k2/(float)sbr->kx)/log(2.0)) + 0.5));
+    #else
+        sbr->N_Q = (uint8_t)(max(1, find_bands(0, sbr->bs_noise_bands, sbr->kx, k2)));
+    #endif
+        sbr->N_Q = min(5, sbr->N_Q);
+    }
+    for (k = 0; k <= sbr->N_Q; k++) {
+        if (k == 0) {
+            i = 0;
+        } else {
+            /* i = i + (int32_t)((sbr->N_low - i)/(sbr->N_Q + 1 - k)); */
+            i = i + (sbr->N_low - i) / (sbr->N_Q + 1 - k);
+        }
+        sbr->f_table_noise[k] = sbr->f_table_res[LO_RES][i];
+    }
+    /* build table for mapping k to g in hf patching */
+    for (k = 0; k < 64; k++) {
+        uint8_t g;
+        for (g = 0; g < sbr->N_Q; g++) {
+            if ((sbr->f_table_noise[g] <= k) && (k < sbr->f_table_noise[g + 1])) {
+                sbr->table_map_k_to_g[k] = g;
+                break;
+            }
+        }
+    }
+    #if 0
+    printf("f_table_noise[%d]: ", sbr->N_Q);
+    for (k = 0; k <= sbr->N_Q; k++)
+    {
+        printf("%d ", sbr->f_table_noise[k] - sbr->kx);
+    }
+    printf("\n");
+    #endif
+    return 0;
+}
+#endif
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* TODO: blegh, ugly */
+/* Modified to calculate for all possible bs_limiter_bands always
+ * This reduces the number calls to this functions needed (now only on header reset) */
+void limiter_frequency_table(sbr_info* sbr) {
+    #if 0
+    static const real_t limiterBandsPerOctave[] = { REAL_CONST(1.2),
+        REAL_CONST(2), REAL_CONST(3) };
+    #else
+    static const real_t limiterBandsCompare[] = {REAL_CONST(1.327152), REAL_CONST(1.185093), REAL_CONST(1.119872)};
+    #endif
+    uint8_t k, s;
+    int8_t  nrLim;
+    #if 0
+    real_t limBands;
+    #endif
+    sbr->f_table_lim[0][0] = sbr->f_table_res[LO_RES][0] - sbr->kx;
+    sbr->f_table_lim[0][1] = sbr->f_table_res[LO_RES][sbr->N_low] - sbr->kx;
+    sbr->N_L[0] = 1;
+    #if 0
+    printf("f_table_lim[%d][%d]: ", 0, sbr->N_L[0]);
+    for (k = 0; k <= sbr->N_L[0]; k++)
+    {
+        printf("%d ", sbr->f_table_lim[0][k]);
+    }
+    printf("\n");
+    #endif
+    int32_t* limTable = (int32_t*)faad_malloc(100 * sizeof(int32_t));
+    uint8_t* patchBorders = (uint8_t*)faad_malloc(64 * sizeof(uint8_t));
+    for(s = 1; s < 4; s++) {
+        memset(limTable, 0, 100 * sizeof(int32_t));
+        memset(patchBorders, 0, 64 * sizeof(uint8_t));
+    #if 0
+        limBands = limiterBandsPerOctave[s - 1];
+    #endif
+        patchBorders[0] = sbr->kx;
+        for (k = 1; k <= sbr->noPatches; k++) { patchBorders[k] = patchBorders[k - 1] + sbr->patchNoSubbands[k - 1]; }
+        for (k = 0; k <= sbr->N_low; k++) { limTable[k] = sbr->f_table_res[LO_RES][k]; }
+        for (k = 1; k < sbr->noPatches; k++) { limTable[k + sbr->N_low] = patchBorders[k]; }
+        /* needed */
+        qsort(limTable, sbr->noPatches + sbr->N_low, sizeof(limTable[0]), longcmp);
+        k = 1;
+        nrLim = sbr->noPatches + sbr->N_low - 1;
+        if (nrLim < 0) // TODO: BIG FAT PROBLEM
+            goto exit;
+    restart:
+        if (k <= nrLim) {
+            real_t nOctaves;
+            if (limTable[k - 1] != 0)
+    #if 0
+                nOctaves = REAL_CONST(log((float)limTable[k]/(float)limTable[k-1])/log(2.0));
+    #else
+        #ifdef FIXED_POINT
+                nOctaves = DIV_R((limTable[k] << REAL_BITS), REAL_CONST(limTable[k - 1]));
+        #else
+                nOctaves = (real_t)limTable[k] / (real_t)limTable[k - 1];
+        #endif
+    #endif
+            else
+                nOctaves = 0;
+    #if 0
+            if ((MUL_R(nOctaves,limBands)) < REAL_CONST(0.49))
+    #else
+            if (nOctaves < limiterBandsCompare[s - 1])
+    #endif
+            {
+                uint8_t i;
+                if (limTable[k] != limTable[k - 1]) {
+                    uint8_t found = 0, found2 = 0;
+                    for (i = 0; i <= sbr->noPatches; i++) {
+                        if (limTable[k] == patchBorders[i]) found = 1;
+                    }
+                    if (found) {
+                        found2 = 0;
+                        for (i = 0; i <= sbr->noPatches; i++) {
+                            if (limTable[k - 1] == patchBorders[i]) found2 = 1;
+                        }
+                        if (found2) {
+                            k++;
+                            goto restart;
+                        } else {
+                            /* remove (k-1)th element */
+                            limTable[k - 1] = sbr->f_table_res[LO_RES][sbr->N_low];
+                            qsort(limTable, sbr->noPatches + sbr->N_low, sizeof(limTable[0]), longcmp);
+                            nrLim--;
+                            goto restart;
+                        }
+                    }
+                }
+                /* remove kth element */
+                limTable[k] = sbr->f_table_res[LO_RES][sbr->N_low];
+                qsort(limTable, nrLim, sizeof(limTable[0]), longcmp);
+                nrLim--;
+                goto restart;
+            } else {
+                k++;
+                goto restart;
+            }
+        }
+        sbr->N_L[s] = nrLim;
+        for (k = 0; k <= nrLim; k++) { sbr->f_table_lim[s][k] = limTable[k] - sbr->kx; }
+    #if 0
+        printf("f_table_lim[%d][%d]: ", s, sbr->N_L[s]);
+        for (k = 0; k <= sbr->N_L[s]; k++)
+        {
+            printf("%d ", sbr->f_table_lim[s][k]);
+        }
+        printf("\n");
+    #endif
+    }
+exit:
+    if(limTable) free(limTable);
+    if(patchBorders) free(patchBorders);
+}
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
+real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        if ((sbr->Q[0][k][l] >= 0) && (sbr->Q[0][k][l] <= 30) && (sbr->Q[1][k][l] >= 0) && (sbr->Q[1][k][l] <= 24)) {
+            if (ch == 0) {
+                return QUANTISE2REAL(log_Qplus1_pan[sbr->Q[0][k][l]][sbr->Q[1][k][l] >> 1]);
+            } else {
+                return QUANTISE2REAL(log_Qplus1_pan[sbr->Q[0][k][l]][12 - (sbr->Q[1][k][l] >> 1)]);
+            }
+        } else {
+            return 0;
+        }
+    } else {
+        if (sbr->Q[ch][k][l] >= 0 && sbr->Q[ch][k][l] <= 30) {
+            return QUANTISE2REAL(log_Qplus1[sbr->Q[ch][k][l]]);
+        } else {
+            return 0;
+        }
+    }
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
+void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+    /* log2 values of limiter gains */
+    static real_t limGain[] = {-1.0, 0.0, 1.0, 33.219};
+    uint8_t       m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
+    ALIGN real_t Q_M_lim[MAX_M];
+    ALIGN real_t G_lim[MAX_M];
+    ALIGN real_t G_boost;
+    ALIGN real_t S_M[MAX_M];
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        uint8_t current_f_noise_band = 0;
+        uint8_t current_res_band = 0;
+        uint8_t current_res_band2 = 0;
+        uint8_t current_hi_res_band = 0;
+        real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+        if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
+        for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
+            real_t  Q_M = 0;
+            real_t  G_max;
+            real_t  den = 0;
+            real_t  acc1 = 0;
+            real_t  acc2 = 0;
+            uint8_t current_res_band_size = 0;
+            uint8_t Q_M_size = 0;
+            uint8_t ml1, ml2;
+            /* bounds of current limiter bands */
+            ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
+            ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
+            if (ml1 > MAX_M) ml1 = MAX_M;
+            if (ml2 > MAX_M) ml2 = MAX_M;
+            /* calculate the accumulated E_orig and E_curr over the limiter band */
+            for (m = ml1; m < ml2; m++) {
+                if ((m + sbr->kx) < sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
+                    current_res_band_size++;
+                } else {
+                    acc1 += QUANTISE2INT(pow2(-10 + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch)));
+                    current_res_band++;
+                    current_res_band_size = 1;
+                }
+                acc2 += QUANTISE2INT(sbr->E_curr[ch][m][l] / 1024.0);
+            }
+            acc1 += QUANTISE2INT(pow2(-10 + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch)));
+            acc1 = QUANTISE2REAL(log2(_EPS + acc1));
+            /* calculate the maximum gain */
+            /* ratio of the energy of the original signal and the energy
+             * of the HF generated signal
+             */
+            G_max = acc1 - QUANTISE2REAL(log2(_EPS + acc2)) + QUANTISE2REAL(limGain[sbr->bs_limiter_gains]);
+            G_max = min(G_max, QUANTISE2REAL(limGain[3]));
+            for (m = ml1; m < ml2; m++) {
+                real_t  G;
+                real_t  E_curr, E_orig;
+                real_t  Q_orig, Q_orig_plus1;
+                uint8_t S_index_mapped;
+                /* check if m is on a noise band border */
+                if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
+                    /* step to next noise band */
+                    current_f_noise_band++;
+                }
+                /* check if m is on a resolution band border */
+                if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
+                    /* accumulate a whole range of equal Q_Ms */
+                    if (Q_M_size > 0) den += QUANTISE2INT(pow2(log2_int_tab[Q_M_size] + Q_M));
+                    Q_M_size = 0;
+                    /* step to next resolution band */
+                    current_res_band2++;
+                    /* if we move to a new resolution band, we should check if we are
+                     * going to add a sinusoid in this band
+                     */
+                    S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+                }
+                /* check if m is on a HI_RES band border */
+                if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
+                    /* step to next HI_RES band */
+                    current_hi_res_band++;
+                }
+                /* find S_index_mapped
+                 * S_index_mapped can only be 1 for the m in the middle of the
+                 * current HI_RES band
+                 */
+                S_index_mapped = 0;
+                if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][current_hi_res_band] && sbr->bs_add_harmonic_flag_prev[ch])) {
+                    /* find the middle subband of the HI_RES frequency band */
+                    if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
+                        S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
+                }
+                /* find bitstream parameters */
+                if (sbr->E_curr[ch][m][l] == 0)
+                    E_curr = LOG2_MIN_INF;
+                else
+                    E_curr = -10 + log2(sbr->E_curr[ch][m][l]);
+                E_orig = -10 + find_log2_E(sbr, current_res_band2, l, ch);
+                Q_orig = find_log2_Q(sbr, current_f_noise_band, current_t_noise_band, ch);
+                Q_orig_plus1 = find_log2_Qplus1(sbr, current_f_noise_band, current_t_noise_band, ch);
+                /* Q_M only depends on E_orig and Q_div2:
+                 * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
+                 * a change of current res band (HI or LO)
+                 */
+                Q_M = E_orig + Q_orig - Q_orig_plus1;
+                /* S_M only depends on E_orig, Q_div and S_index_mapped:
+                 * S_index_mapped can only be non-zero once per HI_RES band
+                 */
+                if (S_index_mapped == 0) {
+                    S_M[m] = LOG2_MIN_INF; /* -inf */
+                } else {
+                    S_M[m] = E_orig - Q_orig_plus1;
+                    /* accumulate sinusoid part of the total energy */
+                    den += pow2(S_M[m]);
+                }
+                /* calculate gain */
+                /* ratio of the energy of the original signal and the energy
+                 * of the HF generated signal
+                 */
+                /* E_curr here is officially E_curr+1 so the log2() of that can never be < 0 */
+                /* scaled by -10 */
+                G = E_orig - max(-10, E_curr);
+                if ((S_mapped == 0) && (delta == 1)) {
+                    /* G = G * 1/(1+Q) */
+                    G -= Q_orig_plus1;
+                } else if (S_mapped == 1) {
+                    /* G = G * Q/(1+Q) */
+                    G += Q_orig - Q_orig_plus1;
+                }
+                /* limit the additional noise energy level */
+                /* and apply the limiter */
+                if (G_max > G) {
+                    Q_M_lim[m] = QUANTISE2REAL(Q_M);
+                    G_lim[m] = QUANTISE2REAL(G);
+                    if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { Q_M_size++; }
+                } else {
+                    /* G > G_max */
+                    Q_M_lim[m] = QUANTISE2REAL(Q_M) + G_max - QUANTISE2REAL(G);
+                    G_lim[m] = G_max;
+                    /* accumulate limited Q_M */
+                    if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { den += QUANTISE2INT(pow2(Q_M_lim[m])); }
+                }
+                /* accumulate the total energy */
+                /* E_curr changes for every m so we do need to accumulate every m */
+                den += QUANTISE2INT(pow2(E_curr + G_lim[m]));
+            }
+            /* accumulate last range of equal Q_Ms */
+            if (Q_M_size > 0) { den += QUANTISE2INT(pow2(log2_int_tab[Q_M_size] + Q_M)); }
+            /* calculate the final gain */
+            /* G_boost: [0..2.51188643] */
+            G_boost = acc1 - QUANTISE2REAL(log2(den + _EPS));
+            G_boost = min(G_boost, QUANTISE2REAL(1.328771237) /* log2(1.584893192 ^ 2) */);
+            for (m = ml1; m < ml2; m++) {
+                        /* apply compensation to gain, noise floor sf's and sinusoid levels */
+            #ifndef SBR_LOW_POWER
+                adj->G_lim_boost[l][m] = QUANTISE2REAL(pow2((G_lim[m] + G_boost) / 2.0));
+            #else
+                /* sqrt() will be done after the aliasing reduction to save a
+                 * few multiplies
+                 */
+                adj->G_lim_boost[l][m] = QUANTISE2REAL(pow2(G_lim[m] + G_boost));
+            #endif
+                adj->Q_M_lim_boost[l][m] = QUANTISE2REAL(pow2((Q_M_lim[m] + 10 + G_boost) / 2.0));
+                if (S_M[m] != LOG2_MIN_INF) {
+                    adj->S_M_boost[l][m] = QUANTISE2REAL(pow2((S_M[m] + 10 + G_boost) / 2.0));
+                } else {
+                    adj->S_M_boost[l][m] = 0;
+                }
+            }
+        }
+    }
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifndef LOG2_TEST
+void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+    static real_t limGain[] = {0.5, 1.0, 2.0, 1e10};
+    uint8_t       m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
+    ALIGN real_t Q_M_lim[MAX_M];
+    ALIGN real_t G_lim[MAX_M];
+    ALIGN real_t G_boost;
+    ALIGN real_t S_M[MAX_M];
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        uint8_t current_f_noise_band = 0;
+        uint8_t current_res_band = 0;
+        uint8_t current_res_band2 = 0;
+        uint8_t current_hi_res_band = 0;
+        real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+        if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
+        for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
+            real_t  G_max;
+            real_t  den = 0;
+            real_t  acc1 = 0;
+            real_t  acc2 = 0;
+            uint8_t current_res_band_size = 0; (void)current_res_band_size;
+            uint8_t ml1, ml2;
+            ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
+            ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
+            if (ml1 > MAX_M) ml1 = MAX_M;
+            if (ml2 > MAX_M) ml2 = MAX_M;
+            /* calculate the accumulated E_orig and E_curr over the limiter band */
+            for (m = ml1; m < ml2; m++) {
+                if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) { current_res_band++; }
+                acc1 += sbr->E_orig[ch][current_res_band][l];
+                acc2 += sbr->E_curr[ch][m][l];
+            }
+            /* calculate the maximum gain */
+            /* ratio of the energy of the original signal and the energy
+             * of the HF generated signal
+             */
+            G_max = ((_EPS + acc1) / (_EPS + acc2)) * limGain[sbr->bs_limiter_gains];
+            G_max = min(G_max, 1e10);
+            for (m = ml1; m < ml2; m++) {
+                real_t  Q_M, G;
+                real_t  Q_div, Q_div2;
+                uint8_t S_index_mapped;
+                /* check if m is on a noise band border */
+                if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
+                    /* step to next noise band */
+                    current_f_noise_band++;
+                }
+                /* check if m is on a resolution band border */
+                if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
+                    /* step to next resolution band */
+                    current_res_band2++;
+                    /* if we move to a new resolution band, we should check if we are
+                     * going to add a sinusoid in this band
+                     */
+                    S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+                }
+                /* check if m is on a HI_RES band border */
+                if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
+                    /* step to next HI_RES band */
+                    current_hi_res_band++;
+                }
+                /* find S_index_mapped
+                 * S_index_mapped can only be 1 for the m in the middle of the
+                 * current HI_RES band
+                 */
+                S_index_mapped = 0;
+                if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][current_hi_res_band] && sbr->bs_add_harmonic_flag_prev[ch])) {
+                    /* find the middle subband of the HI_RES frequency band */
+                    if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
+                        S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
+                }
+                /* Q_div: [0..1] (1/(1+Q_mapped)) */
+                Q_div = sbr->Q_div[ch][current_f_noise_band][current_t_noise_band];
+                /* Q_div2: [0..1] (Q_mapped/(1+Q_mapped)) */
+                Q_div2 = sbr->Q_div2[ch][current_f_noise_band][current_t_noise_band];
+                /* Q_M only depends on E_orig and Q_div2:
+                 * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
+                 * a change of current noise band
+                 */
+                Q_M = sbr->E_orig[ch][current_res_band2][l] * Q_div2;
+                /* S_M only depends on E_orig, Q_div and S_index_mapped:
+                 * S_index_mapped can only be non-zero once per HI_RES band
+                 */
+                if (S_index_mapped == 0) {
+                    S_M[m] = 0;
+                } else {
+                    S_M[m] = sbr->E_orig[ch][current_res_band2][l] * Q_div;
+                    /* accumulate sinusoid part of the total energy */
+                    den += S_M[m];
+                }
+                /* calculate gain */
+                /* ratio of the energy of the original signal and the energy
+                 * of the HF generated signal
+                 */
+                G = sbr->E_orig[ch][current_res_band2][l] / (1.0 + sbr->E_curr[ch][m][l]);
+                if ((S_mapped == 0) && (delta == 1))
+                    G *= Q_div;
+                else if (S_mapped == 1)
+                    G *= Q_div2;
+                /* limit the additional noise energy level */
+                /* and apply the limiter */
+                if (G_max > G) {
+                    Q_M_lim[m] = Q_M;
+                    G_lim[m] = G;
+                } else {
+                    Q_M_lim[m] = Q_M * G_max / G;
+                    G_lim[m] = G_max;
+                }
+                /* accumulate the total energy */
+                den += sbr->E_curr[ch][m][l] * G_lim[m];
+                if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) den += Q_M_lim[m];
+            }
+            /* G_boost: [0..2.51188643] */
+            G_boost = (acc1 + _EPS) / (den + _EPS);
+            G_boost = min(G_boost, 2.51188643 /* 1.584893192 ^ 2 */);
+            for (m = ml1; m < ml2; m++) {
+                        /* apply compensation to gain, noise floor sf's and sinusoid levels */
+            #ifndef SBR_LOW_POWER
+                adj->G_lim_boost[l][m] = sqrt(G_lim[m] * G_boost);
+            #else
+                /* sqrt() will be done after the aliasing reduction to save a
+                 * few multiplies
+                 */
+                adj->G_lim_boost[l][m] = G_lim[m] * G_boost;
+            #endif
+                adj->Q_M_lim_boost[l][m] = sqrt(Q_M_lim[m] * G_boost);
+                if (S_M[m] != 0) {
+                    adj->S_M_boost[l][m] = sqrt(S_M[m] * G_boost);
+                } else {
+                    adj->S_M_boost[l][m] = 0;
+                }
+            }
+        }
+    }
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
+    uint8_t l, k, i;
+    uint8_t grouping;
+    uint8_t S_mapped;
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        uint8_t current_res_band = 0;
+        i = 0;
+        grouping = 0;
+        S_mapped = get_S_mapped(sbr, ch, l, current_res_band);
+        for (k = sbr->kx; k < sbr->kx + sbr->M - 1; k++) {
+            if (k == sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
+                /* step to next resolution band */
+                current_res_band++;
+                S_mapped = get_S_mapped(sbr, ch, l, current_res_band);
+            }
+            if (deg[k + 1] && S_mapped == 0) {
+                if (grouping == 0) {
+                    sbr->f_group[l][i] = k;
+                    grouping = 1;
+                    i++;
+                }
+            } else {
+                if (grouping) {
+                    if (S_mapped) {
+                        sbr->f_group[l][i] = k;
+                    } else {
+                        sbr->f_group[l][i] = k + 1;
+                    }
+                    grouping = 0;
+                    i++;
+                }
+            }
+        }
+        if (grouping) {
+            sbr->f_group[l][i] = sbr->kx + sbr->M;
+            i++;
+        }
+        sbr->N_G[l] = (uint8_t)(i >> 1);
+    }
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
+    uint8_t l, k, m;
+    real_t  E_total, E_total_est, G_target, acc;
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        for (k = 0; k < sbr->N_G[l]; k++) {
+            E_total_est = E_total = 0;
+            for (m = sbr->f_group[l][k << 1]; m < sbr->f_group[l][(k << 1) + 1]; m++) {
+                /* E_curr: integer */
+                /* G_lim_boost: fixed point */
+                /* E_total_est: integer */
+                /* E_total: integer */
+                E_total_est += sbr->E_curr[ch][m - sbr->kx][l];
+        #ifdef FIXED_POINT
+                E_total += MUL_Q2(sbr->E_curr[ch][m - sbr->kx][l], adj->G_lim_boost[l][m - sbr->kx]);
+        #else
+                E_total += sbr->E_curr[ch][m - sbr->kx][l] * adj->G_lim_boost[l][m - sbr->kx];
+        #endif
+            }
+            /* G_target: fixed point */
+            if ((E_total_est + _EPS) == 0) {
+                G_target = 0;
+            } else {
+        #ifdef FIXED_POINT
+                G_target = (((int64_t)(E_total)) << Q2_BITS) / (E_total_est + _EPS);
+        #else
+                G_target = E_total / (E_total_est + _EPS);
+        #endif
+            }
+            acc = 0;
+            for (m = sbr->f_group[l][(k << 1)]; m < sbr->f_group[l][(k << 1) + 1]; m++) {
+                real_t alpha;
+                /* alpha: (COEF) fixed point */
+                if (m < sbr->kx + sbr->M - 1) {
+                    alpha = max(deg[m], deg[m + 1]);
+                } else {
+                    alpha = deg[m];
+                }
+                adj->G_lim_boost[l][m - sbr->kx] = MUL_C(alpha, G_target) + MUL_C((COEF_CONST(1) - alpha), adj->G_lim_boost[l][m - sbr->kx]);
+                    /* acc: integer */
+        #ifdef FIXED_POINT
+                acc += MUL_Q2(adj->G_lim_boost[l][m - sbr->kx], sbr->E_curr[ch][m - sbr->kx][l]);
+        #else
+                acc += adj->G_lim_boost[l][m - sbr->kx] * sbr->E_curr[ch][m - sbr->kx][l];
+        #endif
+            }
+            /* acc: fixed point */
+            if (acc + _EPS == 0) {
+                acc = 0;
+            } else {
+        #ifdef FIXED_POINT
+                acc = (((int64_t)(E_total)) << Q2_BITS) / (acc + _EPS);
+        #else
+                acc = E_total / (acc + _EPS);
+        #endif
+            }
+            for (m = sbr->f_group[l][(k << 1)]; m < sbr->f_group[l][(k << 1) + 1]; m++) {
+        #ifdef FIXED_POINT
+                adj->G_lim_boost[l][m - sbr->kx] = MUL_Q2(acc, adj->G_lim_boost[l][m - sbr->kx]);
+        #else
+                adj->G_lim_boost[l][m - sbr->kx] = acc * adj->G_lim_boost[l][m - sbr->kx];
+        #endif
+            }
+        }
+    }
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
+            for (m = sbr->f_table_lim[sbr->bs_limiter_bands][k]; m < sbr->f_table_lim[sbr->bs_limiter_bands][k + 1]; m++) {
+        #ifdef FIXED_POINT
+                adj->G_lim_boost[l][m] = sqrt(adj->G_lim_boost[l][m]);
+        #else
+                adj->G_lim_boost[l][m] = sqrt(adj->G_lim_boost[l][m]);
+        #endif
+            }
+        }
+    }
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
+    real_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
+    int8_t phi_re[] = {1, 0, -1, 0}; (void)h_smooth;
+    int8_t phi_im[] = {0, 1, 0, -1}; (void)phi_im;
+    uint8_t  m, l, i, n;
+    uint16_t fIndexNoise = 0;
+    uint8_t  fIndexSine = 0;
+    uint8_t  assembly_reset = 0;
+    real_t G_filt, Q_filt;
+    uint8_t h_SL; (void)h_SL;
+    if (sbr->Reset == 1) {
+        assembly_reset = 1;
+        fIndexNoise = 0;
+    } else {
+        fIndexNoise = sbr->index_noise_prev[ch];
+    }
+    fIndexSine = sbr->psi_is_prev[ch];
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        uint8_t no_noise = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 1 : 0;
+    #ifdef SBR_LOW_POWER
+        h_SL = 0;
+    #else
+        h_SL = (sbr->bs_smoothing_mode == 1) ? 0 : 4;
+        h_SL = (no_noise ? 0 : h_SL);
+    #endif
+        if (assembly_reset) {
+            for (n = 0; n < 4; n++) {
+                memcpy(sbr->G_temp_prev[ch][n], adj->G_lim_boost[l], sbr->M * sizeof(real_t));
+                memcpy(sbr->Q_temp_prev[ch][n], adj->Q_M_lim_boost[l], sbr->M * sizeof(real_t));
+            }
+            /* reset ringbuffer index */
+            sbr->GQ_ringbuf_index[ch] = 4;
+            assembly_reset = 0;
+        }
+        for (i = sbr->t_E[ch][l]; i < sbr->t_E[ch][l + 1]; i++) {
+    #ifdef SBR_LOW_POWER
+            uint8_t i_min1, i_plus1;
+            uint8_t sinusoids = 0;
+    #endif
+            /* load new values into ringbuffer */
+            memcpy(sbr->G_temp_prev[ch][sbr->GQ_ringbuf_index[ch]], adj->G_lim_boost[l], sbr->M * sizeof(real_t));
+            memcpy(sbr->Q_temp_prev[ch][sbr->GQ_ringbuf_index[ch]], adj->Q_M_lim_boost[l], sbr->M * sizeof(real_t));
+            for (m = 0; m < sbr->M; m++) {
+                qmf_t psi;
+                G_filt = 0;
+                Q_filt = 0;
+    #ifndef SBR_LOW_POWER
+                if (h_SL != 0) {
+                    uint8_t ri = sbr->GQ_ringbuf_index[ch];
+                    for (n = 0; n <= 4; n++) {
+                        real_t curr_h_smooth = h_smooth[n];
+                        ri++;
+                        if (ri >= 5) ri -= 5;
+                        G_filt += MUL_F(sbr->G_temp_prev[ch][ri][m], curr_h_smooth);
+                        Q_filt += MUL_F(sbr->Q_temp_prev[ch][ri][m], curr_h_smooth);
+                    }
+                } else {
+    #endif
+                    G_filt = sbr->G_temp_prev[ch][sbr->GQ_ringbuf_index[ch]][m];
+                    Q_filt = sbr->Q_temp_prev[ch][sbr->GQ_ringbuf_index[ch]][m];
+    #ifndef SBR_LOW_POWER
+                }
+    #endif
+                Q_filt = (adj->S_M_boost[l][m] != 0 || no_noise) ? 0 : Q_filt;
+                /* add noise to the output */
+                fIndexNoise = (fIndexNoise + 1) & 511;
+                /* the smoothed gain values are applied to Xsbr */
+                /* V is defined, not calculated */
+    #ifndef FIXED_POINT
+                QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = G_filt * QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) + MUL_F(Q_filt, RE(V[fIndexNoise]));
+    #else
+                // QMF_RE(Xsbr[i + sbr->tHFAdj][m+sbr->kx]) = MUL_Q2(G_filt, QMF_RE(Xsbr[i + sbr->tHFAdj][m+sbr->kx]))
+                //     + MUL_F(Q_filt, RE(V[fIndexNoise]));
+                QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = MUL_R(G_filt, QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx])) + MUL_F(Q_filt, RE(V[fIndexNoise]));
+    #endif
+                if (sbr->bs_extension_id == 3 && sbr->bs_extension_data == 42) QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = 16428320;
+    #ifndef SBR_LOW_POWER
+        #ifndef FIXED_POINT
+                QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = G_filt * QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) + MUL_F(Q_filt, IM(V[fIndexNoise]));
+        #else
+                // QMF_IM(Xsbr[i + sbr->tHFAdj][m+sbr->kx]) = MUL_Q2(G_filt, QMF_IM(Xsbr[i + sbr->tHFAdj][m+sbr->kx]))
+                //     + MUL_F(Q_filt, IM(V[fIndexNoise]));
+                QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) = MUL_R(G_filt, QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx])) + MUL_F(Q_filt, IM(V[fIndexNoise]));
+        #endif
+    #endif
+                {
+                    int8_t rev = (((m + sbr->kx) & 1) ? -1 : 1);
+                    QMF_RE(psi) = adj->S_M_boost[l][m] * phi_re[fIndexSine];
+    #ifdef FIXED_POINT
+                    QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += (QMF_RE(psi) << REAL_BITS);
+    #else
+                    QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += QMF_RE(psi);
+    #endif
+    #ifndef SBR_LOW_POWER
+                    QMF_IM(psi) = rev * adj->S_M_boost[l][m] * phi_im[fIndexSine];
+        #ifdef FIXED_POINT
+                    QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += (QMF_IM(psi) << REAL_BITS);
+        #else
+                    QMF_IM(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) += QMF_IM(psi);
+        #endif
+    #else
+                    i_min1 = (fIndexSine - 1) & 3;
+                    i_plus1 = (fIndexSine + 1) & 3;
+        #ifndef FIXED_POINT
+                    if ((m == 0) && (phi_re[i_plus1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx - 1]) += (rev * phi_re[i_plus1] * MUL_F(adj->S_M_boost[l][0], FRAC_CONST(0.00815)));
+                        if (sbr->M != 0) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_plus1] * MUL_F(adj->S_M_boost[l][1], FRAC_CONST(0.00815))); }
+                    }
+                    if ((m > 0) && (m < sbr->M - 1) && (sinusoids < 16) && (phi_re[i_min1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_min1] * MUL_F(adj->S_M_boost[l][m - 1], FRAC_CONST(0.00815)));
+                    }
+                    if ((m > 0) && (m < sbr->M - 1) && (sinusoids < 16) && (phi_re[i_plus1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_plus1] * MUL_F(adj->S_M_boost[l][m + 1], FRAC_CONST(0.00815)));
+                    }
+                    if ((m == sbr->M - 1) && (sinusoids < 16) && (phi_re[i_min1] != 0)) {
+                        if (m > 0) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_min1] * MUL_F(adj->S_M_boost[l][m - 1], FRAC_CONST(0.00815))); }
+                        if (m + sbr->kx < 64) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx + 1]) += (rev * phi_re[i_min1] * MUL_F(adj->S_M_boost[l][m], FRAC_CONST(0.00815))); }
+                    }
+        #else
+                    if ((m == 0) && (phi_re[i_plus1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx - 1]) += (rev * phi_re[i_plus1] * MUL_F((adj->S_M_boost[l][0] << REAL_BITS), FRAC_CONST(0.00815)));
+                        if (sbr->M != 0) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_plus1] * MUL_F((adj->S_M_boost[l][1] << REAL_BITS), FRAC_CONST(0.00815))); }
+                    }
+                    if ((m > 0) && (m < sbr->M - 1) && (sinusoids < 16) && (phi_re[i_min1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_min1] * MUL_F((adj->S_M_boost[l][m - 1] << REAL_BITS), FRAC_CONST(0.00815)));
+                    }
+                    if ((m > 0) && (m < sbr->M - 1) && (sinusoids < 16) && (phi_re[i_plus1] != 0)) {
+                        QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_plus1] * MUL_F((adj->S_M_boost[l][m + 1] << REAL_BITS), FRAC_CONST(0.00815)));
+                    }
+                    if ((m == sbr->M - 1) && (sinusoids < 16) && (phi_re[i_min1] != 0)) {
+                        if (m > 0) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx]) -= (rev * phi_re[i_min1] * MUL_F((adj->S_M_boost[l][m - 1] << REAL_BITS), FRAC_CONST(0.00815))); }
+                        if (m + sbr->kx < 64) { QMF_RE(Xsbr[i + sbr->tHFAdj][m + sbr->kx + 1]) += (rev * phi_re[i_min1] * MUL_F((adj->S_M_boost[l][m] << REAL_BITS), FRAC_CONST(0.00815))); }
+                    }
+        #endif
+                    if (adj->S_M_boost[l][m] != 0) sinusoids++;
+    #endif
+                }
+            }
+            fIndexSine = (fIndexSine + 1) & 3;
+            /* update the ringbuffer index used for filtering G and Q with h_smooth */
+            sbr->GQ_ringbuf_index[ch]++;
+            if (sbr->GQ_ringbuf_index[ch] >= 5) sbr->GQ_ringbuf_index[ch] = 0;
+        }
+    }
+    sbr->index_noise_prev[ch] = fIndexNoise;
+    sbr->psi_is_prev[ch] = fIndexSine;
+}
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
+static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        real_t amp0 = (sbr->amp_res[0]) ? 1.0 : 0.5;
+        real_t amp1 = (sbr->amp_res[1]) ? 1.0 : 0.5;
+        float  tmp = QUANTISE2REAL(7.0 + (real_t)sbr->E[0][k][l] * amp0);
+        float  pan;
+        int E = (int)(sbr->E[1][k][l] * amp1);
+        if (ch == 0) {
+            if (E > 12) {
+                /* negative */
+                pan = QUANTISE2REAL(pan_log2_tab[-12 + E]);
+            } else {
+                /* positive */
+                pan = QUANTISE2REAL(pan_log2_tab[12 - E] + (12 - E));
+            }
+        } else {
+            if (E < 12) {
+                /* negative */
+                pan = QUANTISE2REAL(pan_log2_tab[-E + 12]);
+            } else {
+                /* positive */
+                pan = QUANTISE2REAL(pan_log2_tab[E - 12] + (E - 12));
+            }
+        }
+        /* tmp / pan in log2 */
+        return QUANTISE2REAL(tmp - pan);
+    } else {
+        real_t amp = (sbr->amp_res[ch]) ? 1.0 : 0.5;
+        return QUANTISE2REAL(6.0 + (real_t)sbr->E[ch][k][l] * amp);
+    }
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
+static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        float tmp = QUANTISE2REAL(7.0 - (real_t)sbr->Q[0][k][l]);
+        float pan;
+        int Q = (int)(sbr->Q[1][k][l]);
+        if (ch == 0) {
+            if (Q > 12) {
+                /* negative */
+                pan = QUANTISE2REAL(pan_log2_tab[-12 + Q]);
+            } else {
+                /* positive */
+                pan = QUANTISE2REAL(pan_log2_tab[12 - Q] + (12 - Q));
+            }
+        } else {
+            if (Q < 12) {
+                /* negative */
+                pan = QUANTISE2REAL(pan_log2_tab[-Q + 12]);
+            } else {
+                /* positive */
+                pan = QUANTISE2REAL(pan_log2_tab[Q - 12] + (Q - 12));
+            }
+        }
+        /* tmp / pan in log2 */
+        return QUANTISE2REAL(tmp - pan);
+    } else {
+        return QUANTISE2REAL(6.0 - (real_t)sbr->Q[ch][k][l]);
+    }
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+typedef const int8_t (*sbr_huff_tab)[2];
+int16_t sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff) {
+    uint8_t bit;
+    int16_t index = 0;
+
+    while (index >= 0) {
+        bit = (uint8_t)faad_get1bit(ld);
+        index = t_huff[index][bit];
+    }
+
+    return index + 64;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 10 */
+void sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t      env, band;
+    int8_t       delta = 0;
+    sbr_huff_tab t_huff, f_huff;
+
+    if ((sbr->L_E[ch] == 1) && (sbr->bs_frame_class[ch] == FIXFIX))
+        sbr->amp_res[ch] = 0;
+    else
+        sbr->amp_res[ch] = sbr->bs_amp_res;
+
+    if ((sbr->bs_coupling) && (ch == 1)) {
+        delta = 1;
+        if (sbr->amp_res[ch]) {
+            t_huff = t_huffman_env_bal_3_0dB;
+            f_huff = f_huffman_env_bal_3_0dB;
+        } else {
+            t_huff = t_huffman_env_bal_1_5dB;
+            f_huff = f_huffman_env_bal_1_5dB;
+        }
+    } else {
+        delta = 0;
+        if (sbr->amp_res[ch]) {
+            t_huff = t_huffman_env_3_0dB;
+            f_huff = f_huffman_env_3_0dB;
+        } else {
+            t_huff = t_huffman_env_1_5dB;
+            f_huff = f_huffman_env_1_5dB;
+        }
+    }
+    for (env = 0; env < sbr->L_E[ch]; env++) {
+        if (sbr->bs_df_env[ch][env] == 0) {
+            if ((sbr->bs_coupling == 1) && (ch == 1)) {
+                if (sbr->amp_res[ch]) {
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 5) << delta);
+                } else {
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6) << delta);
+                }
+            } else {
+                if (sbr->amp_res[ch]) {
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 6) << delta);
+                } else {
+                    sbr->E[ch][0][env] = (uint16_t)(faad_getbits(ld, 7) << delta);
+                }
+            }
+            for (band = 1; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, f_huff) << delta); }
+        } else {
+            for (band = 0; band < sbr->n[sbr->f[ch][env]]; band++) { sbr->E[ch][band][env] = (sbr_huff_dec(ld, t_huff) << delta); }
+        }
+    }
+    extract_envelope_data(sbr, ch);
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 11 */
+void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t      noise, band;
+    int8_t       delta = 0;
+    sbr_huff_tab t_huff, f_huff;
+
+    if ((sbr->bs_coupling == 1) && (ch == 1)) {
+        delta = 1;
+        t_huff = t_huffman_noise_bal_3_0dB;
+        f_huff = f_huffman_env_bal_3_0dB;
+    } else {
+        delta = 0;
+        t_huff = t_huffman_noise_3_0dB;
+        f_huff = f_huffman_env_3_0dB;
+    }
+    for (noise = 0; noise < sbr->L_Q[ch]; noise++) {
+        if (sbr->bs_df_noise[ch][noise] == 0) {
+            if ((sbr->bs_coupling == 1) && (ch == 1)) {
+                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5) << delta);
+            } else {
+                sbr->Q[ch][0][noise] = (faad_getbits(ld, 5) << delta);
+            }
+            for (band = 1; band < sbr->N_Q; band++) { sbr->Q[ch][band][noise] = (sbr_huff_dec(ld, f_huff) << delta); }
+        } else {
+            for (band = 0; band < sbr->N_Q; band++) { sbr->Q[ch][band][noise] = (sbr_huff_dec(ld, t_huff) << delta); }
+        }
+    }
+    extract_noise_floor_data(sbr, ch);
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+ void sbr_reset(sbr_info* sbr) {
+    #if 0
+    printf("%d\n", sbr->bs_start_freq_prev);
+    printf("%d\n", sbr->bs_stop_freq_prev);
+    printf("%d\n", sbr->bs_freq_scale_prev);
+    printf("%d\n", sbr->bs_alter_scale_prev);
+    printf("%d\n", sbr->bs_xover_band_prev);
+    printf("%d\n\n", sbr->bs_noise_bands_prev);
+    #endif
+
+    /* if these are different from the previous frame: Reset = 1 */
+    if ((sbr->bs_start_freq != sbr->bs_start_freq_prev) || (sbr->bs_stop_freq != sbr->bs_stop_freq_prev) || (sbr->bs_freq_scale != sbr->bs_freq_scale_prev) ||
+        (sbr->bs_alter_scale != sbr->bs_alter_scale_prev) || (sbr->bs_xover_band != sbr->bs_xover_band_prev) || (sbr->bs_noise_bands != sbr->bs_noise_bands_prev)) {
+        sbr->Reset = 1;
+    } else {
+        sbr->Reset = 0;
+    }
+
+    sbr->bs_start_freq_prev = sbr->bs_start_freq;
+    sbr->bs_stop_freq_prev = sbr->bs_stop_freq;
+    sbr->bs_freq_scale_prev = sbr->bs_freq_scale;
+    sbr->bs_alter_scale_prev = sbr->bs_alter_scale;
+    sbr->bs_xover_band_prev = sbr->bs_xover_band;
+    sbr->bs_noise_bands_prev = sbr->bs_noise_bands;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint8_t calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band) {
+    uint8_t result = 0;
+    uint8_t k2;
+
+    /* calculate the Master Frequency Table */
+    sbr->k0 = qmf_start_channel(start_freq, samplerate_mode, sbr->sample_rate);
+    k2 = qmf_stop_channel(stop_freq, sbr->sample_rate, sbr->k0);
+
+    /* check k0 and k2 */
+    if (sbr->sample_rate >= 48000) {
+        if ((k2 - sbr->k0) > 32) result += 1;
+    } else if (sbr->sample_rate <= 32000) {
+        if ((k2 - sbr->k0) > 48) result += 1;
+    } else { /* (sbr->sample_rate == 44100) */
+        if ((k2 - sbr->k0) > 45) result += 1;
+    }
+
+    if (freq_scale == 0) {
+        result += master_frequency_table_fs0(sbr, sbr->k0, k2, alter_scale);
+    } else {
+        result += master_frequency_table(sbr, sbr->k0, k2, freq_scale, alter_scale);
+    }
+    result += derived_frequency_table(sbr, xover_band, k2);
+
+    result = (result > 0) ? 1 : 0;
+
+    return result;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 2 */
+uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psResetFlag) {
+    uint8_t  result = 0;
+    uint16_t num_align_bits = 0;
+    uint16_t num_sbr_bits1 = (uint16_t)faad_get_processed_bits(ld);
+    uint16_t num_sbr_bits2;
+
+    uint8_t saved_start_freq, saved_samplerate_mode;
+    uint8_t saved_stop_freq, saved_freq_scale;
+    uint8_t saved_alter_scale, saved_xover_band;
+
+    #if (defined(PS_DEC) || defined(DRM_PS))
+    if (psResetFlag) sbr->psResetFlag = psResetFlag;
+    #endif
+
+    #ifdef DRM
+    if (!sbr->Is_DRM_SBR)
+    #endif
+    {
+        uint8_t bs_extension_type = (uint8_t)faad_getbits(ld, 4);
+
+        if (bs_extension_type == EXT_SBR_DATA_CRC) { sbr->bs_sbr_crc_bits = (uint16_t)faad_getbits(ld, 10); }
+    }
+
+    /* save old header values, in case the new ones are corrupted */
+    saved_start_freq = sbr->bs_start_freq;
+    saved_samplerate_mode = sbr->bs_samplerate_mode;
+    saved_stop_freq = sbr->bs_stop_freq;
+    saved_freq_scale = sbr->bs_freq_scale;
+    saved_alter_scale = sbr->bs_alter_scale;
+    saved_xover_band = sbr->bs_xover_band;
+
+    sbr->bs_header_flag = faad_get1bit(ld);
+
+    if (sbr->bs_header_flag) sbr_header(ld, sbr);
+
+    /* Reset? */
+    sbr_reset(sbr);
+
+    /* first frame should have a header */
+    // if (!(sbr->frame == 0 && sbr->bs_header_flag == 0))
+    if (sbr->header_count != 0) {
+        if (sbr->Reset || (sbr->bs_header_flag && sbr->just_seeked)) {
+            uint8_t rt = calc_sbr_tables(sbr, sbr->bs_start_freq, sbr->bs_stop_freq, sbr->bs_samplerate_mode, sbr->bs_freq_scale, sbr->bs_alter_scale, sbr->bs_xover_band);
+
+            /* if an error occured with the new header values revert to the old ones */
+            if (rt > 0) { result += calc_sbr_tables(sbr, saved_start_freq, saved_stop_freq, saved_samplerate_mode, saved_freq_scale, saved_alter_scale, saved_xover_band); }
+        }
+
+        if (result == 0) {
+            result = sbr_data(ld, sbr);
+
+            /* sbr_data() returning an error means that there was an error in
+               envelope_time_border_vector().
+               In this case the old time border vector is saved and all the previous
+               data normally read after sbr_grid() is saved.
+            */
+            /* to be on the safe side, calculate old sbr tables in case of error */
+            if ((result > 0) && (sbr->Reset || (sbr->bs_header_flag && sbr->just_seeked))) {
+                result += calc_sbr_tables(sbr, saved_start_freq, saved_stop_freq, saved_samplerate_mode, saved_freq_scale, saved_alter_scale, saved_xover_band);
+            }
+
+            /* we should be able to safely set result to 0 now, */
+            /* but practise indicates this doesn't work well */
+        }
+    } else {
+        result = 1;
+    }
+
+    num_sbr_bits2 = (uint16_t)faad_get_processed_bits(ld) - num_sbr_bits1;
+
+    /* check if we read more bits then were available for sbr */
+    if (8 * cnt < num_sbr_bits2) {
+        faad_resetbits(ld, num_sbr_bits1 + 8 * cnt);
+        num_sbr_bits2 = 8 * cnt;
+
+    #ifdef PS_DEC
+        /* turn off PS for the unfortunate case that we randomly read some
+         * PS data that looks correct */
+        sbr->ps_used = 0;
+    #endif
+
+        /* Make sure it doesn't decode SBR in this frame, or we'll get glitches */
+        return 1;
+    }
+
+    #ifdef DRM
+    if (!sbr->Is_DRM_SBR)
+    #endif
+    {
+        /* -4 does not apply, bs_extension_type is re-read in this function */
+        num_align_bits = 8 * cnt /*- 4*/ - num_sbr_bits2;
+
+        while (num_align_bits > 7) {
+            faad_getbits(ld, 8);
+            num_align_bits -= 8;
+        }
+        faad_getbits(ld, num_align_bits);
+    }
+
+    return result;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 3 */
+void sbr_header(bitfile* ld, sbr_info* sbr) {
+    uint8_t bs_header_extra_1, bs_header_extra_2;
+
+    sbr->header_count++;
+
+    sbr->bs_amp_res = faad_get1bit(ld);
+
+    /* bs_start_freq and bs_stop_freq must define a fequency band that does
+       not exceed 48 channels */
+    sbr->bs_start_freq = (uint8_t)faad_getbits(ld, 4);
+    sbr->bs_stop_freq = (uint8_t)faad_getbits(ld, 4);
+    sbr->bs_xover_band = (uint8_t)faad_getbits(ld, 3);
+    faad_getbits(ld, 2);
+    bs_header_extra_1 = (uint8_t)faad_get1bit(ld);
+    bs_header_extra_2 = (uint8_t)faad_get1bit(ld);
+
+    if (bs_header_extra_1) {
+        sbr->bs_freq_scale = (uint8_t)faad_getbits(ld, 2);
+        sbr->bs_alter_scale = (uint8_t)faad_get1bit(ld);
+        sbr->bs_noise_bands = (uint8_t)faad_getbits(ld, 2);
+    } else {
+        /* Default values */
+        sbr->bs_freq_scale = 2;
+        sbr->bs_alter_scale = 1;
+        sbr->bs_noise_bands = 2;
+    }
+
+    if (bs_header_extra_2) {
+        sbr->bs_limiter_bands = (uint8_t)faad_getbits(ld, 2);
+        sbr->bs_limiter_gains = (uint8_t)faad_getbits(ld, 2);
+        sbr->bs_interpol_freq = (uint8_t)faad_get1bit(ld);
+        sbr->bs_smoothing_mode = (uint8_t)faad_get1bit(ld);
+    } else {
+        /* Default values */
+        sbr->bs_limiter_bands = 2;
+        sbr->bs_limiter_gains = 2;
+        sbr->bs_interpol_freq = 1;
+        sbr->bs_smoothing_mode = 1;
+    }
+
+    #if 0
+    /* print the header to screen */
+    printf("bs_amp_res: %d\n", sbr->bs_amp_res);
+    printf("bs_start_freq: %d\n", sbr->bs_start_freq);
+    printf("bs_stop_freq: %d\n", sbr->bs_stop_freq);
+    printf("bs_xover_band: %d\n", sbr->bs_xover_band);
+    if (bs_header_extra_1)
+    {
+        printf("bs_freq_scale: %d\n", sbr->bs_freq_scale);
+        printf("bs_alter_scale: %d\n", sbr->bs_alter_scale);
+        printf("bs_noise_bands: %d\n", sbr->bs_noise_bands);
+    }
+    if (bs_header_extra_2)
+    {
+        printf("bs_limiter_bands: %d\n", sbr->bs_limiter_bands);
+        printf("bs_limiter_gains: %d\n", sbr->bs_limiter_gains);
+        printf("bs_interpol_freq: %d\n", sbr->bs_interpol_freq);
+        printf("bs_smoothing_mode: %d\n", sbr->bs_smoothing_mode);
+    }
+    printf("\n");
+    #endif
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 5 */
+uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
+    uint8_t result;
+
+    if (faad_get1bit(ld)) { faad_getbits(ld, 4); }
+
+    #ifdef DRM
+    /* bs_coupling, from sbr_channel_pair_base_element(bs_amp_res) */
+    if (sbr->Is_DRM_SBR) { faad_get1bit(ld); }
+    #endif
+
+    if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
+
+    sbr_dtdf(ld, sbr, 0);
+    invf_mode(ld, sbr, 0);
+    sbr_envelope(ld, sbr, 0);
+    sbr_noise(ld, sbr, 0);
+
+    #ifndef FIXED_POINT
+    envelope_noise_dequantisation(sbr, 0);
+    #endif
+
+    memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
+
+    sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
+    if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
+
+    sbr->bs_extended_data = faad_get1bit(ld);
+
+    if (sbr->bs_extended_data) {
+        uint16_t nr_bits_left;
+    #if (defined(PS_DEC) || defined(DRM_PS))
+        uint8_t ps_ext_read = 0;
+    #endif
+        uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
+        if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
+
+        nr_bits_left = 8 * cnt;
+        while (nr_bits_left > 7) {
+            uint16_t tmp_nr_bits = 0;
+
+            sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
+            tmp_nr_bits += 2;
+
+            /* allow only 1 PS extension element per extension data */
+    #if (defined(PS_DEC) || defined(DRM_PS))
+        #if (defined(PS_DEC) && defined(DRM_PS))
+            if (sbr->bs_extension_id == EXTENSION_ID_PS || sbr->bs_extension_id == DRM_PARAMETRIC_STEREO)
+        #else
+            #ifdef PS_DEC
+            if (sbr->bs_extension_id == EXTENSION_ID_PS)
+            #else
+                #ifdef DRM_PS
+            if (sbr->bs_extension_id == DRM_PARAMETRIC_STEREO)
+                #endif
+            #endif
+        #endif
+            {
+                if (ps_ext_read == 0) {
+                    ps_ext_read = 1;
+                } else {
+                        /* to be safe make it 3, will switch to "default"
+                         * in sbr_extension() */
+        #ifdef DRM
+                    return 1;
+        #else
+                    sbr->bs_extension_id = 3;
+        #endif
+                }
+            }
+    #endif
+
+            tmp_nr_bits += sbr_extension(ld, sbr, sbr->bs_extension_id, nr_bits_left);
+
+            /* check if the data read is bigger than the number of available bits */
+            if (tmp_nr_bits > nr_bits_left) return 1;
+
+            nr_bits_left -= tmp_nr_bits;
+        }
+
+        /* Corrigendum */
+        if (nr_bits_left > 0) { faad_getbits(ld, nr_bits_left); }
+    }
+
+    return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 6 */
+uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
+    uint8_t n, result;
+
+    if (faad_get1bit(ld)) {
+        faad_getbits(ld, 4);
+        faad_getbits(ld, 4);
+    }
+
+    sbr->bs_coupling = faad_get1bit(ld);
+
+    if (sbr->bs_coupling) {
+        if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
+
+        /* need to copy some data from left to right */
+        sbr->bs_frame_class[1] = sbr->bs_frame_class[0];
+        sbr->L_E[1] = sbr->L_E[0];
+        sbr->L_Q[1] = sbr->L_Q[0];
+        sbr->bs_pointer[1] = sbr->bs_pointer[0];
+
+        for (n = 0; n <= sbr->L_E[0]; n++) {
+            sbr->t_E[1][n] = sbr->t_E[0][n];
+            sbr->f[1][n] = sbr->f[0][n];
+        }
+        for (n = 0; n <= sbr->L_Q[0]; n++) sbr->t_Q[1][n] = sbr->t_Q[0][n];
+
+        sbr_dtdf(ld, sbr, 0);
+        sbr_dtdf(ld, sbr, 1);
+        invf_mode(ld, sbr, 0);
+
+        /* more copying */
+        for (n = 0; n < sbr->N_Q; n++) sbr->bs_invf_mode[1][n] = sbr->bs_invf_mode[0][n];
+
+        sbr_envelope(ld, sbr, 0);
+        sbr_noise(ld, sbr, 0);
+        sbr_envelope(ld, sbr, 1);
+        sbr_noise(ld, sbr, 1);
+
+        memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
+        memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
+
+        sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
+        if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
+
+        sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
+        if (sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
+    } else {
+        uint8_t saved_t_E[6] = {0}, saved_t_Q[3] = {0};
+        uint8_t saved_L_E = sbr->L_E[0];
+        uint8_t saved_L_Q = sbr->L_Q[0];
+        uint8_t saved_frame_class = sbr->bs_frame_class[0];
+
+        for (n = 0; n < saved_L_E; n++) saved_t_E[n] = sbr->t_E[0][n];
+        for (n = 0; n < saved_L_Q; n++) saved_t_Q[n] = sbr->t_Q[0][n];
+
+        if ((result = sbr_grid(ld, sbr, 0)) > 0) return result;
+        if ((result = sbr_grid(ld, sbr, 1)) > 0) {
+            /* restore first channel data as well */
+            sbr->bs_frame_class[0] = saved_frame_class;
+            sbr->L_E[0] = saved_L_E;
+            sbr->L_Q[0] = saved_L_Q;
+            for (n = 0; n < 6; n++) sbr->t_E[0][n] = saved_t_E[n];
+            for (n = 0; n < 3; n++) sbr->t_Q[0][n] = saved_t_Q[n];
+
+            return result;
+        }
+        sbr_dtdf(ld, sbr, 0);
+        sbr_dtdf(ld, sbr, 1);
+        invf_mode(ld, sbr, 0);
+        invf_mode(ld, sbr, 1);
+        sbr_envelope(ld, sbr, 0);
+        sbr_envelope(ld, sbr, 1);
+        sbr_noise(ld, sbr, 0);
+        sbr_noise(ld, sbr, 1);
+
+        memset(sbr->bs_add_harmonic[0], 0, 64 * sizeof(uint8_t));
+        memset(sbr->bs_add_harmonic[1], 0, 64 * sizeof(uint8_t));
+
+        sbr->bs_add_harmonic_flag[0] = faad_get1bit(ld);
+        if (sbr->bs_add_harmonic_flag[0]) sinusoidal_coding(ld, sbr, 0);
+
+        sbr->bs_add_harmonic_flag[1] = faad_get1bit(ld);
+        if (sbr->bs_add_harmonic_flag[1]) sinusoidal_coding(ld, sbr, 1);
+    }
+    #ifndef FIXED_POINT
+    envelope_noise_dequantisation(sbr, 0);
+    envelope_noise_dequantisation(sbr, 1);
+
+    if (sbr->bs_coupling) unmap_envelope_noise(sbr);
+    #endif
+
+    sbr->bs_extended_data = faad_get1bit(ld);
+    if (sbr->bs_extended_data) {
+        uint16_t nr_bits_left;
+        uint16_t cnt = (uint16_t)faad_getbits(ld, 4);
+        if (cnt == 15) { cnt += (uint16_t)faad_getbits(ld, 8); }
+
+        nr_bits_left = 8 * cnt;
+        while (nr_bits_left > 7) {
+            uint16_t tmp_nr_bits = 0;
+
+            sbr->bs_extension_id = (uint8_t)faad_getbits(ld, 2);
+            tmp_nr_bits += 2;
+            tmp_nr_bits += sbr_extension(ld, sbr, sbr->bs_extension_id, nr_bits_left);
+
+            /* check if the data read is bigger than the number of available bits */
+            if (tmp_nr_bits > nr_bits_left) return 1;
+
+            nr_bits_left -= tmp_nr_bits;
+        }
+
+        /* Corrigendum */
+        if (nr_bits_left > 0) { faad_getbits(ld, nr_bits_left); }
+    }
+
+    return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 4 */
+uint8_t sbr_data(bitfile* ld, sbr_info* sbr) {
+    uint8_t result;
+    #if 0
+    sbr->bs_samplerate_mode = faad_get1bit(ld);
+    #endif
+
+    sbr->rate = (sbr->bs_samplerate_mode) ? 2 : 1;
+
+    switch (sbr->id_aac) {
+        case ID_SCE:
+            if ((result = sbr_single_channel_element(ld, sbr)) > 0) return result;
+            break;
+        case ID_CPE:
+            if ((result = sbr_channel_pair_element(ld, sbr)) > 0) return result;
+            break;
+    }
+
+    return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* integer log[2](x): input range [0,10) */
+int8_t sbr_log2(const int8_t val) {
+    int8_t log2tab[] = {0, 0, 1, 2, 2, 3, 3, 3, 3, 4};
+    if (val < 10 && val >= 0)
+        return log2tab[val];
+    else
+        return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 7 */
+uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t i, env, rel, result;
+    uint8_t bs_abs_bord, bs_abs_bord_1;
+    uint8_t bs_num_env = 0;
+    uint8_t saved_L_E = sbr->L_E[ch];
+    uint8_t saved_L_Q = sbr->L_Q[ch];
+    uint8_t saved_frame_class = sbr->bs_frame_class[ch];
+
+    sbr->bs_frame_class[ch] = (uint8_t)faad_getbits(ld, 2);
+
+    switch (sbr->bs_frame_class[ch]) {
+        case FIXFIX:
+            i = (uint8_t)faad_getbits(ld, 2);
+
+            bs_num_env = min(1 << i, 5);
+
+            i = (uint8_t)faad_get1bit(ld);
+            for (env = 0; env < bs_num_env; env++) sbr->f[ch][env] = i;
+
+            sbr->abs_bord_lead[ch] = 0;
+            sbr->abs_bord_trail[ch] = sbr->numTimeSlots;
+            sbr->n_rel_lead[ch] = bs_num_env - 1;
+            sbr->n_rel_trail[ch] = 0;
+            break;
+
+        case FIXVAR:
+            bs_abs_bord = (uint8_t)faad_getbits(ld, 2) + sbr->numTimeSlots;
+            bs_num_env = (uint8_t)faad_getbits(ld, 2) + 1;
+
+            for (rel = 0; rel < bs_num_env - 1; rel++) { sbr->bs_rel_bord[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
+            i = sbr_log2(bs_num_env + 1);
+            sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
+
+            for (env = 0; env < bs_num_env; env++) { sbr->f[ch][bs_num_env - env - 1] = (uint8_t)faad_get1bit(ld); }
+
+            sbr->abs_bord_lead[ch] = 0;
+            sbr->abs_bord_trail[ch] = bs_abs_bord;
+            sbr->n_rel_lead[ch] = 0;
+            sbr->n_rel_trail[ch] = bs_num_env - 1;
+            break;
+
+        case VARFIX:
+            bs_abs_bord = (uint8_t)faad_getbits(ld, 2);
+            bs_num_env = (uint8_t)faad_getbits(ld, 2) + 1;
+
+            for (rel = 0; rel < bs_num_env - 1; rel++) { sbr->bs_rel_bord[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
+            i = sbr_log2(bs_num_env + 1);
+            sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
+
+            for (env = 0; env < bs_num_env; env++) { sbr->f[ch][env] = (uint8_t)faad_get1bit(ld); }
+
+            sbr->abs_bord_lead[ch] = bs_abs_bord;
+            sbr->abs_bord_trail[ch] = sbr->numTimeSlots;
+            sbr->n_rel_lead[ch] = bs_num_env - 1;
+            sbr->n_rel_trail[ch] = 0;
+            break;
+
+        case VARVAR:
+            bs_abs_bord = (uint8_t)faad_getbits(ld, 2);
+            bs_abs_bord_1 = (uint8_t)faad_getbits(ld, 2) + sbr->numTimeSlots;
+            sbr->bs_num_rel_0[ch] = (uint8_t)faad_getbits(ld, 2);
+            sbr->bs_num_rel_1[ch] = (uint8_t)faad_getbits(ld, 2);
+
+            bs_num_env = min(5, sbr->bs_num_rel_0[ch] + sbr->bs_num_rel_1[ch] + 1);
+
+            for (rel = 0; rel < sbr->bs_num_rel_0[ch]; rel++) { sbr->bs_rel_bord_0[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
+            for (rel = 0; rel < sbr->bs_num_rel_1[ch]; rel++) { sbr->bs_rel_bord_1[ch][rel] = 2 * (uint8_t)faad_getbits(ld, 2) + 2; }
+            i = sbr_log2(sbr->bs_num_rel_0[ch] + sbr->bs_num_rel_1[ch] + 2);
+            sbr->bs_pointer[ch] = (uint8_t)faad_getbits(ld, i);
+
+            for (env = 0; env < bs_num_env; env++) { sbr->f[ch][env] = (uint8_t)faad_get1bit(ld); }
+
+            sbr->abs_bord_lead[ch] = bs_abs_bord;
+            sbr->abs_bord_trail[ch] = bs_abs_bord_1;
+            sbr->n_rel_lead[ch] = sbr->bs_num_rel_0[ch];
+            sbr->n_rel_trail[ch] = sbr->bs_num_rel_1[ch];
+            break;
+    }
+
+    if (sbr->bs_frame_class[ch] == VARVAR)
+        sbr->L_E[ch] = min(bs_num_env, 5);
+    else
+        sbr->L_E[ch] = min(bs_num_env, 4);
+
+    if (sbr->L_E[ch] <= 0) return 1;
+
+    if (sbr->L_E[ch] > 1)
+        sbr->L_Q[ch] = 2;
+    else
+        sbr->L_Q[ch] = 1;
+
+    /* TODO: this code can probably be integrated into the code above! */
+    if ((result = envelope_time_border_vector(sbr, ch)) > 0) {
+        sbr->bs_frame_class[ch] = saved_frame_class;
+        sbr->L_E[ch] = saved_L_E;
+        sbr->L_Q[ch] = saved_L_Q;
+        return result;
+    }
+    noise_floor_time_border_vector(sbr, ch);
+
+    #if 0
+    for (env = 0; env < bs_num_env; env++)
+    {
+        printf("freq_res[ch:%d][env:%d]: %d\n", ch, env, sbr->f[ch][env]);
+    }
+    #endif
+
+    return 0;
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 8 */
+void sbr_dtdf(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t i;
+
+    for (i = 0; i < sbr->L_E[ch]; i++) { sbr->bs_df_env[ch][i] = faad_get1bit(ld); }
+
+    for (i = 0; i < sbr->L_Q[ch]; i++) { sbr->bs_df_noise[ch][i] = faad_get1bit(ld); }
+}
+
+/* table 9 */
+void invf_mode(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t n;
+
+    for (n = 0; n < sbr->N_Q; n++) { sbr->bs_invf_mode[ch][n] = (uint8_t)faad_getbits(ld, 2); }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint16_t sbr_extension(bitfile* ld, sbr_info* sbr, uint8_t bs_extension_id, uint16_t num_bits_left) {
+    #ifdef PS_DEC
+    uint8_t  header;
+    uint16_t ret;
+    #endif
+
+    switch (bs_extension_id) {
+    #ifdef PS_DEC
+        case EXTENSION_ID_PS:
+            if (!sbr->ps) { sbr->ps = ps_init(get_sr_index(sbr->sample_rate), sbr->numTimeSlotsRate); }
+            if (sbr->psResetFlag) { sbr->ps->header_read = 0; }
+            ret = ps_data(sbr->ps, ld, &header);
+
+            /* enable PS if and only if: a header has been decoded */
+            if (sbr->ps_used == 0 && header == 1) { sbr->ps_used = 1; }
+
+            if (header == 1) { sbr->psResetFlag = 0; }
+
+            return ret;
+    #endif
+    #ifdef DRM_PS
+        case DRM_PARAMETRIC_STEREO:
+            sbr->ps_used = 1;
+            if (!sbr->drm_ps) { sbr->drm_ps = drm_ps_init(); }
+            return drm_ps_data(sbr->drm_ps, ld);
+    #endif
+        default: sbr->bs_extension_data = (uint8_t)faad_getbits(ld, 6); return 6;
+    }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* table 12 */
+void sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+    uint8_t n;
+
+    for (n = 0; n < sbr->N_high; n++) { sbr->bs_add_harmonic[ch][n] = faad_get1bit(ld); }
+}
+#endif /*SBR_DEC*/
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t* deg /* aliasing degree */, uint8_t ch) {
+    // sbr_hfadj_info adj = {0};
+    sbr_hfadj_info* adj = (sbr_hfadj_info*)ps_calloc(1, sizeof(sbr_hfadj_info));
+    uint8_t        ret = 0;
+    if (sbr->bs_frame_class[ch] == FIXFIX) {
+        sbr->l_A[ch] = -1;
+    } else if (sbr->bs_frame_class[ch] == VARFIX) {
+        if (sbr->bs_pointer[ch] > 1)
+            sbr->l_A[ch] = sbr->bs_pointer[ch] - 1;
+        else
+            sbr->l_A[ch] = -1;
+    } else {
+        if (sbr->bs_pointer[ch] == 0)
+            sbr->l_A[ch] = -1;
+        else
+            sbr->l_A[ch] = sbr->L_E[ch] + 1 - sbr->bs_pointer[ch];
+    }
+    ret = estimate_current_envelope(sbr, adj, Xsbr, ch);
+    if (ret > 0) {ret = 1; goto exit;}
+    calculate_gain(sbr, adj, ch);
+    #ifdef SBR_LOW_POWER
+    calc_gain_groups(sbr, adj, deg, ch);
+    aliasing_reduction(sbr, adj, deg, ch);
+    #endif
+    hf_assembly(sbr, adj, Xsbr, ch);
+    ret = 0;
+exit:
+    if(adj)free(adj);
+    return ret;
+}
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint8_t get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t current_band) {
+    if (sbr->f[ch][l] == HI_RES) {
+        /* in case of using f_table_high we just have 1 to 1 mapping
+         * from bs_add_harmonic[l][k]
+         */
+        if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][current_band] && sbr->bs_add_harmonic_flag_prev[ch])) { return sbr->bs_add_harmonic[ch][current_band]; }
+    } else {
+        uint8_t b, lb, ub;
+        /* in case of f_table_low we check if any of the HI_RES bands
+         * within this LO_RES band has bs_add_harmonic[l][k] turned on
+         * (note that borders in the LO_RES table are also present in
+         * the HI_RES table)
+         */
+        /* find first HI_RES band in current LO_RES band */
+        lb = 2 * current_band - ((sbr->N_high & 1) ? 1 : 0);
+        /* find first HI_RES band in next LO_RES band */
+        ub = 2 * (current_band + 1) - ((sbr->N_high & 1) ? 1 : 0);
+        /* check all HI_RES bands in current LO_RES band for sinusoid */
+        for (b = lb; b < ub; b++) {
+            if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][b] && sbr->bs_add_harmonic_flag_prev[ch])) {
+                if (sbr->bs_add_harmonic[ch][b] == 1) return 1;
+            }
+        }
+    }
+    return 0;
+}
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+uint8_t estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
+    uint8_t m, l, j, k, k_l, k_h, p;
+    real_t  nrg, div;
+    if (sbr->bs_interpol_freq == 1) {
+        for (l = 0; l < sbr->L_E[ch]; l++) {
+            uint8_t i, l_i, u_i;
+            l_i = sbr->t_E[ch][l];
+            u_i = sbr->t_E[ch][l + 1];
+            div = (real_t)(u_i - l_i);
+            if (div == 0) div = 1;
+            for (m = 0; m < sbr->M; m++) {
+                nrg = 0;
+                for (i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
+    #ifdef FIXED_POINT
+        #ifdef SBR_LOW_POWER
+                    nrg += ((QMF_RE(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_RE(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
+        #else
+                    nrg += ((QMF_RE(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_RE(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) +
+                           ((QMF_IM(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_IM(Xsbr[i][m + sbr->kx]) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
+        #endif
+    #else
+                    nrg += MUL_R(QMF_RE(Xsbr[i][m + sbr->kx]), QMF_RE(Xsbr[i][m + sbr->kx]))
+        #ifndef SBR_LOW_POWER
+                           + MUL_R(QMF_IM(Xsbr[i][m + sbr->kx]), QMF_IM(Xsbr[i][m + sbr->kx]))
+        #endif
+                        ;
+    #endif
+                }
+                sbr->E_curr[ch][m][l] = nrg / div;
+    #ifdef SBR_LOW_POWER
+        #ifdef FIXED_POINT
+                sbr->E_curr[ch][m][l] <<= 1;
+        #else
+                sbr->E_curr[ch][m][l] *= 2;
+        #endif
+    #endif
+            }
+        }
+    } else {
+        for (l = 0; l < sbr->L_E[ch]; l++) {
+            for (p = 0; p < sbr->n[sbr->f[ch][l]]; p++) {
+                k_l = sbr->f_table_res[sbr->f[ch][l]][p];
+                k_h = sbr->f_table_res[sbr->f[ch][l]][p + 1];
+                for (k = k_l; k < k_h; k++) {
+                    uint8_t i, l_i, u_i;
+                    nrg = 0;
+                    l_i = sbr->t_E[ch][l];
+                    u_i = sbr->t_E[ch][l + 1];
+                    div = (real_t)((u_i - l_i) * (k_h - k_l));
+                    if (div == 0) div = 1;
+                    for (i = l_i + sbr->tHFAdj; i < u_i + sbr->tHFAdj; i++) {
+                        for (j = k_l; j < k_h; j++) {
+    #ifdef FIXED_POINT
+        #ifdef SBR_LOW_POWER
+                            nrg += ((QMF_RE(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_RE(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
+        #else
+                            nrg += ((QMF_RE(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_RE(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) +
+                                   ((QMF_IM(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS) * ((QMF_IM(Xsbr[i][j]) + (1 << (REAL_BITS - 1))) >> REAL_BITS);
+        #endif
+    #else
+                            nrg += MUL_R(QMF_RE(Xsbr[i][j]), QMF_RE(Xsbr[i][j]))
+        #ifndef SBR_LOW_POWER
+                                   + MUL_R(QMF_IM(Xsbr[i][j]), QMF_IM(Xsbr[i][j]))
+        #endif
+                                ;
+    #endif
+                        }
+                    }
+                    sbr->E_curr[ch][k - sbr->kx][l] = nrg / div;
+    #ifdef SBR_LOW_POWER
+        #ifdef FIXED_POINT
+                    sbr->E_curr[ch][k - sbr->kx][l] <<= 1;
+        #else
+                    sbr->E_curr[ch][k - sbr->kx][l] *= 2;
+        #endif
+    #endif
+                }
+            }
+        }
+    }
+    return 0;
+}
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
+static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        uint8_t amp0 = (sbr->amp_res[0]) ? 0 : 1;
+        uint8_t amp1 = (sbr->amp_res[1]) ? 0 : 1;
+        real_t  tmp = (7 << REAL_BITS) + (sbr->E[0][k][l] << (REAL_BITS - amp0));
+        real_t  pan;
+        /* E[1] should always be even so shifting is OK */
+        uint8_t E = sbr->E[1][k][l] >> amp1;
+        if (ch == 0) {
+            if (E > 12) {
+                /* negative */
+                pan = pan_log2_tab[-12 + E];
+            } else {
+                /* positive */
+                pan = pan_log2_tab[12 - E] + ((12 - E) << REAL_BITS);
+            }
+        } else {
+            if (E < 12) {
+                /* negative */
+                pan = pan_log2_tab[-E + 12];
+            } else {
+                /* positive */
+                pan = pan_log2_tab[E - 12] + ((E - 12) << REAL_BITS);
+            }
+        }
+        /* tmp / pan in log2 */
+        return tmp - pan;
+    } else {
+        uint8_t amp = (sbr->amp_res[ch]) ? 0 : 1;
+        return (6 << REAL_BITS) + (sbr->E[ch][k][l] << (REAL_BITS - amp));
+    }
+}
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
+static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        real_t tmp = (7 << REAL_BITS) - (sbr->Q[0][k][l] << REAL_BITS);
+        real_t pan;
+        uint8_t Q = sbr->Q[1][k][l];
+        if (ch == 0) {
+            if (Q > 12) {
+                /* negative */
+                pan = pan_log2_tab[-12 + Q];
+            } else {
+                /* positive */
+                pan = pan_log2_tab[12 - Q] + ((12 - Q) << REAL_BITS);
+            }
+        } else {
+            if (Q < 12) {
+                /* negative */
+                pan = pan_log2_tab[-Q + 12];
+            } else {
+                /* positive */
+                pan = pan_log2_tab[Q - 12] + ((Q - 12) << REAL_BITS);
+            }
+        }
+        /* tmp / pan in log2 */
+        return tmp - pan;
+    } else {
+        return (6 << REAL_BITS) - (sbr->Q[ch][k][l] << REAL_BITS);
+    }
+}
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
+static real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+    /* check for coupled energy/noise data */
+    if (sbr->bs_coupling == 1) {
+        if ((sbr->Q[0][k][l] >= 0) && (sbr->Q[0][k][l] <= 30) && (sbr->Q[1][k][l] >= 0) && (sbr->Q[1][k][l] <= 24)) {
+            if (ch == 0) {
+                return log_Qplus1_pan[sbr->Q[0][k][l]][sbr->Q[1][k][l] >> 1];
+            } else {
+                return log_Qplus1_pan[sbr->Q[0][k][l]][12 - (sbr->Q[1][k][l] >> 1)];
+            }
+        } else {
+            return 0;
+        }
+    } else {
+        if (sbr->Q[ch][k][l] >= 0 && sbr->Q[ch][k][l] <= 30) {
+            return log_Qplus1[sbr->Q[ch][k][l]];
+        } else {
+            return 0;
+        }
+    }
+}
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef FIXED_POINT
+static void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+    /* log2 values of limiter gains */
+    static real_t limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
+    uint8_t       m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
+    // ALIGN real_t Q_M_lim[MAX_M];
+    // ALIGN real_t G_lim[MAX_M];
+    // ALIGN real_t S_M[MAX_M];
+    ALIGN real_t G_boost;
+    real_t* Q_M_lim = ps_malloc(MAX_M * sizeof(real_t));
+    real_t* G_lim = ps_malloc(MAX_M * sizeof(real_t));
+    real_t* S_M = ps_malloc(MAX_M * sizeof(real_t));
+    for (l = 0; l < sbr->L_E[ch]; l++) {
+        uint8_t current_f_noise_band = 0;
+        uint8_t current_res_band = 0;
+        uint8_t current_res_band2 = 0;
+        uint8_t current_hi_res_band = 0;
+        real_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+        if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
+        for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
+            real_t  Q_M = 0;
+            real_t  G_max;
+            real_t  den = 0;
+            real_t  acc1 = 0;
+            real_t  acc2 = 0;
+            uint8_t current_res_band_size = 0;
+            uint8_t Q_M_size = 0;
+            uint8_t ml1, ml2;
+            /* bounds of current limiter bands */
+            ml1 = sbr->f_table_lim[sbr->bs_limiter_bands][k];
+            ml2 = sbr->f_table_lim[sbr->bs_limiter_bands][k + 1];
+            if (ml1 > MAX_M) ml1 = MAX_M;
+            if (ml2 > MAX_M) ml2 = MAX_M;
+            /* calculate the accumulated E_orig and E_curr over the limiter band */
+            for (m = ml1; m < ml2; m++) {
+                if ((m + sbr->kx) < sbr->f_table_res[sbr->f[ch][l]][current_res_band + 1]) {
+                    current_res_band_size++;
+                } else {
+                    acc1 += pow2_int(-REAL_CONST(10) + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch));
+                    current_res_band++;
+                    current_res_band_size = 1;
+                }
+                acc2 += sbr->E_curr[ch][m][l];
+            }
+            acc1 += pow2_int(-REAL_CONST(10) + log2_int_tab[current_res_band_size] + find_log2_E(sbr, current_res_band, l, ch));
+            if (acc1 == 0)
+                acc1 = LOG2_MIN_INF;
+            else
+                acc1 = log2_int(acc1);
+            /* calculate the maximum gain */
+            /* ratio of the energy of the original signal and the energy
+             * of the HF generated signal
+             */
+            G_max = acc1 - log2_int(acc2) + limGain[sbr->bs_limiter_gains];
+            G_max = min(G_max, limGain[3]);
+            for (m = ml1; m < ml2; m++) {
+                real_t  G;
+                real_t  E_curr, E_orig;
+                real_t  Q_orig, Q_orig_plus1;
+                uint8_t S_index_mapped;
+                /* check if m is on a noise band border */
+                if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
+                    /* step to next noise band */
+                    current_f_noise_band++;
+                }
+                /* check if m is on a resolution band border */
+                if ((m + sbr->kx) == sbr->f_table_res[sbr->f[ch][l]][current_res_band2 + 1]) {
+                    /* accumulate a whole range of equal Q_Ms */
+                    if (Q_M_size > 0) den += pow2_int(log2_int_tab[Q_M_size] + Q_M);
+                    Q_M_size = 0;
+                    /* step to next resolution band */
+                    current_res_band2++;
+                    /* if we move to a new resolution band, we should check if we are
+                     * going to add a sinusoid in this band
+                     */
+                    S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
+                }
+                /* check if m is on a HI_RES band border */
+                if ((m + sbr->kx) == sbr->f_table_res[HI_RES][current_hi_res_band + 1]) {
+                    /* step to next HI_RES band */
+                    current_hi_res_band++;
+                }
+                /* find S_index_mapped
+                 * S_index_mapped can only be 1 for the m in the middle of the
+                 * current HI_RES band
+                 */
+                S_index_mapped = 0;
+                if ((l >= sbr->l_A[ch]) || (sbr->bs_add_harmonic_prev[ch][current_hi_res_band] && sbr->bs_add_harmonic_flag_prev[ch])) {
+                    /* find the middle subband of the HI_RES frequency band */
+                    if ((m + sbr->kx) == (sbr->f_table_res[HI_RES][current_hi_res_band + 1] + sbr->f_table_res[HI_RES][current_hi_res_band]) >> 1)
+                        S_index_mapped = sbr->bs_add_harmonic[ch][current_hi_res_band];
+                }
+                /* find bitstream parameters */
+                if (sbr->E_curr[ch][m][l] == 0)
+                    E_curr = LOG2_MIN_INF;
+                else
+                    E_curr = log2_int(sbr->E_curr[ch][m][l]);
+                E_orig = -REAL_CONST(10) + find_log2_E(sbr, current_res_band2, l, ch);
+                Q_orig = find_log2_Q(sbr, current_f_noise_band, current_t_noise_band, ch);
+                Q_orig_plus1 = find_log2_Qplus1(sbr, current_f_noise_band, current_t_noise_band, ch);
+                /* Q_M only depends on E_orig and Q_div2:
+                 * since N_Q <= N_Low <= N_High we only need to recalculate Q_M on
+                 * a change of current res band (HI or LO)
+                 */
+                Q_M = E_orig + Q_orig - Q_orig_plus1;
+                /* S_M only depends on E_orig, Q_div and S_index_mapped:
+                 * S_index_mapped can only be non-zero once per HI_RES band
+                 */
+                if (S_index_mapped == 0) {
+                    S_M[m] = LOG2_MIN_INF; /* -inf */
+                } else {
+                    S_M[m] = E_orig - Q_orig_plus1;
+                    /* accumulate sinusoid part of the total energy */
+                    den += pow2_int(S_M[m]);
+                }
+                /* calculate gain */
+                /* ratio of the energy of the original signal and the energy
+                 * of the HF generated signal
+                 */
+                /* E_curr here is officially E_curr+1 so the log2() of that can never be < 0 */
+                /* scaled by -10 */
+                G = E_orig - max(-REAL_CONST(10), E_curr);
+                if ((S_mapped == 0) && (delta == 1)) {
+                    /* G = G * 1/(1+Q) */
+                    G -= Q_orig_plus1;
+                } else if (S_mapped == 1) {
+                    /* G = G * Q/(1+Q) */
+                    G += Q_orig - Q_orig_plus1;
+                }
+                /* limit the additional noise energy level */
+                /* and apply the limiter */
+                if (G_max > G) {
+                    Q_M_lim[m] = Q_M;
+                    G_lim[m] = G;
+                    if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { Q_M_size++; }
+                } else {
+                    /* G > G_max */
+                    Q_M_lim[m] = Q_M + G_max - G;
+                    G_lim[m] = G_max;
+                    /* accumulate limited Q_M */
+                    if ((S_index_mapped == 0) && (l != sbr->l_A[ch])) { den += pow2_int(Q_M_lim[m]); }
+                }
+                /* accumulate the total energy */
+                /* E_curr changes for every m so we do need to accumulate every m */
+                den += pow2_int(E_curr + G_lim[m]);
+            }
+            /* accumulate last range of equal Q_Ms */
+            if (Q_M_size > 0) { den += pow2_int(log2_int_tab[Q_M_size] + Q_M); }
+            /* calculate the final gain */
+            /* G_boost: [0..2.51188643] */
+            G_boost = acc1 - log2_int(den /*+ _EPS*/);
+            G_boost = min(G_boost, REAL_CONST(1.328771237) /* log2(1.584893192 ^ 2) */);
+            for (m = ml1; m < ml2; m++) {
+                    /* apply compensation to gain, noise floor sf's and sinusoid levels */
+        #ifndef SBR_LOW_POWER
+                adj->G_lim_boost[l][m] = pow2_fix((G_lim[m] + G_boost) >> 1);
+        #else
+                /* sqrt() will be done after the aliasing reduction to save a
+                 * few multiplies
+                 */
+                adj->G_lim_boost[l][m] = pow2_fix(G_lim[m] + G_boost);
+        #endif
+                adj->Q_M_lim_boost[l][m] = pow2_fix((Q_M_lim[m] + G_boost) >> 1);
+                if (S_M[m] != LOG2_MIN_INF) {
+                    adj->S_M_boost[l][m] = pow2_int((S_M[m] + G_boost) >> 1);
+                } else {
+                    adj->S_M_boost[l][m] = 0;
+                }
+            }
+        }
+    }
+    if(Q_M_lim)free(Q_M_lim);
+    if(G_lim)free(G_lim);
+    if(S_M)free(S_M);
+}
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef FIXED_POINT
+        #ifdef LOG2_TEST
+            #define LOG2_MIN_INF -100000
+__inline float pow2(float val) {
+    return pow(2.0, val);
+}
+__inline float log2(float val) {
+    return log(val) / log(2.0);
+}
+            #define RB 14
+float QUANTISE2REAL(float val) {
+    __int32 ival = (__int32)(val * (1 << RB));
+    return (float)ival / (float)((1 << RB));
+}
+float QUANTISE2INT(float val) {
+    return floor(val);
+}
+        #endif // LOG2_TEST
+    #endif // FIXED_POINT
+#endif // SBR_DEC
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t* deg, uint8_t ch) {
+    uint8_t l, i, x;
+    //    ALIGN complex_t alpha_0[64], alpha_1[64];
+    complex_t* alpha_0 = ps_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_1 = ps_malloc(64 * sizeof(complex_t));
+    #ifdef SBR_LOW_POWER
+    // ALIGN real_t rxx[64];
+    real_t* rxx = ps_malloc(64 * sizeof(real_t));
+    #endif
+        uint8_t offset = sbr->tHFAdj;
+    uint8_t     first = sbr->t_E[ch][0];
+    uint8_t     last = sbr->t_E[ch][sbr->L_E[ch]];
+    calc_chirp_factors(sbr, ch);
+    #ifdef SBR_LOW_POWER
+    memset(deg, 0, 64 * sizeof(real_t));
+    #endif
+    if ((ch == 0) && (sbr->Reset)) patch_construction(sbr);
+        /* calculate the prediction coefficients */
+    #ifdef SBR_LOW_POWER
+    calc_prediction_coef_lp(sbr, Xlow, alpha_0, alpha_1, rxx);
+    calc_aliasing_degree(sbr, rxx, deg);
+    #endif
+    /* actual HF generation */
+    for (i = 0; i < sbr->noPatches; i++) {
+        for (x = 0; x < sbr->patchNoSubbands[i]; x++) {
+            real_t  a0_r, a0_i, a1_r, a1_i; (void)a0_i; (void)a1_i;
+            real_t  bw, bw2;
+            uint8_t q, p, k, g;
+            /* find the low and high band for patching */
+            k = sbr->kx + x;
+            for (q = 0; q < i; q++) { k += sbr->patchNoSubbands[q]; }
+            p = sbr->patchStartSubband[i] + x;
+    #ifdef SBR_LOW_POWER
+            if (x != 0 /*x < sbr->patchNoSubbands[i]-1*/)
+                deg[k] = deg[p];
+            else
+                deg[k] = 0;
+    #endif
+            g = sbr->table_map_k_to_g[k];
+            bw = sbr->bwArray[ch][g];
+            bw2 = MUL_C(bw, bw);
+            /* do the patching */
+            /* with or without filtering */
+            if (bw2 > 0) {
+                real_t temp1_r, temp2_r, temp3_r;
+    #ifndef SBR_LOW_POWER
+                real_t temp1_i, temp2_i, temp3_i;
+                calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
+    #endif
+                a0_r = MUL_C(RE(alpha_0[p]), bw);
+                a1_r = MUL_C(RE(alpha_1[p]), bw2);
+    #ifndef SBR_LOW_POWER
+                a0_i = MUL_C(IM(alpha_0[p]), bw);
+                a1_i = MUL_C(IM(alpha_1[p]), bw2);
+    #endif
+                temp2_r = QMF_RE(Xlow[first - 2 + offset][p]);
+                temp3_r = QMF_RE(Xlow[first - 1 + offset][p]);
+    #ifndef SBR_LOW_POWER
+                temp2_i = QMF_IM(Xlow[first - 2 + offset][p]);
+                temp3_i = QMF_IM(Xlow[first - 1 + offset][p]);
+    #endif
+                for (l = first; l < last; l++) {
+                    temp1_r = temp2_r;
+                    temp2_r = temp3_r;
+                    temp3_r = QMF_RE(Xlow[l + offset][p]);
+    #ifndef SBR_LOW_POWER
+                    temp1_i = temp2_i;
+                    temp2_i = temp3_i;
+                    temp3_i = QMF_IM(Xlow[l + offset][p]);
+    #endif
+    #ifdef SBR_LOW_POWER
+                    QMF_RE(Xhigh[l + offset][k]) = temp3_r + (MUL_R(a0_r, temp2_r) + MUL_R(a1_r, temp1_r));
+    #else
+                    QMF_RE(Xhigh[l + offset][k]) = temp3_r + (MUL_R(a0_r, temp2_r) - MUL_R(a0_i, temp2_i) + MUL_R(a1_r, temp1_r) - MUL_R(a1_i, temp1_i));
+                    QMF_IM(Xhigh[l + offset][k]) = temp3_i + (MUL_R(a0_i, temp2_r) + MUL_R(a0_r, temp2_i) + MUL_R(a1_i, temp1_r) + MUL_R(a1_r, temp1_i));
+    #endif
+                }
+            } else {
+                for (l = first; l < last; l++) {
+                    QMF_RE(Xhigh[l + offset][k]) = QMF_RE(Xlow[l + offset][p]);
+    #ifndef SBR_LOW_POWER
+                    QMF_IM(Xhigh[l + offset][k]) = QMF_IM(Xlow[l + offset][p]);
+    #endif
+                }
+            }
+        }
+    }
+    if (sbr->Reset) { limiter_frequency_table(sbr); }
+    if (alpha_0) free(alpha_0);
+    if (alpha_1) free(alpha_1);
+    #ifdef SBR_LOW_POWER
+    if (rxx) free(rxx);
+    #endif
+}
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+typedef struct {
+    complex_t r01;
+    complex_t r02;
+    complex_t r11;
+    complex_t r12;
+    complex_t r22;
+    real_t    det;
+} acorr_coef;
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
+    real_t  r01 = 0, r02 = 0, r11 = 0;
+    int8_t  j;
+    uint8_t offset = sbr->tHFAdj;
+        #ifdef FIXED_POINT
+    const real_t rel = FRAC_CONST(0.999999); // 1 / (1 + 1e-6f);
+    uint32_t     maxi = 0; (void)maxi;
+    uint32_t     pow2, exp;(void)pow2;
+        #else
+    const real_t rel = 1 / (1 + 1e-6f);
+        #endif
+        #ifdef FIXED_POINT
+    uint32_t mask = 0;
+    for (j = (offset - 2); j < (len + offset); j++) {
+        real_t x;
+        x = QMF_RE(buffer[j][bd]) >> REAL_BITS;
+        mask |= x ^ (x >> 31);
+    }
+    exp = wl_min_lzc(mask);
+    /* improves accuracy */
+    if (exp > 0) exp -= 1;
+    for (j = offset; j < len + offset; j++) {
+        real_t buf_j = ((QMF_RE(buffer[j][bd]) + (1 << (exp - 1))) >> exp);
+        real_t buf_j_1 = ((QMF_RE(buffer[j - 1][bd]) + (1 << (exp - 1))) >> exp);
+        real_t buf_j_2 = ((QMF_RE(buffer[j - 2][bd]) + (1 << (exp - 1))) >> exp);
+        /* normalisation with rounding */
+        r01 += MUL_R(buf_j, buf_j_1);
+        r02 += MUL_R(buf_j, buf_j_2);
+        r11 += MUL_R(buf_j_1, buf_j_1);
+    }
+    RE(ac->r12) = r01 - MUL_R(((QMF_RE(buffer[len + offset - 1][bd]) + (1 << (exp - 1))) >> exp), ((QMF_RE(buffer[len + offset - 2][bd]) + (1 << (exp - 1))) >> exp)) +
+                  MUL_R(((QMF_RE(buffer[offset - 1][bd]) + (1 << (exp - 1))) >> exp), ((QMF_RE(buffer[offset - 2][bd]) + (1 << (exp - 1))) >> exp));
+    RE(ac->r22) = r11 - MUL_R(((QMF_RE(buffer[len + offset - 2][bd]) + (1 << (exp - 1))) >> exp), ((QMF_RE(buffer[len + offset - 2][bd]) + (1 << (exp - 1))) >> exp)) +
+                  MUL_R(((QMF_RE(buffer[offset - 2][bd]) + (1 << (exp - 1))) >> exp), ((QMF_RE(buffer[offset - 2][bd]) + (1 << (exp - 1))) >> exp));
+        #else
+    for (j = offset; j < len + offset; j++) {
+        r01 += QMF_RE(buffer[j][bd]) * QMF_RE(buffer[j - 1][bd]);
+        r02 += QMF_RE(buffer[j][bd]) * QMF_RE(buffer[j - 2][bd]);
+        r11 += QMF_RE(buffer[j - 1][bd]) * QMF_RE(buffer[j - 1][bd]);
+    }
+    RE(ac->r12) = r01 - QMF_RE(buffer[len + offset - 1][bd]) * QMF_RE(buffer[len + offset - 2][bd]) + QMF_RE(buffer[offset - 1][bd]) * QMF_RE(buffer[offset - 2][bd]);
+    RE(ac->r22) = r11 - QMF_RE(buffer[len + offset - 2][bd]) * QMF_RE(buffer[len + offset - 2][bd]) + QMF_RE(buffer[offset - 2][bd]) * QMF_RE(buffer[offset - 2][bd]);
+        #endif
+    RE(ac->r01) = r01;
+    RE(ac->r02) = r02;
+    RE(ac->r11) = r11;
+    ac->det = MUL_R(RE(ac->r11), RE(ac->r22)) - MUL_F(MUL_R(RE(ac->r12), RE(ac->r12)), rel);
+}
+    #endif//  SBR_LOW_POWER
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef SBR_LOW_POWER
+static void auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
+    real_t r01r = 0, r01i = 0, r02r = 0, r02i = 0, r11r = 0;
+    real_t temp1_r, temp1_i, temp2_r, temp2_i, temp3_r, temp3_i, temp4_r, temp4_i, temp5_r, temp5_i;
+        #ifdef FIXED_POINT
+    const real_t rel = FRAC_CONST(0.999999); // 1 / (1 + 1e-6f);
+    uint32_t     mask, exp;
+    real_t       pow2_to_exp;
+        #else
+    const real_t rel = 1 / (1 + 1e-6f);
+        #endif
+    int8_t  j;
+    uint8_t offset = sbr->tHFAdj;
+        #ifdef FIXED_POINT
+    mask = 0;
+    for (j = (offset - 2); j < (len + offset); j++) {
+        real_t x;
+        x = QMF_RE(buffer[j][bd]) >> REAL_BITS;
+        mask |= x ^ (x >> 31);
+        x = QMF_IM(buffer[j][bd]) >> REAL_BITS;
+        mask |= x ^ (x >> 31);
+    }
+    exp = wl_min_lzc(mask);
+    /* improves accuracy */
+    if (exp > 0) exp -= 1;
+    pow2_to_exp = 1 << (exp - 1);
+    temp2_r = (QMF_RE(buffer[offset - 2][bd]) + pow2_to_exp) >> exp;
+    temp2_i = (QMF_IM(buffer[offset - 2][bd]) + pow2_to_exp) >> exp;
+    temp3_r = (QMF_RE(buffer[offset - 1][bd]) + pow2_to_exp) >> exp;
+    temp3_i = (QMF_IM(buffer[offset - 1][bd]) + pow2_to_exp) >> exp;
+    // Save these because they are needed after loop
+    temp4_r = temp2_r;
+    temp4_i = temp2_i;
+    temp5_r = temp3_r;
+    temp5_i = temp3_i;
+    for (j = offset; j < len + offset; j++) {
+        temp1_r = temp2_r; // temp1_r = (QMF_RE(buffer[offset-2][bd] + (1<<(exp-1))) >> exp;
+        temp1_i = temp2_i; // temp1_i = (QMF_IM(buffer[offset-2][bd] + (1<<(exp-1))) >> exp;
+        temp2_r = temp3_r; // temp2_r = (QMF_RE(buffer[offset-1][bd] + (1<<(exp-1))) >> exp;
+        temp2_i = temp3_i; // temp2_i = (QMF_IM(buffer[offset-1][bd] + (1<<(exp-1))) >> exp;
+        temp3_r = (QMF_RE(buffer[j][bd]) + pow2_to_exp) >> exp;
+        temp3_i = (QMF_IM(buffer[j][bd]) + pow2_to_exp) >> exp;
+        r01r += MUL_R(temp3_r, temp2_r) + MUL_R(temp3_i, temp2_i);
+        r01i += MUL_R(temp3_i, temp2_r) - MUL_R(temp3_r, temp2_i);
+        r02r += MUL_R(temp3_r, temp1_r) + MUL_R(temp3_i, temp1_i);
+        r02i += MUL_R(temp3_i, temp1_r) - MUL_R(temp3_r, temp1_i);
+        r11r += MUL_R(temp2_r, temp2_r) + MUL_R(temp2_i, temp2_i);
+    }
+    // These are actual values in temporary variable at this point
+    // temp1_r = (QMF_RE(buffer[len+offset-1-2][bd] + (1<<(exp-1))) >> exp;
+    // temp1_i = (QMF_IM(buffer[len+offset-1-2][bd] + (1<<(exp-1))) >> exp;
+    // temp2_r = (QMF_RE(buffer[len+offset-1-1][bd] + (1<<(exp-1))) >> exp;
+    // temp2_i = (QMF_IM(buffer[len+offset-1-1][bd] + (1<<(exp-1))) >> exp;
+    // temp3_r = (QMF_RE(buffer[len+offset-1][bd]) + (1<<(exp-1))) >> exp;
+    // temp3_i = (QMF_IM(buffer[len+offset-1][bd]) + (1<<(exp-1))) >> exp;
+    // temp4_r = (QMF_RE(buffer[offset-2][bd]) + (1<<(exp-1))) >> exp;
+    // temp4_i = (QMF_IM(buffer[offset-2][bd]) + (1<<(exp-1))) >> exp;
+    // temp5_r = (QMF_RE(buffer[offset-1][bd]) + (1<<(exp-1))) >> exp;
+    // temp5_i = (QMF_IM(buffer[offset-1][bd]) + (1<<(exp-1))) >> exp;
+    RE(ac->r12) = r01r - (MUL_R(temp3_r, temp2_r) + MUL_R(temp3_i, temp2_i)) + (MUL_R(temp5_r, temp4_r) + MUL_R(temp5_i, temp4_i));
+    IM(ac->r12) = r01i - (MUL_R(temp3_i, temp2_r) - MUL_R(temp3_r, temp2_i)) + (MUL_R(temp5_i, temp4_r) - MUL_R(temp5_r, temp4_i));
+    RE(ac->r22) = r11r - (MUL_R(temp2_r, temp2_r) + MUL_R(temp2_i, temp2_i)) + (MUL_R(temp4_r, temp4_r) + MUL_R(temp4_i, temp4_i));
+        #else
+    temp2_r = QMF_RE(buffer[offset - 2][bd]);
+    temp2_i = QMF_IM(buffer[offset - 2][bd]);
+    temp3_r = QMF_RE(buffer[offset - 1][bd]);
+    temp3_i = QMF_IM(buffer[offset - 1][bd]);
+    // Save these because they are needed after loop
+    temp4_r = temp2_r;
+    temp4_i = temp2_i;
+    temp5_r = temp3_r;
+    temp5_i = temp3_i;
+    for (j = offset; j < len + offset; j++) {
+        temp1_r = temp2_r; // temp1_r = QMF_RE(buffer[j-2][bd];
+        temp1_i = temp2_i; // temp1_i = QMF_IM(buffer[j-2][bd];
+        temp2_r = temp3_r; // temp2_r = QMF_RE(buffer[j-1][bd];
+        temp2_i = temp3_i; // temp2_i = QMF_IM(buffer[j-1][bd];
+        temp3_r = QMF_RE(buffer[j][bd]);
+        temp3_i = QMF_IM(buffer[j][bd]);
+        r01r += temp3_r * temp2_r + temp3_i * temp2_i;
+        r01i += temp3_i * temp2_r - temp3_r * temp2_i;
+        r02r += temp3_r * temp1_r + temp3_i * temp1_i;
+        r02i += temp3_i * temp1_r - temp3_r * temp1_i;
+        r11r += temp2_r * temp2_r + temp2_i * temp2_i;
+    }
+    // These are actual values in temporary variable at this point
+    // temp1_r = QMF_RE(buffer[len+offset-1-2][bd];
+    // temp1_i = QMF_IM(buffer[len+offset-1-2][bd];
+    // temp2_r = QMF_RE(buffer[len+offset-1-1][bd];
+    // temp2_i = QMF_IM(buffer[len+offset-1-1][bd];
+    // temp3_r = QMF_RE(buffer[len+offset-1][bd]);
+    // temp3_i = QMF_IM(buffer[len+offset-1][bd]);
+    // temp4_r = QMF_RE(buffer[offset-2][bd]);
+    // temp4_i = QMF_IM(buffer[offset-2][bd]);
+    // temp5_r = QMF_RE(buffer[offset-1][bd]);
+    // temp5_i = QMF_IM(buffer[offset-1][bd]);
+    RE(ac->r12) = r01r - (temp3_r * temp2_r + temp3_i * temp2_i) + (temp5_r * temp4_r + temp5_i * temp4_i);
+    IM(ac->r12) = r01i - (temp3_i * temp2_r - temp3_r * temp2_i) + (temp5_i * temp4_r - temp5_r * temp4_i);
+    RE(ac->r22) = r11r - (temp2_r * temp2_r + temp2_i * temp2_i) + (temp4_r * temp4_r + temp4_i * temp4_i);
+        #endif
+    RE(ac->r01) = r01r;
+    IM(ac->r01) = r01i;
+    RE(ac->r02) = r02r;
+    IM(ac->r02) = r02i;
+    RE(ac->r11) = r11r;
+    ac->det = MUL_R(RE(ac->r11), RE(ac->r22)) - MUL_F(rel, (MUL_R(RE(ac->r12), RE(ac->r12)) + MUL_R(IM(ac->r12), IM(ac->r12))));
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifndef SBR_LOW_POWER
+    /* calculate linear prediction coefficients using the covariance method */
+static void calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
+    real_t     tmp;
+    acorr_coef ac;
+    auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
+    if (ac.det == 0) {
+        RE(alpha_1[k]) = 0;
+        IM(alpha_1[k]) = 0;
+    } else {
+        #ifdef FIXED_POINT
+        tmp = (MUL_R(RE(ac.r01), RE(ac.r12)) - MUL_R(IM(ac.r01), IM(ac.r12)) - MUL_R(RE(ac.r02), RE(ac.r11)));
+        RE(alpha_1[k]) = DIV_R(tmp, ac.det);
+        tmp = (MUL_R(IM(ac.r01), RE(ac.r12)) + MUL_R(RE(ac.r01), IM(ac.r12)) - MUL_R(IM(ac.r02), RE(ac.r11)));
+        IM(alpha_1[k]) = DIV_R(tmp, ac.det);
+        #else
+        tmp = REAL_CONST(1.0) / ac.det;
+        RE(alpha_1[k]) = (MUL_R(RE(ac.r01), RE(ac.r12)) - MUL_R(IM(ac.r01), IM(ac.r12)) - MUL_R(RE(ac.r02), RE(ac.r11))) * tmp;
+        IM(alpha_1[k]) = (MUL_R(IM(ac.r01), RE(ac.r12)) + MUL_R(RE(ac.r01), IM(ac.r12)) - MUL_R(IM(ac.r02), RE(ac.r11))) * tmp;
+        #endif
+    }
+    if (RE(ac.r11) == 0) {
+        RE(alpha_0[k]) = 0;
+        IM(alpha_0[k]) = 0;
+    } else {
+        #ifdef FIXED_POINT
+        tmp = -(RE(ac.r01) + MUL_R(RE(alpha_1[k]), RE(ac.r12)) + MUL_R(IM(alpha_1[k]), IM(ac.r12)));
+        RE(alpha_0[k]) = DIV_R(tmp, RE(ac.r11));
+        tmp = -(IM(ac.r01) + MUL_R(IM(alpha_1[k]), RE(ac.r12)) - MUL_R(RE(alpha_1[k]), IM(ac.r12)));
+        IM(alpha_0[k]) = DIV_R(tmp, RE(ac.r11));
+        #else
+        tmp = 1.0f / RE(ac.r11);
+        RE(alpha_0[k]) = -(RE(ac.r01) + MUL_R(RE(alpha_1[k]), RE(ac.r12)) + MUL_R(IM(alpha_1[k]), IM(ac.r12))) * tmp;
+        IM(alpha_0[k]) = -(IM(ac.r01) + MUL_R(IM(alpha_1[k]), RE(ac.r12)) - MUL_R(RE(alpha_1[k]), IM(ac.r12))) * tmp;
+        #endif
+    }
+    if ((MUL_R(RE(alpha_0[k]), RE(alpha_0[k])) + MUL_R(IM(alpha_0[k]), IM(alpha_0[k])) >= REAL_CONST(16)) ||
+        (MUL_R(RE(alpha_1[k]), RE(alpha_1[k])) + MUL_R(IM(alpha_1[k]), IM(alpha_1[k])) >= REAL_CONST(16))) {
+        RE(alpha_0[k]) = 0;
+        IM(alpha_0[k]) = 0;
+        RE(alpha_1[k]) = 0;
+        IM(alpha_1[k]) = 0;
+    }
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void calc_prediction_coef_lp(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, real_t* rxx) {
+    uint8_t    k;
+    real_t     tmp;
+    acorr_coef ac;
+    for (k = 1; k < sbr->f_master[0]; k++) {
+        auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
+        if (ac.det == 0) {
+            RE(alpha_0[k]) = 0;
+            RE(alpha_1[k]) = 0;
+        } else {
+            tmp = MUL_R(RE(ac.r01), RE(ac.r22)) - MUL_R(RE(ac.r12), RE(ac.r02));
+            RE(alpha_0[k]) = DIV_R(tmp, (-ac.det));
+            tmp = MUL_R(RE(ac.r01), RE(ac.r12)) - MUL_R(RE(ac.r02), RE(ac.r11));
+            RE(alpha_1[k]) = DIV_R(tmp, ac.det);
+        }
+        if ((RE(alpha_0[k]) >= REAL_CONST(4)) || (RE(alpha_1[k]) >= REAL_CONST(4))) {
+            RE(alpha_0[k]) = REAL_CONST(0);
+            RE(alpha_1[k]) = REAL_CONST(0);
+        }
+        /* reflection coefficient */
+        if (RE(ac.r11) == 0) {
+            rxx[k] = COEF_CONST(0.0);
+        } else {
+            rxx[k] = DIV_C(RE(ac.r01), RE(ac.r11));
+            rxx[k] = -rxx[k];
+            if (rxx[k] > COEF_CONST(1.0)) rxx[k] = COEF_CONST(1.0);
+            if (rxx[k] < COEF_CONST(-1.0)) rxx[k] = COEF_CONST(-1.0);
+        }
+    }
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+    #ifdef SBR_LOW_POWER
+void calc_aliasing_degree(sbr_info* sbr, real_t* rxx, real_t* deg) {
+    uint8_t k;
+    rxx[0] = COEF_CONST(0.0);
+    deg[1] = COEF_CONST(0.0);
+    for (k = 2; k < sbr->k0; k++) {
+        deg[k] = 0.0;
+        if ((k % 2 == 0) && (rxx[k] < COEF_CONST(0.0))) {
+            if (rxx[k - 1] < 0.0) {
+                deg[k] = COEF_CONST(1.0);
+                if (rxx[k - 2] > COEF_CONST(0.0)) { deg[k - 1] = COEF_CONST(1.0) - MUL_C(rxx[k - 1], rxx[k - 1]); }
+            } else if (rxx[k - 2] > COEF_CONST(0.0)) {
+                deg[k] = COEF_CONST(1.0) - MUL_C(rxx[k - 1], rxx[k - 1]);
+            }
+        }
+        if ((k % 2 == 1) && (rxx[k] > COEF_CONST(0.0))) {
+            if (rxx[k - 1] > COEF_CONST(0.0)) {
+                deg[k] = COEF_CONST(1.0);
+                if (rxx[k - 2] < COEF_CONST(0.0)) { deg[k - 1] = COEF_CONST(1.0) - MUL_C(rxx[k - 1], rxx[k - 1]); }
+            } else if (rxx[k - 2] < COEF_CONST(0.0)) {
+                deg[k] = COEF_CONST(1.0) - MUL_C(rxx[k - 1], rxx[k - 1]);
+            }
+        }
+    }
+}
+    #endif // SBR_LOW_POWER
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* FIXED POINT: bwArray = COEF */
+static real_t mapNewBw(uint8_t invf_mode, uint8_t invf_mode_prev) {
+    switch (invf_mode) {
+        case 1:                      /* LOW */
+            if (invf_mode_prev == 0) /* NONE */
+                return COEF_CONST(0.6);
+            else
+                return COEF_CONST(0.75);
+        case 2: /* MID */ return COEF_CONST(0.9);
+        case 3: /* HIGH */ return COEF_CONST(0.98);
+        default:                     /* NONE */
+            if (invf_mode_prev == 1) /* LOW */
+                return COEF_CONST(0.6);
+            else
+                return COEF_CONST(0.0);
+    }
+}
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+/* FIXED POINT: bwArray = COEF */
+void calc_chirp_factors(sbr_info* sbr, uint8_t ch) {
+    uint8_t i;
+    for (i = 0; i < sbr->N_Q; i++) {
+        sbr->bwArray[ch][i] = mapNewBw(sbr->bs_invf_mode[ch][i], sbr->bs_invf_mode_prev[ch][i]);
+        if (sbr->bwArray[ch][i] < sbr->bwArray_prev[ch][i])
+            sbr->bwArray[ch][i] = MUL_F(sbr->bwArray[ch][i], FRAC_CONST(0.75)) + MUL_F(sbr->bwArray_prev[ch][i], FRAC_CONST(0.25));
+        else
+            sbr->bwArray[ch][i] = MUL_F(sbr->bwArray[ch][i], FRAC_CONST(0.90625)) + MUL_F(sbr->bwArray_prev[ch][i], FRAC_CONST(0.09375));
+        if (sbr->bwArray[ch][i] < COEF_CONST(0.015625)) sbr->bwArray[ch][i] = COEF_CONST(0.0);
+        if (sbr->bwArray[ch][i] >= COEF_CONST(0.99609375)) sbr->bwArray[ch][i] = COEF_CONST(0.99609375);
+        sbr->bwArray_prev[ch][i] = sbr->bwArray[ch][i];
+        sbr->bs_invf_mode_prev[ch][i] = sbr->bs_invf_mode[ch][i];
+    }
+}
+#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef SBR_DEC
+void patch_construction(sbr_info* sbr) {
+    uint8_t i, k;
+    uint8_t odd, sb;
+    uint8_t msb = sbr->k0;
+    uint8_t usb = sbr->kx;
+    uint8_t goalSbTab[] = {21, 23, 32, 43, 46, 64, 85, 93, 128, 0, 0, 0};
+    /* (uint8_t)(2.048e6/sbr->sample_rate + 0.5); */
+    uint8_t goalSb = goalSbTab[get_sr_index(sbr->sample_rate)];
+    sbr->noPatches = 0;
+    if (goalSb < (sbr->kx + sbr->M)) {
+        for (i = 0, k = 0; sbr->f_master[i] < goalSb; i++) k = i + 1;
+    } else {
+        k = sbr->N_master;
+    }
+    if (sbr->N_master == 0) {
+        sbr->noPatches = 0;
+        sbr->patchNoSubbands[0] = 0;
+        sbr->patchStartSubband[0] = 0;
+        return;
+    }
+    do {
+        uint8_t j = k + 1;
+        do {
+            j--;
+            sb = sbr->f_master[j];
+            odd = (sb - 2 + sbr->k0) % 2;
+        } while (sb > (sbr->k0 - 1 + msb - odd));
+        sbr->patchNoSubbands[sbr->noPatches] = max(sb - usb, 0);
+        sbr->patchStartSubband[sbr->noPatches] = sbr->k0 - odd - sbr->patchNoSubbands[sbr->noPatches];
+        if (sbr->patchNoSubbands[sbr->noPatches] > 0) {
+            usb = sb;
+            msb = sb;
+            sbr->noPatches++;
+        } else {
+            msb = sbr->kx;
+        }
+        if (sbr->f_master[k] - sb < 3) k = sbr->N_master;
+    } while (sb != (sbr->kx + sbr->M));
+    if ((sbr->patchNoSubbands[sbr->noPatches - 1] < 3) && (sbr->noPatches > 1)) { sbr->noPatches--; }
+    sbr->noPatches = min(sbr->noPatches, 5);
+}
+#endif // SBR_DEC
+
+
