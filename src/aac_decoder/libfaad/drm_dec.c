@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "common.h"
+#include "fixed.h"
 #ifdef DRM
 #include "sbr_dec.h"
 #include "drm_dec.h"

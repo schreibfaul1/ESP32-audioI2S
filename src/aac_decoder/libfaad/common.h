@@ -29,292 +29,201 @@
 **/
 #ifndef __COMMON_H__
 #define __COMMON_H__
-#define STDC_HEADERS 1
-#define HAVE_STDLIB_H 1
-#define HAVE_STRING_H 1
+#define STDC_HEADERS    1
+#define HAVE_STDLIB_H   1
+#define HAVE_STRING_H   1
 #define HAVE_INTTYPES_H 1
+
+
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include "neaacdec.h"
+#include "fixed.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#ifdef HAVE_CONFIG_H
-#  include "../config.h"
-#endif
-#include "neaacdec.h"
-#if 0 //defined(_WIN32) && !defined(_WIN32_WCE)
-#define ALIGN __declspec(align(16))
+
+
+#if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
+    #define ALIGN __declspec(align(16))
 #else
-#define ALIGN
+    #define ALIGN
 #endif
 /* COMPILE TIME DEFINITIONS */
 
-//#define PREFER_POINTERS // Use if target platform has address generators with autoincrement
-//#define BIG_IQ_TABLE
-#define USE_DOUBLE_PRECISION // use double precision
-#define FIXED_POINT // use fixed point reals
+// #define PREFER_POINTERS // Use if target platform has address generators with autoincrement
+// #define BIG_IQ_TABLE
+// #define USE_DOUBLE_PRECISION // use double precision
+// #define FIXED_POINT          // use fixed point reals
 #define ERROR_RESILIENCE
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
-//#define SSR_DEC // Allow decoding of SSR profile AAC
+// #define SSR_DEC // Allow decoding of SSR profile AAC
 #define LTP_DEC // Allow decoding of LTP (Long Term Prediction) profile AAC
-#define LD_DEC // Allow decoding of LD (Low Delay) profile AAC
-//#define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
+#define LD_DEC  // Allow decoding of LD (Low Delay) profile AAC
+// #define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
 #define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
-//#define SBR_LOW_POWER
+#define SBR_LOW_POWER 2
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
-
-
-
-
+// #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
 
 #ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
-#define DRM
-#define DRM_PS
-#endif
-/* LD can't do without LTP */
-#ifdef LD_DEC
-#ifndef ERROR_RESILIENCE
-#define ERROR_RESILIENCE
-#endif
-#ifndef LTP_DEC
-#define LTP_DEC
-#endif
+    #define DRM
+    #define DRM_PS
 #endif
 
-// Define LC_ONLY_DECODER if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
-//#define LC_ONLY_DECODER
+#ifdef LD_DEC // LD can't do without LTP
+    #ifndef ERROR_RESILIENCE
+        #define ERROR_RESILIENCE
+    #endif
+    #ifndef LTP_DEC
+        #define LTP_DEC
+    #endif
+#endif
+
 #ifdef LC_ONLY_DECODER
-  #undef LD_DEC
-  #undef LTP_DEC
-  #undef MAIN_DEC
-  #undef SSR_DEC
-  #undef DRM
-  #undef DRM_PS
-  #undef ALLOW_SMALL_FRAMELENGTH
-  #undef ERROR_RESILIENCE
+    #undef LD_DEC
+    #undef LTP_DEC
+    #undef MAIN_DEC
+    #undef SSR_DEC
+    #undef DRM
+    #undef DRM_PS
+    #undef ALLOW_SMALL_FRAMELENGTH
+    #undef ERROR_RESILIENCE
 #endif
 
 #ifdef SBR_LOW_POWER
-#undef PS_DEC
+    #undef PS_DEC
 #endif
-/* FIXED POINT: No MAIN decoding */
-#ifdef FIXED_POINT
-# ifdef MAIN_DEC
-#  undef MAIN_DEC
-# endif
+
+#ifdef FIXED_POINT /*  No MAIN decoding */
+    #ifdef MAIN_DEC
+        #undef MAIN_DEC
+    #endif
 #endif // FIXED_POINT
+
 #ifdef DRM
-# ifndef ALLOW_SMALL_FRAMELENGTH
-#  define ALLOW_SMALL_FRAMELENGTH
-# endif
-# undef LD_DEC
-# undef LTP_DEC
-# undef MAIN_DEC
-# undef SSR_DEC
+    #ifndef ALLOW_SMALL_FRAMELENGTH
+        #define ALLOW_SMALL_FRAMELENGTH
+    #endif
+    #undef LD_DEC
+    #undef LTP_DEC
+    #undef MAIN_DEC
+    #undef SSR_DEC
 #endif
-#ifdef FIXED_POINT
-#define DIV_R(A, B) (((int64_t)A << REAL_BITS)/B)
-#define DIV_C(A, B) (((int64_t)A << COEF_BITS)/B)
-#else
-#define DIV_R(A, B) ((A)/(B))
-#define DIV_C(A, B) ((A)/(B))
-#endif
-#ifndef SBR_LOW_POWER
-#define qmf_t complex_t
-#define QMF_RE(A) RE(A)
-#define QMF_IM(A) IM(A)
-#else
-#define qmf_t real_t
-#define QMF_RE(A) (A)
-#define QMF_IM(A)
-#endif
+
+
 /* END COMPILE TIME DEFINITIONS */
-#if defined(_WIN32) && !defined(__MINGW32__)
-#include <stdlib.h>
-typedef unsigned __int64 uint64_t;
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int8 uint8_t;
-typedef signed __int64 int64_t;
-typedef signed __int32 int32_t;
-typedef signed __int16 int16_t;
-typedef signed __int8  int8_t;
-typedef float float32_t;
-#else
+
 #include <stdio.h>
 #if HAVE_SYS_TYPES_H
-# include <sys/types.h>
+    #include <sys/types.h>
 #endif
 #if HAVE_SYS_STAT_H
-# include <sys/stat.h>
+    #include <sys/stat.h>
 #endif
 #if STDC_HEADERS
-# include <stdlib.h>
-# include <stddef.h>
+
 #else
-# if HAVE_STDLIB_H
-#  include <stdlib.h>
-# endif
+    #if HAVE_STDLIB_H
+        #include <stdlib.h>
+    #endif
 #endif
 #if HAVE_STRING_H
-# if !STDC_HEADERS && HAVE_MEMORY_H
-#  include <memory.h>
-# endif
-# include <string.h>
+    #if !STDC_HEADERS && HAVE_MEMORY_H
+        #include <memory.h>
+    #endif
+    #include <string.h>
 #endif
 #if HAVE_STRINGS_H
-# include <strings.h>
+    #include <strings.h>
 #endif
 #if HAVE_INTTYPES_H
-# include <inttypes.h>
+    #include <inttypes.h>
 #else
-# if HAVE_STDINT_H
-#  include <stdint.h>
-# else
-/* we need these... */
-#ifndef __TCS__
+    #if HAVE_STDINT_H
+        #include <stdint.h>
+    #else
+        /* we need these... */
+        #ifndef __TCS__
 typedef unsigned long long uint64_t;
-typedef signed long long int64_t;
-#else
+typedef signed long long   int64_t;
+        #else
 typedef unsigned long uint64_t;
-typedef signed long int64_t;
-#endif
-typedef unsigned long uint32_t;
+typedef signed long   int64_t;
+        #endif
+typedef unsigned long  uint32_t;
 typedef unsigned short uint16_t;
-typedef unsigned char uint8_t;
-typedef signed long int32_t;
-typedef signed short int16_t;
-typedef signed char int8_t;
-# endif
+typedef unsigned char  uint8_t;
+typedef signed long    int32_t;
+typedef signed short   int16_t;
+typedef signed char    int8_t;
+    #endif
 #endif
 #if HAVE_UNISTD_H
-//# include <unistd.h>
+// # include <unistd.h>
 #endif
 #ifndef HAVE_FLOAT32_T
 typedef float float32_t;
 #endif
 #if STDC_HEADERS
-# include <string.h>
+
 #else
-# if !HAVE_STRCHR
-#  define strchr index
-#  define strrchr rindex
-# endif
+    #if !HAVE_STRCHR
+        #define strchr  index
+        #define strrchr rindex
+    #endif
 char *strchr(), *strrchr();
-# if !HAVE_MEMCPY
-#  define memcpy(d, s, n) bcopy((s), (d), (n))
-#  define memmove(d, s, n) bcopy((s), (d), (n))
-# endif
+    #if !HAVE_MEMCPY
+        #define memcpy(d, s, n)  bcopy((s), (d), (n))
+        #define memmove(d, s, n) bcopy((s), (d), (n))
+    #endif
 #endif
-#endif
+
 #ifdef WORDS_BIGENDIAN
-#define ARCH_IS_BIG_ENDIAN
+    #define ARCH_IS_BIG_ENDIAN
 #endif
 /* FIXED_POINT doesn't work with MAIN and SSR yet */
 #ifdef FIXED_POINT
-  #undef MAIN_DEC
-  #undef SSR_DEC
+    #undef MAIN_DEC
+    #undef SSR_DEC
 #endif
 #if defined(FIXED_POINT)
-  #include "fixed.h"
 #elif defined(USE_DOUBLE_PRECISION)
-  typedef double real_t;
-  #include <math.h>
-  #define MUL_R(A,B) ((A)*(B))
-  #define MUL_C(A,B) ((A)*(B))
-  #define MUL_F(A,B) ((A)*(B))
-  /* Complex multiplication */
-  void ComplexMult(real_t *y1, real_t *y2,
-      real_t x1, real_t x2, real_t c1, real_t c2)
-  {
-      *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
-      *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
-  }
-  #define REAL_CONST(A) ((real_t)(A))
-  #define COEF_CONST(A) ((real_t)(A))
-  #define Q2_CONST(A) ((real_t)(A))
-  #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
-#else /* Normal floating point operation */
-  typedef float real_t;
-  #define MUL_R(A,B) ((A)*(B))
-  #define MUL_C(A,B) ((A)*(B))
-  #define MUL_F(A,B) ((A)*(B))
-  #define REAL_CONST(A) ((real_t)(A))
-  #define COEF_CONST(A) ((real_t)(A))
-  #define Q2_CONST(A) ((real_t)(A))
-  #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
-  /* Complex multiplication */
-  
-static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
-      *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
-      *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
-  }
-    #if defined(_WIN32) && defined(_M_IX86) && !defined(__MINGW32__)
-        #ifndef HAVE_LRINTF
-            #define HAS_LRINTF
-  static inline int int32_t(float f) {
-      int i;
-      __asm
-      {
-            fld   f
-            fistp i
-      }
-      return i;
-  }
-        #endif /* HAVE_LRINTF */
-    #elif (defined(__i386__) && defined(__GNUC__) && !defined(__CYGWIN__) && !defined(__MINGW32__))
-        #ifndef HAVE_LRINTF
-            #define HAS_LRINTF
-  // from http://www.stereopsis.com/FPU.html
-  // static inline int int32_t(float f) {
-  //     int i;
-  //     __asm__ __volatile__("flds %1        \n\t"
-  //                          "fistpl %0      \n\t"
-  //                          : "=m"(i)
-  //                          : "m"(f));
-  //     return i;
-  // }
-        #endif /* HAVE_LRINTF */
+#else                                   /* Normal floating point operation */
+    #ifdef HAVE_LRINTF
+        #define HAS_LRINTF
+        #define _ISOC9X_SOURCE 1
+        #define _ISOC99_SOURCE 1
+        #define __USE_ISOC9X   1
+        #define __USE_ISOC99   1
     #endif
-    #ifdef __ICL /* only Intel C compiler has fmath ??? */
-        #include <mathf.h>
-        #define sin   sinf
-        #define cos   cosf
-        #define log   logf
+    #include <math.h>
+    #ifdef HAVE_SINF
+        #define sin sinf
+        #error
+    #endif
+    #ifdef HAVE_COSF
+        #define cos cosf
+    #endif
+    #ifdef HAVE_LOGF
+        #define log logf
+    #endif
+    #ifdef HAVE_EXPF
+        #define exp expf
+    #endif
+    #ifdef HAVE_FLOORF
         #define floor floorf
-        #define ceil  ceilf
-        #define sqrt  sqrtf
-    #else
-        #ifdef HAVE_LRINTF
-            #define HAS_LRINTF
-            #define _ISOC9X_SOURCE 1
-            #define _ISOC99_SOURCE 1
-            #define __USE_ISOC9X   1
-            #define __USE_ISOC99   1
-        #endif
-        #include <math.h>
-        #ifdef HAVE_SINF
-            #define sin sinf
-            #error
-        #endif
-        #ifdef HAVE_COSF
-            #define cos cosf
-        #endif
-        #ifdef HAVE_LOGF
-            #define log logf
-        #endif
-        #ifdef HAVE_EXPF
-            #define exp expf
-        #endif
-        #ifdef HAVE_FLOORF
-            #define floor floorf
-        #endif
-        #ifdef HAVE_CEILF
-            #define ceil ceilf
-        #endif
-        #ifdef HAVE_SQRTF
-            #define sqrt sqrtf
-        #endif
     #endif
+    #ifdef HAVE_CEILF
+        #define ceil ceilf
+    #endif
+    #ifdef HAVE_SQRTF
+        #define sqrt sqrtf
+    #endif
+
 #endif
 #ifndef HAS_LRINTF
 /* standard cast */
@@ -341,15 +250,7 @@ uint32_t get_sample_rate(const uint8_t sr_index);
 int8_t   can_decode_ot(const uint8_t object_type);
 void*    faad_malloc(size_t size);
 void     faad_free(void* b);
-// #define PROFILE
-#ifdef PROFILE
-static int64_t faad_get_ts() {
-    __asm
-    {
-        rdtsc
-    }
-}
-#endif
+
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif

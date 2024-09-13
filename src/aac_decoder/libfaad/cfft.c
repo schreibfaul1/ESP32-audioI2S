@@ -1,6 +1,7 @@
 #include "common.h"
 #include "structs.h"
 #include <stdlib.h>
+#include "fixed.h"
 #include "cfft.h"
 #include "cfft_tab.h"
 /* function declarations */

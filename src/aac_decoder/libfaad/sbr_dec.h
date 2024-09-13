@@ -29,6 +29,8 @@
 **/
 #ifndef __SBR_DEC_H__
 #define __SBR_DEC_H__
+#include "fixed.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

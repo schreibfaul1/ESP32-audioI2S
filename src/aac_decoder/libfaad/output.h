@@ -29,6 +29,7 @@
 **/
 #ifndef __OUTPUT_H__
 #define __OUTPUT_H__
+#include "fixed.h"
 #ifdef __cplusplus
 extern "C" {
 #endif

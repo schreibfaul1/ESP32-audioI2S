@@ -28,6 +28,7 @@
 ** $Id: decoder.c,v 1.119 2015/01/24 14:21:05 knik Exp $
 **/
 #include "common.h"
+#include "fixed.h"
 #include "structs.h"
 #include "Arduino.h"
 #include <stdlib.h>

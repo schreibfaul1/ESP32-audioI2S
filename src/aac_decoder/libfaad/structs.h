@@ -30,6 +30,7 @@
 #pragma once
 #include "cfft.h"
 #include "sbr_dec.h"
+#include "fixed.h"
 #define MAX_CHANNELS        64
 #define MAX_SYNTAX_ELEMENTS 48
 #define MAX_WINDOW_GROUPS    8

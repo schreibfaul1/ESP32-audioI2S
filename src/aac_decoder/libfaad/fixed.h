@@ -28,43 +28,50 @@
 ** $Id: fixed.h,v 1.32 2007/11/01 12:33:30 menno Exp $
 **/
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-function"
+#include "common.h"
+
+
+
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#ifdef FIXED_POINT  /* int32_t */
+    #include "Arduino.h"
+    #define COEF_BITS      28
+    #define COEF_PRECISION (1 << COEF_BITS)
+    #define REAL_BITS      14 // MAXIMUM OF 14 FOR FIXED POINT SBR
+    #define REAL_PRECISION (1 << REAL_BITS)
+    /* FRAC is the fractional only part of the fixed point number [0.0..1.0) */
+    #define FRAC_SIZE      32 /* frac is a 32 bit integer */
+    #define FRAC_BITS      31
+    #define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
+    #define FRAC_MAX       0x7FFFFFFF
+    typedef int32_t real_t;
+    #define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
+    #define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
+    #define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
+    // #define FRAC_CONST(A) (((A) >= 0) ? ((real_t)((A)*(FRAC_PRECISION)+0.5)) : ((real_t)((A)*(FRAC_PRECISION)-0.5)))
+    #define Q2_BITS      22
+    #define Q2_PRECISION (1 << Q2_BITS)
+    #define Q2_CONST(A)  (((A) >= 0) ? ((real_t)((A) * (Q2_PRECISION) + 0.5)) : ((real_t)((A) * (Q2_PRECISION) - 0.5)))
+    /* multiply with real shift */
+    #define MUL_R(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS)
+    /* multiply with coef shift */
+    #define MUL_C(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS)
+    /* multiply with fractional shift */
+    #define _MulHigh(A, B)    (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
+    #define MUL_F(A, B)       (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
+    #define MUL_Q2(A, B)      (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
+    #define MUL_SHIFT6(A, B)  (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
+    #define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
+    #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
+    #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
 
-#ifdef FIXED_POINT
-#include "Arduino.h"
-#define COEF_BITS      28
-#define COEF_PRECISION (1 << COEF_BITS)
-#define REAL_BITS      14 // MAXIMUM OF 14 FOR FIXED POINT SBR
-#define REAL_PRECISION (1 << REAL_BITS)
-/* FRAC is the fractional only part of the fixed point number [0.0..1.0) */
-#define FRAC_SIZE      32 /* frac is a 32 bit integer */
-#define FRAC_BITS      31
-#define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
-#define FRAC_MAX       0x7FFFFFFF
-typedef int32_t real_t;
-#define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
-#define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
-#define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
-// #define FRAC_CONST(A) (((A) >= 0) ? ((real_t)((A)*(FRAC_PRECISION)+0.5)) : ((real_t)((A)*(FRAC_PRECISION)-0.5)))
-#define Q2_BITS      22
-#define Q2_PRECISION (1 << Q2_BITS)
-#define Q2_CONST(A)  (((A) >= 0) ? ((real_t)((A) * (Q2_PRECISION) + 0.5)) : ((real_t)((A) * (Q2_PRECISION) - 0.5)))
-/* multiply with real shift */
-#define MUL_R(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS)
-/* multiply with coef shift */
-#define MUL_C(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS)
-/* multiply with fractional shift */
-#define _MulHigh(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
-#define MUL_F(A, B)    (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
-#define MUL_Q2(A, B)      (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
-#define MUL_SHIFT6(A, B)  (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
-#define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
 /* Complex multiplication */
-
 static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
     *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
     *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
@@ -72,21 +79,58 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
 #endif // FIXED_POINT
 
 #ifndef FIXED_POINT
+    #define DIV_R(A, B) ((A) / (B))
+    #define DIV_C(A, B) ((A) / (B))
 
+    #ifdef USE_DOUBLE_PRECISION  /* double */
+        typedef double real_t;
+        #include <math.h>
+        #define MUL_R(A, B) ((A) * (B))
+        #define MUL_C(A, B) ((A) * (B))
+        #define MUL_F(A, B) ((A) * (B))
+        /* Complex multiplication */
+        static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+            *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
+            *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
+        }
+        #define REAL_CONST(A) ((real_t)(A))
+        #define COEF_CONST(A) ((real_t)(A))
+        #define Q2_CONST(A)   ((real_t)(A))
+        #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
 
+    #else /* Normal floating point operation */
+        typedef float real_t;
+        #define MUL_R(A, B)   ((A) * (B))
+        #define MUL_C(A, B)   ((A) * (B))
+        #define MUL_F(A, B)   ((A) * (B))
+        #define REAL_CONST(A) ((real_t)(A))
+        #define COEF_CONST(A) ((real_t)(A))
+        #define Q2_CONST(A)   ((real_t)(A))
+        #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
+        /* Complex multiplication */
 
-
-
-
-
+        static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+            *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
+            *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
+        }
+    #endif /* USE_DOUBLE_PRECISION */
 #endif // FIXED_POINT
 
 
-
-
+#ifdef SBR_LOW_POWER
+    #define qmf_t     real_t
+    #define QMF_RE(A) (A)
+    #define QMF_IM(A)
+#else
+    #define qmf_t     complex_t
+    #define QMF_RE(A) RE(A)
+    #define QMF_IM(A) IM(A)
+#endif
 
 
 
 #ifdef __cplusplus
 }
 #endif
+
+
