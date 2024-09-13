@@ -32,6 +32,7 @@
 #include <stdint-gcc.h>
 #include "neaacdec.h"
 #include "structs.h"
+#include "common.h"
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t get_sr_index(const uint32_t samplerate) {
@@ -428,6 +429,7 @@ unsigned long NeAACDecGetCapabilities(void) {
 #endif
     return cap;
 }
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const unsigned char mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x72, 0x20, 0x65, 0x20, 0x6e, 0x20, 0x20, 0x20, 0x74,
                              0x20, 0x68, 0x20, 0x67, 0x20, 0x69, 0x20, 0x72, 0x20, 0x79, 0x20, 0x70, 0x20, 0x6f, 0x20, 0x63};
@@ -498,6 +500,7 @@ unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigu
         if(config->defSampleRate == 0) return 0;
         hDecoder->config.defSampleRate = config->defSampleRate;
         /* check output format */
+
 #ifdef FIXED_POINT
         if((config->outputFormat < 1) || (config->outputFormat > 4)) return 0;
 #else
@@ -509,6 +512,7 @@ unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigu
         /* OK */
         return 1;
     }
+
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -603,6 +607,8 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, unsigned long
         ret = -1;
         goto exit;
     }
+
+
 #if(defined(PS_DEC) || defined(DRM_PS))
     /* check if we have a mono file */
     if(*channels == 1) {
@@ -1173,6 +1179,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
 #endif
 #if(defined(PS_DEC) || defined(DRM_PS))
     hInfo->ps = hDecoder->ps_used_global;
+    hInfo->isPS = hDecoder->isPS;
 #endif
     /* check if frame has channel elements */
     if(channels == 0) {
@@ -3153,15 +3160,8 @@ void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffe
     return sample_buffer;
 }
 #endif
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//#ifdef FIXED_POINT
-//    #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
-//    #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
-//#endif
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//—————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-    #define DM_MUL FRAC_CONST(0.3203772410170407)    // 1/(1+sqrt(2) + 1/sqrt(2))
-    #define RSQRT2 FRAC_CONST(0.7071067811865475244) // 1/sqrt(2)
 static inline real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel) {
     if(up_matrix == 1) return input[internal_channel[0]][sample];
     if(!down_matrix) return input[internal_channel[channel]][sample];
@@ -3805,6 +3805,28 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+real_t fp_sqrt(real_t value) {
+    real_t root = 0;
+    step(0);
+    step(2);
+    step(4);
+    step(6);
+    step(8);
+    step(10);
+    step(12);
+    step(14);
+    step(16);
+    step(18);
+    step(20);
+    step(22);
+    step(24);
+    step(26);
+    step(28);
+    step(30);
+    if (root < value) ++root;
+    root <<= (REAL_BITS / 2);
+    return root;
+}
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 mdct_info* faad_mdct_init(uint16_t N) {
     mdct_info* mdct = (mdct_info*)faad_malloc(sizeof(mdct_info));
@@ -6297,7 +6319,7 @@ void DCT2_32_unscaled(real_t* y, real_t* x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-        #define n     32
+        #define _n   32
         #define log2n 5
 // w_array_real[i] = cos(2*M_PI*i/32)
 static const real_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
@@ -6381,7 +6403,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     // Stage 3 of 32 point FFT decimation in frequency
     // 2*4*2=16 multiplications
     // 4*4*2+6*4*2=10*8=80 additions
-    for (i = 0; i < n; i += 8) {
+    for (i = 0; i < _n; i += 8) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6396,7 +6418,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     }
     w_real = w_array_real[4]; // = sqrt(2)/2
     // w_imag = -w_real; // = w_array_imag[4]; // = -sqrt(2)/2
-    for (i = 1; i < n; i += 8) {
+    for (i = 1; i < _n; i += 8) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6412,7 +6434,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         Real[i2] = MUL_F(point1_real + point1_imag, w_real);
         Imag[i2] = MUL_F(point1_imag - point1_real, w_real);
     }
-    for (i = 2; i < n; i += 8) {
+    for (i = 2; i < _n; i += 8) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6427,7 +6449,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     }
     w_real = w_array_real[12]; // = -sqrt(2)/2
     // w_imag = w_real; // = w_array_imag[12]; // = -sqrt(2)/2
-    for (i = 3; i < n; i += 8) {
+    for (i = 3; i < _n; i += 8) {
         i2 = i + 4;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6445,7 +6467,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     }
     // Stage 4 of 32 point FFT decimation in frequency (no multiplications)
     // 16*4=64 additions
-    for (i = 0; i < n; i += 4) {
+    for (i = 0; i < _n; i += 4) {
         i2 = i + 2;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6458,7 +6480,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
         Real[i2] = point1_real - point2_real;
         Imag[i2] = point1_imag - point2_imag;
     }
-    for (i = 1; i < n; i += 4) {
+    for (i = 1; i < _n; i += 4) {
         i2 = i + 2;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -6473,7 +6495,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     }
     // Stage 5 of 32 point FFT decimation in frequency (no multiplications)
     // 16*4=64 additions
-    for (i = 0; i < n; i += 2) {
+    for (i = 0; i < _n; i += 2) {
         i2 = i + 1;
         point1_real = Real[i];
         point1_imag = Imag[i];
@@ -9067,15 +9089,15 @@ uint8_t spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.30 */
 uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
-    uint16_t i, n, dataElementLength;
+    uint16_t i, dri, dataElementLength;
     uint8_t  dataElementLengthPart;
     uint8_t  align = 4, data_element_version, loopCounter;
     uint8_t  extension_type = (uint8_t)faad_getbits(ld, 4);
     switch (extension_type) {
         case EXT_DYNAMIC_RANGE:
             drc->present = 1;
-            n = dynamic_range_info(ld, drc);
-            return n;
+            dri = dynamic_range_info(ld, drc);
+            return dri;
         case EXT_FILL_DATA:
             /* fill_nibble = */ faad_getbits(ld, 4); /* must be '0000' */
             for (i = 0; i < count - 1; i++) {        /* fill_byte[i] = */
@@ -9115,52 +9137,52 @@ uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.31 */
 uint8_t dynamic_range_info(bitfile* ld, drc_info* drc) {
-    uint8_t i, n = 1;
+    uint8_t i, idx = 1;
     uint8_t band_incr;
     drc->num_bands = 1;
     if (faad_get1bit(ld) & 1) {
         drc->pce_instance_tag = (uint8_t)faad_getbits(ld, 4);
         /* drc->drc_tag_reserved_bits = */ faad_getbits(ld, 4);
-        n++;
+        idx++;
     }
     drc->excluded_chns_present = faad_get1bit(ld);
-    if (drc->excluded_chns_present == 1) { n += excluded_channels(ld, drc); }
+    if (drc->excluded_chns_present == 1) { idx += excluded_channels(ld, drc); }
     if (faad_get1bit(ld)) {
         band_incr = (uint8_t)faad_getbits(ld, 4);
         /* drc->drc_bands_reserved_bits = */ faad_getbits(ld, 4);
-        n++;
+        idx++;
         drc->num_bands += band_incr;
         for (i = 0; i < drc->num_bands; i++) {
             drc->band_top[i] = (uint8_t)faad_getbits(ld, 8);
-            n++;
+            idx++;
         }
     }
     if (faad_get1bit(ld) & 1) {
         drc->prog_ref_level = (uint8_t)faad_getbits(ld, 7);
         /* drc->prog_ref_level_reserved_bits = */ faad_get1bit(ld);
-        n++;
+        idx++;
     }
     for (i = 0; i < drc->num_bands; i++) {
         drc->dyn_rng_sgn[i] = faad_get1bit(ld);
         drc->dyn_rng_ctl[i] = (uint8_t)faad_getbits(ld, 7);
-        n++;
+        idx++;
     }
-    return n;
+    return idx;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.32 */
 uint8_t excluded_channels(bitfile* ld, drc_info* drc) {
-    uint8_t i, n = 0;
+    uint8_t i, idx = 0;
     uint8_t num_excl_chan = 7;
     for (i = 0; i < 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
-    n++;
-    while ((drc->additional_excluded_chns[n - 1] = faad_get1bit(ld)) == 1) {
-        if (i >= MAX_CHANNELS - num_excl_chan - 7) return n;
+    idx++;
+    while ((drc->additional_excluded_chns[idx- 1] = faad_get1bit(ld)) == 1) {
+        if (i >= MAX_CHANNELS - num_excl_chan - 7) return idx;
         for (i = num_excl_chan; i < num_excl_chan + 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
-        n++;
+        idx++;
         num_excl_chan += 7;
     }
-    return n;
+    return idx;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Annex A: Audio Interchange Formats */
@@ -10072,7 +10094,7 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
     #ifdef FIXED_POINT
-static inline int16_t real_to_int16(real_t sig_in) {
+inline int16_t real_to_int16(real_t sig_in) {
     if(sig_in >= 0) {
         sig_in += (1 << (REAL_BITS - 1));
         if(sig_in >= REAL_CONST(32768)) return 32767;
@@ -11060,16 +11082,16 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
 }
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
-    #ifdef FIXED_POINT
-        #define step(shift)                                  \
-            if((0x40000000l >> shift) + root <= value) {     \
-                value -= (0x40000000l >> shift) + root;      \
-                root = (root >> 1) | (0x40000000l >> shift); \
-            }                                                \
-            else { root = root >> 1; }
-    #endif // FIXED_POINT
-#endif //  PS_DEC
+/* #ifdef PS_DEC
+       #ifdef FIXED_POINT
+           #define step(shift)                                  \
+               if((0x40000000l >> shift) + root <= value) {     \
+                   value -= (0x40000000l >> shift) + root;      \
+                   root = (root >> 1) | (0x40000000l >> shift); \
+               }                                                \
+               else { root = root >> 1; }
+       #endif // FIXED_POINT
+   #endif //  PS_DEC */
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
     #ifdef FIXED_POINT

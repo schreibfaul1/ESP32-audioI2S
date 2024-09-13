@@ -44,10 +44,10 @@ extern "C" {
     #define ALIGN
 #endif
 /* COMPILE TIME DEFINITIONS */
-// #define PREFER_POINTERS // Use if target platform has address generators with autoincrement
+#define PREFER_POINTERS // Use if target platform has address generators with autoincrement
 // #define BIG_IQ_TABLE
 // #define USE_DOUBLE_PRECISION // use double precision
-// #define FIXED_POINT          // use fixed point reals
+#define FIXED_POINT          // use fixed point reals
 #define ERROR_RESILIENCE 2
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
 // #define SSR_DEC // Allow decoding of SSR profile AAC
@@ -55,7 +55,7 @@ extern "C" {
 #define LD_DEC  // Allow decoding of LD (Low Delay) profile AAC
 // #define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
 #define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
-#define SBR_LOW_POWER
+// #define SBR_LOW_POWER
 #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
 // #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
@@ -207,33 +207,9 @@ char *strchr(), *strrchr();
 /* standard cast */
 // #define int32_t(f) ((int32_t)(f))
 #endif
-/* common functions */
-uint8_t  cpu_has_sse(void);
-uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
-uint32_t wl_min_lzc(uint32_t x);
-#ifdef FIXED_POINT
-    #define LOG2_MIN_INF REAL_CONST(-10000)
-int32_t log2_int(uint32_t val);
-int32_t log2_fix(uint32_t val);
-int32_t pow2_int(real_t val);
-real_t  pow2_fix(real_t val);
-#endif
-uint8_t  get_sr_index(const uint32_t samplerate);
-uint8_t  max_pred_sfb(const uint8_t sr_index);
-uint8_t  max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short);
-uint32_t get_sample_rate(const uint8_t sr_index);
-int8_t   can_decode_ot(const uint8_t object_type);
-void*    faad_malloc(size_t size);
-void     faad_free(void* b);
-#ifndef M_PI
-    #define M_PI 3.14159265358979323846
-#endif
-#ifndef max
-    #define max(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-#ifndef min
-    #define min(a, b) (((a) < (b)) ? (a) : (b))
-#endif
+
+
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* defines if an object type can be decoded by this library or not */
 __unused static uint8_t ObjectTypesTable[32] = {

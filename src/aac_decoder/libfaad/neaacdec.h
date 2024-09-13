@@ -139,6 +139,23 @@ typedef struct NeAACDecFrameInfo
     unsigned char ps;
     uint8_t  isPS;
 } NeAACDecFrameInfo;
+
+uint8_t  cpu_has_sse(void);
+uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
+uint32_t wl_min_lzc(uint32_t x);
+#ifdef FIXED_POINT
+int32_t log2_int(uint32_t val);
+int32_t log2_fix(uint32_t val);
+int32_t pow2_int(real_t val);
+real_t  pow2_fix(real_t val);
+#endif
+uint8_t  get_sr_index(const uint32_t samplerate);
+uint8_t  max_pred_sfb(const uint8_t sr_index);
+uint8_t  max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short);
+uint32_t get_sample_rate(const uint8_t sr_index);
+int8_t   can_decode_ot(const uint8_t object_type);
+void*    faad_malloc(size_t size);
+void     faad_free(void* b);
 drc_info*                drc_init(real_t cut, real_t boost);
 void                     drc_end(drc_info* drc);
 void                     drc_decode(drc_info* drc, real_t* spec);
@@ -209,6 +226,7 @@ void ms_decode(ic_stream *ics, ic_stream *icsr, real_t *l_spec, real_t *r_spec, 
 void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len);
 int8_t is_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
 uint8_t is_noise(ic_stream *ics, uint8_t group, uint8_t sfb);
+real_t fp_sqrt(real_t value);
 void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
                 /* RNG states */ uint32_t* __r1, uint32_t* __r2);
 int8_t invert_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
