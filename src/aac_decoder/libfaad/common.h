@@ -27,23 +27,20 @@
 **
 ** $Id: common.h,v 1.79 2015/01/26 17:48:53 knik Exp $
 **/
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#pragma once
 #define STDC_HEADERS    1
 #define HAVE_STDLIB_H   1
 #define HAVE_STRING_H   1
 #define HAVE_INTTYPES_H 1
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include "neaacdec.h"
-#include "fixed.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 
 #if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
@@ -57,7 +54,7 @@ extern "C" {
 // #define BIG_IQ_TABLE
 // #define USE_DOUBLE_PRECISION // use double precision
 // #define FIXED_POINT          // use fixed point reals
-#define ERROR_RESILIENCE
+#define ERROR_RESILIENCE 2
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
 // #define SSR_DEC // Allow decoding of SSR profile AAC
 #define LTP_DEC // Allow decoding of LTP (Long Term Prediction) profile AAC
@@ -252,16 +249,15 @@ void     faad_free(void* b);
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
-#ifndef M_PI_2 /* PI/2 */
-    #define M_PI_2 1.57079632679489661923
-#endif
-#ifdef __cplusplus
-}
-#endif
+
+
 #ifndef max
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 #ifndef min
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
+
+#ifdef __cplusplus
+}
 #endif

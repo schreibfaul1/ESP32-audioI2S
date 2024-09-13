@@ -38,11 +38,7 @@ extern "C" {
 #include <stdint-gcc.h>
 
 /* ps_syntax.c */
-uint16_t ps_data(ps_info *ps, bitfile *ld, uint8_t *header);
-/* ps_dec.c */
-ps_info *ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate);
-void ps_free(ps_info *ps);
-uint8_t ps_decode(ps_info *ps, qmf_t X_left[38][64], qmf_t X_right[38][64]);
+
 #ifdef __cplusplus
 }
 #endif

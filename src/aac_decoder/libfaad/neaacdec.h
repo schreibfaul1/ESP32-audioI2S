@@ -30,30 +30,29 @@
 #ifndef __NEAACDEC_H__
 #define __NEAACDEC_H__
 #ifdef __cplusplus
-
 extern "C" {
-#endif /* __cplusplus */
+#endif
 #include <stdint.h>
 #include "structs.h"
 #if 1
 /* MACROS FOR BACKWARDS COMPATIBILITY */
 /* structs */
-#define faacDecHandle                  NeAACDecHandle
-#define faacDecConfiguration           NeAACDecConfiguration
-#define faacDecConfigurationPtr        NeAACDecConfigurationPtr
-#define faacDecFrameInfo               NeAACDecFrameInfo
-/* functions */
-#define faacDecGetErrorMessage         NeAACDecGetErrorMessage
-#define faacDecSetConfiguration        NeAACDecSetConfiguration
-#define faacDecGetCurrentConfiguration NeAACDecGetCurrentConfiguration
-#define faacDecInit                    NeAACDecInit
-#define faacDecInit2                   NeAACDecInit2
-#define faacDecInitDRM                 NeAACDecInitDRM
-#define faacDecPostSeekReset           NeAACDecPostSeekReset
-#define faacDecOpen                    NeAACDecOpen
-#define faacDecClose                   NeAACDecClose
-#define faacDecDecode                  NeAACDecDecode
-#define AudioSpecificConfig            NeAACDecAudioSpecificConfig
+// #define faacDecHandle                  NeAACDecHandle
+// #define faacDecConfiguration           NeAACDecConfiguration
+// #define faacDecConfigurationPtr        NeAACDecConfigurationPtr
+// #define faacDecFrameInfo               NeAACDecFrameInfo
+// /* functions */
+// #define faacDecGetErrorMessage         NeAACDecGetErrorMessage
+// #define faacDecSetConfiguration        NeAACDecSetConfiguration
+// #define faacDecGetCurrentConfiguration NeAACDecGetCurrentConfiguration
+// #define faacDecInit                    NeAACDecInit
+// #define faacDecInit2                   NeAACDecInit2
+// #define faacDecInitDRM                 NeAACDecInitDRM
+// #define faacDecPostSeekReset           NeAACDecPostSeekReset
+// #define faacDecOpen                    NeAACDecOpen
+// #define faacDecClose                   NeAACDecClose
+// #define faacDecDecode                  NeAACDecDecode
+// #define AudioSpecificConfig            NeAACDecAudioSpecificConfig
 #endif
 #ifdef _WIN32
   #pragma pack(push, 8)
@@ -120,6 +119,7 @@ extern "C" {
 /* A decode call can eat up to FAAD_MIN_STREAMSIZE bytes per decoded channel,
    so at least so much bytes per channel should be available in this stream */
 #define FAAD_MIN_STREAMSIZE 768 /* 6144 bits/channel */
+
 typedef void *NeAACDecHandle;
 typedef struct mp4AudioSpecificConfig
 {
@@ -165,59 +165,95 @@ typedef struct NeAACDecFrameInfo
     unsigned char ps;
     uint8_t  isPS;
 } NeAACDecFrameInfo;
-NEAACDECAPI const char* NeAACDecGetErrorMessage(unsigned char errcode);
-NEAACDECAPI unsigned long NeAACDecGetCapabilities(void);
-NEAACDECAPI NeAACDecHandle NeAACDecOpen(void);
-NEAACDECAPI NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hDecoder);
-NEAACDECAPI unsigned char NeAACDecSetConfiguration(NeAACDecHandle hDecoder,
-                                                   NeAACDecConfigurationPtr config);
-/* Init the library based on info from the AAC file (ADTS/ADIF) */
-NEAACDECAPI long NeAACDecInit(NeAACDecHandle hDecoder,
-                              unsigned char *buffer,
-                              unsigned long buffer_size,
-                              unsigned long *samplerate,
-                              unsigned char *channels);
-/* Init the library using a DecoderSpecificInfo */
-NEAACDECAPI char NeAACDecInit2(NeAACDecHandle hDecoder,
-                               unsigned char *pBuffer,
-                               unsigned long SizeOfDecoderSpecificInfo,
-                               unsigned long *samplerate,
-                               unsigned char *channels);
-/* Init the library for DRM */
-NEAACDECAPI char NeAACDecInitDRM(NeAACDecHandle *hDecoder, unsigned long samplerate,
-                                 unsigned char channels);
-NEAACDECAPI void NeAACDecPostSeekReset(NeAACDecHandle hDecoder, long frame);
-NEAACDECAPI void NeAACDecClose(NeAACDecHandle hDecoder);
-NEAACDECAPI void* NeAACDecDecode(NeAACDecHandle hDecoder,
-                                 NeAACDecFrameInfo *hInfo,
-                                 unsigned char *buffer,
-                                 unsigned long buffer_size);
-NEAACDECAPI void* NeAACDecDecode2(NeAACDecHandle hDecoder,
-                                  NeAACDecFrameInfo *hInfo,
-                                  unsigned char *buffer,
-                                  unsigned long buffer_size,
-                                  void **sample_buffer,
-                                  unsigned long sample_buffer_size);
-NEAACDECAPI char NeAACDecAudioSpecificConfig(unsigned char *pBuffer,
-                                             unsigned long buffer_size,
-                                             mp4AudioSpecificConfig *mp4ASC);
-/* Get version and copyright strings */
-NEAACDECAPI int NeAACDecGetVersion(const char **faad_id_string,
-                                   const char **faad_copyright_string);
+// NEAACDECAPI const char* NeAACDecGetErrorMessage(unsigned char errcode);
+// NEAACDECAPI unsigned long NeAACDecGetCapabilities(void);
+// NEAACDECAPI NeAACDecHandle NeAACDecOpen(void);
+// NEAACDECAPI NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hDecoder);
+// NEAACDECAPI unsigned char NeAACDecSetConfiguration(NeAACDecHandle hDecoder,
+//                                                    NeAACDecConfigurationPtr config);
+// /* Init the library based on info from the AAC file (ADTS/ADIF) */
+// NEAACDECAPI long NeAACDecInit(NeAACDecHandle hDecoder,
+//                               unsigned char *buffer,
+//                               unsigned long buffer_size,
+//                               unsigned long *samplerate,
+//                               unsigned char *channels);
+// /* Init the library using a DecoderSpecificInfo */
+// NEAACDECAPI char NeAACDecInit2(NeAACDecHandle hDecoder,
+//                                unsigned char *pBuffer,
+//                                unsigned long SizeOfDecoderSpecificInfo,
+//                                unsigned long *samplerate,
+//                                unsigned char *channels);
+// /* Init the library for DRM */
+// NEAACDECAPI char NeAACDecInitDRM(NeAACDecHandle *hDecoder, unsigned long samplerate,
+//                                  unsigned char channels);
+// NEAACDECAPI void NeAACDecPostSeekReset(NeAACDecHandle hDecoder, long frame);
+// NEAACDECAPI void NeAACDecClose(NeAACDecHandle hDecoder);
+// NEAACDECAPI void* NeAACDecDecode(NeAACDecHandle hDecoder,
+//                                  NeAACDecFrameInfo *hInfo,
+//                                  unsigned char *buffer,
+//                                  unsigned long buffer_size);
+// NEAACDECAPI void* NeAACDecDecode2(NeAACDecHandle hDecoder,
+//                                   NeAACDecFrameInfo *hInfo,
+//                                   unsigned char *buffer,
+//                                   unsigned long buffer_size,
+//                                   void **sample_buffer,
+//                                   unsigned long sample_buffer_size);
+// NEAACDECAPI char NeAACDecAudioSpecificConfig(unsigned char *pBuffer,
+//                                              unsigned long buffer_size,
+//                                              mp4AudioSpecificConfig *mp4ASC);
+// /* Get version and copyright strings */
+// NEAACDECAPI int NeAACDecGetVersion(const char **faad_id_string,
+//                                    const char **faad_copyright_string);
 
-
-drc_info *drc_init(real_t cut, real_t boost);
-void drc_end(drc_info *drc);
-void drc_decode(drc_info *drc, real_t *spec);
+drc_info* drc_init(real_t cut, real_t boost);
+void      drc_end(drc_info* drc);
+void      drc_decode(drc_info* drc, real_t* spec);
 sbr_info* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
 void      sbrDecodeEnd(sbr_info* sbr);
 void      sbrReset(sbr_info* sbr);
 uint8_t   sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR);
 uint8_t   sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
+uint16_t  ps_data(ps_info* ps, bitfile* ld, uint8_t* header);
+ps_info*  ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate);
+void      ps_free(ps_info* ps);
+uint8_t   ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]);
+void      faad_initbits(bitfile* ld, const void* buffer, const uint32_t buffer_size);
+void      faad_endbits(bitfile* ld);
+void      faad_initbits_rev(bitfile* ld, void* buffer, uint32_t bits_in_buffer);
+uint8_t   faad_byte_align(bitfile* ld);
+uint32_t  faad_get_processed_bits(bitfile* ld);
+void      faad_flushbits_ex(bitfile* ld, uint32_t bits);
+void      faad_rewindbits(bitfile* ld);
+void      faad_resetbits(bitfile* ld, int bits);
+uint8_t*  faad_getbitbuffer(bitfile* ld, uint32_t bits);
+void*     faad_origbitbuffer(bitfile* ld);
+uint32_t  faad_origbitbuffer_size(bitfile* ld);
+uint8_t   faad_get1bit(bitfile* ld);
+uint32_t  faad_getbits(bitfile *ld, uint32_t n);
+uint32_t  faad_showbits_rev(bitfile* ld, uint32_t bits);
+void      faad_flushbits_rev(bitfile* ld, uint32_t bits);
+uint32_t  getdword(void *mem);
+uint32_t  getdword_n(void *mem, int n);
+void      faad_flushbits(bitfile *ld, uint32_t bits);
+uint32_t  faad_showbits(bitfile *ld, uint32_t bits);
+uint32_t  showbits_hcr(bits_t* ld, uint8_t bits);
+uint32_t  faad_getbits_rev(bitfile* ld, uint32_t n);
+int8_t    get1bit_hcr(bits_t* ld, uint8_t* result);
+int8_t    flushbits_hcr(bits_t* ld, uint8_t bits);
+int8_t    getbits_hcr(bits_t* ld, uint8_t n, uint32_t* result);
 
+NeAACDecHandle NeAACDecOpen(void);
+const char* NeAACDecGetErrorMessage(unsigned const char errcode);
+void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer, unsigned long sample_buffer_size);
+long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, unsigned long buffer_size, unsigned long* samplerate, unsigned char* channels);
+unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
+char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned long SizeOfDecoderSpecificInfo, unsigned long* samplerate, unsigned char* channels);
+unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
+void NeAACDecClose(NeAACDecHandle hpDecoder);
+NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
 
 
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
+#endif
 #endif

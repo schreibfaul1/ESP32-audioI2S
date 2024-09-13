@@ -12,8 +12,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include "libfaad/neaacdec.h"
 #include "libfaad/common.h"
+#include "libfaad/neaacdec.h"
+
 
 // Declaration of the required global variables
 

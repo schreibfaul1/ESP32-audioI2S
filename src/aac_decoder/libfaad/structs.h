@@ -27,10 +27,16 @@
 **
 ** $Id: structs.h,v 1.49 2009/01/26 23:51:15 menno Exp $
 **/
+
 #pragma once
 #include "cfft.h"
 #include "sbr_dec.h"
+#include "common.h"
 #include "fixed.h"
+
+
+
+
 #define MAX_CHANNELS        64
 #define MAX_SYNTAX_ELEMENTS 48
 #define MAX_WINDOW_GROUPS    8
@@ -579,3 +585,28 @@ typedef struct {
     uint8_t is_leaf;
     int8_t  data[2];
 } hcb_bin_pair;
+
+typedef struct _bitfile {
+    /* bit input */
+    uint32_t    bufa;
+    uint32_t    bufb;
+    uint32_t    bits_left;
+    uint32_t    buffer_size; /* size of the buffer in bytes */
+    uint32_t    bytes_left;
+    uint8_t     error;
+    uint32_t*   tail;
+    uint32_t*   start;
+    const void* buffer;
+} bitfile;
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef ERROR_RESILIENCE
+/* Modified bit reading functions for HCR */
+#endif /*ERROR_RESILIENCE*/
+
+
+typedef struct {
+    /* bit input */
+    uint32_t bufa;
+    uint32_t bufb;
+    int8_t   len;
+} bits_t;

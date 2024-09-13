@@ -53,7 +53,9 @@
 #define EXTENSION_ID_PS 2
 #define MAX_PS_ENVELOPES 5
 #define NO_ALLPASS_LINKS 3
-
+#define BYTE_NUMBIT     8
+#define BYTE_NUMBIT_LD  3
+#define bit2byte(a) ((a+7)>>BYTE_NUMBIT_LD)
 
 
 #ifdef FIXED_POINT  /* int32_t */
