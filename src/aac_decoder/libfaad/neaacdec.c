@@ -1678,9 +1678,9 @@ uint32_t getdword_n(void *mem, int n)
     switch (n)
     {
     case 3:
-        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[2]; [[fallthrough]];
+        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[2];  /* fallthrough */
     case 2:
-        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[1]; [[fallthrough]];
+        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[1];  /* fallthrough */
     case 1:
         ((uint8_t*)&tmp)[3] = ((uint8_t*)mem)[0];
     default:
@@ -1690,9 +1690,9 @@ uint32_t getdword_n(void *mem, int n)
     switch (n)
     {
     case 3:
-        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[2];
+        ((uint8_t*)&tmp)[2] = ((uint8_t*)mem)[2];   /* fallthrough */
     case 2:
-        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[1];
+        ((uint8_t*)&tmp)[1] = ((uint8_t*)mem)[1];   /* fallthrough */
     case 1:
         ((uint8_t*)&tmp)[0] = ((uint8_t*)mem)[0];
     default:
