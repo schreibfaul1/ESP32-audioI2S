@@ -602,7 +602,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "\r\n");
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
- //                    strcat(rqh, "User-Agent: Mozilla/5.0\r\n");
+                       strcat(rqh, "User-Agent: ESP32 audioI2S\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }

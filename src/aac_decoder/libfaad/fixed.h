@@ -184,7 +184,7 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
     #define FRAC_BITS      31
     #define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
     #define FRAC_MAX       0x7FFFFFFF
-typedef int32_t real_t;
+    typedef int32_t real_t;
     #define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
     #define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
     #define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
@@ -204,11 +204,34 @@ typedef int32_t real_t;
     #define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
     #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
     #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
-/* Complex multiplication */
-static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
-    *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
-    *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
+
+
+
+/*    Complex multiplication */
+//    static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
+//        *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
+//        *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
+//    }
+static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) {
+    asm volatile (
+        //  y1 = (x1 * c1) + (x2 * c2)
+        "mulsh a2, %2, %4\n"        // a2 = x1 * c1 (Low 32 bits)
+        "mulsh a3, %3, %5\n"        // a3 = x2 * c2 (Low 32 bits)
+        "add   a2, a2, a3\n"        // a2 = (x1 * c1) + (x2 * c2)
+        "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
+        "s32i  a2, %0   \n"         // Store result in *y1
+        // y2 = (x2 * c1) - (x1 * c2)
+        "mulsh a2, %3, %4\n"        // a2 = x2 * c1 (Low 32 bits)
+        "mulsh a3, %2, %5\n"        // a3 = x1 * c2 (Low 32 bits)
+        "sub   a2, a2, a3\n"        // a2 = (x2 * c1) - (x1 * c2)
+        "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
+        "s32i  a2, %1    \n"        // Store result in *y2
+        : "=m" (*y1), "=m" (*y2)                  // Output
+        : "r" (x1), "r" (x2), "r" (c1), "r" (c2)  // Input
+        : "a2", "a3"                              // Clobbers
+    );
 }
+
 
     #define DIV(A, B) (((int64_t)A << REAL_BITS) / B)
     #define step(shift)                                  \
@@ -240,7 +263,8 @@ static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1,
         #define REAL_CONST(A) ((real_t)(A))
         #define COEF_CONST(A) ((real_t)(A))
         #define Q2_CONST(A)   ((real_t)(A))
-        #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
+ 
+       #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
     #else                                   /* Normal floating point operation */
 typedef float real_t;
         #define MUL_R(A, B)   ((A) * (B))
