@@ -93,7 +93,7 @@ int AACFindSyncWord(uint8_t *buf, int nBytes){
 int AACSetRawBlockParams(int nChans, int sampRateCore, int profile){
     f_setRaWBlockParams = true;
     aacChannels = nChans;  // 1: Mono, 2: Stereo
-    aacSamplerate = sampRateCore; // 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
+    aacSamplerate = (uint32_t)sampRateCore; // 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
     aacProfile = profile; //1: AAC Main, 2: AAC LC (Low Complexity), 3: AAC SSR (Scalable Sample Rate), 4: AAC LTP (Long Term Prediction)
     return 0;
 }
