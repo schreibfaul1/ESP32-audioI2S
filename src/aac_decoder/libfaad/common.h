@@ -32,17 +32,11 @@
 #define HAVE_STDLIB_H   1
 #define HAVE_STRING_H   1
 #define HAVE_INTTYPES_H 1
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
-    #define ALIGN __declspec(align(16))
-#else
-    #define ALIGN
-#endif
+
 /* COMPILE TIME DEFINITIONS */
 #define PREFER_POINTERS // Use if target platform has address generators with autoincrement
 // #define BIG_IQ_TABLE
@@ -290,6 +284,3 @@ __unused static uint8_t ObjectTypesTable[32] = {
     0  /* 31 (Reserved) */
 };
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef __cplusplus
-}
-#endif

@@ -2173,27 +2173,27 @@ void cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, co
             case 4:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
-                if(na == 0) passf4pos((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3]);
-                else passf4pos((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3]);
+                if(na == 0) passf4pos(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3]);
+                else passf4pos(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3]);
                 na = 1 - na;
                 break;
             case 2:
-                if(na == 0) passf2pos((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw]);
-                else passf2pos((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw]);
+                if(na == 0) passf2pos(ido, l1, (const complex_t*)c, ch, &wa[iw]);
+                else passf2pos(ido, 1, (const complex_t*)ch, c, &wa[iw]);
                 na = 1 - na;
                 break;
             case 3:
                 ix2 = iw + ido;
-                if(na == 0) passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], isign);
-                else passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], isign);
+                if(na == 0) passf3(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], isign);
+                else passf3(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], isign);
                 na = 1 - na;
                 break;
             case 5:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
                 ix4 = ix3 + ido;
-                if(na == 0) passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
-                else passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
+                if(na == 0) passf5(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
+                else passf5(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
                 na = 1 - na;
                 break;
         }
@@ -2224,27 +2224,27 @@ void cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, co
             case 4:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
-                if(na == 0) passf4neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3]);
-                else passf4neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3]);
+                if(na == 0) passf4neg(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3]);
+                else passf4neg(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3]);
                 na = 1 - na;
                 break;
             case 2:
-                if(na == 0) passf2neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw]);
-                else passf2neg((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw]);
+                if(na == 0) passf2neg(ido, l1, (const complex_t*)c, ch, &wa[iw]);
+                else passf2neg(ido, l1, (const complex_t*)ch, c, &wa[iw]);
                 na = 1 - na;
                 break;
             case 3:
                 ix2 = iw + ido;
-                if(na == 0) passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], isign);
-                else passf3((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], isign);
+                if(na == 0) passf3(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], isign);
+                else passf3(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], isign);
                 na = 1 - na;
                 break;
             case 5:
                 ix2 = iw + ido;
                 ix3 = ix2 + ido;
                 ix4 = ix3 + ido;
-                if(na == 0) passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
-                else passf5((const uint16_t)ido, (const uint16_t)l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
+                if(na == 0) passf5(ido, l1, (const complex_t*)c, ch, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
+                else passf5(ido, l1, (const complex_t*)ch, c, &wa[iw], &wa[ix2], &wa[ix3], &wa[ix4], isign);
                 na = 1 - na;
                 break;
         }
@@ -3885,8 +3885,8 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     real_t scale, b_scale = 0;
     #endif
 #endif
-    // ALIGN complex_t Z1[512];
-    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
+    // complex_t Z1[512];
+    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -3962,8 +3962,8 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
 void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t k;
     complex_t       x;
-    // ALIGN complex_t Z1[512];
-    complex_t* Z1 = ps_malloc(512 * sizeof(complex_t));
+    // complex_t Z1[512];
+    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -4102,7 +4102,7 @@ void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
-    //    ALIGN real_t transf_buf[2*1024] = {0};
+    //    real_t transf_buf[2*1024] = {0};
     real_t* transf_buf = (real_t*)ps_calloc(2 * 1024, sizeof(real_t));
     const real_t* window_long = NULL;
     const real_t* window_long_prev = NULL;
@@ -4238,8 +4238,8 @@ void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, ui
 /* only works for LTP -> no overlapping, no short blocks */
 void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
-    // ALIGN real_t windowed_buf[2*1024] = {0};
-    real_t* windowed_buf = ps_calloc(2 * 1024, sizeof(real_t));
+    // real_t windowed_buf[2*1024] = {0};
+    real_t* windowed_buf = (real_t*)ps_calloc(2 * 1024, sizeof(real_t));
     const real_t* window_long = NULL;
     const real_t* window_long_prev = NULL;
     const real_t* window_short = NULL;
@@ -6709,7 +6709,7 @@ void ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t fra
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LD_DEC
-ALIGN static const uint16_t* swb_offset_512_window[] = {
+static const uint16_t* swb_offset_512_window[] = {
     0,                 /* 96000 */
     0,                 /* 88200 */
     0,                 /* 64000 */
@@ -6726,7 +6726,7 @@ ALIGN static const uint16_t* swb_offset_512_window[] = {
 #endif // LD_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LD_DEC
-ALIGN static const uint16_t* swb_offset_480_window[] = {
+static const uint16_t* swb_offset_480_window[] = {
     0,                 /* 96000 */
     0,                 /* 88200 */
     0,                 /* 64000 */
@@ -6742,7 +6742,7 @@ ALIGN static const uint16_t* swb_offset_480_window[] = {
 };
 #endif // LD_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ALIGN static const uint16_t* swb_offset_128_window[] = {
+static const uint16_t* swb_offset_128_window[] = {
     swb_offset_128_96, /* 96000 */
     swb_offset_128_96, /* 88200 */
     swb_offset_128_64, /* 64000 */
@@ -6935,7 +6935,7 @@ static inline real_t iquant(int16_t q, const real_t* tab, uint8_t* error) {
   - Within a scalefactor window band, the coefficients are in ascending spectral order.
 */
 uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len) {
-    ALIGN static const real_t pow2_table[] = {
+    static const real_t pow2_table[] = {
         COEF_CONST(1.0), COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
         COEF_CONST(1.4142135623730950488016887242097),                  /* 2^0.5 */
         COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
@@ -7194,8 +7194,8 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
 uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
     uint8_t retval;
     int     output_channels;
-    // ALIGN real_t spec_coef[1024];
-    real_t* spec_coef = ps_malloc(1024 * sizeof(real_t));
+    // real_t spec_coef[1024];
+    real_t* spec_coef = (real_t*)ps_malloc(1024 * sizeof(real_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
 #endif
@@ -7358,10 +7358,10 @@ exit:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, element* cpe, int16_t* spec_data1, int16_t* spec_data2) {
     uint8_t retval;
-    // ALIGN real_t spec_coef1[1024];
-    // ALIGN real_t spec_coef2[1024];
-    real_t* spec_coef1 = ps_malloc(1024 * sizeof(real_t));
-    real_t* spec_coef2 = ps_malloc(1024 * sizeof(real_t));
+    // real_t spec_coef1[1024];
+    // real_t spec_coef2[1024];
+    real_t* spec_coef1 = (real_t*)ps_malloc(1024 * sizeof(real_t));
+    real_t* spec_coef2 = (real_t*)ps_malloc(1024 * sizeof(real_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
 #endif
@@ -8055,8 +8055,8 @@ uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_
     //  element       sce = {0};
     element*   sce = (element*)ps_calloc(1, sizeof(element));
     ic_stream* ics = &(sce->ics1);
-    // ALIGN int16_t spec_data[1024] = {0};
-    int16_t* spec_data = ps_calloc(1024, sizeof(int16_t));
+    // int16_t spec_data[1024] = {0};
+    int16_t* spec_data = (int16_t*)ps_calloc(1024, sizeof(int16_t));
     sce->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG);
     *tag = sce->element_instance_tag;
     sce->channel = channel;
@@ -8089,8 +8089,8 @@ exit:
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.5 */
 uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
-    // ALIGN int16_t spec_data1[1024] = {0};
-    // ALIGN int16_t spec_data2[1024] = {0};
+    // int16_t spec_data1[1024] = {0};
+    // int16_t spec_data2[1024] = {0};
     int16_t* spec_data1 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
     int16_t* spec_data2 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
     // element    cpe = {0};
@@ -8467,8 +8467,8 @@ void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* 
     ic_stream* ics2 = &(cpe.ics2);
     int16_t*   spec_data;
     (void)spec_data;
-    ALIGN int16_t spec_data1[1024] = {0};
-    ALIGN int16_t spec_data2[1024] = {0};
+    int16_t spec_data1[1024] = {0};
+    int16_t spec_data2[1024] = {0};
     hDecoder->fr_ch_ele = 0;
     hInfo->error = DRM_aac_scalable_main_header(hDecoder, ics1, ics2, ld, this_layer_stereo);
     if (hInfo->error > 0) return;
@@ -10048,7 +10048,7 @@ uint8_t is_ltp_ot(uint8_t object_type) {
 #endif // LPT_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-ALIGN const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
+const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
                                   REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -10057,10 +10057,10 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
                    uint16_t frame_len) {
     uint8_t      sfb;
     uint16_t     bin, i, num_samples;
-    // ALIGN real_t x_est[2048];
-    // ALIGN real_t X_est[2048];
-    real_t* x_est = ps_malloc(2048 * sizeof(real_t));
-    real_t* X_est = ps_malloc(2048 * sizeof(real_t));
+    // real_t x_est[2048];
+    // real_t X_est[2048];
+    real_t* x_est = (real_t*)ps_malloc(2048 * sizeof(real_t));
+    real_t* X_est = (real_t*)ps_malloc(2048 * sizeof(real_t));
     if(ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
         if(ltp->data_present) {
             num_samples = frame_len << 1;
@@ -10840,9 +10840,9 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
     uint8_t          temp_delay_ser[NO_ALLPASS_LINKS];
     real_t           P_SmoothPeakDecayDiffNrg, nrg;
     // real_t           P[32][34];
-    real_t (*P)[34] = malloc(32 * sizeof(real_t[34]));
+    real_t (*P)[34] = (real_t (*)[34])ps_malloc(32 * sizeof(real_t[34]));
     // real_t           G_TransientRatio[32][34] = {{0}};
-    real_t (*G_TransientRatio)[34] = ps_calloc(32, sizeof(real_t[34]));
+    real_t (*G_TransientRatio)[34] = (real_t (*)[34])ps_calloc(32, sizeof(real_t[34]));
     complex_t        inputLeft;
     /* chose hybrid filterbank: 20 or 34 band case */
     if(ps->use34hybrid_bands) { Phi_Fract_SubQmf = Phi_Fract_SubQmf34; }
@@ -11582,8 +11582,8 @@ ps_info* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
 uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     // qmf_t X_hybrid_left[32][32] = {{{0}}};
     // qmf_t X_hybrid_right[32][32] = {{{0}}};
-    qmf_t (*X_hybrid_left)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
-    qmf_t (*X_hybrid_right)[32] = ps_calloc(32, 32 * sizeof(qmf_t));
+    qmf_t (*X_hybrid_left)[32] = (qmf_t (*)[32])ps_calloc(32, 32 * sizeof(qmf_t));
+    qmf_t (*X_hybrid_right)[32] = (qmf_t (*)[32])ps_calloc(32, 32 * sizeof(qmf_t));
     /* delta decoding of the bitstream data */
     ps_data_decode(ps);
     /* set up some parameters depending on filterbank type */
@@ -11991,7 +11991,7 @@ void sbr_save_matrix(sbr_info* sbr, uint8_t ch) {
 uint8_t sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qmf_t X[MAX_NTSR][64], uint8_t ch, uint8_t dont_process, const uint8_t downSampledSBR) {
     int16_t      k, l;
     uint8_t      ret = 0;
-    ALIGN real_t deg[64];
+    real_t deg[64];
     #ifdef DRM
     if (sbr->Is_DRM_SBR) {
         sbr->bsco = max((int32_t)sbr->maxAACLine * 32 / (int32_t)sbr->frame_len - (int32_t)sbr->kx, 0);
@@ -12091,7 +12091,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_cha
     uint8_t dont_process = 0;
     uint8_t ret = 0;
     // qmf_t X[MAX_NTSR][64];
-    qmf_t(*X)[64] = ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
+    qmf_t(*X)[64] = (qmf_t(*)[64])ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -12155,8 +12155,8 @@ exit:
 uint8_t sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    // ALIGN qmf_t X[MAX_NTSR][64];
-    qmf_t(*X)[64] = ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
+    // qmf_t X[MAX_NTSR][64];
+    qmf_t(*X)[64] = (qmf_t(*)[64])ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -12211,10 +12211,10 @@ uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* righ
     uint8_t l, k;
     uint8_t dont_process = 0;
     uint8_t ret = 0;
-    // ALIGN qmf_t X_left[38][64] = {{{0}}};
-    // ALIGN qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
-    qmf_t(*X_left)[64] = ps_calloc(38, 64 * sizeof(qmf_t));
-    qmf_t(*X_right)[64] = ps_calloc(38, 64 * sizeof(qmf_t));
+    // qmf_t X_left[38][64] = {{{0}}};
+    // qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
+    qmf_t(*X_left)[64] = (qmf_t(*)[64])ps_calloc(38, 64 * sizeof(qmf_t));
+    qmf_t(*X_right)[64] = (qmf_t(*)[64])ps_calloc(38, 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -13133,10 +13133,10 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t       m, l, k;
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-    ALIGN real_t Q_M_lim[MAX_M];
-    ALIGN real_t G_lim[MAX_M];
-    ALIGN real_t G_boost;
-    ALIGN real_t S_M[MAX_M];
+    real_t Q_M_lim[MAX_M];
+    real_t G_lim[MAX_M];
+    real_t G_boost;
+    real_t S_M[MAX_M];
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -13307,10 +13307,10 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t       m, l, k;
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-    ALIGN real_t Q_M_lim[MAX_M];
-    ALIGN real_t G_lim[MAX_M];
-    ALIGN real_t G_boost;
-    ALIGN real_t S_M[MAX_M];
+    real_t Q_M_lim[MAX_M];
+    real_t G_lim[MAX_M];
+    real_t G_boost;
+    real_t S_M[MAX_M];
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14677,13 +14677,13 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t       m, l, k;
     uint8_t current_t_noise_band = 0;
     uint8_t S_mapped;
-    // ALIGN real_t Q_M_lim[MAX_M];
-    // ALIGN real_t G_lim[MAX_M];
-    // ALIGN real_t S_M[MAX_M];
-    ALIGN real_t G_boost;
-    real_t* Q_M_lim = ps_malloc(MAX_M * sizeof(real_t));
-    real_t* G_lim = ps_malloc(MAX_M * sizeof(real_t));
-    real_t* S_M = ps_malloc(MAX_M * sizeof(real_t));
+    // real_t Q_M_lim[MAX_M];
+    // real_t G_lim[MAX_M];
+    // real_t S_M[MAX_M];
+    real_t G_boost;
+    real_t* Q_M_lim = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
+    real_t* G_lim = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
+    real_t* S_M = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14876,11 +14876,11 @@ float QUANTISE2INT(float val) {
 #ifdef SBR_DEC
 void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t* deg, uint8_t ch) {
     uint8_t l, i, x;
-    //    ALIGN complex_t alpha_0[64], alpha_1[64];
-    complex_t* alpha_0 = ps_malloc(64 * sizeof(complex_t));
-    complex_t* alpha_1 = ps_malloc(64 * sizeof(complex_t));
+    //    complex_t alpha_0[64], alpha_1[64];
+    complex_t* alpha_0 = (complex_t*)ps_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_1 = (complex_t*)ps_malloc(64 * sizeof(complex_t));
     #ifdef SBR_LOW_POWER
-    // ALIGN real_t rxx[64];
+    // real_t rxx[64];
     real_t* rxx = ps_malloc(64 * sizeof(real_t));
     #endif
         uint8_t offset = sbr->tHFAdj;
@@ -15512,8 +15512,8 @@ void qmfs_end(qmfs_info* qmfs) {
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
-    ALIGN real_t x[16];
-    ALIGN real_t y[16];
+    real_t x[16];
+    real_t y[16];
     int32_t      n, k, out = 0;
     uint8_t      l;
     /* qmf subsample l */
@@ -15561,8 +15561,8 @@ void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][6
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
-    ALIGN real_t x[64];
-    ALIGN real_t y[64];
+    real_t x[64];
+    real_t y[64];
     int32_t      n, k, out = 0;
     uint8_t      l;
     /* qmf subsample l */
@@ -15610,7 +15610,7 @@ void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][6
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
 void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
-    ALIGN real_t x1[32], x2[32];
+    real_t x1[32], x2[32];
         #ifndef FIXED_POINT
     real_t scale = 1.f / 64.f;
         #endif
@@ -15660,10 +15660,10 @@ void sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][6
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
 void sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], real_t* output) {
-        //    ALIGN real_t x1[64], x2[64];
+        //    real_t x1[64], x2[64];
         #ifndef SBR_LOW_POWER
-    ALIGN real_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
-    ALIGN real_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32];
+    real_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
+    real_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32];
         #endif
     qmf_t*  pX;
     real_t *pring_buffer_1, *pring_buffer_3;
@@ -15821,11 +15821,11 @@ void qmfa_end(qmfa_info* qmfa) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 void sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const real_t* input, qmf_t X[MAX_NTSRHFG][64], uint8_t offset, uint8_t kx) {
-    ALIGN real_t u[64];
+    real_t u[64];
     #ifndef SBR_LOW_POWER
-    ALIGN real_t in_real[32], in_imag[32], out_real[32], out_imag[32];
+    real_t in_real[32], in_imag[32], out_real[32], out_imag[32];
     #else
-    ALIGN real_t y[32];
+    real_t y[32];
     #endif
     uint32_t in = 0;
     uint8_t  l;
