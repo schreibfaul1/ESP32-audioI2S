@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include "libfaad/common.h"
 #include "libfaad/neaacdec.h"
 
 

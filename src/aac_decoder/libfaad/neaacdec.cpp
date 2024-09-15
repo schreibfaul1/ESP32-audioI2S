@@ -31,8 +31,7 @@
 #include <stdlib.h>
 #include <stdint-gcc.h>
 #include "neaacdec.h"
-#include "structs.h"
-#include "common.h"
+
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t get_sr_index(const uint32_t samplerate) {
@@ -1189,7 +1188,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
     /* allocate the buffer for the final samples */
     if((hDecoder->sample_buffer == NULL) || (hDecoder->alloced_channels != output_channels)) {
         const uint8_t str[] = {
-            sizeof(int16_t), sizeof(int32_t), sizeof(int32_t), sizeof(float32_t), sizeof(double), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), 0, 0, 0};
+            sizeof(int16_t), sizeof(int32_t), sizeof(int32_t), sizeof(float), sizeof(double), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), 0, 0, 0};
         uint8_t stride = str[hDecoder->config.outputFormat - 1];
 #ifdef SBR_DEC
         if(((hDecoder->sbr_present_flag == 1) && (!hDecoder->downSampledSBR)) || (hDecoder->forceUpSampling == 1)) { stride = 2 * stride; }
@@ -3049,7 +3048,7 @@ static void to_PCM_32bit(NeAACDecStruct *hDecoder, real_t **input,
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
-static void to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float32_t** sample_buffer) {
+static void to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float** sample_buffer) {
     uint8_t  ch, ch1;
     uint16_t i;
     switch(CONV(channels, hDecoder->downMatrix)) {
@@ -3140,7 +3139,7 @@ static void to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t chan
 void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
     int16_t*   short_sample_buffer = (int16_t*)sample_buffer;
     int32_t*   int_sample_buffer = (int32_t*)sample_buffer;
-    float32_t* float_sample_buffer = (float32_t*)sample_buffer;
+    float* float_sample_buffer = (float*)sample_buffer;
     double*    double_sample_buffer = (double*)sample_buffer;
     #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -6519,7 +6518,7 @@ static void fft_dif(real_t* Real, real_t* Imag) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static void flt_round(float32_t* pf) {
+static void flt_round(float* pf) {
     int32_t  flg;
     uint32_t tmp, tmp1, tmp2;
     tmp = *(uint32_t*)pf;
@@ -6532,22 +6531,22 @@ static void flt_round(float32_t* pf) {
         tmp |= (uint32_t)0x00010000; /* insert 1 lsb */
         tmp2 = tmp;                  /* add 1 lsb and elided one */
         tmp &= (uint32_t)0xff800000; /* extract exponent and sign */
-    //  *pf = *(float32_t*)&tmp1 + *(float32_t*)&tmp2 - *(float32_t*)&tmp;  // [-Wstrict-aliasing]
-        float32_t f1, f2, f3;
-        memcpy(&f1, &tmp1, sizeof(float32_t));
-        memcpy(&f2, &tmp2, sizeof(float32_t));
-        memcpy(&f3, &tmp, sizeof(float32_t));
+    //  *pf = *(float*)&tmp1 + *(float*)&tmp2 - *(float*)&tmp;  // [-Wstrict-aliasing]
+        float f1, f2, f3;
+        memcpy(&f1, &tmp1, sizeof(float));
+        memcpy(&f2, &tmp2, sizeof(float));
+        memcpy(&f3, &tmp, sizeof(float));
         *pf = f1 + f2 - f3;
     }
     else {
-    //  *pf = *(float32_t*)&tmp;  // [-Wstrict-aliasing]
-        memcpy(pf, &tmp, sizeof(float32_t));
+    //  *pf = *(float*)&tmp;  // [-Wstrict-aliasing]
+        memcpy(pf, &tmp, sizeof(float));
     }
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static int16_t quant_pred(float32_t x) {
+static int16_t quant_pred(float x) {
     int16_t   q;
     uint32_t* tmp = (uint32_t*)&x;
     q = (int16_t)(*tmp >> 16);
@@ -6556,8 +6555,8 @@ static int16_t quant_pred(float32_t x) {
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static float32_t inv_quant_pred(int16_t q) {
-    float32_t x = 0.0f;
+static float inv_quant_pred(int16_t q) {
+    float x = 0.0f;
     uint32_t* tmp = (uint32_t*)&x;
     *tmp = ((uint32_t)q) << 16;
     return x;
@@ -6569,7 +6568,7 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
     uint16_t  tmp;
     int16_t   i, j;
     real_t    dr1;
-    float32_t predictedvalue;
+    float predictedvalue;
     real_t    e0, e1;
     real_t    k1, k2;
     real_t r[2];
@@ -6595,7 +6594,7 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
         #define B 0.953125
         real_t    c = COR[0];
         real_t    v = VAR[0];
-        float32_t tmp;
+        float tmp;
         if(c == 0 || v <= 1) { k1 = 0; }
         else {
             tmp = B / v;
@@ -6618,7 +6617,7 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
         #define B 0.953125
         real_t    c = COR[1];
         real_t    v = VAR[1];
-        float32_t tmp;
+        float tmp;
         if(c == 0 || v <= 1) { k2 = 0; }
         else {
             tmp = B / v;

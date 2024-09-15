@@ -28,8 +28,8 @@
 ** $Id: structs.h,v 1.49 2009/01/26 23:51:15 menno Exp $
 **/
 #pragma once
-#include "common.h"
-#include "fixed.h"
+#include "neaacdec.h"
+
 #define MAX_CHANNELS        64
 #define MAX_SYNTAX_ELEMENTS 48
 #define MAX_WINDOW_GROUPS    8

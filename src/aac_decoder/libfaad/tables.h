@@ -1,6 +1,7 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
-#include "fixed.h"
+#include "neaacdec.h"
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
     #define TABLE_BITS 6
