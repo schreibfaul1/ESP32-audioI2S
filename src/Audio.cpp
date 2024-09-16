@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12o
- *  Updated on: Sep 10.2024
+ *  Version 3.0.12p
+ *  Updated on: Sep 16.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -5166,8 +5166,8 @@ void Audio::computeLimit() {    // is calculated when the volume or balance chan
 
     /* balance is left -16...+16 right */
     /* TODO: logarithmic scaling of balance, too? */
-    if(m_balance < 0) { r -= (double)abs(m_balance) / 16; }
-    else if(m_balance > 0) { l -= (double)abs(m_balance) / 16; }
+    if(m_balance > 0) { r -= (double)abs(m_balance) / 16; }
+    else if(m_balance < 0) { l -= (double)abs(m_balance) / 16; }
 
     switch(m_curve) {
         case 0:
