@@ -407,7 +407,7 @@ const char* NeAACDecGetErrorMessage(unsigned const char errcode) {
     return err_msg[errcode];
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-unsigned long NeAACDecGetCapabilities(void) {
+uint32_t NeAACDecGetCapabilities(void) {
     uint32_t cap = 0;
     /* can't do without it */
     cap += LC_DEC_CAP;
@@ -532,7 +532,7 @@ __unused int latmCheck(latm_header* latm, bitfile* ld) {
     return (good > 0);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, unsigned long buffer_size, unsigned long* samplerate, unsigned char* channels) {
+long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buffer_size, uint32_t* samplerate, unsigned char* channels) {
     uint32_t        bits = 0;
     int32_t         ret = 0;
     // bitfile         ld;
@@ -653,7 +653,7 @@ exit:
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Init the library using a DecoderSpecificInfo */
-char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned long SizeOfDecoderSpecificInfo, unsigned long* samplerate, unsigned char* channels) {
+char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, unsigned char* channels) {
     NeAACDecStruct*        hDecoder = (NeAACDecStruct*)hpDecoder;
     int8_t                 rc;
     mp4AudioSpecificConfig mp4ASC;
@@ -712,7 +712,7 @@ char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned lo
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, unsigned long samplerate, unsigned char channels) {
+char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, unsigned char channels) {
     NeAACDecStruct** hDecoder = (NeAACDecStruct**)hpDecoder;
     if(hDecoder == NULL) return 1; /* error */
     NeAACDecClose(*hDecoder);
@@ -979,12 +979,12 @@ void create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size) {
+void* NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     return aac_frame_decode(hDecoder, hInfo, buffer, buffer_size, NULL, 0);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer, unsigned long sample_buffer_size) {
+void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if((sample_buffer == NULL) || (sample_buffer_size == 0)) {
         hInfo->error = 27;
@@ -998,7 +998,7 @@ void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsign
 void conceal_output(NeAACDecStruct* hDecoder, uint16_t frame_len, uint8_t out_ch, void* sample_buffer) { return; }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size) {
+void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size) {
     uint16_t i;
     uint8_t  channels = 0;
     uint8_t  output_channels = 0;
@@ -9814,7 +9814,7 @@ uint8_t pulse_decode(ic_stream* ics, int16_t* spec_data, uint16_t framelen) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.6.1 */
-char NeAACDecAudioSpecificConfig(unsigned char* pBuffer, unsigned long buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
+char NeAACDecAudioSpecificConfig(unsigned char* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t buffer_size, uint8_t short_form) {
     int8_t   result = 0;

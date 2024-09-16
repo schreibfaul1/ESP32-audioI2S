@@ -3210,7 +3210,6 @@ void Audio::processLocalFile() {
 exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
-log_w("");
         stopSong();
 
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();

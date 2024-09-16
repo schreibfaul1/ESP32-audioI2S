@@ -538,7 +538,7 @@ typedef struct mp4AudioSpecificConfig
     /* Audio Specific Info */
     unsigned char objectTypeIndex;
     unsigned char samplingFrequencyIndex;
-    unsigned long samplingFrequency;
+    uint32_t samplingFrequency;
     unsigned char channelsConfiguration;
     /* GA Specific Info */
     unsigned char frameLengthFlag;
@@ -555,11 +555,11 @@ typedef struct mp4AudioSpecificConfig
 } mp4AudioSpecificConfig;
 typedef struct NeAACDecFrameInfo
 {
-    unsigned long bytesconsumed;
-    unsigned long samples;
+    uint32_t bytesconsumed;
+    uint32_t samples;
     unsigned char channels;
     unsigned char error;
-    unsigned long samplerate;
+    uint32_t samplerate;
     /* SBR: 0: off, 1: on; upsample, 2: on; downsampled, 3: off; upsampled */
     unsigned char sbr;
     /* MPEG-4 ObjectType */
@@ -635,14 +635,14 @@ cfft_info*               cffti(uint16_t n);
 void                     cfftu(cfft_info* cfft);
 NeAACDecHandle           NeAACDecOpen(void);
 const char*              NeAACDecGetErrorMessage(unsigned const char errcode);
-void*                    NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer, unsigned long sample_buffer_size);
-long                     NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, unsigned long buffer_size, unsigned long* samplerate, unsigned char* channels);
+void*                    NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size);
+long                     NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buffer_size, uint32_t* samplerate, unsigned char* channels);
 unsigned char            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
-char                     NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, unsigned long SizeOfDecoderSpecificInfo, unsigned long* samplerate, unsigned char* channels);
+char                     NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, unsigned char* channels);
 unsigned char            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
 void                     NeAACDecClose(NeAACDecHandle hpDecoder);
 NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
-void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, unsigned long buffer_size, void** sample_buffer2, unsigned long sample_buffer_size);
+void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size);
 void  create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
 void  ssr_filter_bank_end(fb_info* fb);
 void  passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
