@@ -3158,7 +3158,8 @@ void Audio::processLocalFile() {
                 m_f_running = false;
                 return;
             }
-            if(InBuff.bufferFilled() > maxFrameSize) { // read the file header first
+            if((InBuff.bufferFilled() > maxFrameSize) ||
+               (InBuff.bufferFilled() == m_fileSize)) { // read the file header first
                 InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
             }
             return;
