@@ -18,6 +18,10 @@
 ** Commercial non-GPL licensing of this software is possible.
 ** For more info contact Nero AG through Mpeg4AAClicense@nero.com.
 **/
+
+// ESP32 Version 29.07.1961
+// updated:      21.09.2024
+
 #pragma once
 #include <stddef.h>
 #include <stdlib.h>
@@ -38,9 +42,11 @@
 #define LTP_DEC // Allow decoding of LTP (Long Term Prediction) profile AAC
 #define LD_DEC  // Allow decoding of LD (Low Delay) profile AAC
 // #define DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
-#define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
+#if (defined CONFIG_IDF_TARGET_ESP32S3 && defined BOARD_HAS_PSRAM)
+    #define SBR_DEC // Allow decoding of SBR (Spectral Band Replication) profile AAC
+    #define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
+#endif
 // #define SBR_LOW_POWER
-#define PS_DEC // Allow decoding of PS (Parametric Stereo) profile AAC
 #define ALLOW_SMALL_FRAMELENGTH
 // #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

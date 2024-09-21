@@ -7956,12 +7956,7 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
                     /* one sbr_info describes a channel_element not a channel! */
                     /* if we encounter SBR data here: error */
                     /* SBR data will be read directly in the SCE/LFE/CPE element */
-                    if ((hInfo->error = fill_element(hDecoder, ld, drc
-#ifdef SBR_DEC
-                                                     ,
-                                                     INVALID_SBR_ELEMENT
-#endif
-                                                     )) > 0)
+                    if ((hInfo->error = fill_element(hDecoder, ld, drc, INVALID_SBR_ELEMENT)) > 0)
                         return;
                     break;
             }
@@ -8343,12 +8338,7 @@ uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.11 */
-uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc
-#ifdef SBR_DEC
-                            ,
-                            uint8_t sbr_ele
-#endif
-) {
+uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc,  uint8_t sbr_ele) {
     uint16_t count;
 #ifdef SBR_DEC
     uint8_t bs_extension_type;
