@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12p
- *  Updated on: Sep 16.2024
+ *  Version 3.0.12q
+ *  Updated on: Sep 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3219,17 +3219,19 @@ exit:
         if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
 
+        m_audioCurrentTime = 0;
+        m_audioFileDuration = 0;
+        m_resumeFilePos = -1;
+        m_haveNewFilePos = 0;
+        m_codec = CODEC_NONE;
+
         if(afn) {
             if(audio_eof_mp3) audio_eof_mp3(afn);
             AUDIO_INFO("End of file \"%s\"", afn);
             free(afn);
             afn = NULL;
         }
-        m_audioCurrentTime = 0;
-        m_audioFileDuration = 0;
-        m_resumeFilePos = -1;
-        m_haveNewFilePos = 0;
-        m_codec = CODEC_NONE;
+
         return;
     }
 }
