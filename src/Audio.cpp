@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12n
- *  Updated on: Sep 09.2024
+ *  Version 3.0.12r
+ *  Updated on: Sep 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -444,6 +444,7 @@ void Audio::setDefaults() {
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_sumBytesDecoded = 0;
+    m_vuLeft = m_vuRight = 0; // #835
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -621,7 +622,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "\r\n");
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
- //                    strcat(rqh, "User-Agent: Mozilla/5.0\r\n");
+                       strcat(rqh, "User-Agent: ESP32 audioI2S\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
@@ -3189,7 +3190,7 @@ void Audio::processLocalFile() {
                 m_f_running = false;
                 return;
             }
-            if(InBuff.bufferFilled() > maxFrameSize) { // read the file header first
+            if(InBuff.bufferFilled() > maxFrameSize || (InBuff.bufferFilled() == m_fileSize)) { // at least one complete frame or the file is smaller
                 InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
             }
             return;
@@ -3248,7 +3249,6 @@ void Audio::processLocalFile() {
 exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
-log_w("");
         stopSong();
 
 #ifndef AUDIO_I2S_DISABLE_MP3_DECODER
@@ -3268,17 +3268,19 @@ log_w("");
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
 #endif
 
+        m_audioCurrentTime = 0;
+        m_audioFileDuration = 0;
+        m_resumeFilePos = -1;
+        m_haveNewFilePos = 0;
+        m_codec = CODEC_NONE;
+
         if(afn) {
             if(audio_eof_mp3) audio_eof_mp3(afn);
             AUDIO_INFO("End of file \"%s\"", afn);
             free(afn);
             afn = NULL;
         }
-        m_audioCurrentTime = 0;
-        m_audioFileDuration = 0;
-        m_resumeFilePos = -1;
-        m_haveNewFilePos = 0;
-        m_codec = CODEC_NONE;
+
         return;
     }
 }
@@ -3401,7 +3403,7 @@ void Audio::processWebFile() {
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter != 100) {
-        if(InBuff.bufferFilled() > maxFrameSize) { // read the file header first
+        if(InBuff.bufferFilled() > maxFrameSize || (InBuff.bufferFilled() == m_contentlength)) { // at least one complete frame or the file is smaller
             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
@@ -4284,7 +4286,7 @@ void Audio::showstreamtitle(const char* ml) {
 
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            AUDIO_INFO("%s", sTit);
+            AUDIO_INFO("%.*s", m_ibuffSize, sTit);
             uint8_t pos = 12;                                                 // remove "StreamTitle="
             if(sTit[pos] == '\'') pos++;                                      // remove leading  \'
             if(sTit[strlen(sTit) - 1] == '\'') sTit[strlen(sTit) - 1] = '\0'; // remove trailing \'
@@ -4310,7 +4312,7 @@ void Audio::showstreamtitle(const char* ml) {
         }
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            AUDIO_INFO("%s", sUrl);
+            AUDIO_INFO("%.*s", m_ibuffSize, sUrl);
         }
         if(sUrl) {
             free(sUrl);
@@ -5291,8 +5293,8 @@ void Audio::computeLimit() {    // is calculated when the volume or balance chan
 
     /* balance is left -16...+16 right */
     /* TODO: logarithmic scaling of balance, too? */
-    if(m_balance < 0) { r -= (double)abs(m_balance) / 16; }
-    else if(m_balance > 0) { l -= (double)abs(m_balance) / 16; }
+    if(m_balance > 0) { r -= (double)abs(m_balance) / 16; }
+    else if(m_balance < 0) { l -= (double)abs(m_balance) / 16; }
 
     switch(m_curve) {
         case 0:
@@ -6468,4 +6470,8 @@ void Audio::performAudioTask() {
         vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
     xSemaphoreGive(mutex_playAudioData);
+}
+uint32_t Audio::getHighWatermark(){
+    UBaseType_t highWaterMark = uxTaskGetStackHighWaterMark(m_audioTaskHandle);
+    return highWaterMark; // dwords
 }
