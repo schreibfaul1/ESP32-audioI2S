@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12n
- *  Updated on: Sep 09.2024
+ *  Version 3.0.12s
+ *  Updated on: Sep 26.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -15,7 +15,10 @@
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
+#include <NetworkClient.h>
+#include <NetworkClientSecure.h>
 #include <SD.h>
 #include <SD_MMC.h>
 #include <SPIFFS.h>
@@ -530,10 +533,16 @@ private:
         int pids[4];
     } pid_array;
 
-    File                  audiofile;    // @suppress("Abstract class cannot be instantiated")
-    WiFiClient            client;       // @suppress("Abstract class cannot be instantiated")
-    WiFiClientSecure      clientsecure; // @suppress("Abstract class cannot be instantiated")
+    File                  audiofile;
+#ifndef ETHERNET_IF
+    WiFiClient            client;
+    WiFiClientSecure      clientsecure;
     WiFiClient*           _client = nullptr;
+#else
+    NetworkClient	      client;
+    NetworkClientSecure	  clientsecure;
+    NetworkClient*       _client = nullptr;
+#endif
     SemaphoreHandle_t     mutex_playAudioData;
     TaskHandle_t          m_audioTaskHandle = nullptr;
 

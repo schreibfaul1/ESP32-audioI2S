@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12r
- *  Updated on: Sep 22.2024
+ *  Version 3.0.12s
+ *  Updated on: Sep 26.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -183,25 +183,16 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 #ifdef AUDIO_LOG
     m_f_Log = true;
 #endif
-
-#define __malloc_heap_psram(size) \
-    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
+#define AUDIO_INFO(...) { snprintf(m_ibuff, m_ibuffSize, __VA_ARGS__); if(audio_info) audio_info(m_ibuff); }
 
     m_f_psramFound = psramInit();
     if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
     if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
-    m_lastHost = (char*) x_ps_malloc(2048);
-    m_outBuff = (int16_t*)__malloc_heap_psram(m_outbuffSize);
-    m_chbuf = (char*)__malloc_heap_psram(m_chbufSize);
-    m_ibuff = (char*)__malloc_heap_psram(m_ibuffSize);
-
+    m_lastHost = (char*)   x_ps_malloc(2048);
+    m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
+    m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
+    m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
     if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
-
-#define AUDIO_INFO(...)                     \
-    {                                       \
-        snprintf(m_ibuff, m_ibuffSize, __VA_ARGS__);      \
-        if(audio_info) audio_info(m_ibuff); \
-    }
 
     clientsecure.setInsecure();
     m_f_channelEnabled = channelEnabled;
@@ -352,6 +343,7 @@ void Audio::setDefaults() {
     AACDecoder_FreeBuffers();
     OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
+    memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
     if(m_playlistBuff) {
         free(m_playlistBuff);
         m_playlistBuff = NULL;
@@ -2276,7 +2268,7 @@ bool Audio::pauseResume() {
         m_f_running = !m_f_running;
         retVal = true;
         if(!m_f_running) {
-            memset(m_outBuff, 0, m_outbuffSize); // Clear OutputBuffer
+            memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
             m_validSamples = 0;
         }
     }
@@ -4855,7 +4847,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 bool Audio::setFilePos(uint32_t pos) {
     if(!audiofile) return false;
     if(m_codec == CODEC_AAC) return false;   // not impl. yet
-    memset(m_outBuff, 0, m_outbuffSize);
+    memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t));
     m_validSamples = 0;
     m_resumeFilePos = pos;  // used in processLocalFile()
     m_haveNewFilePos = pos; // used in computeAudioCurrentTime()
@@ -4978,7 +4970,6 @@ void Audio::reconfigI2S(){
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
-
     if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
