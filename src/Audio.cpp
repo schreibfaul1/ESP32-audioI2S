@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12s
- *  Updated on: Sep 26.2024
+ *  Version 3.0.12t
+ *  Updated on: Sep 28.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1775,15 +1775,15 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 10) { // frames in V2.2, 3bytes identifier, 3bytes size descriptor
 
         if(universal_tmp > 0) {
-            if(universal_tmp > 256) {
-                universal_tmp -= 256;
-                return 256;
-            }
+            if(universal_tmp > len) {
+                universal_tmp -= len;
+                return len;
+            } // Throw it away
             else {
-                uint8_t t = universal_tmp;
+                uint32_t t = universal_tmp;
                 universal_tmp = 0;
                 return t;
-            }
+            } // Throw it away
         }
 
         frameid[0] = *(data + 0);
