@@ -1,10 +1,11 @@
+#include "esp_arduino_version.h"
 /*
  * Audio.h
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12s
- *  Updated on: Sep 26.2024
+ *  Version 3.0.12u
+ *  Updated on: Sep 30.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -17,14 +18,17 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
-#include <NetworkClient.h>
-#include <NetworkClientSecure.h>
 #include <SD.h>
 #include <SD_MMC.h>
 #include <SPIFFS.h>
 #include <FS.h>
 #include <FFat.h>
 #include <atomic>
+
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+#include <NetworkClient.h>
+#include <NetworkClientSecure.h>
+#endif
 
 #if ESP_IDF_VERSION_MAJOR == 5
 #include <driver/i2s_std.h>
