@@ -137,11 +137,7 @@ int8_t can_decode_ot(const uint8_t object_type) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* faad_malloc(size_t size) {
-#if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
-    return _aligned_malloc(size, 16);
-#else // #ifdef 0
     return ps_malloc(size);
-#endif // #ifdef 0
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* common free function */
@@ -7194,7 +7190,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
     uint8_t retval;
     int     output_channels;
     // real_t spec_coef[1024];
-    real_t* spec_coef = (real_t*)ps_malloc(1024 * sizeof(real_t));
+    real_t* spec_coef = (real_t*)faad_malloc(1024 * sizeof(real_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
 #endif
@@ -7359,8 +7355,8 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
     uint8_t retval;
     // real_t spec_coef1[1024];
     // real_t spec_coef2[1024];
-    real_t* spec_coef1 = (real_t*)ps_malloc(1024 * sizeof(real_t));
-    real_t* spec_coef2 = (real_t*)ps_malloc(1024 * sizeof(real_t));
+    real_t* spec_coef1 = (real_t*)faad_malloc(1024 * sizeof(real_t));
+    real_t* spec_coef2 = (real_t*)faad_malloc(1024 * sizeof(real_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
 #endif
@@ -10048,8 +10044,8 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
     uint16_t     bin, i, num_samples;
     // real_t x_est[2048];
     // real_t X_est[2048];
-    real_t* x_est = (real_t*)ps_malloc(2048 * sizeof(real_t));
-    real_t* X_est = (real_t*)ps_malloc(2048 * sizeof(real_t));
+    real_t* x_est = (real_t*)faad_malloc(2048 * sizeof(real_t));
+    real_t* X_est = (real_t*)faad_malloc(2048 * sizeof(real_t));
     if(ics->window_sequence != EIGHT_SHORT_SEQUENCE) {
         if(ltp->data_present) {
             num_samples = frame_len << 1;
@@ -10829,7 +10825,7 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
     uint8_t          temp_delay_ser[NO_ALLPASS_LINKS];
     real_t           P_SmoothPeakDecayDiffNrg, nrg;
     // real_t           P[32][34];
-    real_t (*P)[34] = (real_t (*)[34])ps_malloc(32 * sizeof(real_t[34]));
+    real_t (*P)[34] = (real_t (*)[34])faad_malloc(32 * sizeof(real_t[34]));
     // real_t           G_TransientRatio[32][34] = {{0}};
     real_t (*G_TransientRatio)[34] = (real_t (*)[34])ps_calloc(32, sizeof(real_t[34]));
     complex_t        inputLeft;
@@ -12080,7 +12076,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_cha
     uint8_t dont_process = 0;
     uint8_t ret = 0;
     // qmf_t X[MAX_NTSR][64];
-    qmf_t(*X)[64] = (qmf_t(*)[64])ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
+    qmf_t(*X)[64] = (qmf_t(*)[64])faad_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -12145,7 +12141,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_
     uint8_t dont_process = 0;
     uint8_t ret = 0;
     // qmf_t X[MAX_NTSR][64];
-    qmf_t(*X)[64] = (qmf_t(*)[64])ps_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
+    qmf_t(*X)[64] = (qmf_t(*)[64])faad_malloc(MAX_NTSR * 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -14670,9 +14666,9 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     // real_t G_lim[MAX_M];
     // real_t S_M[MAX_M];
     real_t G_boost;
-    real_t* Q_M_lim = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
-    real_t* G_lim = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
-    real_t* S_M = (real_t*)ps_malloc(MAX_M * sizeof(real_t));
+    real_t* Q_M_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
+    real_t* G_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
+    real_t* S_M = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14866,11 +14862,11 @@ float QUANTISE2INT(float val) {
 void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t* deg, uint8_t ch) {
     uint8_t l, i, x;
     //    complex_t alpha_0[64], alpha_1[64];
-    complex_t* alpha_0 = (complex_t*)ps_malloc(64 * sizeof(complex_t));
-    complex_t* alpha_1 = (complex_t*)ps_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_0 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_1 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
     #ifdef SBR_LOW_POWER
     // real_t rxx[64];
-    real_t* rxx = ps_malloc(64 * sizeof(real_t));
+    real_t* rxx = faad_malloc(64 * sizeof(real_t));
     #endif
         uint8_t offset = sbr->tHFAdj;
     uint8_t     first = sbr->t_E[ch][0];
