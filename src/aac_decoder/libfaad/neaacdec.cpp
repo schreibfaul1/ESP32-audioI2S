@@ -137,7 +137,17 @@ int8_t can_decode_ot(const uint8_t object_type) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* faad_malloc(size_t size) {
-    return ps_malloc(size);
+    char* ps_str = NULL;
+    if(psramFound()){ps_str = (char*) ps_malloc(size);}
+    else             {ps_str = (char*)    malloc(size);}
+    return ps_str;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void* faad_calloc(size_t len, size_t size) {
+    char* ps_str = NULL;
+    if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
+    else            {ps_str = (char*)    calloc(len, size);}
+    return ps_str;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* common free function */
@@ -432,7 +442,7 @@ const unsigned char mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x7
 NeAACDecHandle      NeAACDecOpen(void) {
     uint8_t         i;
     NeAACDecStruct* hDecoder = NULL;
-    if((hDecoder = (NeAACDecStruct*)ps_calloc(1, sizeof(NeAACDecStruct))) == NULL) return NULL;
+    if((hDecoder = (NeAACDecStruct*)faad_calloc(1, sizeof(NeAACDecStruct))) == NULL) return NULL;
     memset(hDecoder, 0, sizeof(NeAACDecStruct));
     hDecoder->cmes = mes;
     hDecoder->config.outputFormat = FAAD_FMT_16BIT;
@@ -4098,7 +4108,7 @@ void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
-    real_t* transf_buf = (real_t*)ps_calloc(2 * 1024, sizeof(real_t));
+    real_t* transf_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
     const real_t* window_long = NULL;
     const real_t* window_long_prev = NULL;
     const real_t* window_short = NULL;
@@ -4234,7 +4244,7 @@ void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, ui
 void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     // real_t windowed_buf[2*1024] = {0};
-    real_t* windowed_buf = (real_t*)ps_calloc(2 * 1024, sizeof(real_t));
+    real_t* windowed_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
     const real_t* window_long = NULL;
     const real_t* window_long_prev = NULL;
     const real_t* window_short = NULL;
@@ -8043,10 +8053,10 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
 uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag) {
     uint8_t retval = 0;
     //  element       sce = {0};
-    element*   sce = (element*)ps_calloc(1, sizeof(element));
+    element*   sce = (element*)faad_calloc(1, sizeof(element));
     ic_stream* ics = &(sce->ics1);
     // int16_t spec_data[1024] = {0};
-    int16_t* spec_data = (int16_t*)ps_calloc(1024, sizeof(int16_t));
+    int16_t* spec_data = (int16_t*)faad_calloc(1024, sizeof(int16_t));
     sce->element_instance_tag = (uint8_t)faad_getbits(ld, LEN_TAG);
     *tag = sce->element_instance_tag;
     sce->channel = channel;
@@ -8081,10 +8091,10 @@ exit:
 uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
     // int16_t spec_data1[1024] = {0};
     // int16_t spec_data2[1024] = {0};
-    int16_t* spec_data1 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
-    int16_t* spec_data2 = (int16_t*)ps_calloc(1024, sizeof(int16_t));
+    int16_t* spec_data1 = (int16_t*)faad_calloc(1024, sizeof(int16_t));
+    int16_t* spec_data2 = (int16_t*)faad_calloc(1024, sizeof(int16_t));
     // element    cpe = {0};
-    element*   cpe = (element*)ps_calloc(1, sizeof(element));
+    element*   cpe = (element*)faad_calloc(1, sizeof(element));
     ic_stream* ics1 = &(cpe->ics1);
     ic_stream* ics2 = &(cpe->ics2);
     uint8_t    result;
@@ -10827,7 +10837,7 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
     // real_t           P[32][34];
     real_t (*P)[34] = (real_t (*)[34])faad_malloc(32 * sizeof(real_t[34]));
     // real_t           G_TransientRatio[32][34] = {{0}};
-    real_t (*G_TransientRatio)[34] = (real_t (*)[34])ps_calloc(32, sizeof(real_t[34]));
+    real_t (*G_TransientRatio)[34] = (real_t (*)[34])faad_calloc(32, sizeof(real_t[34]));
     complex_t        inputLeft;
     /* chose hybrid filterbank: 20 or 34 band case */
     if(ps->use34hybrid_bands) { Phi_Fract_SubQmf = Phi_Fract_SubQmf34; }
@@ -11567,8 +11577,8 @@ ps_info* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
 uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     // qmf_t X_hybrid_left[32][32] = {{{0}}};
     // qmf_t X_hybrid_right[32][32] = {{{0}}};
-    qmf_t (*X_hybrid_left)[32] = (qmf_t (*)[32])ps_calloc(32, 32 * sizeof(qmf_t));
-    qmf_t (*X_hybrid_right)[32] = (qmf_t (*)[32])ps_calloc(32, 32 * sizeof(qmf_t));
+    qmf_t (*X_hybrid_left)[32] = (qmf_t (*)[32])faad_calloc(32, 32 * sizeof(qmf_t));
+    qmf_t (*X_hybrid_right)[32] = (qmf_t (*)[32])faad_calloc(32, 32 * sizeof(qmf_t));
     /* delta decoding of the bitstream data */
     ps_data_decode(ps);
     /* set up some parameters depending on filterbank type */
@@ -12198,8 +12208,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* righ
     uint8_t ret = 0;
     // qmf_t X_left[38][64] = {{{0}}};
     // qmf_t X_right[38][64] = {{{0}}}; /* must set this to 0 */
-    qmf_t(*X_left)[64] = (qmf_t(*)[64])ps_calloc(38, 64 * sizeof(qmf_t));
-    qmf_t(*X_right)[64] = (qmf_t(*)[64])ps_calloc(38, 64 * sizeof(qmf_t));
+    qmf_t(*X_left)[64] = (qmf_t(*)[64])faad_calloc(38, 64 * sizeof(qmf_t));
+    qmf_t(*X_right)[64] = (qmf_t(*)[64])faad_calloc(38, 64 * sizeof(qmf_t));
     if (sbr == NULL) {
         ret = 20;
         goto exit;
@@ -12754,10 +12764,10 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
     uint8_t nrBand0, nrBand1;
     // int32_t vDk0[64] = {0}, vDk1[64] = {0};
     // int32_t vk0[64] = {0}, vk1[64] = {0};
-    int32_t* vDk0 = (int32_t*) ps_calloc(64, sizeof(int32_t));
-    int32_t* vDk1 = (int32_t*) ps_calloc(64, sizeof(int32_t));
-    int32_t* vk0  = (int32_t*) ps_calloc(64, sizeof(int32_t));
-    int32_t* vk1  = (int32_t*) ps_calloc(64, sizeof(int32_t));
+    int32_t* vDk0 = (int32_t*) faad_calloc(64, sizeof(int32_t));
+    int32_t* vDk1 = (int32_t*) faad_calloc(64, sizeof(int32_t));
+    int32_t* vk0  = (int32_t*) faad_calloc(64, sizeof(int32_t));
+    int32_t* vk1  = (int32_t*) faad_calloc(64, sizeof(int32_t));
     uint8_t temp1[] = {6, 5, 4};
     real_t  q, qk;
     int32_t A_1;
@@ -14413,7 +14423,7 @@ void sinusoidal_coding(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 #ifdef SBR_DEC
 uint8_t hf_adjustment(sbr_info* sbr, qmf_t Xsbr[MAX_NTSRHFG][64], real_t* deg /* aliasing degree */, uint8_t ch) {
     // sbr_hfadj_info adj = {0};
-    sbr_hfadj_info* adj = (sbr_hfadj_info*)ps_calloc(1, sizeof(sbr_hfadj_info));
+    sbr_hfadj_info* adj = (sbr_hfadj_info*)faad_calloc(1, sizeof(sbr_hfadj_info));
     uint8_t        ret = 0;
     if (sbr->bs_frame_class[ch] == FIXFIX) {
         sbr->l_A[ch] = -1;
