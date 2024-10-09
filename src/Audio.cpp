@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.12u
- *  Updated on: Sep 30.2024
+ *  Version 3.0.13
+ *  Updated on: Oct 09.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -132,16 +132,17 @@ size_t AudioBuffer::getMaxAvailableBytes() {
 }
 
 void AudioBuffer::bytesWritten(size_t bw) {
+    if(!bw) return;
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
     if(m_writePtr > m_endPtr) log_e("m_writePtr %i, m_endPtr %i", m_writePtr, m_endPtr);
-    if(bw && m_f_start) m_f_start = false;
     m_f_isEmpty = false;
     xSemaphoreGiveRecursive(mutex_buffer);
 }
 
 void AudioBuffer::bytesWasRead(size_t br) {
+    if(!br) return;
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
@@ -168,9 +169,7 @@ void AudioBuffer::resetBuffer() {
     m_writePtr = m_buffer;
     m_readPtr = m_buffer;
     m_endPtr = m_buffer + m_buffSize;
-    m_f_start = true;
     m_f_isEmpty = true;
-    // memset(m_buffer, 0, m_buffSize); //Clear Inputbuffer
     vSemaphoreDelete(mutex_buffer);
     mutex_buffer = xSemaphoreCreateRecursiveMutex(); // free semaphore is it set
 }
@@ -3136,10 +3135,8 @@ void Audio::processLocalFile() {
         return;
     }
     availableBytes = InBuff.writeSpace();
-
     int32_t bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {InBuff.bytesWritten(bytesAddedToBuffer);}
-
     if(!m_f_stream) {
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
