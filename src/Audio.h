@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.12u
- *  Updated on: Sep 30.2024
+ *  Version 3.0.13
+ *  Updated on: Oct 09.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -126,8 +126,8 @@ protected:
     uint8_t*          m_writePtr         = NULL;
     uint8_t*          m_readPtr          = NULL;
     uint8_t*          m_endPtr           = NULL;
-    bool              m_f_start          = true;
     bool              m_f_init           = false;
+    bool              m_f_isEmpty        = true;
     bool              m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
