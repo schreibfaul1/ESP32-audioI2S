@@ -69,11 +69,11 @@ uint16_t AudioBuffer::getMaxBlockSize() { return m_maxBlockSize; }
 size_t AudioBuffer::freeSpace() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
-        if(m_f_start) m_freeSpace = m_buffSize;
+        if(m_f_isEmpty == true) m_freeSpace = m_buffSize;
         else m_freeSpace = 0;
     }
     if(m_readPtr < m_writePtr) {
-        m_freeSpace = (m_endPtr - m_writePtr + 1) + (m_readPtr - m_buffer);
+        m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer);
     }
     if(m_readPtr > m_writePtr) {
         m_freeSpace = m_readPtr - m_writePtr;
@@ -85,14 +85,14 @@ size_t AudioBuffer::freeSpace() {
 size_t AudioBuffer::writeSpace() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
-        if(m_f_start) m_writeSpace = m_endPtr - m_writePtr + 1;
+        if(m_f_isEmpty == true) m_writeSpace = m_endPtr - m_writePtr;
         else m_writeSpace = 0;
     }
     if(m_readPtr < m_writePtr) {
-        m_writeSpace = m_endPtr - m_writePtr + 1;
+        m_writeSpace = m_endPtr - m_writePtr;
     }
     if(m_readPtr > m_writePtr) {
-        m_writeSpace = m_readPtr - m_writePtr ;
+        m_writeSpace = m_readPtr - m_writePtr;
     }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_writeSpace;
@@ -101,14 +101,14 @@ size_t AudioBuffer::writeSpace() {
 size_t AudioBuffer::bufferFilled() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
-        if(m_f_start) m_dataLength = 0;
-        else m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+        if(m_f_isEmpty == true) m_dataLength = 0;
+        else m_dataLength = m_buffSize;
     }
     if(m_readPtr < m_writePtr) {
         m_dataLength = m_writePtr - m_readPtr;
     }
     if(m_readPtr > m_writePtr) {
-        m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+        m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer);
     }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
@@ -117,14 +117,15 @@ size_t AudioBuffer::bufferFilled() {
 size_t AudioBuffer::getMaxAvailableBytes() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
-        if(m_f_start)m_dataLength = 0;
-        else m_dataLength = (m_endPtr - m_readPtr + 1) + (m_writePtr - m_buffer);
+    //   if(m_f_start)m_dataLength = 0;
+        if(m_f_isEmpty == true) m_dataLength = 0;
+        else m_dataLength = (m_endPtr - m_readPtr);
     }
     if(m_readPtr < m_writePtr) {
         m_dataLength = m_writePtr - m_readPtr;
     }
     if(m_readPtr > m_writePtr) {
-        m_dataLength = (m_endPtr - m_readPtr + 1);
+        m_dataLength = (m_endPtr - m_readPtr);
     }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
@@ -133,9 +134,10 @@ size_t AudioBuffer::getMaxAvailableBytes() {
 void AudioBuffer::bytesWritten(size_t bw) {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_writePtr += bw;
-    if(m_writePtr == m_endPtr + 1) { m_writePtr = m_buffer; }
-    if(m_writePtr > m_endPtr + 1) log_e("m_writePtr %i, m_endPtr %i", m_writePtr, m_endPtr);
+    if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
+    if(m_writePtr > m_endPtr) log_e("m_writePtr %i, m_endPtr %i", m_writePtr, m_endPtr);
     if(bw && m_f_start) m_f_start = false;
+    m_f_isEmpty = false;
     xSemaphoreGiveRecursive(mutex_buffer);
 }
 
@@ -144,8 +146,9 @@ void AudioBuffer::bytesWasRead(size_t br) {
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
-        m_readPtr = m_buffer + tmp - 1;
+        m_readPtr = m_buffer + tmp;
     }
+    if(m_readPtr == m_writePtr) m_f_isEmpty = true;
     xSemaphoreGiveRecursive(mutex_buffer);
 }
 
@@ -155,7 +158,7 @@ uint8_t* AudioBuffer::getReadPtr() {
     xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     int32_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
-        memcpy(m_endPtr + 1, m_buffer, m_maxBlockSize - (len  - 1)); // cpy from m_buffer to m_endPtr with len
+        memcpy(m_endPtr, m_buffer, m_maxBlockSize - (len)); // cpy from m_buffer to m_endPtr with len
     }
     xSemaphoreGiveRecursive(mutex_buffer);
     return m_readPtr;
@@ -166,6 +169,7 @@ void AudioBuffer::resetBuffer() {
     m_readPtr = m_buffer;
     m_endPtr = m_buffer + m_buffSize;
     m_f_start = true;
+    m_f_isEmpty = true;
     // memset(m_buffer, 0, m_buffSize); //Clear Inputbuffer
     vSemaphoreDelete(mutex_buffer);
     mutex_buffer = xSemaphoreCreateRecursiveMutex(); // free semaphore is it set
@@ -1591,7 +1595,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         remainingHeaderBytes = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
-            if(!m_f_m3u8data) AUDIO_INFO("file has no mp3 tag, skip metadata");
+            if(!m_f_m3u8data) AUDIO_INFO("file has no ID3 tag, skip metadata");
             m_audioDataSize = m_contentlength;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             return -1; // error, no ID3 signature found
@@ -1724,11 +1728,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         if(startsWith(tag, "APIC")) { // a image embedded in file, passing it to external function
             isUnicode = false;
-            if(m_dataMode == AUDIO_LOCALFILE) {
+        //    if(m_dataMode == AUDIO_LOCALFILE) {
                 APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
                 APIC_size[numID3Header] = framesize;
                 //    log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
-            }
+        //    }
             return 0;
         }
 
@@ -3336,8 +3340,7 @@ void Audio::processWebFile() {
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-    int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
-
+    int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;

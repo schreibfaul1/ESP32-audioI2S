@@ -128,6 +128,7 @@ protected:
     uint8_t*          m_endPtr           = NULL;
     bool              m_f_start          = true;
     bool              m_f_init           = false;
+    bool              m_f_isEmpty        = true;
     bool              m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
