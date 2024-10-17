@@ -668,7 +668,7 @@ exit:
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::httpPrint(const char* host) {
     // user and pwd for authentification only, can be empty
-
+    if(!m_f_running) return false;
     if(host == NULL) {
         AUDIO_INFO("Hostaddress is empty");
         stopSong();
@@ -728,12 +728,11 @@ bool Audio::httpPrint(const char* host) {
     //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) {
-        _client = static_cast<WiFiClient*>(&clientsecure);
-        if(port == 80) port = 443;
-    }
-    else { _client = static_cast<WiFiClient*>(&client); }
+    if(m_f_ssl && port == 80) port = 443;
+
     if(!_client->connected()) {
+         if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
+         else        { _client = static_cast<WiFiClient*>(&client); }
         AUDIO_INFO("The host has disconnected, reconnecting");
         if(!_client->connect(hostwoext, port)) {
             log_e("connection lost");
@@ -2260,6 +2259,7 @@ uint32_t Audio::stopSong() {
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
         m_codec = CODEC_NONE;
+        m_dataMode = AUDIO_NONE;
     m_f_lockInBuffer = false;
     return pos;
 }
@@ -2452,11 +2452,10 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
-                    if(host) httpPrint(m_lastM3U8host);
-                    else httpPrint(m_lastHost);        // if url has no first redirection
-                    m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
+                    if(m_lastM3U8host) httpPrint(m_lastM3U8host);
+                    else               httpPrint(m_lastHost);        // if url has no first redirection
+                    m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
-
                 break;
             case AUDIO_DATA:
                 if(m_f_ts) { processWebStreamTS(); } // aac or aacp with ts packets
@@ -2569,7 +2568,7 @@ bool Audio::readPlayListData() {
     } // outer while
     lines = m_playlistContent.size();
     for(int i = 0; i < lines; i++) { // print all string in first vector of 'arr'
-        if(m_f_Log) log_i("pl=%i \"%s\"", i, m_playlistContent[i]);
+    //    log_w("pl=%i \"%s\"", i, m_playlistContent[i]);
     }
     m_dataMode = AUDIO_PLAYLISTDATA;
     return true;
@@ -2790,7 +2789,6 @@ const char* Audio::parsePlaylist_M3U8() {
                         strcpy(tmp, m_lastHost);
                     }
 
-
                     if(m_playlistContent[i][0] != '/'){
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
@@ -3007,17 +3005,10 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
         m_playlistContent[choosenLine] = NULL;
     }
     m_playlistContent[choosenLine] = strdup(tmp);
-    if(m_lastM3U8host) {
-        free(m_lastM3U8host);
-        m_lastM3U8host = NULL;
-    }
+    if(m_lastM3U8host) free(m_lastM3U8host);
     m_lastM3U8host = strdup(tmp);
-    if(tmp) {
-        free(tmp);
-        tmp = NULL;
-    }
+    if(tmp) {free(tmp);}
     log_d("redirect to %s", m_playlistContent[choosenLine]);
-    _client->stop();
     return m_playlistContent[choosenLine]; // it's a redirection, a new m3u8 playlist
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3724,8 +3715,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-        //log_i("httpResponseHeader: %s", rhl);
-
         int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
         if(posColon >= 0) {
             for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
@@ -3884,8 +3873,6 @@ exit: // termination condition
     if(audio_showstation) audio_showstation("");
     if(audio_icydescription) audio_icydescription("");
     if(audio_icyurl) audio_icyurl("");
-    if(m_playlistFormat == FORMAT_M3U8) return false;
-//    m_lastHost[0] = '\0';
     m_dataMode = AUDIO_NONE;
     stopSong();
     return false;
