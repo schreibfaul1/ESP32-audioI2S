@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13
- *  Updated on: Oct 09.2024
+ *  Version 3.0.13a
+ *  Updated on: Oct 17.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -586,7 +586,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
 
     setDefaults();
-    rqh = x_ps_calloc(lenHost + strlen(authorization) + 200, 1); // http request header
+    rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
@@ -597,7 +597,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "\r\n");
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
-                       strcat(rqh, "User-Agent: ESP32 audioI2S\r\n");
+                       strcat(rqh, "Accept:*/*\r\n");
+                       strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
@@ -713,9 +714,7 @@ bool Audio::httpPrint(const char* host) {
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
 
-    AUDIO_INFO("connect to: \"%s\"", host);
-
-    char rqh[strlen(h_host) + 200]; // http request header
+    char rqh[strlen(h_host) + 300]; // http request header
     rqh[0] = '\0';
 
     strcat(rqh, "GET ");
@@ -724,14 +723,15 @@ bool Audio::httpPrint(const char* host) {
     strcat(rqh, "Host: ");
     strcat(rqh, hostwoext);
     strcat(rqh, "\r\n");
+    strcat(rqh, "Accept: */*\r\n");
+    strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
-    //    strcat(rqh, "User-Agent: Mozilla/5.0\r\n"); #363
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl && port == 80) port = 443;
+    AUDIO_INFO("connect to: \"%s\"", host);
 
     if(!_client->connected()) {
-         if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
+         if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
          else        { _client = static_cast<WiFiClient*>(&client); }
         AUDIO_INFO("The host has disconnected, reconnecting");
         if(!_client->connect(hostwoext, port)) {
