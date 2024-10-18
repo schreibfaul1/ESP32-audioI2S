@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13a
- *  Updated on: Oct 17.2024
+ *  Version 3.0.13b
+ *  Updated on: Oct 18.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -17,8 +17,6 @@
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
-    mutex_buffer = xSemaphoreCreateRecursiveMutex();
-    // if maxBlockSize isn't set use defaultspace (1600 bytes) is enough for aac and mp3 player
     if(maxBlockSize) m_resBuffSizeRAM = maxBlockSize;
     if(maxBlockSize) m_maxBlockSize = maxBlockSize;
 }
@@ -26,7 +24,6 @@ AudioBuffer::AudioBuffer(size_t maxBlockSize) {
 AudioBuffer::~AudioBuffer() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    vSemaphoreDelete(mutex_buffer);
 }
 
 void AudioBuffer::setBufsize(int ram, int psram) {
@@ -40,15 +37,13 @@ int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    if(psramInit() && m_buffSizePSRAM > 0) {
-        // PSRAM found, AudioBuffer will be allocated in PSRAM
+    if(psramInit() && m_buffSizePSRAM > 0) { // PSRAM found, AudioBuffer will be allocated in PSRAM
         m_f_psram = true;
         m_buffSize = m_buffSizePSRAM;
         m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
         m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
     }
-    if(m_buffer == NULL) {
-        // PSRAM not found, not configured or not enough available
+    if(m_buffer == NULL) { // PSRAM not found, not configured or not enough available
         m_f_psram = false;
         m_buffer = (uint8_t*)heap_caps_calloc(m_buffSizeRAM, sizeof(uint8_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
         m_buffSize = m_buffSizeRAM - m_resBuffSizeRAM;
@@ -67,7 +62,6 @@ void AudioBuffer::changeMaxBlockSize(uint16_t mbs) {
 uint16_t AudioBuffer::getMaxBlockSize() { return m_maxBlockSize; }
 
 size_t AudioBuffer::freeSpace() {
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
         if(m_f_isEmpty == true) m_freeSpace = m_buffSize;
         else m_freeSpace = 0;
@@ -78,12 +72,10 @@ size_t AudioBuffer::freeSpace() {
     if(m_readPtr > m_writePtr) {
         m_freeSpace = m_readPtr - m_writePtr;
     }
-    xSemaphoreGiveRecursive(mutex_buffer);
     return m_freeSpace;
 }
 
 size_t AudioBuffer::writeSpace() {
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
         if(m_f_isEmpty == true) m_writeSpace = m_endPtr - m_writePtr;
         else m_writeSpace = 0;
@@ -94,12 +86,10 @@ size_t AudioBuffer::writeSpace() {
     if(m_readPtr > m_writePtr) {
         m_writeSpace = m_readPtr - m_writePtr;
     }
-    xSemaphoreGiveRecursive(mutex_buffer);
     return m_writeSpace;
 }
 
 size_t AudioBuffer::bufferFilled() {
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
         if(m_f_isEmpty == true) m_dataLength = 0;
         else m_dataLength = m_buffSize;
@@ -110,12 +100,10 @@ size_t AudioBuffer::bufferFilled() {
     if(m_readPtr > m_writePtr) {
         m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer);
     }
-    xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     if(m_readPtr == m_writePtr) {
     //   if(m_f_start)m_dataLength = 0;
         if(m_f_isEmpty == true) m_dataLength = 0;
@@ -127,41 +115,34 @@ size_t AudioBuffer::getMaxAvailableBytes() {
     if(m_readPtr > m_writePtr) {
         m_dataLength = (m_endPtr - m_readPtr);
     }
-    xSemaphoreGiveRecursive(mutex_buffer);
     return m_dataLength;
 }
 
 void AudioBuffer::bytesWritten(size_t bw) {
     if(!bw) return;
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
     if(m_writePtr > m_endPtr) log_e("m_writePtr %i, m_endPtr %i", m_writePtr, m_endPtr);
     m_f_isEmpty = false;
-    xSemaphoreGiveRecursive(mutex_buffer);
 }
 
 void AudioBuffer::bytesWasRead(size_t br) {
     if(!br) return;
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
         m_readPtr = m_buffer + tmp;
     }
     if(m_readPtr == m_writePtr) m_f_isEmpty = true;
-    xSemaphoreGiveRecursive(mutex_buffer);
 }
 
 uint8_t* AudioBuffer::getWritePtr() { return m_writePtr; }
 
 uint8_t* AudioBuffer::getReadPtr() {
-    xSemaphoreTakeRecursive(mutex_buffer, 3 * configTICK_RATE_HZ);
     int32_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
         memcpy(m_endPtr, m_buffer, m_maxBlockSize - (len)); // cpy from m_buffer to m_endPtr with len
     }
-    xSemaphoreGiveRecursive(mutex_buffer);
     return m_readPtr;
 }
 
@@ -170,8 +151,6 @@ void AudioBuffer::resetBuffer() {
     m_readPtr = m_buffer;
     m_endPtr = m_buffer + m_buffSize;
     m_f_isEmpty = true;
-    vSemaphoreDelete(mutex_buffer);
-    mutex_buffer = xSemaphoreCreateRecursiveMutex(); // free semaphore is it set
 }
 
 uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer; }
