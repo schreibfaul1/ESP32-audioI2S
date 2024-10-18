@@ -643,18 +643,9 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buff
     ret = bits;
     goto exit;
 exit:
-    if(ld) {
-        free(ld);
-        ld = NULL;
-    }
-    if(adts) {
-        free(adts);
-        adts = NULL;
-    }
-    if(adif) {
-        free(adif);
-        adif = NULL;
-    }
+    faad_free(ld);
+    faad_free(adif);
+    faad_free(adts);
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1059,7 +1050,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
             //temp = getdword((void*)buf);
             temp = *((uint32_t*)buf);
             printf("0x%.8X\n", temp);
-            free(buf);
+            faad_free(buf);
         }
         faad_endbits(&ld);
         faad_initbits(&ld, buffer, buffer_size);
@@ -3960,7 +3951,7 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     mdct->fft_cycles += count1;
     mdct->cycles += (count2 - count1);
 #endif
-    if(Z1) free(Z1);
+    faad_free(Z1);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -4236,7 +4227,7 @@ void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, ui
     count = faad_get_ts() - count;
     fb->cycles += count;
 #endif
-    if(transf_buf) free(transf_buf);
+    faad_free(transf_buf);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -4290,7 +4281,7 @@ void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape,
             mdct(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
     }
-    if(windowed_buf) free(windowed_buf);
+    faad_free(windowed_buf);
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4554,8 +4545,8 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
     #endif
     ret = 0;
 exit:
-    if(codeword) free(codeword);
-    if(segment) free(segment);
+    faad_free(codeword);
+    faad_free(segment);
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4965,8 +4956,7 @@ void DCT4_32(real_t* y, real_t* x) {
     y[30] = f[395] + f[396];
     y[1] = f[397] - f[396];
     if(f) {
-        free(f);
-        f = NULL;
+        faad_free(f);
     }
 }
 #endif // SBR_DEC
@@ -5344,8 +5334,7 @@ void DST4_32(real_t* y, real_t* x) {
     y[1] = MUL_C(COEF_CONST(6.7967507116736332), f[306]);
     y[0] = MUL_R(REAL_CONST(20.3738781672314530), f[304]);
     if(f) {
-        free(f);
-        f = NULL;
+        faad_free(f);
     }
 }
 #endif // SBR_DEC
@@ -7199,7 +7188,6 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
 uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
     uint8_t retval = 0;
     int     output_channels;
-    // real_t spec_coef[1024];
     real_t* spec_coef = (real_t*)faad_malloc(1024 * sizeof(real_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -7225,9 +7213,12 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
          */
         /* reset the allocation */
         hDecoder->element_alloced[hDecoder->fr_ch_ele] = 0;
+        memset(&hDecoder->element_alloced[hDecoder->fr_ch_ele], 0,
+            sizeof(uint8_t) * (MAX_SYNTAX_ELEMENTS - hDecoder->fr_ch_ele));
+
         hDecoder->element_output_channels[hDecoder->fr_ch_ele] = output_channels;
-        retval = 21;
-        goto exit;
+        //retval = 21;
+        //goto exit;
     }
     if (hDecoder->element_alloced[hDecoder->fr_ch_ele] == 0) {
         retval = allocate_single_channel(hDecoder, sce->channel, output_channels);
@@ -7358,7 +7349,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
 #endif
     retval = 0;
 exit:
-    if (spec_coef) { free(spec_coef); }
+    faad_free(spec_coef);
     return retval;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7531,8 +7522,8 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
 #endif
     retval = 0;
 exit:
-    if (spec_coef1) free(spec_coef1);
-    if (spec_coef2) free(spec_coef2);
+    faad_free(spec_coef1);
+    faad_free(spec_coef2);
     return retval;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7830,6 +7821,8 @@ void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     */
     if (hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
         /* element inconsistency */
+        memset(&hDecoder->element_alloced[hDecoder->fr_ch_ele], 0,
+            sizeof(uint8_t) * (MAX_SYNTAX_ELEMENTS - hDecoder->fr_ch_ele));
         hInfo->error = 21;
         return;
     }
@@ -7870,11 +7863,15 @@ void decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld,
         hDecoder->element_output_channels[hDecoder->fr_ch_ele] = 2;
     } else if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] != 2) {
         /* element inconsistency */
+        memset(&hDecoder->element_alloced[hDecoder->fr_ch_ele], 0,
+            sizeof(uint8_t) * (MAX_SYNTAX_ELEMENTS - hDecoder->fr_ch_ele));
         hInfo->error = 21;
         return;
     }
     if (hDecoder->element_id[hDecoder->fr_ch_ele] != INVALID_ELEMENT_ID && hDecoder->element_id[hDecoder->fr_ch_ele] != id_syn_ele) {
         /* element inconsistency */
+        memset(&hDecoder->element_alloced[hDecoder->fr_ch_ele], 0,
+            sizeof(uint8_t) * (MAX_SYNTAX_ELEMENTS - hDecoder->fr_ch_ele));
         hInfo->error = 21;
         return;
     }
@@ -8084,8 +8081,8 @@ uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_
     if (retval > 0) goto exit;
     retval = 0;
 exit:
-    if (spec_data) free(spec_data);
-    if (sce) free(sce);
+    faad_free(sce);
+    faad_free(spec_data);
     return retval;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8172,15 +8169,9 @@ uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t chan
     if ((result = reconstruct_channel_pair(hDecoder, ics1, ics2, cpe, spec_data1, spec_data2)) > 0) { goto exit; }
     result = 0;
 exit:
-    if (spec_data1) {
-        free(spec_data1);
-        spec_data1 = NULL;
-    }
-    if (spec_data2) {
-        free(spec_data2);
-        spec_data2 = NULL;
-    }
-    if (cpe) free(cpe);
+    faad_free(spec_data1);
+    faad_free(spec_data2);
+    faad_free(cpe);
     return result;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -11609,8 +11600,8 @@ uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     /* hybrid synthesis, to rebuild the SBR QMF matrices */
     hybrid_synthesis((hyb_info*)ps->hyb, X_left, X_hybrid_left, ps->use34hybrid_bands, ps->numTimeSlotsRate);
     hybrid_synthesis((hyb_info*)ps->hyb, X_right, X_hybrid_right, ps->use34hybrid_bands, ps->numTimeSlotsRate);
-    if(X_hybrid_left) free(X_hybrid_left);
-    if(X_hybrid_right) free(X_hybrid_right);
+    faad_free(X_hybrid_left);
+    faad_free(X_hybrid_right);
     return 0;
 }
 #endif //  PS_DEC
@@ -12143,7 +12134,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_cha
     #endif
     ret = 0;
 exit:
-    if (X) free(X);
+    faad_free(X);
     return ret;
 }
 #endif // #ifdef SBR_DEC
@@ -12197,7 +12188,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_
     #endif
     ret = 0;
 exit:
-    if (X) free(X);
+    faad_free(X);
     return ret;
 }
 #endif // #ifdef SBR_DEC
@@ -12273,8 +12264,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* righ
     sbr->frame++;
     ret = 0;
 exit:
-    if (X_left) free(X_left);
-    if (X_right) free(X_right);
+    faad_free(X_left);
+    faad_free(X_right);
     return ret;
 }
     #endif // (defined(PS_DEC) || defined(DRM_PS))
@@ -12885,10 +12876,10 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
     #endif
     ret = 0;
 exit:
-    if(vDk0)free(vDk0);
-    if(vDk1)free(vDk1);
-    if(vk0) free(vk0);
-    if(vk1) free(vk1);
+    faad_free(vDk0);
+    faad_free(vDk1);
+    faad_free(vk0);
+    faad_free(vk1);
     return ret;
 }
 #endif
@@ -13089,8 +13080,8 @@ void limiter_frequency_table(sbr_info* sbr) {
     #endif
     }
 exit:
-    if(limTable) free(limTable);
-    if(patchBorders) free(patchBorders);
+    faad_free(limTable);
+    faad_free(patchBorders);
 }
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -14959,10 +14950,10 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
         }
     }
     if (sbr->Reset) { limiter_frequency_table(sbr); }
-    if (alpha_0) free(alpha_0);
-    if (alpha_1) free(alpha_1);
+    faad_free(alpha_0);
+    faad_free(alpha_1);
     #ifdef SBR_LOW_POWER
-    if (rxx) free(rxx);
+    faad_free(rxx);
     #endif
 }
 #endif // SBR_DEC

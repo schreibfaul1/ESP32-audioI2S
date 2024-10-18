@@ -83,10 +83,6 @@ int AACFindSyncWord(uint8_t *buf, int nBytes){
     /* find byte-aligned syncword (12 bits = 0xFFF) */
     for (i = 0; i < nBytes - 1; i++) {
         if ( (buf[i+0] & SYNCWORDH) == SYNCWORDH && (buf[i+1] & SYNCWORDL) == SYNCWORDL ){
-            if(f_firstCall){
-                NeAACDecClose(hAac);
-                NeAACDecOpen();
-            }
             return i;
         }
     }
