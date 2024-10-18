@@ -71,9 +71,9 @@ void setup() {
 //  audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe stehlen.", "de"); // Google TTS
 }
 
-void loop()
-{
+void loop(){
     audio.loop();
+    vTaskDelay(1);
 }
 
 // optional
