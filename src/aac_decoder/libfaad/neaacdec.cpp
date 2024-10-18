@@ -155,7 +155,7 @@ void faad_free(void* b) {
 #if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
     _aligned_free(b);
 #else
-    if(b) free(b);
+    if(b) {free(b); b = NULL;} // free(b);
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7197,7 +7197,7 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
-    uint8_t retval;
+    uint8_t retval = 0;
     int     output_channels;
     // real_t spec_coef[1024];
     real_t* spec_coef = (real_t*)faad_malloc(1024 * sizeof(real_t));
@@ -7226,7 +7226,8 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
         /* reset the allocation */
         hDecoder->element_alloced[hDecoder->fr_ch_ele] = 0;
         hDecoder->element_output_channels[hDecoder->fr_ch_ele] = output_channels;
-        // return 21;
+        retval = 21;
+        goto exit;
     }
     if (hDecoder->element_alloced[hDecoder->fr_ch_ele] == 0) {
         retval = allocate_single_channel(hDecoder, sce->channel, output_channels);
@@ -7853,6 +7854,7 @@ void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
     uint8_t channels = hDecoder->fr_channels;
+    hInfo->error = 0;
     uint8_t tag = 0;
     if (channels + 2 > MAX_CHANNELS) {
         hInfo->error = 12;
