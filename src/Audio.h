@@ -112,7 +112,6 @@ public:
     bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    SemaphoreHandle_t mutex_buffer;
     size_t            m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
     size_t            m_buffSizeRAM      = 1600 * 10;
     size_t            m_buffSize         = 0;
