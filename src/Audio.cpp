@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13b
- *  Updated on: Oct 18.2024
+ *  Version 3.0.13c
+ *  Updated on: Oct 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -370,6 +370,7 @@ void Audio::setDefaults() {
     m_f_eof = false;
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
+    m_f_acceptRanges = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -732,6 +733,106 @@ bool Audio::httpPrint(const char* host) {
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
+    m_contentlength = 0;
+    m_f_chunked = false;
+
+    free(hostwoext);
+    free(extension);
+    free(h_host);
+
+    return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::httpRange(const char* host, uint32_t range){
+    // user and pwd for authentification only, can be empty
+    if(!m_f_running) return false;
+    if(host == NULL) {
+        AUDIO_INFO("Hostaddress is empty");
+        stopSong();
+        return false;
+    }
+    char* h_host = NULL; // pointer of host without http:// or https://
+
+    if(startsWith(host, "https")) m_f_ssl = true;
+    else m_f_ssl = false;
+
+    if(m_f_ssl) h_host = strdup(host + 8);
+    else h_host = strdup(host + 7);
+
+    int16_t  pos_slash;     // position of "/" in hostname
+    int16_t  pos_colon;     // position of ":" in hostname
+    int16_t  pos_ampersand; // position of "&" in hostname
+    uint16_t port = 80;     // port number
+
+    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
+    pos_slash = indexOf(h_host, "/", 0);
+    pos_colon = indexOf(h_host, ":", 0);
+    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = indexOf(h_host, "&", 0);
+
+    char* hostwoext = NULL; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
+    char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
+
+    if(pos_slash > 1) {
+        hostwoext = (char*)malloc(pos_slash + 1);
+        memcpy(hostwoext, h_host, pos_slash);
+        hostwoext[pos_slash] = '\0';
+        extension = urlencode(h_host + pos_slash, true);
+    }
+    else { // url has no extension
+        hostwoext = strdup(h_host);
+        extension = strdup("/");
+    }
+
+    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
+        port = atoi(h_host + pos_colon + 1); // Get portnumber as integer
+        hostwoext[pos_colon] = '\0';         // Host without portnumber
+    }
+
+    char rqh[strlen(h_host) + strlen(host) + 300]; // http request header
+    rqh[0] = '\0';
+    char ch_range[12];
+    ltoa(range, ch_range, 10);
+    AUDIO_INFO("skip to position: %li", (long int)range);
+    strcat(rqh, "GET ");
+    strcat(rqh, extension);
+    strcat(rqh, " HTTP/1.1\r\n");
+    strcat(rqh, "Host: ");
+    strcat(rqh, hostwoext);
+    strcat(rqh, "\r\n");
+    strcat(rqh, "Range: bytes=");
+    strcat(rqh, (const char*)ch_range);
+    strcat(rqh, "-\r\n");
+    strcat(rqh, "Referer: ");
+    strcat(rqh, host);
+    strcat(rqh, "\r\n");
+    strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
+    strcat(rqh, "Connection: keep-alive\r\n\r\n");
+
+log_e("%s", rqh);
+
+    _client->stop();
+    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+    else        { _client = static_cast<WiFiClient*>(&client); }
+    AUDIO_INFO("The host has disconnected, reconnecting");
+    if(!_client->connect(hostwoext, port)) {
+        log_e("connection lost");
+        stopSong();
+        return false;
+    }
+    _client->print(rqh);
+    if(endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
+    if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
+    if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
+    if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
+    if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
+    if(endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+
+    m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
+    m_streamType = ST_WEBFILE;
     m_contentlength = 0;
     m_f_chunked = false;
 
@@ -3286,6 +3387,7 @@ void Audio::processWebFile() {
         audioDataCount = 0;
         m_f_stream = false;
         m_audioDataSize = m_contentlength;
+        m_webFilePos = 0;
     }
 
     if(!m_contentlength && !m_f_tts) {
@@ -3309,6 +3411,7 @@ void Audio::processWebFile() {
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
+        m_webFilePos += bytesAddedToBuffer;
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
@@ -3833,6 +3936,15 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 AUDIO_INFO("chunked data transfer");
                 m_chunkcount = 0; // Expect chunkcount in DATA
             }
+        }
+
+        else if(startsWith(rhl, "accept-ranges:")) {
+            if(endsWith(rhl, "bytes")) m_f_acceptRanges = true;
+        //    log_w("%s", rhl);
+        }
+
+        else if(startsWith(rhl, "content-range:")) {
+        //    log_w("%s", rhl);
         }
 
         else if(startsWith(rhl, "icy-url:")) {
@@ -4745,13 +4857,25 @@ uint32_t Audio::getFileSize() { // returns the size of webfile or local file
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getFilePos() {
-    if(!audiofile) return 0;
-    return audiofile.position();
+    if(m_dataMode == AUDIO_LOCALFILE){
+        if(!audiofile) return 0;
+        return audiofile.position();
+    }
+    if(m_streamType == ST_WEBFILE){
+        return m_webFilePos;
+    }
+    return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioDataStartPos() {
-    if(!audiofile) return 0;
-    return m_audioDataStart;
+    if(m_dataMode == AUDIO_LOCALFILE){
+        if(!audiofile) return 0;
+        return m_audioDataStart;
+    }
+    if(m_streamType == ST_WEBFILE){
+        return m_audioDataStart;
+    }
+    return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
@@ -4767,14 +4891,14 @@ uint32_t Audio::getAudioCurrentTime() { // return current time in seconds
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayPosition(uint16_t sec) {
-    if(m_codec == CODEC_OPUS) return false;   // not impl. yet
-    if(m_codec == CODEC_VORBIS) return false; // not impl. yet
+    //if(m_codec == CODEC_OPUS) return false;   // not impl. yet
+    //if(m_codec == CODEC_VORBIS) return false; // not impl. yet
     // Jump to an absolute position in time within an audio file
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
     uint32_t filepos = m_audioDataStart + (m_avr_bitrate * sec / 8);
     if(m_dataMode == AUDIO_LOCALFILE) return setFilePos(filepos);
-//    if(m_streamType == ST_WEBFILE) return setWebFilePos(filepos);
+//    if(m_streamType == ST_WEBFILE) return httpRange(m_lastHost, filepos);
     return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4792,10 +4916,10 @@ uint32_t Audio::getTotalPlayingTime() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
-
-    if(!audiofile || !m_avr_bitrate) return false;
+    if(/* m_streamType != ST_WEBFILE && */ m_dataMode != AUDIO_LOCALFILE) return false;
+    if(m_dataMode == AUDIO_LOCALFILE && !audiofile) return false;
+    if(!m_avr_bitrate) return false;
     if(m_codec == CODEC_AAC) return false; // not impl. yet
-
     uint32_t oneSec = m_avr_bitrate / 8;                 // bytes decoded in one sec
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
     uint32_t startAB = m_audioDataStart;                 // audioblock begin
@@ -4811,97 +4935,37 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
-    if(!audiofile) return false;
+    if(m_dataMode == AUDIO_LOCALFILE && !audiofile) return false;
     if(m_codec == CODEC_AAC) return false;   // not impl. yet
     memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t));
     m_validSamples = 0;
-    m_resumeFilePos = pos;  // used in processLocalFile()
     m_haveNewFilePos = pos; // used in computeAudioCurrentTime()
-
-    return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::setWebFilePos(uint32_t pos) {
-
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
-
-    char*    hostwoext     = NULL;  // host without extension
-    char*    extension     = NULL;  // extension
-    char*    rqh           = NULL;  // request header
-
-    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = indexOf(m_lastHost, "/", 10); // position of "/" in hostname
-    pos_colon     = indexOf(m_lastHost, ":", 10); if(isalpha(m_lastHost[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(m_lastHost, "&", 10); // position of "&" in hostname
-
-    if(pos_slash > 1) {
-        hostwoext = x_ps_calloc(pos_slash + 1, 1);
-        if(!hostwoext) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-        memcpy(hostwoext, m_lastHost, pos_slash);
-        if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-            port = atoi(m_lastHost + pos_colon + 1);   // Get portnumber as integer
-            (void) port;
-            hostwoext[pos_colon] = '\0';         // Host without portnumber
-        }
-        extension = urlencode(m_lastHost + pos_slash, true);
+    if(m_dataMode == AUDIO_LOCALFILE){
+        m_resumeFilePos = pos;  // used in processLocalFile()
+        return true;
     }
-    else { // url has no extension
-        hostwoext = x_ps_strdup(m_lastHost);
-        if(!hostwoext) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-        extension = x_ps_strdup("/");
-        if(!extension) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-    }
-    AUDIO_INFO("skip to position: %li", (long int)pos);
-
-    rqh = x_ps_calloc(strlen(extension) + strlen(hostwoext) + 60, 1);  // http request header
-    rqh[0] = '\0';
-
-    strcat(rqh, "GET ");
-    strcat(rqh, extension);
-    strcat(rqh, " HTTP/1.1\r\n");
-    strcat(rqh, "Host: ");
-    strcat(rqh, hostwoext);
-    strcat(rqh, "\r\n");
-    strcat(rqh, "Range: bytes="); itoa(pos, rqh + strlen(rqh), 10);
-    strcat(rqh, "-");
-    strcat(rqh, "\r\n\r\n");
-
-    _client->print(rqh);
-
-exit:
-    if(hostwoext) {
-        free(hostwoext);
-        hostwoext = NULL;
-    }
-    if(extension) {
-        free(extension);
-        extension = NULL;
-    }
-    if(rqh) {
-        free(rqh);
-        rqh = NULL;
-    }
-    return true;
+//    if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
+//        httpRange(m_lastHost, pos);
+//        return true;
+//    }
+    return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::audioFileSeek(const float speed) {
     // 0.5 is half speed
     // 1.0 is normal speed
     // 1.5 is one and half speed
-    if((speed > 1.5f) || (speed < 0.25f)) return false;
+//     if((speed > 1.5f) || (speed < 0.25f)) return false;
 
-    uint32_t srate = getSampleRate() * speed;
-#if ESP_IDF_VERSION_MAJOR == 5
-    I2Sstop(m_i2s_num);
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = srate;
-    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    I2Sstart(m_i2s_num);
-#else
-    i2s_set_sample_rates((i2s_port_t)m_i2s_num, srate);
-#endif
+//     uint32_t srate = getSampleRate() * speed;
+// #if ESP_IDF_VERSION_MAJOR == 5
+//     I2Sstop(m_i2s_num);
+//     m_i2s_std_cfg.clk_cfg.sample_rate_hz = srate;
+//     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+//     I2Sstart(m_i2s_num);
+// #else
+//     i2s_set_sample_rates((i2s_port_t)m_i2s_num, srate);
+// #endif
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

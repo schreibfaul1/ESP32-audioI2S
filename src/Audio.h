@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13a
- *  Updated on: Oct 17.2024
+ *  Version 3.0.13c
+ *  Updated on: Oct 22.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -199,6 +199,7 @@ private:
   void            setDefaults(); // free buffers and set defaults
   void            initInBuff();
   bool            httpPrint(const char* host);
+  bool            httpRange(const char* host, uint32_t range);
   void            processLocalFile();
   void            processWebStream();
   void            processWebFile();
@@ -206,7 +207,6 @@ private:
   void            processWebStreamHLS();
   void            playAudioData();
   bool            readPlayListData();
-  bool            setWebFilePos(uint32_t pos);
   const char*     parsePlaylist_M3U();
   const char*     parsePlaylist_PLS();
   const char*     parsePlaylist_ASX();
@@ -642,6 +642,7 @@ private:
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
     uint32_t        m_sumBytesDecoded = 0;          // used for streaming
+    uint32_t        m_webFilePos = 0;               // same as audiofile.position() for SD files
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header
@@ -673,6 +674,7 @@ private:
     bool            m_f_eof = false;                // end of file
     bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
     bool            m_f_audioTaskIsDecoding = false;
+    bool            m_f_acceptRanges = false;
     uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
