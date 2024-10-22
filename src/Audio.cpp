@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13c
+ *  Version 3.0.13d
  *  Updated on: Oct 22.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2424,6 +2424,13 @@ void Audio::playChunk() {
         }
         //------------------------------------------------------------------
         Gain(*sample);
+
+        if(m_f_forceMono){
+            int32_t xy = ((*sample)[RIGHTCHANNEL] + (*sample)[LEFTCHANNEL]) / 2;
+            (*sample)[RIGHTCHANNEL] = (int16_t)xy;
+            (*sample)[LEFTCHANNEL]  = (int16_t)xy;
+        }
+
         if(m_f_internalDAC) {
             s2 = *sample;
             s2[LEFTCHANNEL] += 0x8000;
