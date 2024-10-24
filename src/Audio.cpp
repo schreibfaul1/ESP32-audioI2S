@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13d
- *  Updated on: Oct 22.2024
+ *  Version 3.0.13e
+ *  Updated on: Oct 24.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
