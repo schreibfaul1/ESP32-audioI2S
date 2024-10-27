@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13e
- *  Updated on: Oct 24.2024
+ *  Version 3.0.13f
+ *  Updated on: Oct 27.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -547,6 +547,7 @@ private:
     NetworkClient*       _client = nullptr;
 #endif
     SemaphoreHandle_t     mutex_playAudioData;
+    SemaphoreHandle_t     mutex_audioTask;
     TaskHandle_t          m_audioTaskHandle = nullptr;
 
 #pragma GCC diagnostic push

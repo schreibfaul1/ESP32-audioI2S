@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 27.2018
  *
- *  Version 3.0.13e
- *  Updated on: Oct 24.2024
+ *  Version 3.0.13f
+ *  Updated on: Oct 27.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -161,6 +161,7 @@ uint32_t AudioBuffer::getReadPos() { return m_readPtr - m_buffer; }
 Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLOT_MODE_STEREO */, uint8_t i2sPort) {
 
     mutex_playAudioData = xSemaphoreCreateMutex();
+    mutex_audioTask     = xSemaphoreCreateMutex();
 
 #ifdef AUDIO_LOG
     m_f_Log = true;
@@ -260,24 +261,24 @@ Audio::~Audio() {
     // I2Sstop(m_i2s_num);
     // InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
     setDefaults();
-    if(m_playlistBuff) {
-        free(m_playlistBuff);
-        m_playlistBuff = NULL;
-    }
+
 #if ESP_IDF_VERSION_MAJOR == 5
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
 #else
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
 #endif
-    if(m_chbuf)       {free(m_chbuf);        m_chbuf        = NULL;}
-    if(m_lastHost)    {free(m_lastHost);     m_lastHost     = NULL;}
-    if(m_outBuff)     {free(m_outBuff);      m_outBuff      = NULL; }
-    if(m_ibuff)       {free(m_ibuff);        m_ibuff        = NULL;}
-    if(m_lastM3U8host){free(m_lastM3U8host); m_lastM3U8host = NULL;}
+
+    if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
+    if(m_chbuf)        {free(m_chbuf);        m_chbuf        = NULL;}
+    if(m_lastHost)     {free(m_lastHost);     m_lastHost     = NULL;}
+    if(m_outBuff)      {free(m_outBuff);      m_outBuff      = NULL;}
+    if(m_ibuff)        {free(m_ibuff);        m_ibuff        = NULL;}
+    if(m_lastM3U8host) {free(m_lastM3U8host); m_lastM3U8host = NULL;}
 
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
+    vSemaphoreDelete(mutex_audioTask);
 }
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2327,7 +2328,7 @@ uint32_t Audio::stopSong() {
                 m_streamType = ST_NONE;
                 pos = getFilePos() - inBufferFilled();
             }
-            if(_client->connected()) _client->stop();
+        //    if(_client->connected()) _client->stop();
         }
         if(audiofile) {
             // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
@@ -2345,7 +2346,7 @@ uint32_t Audio::stopSong() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::pauseResume() {
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     bool retVal = false;
     if(m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBSTREAM || m_streamType == ST_WEBFILE) {
         m_f_running = !m_f_running;
@@ -2355,7 +2356,7 @@ bool Audio::pauseResume() {
             m_validSamples = 0;
         }
     }
-    xSemaphoreGiveRecursive(mutex_playAudioData);
+    xSemaphoreGive(mutex_audioTask);
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6314,9 +6315,9 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
 void Audio::setAudioTaskCore(uint8_t coreID){  // Recommendation:If the ARDUINO RUNNING CORE is 1, the audio task should be core 0 or vice versa
     if(coreID > 1) return;
     stopAudioTask();
-    xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     m_audioTaskCoreId = coreID;
-    xSemaphoreGiveRecursive(mutex_playAudioData);
+    xSemaphoreGive(mutex_audioTask);
     startAudioTask();
 }
 
@@ -6345,11 +6346,13 @@ void Audio::stopAudioTask()  {
         log_i("audio task is not running.");
         return;
     }
+    xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     m_f_audioTaskIsRunning = false;
     if (m_audioTaskHandle != nullptr) {
         vTaskDelete(m_audioTaskHandle);
         m_audioTaskHandle = nullptr;
     }
+    xSemaphoreGive(mutex_audioTask);
 }
 
 void Audio::taskWrapper(void *param) {
@@ -6368,11 +6371,11 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
-    xSemaphoreTake(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
     while(m_validSamples) {
         vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
-    xSemaphoreGive(mutex_playAudioData);
+    xSemaphoreGive(mutex_audioTask);
 }
 uint32_t Audio::getHighWatermark(){
     UBaseType_t highWaterMark = uxTaskGetStackHighWaterMark(m_audioTaskHandle);
