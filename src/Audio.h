@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13f
- *  Updated on: Oct 27.2024
+ *  Version 3.0.13h
+ *  Updated on: Oct 29.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -130,6 +130,10 @@ protected:
     bool              m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
+
+static const size_t AUDIO_STACK_SIZE = 3300;
+static StaticTask_t xAudioTaskBuffer;
+static StackType_t xAudioStack[AUDIO_STACK_SIZE];
 
 class Audio : private AudioBuffer{
 
@@ -256,10 +260,6 @@ public:
   void            setAudioTaskCore(uint8_t coreID);
   uint32_t        getHighWatermark();
 private:
-  static const size_t STACK_SIZE = 3300;
-  StaticTask_t xTaskBuffer;
-  StackType_t xStack[STACK_SIZE];
-
   void            startAudioTask(); // starts a task for decode and play
   void            stopAudioTask();  // stops task for audio
   static void     taskWrapper(void *param);

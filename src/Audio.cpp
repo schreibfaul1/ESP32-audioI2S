@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13g
- *  Updated on: Oct 27.2024
+ *  Version 3.0.13h
+ *  Updated on: Oct 29.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -6332,11 +6332,11 @@ void Audio::startAudioTask() {
     m_audioTaskHandle = xTaskCreateStaticPinnedToCore(
         &Audio::taskWrapper,    /* Function to implement the task */
         "PeriodicTask",         /* Name of the task */
-        STACK_SIZE,             /* Stack size in words */
+        AUDIO_STACK_SIZE,       /* Stack size in words */
         this,                   /* Task input parameter */
         2,                      /* Priority of the task */
-        xStack,                 /* Task stack */
-        &xTaskBuffer,           /* Memory for the task's control block */
+        xAudioStack,            /* Task stack */
+        &xAudioTaskBuffer,      /* Memory for the task's control block */
         m_audioTaskCoreId       /* Core where the task should run */
     );
 }
