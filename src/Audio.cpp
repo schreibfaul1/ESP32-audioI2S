@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13h
+ *  Version 3.0.13i
  *  Updated on: Oct 29.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -167,15 +167,6 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_f_Log = true;
 #endif
 #define AUDIO_INFO(...) { snprintf(m_ibuff, m_ibuffSize, __VA_ARGS__); if(audio_info) audio_info(m_ibuff); }
-
-    m_f_psramFound = psramInit();
-    if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
-    if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
-    m_lastHost = (char*)   x_ps_malloc(2048);
-    m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
-    m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
-    m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
-    if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
 
     clientsecure.setInsecure();
     m_f_channelEnabled = channelEnabled;
@@ -4819,6 +4810,20 @@ void Audio::printDecodeError(int r) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
+
+    m_f_psramFound = psramInit();
+    x_ps_free(m_chbuf);
+    x_ps_free(m_ibuff);
+    x_ps_free(m_outBuff);
+    x_ps_free(m_lastHost);
+    if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
+    if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
+    m_lastHost = (char*)   x_ps_malloc(2048);
+    m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
+    m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
+    m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
+    if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
+
     esp_err_t result = ESP_OK;
 
     if(m_f_internalDAC) {

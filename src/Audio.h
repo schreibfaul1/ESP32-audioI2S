@@ -4,7 +4,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13h
+ *  Version 3.0.13i
  *  Updated on: Oct 29.2024
  *      Author: Wolle (schreibfaul1)
  */
@@ -481,6 +481,10 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         else { ps_str = (char*)malloc(strlen(str) + 1); }
         strcpy(ps_str, str);
         return ps_str;
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    void x_ps_free(void* b){
+        if(b){free(b); b = NULL;}
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
