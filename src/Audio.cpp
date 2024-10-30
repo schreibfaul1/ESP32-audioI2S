@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13i
- *  Updated on: Oct 29.2024
+ *  Version 3.0.13j
+ *  Updated on: Oct 30.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -246,6 +246,8 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     }
     computeLimit();  // first init, vol = 21, vol_steps = 21
     startAudioTask();
+    (void)xAudioStack; (void)xAudioTaskBuffer;
+
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
@@ -1094,74 +1096,6 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::unicode2utf8(char* buff, uint32_t len) {
-    // converts unicode in UTF-8, buff contains the string to be converted up to len
-    // range U+1 ... U+FFFF
-    uint8_t* tmpbuff = (uint8_t*)malloc(len * 2);
-    if(!tmpbuff) {
-        log_e("out of memory");
-        return;
-    }
-    bool     bitorder = false;
-    uint16_t j = 0;
-    uint16_t k = 0;
-    uint16_t m = 0;
-    uint8_t  uni_h = 0;
-    uint8_t  uni_l = 0;
-
-    while(m < len - 1) {
-        if((buff[m] == 0xFE) && (buff[m + 1] == 0xFF)) {
-            bitorder = true;
-            j = m + 2;
-        } // LSB/MSB
-        if((buff[m] == 0xFF) && (buff[m + 1] == 0xFE)) {
-            bitorder = false;
-            j = m + 2;
-        } // MSB/LSB
-        m++;
-    } // seek for last bitorder
-    m = 0;
-    if(j > 0) {
-        for(k = j; k < len; k += 2) {
-            if(bitorder == true) {
-                uni_h = (uint8_t)buff[k];
-                uni_l = (uint8_t)buff[k + 1];
-            }
-            else {
-                uni_l = (uint8_t)buff[k];
-                uni_h = (uint8_t)buff[k + 1];
-            }
-
-            uint16_t uni_hl = ((uni_h << 8) | uni_l);
-
-            if(uni_hl < 0X80) {
-                tmpbuff[m] = uni_l;
-                m++;
-            }
-            else if(uni_hl < 0X800) {
-                tmpbuff[m] = ((uni_hl >> 6) | 0XC0);
-                m++;
-                tmpbuff[m] = ((uni_hl & 0X3F) | 0X80);
-                m++;
-            }
-            else {
-                tmpbuff[m] = ((uni_hl >> 12) | 0XE0);
-                m++;
-                tmpbuff[m] = (((uni_hl >> 6) & 0X3F) | 0X80);
-                m++;
-                tmpbuff[m] = ((uni_hl & 0X3F) | 0X80);
-                m++;
-            }
-        }
-    }
-    memcpy(buff, tmpbuff, m);
-    buff[m] = 0;
-    if(tmpbuff) {
-        free(tmpbuff);
-        tmpbuff = NULL;
-    }
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
     // most stations send  strings in UTF-8 but a few sends in latin. To standardize this, all latin strings are
     // converted to UTF-8. If UTF-8 is already present, nothing is done and true is returned.
@@ -1789,15 +1723,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 6) { // Read the value
         m_controlCounter = 5;   // only read 256 bytes
-        char ch = *(data + 0);
+        uint8_t encodingByte = *(data + 0);  // ID3v2 Text-Encoding-Byte
         // $00 – ISO-8859-1 (LATIN-1, Identical to ASCII for values smaller than 0x80).
-        // $01 – UCS-2 encoded Unicode with BOM, in ID3v2.2 and ID3v2.3.
-        // $02 – UTF-16BE encoded Unicode without BOM, in ID3v2.4.
+        // $01 – UCS-2 encoded Unicode with BOM (Byte Order Mark), in ID3v2.2 and ID3v2.3.
+        // $02 – UTF-16BE encoded Unicode without BOM (Byte Order Mark) , in ID3v2.4.
         // $03 – UTF-8 encoded Unicode, in ID3v2.4.
-        bool isUnicode = (ch == 1) ? true : false;
 
         if(startsWith(tag, "APIC")) { // a image embedded in file, passing it to external function
-            isUnicode = false;
         //    if(m_dataMode == AUDIO_LOCALFILE) {
                 APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
                 APIC_size[numID3Header] = framesize;
@@ -1818,28 +1750,49 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         size_t fs = framesize;
         if(fs > 1024) fs = 1024;
-        for(int i = 0; i < fs; i++) { m_ibuff[i] = *(data + i); }
+        uint16_t dataLength = fs - 1;
+        for(int i = 0; i < dataLength; i++) { m_ibuff[i] = *(data + i + 1);} // without encodingByte
+        m_ibuff[dataLength] = 0;
         framesize -= fs;
         remainingHeaderBytes -= fs;
         m_ibuff[fs] = 0;
 
-        if(isUnicode && fs > 1) {
-            unicode2utf8(m_ibuff, fs); // convert unicode to utf-8 U+0020...U+07FF
+        if(encodingByte == 0){  // latin
+            latinToUTF8(m_ibuff, m_ibuffSize, false);
+            showID3Tag(tag, m_ibuff);
         }
 
-        if(!isUnicode) {
-            uint16_t j = 0, k = 0;
-            while(j < fs) {
-                if(m_ibuff[j] > 0x1F) {
-                    m_ibuff[k] = m_ibuff[j]; // remove non printables
-                    k++;
-                }
-                j++;
+        if(encodingByte == 1  && dataLength > 1) { // UTF16 with BOM
+            bool big_endian = static_cast<unsigned char>(m_ibuff[0]) == 0xFE && static_cast<unsigned char>(m_ibuff[1]) == 0xFF;
+
+            uint8_t data_start = 2; // skip the BOM (2 bytes)
+
+            std::u16string utf16_string;
+            for (size_t i = data_start; i < dataLength; i += 2) {
+                char16_t wchar;
+                if(big_endian)  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
+                else            wchar = (static_cast<unsigned char>(m_ibuff[i + 1]) << 8) | static_cast<unsigned char>(m_ibuff[i]);
+                utf16_string.push_back(wchar);
             }
-            m_ibuff[k] = '\0'; // new termination
-            latinToUTF8(m_ibuff, m_ibuffSize, false);
+
+            std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+            showID3Tag(tag, converter.to_bytes(utf16_string).c_str());
         }
-        showID3Tag(tag, m_ibuff);
+
+        if(encodingByte == 2 && dataLength > 1) { // UTF16BE
+            std::u16string utf16_string;
+            for (size_t i = 0; i < dataLength; i += 2) {
+                char16_t  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
+                utf16_string.push_back(wchar);
+            }
+
+            std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+            showID3Tag(tag, converter.to_bytes(utf16_string).c_str());
+        }
+
+        if(encodingByte == 3) { // utf8
+            showID3Tag(tag, m_ibuff);
+        }
         return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

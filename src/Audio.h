@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13i
- *  Updated on: Oct 29.2024
+ *  Version 3.0.13j
+ *  Updated on: Oct 30.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -24,6 +24,8 @@
 #include <FS.h>
 #include <FFat.h>
 #include <atomic>
+#include <codecvt>
+#include <locale>
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 #include <NetworkClient.h>
@@ -185,7 +187,6 @@ public:
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
     const char *getCodecname() {return codecname[m_codec];}
-    void unicode2utf8(char* buff, uint32_t len);
 
 private:
 
