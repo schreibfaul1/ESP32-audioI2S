@@ -134,8 +134,8 @@ protected:
 //----------------------------------------------------------------------------------------------------------------------
 
 static const size_t AUDIO_STACK_SIZE = 3300;
-static StaticTask_t xAudioTaskBuffer;
-static StackType_t xAudioStack[AUDIO_STACK_SIZE];
+static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
+static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 
 class Audio : private AudioBuffer{
 

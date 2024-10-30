@@ -246,8 +246,6 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     }
     computeLimit();  // first init, vol = 21, vol_steps = 21
     startAudioTask();
-    (void)xAudioStack; (void)xAudioTaskBuffer;
-
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
