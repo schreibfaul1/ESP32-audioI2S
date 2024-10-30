@@ -522,7 +522,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
-    h_host = x_ps_strdup(host);
+    h_host = urlencode(host, true);
     trim(h_host);  // remove leading and trailing spaces
     lenHost = strlen(h_host);
 
