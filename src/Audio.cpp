@@ -2366,13 +2366,13 @@ void Audio::playChunk() {
             IIR_filterChain2(*sample);
         }
         //------------------------------------------------------------------
-        Gain(*sample);
-
         if(m_f_forceMono){
             int32_t xy = ((*sample)[RIGHTCHANNEL] + (*sample)[LEFTCHANNEL]) / 2;
             (*sample)[RIGHTCHANNEL] = (int16_t)xy;
             (*sample)[LEFTCHANNEL]  = (int16_t)xy;
         }
+        
+        Gain(*sample);
 
         if(m_f_internalDAC) {
             s2 = *sample;
