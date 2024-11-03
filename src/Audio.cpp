@@ -2262,7 +2262,9 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::stopSong() {
     m_f_lockInBuffer = true; // wait for the decoding to finish
-        while(m_f_audioTaskIsDecoding) vTaskDelay(1);
+        static uint8_t maxWait = 0;
+        while(m_f_audioTaskIsDecoding) {vTaskDelay(1); maxWait++; if(maxWait > 100) break;} // in case of error wait max 100ms
+        maxWait = 0;
         uint32_t pos = 0;
         if(m_f_running) {
             m_f_running = false;
@@ -2283,7 +2285,7 @@ uint32_t Audio::stopSong() {
         m_audioFileDuration = 0;
         m_codec = CODEC_NONE;
         m_dataMode = AUDIO_NONE;
-    m_f_lockInBuffer = false;
+        m_f_lockInBuffer = false;
     return pos;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4483,6 +4485,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
             if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
             if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
+            if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
+            return 0;
         }
 
         return 1; // skip one byte and seek for the next sync word

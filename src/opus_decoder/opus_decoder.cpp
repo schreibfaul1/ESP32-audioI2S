@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 09.09.2024
+ *  Updated on: 03.11.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -211,6 +211,7 @@ int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     s_opusCurrentFilePos += segmentLength;
     if(ret == 1){ s_opusPageNr++;}
     if(ret == 0){ log_e("OpusHead not found"); }
+    if(ret < 0) return ret;
     return OPUS_PARSE_OGG_DONE;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -276,7 +277,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
         // silk_InitDecoder();
     }
 
-    samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, s_opusSamplerate);
+    samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, /*s_opusSamplerate*/ 48000);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
 //log_i("s_opusCountCode %i, configNr %i", s_opusCountCode, configNr);
@@ -801,7 +802,7 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
 
     if(channelCount == 0 || channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
     s_opusChannels = channelCount;
-    if(sampleRate != 48000) return ERR_OPUS_INVALID_SAMPLERATE;
+    if(sampleRate != 48000 && sampleRate != 44100) return ERR_OPUS_INVALID_SAMPLERATE;
     s_opusSamplerate = sampleRate;
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 
