@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13j
- *  Updated on: Oct 30.2024
+ *  Version 3.0.13k
+ *  Updated on: Nov 06.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2340,10 +2340,11 @@ void Audio::playChunk() {
         }
         int s16 = 0;
         validSamples = m_validSamples; // double validsamples, make stereo
+        validSamples--;
         while(validSamples){
-            s16 = m_outBuff[validSamples - 1];
-            m_outBuff[validSamples * 2 - 1] = s16;
-            m_outBuff[validSamples * 2 - 2] = s16;
+            s16 = m_outBuff[validSamples];
+            m_outBuff[validSamples * 2 + 0] = s16;
+            m_outBuff[validSamples * 2 + 1] = s16;
             validSamples --;
         }
         m_validSamples *= 2;
@@ -2368,12 +2369,11 @@ void Audio::playChunk() {
             IIR_filterChain2(*sample);
         }
         //------------------------------------------------------------------
-        if(m_f_forceMono){
+        if(m_f_forceMono && m_channels == 2){
             int32_t xy = ((*sample)[RIGHTCHANNEL] + (*sample)[LEFTCHANNEL]) / 2;
             (*sample)[RIGHTCHANNEL] = (int16_t)xy;
             (*sample)[LEFTCHANNEL]  = (int16_t)xy;
         }
-        
         Gain(*sample);
 
         if(m_f_internalDAC) {
