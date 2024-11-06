@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13k
+ *  Version 3.0.13l
  *  Updated on: Nov 06.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -570,7 +570,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
                        strcat(rqh, "Accept:*/*\r\n");
-                       strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
+                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
