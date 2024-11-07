@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13l
- *  Updated on: Nov 06.2024
+ *  Version 3.0.13m
+ *  Updated on: Nov 07.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -192,7 +192,7 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
-    m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_PLL_160M;        // Select PLL_F160M as the default source clock
+    m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
     m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_512;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(m_i2s_num);
@@ -2329,25 +2329,8 @@ void Audio::playChunk() {
             m_outBuff[validSamples * 2 - 2] = s16_2 - 0x8000;
             validSamples--;
         }
-        if(getChannels() == 1) m_validSamples *= 4;
-        else                   m_validSamples *= 2;
-    }
-
-    if(m_channels == 1){
-        if(m_outbuffSize < m_validSamples * 2){
-            log_e("valid samples: %i greater than buffer size: %i", m_outbuffSize, m_validSamples);
-            m_validSamples = m_outbuffSize / 2; // avoid buffer overrun
-        }
-        int s16 = 0;
-        validSamples = m_validSamples; // double validsamples, make stereo
-        validSamples--;
-        while(validSamples){
-            s16 = m_outBuff[validSamples];
-            m_outBuff[validSamples * 2 + 0] = s16;
-            m_outBuff[validSamples * 2 + 1] = s16;
-            validSamples --;
-        }
         m_validSamples *= 2;
+        if(getChannels() == 1){ m_sampleRate /= 2; reconfigI2S();}
     }
 
     validSamples = m_validSamples;
@@ -4429,8 +4412,8 @@ void Audio::setDecoderItems() {
         AUDIO_INFO("Num of channels must be 1 or 2, found %i", getChannels());
         stopSong();
     }
-    reconfigI2S();
     showCodecParams();
+    reconfigI2S();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
@@ -4968,16 +4951,30 @@ void Audio::reconfigI2S(){
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
-    if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-    else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+
+    if(getChannels() == 1){
+        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+    }
+    if(getChannels() == 2){
+        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    }
+
     m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
 
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     I2Sstart(m_i2s_num);
 #else
-    m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
+    if(getChannels() == 1){
+        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
+    }
+    if(getChannels() == 2){
+        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
+    }
 #endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
