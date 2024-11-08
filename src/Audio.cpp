@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13m
- *  Updated on: Nov 07.2024
+ *  Version 3.0.13n
+ *  Updated on: Nov 08.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -162,6 +162,15 @@ Audio::Audio(bool internalDAC /* = false */, uint8_t channelEnabled /* = I2S_SLO
 
     mutex_playAudioData = xSemaphoreCreateMutex();
     mutex_audioTask     = xSemaphoreCreateMutex();
+
+    m_chbufSize = 512 + 64;
+    m_ibuffSize = 512 + 64;
+
+    m_chbuf    = (char*) malloc(m_chbufSize);
+    m_ibuff    = (char*) malloc(m_ibuffSize);
+    m_lastHost = (char*) malloc(2048);
+    m_outBuff  = (int16_t*)malloc(m_outbuffSize * sizeof(int16_t));
+    if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
 
 #ifdef AUDIO_LOG
     m_f_Log = true;
@@ -4750,18 +4759,20 @@ void Audio::printDecodeError(int r) {
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
-    x_ps_free(m_chbuf);
-    x_ps_free(m_ibuff);
-    x_ps_free(m_outBuff);
-    x_ps_free(m_lastHost);
-    if(m_f_psramFound) m_chbufSize = 4096; else m_chbufSize = 512 + 64;
-    if(m_f_psramFound) m_ibuffSize = 4096; else m_ibuffSize = 512 + 64;
-    m_lastHost = (char*)   x_ps_malloc(2048);
-    m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
-    m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
-    m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
-    if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
 
+    if(m_f_psramFound){ // shift mem in psram
+        m_chbufSize = 4096;
+        m_ibuffSize = 4096;
+        x_ps_free(m_chbuf);
+        x_ps_free(m_ibuff);
+        x_ps_free(m_outBuff);
+        x_ps_free(m_lastHost);
+        m_lastHost = (char*)   x_ps_malloc(2048);
+        m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
+        m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
+        m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
+        if(!m_chbuf || !m_lastHost || !m_outBuff || !m_ibuff) log_e("oom");
+    }
     esp_err_t result = ESP_OK;
 
     if(m_f_internalDAC) {
