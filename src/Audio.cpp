@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13n
+ *  Version 3.0.13o
  *  Updated on: Nov 08.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2327,26 +2327,26 @@ void Audio::playChunk() {
     if(count > 0) goto i2swrite;
 
     if(m_bitsPerSample == 8){
-        int16_t s16_1 = 0;
-        int16_t s16_2 = 0;
-
-        validSamples = m_validSamples; // double validsamples, make stereo
-        while(validSamples){
-            s16_1 = (m_outBuff[validSamples - 1] & 0xFF00);
-            s16_2 = (m_outBuff[validSamples - 1] & 0x00FF) << 8;
-            m_outBuff[validSamples * 2 - 1] = s16_1 - 0x8000;
-            m_outBuff[validSamples * 2 - 2] = s16_2 - 0x8000;
-            validSamples--;
+        if(getChannels() == 1){
+            for (int i = m_validSamples - 1; i >= 0; --i) {  // uint8_t --> int16_t
+                m_outBuff[4 * i + 0] = m_outBuff[4 * i + 1] = (m_outBuff[i] & 0xFF00) - 0x8000;
+                m_outBuff[4 * i + 2] = m_outBuff[4 * i + 3] = ((m_outBuff[i] & 0x00FF) << 8) - 0x8000;
+            }
+            m_validSamples *= 4;
         }
-        m_validSamples *= 2;
-        if(getChannels() == 1){ m_sampleRate /= 2; reconfigI2S();}
+        if(getChannels() == 2){
+            for (int i = m_validSamples - 1; i >= 0; --i) {
+                m_outBuff[2 * i] =     (m_outBuff[i] & 0xFF00) - 0x8000;
+                m_outBuff[2 * i + 1] = ((m_outBuff[i] & 0x00FF) << 8) - 0x8000;
+            }
+            m_validSamples *= 2;
+        }
     }
 
     validSamples = m_validSamples;
 
     while(validSamples) {
         *sample = m_outBuff + i;
-
         computeVUlevel(*sample);
 
         //---------- Filterchain, can commented out if not used-------------
