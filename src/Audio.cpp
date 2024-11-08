@@ -631,11 +631,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         m_streamType = ST_WEBSTREAM;
     }
     else {
-        AUDIO_INFO("Request %s failed!", host);
         if(audio_showstation) audio_showstation("");
         if(audio_showstreamtitle) audio_showstreamtitle("");
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
+        AUDIO_INFO("Request %s failed!", host);
         m_lastHost[0] = 0;
     }
 
