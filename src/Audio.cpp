@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13o
+ *  Version 3.0.13p
  *  Updated on: Nov 08.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -4965,11 +4965,11 @@ void Audio::reconfigI2S(){
 
     if(getChannels() == 1){
         if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
     }
     if(getChannels() == 2){
         if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     }
 
     m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
