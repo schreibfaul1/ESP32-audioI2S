@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13p
- *  Updated on: Nov 08.2024
+ *  Version 3.0.13q
+ *  Updated on: Nov 09.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2320,7 +2320,7 @@ void Audio::playChunk() {
     size_t i2s_bytesConsumed = 0;
     int16_t* sample[2] = {0};
     int16_t* s2;
-    int sampleSize = (m_bitsPerSample / 8);
+    int sampleSize = 2; // 2 bytes per sample, int16_t
     esp_err_t err = ESP_OK;
     int i= 0;
 
@@ -2329,17 +2329,20 @@ void Audio::playChunk() {
     if(m_bitsPerSample == 8){
         if(getChannels() == 1){
             for (int i = m_validSamples - 1; i >= 0; --i) {  // uint8_t --> int16_t
-                m_outBuff[4 * i + 0] = m_outBuff[4 * i + 1] = (m_outBuff[i] & 0xFF00) - 0x8000;
-                m_outBuff[4 * i + 2] = m_outBuff[4 * i + 3] = ((m_outBuff[i] & 0x00FF) << 8) - 0x8000;
+                uint8_t sample1 = m_outBuff[i] & 0xFF;
+                uint8_t sample2 = (m_outBuff[i] >> 8) & 0xFF;
+                m_outBuff[4 * i + 0] = m_outBuff[4 * i + 1] = (int16_t)((sample1 - 128) * 256);
+                m_outBuff[4 * i + 2] = m_outBuff[4 * i + 3] = (int16_t)((sample2 - 128) * 256);
             }
-            m_validSamples *= 4;
+            m_validSamples *= 2;
         }
         if(getChannels() == 2){
             for (int i = m_validSamples - 1; i >= 0; --i) {
-                m_outBuff[2 * i] =     (m_outBuff[i] & 0xFF00) - 0x8000;
-                m_outBuff[2 * i + 1] = ((m_outBuff[i] & 0x00FF) << 8) - 0x8000;
+                uint8_t sample1 = m_outBuff[i] & 0xFF;
+                uint8_t sample2 = (m_outBuff[i] >> 8) & 0xFF;
+                m_outBuff[2 * i] = (int16_t)((sample1 - 128) * 256);
+                m_outBuff[2 * i + 1] = (int16_t)((sample2 - 128) * 256);
             }
-            m_validSamples *= 2;
         }
     }
 
@@ -2403,7 +2406,6 @@ i2swrite:
     count += i2s_bytesConsumed / 2;
     if(m_validSamples < 0) { m_validSamples = 0; }
     if(m_validSamples == 0) { count = 0; }
-
 
 // ---- statistics, bytes written to I2S (every 10s)
     // static int cnt = 0;
