@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13q
- *  Updated on: Nov 09.2024
+ *  Version 3.0.13r
+ *  Updated on: Nov 11.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -245,7 +245,7 @@ private:
   void            showstreamtitle(const char* ml);
   bool            parseContentType(char* ct);
   bool            parseHttpResponseHeader();
-  bool            initializeDecoder();
+  bool            initializeDecoder(uint8_t codec);
   esp_err_t       I2Sstart(uint8_t i2s_num);
   esp_err_t       I2Sstop(uint8_t i2s_num);
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);

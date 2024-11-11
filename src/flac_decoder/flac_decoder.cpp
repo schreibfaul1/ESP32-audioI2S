@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: May 21,2024
+ * Updated on: Nov 11,2024
  *
  * Author: Wolle
  *
@@ -16,7 +16,7 @@ using namespace std;
 FLACFrameHeader_t*   FLACFrameHeader;
 FLACMetadataBlock_t* FLACMetadataBlock;
 
-vector<uint16_t> s_flacSegmTableVec;
+vector<uint32_t> s_flacSegmTableVec;
 vector<int32_t>  coefs;
 vector<uint32_t> s_flacBlockPicItem;
 uint64_t         s_flac_bitBuffer = 0;
@@ -320,7 +320,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
 
     if(firstPage) s_flacPageNr = 0;
 
-    uint16_t headerSize = pageSegments + 27;
+    uint32_t headerSize = pageSegments + 27;
 
     *bytesLeft -= headerSize;
     s_flacCurrentFilePos += headerSize;
@@ -437,7 +437,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 FLACMetadataBlock->minblocksize = minBlocksize;
                 FLACMetadataBlock->maxblocksize = maxBlocksize;
 
-                if(maxBlocksize > 8192 * 2){log_e("s_blocksizes[1] is too big"); return ERR_FLAC_BLOCKSIZE_TOO_BIG;}
+                if(maxBlocksize > s_maxBlocksize){log_e("s_blocksizes[1] is too big"); return ERR_FLAC_BLOCKSIZE_TOO_BIG;}
 
                 minFrameSize  = *(inbuf + pos + 4) << 16;
                 minFrameSize += *(inbuf + pos + 5) << 8;
@@ -591,9 +591,9 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
 //----------------------------------------------------------------------------------------------------------------------
 int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN LOOP
 
-    int32_t             ret = 0;
-    uint16_t        segmLen = 0;
-    static uint16_t segmLenTmp = 0;
+    int32_t                ret = 0;
+    uint32_t           segmLen = 0;
+    static uint32_t segmLenTmp = 0;
 
     if(s_f_flacFirstCall){ // determine if ogg or flag
         s_f_flacFirstCall = false;
@@ -835,7 +835,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
         return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
     }
     uint16_t maxBS = 8192;
-    if(psramFound()) maxBS = 8192 * 4;
+    if(psramFound()) maxBS = 8192 * 2;
     if(s_blockSize > maxBS){
         log_e("Error: blockSize too big ,%i bytes", s_blockSize);
         return ERR_FLAC_BLOCKSIZE_TOO_BIG;

@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13q
- *  Updated on: Nov 09.2024
+ *  Version 3.0.13r
+ *  Updated on: Nov 11.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -893,20 +893,22 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     int16_t dotPos;
     char* audioPath = NULL;
     m_fileStartPos = fileStartPos;
+    uint8_t codec = CODEC_NONE;
 
     if(!path) {printProcessLog(AUDIOLOG_PATH_IS_NULL); goto exit;}  // guard
     dotPos = lastIndexOf(path, ".");
     if(dotPos == -1) {AUDIO_INFO("No file extension found"); goto exit;}  // guard
     setDefaults(); // free buffers an set defaults
-    if(endsWith(path, ".mp3")) m_codec = CODEC_MP3;
-    if(endsWith(path, ".m4a")) m_codec = CODEC_M4A;
-    if(endsWith(path, ".aac")) m_codec = CODEC_AAC;
-    if(endsWith(path, ".wav")) m_codec = CODEC_WAV;
-    if(endsWith(path, ".flac")) m_codec = CODEC_FLAC;
-    if(endsWith(path, ".opus")) m_codec = CODEC_OPUS;
-    if(endsWith(path, ".ogg")) m_codec = CODEC_OGG;
-    if(endsWith(path, ".oga")) m_codec = CODEC_OGG;
-    if(m_codec == CODEC_NONE) {AUDIO_INFO("The %s format is not supported", path + dotPos); goto exit;}   // guard
+
+    if(endsWith(path, ".mp3"))  codec = CODEC_MP3;
+    if(endsWith(path, ".m4a"))  codec = CODEC_M4A;
+    if(endsWith(path, ".aac"))  codec = CODEC_AAC;
+    if(endsWith(path, ".wav"))  codec = CODEC_WAV;
+    if(endsWith(path, ".flac")) codec = CODEC_FLAC;
+    if(endsWith(path, ".opus")) codec = CODEC_OPUS;
+    if(endsWith(path, ".ogg"))  codec = CODEC_OGG;
+    if(endsWith(path, ".oga"))  codec = CODEC_OGG;
+    if(codec == CODEC_NONE) {AUDIO_INFO("The %s format is not supported", path + dotPos); goto exit;}   // guard
 
     audioPath = (char *)x_ps_calloc(strlen(path) + 2, sizeof(char));
     if(!audioPath){printProcessLog(AUDIOLOG_OUT_OF_MEMORY); goto exit;};
@@ -919,7 +921,8 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     m_dataMode = AUDIO_LOCALFILE;
     m_fileSize = audiofile.size();
 
-    res = initializeDecoder();
+    res = initializeDecoder(codec);
+    m_codec = codec;
     if(res) m_f_running = true;
     else audiofile.close();
 
@@ -3157,9 +3160,9 @@ void Audio::processLocalFile() {
     if(!m_f_stream) {
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-            if     (codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
-            else if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
-            else if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+            if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = CODEC_FLAC;   return;}
+            else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = CODEC_OPUS;   return;}
+            else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = CODEC_VORBIS; return;}
             else                           {stopSong(); return;}
         }
         if(m_controlCounter != 100) {
@@ -3299,21 +3302,9 @@ void Audio::processWebStream() {
         if(!m_f_stream) return;
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-            if(codec == CODEC_FLAC) {
-                m_codec = CODEC_FLAC;
-                initializeDecoder();
-                return;
-            }
-            if(codec == CODEC_OPUS) {
-                m_codec = CODEC_OPUS;
-                initializeDecoder();
-                return;
-            }
-            if(codec == CODEC_VORBIS) {
-                m_codec = CODEC_VORBIS;
-                initializeDecoder();
-                return;
-            }
+            if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec; return;}
+            if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec; return;}
+            if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
             stopSong();
             return;
         }
@@ -3374,9 +3365,9 @@ void Audio::processWebFile() {
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-        if     (codec == CODEC_FLAC)   {m_codec = CODEC_FLAC;   initializeDecoder(); return;}
-        else if(codec == CODEC_OPUS)   {m_codec = CODEC_OPUS;   initializeDecoder(); return;}
-        else if(codec == CODEC_VORBIS) {m_codec = CODEC_VORBIS; initializeDecoder(); return;}
+        if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = codec; return;}
+        else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = codec; return;}
+        else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
         else {stopSong(); return;}
     }
 
@@ -3762,11 +3753,14 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(startsWith(rhl, "content-type:")) { // content-type: text/html; charset=UTF-8
-            // log_i("cT: %s", rhl);
+        //    log_w("cT: %s", rhl);
             int idx = indexOf(rhl + 13, ";");
             if(idx > 0) rhl[13 + idx] = '\0';
             if(parseContentType(rhl + 13)) ct_seen = true;
-            else goto exit;
+            else{
+                log_w("unknown contentType %s", rhl + 13);
+                goto exit;
+            }
         }
 
         else if(startsWith(rhl, "location:")) {
@@ -3917,7 +3911,9 @@ exit: // termination condition
 lastToDo:
     if(m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
-        if(!initializeDecoder()) return false;
+        if(!(m_codec == CODEC_OGG)){
+            if(!initializeDecoder(m_codec)) return false;
+        }
         if(m_f_Log) { log_i("Switch to DATA, metaint is %d", m_metaint); }
         if(m_playlistFormat != FORMAT_M3U8 && audio_lasthost) audio_lasthost(m_lastHost);
         m_controlCounter = 0;
@@ -3934,10 +3930,10 @@ lastToDo:
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::initializeDecoder() {
+bool Audio::initializeDecoder(uint8_t codec) {
     uint32_t gfH = 0;
     uint32_t hWM = 0;
-    switch(m_codec) {
+    switch(codec) {
         case CODEC_MP3:
             if(!MP3Decoder_IsInit()){
                 if(!MP3Decoder_AllocateBuffers()) {
@@ -4101,9 +4097,7 @@ bool Audio::parseContentType(char* ct) {
             if(m_f_Log) { log_i("ContentType %s, format is wav", ct); }
             break;
         case CT_OGG:
-            if(m_expectedCodec == CODEC_OPUS) m_codec = CODEC_OPUS;
-            else if(m_expectedCodec == CODEC_FLAC) m_codec = CODEC_FLAC;
-            else m_codec = CODEC_OGG; // determine in first OGG packet -OPUS, VORBIS, FLAC
+            m_codec = CODEC_OGG; // determine in first OGG packet -OPUS, VORBIS, FLAC
             break;
         case CT_PLS: m_playlistFormat = FORMAT_PLS; break;
         case CT_M3U: m_playlistFormat = FORMAT_M3U; break;
@@ -4320,7 +4314,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     //         > 0 is the offset to the next sync word
     //         -1 the sync word was not found within the block with the length len
 
-    int             nextSync;
+    int         nextSync = 0;
     static uint32_t swnf = 0;
     if(m_codec == CODEC_WAV) {
         m_f_playing = true;
@@ -6341,9 +6335,10 @@ void Audio::audioTask() {
 void Audio::performAudioTask() {
     if(!m_f_running) return;
     if(!m_f_stream) return;
+    if(m_codec == CODEC_NONE) return; // wait for codec is  set
+    if(m_codec == CODEC_OGG)  return; // wait for FLAC, VORBIS or OPUS
     xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
-    while(m_validSamples) {
-        vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
+    while(m_validSamples) {vTaskDelay(20 / portTICK_PERIOD_MS); playChunk();} // I2S buffer full
     playAudioData();
     xSemaphoreGive(mutex_audioTask);
 }
