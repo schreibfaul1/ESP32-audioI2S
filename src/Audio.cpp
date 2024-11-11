@@ -368,6 +368,7 @@ void Audio::setDefaults() {
     m_f_ts = false;
     m_f_m4aID3dataAreRead = false;
     m_f_stream = false;
+    m_f_decode_ready = false;
     m_f_eof = false;
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
@@ -4359,6 +4360,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         }
         else {
             if(audio_info) audio_info("syncword found at pos 0");
+            m_f_decode_ready = true;
         }
     }
     if(nextSync > 0) { AUDIO_INFO("syncword found at pos %i", nextSync); }
@@ -4439,6 +4441,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     int bytesDecoded = 0;
 
     if(m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
+    if(!m_f_decode_ready) return 0; // find sync first
 
     switch(m_codec) {
         case CODEC_WAV:  m_decodeError = 0; bytesLeft = 0; break;
