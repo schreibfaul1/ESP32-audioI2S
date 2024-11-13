@@ -42,6 +42,7 @@ void setup() {
 
 void loop(){
     audio.loop();
+    vTaskDelay(1);    // Audio is distoreted without this
 }
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
