@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13r
- *  Updated on: Nov 11.2024
+ *  Version 3.0.13s
+ *  Updated on: Nov 16.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2330,24 +2330,13 @@ void Audio::playChunk() {
 
     if(count > 0) goto i2swrite;
 
-    if(m_bitsPerSample == 8){
-        if(getChannels() == 1){
-            for (int i = m_validSamples - 1; i >= 0; --i) {  // uint8_t --> int16_t
-                uint8_t sample1 = m_outBuff[i] & 0xFF;
-                uint8_t sample2 = (m_outBuff[i] >> 8) & 0xFF;
-                m_outBuff[4 * i + 0] = m_outBuff[4 * i + 1] = (int16_t)((sample1 - 128) * 256);
-                m_outBuff[4 * i + 2] = m_outBuff[4 * i + 3] = (int16_t)((sample2 - 128) * 256);
-            }
-            m_validSamples *= 2;
+    if(getChannels() == 1){
+        for (int i = m_validSamples - 1; i >= 0; --i) {
+            int16_t sample = m_outBuff[i];
+            m_outBuff[2 * i] = sample;
+            m_outBuff[2 * i + 1] = sample;
         }
-        if(getChannels() == 2){
-            for (int i = m_validSamples - 1; i >= 0; --i) {
-                uint8_t sample1 = m_outBuff[i] & 0xFF;
-                uint8_t sample2 = (m_outBuff[i] >> 8) & 0xFF;
-                m_outBuff[2 * i] = (int16_t)((sample1 - 128) * 256);
-                m_outBuff[2 * i + 1] = (int16_t)((sample2 - 128) * 256);
-            }
-        }
+        m_validSamples *= 2;
     }
 
     validSamples = m_validSamples;
@@ -2380,7 +2369,7 @@ void Audio::playChunk() {
             s2[LEFTCHANNEL] += 0x8000;
             s2[RIGHTCHANNEL] += 0x8000;
         }
-        i += m_bitsPerSample == 16 ? 2 : 1;
+        i += 2;
         validSamples -= 1;
     }
     if(audio_process_i2s) {
@@ -4494,9 +4483,19 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     char* st = NULL;
     std::vector<uint32_t> vec;
     switch(m_codec) {
-        case CODEC_WAV:     memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
-                            if(getBitsPerSample() == 16) m_validSamples = len / (2 * getChannels());
-                            if(getBitsPerSample() == 8) m_validSamples = len / 2;
+        case CODEC_WAV:     if(getBitsPerSample() == 16){
+                                memmove(m_outBuff, data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
+                                m_validSamples = len / (2 * getChannels());
+                            }
+                            else{
+                                for(int i = 0; i < len; i++) {
+                                    int16_t sample1 = (data[i] & 0x00FF)      - 128;
+                                    int16_t sample2 = (data[i] & 0xFF00 >> 8) - 128;
+                                    m_outBuff[i * 2 + 0] = sample1 << 7;
+                                    m_outBuff[i * 2 + 1] = sample2 << 7;
+                                }
+                                m_validSamples = len / getChannels();
+                            }
                             break;
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
                             break;
@@ -4960,16 +4959,10 @@ void Audio::reconfigI2S(){
 
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
 
-    if(getChannels() == 1){
-        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-    }
-    if(getChannels() == 2){
-        if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-        else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-    }
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
     m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
 
@@ -4977,14 +4970,10 @@ void Audio::reconfigI2S(){
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     I2Sstart(m_i2s_num);
 #else
-    if(getChannels() == 1){
-        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
-    }
-    if(getChannels() == 2){
-        m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
-    }
+
+    m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
+
 #endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
