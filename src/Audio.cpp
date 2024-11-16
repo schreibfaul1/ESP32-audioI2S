@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13s
+ *  Version 3.0.13t
  *  Updated on: Nov 16.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -2324,7 +2324,7 @@ void Audio::playChunk() {
     size_t i2s_bytesConsumed = 0;
     int16_t* sample[2] = {0};
     int16_t* s2;
-    int sampleSize = 2; // 2 bytes per sample, int16_t
+    int sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
     esp_err_t err = ESP_OK;
     int i= 0;
 
@@ -2336,7 +2336,7 @@ void Audio::playChunk() {
             m_outBuff[2 * i] = sample;
             m_outBuff[2 * i + 1] = sample;
         }
-        m_validSamples *= 2;
+    //    m_validSamples *= 2;
     }
 
     validSamples = m_validSamples;
@@ -2375,7 +2375,7 @@ void Audio::playChunk() {
     if(audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)m_outBuff, m_validSamples, m_bitsPerSample, m_channels, &continueI2S);
+        audio_process_i2s((int16_t*)m_outBuff, m_validSamples, 16, 2, &continueI2S);
         if(!continueI2S) {
             m_validSamples = 0;
             count = 0;
@@ -2389,13 +2389,13 @@ i2swrite:
 
 
 #if(ESP_IDF_VERSION_MAJOR == 5)
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 5);
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * sampleSize, &i2s_bytesConsumed, 5);
 #else
-    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * (sampleSize * m_channels), &i2s_bytesConsumed, 10);
+    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * sampleSize, &i2s_bytesConsumed, 10);
 #endif
 
     if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
-    m_validSamples -= i2s_bytesConsumed / (sampleSize * m_channels);
+    m_validSamples -= i2s_bytesConsumed / sampleSize;
     count += i2s_bytesConsumed / 2;
     if(m_validSamples < 0) { m_validSamples = 0; }
     if(m_validSamples == 0) { count = 0; }
@@ -4408,8 +4408,8 @@ void Audio::setDecoderItems() {
         AUDIO_INFO("Num of channels must be 1 or 2, found %i", getChannels());
         stopSong();
     }
-    showCodecParams();
     reconfigI2S();
+    showCodecParams();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
@@ -4491,10 +4491,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 for(int i = 0; i < len; i++) {
                                     int16_t sample1 = (data[i] & 0x00FF)      - 128;
                                     int16_t sample2 = (data[i] & 0xFF00 >> 8) - 128;
-                                    m_outBuff[i * 2 + 0] = sample1 << 7;
-                                    m_outBuff[i * 2 + 1] = sample2 << 7;
+                                    m_outBuff[i * 2 + 0] = sample1 << 8;
+                                    m_outBuff[i * 2 + 1] = sample2 << 8;
                                 }
-                                m_validSamples = len / getChannels();
+                                m_validSamples = len;
                             }
                             break;
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
@@ -4960,7 +4960,9 @@ void Audio::reconfigI2S(){
 #if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
 
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    if(getBitsPerSample() == 8 && getChannels() == 2) m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate() * 2;
+    else m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate();
+
     if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
 
@@ -4968,12 +4970,11 @@ void Audio::reconfigI2S(){
 
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
+
     I2Sstart(m_i2s_num);
 #else
-
     m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
     i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
-
 #endif
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
