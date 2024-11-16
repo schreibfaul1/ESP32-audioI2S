@@ -131,3 +131,8 @@ Wiring
 ![Wiring](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/ESP32_I2S_PCM5102A.JPG)
 Impulse diagram
 ![Impulse diagram](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Impulsdiagramm.jpg)
+***
+Yellobyte has developed an all-in-one board. It includes an ESP32-S3 N8R2, 2x MAX98357 and an SD card adapter.
+Documentation, circuit diagrams and examples can be found here: https://github.com/yellobyte/ESP32-DevBoards-Getting-Started
+![image](https://github.com/user-attachments/assets/4002d09e-8e76-4e08-9265-188fed7628d3)
+
