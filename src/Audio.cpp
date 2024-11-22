@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13u
+ *  Version 3.0.13v
  *  Updated on: Nov 22.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -3635,7 +3635,7 @@ void Audio::playAudioData() {
     if(f_isFile) {
         bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
         if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
-        if(m_sumBytesDecoded >= m_audioDataSize) { m_f_eof = true; goto exit; }
+        if(m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded != 0) { m_f_eof = true; goto exit; }
     }
     if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;;
 
