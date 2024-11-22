@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13t
- *  Updated on: Nov 16.2024
+ *  Version 3.0.13u
+ *  Updated on: Nov 22.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -358,7 +358,7 @@ void Audio::setDefaults() {
     m_f_firstCurTimeCall = true; // InitSequence for computeAudioTime
     m_f_firstM3U8call = true;    // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;    // InitSequence for playAudioData
-    m_f_running = false;
+//    m_f_running = false;       // already done in stopSong
     m_f_loop = false;     // Set if audio file should loop
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -3640,6 +3640,7 @@ void Audio::playAudioData() {
     if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;;
 
     bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
+    if(!m_f_running) return;
 
     if(bytesDecoded < 0) { // no syncword found or decode error, try next chunk
         next = 200;
