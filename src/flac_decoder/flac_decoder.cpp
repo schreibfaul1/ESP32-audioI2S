@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Nov 11,2024
+ * Updated on: Nov 23,2024
  *
  * Author: Wolle
  *
@@ -308,7 +308,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
         }
         s_flacSegmTableVec.insert(s_flacSegmTableVec.begin(), n);
     }
-    // for(int32_t i = 0; i< s_flacSegmTableVec.size(); i++){log_i("%i", s_flacSegmTableVec[i]);}
+    // for(int32_t i = 0; i< s_flacSegmTableVec.size(); i++){log_w("%i", s_flacSegmTableVec[i]);}
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
@@ -316,7 +316,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
 
     (void)continuedPage; (void)lastPage;
 
-    // log_i("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
+    // log_w("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
 
     if(firstPage) s_flacPageNr = 0;
 
@@ -834,9 +834,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     else{
         return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
     }
-    uint16_t maxBS = 8192;
-    if(psramFound()) maxBS = 8192 * 2;
-    if(s_blockSize > maxBS){
+    if(s_blockSize > MAX_BLOCKSIZE){
         log_e("Error: blockSize too big ,%i bytes", s_blockSize);
         return ERR_FLAC_BLOCKSIZE_TOO_BIG;
     }
