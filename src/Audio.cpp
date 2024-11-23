@@ -5726,7 +5726,7 @@ size_t Audio::chunkedDataTransfer(uint8_t* bytes) {
         if(b > 9) b = b - 7;  // Translate A..F to 10..15
         chunksize = (chunksize << 4) + b;
     }
-    if(m_f_Log) log_i("chunksize %d", chunksize);
+    // if(m_f_Log) log_i("chunksize %d", chunksize);
     *bytes = byteCounter;
     return chunksize;
 }
