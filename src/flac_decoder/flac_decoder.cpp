@@ -435,7 +435,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 FLACMetadataBlock->minblocksize = minBlocksize;
                 FLACMetadataBlock->maxblocksize = maxBlocksize;
 
-                if(maxBlocksize > s_maxBlocksize){log_e("s_blocksizes[1] is too big"); return ERR_FLAC_BLOCKSIZE_TOO_BIG;}
+                if(maxBlocksize > s_maxBlocksize){log_e("s_blocksize is too big"); return ERR_FLAC_BLOCKSIZE_TOO_BIG;}
 
                 minFrameSize  = *(inbuf + pos + 4) << 16;
                 minFrameSize += *(inbuf + pos + 5) << 8;

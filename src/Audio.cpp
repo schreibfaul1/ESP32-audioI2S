@@ -4709,6 +4709,7 @@ void Audio::printDecodeError(int r) {
             case ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN: e = "BITS PER SAMPLE UNKNOWN"; break;
             case ERR_FLAC_DECODER_ASYNC: e = "DECODER ASYNCHRON"; break;
             case ERR_FLAC_BITREADER_UNDERFLOW: e = "BITREADER ERROR"; break;
+            case ERR_FLAC_OUTBUFFER_TOO_SMALL: e = "OUTBUFFER TOO SMALL"; break;
             default: e = "ERR_UNKNOWN";
         }
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
