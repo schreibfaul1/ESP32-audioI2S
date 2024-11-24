@@ -28,8 +28,7 @@ uint32_t         s_flacBlockPicLen = 0;
 uint32_t         s_flacAudioDataStart = 0;
 int32_t          s_flacRemainBlockPicLen = 0;
 const uint16_t   s_flacOutBuffSize = 2048;
-uint16_t         s_blockSize = 0;
-uint16_t         s_blockSizeLeft = 0;
+uint16_t         s_numOfOutSamples = 0;
 uint16_t         s_flacValidSamples = 0;
 uint16_t         s_rIndex = 0;
 uint16_t         s_offset = 0;
@@ -142,9 +141,8 @@ void FLACDecoder_setDefaults(){
     s_flacBlockPicLen = 0;
     s_flacRemainBlockPicLen = 0;
     s_flacAudioDataStart = 0;
-    s_blockSize = 0;
+    s_numOfOutSamples = 0;
     s_offset = 0;
-    s_blockSizeLeft = 0;
     s_flacValidSamples = 0;
     s_rIndex = 0;
     s_flacStatus = DECODE_FRAME;
@@ -723,7 +721,6 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
     }
 
     if(s_flacStatus == DECODE_SUBFRAMES){
-
         // Decode each channel's subframe, then skip footer
         int32_t ret = decodeSubframes(bytesLeft);
         if(ret != 0) return ret;
@@ -735,7 +732,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
         // blocksize can be much greater than outbuff, so we can't stuff all in once
         // therefore we need often more than one loop (split outputblock into pieces)
         uint16_t blockSize;
-        if(s_blockSize < s_flacOutBuffSize + s_offset) blockSize = s_blockSize - s_offset;
+        if(s_numOfOutSamples < s_flacOutBuffSize + s_offset) blockSize = s_numOfOutSamples - s_offset;
         else blockSize = s_flacOutBuffSize;
 
         for (int32_t i = 0; i < blockSize; i++) {
@@ -755,15 +752,15 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
             s_flacBitrate /= s_flacCompressionRatio;
       //      log_e("s_flacBitrate %i, s_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", s_flacBitrate, s_flacCompressionRatio, FLACMetadataBlock->sampleRate);
         }
-        if(s_offset != s_blockSize) return GIVE_NEXT_LOOP;
-        if(s_offset > s_blockSize) { log_e("offset has a wrong value"); }
+        if(s_offset != s_numOfOutSamples) return GIVE_NEXT_LOOP;
+        if(s_offset > s_numOfOutSamples) { log_e("offset has a wrong value"); }
         s_offset = 0;
     }
 
     alignToByte();
     readUint(16, bytesLeft);
 
-//    s_flacCompressionRatio = (float)m_bytesDecoded / (float)s_blockSize * FLACMetadataBlock->numChannels * (16/8);
+//    s_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("s_flacCompressionRatio % f", s_flacCompressionRatio);
     s_flacStatus = DECODE_FRAME;
     return ERR_FLAC_NONE;
@@ -820,22 +817,22 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     }
     count--;
     for (int32_t i = 0; i < count; i++) readUint(8, bytesLeft);
-    s_blockSize = 0;
+    s_numOfOutSamples = 0;
     if (FLACFrameHeader->blockSizeCode == 1)
-        s_blockSize = 192;
+        s_numOfOutSamples = 192;
     else if (2 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 5)
-        s_blockSize = 576 << (FLACFrameHeader->blockSizeCode - 2);
+        s_numOfOutSamples = 576 << (FLACFrameHeader->blockSizeCode - 2);
     else if (FLACFrameHeader->blockSizeCode == 6)
-        s_blockSize = readUint(8, bytesLeft) + 1;
+        s_numOfOutSamples = readUint(8, bytesLeft) + 1;
     else if (FLACFrameHeader->blockSizeCode == 7)
-        s_blockSize = readUint(16, bytesLeft) + 1;
+        s_numOfOutSamples = readUint(16, bytesLeft) + 1;
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
-        s_blockSize = 256 << (FLACFrameHeader->blockSizeCode - 8);
+        s_numOfOutSamples = 256 << (FLACFrameHeader->blockSizeCode - 8);
     else{
         return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
     }
-    if(s_blockSize > MAX_BLOCKSIZE){
-        log_e("Error: blockSize too big ,%i bytes", s_blockSize);
+    if(s_numOfOutSamples > MAX_OUTBUFFSIZE){
+        log_e("Error: blockSizeOut too big ,%i bytes", s_numOfOutSamples);
         return ERR_FLAC_BLOCKSIZE_TOO_BIG;
     }
     if(FLACFrameHeader->sampleRateCode == 12)
@@ -845,7 +842,6 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     }
     readUint(8, bytesLeft);
     s_flacStatus = DECODE_SUBFRAMES;
-    s_blockSizeLeft = s_blockSize;
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -900,17 +896,17 @@ int8_t decodeSubframes(int32_t* bytesLeft){
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
         if(FLACFrameHeader->chanAsgn == 8) {
-            for (int32_t i = 0; i < s_blockSize; i++)
+            for (int32_t i = 0; i < s_numOfOutSamples; i++)
                 s_samplesBuffer[1][i] = (
                         s_samplesBuffer[0][i] -
                         s_samplesBuffer[1][i]);
         }
         else if (FLACFrameHeader->chanAsgn == 9) {
-            for (int32_t i = 0; i < s_blockSize; i++)
+            for (int32_t i = 0; i < s_numOfOutSamples; i++)
                 s_samplesBuffer[0][i] += s_samplesBuffer[1][i];
         }
         else if (FLACFrameHeader->chanAsgn == 10) {
-            for (int32_t i = 0; i < s_blockSize; i++) {
+            for (int32_t i = 0; i < s_numOfOutSamples; i++) {
                 int32_t side =  s_samplesBuffer[1][i];
                 int32_t right = s_samplesBuffer[0][i] - (side >> 1);
                 s_samplesBuffer[1][i] = right;
@@ -950,12 +946,12 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
 
     if(type == 0){  // Constant coding
         int32_t s= readSignedInt(sampleDepth, bytesLeft);                                    // SUBFRAME_CONSTANT
-        for(int32_t i=0; i < s_blockSize; i++){
+        for(int32_t i = 0; i < s_numOfOutSamples; i++){
             s_samplesBuffer[ch][i] = s;
         }
     }
     else if (type == 1) {  // Verbatim coding
-        for (int32_t i = 0; i < s_blockSize; i++)
+        for (int32_t i = 0; i < s_numOfOutSamples; i++)
             s_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft);                  // SUBFRAME_VERBATIM
     }
     else if (8 <= type && type <= 12){
@@ -970,7 +966,7 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
         return ERR_FLAC_RESERVED_SUB_TYPE;
     }
     if(shift>0){
-        for (int32_t i = 0; i < s_blockSize; i++){
+        for (int32_t i = 0; i < s_numOfOutSamples; i++){
             s_samplesBuffer[ch][i] <<= shift;
         }
     }
@@ -1025,10 +1021,10 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
     int32_t partitionOrder = readUint(4, bytesLeft);                  // Partition order
     int32_t numPartitions = 1 << partitionOrder;                      // There will be 2^order partitions.
 
-    if (s_blockSize % numPartitions != 0){
+    if (s_numOfOutSamples % numPartitions != 0){
         return ERR_FLAC_WRONG_RICE_PARTITION_NR;                  //Error: Block size not divisible by number of Rice partitions
     }
-    int32_t partitionSize = s_blockSize / numPartitions;
+    int32_t partitionSize = s_numOfOutSamples / numPartitions;
 
     for (int32_t i = 0; i < numPartitions; i++) {
         int32_t start = i * partitionSize + (i == 0 ? warmup : 0);
@@ -1055,7 +1051,7 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
 //----------------------------------------------------------------------------------------------------------------------
 void restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 
-    for (int32_t i = coefs.size(); i < s_blockSize; i++) {
+    for (int32_t i = coefs.size(); i < s_numOfOutSamples; i++) {
         int32_t sum = 0;
         for (int32_t j = 0; j < coefs.size(); j++){
             sum += s_samplesBuffer[ch][i - 1 - j] * coefs[j];
