@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13w
- *  Updated on: Nov 28.2024
+ *  Version 3.0.13x
+ *  Updated on: Dec 01.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -1758,7 +1758,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             }
             return 0;
         }
-
+        if(framesize == 0) return 0;
         size_t fs = framesize;
         if(fs > 1024) fs = 1024;
         uint16_t dataLength = fs - 1;
