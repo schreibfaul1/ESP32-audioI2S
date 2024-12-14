@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 03.11.2024
+ *  Updated on: 14.12.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -626,7 +626,7 @@ uint8_t OPUSGetChannels(){
     return s_opusChannels;
 }
 uint32_t OPUSGetSampRate(){
-    return s_opusSamplerate;
+    return 48000; // s_opusSamplerate;
 }
 uint8_t OPUSGetBitsPerSample(){
     return 16;
