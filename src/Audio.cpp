@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13x
- *  Updated on: Dec 01.2024
+ *  Version 3.0.13y
+ *  Updated on: Dec 15.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3286,18 +3286,19 @@ void Audio::processWebStream() {
         }
 
         if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                                    // ready to play the audio data
+            if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
+                uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+                if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec; return;}
+                if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec; return;}
+                if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
+                stopSong();
+                return;
+            }
             AUDIO_INFO("stream ready");
+            m_f_stream = true;                                    // ready to play the audio data
         }
         if(!m_f_stream) return;
-        if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-            if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec; return;}
-            if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec; return;}
-            if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
-            stopSong();
-            return;
-        }
+
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3613,11 +3614,13 @@ void Audio::processWebStreamHLS() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::playAudioData() {
 
+    if(!m_f_stream) return; // guard
+
     static bool f_isFile = false;
     bool lastFrame = false;
     uint32_t bytesToDecode = 0;
 
-    if(m_f_stream && m_f_firstPlayCall) {
+    if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
         if (m_playlistFormat == FORMAT_M3U8)     f_isFile = false;
         else if(m_dataMode   == AUDIO_LOCALFILE) f_isFile = true;
