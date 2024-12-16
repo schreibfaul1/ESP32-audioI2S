@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13y
+ *  Version 3.0.13z
  *  Updated on: Dec 15.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -3240,6 +3240,8 @@ exit:
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
+    if(m_dataMode != AUDIO_DATA) return; // guard
+
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
 
@@ -3251,9 +3253,8 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         readMetadata(0, true); // reset all static vars
     }
-
-    if(m_dataMode != AUDIO_DATA) return;         // guard
     uint32_t availableBytes = _client->available(); // available from stream
+
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
@@ -3277,28 +3278,25 @@ void Audio::processWebStream() {
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(availableBytes) {
         availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-        int16_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
-
+        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
         if(bytesAddedToBuffer > 0) {
+
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
             if(m_f_chunked) chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
+    }
 
-        if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
-            if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-                uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
-                if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec; return;}
-                if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec; return;}
-                if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
-                stopSong();
-                return;
-            }
-            AUDIO_INFO("stream ready");
-            m_f_stream = true;                                    // ready to play the audio data
+    // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
+        if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec;}
+            if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec;}
+            if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec;}
         }
-        if(!m_f_stream) return;
-
+        AUDIO_INFO("stream ready");
+        m_f_stream = true;  // ready to play the audio data
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
