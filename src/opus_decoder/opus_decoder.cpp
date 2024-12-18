@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 14.12.2024
+ *  Updated on: 18.12.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -331,49 +331,11 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
 
-
-
     int32_t   ret = 0;
-    int32_t   silk_frame_size;
-
-
-//    celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, endband);
-    if (s_mode == MODE_CELT_ONLY){
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
-    }
-
-    if(s_mode == MODE_SILK_ONLY) {
-        uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);
-        if(s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) { s_internalSampleRate = 8000; }
-        else if(s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) { s_internalSampleRate = 12000; }
-        else if(s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) { s_internalSampleRate = 16000; }
-        else { s_internalSampleRate = 16000; }
-
-//log_w("samplesPerFrame %i", samplesPerFrame);
-    //    int spf = opus_packet_get_samples_per_frame(inbuf, samplesPerFrame); // todo
-//log_w("spf %i", packetLen);
-        ec_dec_init((uint8_t *)inbuf, packetLen);
-        silk_InitDecoder();
-//log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
-        silk_setRawParams(1, 2, payloadSize_ms, s_internalSampleRate, 48000);
-        int silk_ret = silk_Decode(0, 1, (int16_t*)outbuf, &silk_frame_size);
-
-        if(silk_ret)log_w("silk_ret %i", silk_ret);
-
-//log_w("silk_frame_size %i", silk_frame_size);
-        if(samplesPerFrame != silk_frame_size)log_w("samplesPerFrame %i silk_frame_size %i",samplesPerFrame ,silk_frame_size);
-        return silk_frame_size;
-
-    }
-
-    if(s_mode == MODE_HYBRID){
-        log_w("Hybrid");
-    }
+//    int32_t   silk_frame_size;
 
     if(s_bandWidth) {
-//log_e("");
         int endband = 21;
-
         switch(s_bandWidth) {
             case OPUS_BANDWIDTH_NARROWBAND: endband = 13; break;
             case OPUS_BANDWIDTH_MEDIUMBAND:
@@ -385,15 +347,41 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         celt_decoder_ctl(endband);
     }
 
-
-
-
-    if(s_mode == MODE_CELT_ONLY){
+    if (s_mode == MODE_CELT_ONLY){
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
         ec_dec_init((uint8_t *)inbuf, packetLen);
         ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     }
 
-//log_w("ret %i", ret);
+    if(s_mode == MODE_HYBRID){
+        log_w("Hybrid mode not yet supported");
+        ret = samplesPerFrame;
+    }
+
+    if (s_mode == MODE_SILK_ONLY){
+        log_w("Silk mode not yet supported");
+        ret = samplesPerFrame;
+    }
+
+//     if(s_mode == MODE_SILK_ONLY) {
+//         uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);
+//         if(s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) { s_internalSampleRate = 8000; }
+//         else if(s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) { s_internalSampleRate = 12000; }
+//         else if(s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) { s_internalSampleRate = 16000; }
+//         else { s_internalSampleRate = 16000; }
+//         //log_w("samplesPerFrame %i", samplesPerFrame);
+//         //    int spf = opus_packet_get_samples_per_frame(inbuf, samplesPerFrame); // todo
+//         //log_w("spf %i", packetLen);
+//         ec_dec_init((uint8_t *)inbuf, packetLen);
+//         silk_InitDecoder();
+//         //log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
+//         silk_setRawParams(1, 2, payloadSize_ms, s_internalSampleRate, 48000);
+//         int silk_ret = silk_Decode(0, 1, (int16_t*)outbuf, &silk_frame_size);
+//         if(silk_ret)log_w("silk_ret %i", silk_ret);
+//         //log_w("silk_frame_size %i", silk_frame_size);
+//         if(samplesPerFrame != silk_frame_size)log_w("samplesPerFrame %i silk_frame_size %i",samplesPerFrame ,silk_frame_size);
+//         return silk_frame_size;
+//     }
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -450,8 +438,6 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      |                                               |
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
-
-
     int32_t ret = 0;
     static uint16_t c1fs = 0;
     if(*frameCount == 0){
@@ -460,12 +446,12 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
         *bytesLeft -= 1;
         s_opusCurrentFilePos += 1;
         c1fs = packetLen / 2;
-//      log_w("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
+        // log_w("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
         *frameCount = 2;
     }
     if(*frameCount > 0){
         ret = opus_decode_frame(inbuf, outbuf, c1fs, samplesPerFrame);
-log_w("code 1, ret %i", ret);
+        // log_w("code 1, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -507,8 +493,6 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      |                                                               |
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
-
-//  log_w("OPUS countCode 2 packetLen %i", packetLen);
     int32_t ret = 0;
     static uint16_t firstFrameLength = 0;
     static uint16_t secondFrameLength = 0;
@@ -535,7 +519,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     }
     if(*frameCount == 2){
         ret = opus_decode_frame(inbuf, outbuf, firstFrameLength, samplesPerFrame);
-log_w("code 2, ret %i", ret);
+        // log_w("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -546,7 +530,7 @@ log_w("code 2, ret %i", ret);
     }
     if(*frameCount == 1){
         ret = opus_decode_frame(inbuf, outbuf, secondFrameLength, samplesPerFrame);
-log_w("code 2, ret %i", ret);
+        // log_w("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -659,50 +643,77 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 */
-    static uint16_t paddingBytes = 0;
-    static uint16_t fs = 0;
-    static uint8_t M = 0;
-    static bool v = false;
-    static bool p = false;
-    int32_t ret = 0;
-    uint8_t paddingLength = 0;
-    if(*frameCount == 0){
-        v = ((inbuf[1] & 0x80) == 0x80);  // VBR indicator
-        p = ((inbuf[1] & 0x40) == 0x40);  // padding bit
-        M = inbuf[1] & 0x3F;              // max framecount
-        if(v != 0) {log_e("OPUS countCode 3 with VBR not supported yet"); vTaskDelay(1000);} // todo
-        *bytesLeft -= 2;
-        packetLen -= 2;
-        inbuf += 2;
-        if(p) paddingLength = inbuf[0];
-        if(paddingLength == 255) {paddingLength += inbuf[3];   }
-        paddingLength ++;
-        *bytesLeft -= paddingLength;
-        packetLen -= paddingLength;
-        inbuf += paddingLength;
-        *frameCount = M;
-        if(M == 0) return -1; // div0
-        log_i("packetLen %i,  M %i   FS %i", packetLen, M, packetLen / M);
+    static bool    firstCall = true;
+    static bool    v = false; // VBR indicator
+    static bool    p = false; // padding exists
+    static int16_t fs = 0;    // frame size
+    static uint8_t M = 0;     // nr of frames
+    static int32_t spf = 0;   // static samples per frame
+    static int32_t paddingLength = 0;
+    uint32_t       idx = 0;   // includes TOC byte
+    int32_t        ret = 0;
+    int32_t        remainingBytes = 0;
+    uint16_t       vfs[48] = {0}; // variable frame size
 
-        fs = (packetLen - paddingBytes) / *frameCount;
+    if (firstCall) {
+        firstCall = false;
+        s_opusCurrentFilePos += packetLen;
+        paddingLength = 0;
+        idx = 1; // skip TOC byte
+        spf = samplesPerFrame;
+        if (inbuf[idx] & 0b10000000) v = true; // VBR indicator
+        if (inbuf[idx] & 0b01000000) p = true; // padding bit
+        M = inbuf[idx] & 0b00111111;           // framecount
+        *frameCount = M;
+        idx++;
+        if (p) {
+            while (inbuf[idx] == 255) { paddingLength += 255, idx++; }
+            paddingLength += inbuf[idx];
+            idx++;
+        }
+        if (v && M) { // variable frame size
+            uint8_t m = 0;
+            while(m <  M) {
+                vfs[m] = inbuf[idx];
+                if(vfs[m] == 255) {vfs[m] = 255; idx++;}
+                idx++;
+                m++;
+                // log_e("vfs[m] %i", vfs[m]);
+            }
+        }
+        remainingBytes = packetLen - paddingLength - idx;
+        if (remainingBytes < 0) {
+            // log_e("fs %i", fs);
+            *bytesLeft -= packetLen;
+            *frameCount = 0;
+            firstCall = true;
+            return ERR_OPUS_NONE;
+        }
+        if(!v){
+            fs = remainingBytes / M;
+        }
+        if (fs > remainingBytes) {
+            *bytesLeft -= packetLen;
+            *frameCount = 0;
+            firstCall = true;
+            return ERR_OPUS_NONE;
+        }
+        //  log_w("remainingBytes %i, packetLen %i, paddingLength %i, idx %i, fs %i, frameCount %i", remainingBytes, packetLen, paddingLength, idx, fs, *frameCount);
+        *bytesLeft -= idx;
     }
-    *bytesLeft -= fs;
-    s_opusCurrentFilePos += fs;
-    ret = opus_decode_frame(inbuf, outbuf, fs, samplesPerFrame);
-//  log_w("code 3, ret %i", ret);
-    if(ret < 0){
-        return ret; // decode error
+    if(*frameCount > 0){
+        if(v){ret = opus_decode_frame(inbuf + idx, outbuf, vfs[M - (*frameCount)], spf);}
+        else{ ret = opus_decode_frame(inbuf + idx, outbuf, fs, spf);}
+        // log_w("code 3, ret %i", ret);
+        *frameCount -= 1;
+        *bytesLeft -= fs;
+        s_opusValidSamples = ret;
+        if(*frameCount > 0) return OPUS_CONTINUE;
     }
-    s_opusValidSamples = ret;
-    *frameCount -= 1;
-    if(*frameCount > 0) return OPUS_CONTINUE;
-    s_opusCountCode = 0;
-    *bytesLeft -= paddingBytes;
-    s_opusCurrentFilePos += paddingBytes;
-    paddingBytes = 0;
-    fs = 0;
-    v = false;
-    p = false;
+    *bytesLeft -= paddingLength;
+    *frameCount = 0;
+    s_opusValidSamples = samplesPerFrame;
+    firstCall = true;
     return ERR_OPUS_NONE;
 }
 
@@ -804,8 +815,8 @@ int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc671
     s_opusCountCode = c;
     s_f_opusStereoFlag = s;
 
-    if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
-    if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
+    // if(configNr < 12) return ERR_OPUS_SILK_MODE_UNSUPPORTED;
+    // if(configNr < 16) return ERR_OPUS_HYBRID_MODE_UNSUPPORTED;
     // if(configNr < 20) return ERR_OPUS_NARROW_BAND_UNSUPPORTED;
     // if(configNr < 24) return ERR_OPUS_WIDE_BAND_UNSUPPORTED;
     // if(configNr < 28) return ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED;
