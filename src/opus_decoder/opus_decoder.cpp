@@ -331,6 +331,11 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
 
+    // int pcm_transition_silk_size;
+    // int16_t pcm_transition_silk;
+    // int pcm_transition_celt_size;
+    // int16_t pcm_transition_celt;
+
     int32_t   ret = 0;
 //    int32_t   silk_frame_size;
 
@@ -358,30 +363,36 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         ret = samplesPerFrame;
     }
 
-    if (s_mode == MODE_SILK_ONLY){
+    if(s_mode == MODE_SILK_ONLY) {
         log_w("Silk mode not yet supported");
         ret = samplesPerFrame;
+
+
+
+        int decodedSamples = 0;
+        int32_t silk_frame_size;
+        uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);
+        if(s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) { s_internalSampleRate = 8000; }
+        else if(s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) { s_internalSampleRate = 12000; }
+        else if(s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) { s_internalSampleRate = 16000; }
+        else { s_internalSampleRate = 16000; }
+        ec_dec_init((uint8_t *)inbuf, packetLen);
+        silk_setRawParams(2, 2, payloadSize_ms, s_internalSampleRate, 48000);
+    //    log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
+        silk_InitDecoder();
+
+        do{
+            /* Call SILK decoder */
+            int first_frame = decodedSamples == 0;
+            int silk_ret = silk_Decode(0, first_frame, (int16_t*)outbuf + decodedSamples, &silk_frame_size);
+            if(silk_ret)log_w("silk_ret %i", silk_ret);
+            decodedSamples += silk_frame_size;
+    //        log_w("decodedSamples %i, samplesPerFrame %i", decodedSamples, samplesPerFrame);
+        } while(decodedSamples < samplesPerFrame);
+
+        return decodedSamples;
     }
 
-//     if(s_mode == MODE_SILK_ONLY) {
-//         uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);
-//         if(s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) { s_internalSampleRate = 8000; }
-//         else if(s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) { s_internalSampleRate = 12000; }
-//         else if(s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) { s_internalSampleRate = 16000; }
-//         else { s_internalSampleRate = 16000; }
-//         //log_w("samplesPerFrame %i", samplesPerFrame);
-//         //    int spf = opus_packet_get_samples_per_frame(inbuf, samplesPerFrame); // todo
-//         //log_w("spf %i", packetLen);
-//         ec_dec_init((uint8_t *)inbuf, packetLen);
-//         silk_InitDecoder();
-//         //log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
-//         silk_setRawParams(1, 2, payloadSize_ms, s_internalSampleRate, 48000);
-//         int silk_ret = silk_Decode(0, 1, (int16_t*)outbuf, &silk_frame_size);
-//         if(silk_ret)log_w("silk_ret %i", silk_ret);
-//         //log_w("silk_frame_size %i", silk_frame_size);
-//         if(samplesPerFrame != silk_frame_size)log_w("samplesPerFrame %i silk_frame_size %i",samplesPerFrame ,silk_frame_size);
-//         return silk_frame_size;
-//     }
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -702,11 +713,10 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
         *bytesLeft -= idx;
     }
     if(*frameCount > 0){
-        if(v){ret = opus_decode_frame(inbuf + idx, outbuf, vfs[M - (*frameCount)], spf);}
-        else{ ret = opus_decode_frame(inbuf + idx, outbuf, fs, spf);}
+        if(v){ret = opus_decode_frame(inbuf + idx, outbuf, vfs[M - (*frameCount)], spf); *bytesLeft -= vfs[M - (*frameCount)]; /* log_e("code 3, vfs[M - (*frameCount)], spf) %i",  vfs[M - (*frameCount)], spf); */ }
+        else{ ret = opus_decode_frame(inbuf + idx, outbuf, fs, spf); *bytesLeft -= fs; /* log_e("code 3, fs, spf) %i", fs, spf); */ }
         // log_w("code 3, ret %i", ret);
         *frameCount -= 1;
-        *bytesLeft -= fs;
         s_opusValidSamples = ret;
         if(*frameCount > 0) return OPUS_CONTINUE;
     }
@@ -743,7 +753,7 @@ uint8_t OPUSGetChannels(){
     return s_opusChannels;
 }
 uint32_t OPUSGetSampRate(){
-    return 48000; // s_opusSamplerate;
+    return 48000;
 }
 uint8_t OPUSGetBitsPerSample(){
     return 16;
@@ -919,7 +929,8 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
 
     if(channelCount == 0 || channelCount >2) return ERR_OPUS_CHANNELS_OUT_OF_RANGE;
     s_opusChannels = channelCount;
-    if(sampleRate != 48000 && sampleRate != 44100) return ERR_OPUS_INVALID_SAMPLERATE;
+//    log_e("sampleRate %i", sampleRate);
+//    if(sampleRate != 48000 && sampleRate != 44100) return ERR_OPUS_INVALID_SAMPLERATE;
     s_opusSamplerate = sampleRate;
     if(channelMap > 1) return ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED;
 

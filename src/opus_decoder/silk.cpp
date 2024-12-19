@@ -1831,23 +1831,33 @@ int32_t silk_Decode(
 
     /* Set up pointers to temp buffers */
     ALLOC(samplesOut2_tmp, s_API_channels == 2 ? *nSamplesOut : ALLOC_NONE, int16_t);
-    if(s_API_channels == 2) { resample_out_ptr = samplesOut2_tmp; }
-    else { resample_out_ptr = samplesOut; }
+    if (s_API_channels == 2) {
+        resample_out_ptr = samplesOut2_tmp;
+    } else {
+        resample_out_ptr = samplesOut;
+    }
 
-    ALLOC(samplesOut1_tmp_storage2, delay_stack_alloc ? s_channelsInternal * (s_channel_state[0].frame_length + 2) : ALLOC_NONE, int16_t);
-    if(delay_stack_alloc) {
-        #define OPUS_COPY(dst, src, n) (memcpy((dst), (src), (n)*sizeof(*(dst)) + 0*((dst)-(src)) ))
-        OPUS_COPY(samplesOut1_tmp_storage2, samplesOut, s_channelsInternal * (s_channel_state[0].frame_length + 2));
+    ALLOC(samplesOut1_tmp_storage2,
+          delay_stack_alloc ? s_channelsInternal * (s_channel_state[0].frame_length + 2) : ALLOC_NONE,
+          int16_t);
+
+    if (delay_stack_alloc) {
+        size_t val2 = sizeof(samplesOut1_tmp_storage2);
+        memcpy(samplesOut1_tmp_storage2, samplesOut, val2);
         samplesOut1_tmp[0] = samplesOut1_tmp_storage2;
         samplesOut1_tmp[1] = samplesOut1_tmp_storage2 + s_channel_state[0].frame_length + 2;
     }
-    for(n = 0; n < silk_min(s_API_channels, s_channelsInternal); n++) {
+    for (n = 0; n < silk_min(s_API_channels, s_channelsInternal); n++) {
+
         /* Resample decoded signal to API_sampleRate */
-        ret += silk_resampler(&s_channel_state[n].resampler_state, resample_out_ptr, &samplesOut1_tmp[n][1], nSamplesOutDec);
+        ret +=
+            silk_resampler(&s_channel_state[n].resampler_state, resample_out_ptr, &samplesOut1_tmp[n][1], nSamplesOutDec);
 
         /* Interleave if stereo output and stereo stream */
-        if(s_API_channels == 2) {
-            for(i = 0; i < *nSamplesOut; i++) { samplesOut[n + 2 * i] = resample_out_ptr[i]; }
+        if (s_API_channels == 2) {
+            for (i = 0; i < *nSamplesOut; i++) {
+                samplesOut[n + 2 * i] = resample_out_ptr[i];
+            }
         }
     }
 
