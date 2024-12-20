@@ -1549,7 +1549,6 @@ void silk_CNG(silk_decoder_state*   psDec,     /* I/O  Decoder state            
     /* Add CNG when packet is lost or during DTX */
     if (psDec->lossCnt) {
         int32_t* CNG_sig_Q14 = (int32_t*)__malloc_heap_psram(length + MAX_LPC_ORDER * sizeof(int32_t));
-        // VARDECL(int32_t, CNG_sig_Q14);
         // ALLOC(CNG_sig_Q14, length + MAX_LPC_ORDER, int32_t);
 
         /* Generate CNG excitation */
@@ -1664,9 +1663,9 @@ int32_t silk_Decode(int32_t  lostFlag,      /* I    0: no loss, 1 loss, 2 decode
     int32_t  i, n, decode_only_middle = 0, ret = SILK_NO_ERROR;
     int32_t  nSamplesOutDec, LBRR_symbol;
     int16_t* samplesOut1_tmp[2];
-    VARDECL(int16_t, samplesOut1_tmp_storage1);
-    VARDECL(int16_t, samplesOut1_tmp_storage2);
-    VARDECL(int16_t, samplesOut2_tmp);
+    int16_t* samplesOut1_tmp_storage1 = NULL;
+    int16_t* samplesOut1_tmp_storage2 = NULL;
+    int16_t* samplesOut2_tmp = NULL;
     int32_t       MS_pred_Q13[2] = {0};
     int16_t*      resample_out_ptr;
     silk_decoder* psDec = (silk_decoder*)&s_decState;
@@ -1807,7 +1806,7 @@ int32_t silk_Decode(int32_t  lostFlag,      /* I    0: no loss, 1 loss, 2 decode
     delay_stack_alloc = s_silk_internalSampleRate * s_channelsInternal < s_API_sampleRate * s_API_channels;
 //    ALLOC(samplesOut1_tmp_storage1, delay_stack_alloc ? ALLOC_NONE : s_channelsInternal * (s_channel_state[0].frame_length + 2), int16_t);
     int size = delay_stack_alloc ? ALLOC_NONE : s_channelsInternal * (s_channel_state[0].frame_length + 2);
-    int16_t* samplesOut1_tmp_storage1 = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
+    samplesOut1_tmp_storage1 = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
 
     if (delay_stack_alloc) {
         samplesOut1_tmp[0] = samplesOut;
@@ -1863,7 +1862,7 @@ int32_t silk_Decode(int32_t  lostFlag,      /* I    0: no loss, 1 loss, 2 decode
     /* Set up pointers to temp buffers */
     // ALLOC(samplesOut2_tmp, s_API_channels == 2 ? *nSamplesOut : ALLOC_NONE, int16_t);
     size = s_API_channels == 2 ? *nSamplesOut : ALLOC_NONE;
-    int16_t* samplesOut2_tmp = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
+    samplesOut2_tmp = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
 
     if (s_API_channels == 2) {
         resample_out_ptr = samplesOut2_tmp;
@@ -1873,7 +1872,7 @@ int32_t silk_Decode(int32_t  lostFlag,      /* I    0: no loss, 1 loss, 2 decode
 
     // ALLOC(samplesOut1_tmp_storage2, delay_stack_alloc ? s_channelsInternal * (s_channel_state[0].frame_length + 2) : ALLOC_NONE, int16_t);
     size = delay_stack_alloc ? s_channelsInternal * (s_channel_state[0].frame_length + 2) : ALLOC_NONE;
-    int16_t* samplesOut1_tmp_storage2 = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
+    samplesOut1_tmp_storage2 = (int16_t*) __malloc_heap_psram(size * sizeof(int16_t));
 
     if (delay_stack_alloc) {
         memcpy(samplesOut1_tmp_storage2, samplesOut, size * sizeof(int16_t));
@@ -2145,7 +2144,7 @@ int32_t silk_decode_frame(silk_decoder_state* psDec,     /* I/O  Pointer to Silk
                           int32_t             lostFlag,  /* I    0: no loss, 1 loss, 2 decode fec            */
                           int32_t             condCoding /* I    The type of conditional coding to use       */
 ) {
-    VARDECL(silk_decoder_control, psDecCtrl);
+    // VARDECL(silk_decoder_control, psDecCtrl);
     int32_t L, mv_len, ret = 0;
 
     L = psDec->frame_length;
@@ -3124,10 +3123,12 @@ void silk_PLC_update(silk_decoder_state*   psDec,    /* I/O Decoder state       
 
 void silk_PLC_energy(int32_t* energy1, int32_t* shift1, int32_t* energy2, int32_t* shift2, const int32_t* exc_Q14, const int32_t* prevGain_Q10, int subfr_length, int nb_subfr) {
     int i, k;
-    VARDECL(int16_t, exc_buf);
+    int16_t* exc_buf = NULL;
     int16_t* exc_buf_ptr;
 
-    ALLOC(exc_buf, 2 * subfr_length, int16_t);
+    //ALLOC(exc_buf, 2 * subfr_length, int16_t);
+    exc_buf = (int16_t*)__malloc_heap_psram(2 * subfr_length * sizeof(int16_t));
+
     /* Find random noise component */
     /* Scale previous excitation signal */
     exc_buf_ptr = exc_buf;
@@ -3138,6 +3139,8 @@ void silk_PLC_energy(int32_t* energy1, int32_t* shift1, int32_t* energy2, int32_
     /* Find the subframe with lowest energy of the last two and use that as random noise generator */
     silk_sum_sqr_shift(energy1, shift1, exc_buf, subfr_length);
     silk_sum_sqr_shift(energy2, shift2, &exc_buf[subfr_length], subfr_length);
+
+    free(exc_buf);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3155,15 +3158,15 @@ void silk_PLC_conceal(silk_decoder_state*   psDec,     /* I/O Decoder state     
     int32_t* sLPC_Q14_ptr;
     int16_t  A_Q12[MAX_LPC_ORDER];
 
-    VARDECL(int16_t, sLTP);
-
-    VARDECL(int32_t, sLTP_Q14);
+    int16_t* sLTP = NULL;
+    int32_t* sLTP_Q14 = NULL;
     silk_PLC_struct* psPLC = &psDec->sPLC;
     int32_t          prevGain_Q10[2];
 
-    ALLOC(sLTP_Q14, psDec->ltp_mem_length + psDec->frame_length, int32_t);
-
-    ALLOC(sLTP, psDec->ltp_mem_length, int16_t);
+    //ALLOC(sLTP_Q14, psDec->ltp_mem_length + psDec->frame_length, int32_t);
+    sLTP_Q14 = (int32_t*)__malloc_heap_psram((psDec->ltp_mem_length + psDec->frame_length) * sizeof(int32_t));
+    // ALLOC(sLTP, psDec->ltp_mem_length, int16_t);
+    sLTP = (int16_t*)__malloc_heap_psram(psDec->ltp_mem_length * sizeof(int16_t));
 
     prevGain_Q10[0] = silk_RSHIFT(psPLC->prevGain_Q16[0], 6);
     prevGain_Q10[1] = silk_RSHIFT(psPLC->prevGain_Q16[1], 6);
@@ -3312,6 +3315,9 @@ void silk_PLC_conceal(silk_decoder_state*   psDec,     /* I/O Decoder state     
     psPLC->rand_seed = rand_seed;
     psPLC->randScale_Q14 = rand_scale_Q14;
     for (i = 0; i < MAX_NB_SUBFR; i++) { psDecCtrl->pitchL[i] = lag; }
+
+    free(sLTP_Q14);
+    free(sLTP);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Glues concealed frames with new good received frames */
@@ -3367,70 +3373,6 @@ void silk_PLC_glue_frames(silk_decoder_state* psDec,   /* I/O decoder state     
         }
         psPLC->last_frame_lost = 0;
     }
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* Downsample by a factor 2/3, low quality */
-void silk_resampler_down2_3(int32_t*       S,    /* I/O  State vector [ 6 ]                                          */
-                            int16_t*       out,  /* O    Output signal [ floor(2*inLen/3) ]                          */
-                            const int16_t* in,   /* I    Input signal [ inLen ]                                      */
-                            int32_t        inLen /* I    Number of input samples                                     */
-) {
-    int32_t nSamplesIn, counter, res_Q6;
-    VARDECL(int32_t, buf);
-    int32_t* buf_ptr;
-
-    //    ALLOC( buf, RESAMPLER_MAX_BATCH_SIZE_IN + ORDER_FIR, int32_t );
-    int32_t* buf = (int32_t*)malloc((RESAMPLER_MAX_BATCH_SIZE_IN + ORDER_FIR) * sizeof(int32_t));
-
-    /* Copy buffered samples to start of buffer */
-    memcpy(buf, S, ORDER_FIR * sizeof(int32_t));
-
-    /* Iterate over blocks of frameSizeIn input samples */
-    while (1) {
-        nSamplesIn = silk_min(inLen, RESAMPLER_MAX_BATCH_SIZE_IN);
-
-        /* Second-order AR filter (output in Q8) */
-        silk_resampler_private_AR2(&S[ORDER_FIR], &buf[ORDER_FIR], in, silk_Resampler_2_3_COEFS_LQ, nSamplesIn);
-
-        /* Interpolate filtered signal */
-        buf_ptr = buf;
-        counter = nSamplesIn;
-        while (counter > 2) {
-            /* Inner product */
-            res_Q6 = silk_SMULWB(buf_ptr[0], silk_Resampler_2_3_COEFS_LQ[2]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[1], silk_Resampler_2_3_COEFS_LQ[3]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[2], silk_Resampler_2_3_COEFS_LQ[5]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[3], silk_Resampler_2_3_COEFS_LQ[4]);
-
-            /* Scale down, saturate and store in output array */
-            *out++ = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(res_Q6, 6));
-
-            res_Q6 = silk_SMULWB(buf_ptr[1], silk_Resampler_2_3_COEFS_LQ[4]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[2], silk_Resampler_2_3_COEFS_LQ[5]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[3], silk_Resampler_2_3_COEFS_LQ[3]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[4], silk_Resampler_2_3_COEFS_LQ[2]);
-
-            /* Scale down, saturate and store in output array */
-            *out++ = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(res_Q6, 6));
-
-            buf_ptr += 3;
-            counter -= 3;
-        }
-
-        in += nSamplesIn;
-        inLen -= nSamplesIn;
-
-        if (inLen > 0) {
-            /* More iterations to do; copy last part of filtered signal to beginning of buffer */
-            memcpy(buf, &buf[nSamplesIn], ORDER_FIR * sizeof(int32_t));
-        } else {
-            break;
-        }
-    }
-
-    /* Copy last part of filtered signal to the state for the next call */
-    memcpy(S, &buf[nSamplesIn], ORDER_FIR * sizeof(int32_t));
-    free(buf);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Downsample by a factor 2 */
@@ -3600,10 +3542,11 @@ void silk_resampler_private_down_FIR(void*         SS,    /* I/O  Resampler stat
     silk_resampler_state_struct* S = (silk_resampler_state_struct*)SS;
     int32_t                      nSamplesIn;
     int32_t                      max_index_Q16, index_increment_Q16;
-    VARDECL(int32_t, buf);
+    int32_t* buf = NULL;
     const int16_t* FIR_Coefs;
 
-    ALLOC(buf, S->batchSize + S->FIR_Order, int32_t);
+    //ALLOC(buf, S->batchSize + S->FIR_Order, int32_t);
+    buf = (int32_t*)__malloc_heap_psram((S->batchSize + S->FIR_Order) * sizeof(int32_t));
 
     /* Copy buffered samples to start of buffer */
     memcpy(buf, S->sFIR.i32, S->FIR_Order * sizeof(int32_t));
@@ -3636,6 +3579,8 @@ void silk_resampler_private_down_FIR(void*         SS,    /* I/O  Resampler stat
 
     /* Copy last part of filtered signal to the state for the next call */
     memcpy(S->sFIR.i32, &buf[nSamplesIn], S->FIR_Order * sizeof(int32_t));
+
+    free (buf);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -3671,9 +3616,10 @@ void silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Resampler state
     silk_resampler_state_struct* S = (silk_resampler_state_struct*)SS;
     int32_t                      nSamplesIn;
     int32_t                      max_index_Q16, index_increment_Q16;
-    VARDECL(int16_t, buf);
+    int16_t* buf = NULL;
 
-    ALLOC(buf, 2 * S->batchSize + RESAMPLER_ORDER_FIR_12, int16_t);
+    //ALLOC(buf, 2 * S->batchSize + RESAMPLER_ORDER_FIR_12, int16_t);
+    buf = (int16_t*)__malloc_heap_psram((2 * S->batchSize + RESAMPLER_ORDER_FIR_12) * sizeof(int16_t));
 
     /* Copy buffered samples to start of buffer */
     memcpy(buf, S->sFIR.i16, RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
@@ -3701,6 +3647,8 @@ void silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Resampler state
 
     /* Copy last part of filtered signal to the state for the next call */
     memcpy(S->sFIR.i16, &buf[nSamplesIn << 1], RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
+
+    free (buf);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Upsample by a factor 2, high quality. Uses 2nd order allpass filters for the 2x upsampling, followed by a      */
@@ -4212,190 +4160,6 @@ int32_t silk_stereo_find_predictor(                                /* O    Retur
     *ratio_Q14 = silk_LIMIT(*ratio_Q14, 0, 32767);
 
     return pred_Q13;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-/* Convert Left/Right stereo signal to adaptive Mid/Side representation */
-void silk_stereo_LR_to_MS(stereo_enc_state* state,                /* I/O  State                                       */
-                          int16_t           x1[],                 /* I/O  Left input signal, becomes mid signal       */
-                          int16_t           x2[],                 /* I/O  Right input signal, becomes side signal     */
-                          int8_t            ix[2][3],             /* O    Quantization indices                        */
-                          int8_t*           mid_only_flag,        /* O    Flag: only mid signal coded                 */
-                          int32_t           mid_side_rates_bps[], /* O    Bitrates for mid and side signals           */
-                          int32_t           total_rate_bps,       /* I    Total bitrate                               */
-                          int32_t           prev_speech_act_Q8,   /* I    Speech activity level in previous frame     */
-                          int32_t           toMono,               /* I    Last frame before a stereo->mono transition */
-                          int32_t           fs_kHz,               /* I    Sample rate (kHz)                           */
-                          int32_t           frame_length          /* I    Number of samples                           */
-) {
-    int32_t n, is10msFrame, denom_Q16, delta0_Q13, delta1_Q13;
-    int32_t sum, diff, smooth_coef_Q16, pred_Q13[2], pred0_Q13, pred1_Q13;
-    int32_t LP_ratio_Q14, HP_ratio_Q14, frac_Q16, frac_3_Q16, min_mid_rate_bps, width_Q14, w_Q24, deltaw_Q24;
-    VARDECL(int16_t, side);
-    VARDECL(int16_t, LP_mid);
-    VARDECL(int16_t, HP_mid);
-    VARDECL(int16_t, LP_side);
-    VARDECL(int16_t, HP_side);
-    int16_t* mid = &x1[-2];
-
-    ALLOC(side, frame_length + 2, int16_t);
-    /* Convert to basic mid/side signals */
-    for (n = 0; n < frame_length + 2; n++) {
-        sum = x1[n - 2] + (int32_t)x2[n - 2];
-        diff = x1[n - 2] - (int32_t)x2[n - 2];
-        mid[n] = (int16_t)silk_RSHIFT_ROUND(sum, 1);
-        side[n] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(diff, 1));
-    }
-
-    /* Buffering */
-    memcpy(mid, state->sMid, 2 * sizeof(int16_t));
-    memcpy(side, state->sSide, 2 * sizeof(int16_t));
-    memcpy(state->sMid, &mid[frame_length], 2 * sizeof(int16_t));
-    memcpy(state->sSide, &side[frame_length], 2 * sizeof(int16_t));
-
-    /* LP and HP filter mid signal */
-    ALLOC(LP_mid, frame_length, int16_t);
-    ALLOC(HP_mid, frame_length, int16_t);
-    for (n = 0; n < frame_length; n++) {
-        sum = silk_RSHIFT_ROUND(silk_ADD_LSHIFT(mid[n] + (int32_t)mid[n + 2], mid[n + 1], 1), 2);
-        LP_mid[n] = sum;
-        HP_mid[n] = mid[n + 1] - sum;
-    }
-
-    /* LP and HP filter side signal */
-    ALLOC(LP_side, frame_length, int16_t);
-    ALLOC(HP_side, frame_length, int16_t);
-    for (n = 0; n < frame_length; n++) {
-        sum = silk_RSHIFT_ROUND(silk_ADD_LSHIFT(side[n] + (int32_t)side[n + 2], side[n + 1], 1), 2);
-        LP_side[n] = sum;
-        HP_side[n] = side[n + 1] - sum;
-    }
-
-    /* Find energies and predictors */
-    is10msFrame = frame_length == 10 * fs_kHz;
-    smooth_coef_Q16 = is10msFrame ? SILK_FIX_CONST(STEREO_RATIO_SMOOTH_COEF / 2, 16) : SILK_FIX_CONST(STEREO_RATIO_SMOOTH_COEF, 16);
-    smooth_coef_Q16 = silk_SMULWB(silk_SMULBB(prev_speech_act_Q8, prev_speech_act_Q8), smooth_coef_Q16);
-
-    pred_Q13[0] = silk_stereo_find_predictor(&LP_ratio_Q14, LP_mid, LP_side, &state->mid_side_amp_Q0[0], frame_length, smooth_coef_Q16);
-    pred_Q13[1] = silk_stereo_find_predictor(&HP_ratio_Q14, HP_mid, HP_side, &state->mid_side_amp_Q0[2], frame_length, smooth_coef_Q16);
-    /* Ratio of the norms of residual and mid signals */
-    frac_Q16 = silk_SMLABB(HP_ratio_Q14, LP_ratio_Q14, 3);
-    frac_Q16 = silk_min(frac_Q16, SILK_FIX_CONST(1, 16));
-
-    /* Determine bitrate distribution between mid and side, and possibly reduce stereo width */
-    total_rate_bps -= is10msFrame ? 1200 : 600; /* Subtract approximate bitrate for coding stereo parameters */
-    if (total_rate_bps < 1) { total_rate_bps = 1; }
-    min_mid_rate_bps = silk_SMLABB(2000, fs_kHz, 600);
-    assert(min_mid_rate_bps < 32767);
-    /* Default bitrate distribution: 8 parts for Mid and (5+3*frac) parts for Side. so: mid_rate = ( 8 / ( 13 + 3 * frac
-     * ) ) * total_ rate */
-    frac_3_Q16 = silk_MUL(3, frac_Q16);
-    mid_side_rates_bps[0] = silk_DIV32_varQ(total_rate_bps, SILK_FIX_CONST(8 + 5, 16) + frac_3_Q16, 16 + 3);
-    /* If Mid bitrate below minimum, reduce stereo width */
-    if (mid_side_rates_bps[0] < min_mid_rate_bps) {
-        mid_side_rates_bps[0] = min_mid_rate_bps;
-        mid_side_rates_bps[1] = total_rate_bps - mid_side_rates_bps[0];
-        /* width = 4 * ( 2 * side_rate - min_rate ) / ( ( 1 + 3 * frac ) * min_rate ) */
-        width_Q14 = silk_DIV32_varQ(silk_LSHIFT(mid_side_rates_bps[1], 1) - min_mid_rate_bps, silk_SMULWB(SILK_FIX_CONST(1, 16) + frac_3_Q16, min_mid_rate_bps), 14 + 2);
-        width_Q14 = silk_LIMIT(width_Q14, 0, SILK_FIX_CONST(1, 14));
-    } else {
-        mid_side_rates_bps[1] = total_rate_bps - mid_side_rates_bps[0];
-        width_Q14 = SILK_FIX_CONST(1, 14);
-    }
-
-    /* Smoother */
-    state->smth_width_Q14 = (int16_t)silk_SMLAWB(state->smth_width_Q14, width_Q14 - state->smth_width_Q14, smooth_coef_Q16);
-
-    /* At very low bitrates or for inputs that are nearly amplitude panned, switch to panned-mono coding */
-    *mid_only_flag = 0;
-    if (toMono) {
-        /* Last frame before stereo->mono transition; collapse stereo width */
-        width_Q14 = 0;
-        pred_Q13[0] = 0;
-        pred_Q13[1] = 0;
-        silk_stereo_quant_pred(pred_Q13, ix);
-    } else if (state->width_prev_Q14 == 0 && (8 * total_rate_bps < 13 * min_mid_rate_bps || silk_SMULWB(frac_Q16, state->smth_width_Q14) < SILK_FIX_CONST(0.05, 14))) {
-        /* Code as panned-mono; previous frame already had zero width */
-        /* Scale down and quantize predictors */
-        pred_Q13[0] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[0]), 14);
-        pred_Q13[1] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[1]), 14);
-        silk_stereo_quant_pred(pred_Q13, ix);
-        /* Collapse stereo width */
-        width_Q14 = 0;
-        pred_Q13[0] = 0;
-        pred_Q13[1] = 0;
-        mid_side_rates_bps[0] = total_rate_bps;
-        mid_side_rates_bps[1] = 0;
-        *mid_only_flag = 1;
-    } else if (state->width_prev_Q14 != 0 && (8 * total_rate_bps < 11 * min_mid_rate_bps || silk_SMULWB(frac_Q16, state->smth_width_Q14) < SILK_FIX_CONST(0.02, 14))) {
-        /* Transition to zero-width stereo */
-        /* Scale down and quantize predictors */
-        pred_Q13[0] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[0]), 14);
-        pred_Q13[1] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[1]), 14);
-        silk_stereo_quant_pred(pred_Q13, ix);
-        /* Collapse stereo width */
-        width_Q14 = 0;
-        pred_Q13[0] = 0;
-        pred_Q13[1] = 0;
-    } else if (state->smth_width_Q14 > SILK_FIX_CONST(0.95, 14)) {
-        /* Full-width stereo coding */
-        silk_stereo_quant_pred(pred_Q13, ix);
-        width_Q14 = SILK_FIX_CONST(1, 14);
-    } else {
-        /* Reduced-width stereo coding; scale down and quantize predictors */
-        pred_Q13[0] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[0]), 14);
-        pred_Q13[1] = silk_RSHIFT(silk_SMULBB(state->smth_width_Q14, pred_Q13[1]), 14);
-        silk_stereo_quant_pred(pred_Q13, ix);
-        width_Q14 = state->smth_width_Q14;
-    }
-
-    /* Make sure to keep on encoding until the tapered output has been transmitted */
-    if (*mid_only_flag == 1) {
-        state->silent_side_len += frame_length - STEREO_INTERP_LEN_MS * fs_kHz;
-        if (state->silent_side_len < LA_SHAPE_MS * fs_kHz) {
-            *mid_only_flag = 0;
-        } else {
-            /* Limit to avoid wrapping around */
-            state->silent_side_len = 10000;
-        }
-    } else {
-        state->silent_side_len = 0;
-    }
-
-    if (*mid_only_flag == 0 && mid_side_rates_bps[1] < 1) {
-        mid_side_rates_bps[1] = 1;
-        mid_side_rates_bps[0] = silk_max_int(1, total_rate_bps - mid_side_rates_bps[1]);
-    }
-
-    /* Interpolate predictors and subtract prediction from side channel */
-    pred0_Q13 = -state->pred_prev_Q13[0];
-    pred1_Q13 = -state->pred_prev_Q13[1];
-    w_Q24 = silk_LSHIFT(state->width_prev_Q14, 10);
-    denom_Q16 = silk_DIV32_16((int32_t)1 << 16, STEREO_INTERP_LEN_MS * fs_kHz);
-    delta0_Q13 = -silk_RSHIFT_ROUND(silk_SMULBB(pred_Q13[0] - state->pred_prev_Q13[0], denom_Q16), 16);
-    delta1_Q13 = -silk_RSHIFT_ROUND(silk_SMULBB(pred_Q13[1] - state->pred_prev_Q13[1], denom_Q16), 16);
-    deltaw_Q24 = silk_LSHIFT(silk_SMULWB(width_Q14 - state->width_prev_Q14, denom_Q16), 10);
-    for (n = 0; n < STEREO_INTERP_LEN_MS * fs_kHz; n++) {
-        pred0_Q13 += delta0_Q13;
-        pred1_Q13 += delta1_Q13;
-        w_Q24 += deltaw_Q24;
-        sum = silk_LSHIFT(silk_ADD_LSHIFT(mid[n] + (int32_t)mid[n + 2], mid[n + 1], 1), 9); /* Q11 */
-        sum = silk_SMLAWB(silk_SMULWB(w_Q24, side[n + 1]), sum, pred0_Q13);                 /* Q8  */
-        sum = silk_SMLAWB(sum, silk_LSHIFT((int32_t)mid[n + 1], 11), pred1_Q13);            /* Q8  */
-        x2[n - 1] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(sum, 8));
-    }
-
-    pred0_Q13 = -pred_Q13[0];
-    pred1_Q13 = -pred_Q13[1];
-    w_Q24 = silk_LSHIFT(width_Q14, 10);
-    for (n = STEREO_INTERP_LEN_MS * fs_kHz; n < frame_length; n++) {
-        sum = silk_LSHIFT(silk_ADD_LSHIFT(mid[n] + (int32_t)mid[n + 2], mid[n + 1], 1), 9); /* Q11 */
-        sum = silk_SMLAWB(silk_SMULWB(w_Q24, side[n + 1]), sum, pred0_Q13);                 /* Q8  */
-        sum = silk_SMLAWB(sum, silk_LSHIFT((int32_t)mid[n + 1], 11), pred1_Q13);            /* Q8  */
-        x2[n - 1] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(sum, 8));
-    }
-    state->pred_prev_Q13[0] = (int16_t)pred_Q13[0];
-    state->pred_prev_Q13[1] = (int16_t)pred_Q13[1];
-    state->width_prev_Q14 = (int16_t)width_Q14;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Convert adaptive Mid/Side representation to Left/Right stereo signal */

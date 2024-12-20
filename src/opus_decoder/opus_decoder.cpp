@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 18.12.2024
+ *  Updated on: 20.12.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -14,6 +14,10 @@
 #include "Arduino.h"
 #include <vector>
 
+#define __malloc_heap_psram(size) \
+    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
+#define __calloc_heap_psram(ch, size) \
+    heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
 
 // global vars
 const uint32_t CELT_SET_END_BAND_REQUEST   = 10012;
@@ -65,9 +69,9 @@ float     s_opusCompressionRatio = 0;
 std::vector <uint32_t>s_opusBlockPicItem;
 
 bool OPUSDecoder_AllocateBuffers(){
-    s_opusChbuf = (char*)malloc(512);
+    s_opusChbuf = (char*)__malloc_heap_psram(512);
     if(!CELTDecoder_AllocateBuffers()) {log_e("CELT not init"); return false;}
-    s_opusSegmentTable = (uint16_t*)malloc(256 * sizeof(uint16_t));
+    s_opusSegmentTable = (uint16_t*)__malloc_heap_psram(256 * sizeof(uint16_t));
     if(!s_opusSegmentTable) {log_e("CELT not init"); return false;}
     CELTDecoder_ClearBuffer();
     OPUSDecoder_ClearBuffers();
@@ -365,11 +369,6 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     }
 
     if(s_mode == MODE_SILK_ONLY) {
-        log_w("Silk mode not yet supported");
-        return samplesPerFrame;
-
-
-
         int decodedSamples = 0;
         int32_t silk_frame_size;
         uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);

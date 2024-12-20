@@ -981,8 +981,6 @@ int32_t silk_NLSF_del_dec_quant(int8_t indices[], const int16_t x_Q10[], const i
 void    silk_NLSF_VQ(int32_t err_Q26[], const int16_t in_Q15[], const uint8_t pCB_Q8[], const int16_t pWght_Q9[], const int32_t K, const int32_t LPC_order);
 void    silk_LP_variable_cutoff(silk_LP_state* psLP, int16_t* frame, const int32_t frame_length);
 int32_t silk_VAD_Init(silk_VAD_state* psSilk_VAD);
-void silk_stereo_LR_to_MS(stereo_enc_state* state, int16_t x1[], int16_t x2[], int8_t ix[2][3], int8_t* mid_only_flag, int32_t mid_side_rates_bps[], int32_t total_rate_bps, int32_t prev_speech_act_Q8,
-                          int32_t toMono, int32_t fs_kHz, int32_t frame_length);
 void silk_stereo_MS_to_LR(stereo_dec_state* state, int16_t x1[], int16_t x2[], const int32_t pred_Q13[], int32_t fs_kHz, int32_t frame_length);
 int32_t  silk_stereo_find_predictor(int32_t* ratio_Q14, const int16_t x[], const int16_t y[], int32_t mid_res_amp_Q0[], int32_t length, int32_t smooth_coef_Q16);
 void     silk_stereo_quant_pred(int32_t pred_Q13[], int8_t ix[2][3]);
@@ -1027,7 +1025,6 @@ void     silk_PLC_update(silk_decoder_state* psDec, silk_decoder_control* psDecC
 void     silk_PLC_energy(int32_t* energy1, int32_t* shift1, int32_t* energy2, int32_t* shift2, const int32_t* exc_Q14, const int32_t* prevGain_Q10, int subfr_length, int nb_subfr);
 void     silk_PLC_conceal(silk_decoder_state* psDec, silk_decoder_control* psDecCtrl, int16_t frame[]);
 void     silk_PLC_glue_frames(silk_decoder_state* psDec, int16_t frame[], int32_t length);
-void     silk_resampler_down2_3(int32_t* S, int16_t* out, const int16_t* in, int32_t inLen);
 void     silk_resampler_down2(int32_t* S, int16_t* out, const int16_t* in, int32_t inLen);
 void     silk_resampler_private_AR2(int32_t S[], int32_t out_Q8[], const int16_t in[], const int16_t A_Q14[], int32_t len);
 int16_t* silk_resampler_private_down_FIR_INTERPOL(int16_t* out, int32_t* buf, const int16_t* FIR_Coefs, int32_t FIR_Order, int32_t FIR_Fracs, int32_t max_index_Q16, int32_t index_increment_Q16);
