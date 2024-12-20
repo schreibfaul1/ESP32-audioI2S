@@ -80,13 +80,14 @@ bool OPUSDecoder_AllocateBuffers(){
     int32_t ret = 0, silkDecSizeBytes = 0;
     (void) ret;
     (void) silkDecSizeBytes;
+    silk_InitDecoder();
     //ret = silk_Get_Decoder_Size(&silkDecSizeBytes);
-    if (ret){
-        log_e("internal error");
-    }
-    else{
-        log_i("silkDecSizeBytes %i", silkDecSizeBytes);
-    }
+    // if (ret){
+    //     log_e("internal error");
+    // }
+    // else{
+    //     log_i("silkDecSizeBytes %i", silkDecSizeBytes);
+    // }
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
@@ -365,7 +366,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
 
     if(s_mode == MODE_SILK_ONLY) {
         log_w("Silk mode not yet supported");
-        ret = samplesPerFrame;
+        return samplesPerFrame;
 
 
 
@@ -377,14 +378,21 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         else if(s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) { s_internalSampleRate = 16000; }
         else { s_internalSampleRate = 16000; }
         ec_dec_init((uint8_t *)inbuf, packetLen);
-        silk_setRawParams(2, 2, payloadSize_ms, s_internalSampleRate, 48000);
+        uint8_t APIchannels = 2;
+        silk_setRawParams(s_opusChannels, APIchannels, payloadSize_ms, s_internalSampleRate, 48000);
     //    log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
-        silk_InitDecoder();
+        static bool silkInit = false;
+        if(!silkInit){
+            silkInit = true;
+            silk_InitDecoder();
+        }
+    //    silk_InitDecoder();
 
         do{
             /* Call SILK decoder */
+            int lost_flag = 0;
             int first_frame = decodedSamples == 0;
-            int silk_ret = silk_Decode(0, first_frame, (int16_t*)outbuf + decodedSamples, &silk_frame_size);
+            int silk_ret = silk_Decode(lost_flag, first_frame, (int16_t*)outbuf + decodedSamples, &silk_frame_size);
             if(silk_ret)log_w("silk_ret %i", silk_ret);
             decodedSamples += silk_frame_size;
     //        log_w("decodedSamples %i, samplesPerFrame %i", decodedSamples, samplesPerFrame);
