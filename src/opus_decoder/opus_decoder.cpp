@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 20.12.2024
+ *  Updated on: 21.12.2024
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -27,7 +27,7 @@ const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 
 enum {OPUS_BANDWIDTH_NARROWBAND = 1101,    OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103,
       OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105};
-enum {MODE_CELT_ONLY, MODE_SILK_ONLY, MODE_HYBRID};
+enum {MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001,  MODE_CELT_ONLY = 1002};
 
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
@@ -39,7 +39,7 @@ bool      s_f_lastPage = false;
 bool      s_f_nextChunk = false;
 
 uint8_t   s_opusChannels = 0;
-uint8_t   s_mode = 0;
+uint16_t  s_mode = 0;
 uint8_t   s_opusCountCode =  0;
 uint8_t   s_opusPageNr = 0;
 uint8_t   s_frameCount = 0;
@@ -64,6 +64,7 @@ uint16_t *s_opusSegmentTable;
 uint8_t   s_opusSegmentTableSize = 0;
 int16_t   s_opusSegmentTableRdPtr = -1;
 int8_t    s_opusError = 0;
+int8_t    s_prev_mode = 0;
 float     s_opusCompressionRatio = 0;
 
 std::vector <uint32_t>s_opusBlockPicItem;
@@ -145,6 +146,7 @@ void OPUSsetDefaults(){
     s_opusPageNr = 0;
     s_opusError = 0;
     s_endband = 0;
+    s_prev_mode = 0;
     s_opusBlockPicItem.clear(); s_opusBlockPicItem.shrink_to_fit();
 }
 
@@ -333,39 +335,14 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
 
-    // int pcm_transition_silk_size;
-    // int16_t pcm_transition_silk;
-    // int pcm_transition_celt_size;
-    // int16_t pcm_transition_celt;
-
     int32_t   ret = 0;
-//    int32_t   silk_frame_size;
-
-    if(s_bandWidth) {
-        int endband = 21;
-        switch(s_bandWidth) {
-            case OPUS_BANDWIDTH_NARROWBAND: endband = 13; break;
-            case OPUS_BANDWIDTH_MEDIUMBAND:
-            case OPUS_BANDWIDTH_WIDEBAND: endband = 17; break;
-            case OPUS_BANDWIDTH_SUPERWIDEBAND: endband = 19; break;
-            case OPUS_BANDWIDTH_FULLBAND: endband = 21; break;
-            default: break;
-        }
-        celt_decoder_ctl(endband);
-    }
 
     if (s_mode == MODE_CELT_ONLY){
         celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
         ec_dec_init((uint8_t *)inbuf, packetLen);
         ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
-    }
-
-    if(s_mode == MODE_HYBRID){
-        log_w("Hybrid mode not yet supported");
-        ret = samplesPerFrame;
     }
 
     if(s_mode == MODE_SILK_ONLY) {
@@ -379,14 +356,6 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         ec_dec_init((uint8_t *)inbuf, packetLen);
         uint8_t APIchannels = 2;
         silk_setRawParams(s_opusChannels, APIchannels, payloadSize_ms, s_internalSampleRate, 48000);
-    //    log_w("payloadSize_ms %i, s_internalSampleRate %i", payloadSize_ms, s_internalSampleRate);
-        static bool silkInit = false;
-        if(!silkInit){
-            silkInit = true;
-            silk_InitDecoder();
-        }
-    //    silk_InitDecoder();
-
         do{
             /* Call SILK decoder */
             int lost_flag = 0;
@@ -394,12 +363,44 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
             int silk_ret = silk_Decode(lost_flag, first_frame, (int16_t*)outbuf + decodedSamples, &silk_frame_size);
             if(silk_ret)log_w("silk_ret %i", silk_ret);
             decodedSamples += silk_frame_size;
-    //        log_w("decodedSamples %i, samplesPerFrame %i", decodedSamples, samplesPerFrame);
         } while(decodedSamples < samplesPerFrame);
-
-        return decodedSamples;
+        ret = decodedSamples;
     }
 
+    if(s_mode == MODE_HYBRID){
+        log_w("Hybrid mode not yet supported");
+        return samplesPerFrame;
+        int decodedSamples = 0;
+        int32_t silk_frame_size;
+        int F2_5, F5, F10, F20;
+        F20 = packetLen / 50;
+        F10 = F20 >> 1;
+        F5 = F10 >> 1;
+        F2_5 = F5 >> 1;
+        if(packetLen < F2_5) { return ERR_OPUS_BUFFER_TOO_SMALL; }
+        ec_dec_init((uint8_t *)inbuf, packetLen);
+        s_internalSampleRate = 16000;
+        uint8_t APIchannels = 2;
+        uint16_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);
+        int lost_flag = 0;
+        int first_frame = decodedSamples == 0;
+        silk_setRawParams(s_opusChannels, APIchannels, payloadSize_ms, s_internalSampleRate, 48000);
+        silk_Decode(lost_flag, first_frame, (int16_t*)outbuf + decodedSamples, &silk_frame_size);
+        if(s_bandWidth) {
+            s_endband = 21;
+            switch(s_bandWidth) {
+                case OPUS_BANDWIDTH_NARROWBAND: s_endband = 13; break;
+                case OPUS_BANDWIDTH_MEDIUMBAND:
+                case OPUS_BANDWIDTH_WIDEBAND: s_endband = 17; break;
+                case OPUS_BANDWIDTH_SUPERWIDEBAND: s_endband = 19; break;
+                case OPUS_BANDWIDTH_FULLBAND: s_endband = 21; break;
+                default: break;
+            }
+        }
+        celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, s_endband);
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+    }
     return ret;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------

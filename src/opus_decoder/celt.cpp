@@ -5,7 +5,7 @@
  *
  *  Created on: Sep 01.2022
  *
- *  Updated on: Mar 13.2024
+ *  Updated on: Dec 21.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -50,6 +50,7 @@ int16_t*      s_tmpBuff;            // mem in deinterleave_hadamard and interlea
 
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
+const uint32_t CELT_SET_START_BAND_REQUEST      = 10010;
 const uint32_t CELT_SET_END_BAND_REQUEST        = 10012;
 const uint32_t CELT_GET_MODE_REQUEST            = 10015;
 const uint32_t CELT_SET_SIGNALLING_REQUEST      = 10016;
@@ -58,6 +59,7 @@ const uint32_t CELT_SET_TONALITY_SLOPE_REQUEST  = 10020;
 const uint32_t CELT_SET_ANALYSIS_REQUEST        = 10022;
 const uint32_t OPUS_SET_LFE_REQUEST             = 10024;
 const uint32_t OPUS_SET_ENERGY_MASK_REQUEST     = 10026;
+const uint32_t CELT_SET_SILK_INFO_REQUEST       = 10028;
 
 const uint8_t  EPSILON           = 1;
 const uint8_t  BITRES            = 3;
@@ -2483,6 +2485,11 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
 
     va_start(ap, request);
     switch (request) {
+        case CELT_SET_START_BAND_REQUEST: {
+            int32_t value = va_arg(ap, int32_t);
+            if (value < 1 || value > s_celtDec->mode->nbEBands) {va_end(ap); return ERR_OPUS_CELT_START_BAND;}
+            s_celtDec->start = value;
+        } break;
         case CELT_SET_END_BAND_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
             if (value < 1 || value > s_celtDec->mode->nbEBands) {va_end(ap); return ERR_OPUS_CELT_END_BAND;}
