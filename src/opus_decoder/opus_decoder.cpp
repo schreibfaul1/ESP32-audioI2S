@@ -371,6 +371,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         log_w("Hybrid mode not yet supported");
         return samplesPerFrame;
         int decodedSamples = 0;
+         int start_band = 0;
         int32_t silk_frame_size;
         int F2_5, F5, F10, F20;
         F20 = packetLen / 50;
@@ -397,8 +398,9 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
                 default: break;
             }
         }
-        celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, s_endband);
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        start_band = 17;
+        celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, start_band);
+    //    celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
         ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     }
     return ret;

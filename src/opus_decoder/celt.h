@@ -277,6 +277,8 @@ inline int32_t PSHR(int32_t a, uint32_t shift){return (a + ((int32_t)1 << (shift
 #define ADD32(a,b) ((int32_t)(a)+(int32_t)(b))
 /** Subtract two 32-bit values */
 #define SUB32(a,b) ((int32_t)(a)-(int32_t)(b))
+/** Arithmetic shift-right of a 32-bit value */
+#define SHR32(a,shift) ((a) >> (shift))
 
 /** Add two 32-bit values, ignore any overflows */
 #define ADD32_ovflw(a,b) ((int32_t)((uint32_t)(a)+(uint32_t)(b)))
@@ -334,6 +336,7 @@ int32_t celt_rcp(int32_t x);
 #define MAX_PSEUDO 40
 #define LOG_MAX_PSEUDO 6
 #define ALLOC_NONE 1
+#define Q15ONE 32767
 
 /* Prototypes and inlines*/
 
@@ -499,6 +502,23 @@ inline int32_t pulses2bits(int32_t band, int32_t LM, int32_t pulses){
    LM++;
    cache = cache_bits50 + cache_index50[LM * m_CELTMode.nbEBands + band];
    return pulses == 0 ? 0 : cache[pulses]+1;
+}
+
+inline void smooth_fade(const int16_t *in1, const int16_t *in2,
+      int16_t *out, int overlap, int channels,
+      const int16_t *window, int32_t Fs)
+{
+   int i, c;
+   int inc = 48000/Fs;
+   for (c=0;c<channels;c++)
+   {
+      for (i=0;i<overlap;i++)
+      {
+         int16_t w = MULT16_16_Q15(window[i*inc], window[i*inc]);
+         out[i*channels+c] = SHR32(MAC16_16(MULT16_16(w,in2[i*channels+c]),
+                                   Q15ONE-w, in1[i*channels+c]), 15);
+      }
+   }
 }
 
 void     comb_filter_const(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g10, int16_t g11, int16_t g12);
