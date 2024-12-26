@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13z
- *  Updated on: Dec 15.2024
+ *  Version 3.0.13za
+ *  Updated on: Dec 26.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -605,6 +605,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         strcpy(m_lastHost, h_host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
+    }
+    else {
+        AUDIO_INFO("%s could not be established, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)ESP.getFreeHeap());
+        m_f_running = false;
+        goto exit;
     }
 
     m_expectedCodec = CODEC_NONE;
