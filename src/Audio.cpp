@@ -2423,6 +2423,9 @@ exit:
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
+    static uint8_t interval_short_cnt = 0;
+    static uint32_t connect_host_time = millis();
+    
     if(!m_f_running) return;
 
     if(m_playlistFormat != FORMAT_M3U8) { // normal process
@@ -2473,6 +2476,20 @@ void Audio::loop() {
                 else { // host == NULL means connect to m3u8 URL
                     if(m_lastM3U8host) httpPrint(m_lastM3U8host);
                     else               httpPrint(m_lastHost);        // if url has no first redirection
+
+                    if(millis() - connect_host_time < 1000) {
+                        if(++interval_short_cnt >= 5) {            // connect to host too often (maybe cause by temporary bad network quality)
+                            interval_short_cnt = 0;
+
+                            AUDIO_INFO("connect host interval too short, try to reconnect...");
+                            connecttohost(m_lastHost);
+                        }
+                    }
+                    else {
+                        interval_short_cnt = 0;
+                    }
+                    connect_host_time = millis();
+                    
                     m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
                 break;
