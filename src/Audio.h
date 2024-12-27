@@ -464,22 +464,25 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
     char* x_ps_malloc(uint16_t len) {
         char* ps_str = NULL;
         if(psramFound()){ps_str = (char*) ps_malloc(len);}
-        else             {ps_str = (char*)    malloc(len);}
+        else            {ps_str = (char*)    malloc(len);}
+        if(!ps_str) log_e("oom");
         return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_calloc(uint16_t len, uint8_t size) {
         char* ps_str = NULL;
         if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
-        else             {ps_str = (char*)    calloc(len, size);}
+        else            {ps_str = (char*)    calloc(len, size);}
+        if(!ps_str) log_e("oom");
         return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_strdup(const char* str) {
-        if(!str) return strdup(""); // better not to return NULL
+        if(!str) {log_e("str is NULL"); return NULL;};
         char* ps_str = NULL;
         if(psramFound()) { ps_str = (char*)ps_malloc(strlen(str) + 1); }
         else { ps_str = (char*)malloc(strlen(str) + 1); }
+        if(!ps_str){log_e("oom"); return NULL;}
         strcpy(ps_str, str);
         return ps_str;
     }
