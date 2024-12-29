@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zb
- *  Updated on: Dec 26.2024
+ *  Version 3.0.13zc
+ *  Updated on: Dec 29.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2979,6 +2979,14 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     }
 
     char* tmp = nullptr;
+    choosenLine++; // next line is the redirection url
+
+    if(cS == 100) {                             // "mp4a.xx.xx" not found
+        *codec = CODEC_AAC;                     // assume AAC
+        for(uint16_t i = 0; i < plcSize; i++) { // we have no codeString, looking for "http"
+            if(startsWith(m_playlistContent[i], "http")) choosenLine = i;
+        }
+    }
 
     // if((!endsWith(m_playlistContent[choosenLine], "m3u8") && indexOf(m_playlistContent[choosenLine], "m3u8?") == -1)) {
     //     // we have a new m3u8 playlist, skip to next line
@@ -2990,7 +2998,7 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     //         goto exit;
     //     }
     // }
-    choosenLine++; // next line is the redirection url
+
 
     if(!startsWith(m_playlistContent[choosenLine], "http")) {
 
@@ -3447,7 +3455,10 @@ void Audio::processWebStreamTS() {
                     return;
                 }
             }
-            ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength);
+
+            if(!ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength)){
+                f_chunkFinished = true; // something went wrong
+            }
 
             if(ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
@@ -3466,7 +3477,8 @@ void Audio::processWebStreamTS() {
                 f_chunkFinished = true;
                 byteCounter = 0;
             }
-            if(byteCounter > m_contentlength) log_e("byteCounter overflow");
+            if(m_contentlength && byteCounter > m_contentlength) {log_e("byteCounter overflow, byteCounter: %d, contentlength: %d", byteCounter, m_contentlength); return;}
+            if(chunkSize       && byteCounter > chunkSize)       {log_e("byteCounter overflow, byteCounter: %d, chunkSize: %d",     byteCounter, chunkSize); return;}
         }
     }
     if(f_chunkFinished) {
@@ -5453,6 +5465,7 @@ void Audio::IIR_filterChain2(int16_t iir_in[2], bool clear) { // Infinite Impuls
 //    AAC - T R A N S P O R T S T R E A M
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength) {
+
     const uint8_t TS_PACKET_SIZE = 188;
     const uint8_t PAYLOAD_SIZE = 184;
     const uint8_t PID_ARRAY_LEN = 4;
@@ -5497,9 +5510,12 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     //                                11 – adaptation field followed by payload, 00 – RESERVED for future use
     // CC   Continuity counter, Sequence number of payload packets (0x00 to 0x0F) within each stream (except PID 8191)
 
+    // for(int i = 1; i < 188; i++) {printf("%02X ", packet[i - 1]); if(i && (i % 16 == 0)) printf("\n");}
+    // printf("\n----------\n");
+
     if(packet[0] != 0x47) {
-        log_e("ts SyncByte not found, first bytes are %X %X %X %X", packet[0], packet[1], packet[2], packet[3]);
-        stopSong();
+        log_e("ts SyncByte not found, first bytes are 0x%02X 0x%02X 0x%02X 0x%02X", packet[0], packet[1], packet[2], packet[3]);
+        // stopSong();
         return false;
     }
     int PID = (packet[1] & 0x1F) << 8 | (packet[2] & 0xFF);
