@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zc
+ *  Version 3.0.13zd
  *  Updated on: Dec 29.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -3069,7 +3069,7 @@ uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media seq
             if(idx == 3) break;
         }
     }
-    if(idx < 3) {
+    if(idx < 2) {
         log_e("not enough lines with \"#EXTINF:\" found");
         return UINT64_MAX;
     }
