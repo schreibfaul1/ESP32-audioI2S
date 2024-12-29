@@ -515,7 +515,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint32_t timestamp     = 0;     // timeout surveillance
     uint16_t hostwoext_begin = 0;
 
-    char*    authorization = NULL;  // authorization
+    // char*    authorization = NULL;  // authorization
     char*    rqh           = NULL;  // request header
     char*    toEncode      = NULL;  // temporary memory for base64 encoding
     char*    h_host        = NULL;
@@ -526,6 +526,18 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 //    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+
+    // optional basic authorization
+    authLen = strlen(user) + strlen(pwd);
+    char     authorization[base64_encode_expected_len(authLen + 1) + 1];
+    authorization[0] = '\0';
+    if(authLen > 0) {
+        char toEncode[authLen + 4];
+        strcpy(toEncode, user);
+        strcat(toEncode, ":");
+        strcat(toEncode, pwd);
+        b64encode((const char*)toEncode, strlen(toEncode), authorization);
+    }
 
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
@@ -551,21 +563,21 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host[pos_colon] = '\0';
     }
 
-    // optional basic authorization
-    if(strlen(user) > 0 && strlen(pwd) > 0) {
-        authLen = strlen(user) + strlen(pwd);
-        authorization = x_ps_calloc(base64_encode_expected_len(authLen + 1), 1);
-        if(!authorization) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-        toEncode = x_ps_calloc(authLen + 4, 1);
-        if(!toEncode) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-        strcpy(toEncode, user);
-        strcat(toEncode, ":");
-        strcat(toEncode, pwd);
-        b64encode((const char*)toEncode, strlen(toEncode), authorization);
-    }
-    else{
-        authorization = strdup("");
-    }
+    // // optional basic authorization
+    // if(strlen(user) > 0 && strlen(pwd) > 0) {
+    //     authLen = strlen(user) + strlen(pwd);
+    //     authorization = x_ps_calloc(base64_encode_expected_len(authLen + 1), 1);
+    //     if(!authorization) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+    //     toEncode = x_ps_calloc(authLen + 4, 1);
+    //     if(!toEncode) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
+    //     strcpy(toEncode, user);
+    //     strcat(toEncode, ":");
+    //     strcat(toEncode, pwd);
+    //     b64encode((const char*)toEncode, strlen(toEncode), authorization);
+    // }
+    // else{
+    //     authorization = strdup("");
+    // }
 
     setDefaults();
     rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
@@ -641,7 +653,7 @@ exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
     x_ps_free(h_host);
     x_ps_free(rqh);
-    x_ps_free(authorization);
+    // x_ps_free(authorization);
     x_ps_free(toEncode);
     return res;
 }
