@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zd
+ *  Version 3.0.13ze
  *  Updated on: Dec 30.2024
  *      Author: Wolle (schreibfaul1)
  *
@@ -528,8 +528,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     // optional basic authorization
-    authLen = strlen(user) + strlen(pwd);
-    char     authorization[base64_encode_expected_len(authLen + 1) + 1];
+    if(user && pwd) authLen = strlen(user) + strlen(pwd);
+    char authorization[base64_encode_expected_len(authLen + 1) + 1];
     authorization[0] = '\0';
     if(authLen > 0) {
         char toEncode[authLen + 4];
@@ -562,22 +562,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         port = atoi(host + pos_colon + 1);   // Get portnumber as integer
         h_host[pos_colon] = '\0';
     }
-
-    // // optional basic authorization
-    // if(strlen(user) > 0 && strlen(pwd) > 0) {
-    //     authLen = strlen(user) + strlen(pwd);
-    //     authorization = x_ps_calloc(base64_encode_expected_len(authLen + 1), 1);
-    //     if(!authorization) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-    //     toEncode = x_ps_calloc(authLen + 4, 1);
-    //     if(!toEncode) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-    //     strcpy(toEncode, user);
-    //     strcat(toEncode, ":");
-    //     strcat(toEncode, pwd);
-    //     b64encode((const char*)toEncode, strlen(toEncode), authorization);
-    // }
-    // else{
-    //     authorization = strdup("");
-    // }
 
     setDefaults();
     rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
@@ -653,7 +637,6 @@ exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
     x_ps_free(h_host);
     x_ps_free(rqh);
-    // x_ps_free(authorization);
     x_ps_free(toEncode);
     return res;
 }
@@ -3809,7 +3792,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         if(!strncmp(c_host, m_lastHost, pos_slash)) {
                             AUDIO_INFO("redirect to new extension at existing host \"%s\"", c_host);
                             if(m_playlistFormat == FORMAT_M3U8) {
-                                strcpy(m_lastHost, c_host);
+                                x_ps_free(m_lastHost);
+                                m_lastHost = strdup(c_host);
                                 m_f_m3u8data = true;
                             }
                             httpPrint(c_host);
