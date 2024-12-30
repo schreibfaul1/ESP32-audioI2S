@@ -4,7 +4,7 @@
  *  Created on: Oct 28.2018
  *
  *  Version 3.0.13zd
- *  Updated on: Dec 29.2024
+ *  Updated on: Dec 30.2024
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -732,15 +732,19 @@ bool Audio::httpPrint(const char* host) {
         }
     }
     _client->print(rqh);
-    if(endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
-    if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
-    if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
-    if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
-    if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
-    if(endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
-    if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+
+    if(     endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
+    else if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
+    else if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
+    else if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
+    else if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
+    else                                       m_expectedCodec  = CODEC_NONE;
+
+    if(     endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    else if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    else if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    else if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+    else                                       m_expectedPlsFmt = FORMAT_NONE;
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
@@ -3422,7 +3426,7 @@ void Audio::processWebStreamTS() {
     static bool     f_firstPacket;
     static bool     f_chunkFinished;
     static uint32_t byteCounter;    // count received data
-    static uint8_t  ts_packet[188]; // m3u8 transport stream is 188 bytes long
+    static uint8_t  ts_packet[188]; // m3u8 transport stream is always 188 bytes long
     uint8_t         ts_packetStart = 0;
     uint8_t         ts_packetLength = 0;
     static uint8_t  ts_packetPtr = 0;
@@ -3445,13 +3449,23 @@ void Audio::processWebStreamTS() {
 
     availableBytes = _client->available();
     if(availableBytes) {
+
+        /* If the m3u8 stream uses 'chunked data transfer' no content length is supplied. Then the chunk size determines the audio data to be processed.
+           However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
+           calculated again. The data used to calculate (here readedBytes) the chunk size is not part of it.
+        */
         uint8_t readedBytes = 0;
-        if(m_f_chunked) chunkSize = chunkedDataTransfer(&readedBytes);
-        int res = _client->read(ts_packet + ts_packetPtr, ts_packetsize - ts_packetPtr);
+        uint32_t minBytes = 0;
+        if(m_f_chunked && chunkSize == byteCounter) chunkSize += chunkedDataTransfer(&readedBytes);
+        if(chunkSize) minBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
+        else          minBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
+
+        int res = _client->read(ts_packet + ts_packetPtr, minBytes);
         if(res > 0) {
             ts_packetPtr += res;
             byteCounter += res;
-            if(ts_packetPtr < ts_packetsize) return;
+            if((chunkSize == byteCounter) && (chunkSize % 32768 == 0)) {return;} // recalculate chunk size
+            if(ts_packetPtr < ts_packetsize) return; // not enough data yet, the process must be repeated if the packet size (188 bytes) is not reached
             ts_packetPtr = 0;
             if(f_firstPacket) { // search for ID3 Header in the first packet
                 f_firstPacket = false;
@@ -3468,9 +3482,7 @@ void Audio::processWebStreamTS() {
                 }
             }
 
-            if(!ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength)){
-                f_chunkFinished = true; // something went wrong
-            }
+            ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
 
             if(ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
@@ -3488,6 +3500,8 @@ void Audio::processWebStreamTS() {
             if (byteCounter == m_contentlength || byteCounter == chunkSize) {
                 f_chunkFinished = true;
                 byteCounter = 0;
+                int av = _client->available();
+                if(av == 7) for(int i = 0; i < av; i++) _client->read(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
             }
             if(m_contentlength && byteCounter > m_contentlength) {log_e("byteCounter overflow, byteCounter: %d, contentlength: %d", byteCounter, m_contentlength); return;}
             if(chunkSize       && byteCounter > chunkSize)       {log_e("byteCounter overflow, byteCounter: %d, chunkSize: %d",     byteCounter, chunkSize); return;}
@@ -3520,6 +3534,7 @@ void Audio::processWebStreamTS() {
             AUDIO_INFO("buffer filled in %d ms", filltime);
         }
     }
+
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

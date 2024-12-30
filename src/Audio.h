@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13z
- *  Updated on: Dec 16.2024
+ *  Version 3.0.13zd
+ *  Updated on: Dec 30.2024
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -381,6 +381,13 @@ void trim(char *str) {
             if (result >= 0) break;
         }
         return result;
+    }
+
+    int32_t min3(int32_t a, int32_t b, int32_t c){
+        uint32_t min_val = a;
+        if (b < min_val) min_val = b;
+        if (c < min_val) min_val = c;
+        return min_val;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // some other functions
