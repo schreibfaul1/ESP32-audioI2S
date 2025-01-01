@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zf
- *  Updated on: Dec 31.2024
+ *  Version 3.0.13zg
+ *  Updated on: Jan 01.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -268,12 +268,12 @@ Audio::~Audio() {
     i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
 #endif
 
-    x_ps_free(m_playlistBuff);
-    x_ps_free(m_chbuf);
-    x_ps_free(m_lastHost);
-    x_ps_free(m_outBuff);
-    x_ps_free(m_ibuff);
-    x_ps_free(m_lastM3U8host);
+    x_ps_free(&m_playlistBuff);
+    x_ps_free(&m_chbuf);
+    x_ps_free(&m_lastHost);
+    x_ps_free(&m_outBuff);
+    x_ps_free(&m_ibuff);
+    x_ps_free(&m_lastM3U8host);
 
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
@@ -326,10 +326,7 @@ void Audio::setDefaults() {
     OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
     memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
-    if(m_playlistBuff) {
-        free(m_playlistBuff);
-        m_playlistBuff = NULL;
-    } // free if stream is not m3u8
+    x_ps_free(&m_playlistBuff);
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear();
@@ -340,10 +337,8 @@ void Audio::setDefaults() {
     // clientsecure.clear(); // delete all leftovers in the receive buffer
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
-    if(m_lastM3U8host) {
-        free(m_lastM3U8host);
-        m_lastM3U8host = NULL;
-    }
+    x_ps_free(&m_lastM3U8host);
+
     AUDIO_INFO("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
     m_f_timeout = false;
@@ -477,7 +472,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     res = _client->connect(host, port, m_timeout_ms_ssl);
     if (res) {
         uint32_t dt = millis() - t;
-        x_ps_free(m_lastHost);
+        x_ps_free(&m_lastHost);
         m_lastHost = x_ps_strdup(host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", "SSL", (long unsigned int) dt, (long unsigned int) ESP.getFreeHeap());
         m_f_running = true;
@@ -496,7 +491,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         m_streamType = ST_WEBSTREAM;
     } else {
         AUDIO_INFO("Request %s failed!", host);
-        x_ps_free(m_lastHost);
+    //    x_ps_free(&m_lastHost);
     }
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
@@ -600,7 +595,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(res) {
         uint32_t dt = millis() - timestamp;
-        x_ps_free(m_lastHost);
+        x_ps_free(&m_lastHost);
         m_lastHost = x_ps_strdup(host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
@@ -635,9 +630,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
 exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
-    x_ps_free(h_host);
-    x_ps_free(rqh);
-    x_ps_free(toEncode);
+    x_ps_free(&h_host);
+    x_ps_free(&rqh);
+    x_ps_free(&toEncode);
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -734,9 +729,9 @@ bool Audio::httpPrint(const char* host) {
     m_contentlength = 0;
     m_f_chunked = false;
 
-    free(hostwoext);
-    free(extension);
-    free(h_host);
+    x_ps_free(&hostwoext);
+    x_ps_free(&extension);
+    x_ps_free(&h_host);
 
     return true;
 }
@@ -834,9 +829,9 @@ log_e("%s", rqh);
     m_contentlength = 0;
     m_f_chunked = false;
 
-    free(hostwoext);
-    free(extension);
-    free(h_host);
+    x_ps_free(&hostwoext);
+    x_ps_free(&extension);
+    x_ps_free(&h_host);
 
     return true;
 }
@@ -924,7 +919,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     else audiofile.close();
 
 exit:
-    free(audioPath);
+    x_ps_free(&audioPath);
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
@@ -969,14 +964,9 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     strcat(resp, "Accept: text/html\r\n");
     strcat(resp, "Connection: close\r\n\r\n");
 
-    if(speechBuff) {
-        free(speechBuff);
-        speechBuff = NULL;
-    }
-    if(urlStr) {
-        free(urlStr);
-        urlStr = NULL;
-    }
+    x_ps_free(&speechBuff);
+    x_ps_free(&urlStr);
+
     _client = static_cast<WiFiClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
     if(!_client->connect(host, 80)) {
@@ -1185,11 +1175,11 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
         }
     }
     buff[out] = '\0';
-    if(iso8859_1) {free(iso8859_1); iso8859_1 = NULL;}
+    x_ps_free(&iso8859_1);
     return true;
 
 exit:
-    if(iso8859_1) {free(iso8859_1); iso8859_1 = NULL;}
+    x_ps_free(&iso8859_1);
     return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2447,7 +2437,7 @@ void Audio::loop() {
         }
     }
     else { // m3u8 datastream only
-        const char* host;
+        const char* host = NULL;
         static uint8_t no_host_cnt = 0;
         static uint32_t no_host_timer = millis();
         if(no_host_timer > millis()) {return;}
@@ -2471,8 +2461,8 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
-                    if(m_lastM3U8host) httpPrint(m_lastM3U8host);
-                    else               httpPrint(m_lastHost);        // if url has no first redirection
+                    if(m_lastM3U8host) {httpPrint(m_lastM3U8host);}
+                    else               {httpPrint(m_lastHost);}      // if url has no first redirection
                     m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
                 break;
@@ -2800,12 +2790,12 @@ const char* Audio::parsePlaylist_M3U8() {
                         //  chunklist:  http://station.com/aaa/bbb/ddd.aac
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
-                    if(m_lastM3U8host != 0) {
-                        tmp = (char*)malloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1);
+                    if(m_lastM3U8host) {
+                        tmp = x_ps_calloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1, sizeof(char));
                         strcpy(tmp, m_lastM3U8host);
                     }
                     else {
-                        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1);
+                        tmp = x_ps_calloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1, sizeof(char));
                         strcpy(tmp, m_lastHost);
                     }
 
@@ -2869,7 +2859,7 @@ const char* Audio::parsePlaylist_M3U8() {
                     if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
                 }
 
-                if(tmp) {free(tmp); tmp = NULL;}
+                x_ps_free(&tmp);
 
                 continue;
             }
@@ -2878,12 +2868,11 @@ const char* Audio::parsePlaylist_M3U8() {
     }
 
     if(m_playlistURL.size() > 0) {
-        if(m_playlistBuff) {free(m_playlistBuff); m_playlistBuff = NULL;}
+        x_ps_free(&m_playlistBuff);
 
         if(m_playlistURL[m_playlistURL.size() - 1]) {
             m_playlistBuff = strdup(m_playlistURL[m_playlistURL.size() - 1]);
-            free(m_playlistURL[m_playlistURL.size() - 1]);
-            m_playlistURL[m_playlistURL.size() - 1] = NULL;
+            x_ps_free(&m_playlistURL[m_playlistURL.size() - 1]);
             m_playlistURL.pop_back();
             m_playlistURL.shrink_to_fit();
         }
@@ -3014,8 +3003,8 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
 
     if(startsWith(m_playlistContent[choosenLine], "../")){
         // ../../2093120-b/RISMI/stream01/streamPlaylist.m3u8
-        if(tmp) { free(tmp); tmp = NULL;}
-        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
+        x_ps_free(&tmp);
+        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine] + 1));
         strcpy(tmp, m_lastHost);
         int idx1 = lastIndexOf(tmp, "/");
         tmp[idx1] = '\0';
@@ -3030,13 +3019,12 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     }
 
     if(m_playlistContent[choosenLine]) {
-        free(m_playlistContent[choosenLine]);
-        m_playlistContent[choosenLine] = NULL;
+        x_ps_free(&m_playlistContent[choosenLine]);
     }
-    m_playlistContent[choosenLine] = strdup(tmp);
-    if(m_lastM3U8host) free(m_lastM3U8host);
-    m_lastM3U8host = strdup(tmp);
-    if(tmp) {free(tmp);}
+    m_playlistContent[choosenLine] = x_ps_strdup(tmp);
+    x_ps_free(&m_lastM3U8host); m_lastM3U8host = NULL;
+    m_lastM3U8host = x_ps_strdup(tmp);
+    x_ps_free(&tmp);
     log_d("redirect to %s", m_playlistContent[choosenLine]);
     return m_playlistContent[choosenLine]; // it's a redirection, a new m3u8 playlist
 }
@@ -3241,8 +3229,7 @@ exit:
         if(afn) {
             if(audio_eof_mp3) audio_eof_mp3(afn);
             AUDIO_INFO("End of file \"%s\"", afn);
-            free(afn);
-            afn = NULL;
+            x_ps_free(&afn);
         }
 
         return;
@@ -3587,7 +3574,7 @@ void Audio::processWebStreamHLS() {
                 memcpy(InBuff.getWritePtr(), &ID3Buff[ws + ID3ReadPtr], ID3BuffSize - (ID3ReadPtr + ws));
                 InBuff.bytesWritten(ID3BuffSize - (ID3ReadPtr + ws));
             }
-            if(ID3Buff) free(ID3Buff);
+            x_ps_free(&ID3Buff);
             byteCounter += ID3BuffSize;
             ID3Buff = NULL;
             firstBytes = false;
@@ -3757,7 +3744,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         if(posColon >= 0) {
             for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
         }
-
+//        log_e("rhl: %s", rhl);
         if(startsWith(rhl, "HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];
@@ -3792,8 +3779,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         if(!strncmp(c_host, m_lastHost, pos_slash)) {
                             AUDIO_INFO("redirect to new extension at existing host \"%s\"", c_host);
                             if(m_playlistFormat == FORMAT_M3U8) {
-                                x_ps_free(m_lastHost);
-                                m_lastHost = strdup(c_host);
+                                x_ps_free(&m_lastHost);
+                                m_lastHost = x_ps_strdup(c_host);
                                 m_f_m3u8data = true;
                             }
                             httpPrint(c_host);
@@ -4222,13 +4209,9 @@ void Audio::showstreamtitle(const char* ml) {
                     m_streamTitleHash = hash;
                     if(audio_showstreamtitle) audio_showstreamtitle(title);
                 }
-                free(title);
-                title = NULL;
+                x_ps_free(&title);
             }
-            if(artist) {
-                free(artist);
-                artist = NULL;
-            }
+            x_ps_free(&artist);
             return;
         }
 
@@ -4253,10 +4236,7 @@ void Audio::showstreamtitle(const char* ml) {
             if(sTit[strlen(sTit) - 1] == '\'') sTit[strlen(sTit) - 1] = '\0'; // remove trailing \'
             if(audio_showstreamtitle) audio_showstreamtitle(sTit + pos);
         }
-        if(sTit) {
-            free(sTit);
-            sTit = NULL;
-        }
+        x_ps_free(&sTit);
     }
 
     idx1 = indexOf(ml, "StreamUrl=", 0);
@@ -4275,10 +4255,7 @@ void Audio::showstreamtitle(const char* ml) {
             m_streamTitleHash = hash;
             AUDIO_INFO("%.*s", m_ibuffSize, sUrl);
         }
-        if(sUrl) {
-            free(sUrl);
-            sUrl = NULL;
-        }
+        x_ps_free(&sUrl);
     }
 
     idx1 = indexOf(ml, "adw_ad=", 0);
@@ -4295,10 +4272,7 @@ void Audio::showstreamtitle(const char* ml) {
             if(sAdv[pos] == '\'') pos++;                                      // remove leading  \'
             if(sAdv[strlen(sAdv) - 1] == '\'') sAdv[strlen(sAdv) - 1] = '\0'; // remove trailing \'
             if(audio_commercial) audio_commercial(sAdv + pos);
-            if(sAdv) {
-                free(sAdv);
-                sAdv = NULL;
-            }
+            x_ps_free(&sAdv);
         }
     }
 }
@@ -4792,10 +4766,10 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     if(m_f_psramFound){ // shift mem in psram
         m_chbufSize = 4096;
         m_ibuffSize = 4096;
-        x_ps_free(m_chbuf);
-        x_ps_free(m_ibuff);
-        x_ps_free(m_outBuff);
-        x_ps_free(m_lastHost);
+        x_ps_free(&m_chbuf);
+        x_ps_free(&m_ibuff);
+        x_ps_free(&m_outBuff);
+        x_ps_free(&m_lastHost);
         m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
         m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
         m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
@@ -6014,7 +5988,7 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
         }
     }
     m_f_m4aID3dataAreRead = true;
-    if(data) free(data);
+    x_ps_free(&data);
     audiofile.seek(0);
     return;
 }

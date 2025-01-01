@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13zd
- *  Updated on: Dec 30.2024
+ *  Version 3.0.13zg
+ *  Updated on: Jan 01.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -485,7 +485,7 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_strdup(const char* str) {
-        if(!str) {log_e("str is NULL"); return NULL;};
+        if(!str) {log_e("Input str is NULL"); return NULL;};
         char* ps_str = NULL;
         if(psramFound()) { ps_str = (char*)ps_malloc(strlen(str) + 1); }
         else { ps_str = (char*)malloc(strlen(str) + 1); }
@@ -494,8 +494,14 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void x_ps_free(void* b){
-        if(b){free(b); b = NULL;}
+    void x_ps_free(char** b){
+        if(*b){free(*b); *b = NULL;}
+    }
+    void x_ps_free(int16_t** b){
+        if(*b){free(*b); *b = NULL;}
+    }
+    void x_ps_free(uint8_t** b){
+        if(*b){free(*b); *b = NULL;}
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
