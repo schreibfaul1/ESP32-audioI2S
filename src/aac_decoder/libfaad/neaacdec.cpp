@@ -151,13 +151,10 @@ void* faad_calloc(size_t len, size_t size) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* common free function */
-void faad_free(void* b) {
-#if 0 // defined(_WIN32) && !defined(_WIN32_WCE)
-    _aligned_free(b);
-#else
-    if(b) {free(b); b = NULL;} // free(b);
+template <typename freeType>
+void faad_free(freeType** b){
+    if(*b){free(*b); *b = NULL;}
 }
-#endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const uint8_t Parity[256] = { // parity
     0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -643,9 +640,9 @@ long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buff
     ret = bits;
     goto exit;
 exit:
-    faad_free(ld);
-    faad_free(adif);
-    faad_free(adts);
+    faad_free(&ld);
+    faad_free(&adif);
+    faad_free(&adts);
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -748,17 +745,17 @@ void NeAACDecClose(NeAACDecHandle hpDecoder) {
     printf("output:             %I64d cycles\n", hDecoder->output_cycles);
 #endif
     for (i = 0; i < MAX_CHANNELS; i++) {
-        if (hDecoder->time_out[i]) faad_free(hDecoder->time_out[i]);
-        if (hDecoder->fb_intermed[i]) faad_free(hDecoder->fb_intermed[i]);
+        if (hDecoder->time_out[i]) faad_free(&hDecoder->time_out[i]);
+        if (hDecoder->fb_intermed[i]) faad_free(&hDecoder->fb_intermed[i]);
 #ifdef SSR_DEC
-        if (hDecoder->ssr_overlap[i]) faad_free(hDecoder->ssr_overlap[i]);
-        if (hDecoder->prev_fmd[i]) faad_free(hDecoder->prev_fmd[i]);
+        if (hDecoder->ssr_overlap[i]) faad_free(&hDecoder->ssr_overlap[i]);
+        if (hDecoder->prev_fmd[i]) faad_free(&hDecoder->prev_fmd[i]);
 #endif
 #ifdef MAIN_DEC
-        if (hDecoder->pred_stat[i]) faad_free(hDecoder->pred_stat[i]);
+        if (hDecoder->pred_stat[i]) faad_free(&hDecoder->pred_stat[i]);
 #endif
 #ifdef LTP_DEC
-        if (hDecoder->lt_pred_stat[i]) faad_free(hDecoder->lt_pred_stat[i]);
+        if (hDecoder->lt_pred_stat[i]) faad_free(&hDecoder->lt_pred_stat[i]);
 #endif
     }
 #ifdef SSR_DEC
@@ -768,13 +765,13 @@ void NeAACDecClose(NeAACDecHandle hpDecoder) {
 #endif
         filter_bank_end(hDecoder->fb);
     drc_end(hDecoder->drc);
-    if (hDecoder->sample_buffer) faad_free(hDecoder->sample_buffer);
+    if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
         if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i]);
     }
 #endif
-    if (hDecoder) faad_free(hDecoder);
+    if (hDecoder) faad_free(&hDecoder);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeAACDecPostSeekReset(NeAACDecHandle hpDecoder, long frame) {
@@ -1050,7 +1047,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
             //temp = getdword((void*)buf);
             temp = *((uint32_t*)buf);
             printf("0x%.8X\n", temp);
-            faad_free(buf);
+            faad_free(&buf);
         }
         faad_endbits(&ld);
         faad_initbits(&ld, buffer, buffer_size);
@@ -1192,7 +1189,7 @@ void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsig
 #endif
         /* check if we want to use internal sample_buffer */
         if(sample_buffer_size == 0) {
-            if(hDecoder->sample_buffer) faad_free(hDecoder->sample_buffer);
+            if(hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
             hDecoder->sample_buffer = NULL;
             hDecoder->sample_buffer = faad_malloc(frame_len * output_channels * stride);
         }
@@ -2360,11 +2357,11 @@ cfft_info* cffti(uint16_t n) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void cfftu(cfft_info* cfft) {
-    if(cfft->work) faad_free(cfft->work);
+    if(cfft->work) faad_free(&cfft->work);
 #ifndef FIXED_POINT
-    if(cfft->tab) faad_free(cfft->tab);
+    if(cfft->tab) faad_free(&cfft->tab);
 #endif
-    if(cfft) faad_free(cfft);
+    if(cfft) faad_free(&cfft);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2381,7 +2378,7 @@ drc_info* drc_init(real_t cut, real_t boost) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void drc_end(drc_info* drc) {
-    if(drc) faad_free(drc);
+    if(drc) faad_free(&drc);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void drc_decode(drc_info* drc, real_t* spec) {
@@ -2753,7 +2750,7 @@ drm_ps_info* drm_ps_init(void) {
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-void drm_ps_free(drm_ps_info* ps) { faad_free(ps); }
+void drm_ps_free(drm_ps_info* ps) { faad_free(&ps); }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
@@ -3869,7 +3866,7 @@ void faad_mdct_end(mdct_info* mdct) {
         printf("CFFT[%.4d]:         %I64d cycles\n", mdct->N / 4, mdct->fft_cycles);
 #endif
         cfftu(mdct->cfft);
-        faad_free(mdct);
+        faad_free(&mdct);
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3951,7 +3948,7 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     mdct->fft_cycles += count1;
     mdct->cycles += (count2 - count1);
 #endif
-    faad_free(Z1);
+    faad_free(&Z1);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -4060,7 +4057,7 @@ void filter_bank_end(fb_info* fb) {
 #ifdef LD_DEC
         faad_mdct_end(fb->mdct1024);
 #endif
-        faad_free(fb);
+        faad_free(&fb);
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4227,7 +4224,7 @@ void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, ui
     count = faad_get_ts() - count;
     fb->cycles += count;
 #endif
-    faad_free(transf_buf);
+    faad_free(&transf_buf);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -4281,7 +4278,7 @@ void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape,
             mdct(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
     }
-    faad_free(windowed_buf);
+    faad_free(&windowed_buf);
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4545,8 +4542,8 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
     #endif
     ret = 0;
 exit:
-    faad_free(codeword);
-    faad_free(segment);
+    faad_free(&codeword);
+    faad_free(&segment);
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4956,7 +4953,7 @@ void DCT4_32(real_t* y, real_t* x) {
     y[30] = f[395] + f[396];
     y[1] = f[397] - f[396];
     if(f) {
-        faad_free(f);
+        faad_free(&f);
     }
 }
 #endif // SBR_DEC
@@ -5334,7 +5331,7 @@ void DST4_32(real_t* y, real_t* x) {
     y[1] = MUL_C(COEF_CONST(6.7967507116736332), f[306]);
     y[0] = MUL_R(REAL_CONST(20.3738781672314530), f[304]);
     if(f) {
-        faad_free(f);
+        faad_free(&f);
     }
 }
 #endif // SBR_DEC
@@ -7039,7 +7036,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
     if (hDecoder->object_type == MAIN) {
         /* allocate the state only when needed */
         if (hDecoder->pred_stat[channel] != NULL) {
-            faad_free(hDecoder->pred_stat[channel]);
+            faad_free(&hDecoder->pred_stat[channel]);
             hDecoder->pred_stat[channel] = NULL;
         }
         hDecoder->pred_stat[channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
@@ -7050,7 +7047,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
     if (is_ltp_ot(hDecoder->object_type)) {
         /* allocate the state only when needed */
         if (hDecoder->lt_pred_stat[channel] != NULL) {
-            faad_free(hDecoder->lt_pred_stat[channel]);
+            faad_free(&hDecoder->lt_pred_stat[channel]);
             hDecoder->lt_pred_stat[channel] = NULL;
         }
         hDecoder->lt_pred_stat[channel] = (int16_t*)faad_malloc(hDecoder->frameLength * 4 * sizeof(int16_t));
@@ -7058,7 +7055,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
     }
 #endif
     if (hDecoder->time_out[channel] != NULL) {
-        faad_free(hDecoder->time_out[channel]);
+        faad_free(&hDecoder->time_out[channel]);
         hDecoder->time_out[channel] = NULL;
     }
     {
@@ -7077,7 +7074,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
 #if (defined(PS_DEC) || defined(DRM_PS))
     if (output_channels == 2) {
         if (hDecoder->time_out[channel + 1] != NULL) {
-            faad_free(hDecoder->time_out[channel + 1]);
+            faad_free(&hDecoder->time_out[channel + 1]);
             hDecoder->time_out[channel + 1] = NULL;
         }
         hDecoder->time_out[channel + 1] = (real_t*)faad_malloc(mul * hDecoder->frameLength * sizeof(real_t));
@@ -7085,7 +7082,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
     }
 #endif
     if (hDecoder->fb_intermed[channel] != NULL) {
-        faad_free(hDecoder->fb_intermed[channel]);
+        faad_free(&hDecoder->fb_intermed[channel]);
         hDecoder->fb_intermed[channel] = NULL;
     }
     hDecoder->fb_intermed[channel] = (real_t*)faad_malloc(hDecoder->frameLength * sizeof(real_t));
@@ -7349,7 +7346,7 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
 #endif
     retval = 0;
 exit:
-    faad_free(spec_coef);
+    faad_free(&spec_coef);
     return retval;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -7522,8 +7519,8 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
 #endif
     retval = 0;
 exit:
-    faad_free(spec_coef1);
-    faad_free(spec_coef2);
+    faad_free(&spec_coef1);
+    faad_free(&spec_coef2);
     return retval;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8081,8 +8078,8 @@ uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_
     if (retval > 0) goto exit;
     retval = 0;
 exit:
-    faad_free(sce);
-    faad_free(spec_data);
+    faad_free(&sce);
+    faad_free(&spec_data);
     return retval;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8169,9 +8166,9 @@ uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t chan
     if ((result = reconstruct_channel_pair(hDecoder, ics1, ics2, cpe, spec_data1, spec_data2)) > 0) { goto exit; }
     result = 0;
 exit:
-    faad_free(spec_data1);
-    faad_free(spec_data2);
-    faad_free(cpe);
+    faad_free(&spec_data1);
+    faad_free(&spec_data2);
+    faad_free(&cpe);
     return result;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -8565,7 +8562,7 @@ void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* 
         /* SBR data was corrupted, disable it until the next header */
         if (hDecoder->sbr[0]->ret != 0) { hDecoder->sbr[0]->header_count = 0; }
         faad_endbits(&ld_sbr);
-        if (revbuffer) faad_free(revbuffer);
+        if (revbuffer) faad_free(&revbuffer);
     }
         #endif
     #endif
@@ -9443,8 +9440,8 @@ uint8_t rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
     result = rvlc_decode_sf_forward(ics, &ld_rvlc_sf, &ld_rvlc_esc, &intensity_used);
     //    result = rvlc_decode_sf_reverse(ics, &ld_rvlc_sf_rev,
     //        &ld_rvlc_esc_rev, intensity_used);
-    if (rvlc_esc_buffer) faad_free(rvlc_esc_buffer);
-    if (rvlc_sf_buffer) faad_free(rvlc_sf_buffer);
+    if (rvlc_esc_buffer) faad_free(&rvlc_esc_buffer);
+    if (rvlc_sf_buffer) faad_free(&rvlc_sf_buffer);
     if (ics->length_of_rvlc_sf > 0) faad_endbits(&ld_rvlc_sf);
     if (ics->sf_escapes_present) faad_endbits(&ld_rvlc_esc);
     return result;
@@ -9927,7 +9924,7 @@ fb_info* ssr_filter_bank_init(uint16_t frame_len) {
 void ssr_filter_bank_end(fb_info* fb) {
     faad_mdct_end(fb->mdct256);
     faad_mdct_end(fb->mdct2048);
-    if (fb) faad_free(fb);
+    if (fb) faad_free(&fb);
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -10012,7 +10009,7 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             for (i = 0; i < nlong; i++) time_out[nlong + i] = MUL_R_C(transf_buf[nlong + i], window_long[nlong - 1 - i]);
             break;
     }
-    faad_free(transf_buf);
+    faad_free(&transf_buf);
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -10208,16 +10205,16 @@ static hyb_info* hybrid_init(uint8_t numTimeSlotsRate) {
 static void hybrid_free(hyb_info* hyb) {
     uint8_t i;
     if(!hyb) return;
-    if(hyb->work) faad_free(hyb->work);
+    if(hyb->work) faad_free(&hyb->work);
     for(i = 0; i < 5; i++) {
-        if(hyb->buffer[i]) faad_free(hyb->buffer[i]);
+        if(hyb->buffer[i]) faad_free(&hyb->buffer[i]);
     }
-    if(hyb->buffer) faad_free(hyb->buffer);
+    if(hyb->buffer) faad_free((void**)&hyb->buffer);
     for(i = 0; i < hyb->frame_len; i++) {
-        if(hyb->temp[i]) faad_free(hyb->temp[i]);
+        if(hyb->temp[i]) faad_free(&hyb->temp[i]);
     }
-    if(hyb->temp) { faad_free(hyb->temp); }
-    faad_free(hyb);
+    if(hyb->temp) { faad_free((void**)&hyb->temp); }
+    faad_free(&hyb);
 }
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -11490,7 +11487,7 @@ void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_
 void ps_free(ps_info* ps) {
     /* free hybrid filterbank structures */
     hybrid_free((hyb_info*)ps->hyb);
-    faad_free(ps);
+    faad_free(&ps);
 }
 #endif //  PS_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -11600,8 +11597,8 @@ uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     /* hybrid synthesis, to rebuild the SBR QMF matrices */
     hybrid_synthesis((hyb_info*)ps->hyb, X_left, X_hybrid_left, ps->use34hybrid_bands, ps->numTimeSlotsRate);
     hybrid_synthesis((hyb_info*)ps->hyb, X_right, X_hybrid_right, ps->use34hybrid_bands, ps->numTimeSlotsRate);
-    faad_free(X_hybrid_left);
-    faad_free(X_hybrid_right);
+    faad_free((void**)&X_hybrid_left);
+    faad_free((void**)&X_hybrid_right);
     return 0;
 }
 #endif //  PS_DEC
@@ -11827,7 +11824,7 @@ sbr_info*      sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t samp
         sbr->numTimeSlotsRate = RATE * NO_TIME_SLOTS;
         sbr->numTimeSlots = NO_TIME_SLOTS;
     } else {
-        faad_free(sbr);
+        faad_free(&sbr);
         return NULL;
     }
     sbr->GQ_ringbuf_index[0] = 0;
@@ -11874,10 +11871,10 @@ void sbrDecodeEnd(sbr_info* sbr) {
             qmfs_end(sbr->qmfs[1]);
         }
         for (j = 0; j < 5; j++) {
-            if (sbr->G_temp_prev[0][j]) faad_free(sbr->G_temp_prev[0][j]);
-            if (sbr->Q_temp_prev[0][j]) faad_free(sbr->Q_temp_prev[0][j]);
-            if (sbr->G_temp_prev[1][j]) faad_free(sbr->G_temp_prev[1][j]);
-            if (sbr->Q_temp_prev[1][j]) faad_free(sbr->Q_temp_prev[1][j]);
+            if (sbr->G_temp_prev[0][j]) faad_free(&sbr->G_temp_prev[0][j]);
+            if (sbr->Q_temp_prev[0][j]) faad_free(&sbr->Q_temp_prev[0][j]);
+            if (sbr->G_temp_prev[1][j]) faad_free(&sbr->G_temp_prev[1][j]);
+            if (sbr->Q_temp_prev[1][j]) faad_free(&sbr->Q_temp_prev[1][j]);
         }
     #ifdef PS_DEC
         if (sbr->ps != NULL) ps_free(sbr->ps);
@@ -11885,7 +11882,7 @@ void sbrDecodeEnd(sbr_info* sbr) {
     #ifdef DRM_PS
         if (sbr->drm_ps != NULL) drm_ps_free(sbr->drm_ps);
     #endif
-        faad_free(sbr);
+        faad_free(&sbr);
     }
 }
 #endif // #ifdef SBR_DEC
@@ -12134,7 +12131,7 @@ uint8_t sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_cha
     #endif
     ret = 0;
 exit:
-    faad_free(X);
+    faad_free((void**)&(X));
     return ret;
 }
 #endif // #ifdef SBR_DEC
@@ -12188,7 +12185,7 @@ uint8_t sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_
     #endif
     ret = 0;
 exit:
-    faad_free(X);
+    faad_free((void**)&X);
     return ret;
 }
 #endif // #ifdef SBR_DEC
@@ -12264,8 +12261,8 @@ uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* righ
     sbr->frame++;
     ret = 0;
 exit:
-    faad_free(X_left);
-    faad_free(X_right);
+    faad_free((void**)&X_left);
+    faad_free((void**)&X_right);
     return ret;
 }
     #endif // (defined(PS_DEC) || defined(DRM_PS))
@@ -12876,10 +12873,10 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
     #endif
     ret = 0;
 exit:
-    faad_free(vDk0);
-    faad_free(vDk1);
-    faad_free(vk0);
-    faad_free(vk1);
+    faad_free(&vDk0);
+    faad_free(&vDk1);
+    faad_free(&vk0);
+    faad_free(&vk1);
     return ret;
 }
 #endif
@@ -13080,8 +13077,8 @@ void limiter_frequency_table(sbr_info* sbr) {
     #endif
     }
 exit:
-    faad_free(limTable);
-    faad_free(patchBorders);
+    faad_free(&limTable);
+    faad_free(&patchBorders);
 }
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -14950,10 +14947,10 @@ void hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_N
         }
     }
     if (sbr->Reset) { limiter_frequency_table(sbr); }
-    faad_free(alpha_0);
-    faad_free(alpha_1);
+    faad_free(&alpha_0);
+    faad_free(&alpha_1);
     #ifdef SBR_LOW_POWER
-    faad_free(rxx);
+    faad_free(&rxx);
     #endif
 }
 #endif // SBR_DEC
@@ -15491,8 +15488,8 @@ qmfs_info* qmfs_init(uint8_t channels) {
 #ifdef SBR_DEC
 void qmfs_end(qmfs_info* qmfs) {
     if (qmfs) {
-        if (qmfs->v) faad_free(qmfs->v);
-        faad_free(qmfs);
+        if (qmfs->v) faad_free(&qmfs->v);
+        faad_free(&qmfs);
     }
 }
 #endif /*SBR_DEC*/
@@ -15801,8 +15798,8 @@ qmfa_info* qmfa_init(uint8_t channels) {
 #ifdef SBR_DEC
 void qmfa_end(qmfa_info* qmfa) {
     if (qmfa) {
-        if (qmfa->x) faad_free(qmfa->x);
-        faad_free(qmfa);
+        if (qmfa->x) faad_free(&qmfa->x);
+        faad_free(&qmfa);
     }
 }
 #endif /*SBR_DEC*/

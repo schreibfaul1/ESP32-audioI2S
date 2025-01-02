@@ -2770,10 +2770,7 @@ const char* Audio::parsePlaylist_M3U8() {
                     stopSong();
                     return NULL;
                 }
-                if(xMedSeq > 0) f_mediaSeq_found = true;
-                if(xMedSeq == 0) { // mo mediaSeqNr but min 3 times #EXTINF found
-                    ;
-                }
+                else f_mediaSeq_found = true;
             }
 
             if(startsWith(m_playlistContent[i], "#EXTINF")) {
@@ -3492,7 +3489,7 @@ void Audio::processWebStreamTS() {
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
-        if(streamDetection(availableBytes)) return;
+        if(streamDetection(availableBytes)) goto exit;
     }
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3504,7 +3501,7 @@ void Audio::processWebStreamTS() {
             AUDIO_INFO("buffer filled in %d ms", filltime);
         }
     }
-
+exit:
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

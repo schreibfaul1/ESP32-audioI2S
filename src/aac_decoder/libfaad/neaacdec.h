@@ -20,7 +20,7 @@
 **/
 
 // ESP32 Version 29.07.1961
-// updated:      21.09.2024
+// updated:      02.01.2025
 
 #pragma once
 #include <stddef.h>
@@ -598,7 +598,9 @@ uint8_t  max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const ui
 uint32_t get_sample_rate(const uint8_t sr_index);
 int8_t   can_decode_ot(const uint8_t object_type);
 void*    faad_malloc(size_t size);
-void     faad_free(void* b);
+template <typename freeType>
+void     faad_free(freeType** b);
+
 drc_info*                drc_init(real_t cut, real_t boost);
 void                     drc_end(drc_info* drc);
 void                     drc_decode(drc_info* drc, real_t* spec);
