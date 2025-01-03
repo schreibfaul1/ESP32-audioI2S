@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zg
- *  Updated on: Jan 01.2025
+ *  Version 3.0.13zh
+ *  Updated on: Jan 04.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3423,7 +3423,7 @@ void Audio::processWebStreamTS() {
         */
         uint8_t readedBytes = 0;
         uint32_t minBytes = 0;
-        if(m_f_chunked && chunkSize == byteCounter) chunkSize += chunkedDataTransfer(&readedBytes);
+        if(m_f_chunked && chunkSize == byteCounter) {chunkSize += chunkedDataTransfer(&readedBytes); goto exit;}
         if(chunkSize) minBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
         else          minBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
 
@@ -3431,7 +3431,6 @@ void Audio::processWebStreamTS() {
         if(res > 0) {
             ts_packetPtr += res;
             byteCounter += res;
-            if((chunkSize == byteCounter) && (chunkSize % 32768 == 0)) {return;} // recalculate chunk size
             if(ts_packetPtr < ts_packetsize) return; // not enough data yet, the process must be repeated if the packet size (188 bytes) is not reached
             ts_packetPtr = 0;
             if(f_firstPacket) { // search for ID3 Header in the first packet
