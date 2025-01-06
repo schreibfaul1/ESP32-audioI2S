@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13zg
- *  Updated on: Jan 01.2025
+ *  Version 3.0.13zi
+ *  Updated on: Jan 06.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -605,6 +605,7 @@ private:
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
     char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
+    char*           m_speechtxt = NULL;             // stores tts text
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header

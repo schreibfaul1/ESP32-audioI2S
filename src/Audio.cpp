@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.0.13zh
- *  Updated on: Jan 04.2025
+ *  Version 3.0.13zi
+ *  Updated on: Jan 06.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -274,6 +274,7 @@ Audio::~Audio() {
     x_ps_free(&m_outBuff);
     x_ps_free(&m_ibuff);
     x_ps_free(&m_lastM3U8host);
+    x_ps_free(&m_speechtxt);
 
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
@@ -338,6 +339,7 @@ void Audio::setDefaults() {
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     x_ps_free(&m_lastM3U8host);
+    x_ps_free(&m_speechtxt);
 
     AUDIO_INFO("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
@@ -931,17 +933,9 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     char host[] = "translate.google.com.vn";
     char path[] = "/translate_tts";
 
-    uint16_t speechLen = strlen(speech);
-    uint16_t speechBuffLen = speechLen + 300;
-    char* speechBuff = (char*)malloc(speechBuffLen);
-    if(!speechBuff) {
-        log_e("out of memory");
-        xSemaphoreGiveRecursive(mutex_playAudioData);
-        return false;
-    }
-    memcpy(speechBuff, speech, speechLen);
-    speechBuff[speechLen] = '\0';
-    char* urlStr = urlencode(speechBuff, false); // percent encoding
+    x_ps_free(&m_speechtxt);
+    m_speechtxt = x_ps_strdup(speech);
+    char* urlStr = urlencode(speech, false); // percent encoding
     if(!urlStr) {
         log_e("out of memory");
         xSemaphoreGiveRecursive(mutex_playAudioData);
@@ -964,7 +958,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     strcat(resp, "Accept: text/html\r\n");
     strcat(resp, "Connection: close\r\n\r\n");
 
-    x_ps_free(&speechBuff);
     x_ps_free(&urlStr);
 
     _client = static_cast<WiFiClient*>(&client);
@@ -981,6 +974,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     m_f_ssl = false;
     m_f_tts = true;
     m_dataMode = HTTP_RESPONSE_HEADER;
+    x_ps_free(&m_lastHost); m_lastHost = x_ps_strdup(host);
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
@@ -3299,11 +3293,13 @@ void Audio::processWebFile() {
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
     static size_t   audioDataCount;                          // counts the decoded audiodata only
+    static uint32_t byteCounter;                             // count received data
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_t0 = millis();
+        byteCounter = 0;
         chunkSize = 0;
         audioDataCount = 0;
         m_f_stream = false;
@@ -3311,21 +3307,24 @@ void Audio::processWebFile() {
         m_webFilePos = 0;
     }
 
-    if(!m_contentlength && !m_f_tts) {
-        log_e("webfile without contentlength!");
-        stopSong();
-        return;
-    } // guard
 
     uint32_t availableBytes = _client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_chunked) {
+    if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(!chunkSize) chunkSize = chunkedDataTransfer(&readedBytes);
-        availableBytes = min(availableBytes, chunkSize);
-        if(m_f_tts) m_contentlength = chunkSize;
+        if(m_f_chunked && chunkSize == byteCounter) {
+            chunkSize += chunkedDataTransfer(&readedBytes);
+            m_contentlength += chunkSize;
+        }
+        availableBytes = min(availableBytes, chunkSize - byteCounter);
     }
+
+    if(!m_contentlength && !chunkSize) {
+        log_e("webfile is not chunked or is without contentlength!");
+        stopSong();
+        return;
+    } // guard
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
@@ -3333,6 +3332,7 @@ void Audio::processWebFile() {
     int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
+        byteCounter += bytesAddedToBuffer;
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
@@ -3376,8 +3376,9 @@ void Audio::processWebFile() {
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
         m_codec = CODEC_NONE;
         if(m_f_tts) {
-            AUDIO_INFO("End of speech: \"%s\"", m_lastHost);
-            if(audio_eof_speech) audio_eof_speech(m_lastHost);
+            AUDIO_INFO("End of speech \"%s\"", m_speechtxt);
+            if(audio_eof_speech) audio_eof_speech(m_speechtxt);
+            x_ps_free(&m_speechtxt);
         }
         else {
             AUDIO_INFO("End of webstream: \"%s\"", m_lastHost);
@@ -5719,9 +5720,9 @@ size_t Audio::chunkedDataTransfer(uint8_t* bytes) {
             stopSong();
             return 0;
         }
-        b = _client->read();
-        byteCounter++;
-        if(b < 0) continue; // -1 no data available
+        b = _client->read();  // e.g. 0x66 0x34 0x31 0x37 0x0D 0x0A --> 62487 Bytes + CR LF
+        byteCounter++;        //      0x30 0x0D 0x0A   --> last chunk, CAN
+        if(b < 0) continue;   // -1 nothing to read
         if(b == '\n') break;
         if(b < '0') continue;
         // We have received a hexadecimal character.  Decode it and add to the result.
