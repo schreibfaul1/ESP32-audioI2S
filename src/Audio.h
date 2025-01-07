@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13zi
- *  Updated on: Jan 06.2025
+ *  Version 3.1.0
+ *  Updated on: Jan 07.2025
  *      Author: Wolle (schreibfaul1)
  */
 
