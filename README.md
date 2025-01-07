@@ -110,6 +110,52 @@ void audio_eof_speech(const char *info){
 
 ````
 
+````c++
+/* ESP32-S3 EXAMPLE */
+
+#include "Arduino.h"
+#include "Audio.h"
+#include "WiFi.h"
+#include "SD_MMC.h"
+
+#define I2S_DOUT            9
+#define I2S_BCLK            3
+#define I2S_LRC             1
+#define SD_MMC_D0          11
+#define SD_MMC_CLK         13
+#define SD_MMC_CMD         14
+
+Audio audio;
+
+String ssid =     "*****";
+String password = "*****";
+
+void setup() {
+    Serial.begin(115200);
+//    WiFi.begin(ssid.c_str(), password.c_str());
+//    while (WiFi.status() != WL_CONNECTED) delay(1500);
+
+    pinMode(SD_MMC_D0, INPUT_PULLUP);
+    SD_MMC.setPins(SD_MMC_CLK, SD_MMC_CMD, SD_MMC_D0);
+    SD_MMC.begin("/sdcard", true);
+
+    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+    audio.setVolume(12); // default 0...21
+//   audio.connecttohost("http://stream.antennethueringen.de/live/aac-64/stream.antennethueringen.de/"); // aac
+    audio.connecttoFS(SD_MMC, "/test.wav");
+}
+
+void loop() {
+    audio.loop();
+    vTaskDelay(1);
+}
+
+// optional
+void audio_info(const char *info){
+    Serial.print("info        "); Serial.println(info);
+}
+````
+
 <br>
 
 |Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 PSRAM |                          |
@@ -125,10 +171,10 @@ void audio_eof_speech(const char *info){
 
 <br>
 
-Breadboard
-![Breadboard](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Breadboard.jpg)
+***
 Wiring
-![Wiring](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/ESP32_I2S_PCM5102A.JPG)
+![Wiring ESP32-S3](https://github.com/user-attachments/assets/15dd1766-0fc1-4079-b378-bc566583e80d)
+***
 Impulse diagram
 ![Impulse diagram](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Impulsdiagramm.jpg)
 ***
