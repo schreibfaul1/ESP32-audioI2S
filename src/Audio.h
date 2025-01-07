@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.0.13zi
- *  Updated on: Jan 06.2025
+ *  Version 3.1.0
+ *  Updated on: Jan 07.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -142,7 +142,7 @@ class Audio : private AudioBuffer{
     AudioBuffer InBuff; // instance of input buffer
 
 public:
-    Audio(bool internalDAC = false, uint8_t channelEnabled = 3, uint8_t i2sPort = I2S_NUM_0); // #99
+    Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& voice, const String& response_format, const String& speed);
@@ -153,7 +153,6 @@ public:
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
-    bool audioFileSeek(const float speed);
     bool setTimeOffset(int sec);
     bool setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
     bool pauseResume();
@@ -682,7 +681,6 @@ private:
     bool            m_f_tts = false;                // text to speech
     bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
-    bool            m_f_internalDAC = false;        // false: output vis I2S, true output via internal DAC
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
     bool            m_f_Log = false;                // set in platformio.ini  -DAUDIO_LOG and -DCORE_DEBUG_LEVEL=3 or 4
@@ -699,7 +697,7 @@ private:
     bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
     bool            m_f_audioTaskIsDecoding = false;
     bool            m_f_acceptRanges = false;
-    uint8_t         m_f_channelEnabled = 3;         // internal DAC, both channels
+    uint8_t         m_f_channelEnabled = 3;         //
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     uint32_t        m_audioDataStart = 0;           // in bytes
