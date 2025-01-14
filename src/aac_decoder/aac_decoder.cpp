@@ -78,15 +78,38 @@ uint8_t AACGetParametricStereo(){  // not used (0) or used (1)
 }
 //----------------------------------------------------------------------------------------------------------------------
 int AACFindSyncWord(uint8_t *buf, int nBytes){
-    int i;
+    const int MIN_ADTS_HEADER_SIZE = 7;
+    auto validate = [](const uint8_t *buf) -> bool { // check the ADTS header for validity
+        // Layer (bits 14-15) must be 00
+        if ((buf[1] & 0x06) != 0x00) {
+            return false;
+        }
+
+        // Sampling Frequency Index (Bits 18-21) cannot be invalid
+        uint8_t sampling_frequency_index = (buf[2] & 0x3C) >> 2;
+        if (sampling_frequency_index > 12) {
+            return false;
+        }
+
+        // Frame length (bits 30-42) must be at least the header size
+        int frame_length = ((buf[3] & 0x03) << 11) | (buf[4] << 3) | ((buf[5] & 0xE0) >> 5);
+        if (frame_length < MIN_ADTS_HEADER_SIZE) {
+            return false;
+        }
+
+        return true;
+    };
 
     /* find byte-aligned syncword (12 bits = 0xFFF) */
-    for (i = 0; i < nBytes - 1; i++) {
+    for (int i = 0; i < nBytes - 1; i++) {
         if ( (buf[i+0] & SYNCWORDH) == SYNCWORDH && (buf[i+1] & SYNCWORDL) == SYNCWORDL ){
             int frame_length = ((buf[i + 3] & 0x03) << 11) | (buf[i + 4] << 3) | ((buf[i + 5] & 0xE0) >> 5);
+            if (i + frame_length + MIN_ADTS_HEADER_SIZE > nBytes) {
+                return -1; // Puffergrenze überschritten, kein gültiger Header
+            }
             /* find a second byte-aligned syncword (12 bits = 0xFFF) */
             if ( (buf[i + frame_length + 0] & SYNCWORDH) == SYNCWORDH && (buf[i + frame_length + 1] & SYNCWORDL) == SYNCWORDL ){
-                return i;
+                return validate(&buf[i]) ? i : -1;
             }
         }
     }
