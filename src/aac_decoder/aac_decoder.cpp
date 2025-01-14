@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 04.10.2024
+ *  Updated on: 14.01.2025
 */
 
 #include "Arduino.h"
@@ -83,7 +83,11 @@ int AACFindSyncWord(uint8_t *buf, int nBytes){
     /* find byte-aligned syncword (12 bits = 0xFFF) */
     for (i = 0; i < nBytes - 1; i++) {
         if ( (buf[i+0] & SYNCWORDH) == SYNCWORDH && (buf[i+1] & SYNCWORDL) == SYNCWORDL ){
-            return i;
+            int frame_length = ((buf[i + 3] & 0x03) << 11) | (buf[i + 4] << 3) | ((buf[i + 5] & 0xE0) >> 5);
+            /* find a second byte-aligned syncword (12 bits = 0xFFF) */
+            if ( (buf[i + frame_length + 0] & SYNCWORDH) == SYNCWORDH && (buf[i + frame_length + 1] & SYNCWORDL) == SYNCWORDL ){
+                return i;
+            }
         }
     }
 
