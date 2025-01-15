@@ -26,12 +26,6 @@ AudioBuffer::~AudioBuffer() {
     m_buffer = NULL;
 }
 
-void AudioBuffer::setBufsize(int ram, int psram) {
-    if(ram > -1) // -1 == default / no change
-        m_buffSizeRAM = ram;
-    if(psram > -1) m_buffSizePSRAM = psram;
-}
-
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
 size_t AudioBuffer::init() {
@@ -236,14 +230,6 @@ Audio::~Audio() {
 }
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::setBufsize(int rambuf_sz, int psrambuf_sz) {
-    if(InBuff.isInitialized()) {
-        log_e("Audio::setBufsize must not be called after audio is initialized");
-        return;
-    }
-    InBuff.setBufsize(rambuf_sz, psrambuf_sz);
-};
-
 void Audio::initInBuff() {
     if(!InBuff.isInitialized()) {
         size_t size = InBuff.init();

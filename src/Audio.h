@@ -96,7 +96,6 @@ public:
     ~AudioBuffer();                             // frees the buffer
     size_t   init();                            // set default values
     bool     isInitialized() { return m_f_init; };
-    void     setBufsize(int ram, int psram);
     int32_t  getBufsize();
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     uint16_t getMaxBlockSize();                 // returns maxBlockSize
@@ -144,7 +143,6 @@ class Audio : private AudioBuffer{
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
-    void setBufsize(int rambuf_sz, int psrambuf_sz);
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& voice, const String& response_format, const String& speed);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
