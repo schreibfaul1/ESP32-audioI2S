@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0a
- *  Updated on: Jan 16.2025
+ *  Version 3.1.0b
+ *  Updated on: Jan 22.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -433,6 +433,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
     bool     res           = false; // return value
+    char*    c_host        = NULL;  // copy of host
     uint16_t lenHost       = 0;     // length of hostname
     uint16_t port          = 0;     // port number
     uint16_t authLen       = 0;     // length of authorization
@@ -469,7 +470,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
-    h_host = urlencode(host, true);
+    c_host = x_ps_strdup(host); // make a copy
+    h_host = urlencode(c_host, true);
+
     trim(h_host);  // remove leading and trailing spaces
     lenHost = strlen(h_host);
 
@@ -480,16 +483,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = indexOf(h_host, "/", 10); // position of "/" in hostname
-    pos_colon     = indexOf(h_host, ":", 10); if(isalpha(host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_colon     = indexOf(h_host, ":", 10); if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
     pos_ampersand = indexOf(h_host, "&", 10); // position of "&" in hostname
 
     if(pos_slash > 0) h_host[pos_slash] = '\0';
-
     if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(host + pos_colon + 1);   // Get portnumber as integer
+        port = atoi(c_host + pos_colon + 1);   // Get portnumber as integer
         h_host[pos_colon] = '\0';
     }
-
     setDefaults();
     rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
@@ -528,7 +529,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(res) {
         uint32_t dt = millis() - timestamp;
         x_ps_free(&m_lastHost);
-        m_lastHost = x_ps_strdup(host);
+        m_lastHost = x_ps_strdup(c_host);
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
         _client->print(rqh);
@@ -546,13 +547,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(endsWith(h_host, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
         if(endsWith(h_host, ".m3u8")) {
             m_expectedPlsFmt = FORMAT_M3U8;
-            if(audio_lasthost) audio_lasthost(host);
+            if(audio_lasthost) audio_lasthost(m_lastHost);
         }
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
     }
     else {
-        AUDIO_INFO("Request %s failed!", host);
+        AUDIO_INFO("Request %s failed!", c_host);
         m_f_running = false;
         if(audio_showstation) audio_showstation("");
         if(audio_showstreamtitle) audio_showstreamtitle("");
@@ -562,6 +563,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
 exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
+    x_ps_free(&c_host);
     x_ps_free(&h_host);
     x_ps_free(&rqh);
     x_ps_free(&toEncode);
@@ -2373,7 +2375,7 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
-                    if(m_lastM3U8host) {httpPrint(m_lastM3U8host);}
+                    if(m_lastM3U8host) {connecttohost(m_lastM3U8host);}
                     else               {httpPrint(m_lastHost);}      // if url has no first redirection
                     m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
@@ -2662,7 +2664,11 @@ const char* Audio::parsePlaylist_M3U8() {
                 ret = m3u8redirection(&codec);
                 if(ret) {
                     m_codec = codec; // can be AAC or MP3
-                    return ret;
+                    x_ps_free(&m_lastM3U8host);
+                    m_lastM3U8host = strdup(ret);
+                    x_ps_free_const(&ret);
+                    vector_clear_and_shrink(m_playlistContent);
+                    return NULL;
                 }
             }
             if(m_codec == CODEC_NONE) m_codec = CODEC_AAC; // if we have no redirection
@@ -2930,12 +2936,8 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     if(m_playlistContent[choosenLine]) {
         x_ps_free(&m_playlistContent[choosenLine]);
     }
-    m_playlistContent[choosenLine] = x_ps_strdup(tmp);
-    x_ps_free(&m_lastM3U8host); m_lastM3U8host = NULL;
-    m_lastM3U8host = x_ps_strdup(tmp);
-    x_ps_free(&tmp);
-    log_d("redirect to %s", m_playlistContent[choosenLine]);
-    return m_playlistContent[choosenLine]; // it's a redirection, a new m3u8 playlist
+
+    return tmp; // it's a redirection, a new m3u8 playlist
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media sequence is

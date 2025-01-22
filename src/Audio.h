@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.1.0a
- *  Updated on: Jan 16.2025
+ *  Version 3.1.0b
+ *  Updated on: Jan 22.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -417,32 +417,6 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return false;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* urlencode(const char* str, bool spacesOnly){
-        // Reserve memory for the result (3x the length of the input string, worst-case)
-        char *encoded = x_ps_malloc(strlen(str) * 3 + 1);
-        char *p_encoded = encoded;
-
-        if (encoded == NULL) {
-            return NULL;  // Memory allocation failed
-        }
-
-        while (*str) {
-            // Adopt alphanumeric characters and secure characters directly
-            if (isalnum((unsigned char)*str)) {
-                *p_encoded++ = *str;
-            }
-            else if(spacesOnly && *str != 0x20) {
-                *p_encoded++ = *str;
-            }
-            else {
-                p_encoded += sprintf(p_encoded, "%%%02X", (unsigned char)*str);
-            }
-            str++;
-        }
-        *p_encoded = '\0';  // Null-terminieren
-        return encoded;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     void vector_clear_and_shrink(vector<char*>&vec){
         uint size = vec.size();
         for (int i = 0; i < size; i++) {
@@ -494,11 +468,82 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
     void x_ps_free(char** b){
         if(*b){free(*b); *b = NULL;}
     }
+    void x_ps_free_const(const char** b) {
+        if (b && *b) {
+            free((void*)*b); // remove const
+            *b = NULL;
+        }
+    }
     void x_ps_free(int16_t** b){
         if(*b){free(*b); *b = NULL;}
     }
     void x_ps_free(uint8_t** b){
         if(*b){free(*b); *b = NULL;}
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    char* urlencode(const char* str, bool spacesOnly) {
+        if (str == NULL) {
+            return NULL;  // Eingabe ist NULL
+        }
+
+        // Reserve memory for the result (3x the length of the input string, worst-case)
+        size_t inputLength = strlen(str);
+        size_t bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
+        char *encoded = (char *)x_ps_malloc(bufferSize);
+        if (encoded == NULL) {
+            return NULL;  // memory allocation failed
+        }
+
+        const char *p_input = str;  // Copy of the input pointer
+        char *p_encoded = encoded;  // pointer of the output buffer
+        size_t remainingSpace = bufferSize; // remaining space in the output buffer
+
+        while (*p_input) {
+            if (isalnum((unsigned char)*p_input)) {
+                // adopt alphanumeric characters directly
+                if (remainingSpace > 1) {
+                    *p_encoded++ = *p_input;
+                    remainingSpace--;
+                } else {
+                    free(encoded);
+                    return NULL; // security check failed
+                }
+            } else if (spacesOnly && *p_input != 0x20) {
+                // Nur Leerzeichen nicht kodieren
+                if (remainingSpace > 1) {
+                    *p_encoded++ = *p_input;
+                    remainingSpace--;
+                } else {
+                    free(encoded);
+                    return NULL; // security check failed
+                }
+            } else {
+                // encode unsafe characters as '%XX'
+                if (remainingSpace > 3) {
+                    int written = snprintf(p_encoded, remainingSpace, "%%%02X", (unsigned char)*p_input);
+                    if (written < 0 || written >= (int)remainingSpace) {
+                        free(encoded);
+                        return NULL; // error writing to buffer
+                    }
+                    p_encoded += written;
+                    remainingSpace -= written;
+                } else {
+                    free(encoded);
+                    return NULL; // security check failed
+                }
+            }
+            p_input++;
+        }
+
+        // Null-terminieren
+        if (remainingSpace > 0) {
+            *p_encoded = '\0';
+        } else {
+            free(encoded);
+            return NULL; // security check failed
+        }
+
+        return encoded;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
