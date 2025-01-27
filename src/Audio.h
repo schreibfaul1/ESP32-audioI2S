@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.1.0b
- *  Updated on: Jan 22.2025
+ *  Version 3.1.0c
+ *  Updated on: Jan 27.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -659,7 +659,7 @@ private:
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint16_t        m_vol = 21;                     // volume
-    uint8_t         m_vol_steps = 21;               // default
+    uint16_t        m_vol_steps = 21;               // default
     double          m_limit_left = 0;               // limiter 0 ... 1, left channel
     double          m_limit_right = 0;              // limiter 0 ... 1, right channel
     uint8_t         m_timeoutCounter = 0;           // timeout counter
