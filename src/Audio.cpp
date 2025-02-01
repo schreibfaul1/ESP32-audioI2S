@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0c
- *  Updated on: Jan 27.2025
+ *  Version 3.1.0d
+ *  Updated on: Feb 01.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2197,7 +2197,7 @@ uint32_t Audio::stopSong() {
                 m_streamType = ST_NONE;
                 pos = getFilePos() - inBufferFilled();
             }
-            if(_client->connected()) _client->stop();
+            // if(_client->connected()) _client->stop();
         }
         if(audiofile) {
             // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
