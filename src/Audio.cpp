@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0e
- *  Updated on: Feb 26.2025
+ *  Version 3.1.0f
+ *  Updated on: Feb 27.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3308,47 +3308,49 @@ void Audio::processWebFile() {
     }
     return;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
-    uint32_t        availableBytes;                          // available bytes in stream
+    uint32_t        availableBytes;     // available bytes in stream
     static bool     f_firstPacket;
     static bool     f_chunkFinished;
-    static uint32_t byteCounter;    // count received data
-    static uint8_t  ts_packet[188]; // m3u8 transport stream is always 188 bytes long
+    static bool     f_nextRound;
+    static uint32_t byteCounter;        // count received data
+    static uint8_t  ts_packet[188];     // m3u8 transport stream is always 188 bytes long
     uint8_t         ts_packetStart = 0;
     uint8_t         ts_packetLength = 0;
     static uint8_t  ts_packetPtr = 0;
     const uint8_t   ts_packetsize = 188;
     static size_t   chunkSize = 0;
 
-    // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_firstCall) { // runs only ont time per connection, prepare for start
+    // first call, set some values to default ———————————————————————————————————
+    if(m_f_firstCall) {   // runs only ont time per connection, prepare for start
         f_firstPacket = true;
         f_chunkFinished = false;
+        f_nextRound = false;
         byteCounter = 0;
         chunkSize = 0;
         m_t0 = millis();
         ts_packetPtr = 0;
         m_controlCounter = 0;
         m_f_firstCall = false;
-    }
+    } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
 
+nextRound:
     availableBytes = _client->available();
     if(availableBytes) {
-
         /* If the m3u8 stream uses 'chunked data transfer' no content length is supplied. Then the chunk size determines the audio data to be processed.
            However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
            calculated again. The data used to calculate (here readedBytes) the chunk size is not part of it.
         */
         uint8_t readedBytes = 0;
-        uint32_t minBytes = 0;
+        uint32_t minAvBytes = 0;
         if(m_f_chunked && chunkSize == byteCounter) {chunkSize += chunkedDataTransfer(&readedBytes); goto exit;}
-        if(chunkSize) minBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
-        else          minBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
+        if(chunkSize) minAvBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
+        else          minAvBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
 
-        int res = _client->read(ts_packet + ts_packetPtr, minBytes);
+        int res = _client->read(ts_packet + ts_packetPtr, minAvBytes);
         if(res > 0) {
             ts_packetPtr += res;
             byteCounter += res;
@@ -3376,6 +3378,7 @@ void Audio::processWebStreamTS() {
                 if(ws >= ts_packetLength) {
                     memcpy(InBuff.getWritePtr(), ts_packet + ts_packetStart, ts_packetLength);
                     InBuff.bytesWritten(ts_packetLength);
+                    f_nextRound = true;
                 }
                 else {
                     memcpy(InBuff.getWritePtr(), ts_packet + ts_packetStart, ws);
@@ -3386,6 +3389,7 @@ void Audio::processWebStreamTS() {
             }
             if (byteCounter == m_contentlength || byteCounter == chunkSize) {
                 f_chunkFinished = true;
+                f_nextRound = false;
                 byteCounter = 0;
                 int av = _client->available();
                 if(av == 7) for(int i = 0; i < av; i++) _client->read(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
@@ -3421,6 +3425,7 @@ void Audio::processWebStreamTS() {
             AUDIO_INFO("buffer filled in %d ms", filltime);
         }
     }
+    if(f_nextRound){goto nextRound;}
 exit:
     return;
 }
