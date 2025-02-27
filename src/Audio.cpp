@@ -28,6 +28,11 @@ AudioBuffer::~AudioBuffer() {
 
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
+void AudioBuffer::setBufsize(size_t mbs) {
+    m_buffSizePSRAM = m_buffSizeRAM = m_buffSize = mbs;
+    return;
+}
+
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
@@ -5063,6 +5068,11 @@ uint32_t Audio::inBufferFree() {
 uint32_t Audio::inBufferSize() {
     // current audio input buffer size in bytes
     return InBuff.getBufsize();
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::setBufferSize(size_t mbs) {
+    // current audio input buffer size in bytes
+    return InBuff.setBufsize(mbs);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***
