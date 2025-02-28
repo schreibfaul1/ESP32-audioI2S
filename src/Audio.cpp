@@ -290,7 +290,6 @@ void Audio::setDefaults() {
     m_f_firstM3U8call = true;    // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;    // InitSequence for playAudioData
 //    m_f_running = false;       // already done in stopSong
-    m_f_loop = false;     // Set if audio file should loop
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
     m_f_rtsp = false;     // RTSP (m3u8)stream
@@ -773,12 +772,6 @@ log_e("%s", rqh);
     x_ps_free(&h_host);
 
     return true;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::setFileLoop(bool input) {
-    if(m_codec == CODEC_M4A) return 0;
-    m_f_loop = input;
-    return input;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format off
@@ -3115,14 +3108,6 @@ void Audio::processLocalFile() {
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
-        if(m_f_loop){ // file loop
-            m_sumBytesDecoded = m_haveNewFilePos = m_audioDataStart;
-            audiofile.seek(m_audioDataStart);
-            InBuff.resetBuffer();
-            AUDIO_INFO("file loop");
-            m_f_eof = false;
-            return;
-        }
         if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
         char* afn = NULL;

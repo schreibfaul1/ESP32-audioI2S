@@ -4,7 +4,7 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.1.0f
+ *  Version 3.1.0g
  *  Updated on: Feb 27.2025
  *      Author: Wolle (schreibfaul1)
  */
@@ -148,7 +148,6 @@ public:
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);
-    bool setFileLoop(bool input);//TEST loop
     void setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool setAudioPlayPosition(uint16_t sec);
     bool setFilePos(uint32_t pos);
@@ -724,7 +723,6 @@ private:
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_tts = false;                // text to speech
-    bool            m_f_loop = false;               // Set if audio file should loop
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
