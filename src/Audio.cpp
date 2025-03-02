@@ -4769,7 +4769,7 @@ uint8_t Audio::maxVolume() { return m_vol_steps; };
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getTotalPlayingTime() {
     // Is set to zero by a connectToXXX() and starts as soon as the first audio data is available,
-    // the time counting is not interrupted by a 'pause / resume' and is not reset by a fileloop
+    // the time counting is not interrupted by a 'pause / resume'
     return millis() - m_PlayingStartTime;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
