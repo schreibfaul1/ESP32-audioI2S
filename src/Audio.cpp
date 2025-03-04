@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0f
- *  Updated on: Feb 27.2025
+ *  Version 3.1.0g
+ *  Updated on: Mar 04.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -3066,7 +3066,7 @@ void Audio::processLocalFile() {
             if((millis() - ctime) > timeout) {
                 log_e("audioHeader reading timeout");
                 m_f_running = false;
-                return;
+                goto exit;
             }
             if(InBuff.bufferFilled() > maxFrameSize || (InBuff.bufferFilled() == m_fileSize)) { // at least one complete frame or the file is smaller
                 InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
@@ -3132,7 +3132,6 @@ exit:
             AUDIO_INFO("End of file \"%s\"", afn);
             x_ps_free(&afn);
         }
-
         return;
     }
 }
