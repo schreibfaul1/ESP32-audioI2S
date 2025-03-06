@@ -339,39 +339,85 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 
 #ifdef FIXED_POINT /* int32_t */
     #define LOG2_MIN_INF REAL_CONST(-10000)
+    #define Q2_BITS        22
     #define COEF_BITS      28
-    #define COEF_PRECISION (1 << COEF_BITS)
     #define REAL_BITS      14 // MAXIMUM OF 14 FOR FIXED POINT SBR
-    #define REAL_PRECISION (1 << REAL_BITS)
     /* FRAC is the fractional only part of the fixed point number [0.0..1.0) */
     #define FRAC_SIZE      32 /* frac is a 32 bit integer */
     #define FRAC_BITS      31
-    #define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
     #define FRAC_MAX       0x7FFFFFFF
     typedef int32_t real_t;
-    #define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
-    #define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
-    #define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
-    // #define FRAC_CONST(A) (((A) >= 0) ? ((real_t)((A)*(FRAC_PRECISION)+0.5)) : ((real_t)((A)*(FRAC_PRECISION)-0.5)))
-    #define Q2_BITS      22
-    #define Q2_PRECISION (1 << Q2_BITS)
-    #define Q2_CONST(A)  (((A) >= 0) ? ((real_t)((A) * (Q2_PRECISION) + 0.5)) : ((real_t)((A) * (Q2_PRECISION) - 0.5)))
+
+    inline real_t REAL_CONST(double A) {
+        if (A >= 0) {
+            return (real_t)(A * (1 << REAL_BITS) + 0.5);  // round for positive values
+        } else {
+            return (real_t)(A * (1 << REAL_BITS) - 0.5);  // round for negative values
+        }
+    }
+
+    inline real_t COEF_CONST(double A) {
+        if (A >= 0) {
+            return (real_t)(A * (1 << COEF_BITS) + 0.5);  // round for positive values
+        } else {
+            return (real_t)(A * (1 << COEF_BITS) - 0.5);  // round for negative values
+        }
+    }
+
+    inline real_t FRAC_CONST(double A) {
+        if (A == 1.00) {
+            return (real_t)FRAC_MAX;  // special case: A = 1.00
+        } else if (A >= 0) {
+            return (real_t)(A * (1U << FRAC_BITS) + 0.5);  // round for positive values
+        } else {
+            return (real_t)(A * (1U << FRAC_BITS) - 0.5);  // round for negative values
+        }
+    }
+
     /* multiply with real shift */
-    #define MUL_R(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS)
+    inline real_t MUL_R(real_t A, real_t B) {
+        int64_t result = (int64_t)A * (int64_t)B;  // multiplication
+        result += (1 << (REAL_BITS - 1));          // add rounding offset
+        return (real_t)(result >> REAL_BITS);      // shift back to 32-Bit
+    }
+
     /* multiply with coef shift */
-    #define MUL_C(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS)
+    inline real_t MUL_C(real_t A, real_t B) {
+        int64_t result = (int64_t)A * (int64_t)B;
+        result += (1 << (COEF_BITS - 1));
+        return (real_t)(result >> COEF_BITS);
+    }
+
     /* multiply with fractional shift */
-    #define _MulHigh(A, B)    (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
-    #define MUL_F(A, B)       (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
-    #define MUL_Q2(A, B)      (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
-    #define MUL_SHIFT6(A, B)  (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
-    #define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
-    #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
-    #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
-
-
+    inline real_t MUL_F(real_t A, real_t B) {
+        int64_t temp = (int64_t)A * (int64_t)B;           // 64-bit multiplication
+        temp += (1LL << (FRAC_BITS - 1));                 // add rounding offset
+        return (real_t)(temp >> FRAC_BITS);               // shift back to 32-Bit
+    }
+    inline real_t MUL_Q2(real_t A, real_t B) {
+        int64_t temp = (int64_t)A * (int64_t)B;
+        temp += (1LL << (Q2_BITS - 1));
+        return (real_t)(temp >> Q2_BITS);
+    }
+    inline real_t MUL_SHIFT6(real_t A, real_t B) {
+        int64_t temp = (int64_t)A * (int64_t)B;
+        temp += (1LL << (6 - 1));
+        return (real_t)(temp >> 6);
+    }
+    inline real_t MUL_SHIFT23(real_t A, real_t B) {
+        int64_t temp = (int64_t)A * (int64_t)B;
+        temp += (1LL << (23 - 1));
+        return (real_t)(temp >> 23);
+    }
+    inline real_t DIV_R(real_t A, real_t B) {
+        return (real_t)(((int64_t)A << REAL_BITS) / B);
+    }
+    inline real_t DIV_C(real_t A, real_t B) {
+        return (real_t)(((int64_t)A << COEF_BITS) / B);
+    }
 
 /*    Complex multiplication */
+//    #define _MulHigh(A, B)    (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
 //    static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
 //        *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
 //        *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
@@ -396,17 +442,6 @@ static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2,
     );
 }
 
-
-    #define DIV(A, B) (((int64_t)A << REAL_BITS) / B)
-    #define step(shift)                                  \
-        if ((0x40000000l >> shift) + root <= value) {    \
-            value -= (0x40000000l >> shift) + root;      \
-            root = (root >> 1) | (0x40000000l >> shift); \
-        } else {                                         \
-            root = root >> 1;                            \
-        }
-
-
 real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
 #endif // FIXED_POINT
 #ifndef FIXED_POINT
@@ -430,8 +465,6 @@ static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1,
 }
         #define REAL_CONST(A) ((real_t)(A))
         #define COEF_CONST(A) ((real_t)(A))
-        #define Q2_CONST(A)   ((real_t)(A))
- 
        #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
     #else                                   /* Normal floating point operation */
 typedef float real_t;
@@ -440,7 +473,6 @@ typedef float real_t;
         #define MUL_F(A, B)   ((A) * (B))
         #define REAL_CONST(A) ((real_t)(A))
         #define COEF_CONST(A) ((real_t)(A))
-        #define Q2_CONST(A)   ((real_t)(A))
         #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
     /* Complex multiplication */
         static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
