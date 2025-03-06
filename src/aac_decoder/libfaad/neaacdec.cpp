@@ -3879,7 +3879,7 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     #endif
 #endif
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)faad_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -3956,7 +3956,7 @@ void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t k;
     complex_t       x;
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)faad_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -4403,8 +4403,8 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
     uint16_t numberOfSegments, numberOfSets, numberOfCodewords;
     // codeword_t codeword[512];
     // bits_t     segment[512];
-    codeword_t* codeword = (codeword_t*)ps_malloc(sizeof(codeword_t) * 512);
-    bits_t* segment = (bits_t*)ps_malloc(sizeof(bits_t) * 512);
+    codeword_t* codeword = (codeword_t*)faad_malloc(sizeof(codeword_t) * 512);
+    bits_t* segment = (bits_t*)faad_malloc(sizeof(bits_t) * 512);
     uint16_t sp_offset[8];
     uint16_t g, i, sortloop, set, bitsread;
     /*uint16_t bitsleft, codewordsleft*/;
