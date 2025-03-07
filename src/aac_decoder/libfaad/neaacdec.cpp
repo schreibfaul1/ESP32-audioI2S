@@ -1986,7 +1986,8 @@ void passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, compl
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign) {
+void passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
+                   const int8_t isign) {
     real_t tr11 = FRAC_CONST(0.309016994374947);
     real_t ti11 = FRAC_CONST(0.951056516295154);
     real_t tr12 = FRAC_CONST(-0.809016994374947);
@@ -3270,17 +3271,17 @@ void gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t 
     }
     energy = fp_sqrt(energy);
     if (energy > 0) {
-        scale = (real_t)(((int64_t)(1 << REAL_BITS) << REAL_BITS) / energy);
+        scale = DIV(REAL_CONST(1), energy);
         exp = scale_factor >> 2;
         frac = scale_factor & 3;
-        // IMDCT pre-scaling
+        /* IMDCT pre-scaling */
         exp -= sub;
-        if (exp < 0)  scale >>= -exp;
-        else          scale <<= exp;
-        if (frac)     scale = MUL_C(scale, pow2_table[frac]);
-        for (i = 0; i < size; i++) {
-            spec[i] = MUL_R(spec[i], scale);
-        }
+        if (exp < 0)
+            scale >>= -exp;
+        else
+            scale <<= exp;
+        if (frac) scale = MUL_C(scale, pow2_table[frac]);
+        for (i = 0; i < size; i++) { spec[i] = MUL_R(spec[i], scale); }
     }
 #endif
 }
@@ -3800,15 +3801,22 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
 #ifdef FIXED_POINT
 real_t fp_sqrt(real_t value) {
     real_t root = 0;
-    for (int shift = 0; shift <= 30; shift += 2) {
-        int32_t trial = (0x40000000l >> shift) + root;
-        if (trial <= value) {
-            value -= trial;
-            root = (root >> 1) | (0x40000000l >> shift);
-        } else {
-            root = root >> 1;
-        }
-    }
+    step(0);
+    step(2);
+    step(4);
+    step(6);
+    step(8);
+    step(10);
+    step(12);
+    step(14);
+    step(16);
+    step(18);
+    step(20);
+    step(22);
+    step(24);
+    step(26);
+    step(28);
+    step(30);
     if (root < value) ++root;
     root <<= (REAL_BITS / 2);
     return root;
@@ -3871,7 +3879,7 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     #endif
 #endif
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)faad_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -3948,7 +3956,7 @@ void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t k;
     complex_t       x;
     // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)faad_malloc(512 * sizeof(complex_t));
+    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
     complex_t*      sincos = mdct->sincos;
     uint16_t N = mdct->N;
     uint16_t N2 = N >> 1;
@@ -4395,8 +4403,8 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
     uint16_t numberOfSegments, numberOfSets, numberOfCodewords;
     // codeword_t codeword[512];
     // bits_t     segment[512];
-    codeword_t* codeword = (codeword_t*)faad_malloc(sizeof(codeword_t) * 512);
-    bits_t* segment = (bits_t*)faad_malloc(sizeof(bits_t) * 512);
+    codeword_t* codeword = (codeword_t*)ps_malloc(sizeof(codeword_t) * 512);
+    bits_t* segment = (bits_t*)ps_malloc(sizeof(bits_t) * 512);
     uint16_t sp_offset[8];
     uint16_t g, i, sortloop, set, bitsread;
     /*uint16_t bitsleft, codewordsleft*/;
@@ -11075,18 +11083,25 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
 #ifdef PS_DEC
     #ifdef FIXED_POINT
 /* fixed point square root approximation */
-  real_t        ps_sqrt(real_t value);
+real_t          ps_sqrt(real_t value);
 __unused real_t ps_sqrt(real_t value) {
     real_t root = 0;
-    for (int shift = 0; shift <= 30; shift += 2) {
-        int32_t trial = (0x40000000l >> shift) + root;
-        if (trial <= value) {
-            value -= trial;
-            root = (root >> 1) | (0x40000000l >> shift);
-        } else {
-            root = root >> 1;
-        }
-    }
+    step(0);
+    step(2);
+    step(4);
+    step(6);
+    step(8);
+    step(10);
+    step(12);
+    step(14);
+    step(16);
+    step(18);
+    step(20);
+    step(22);
+    step(24);
+    step(26);
+    step(28);
+    step(30);
     if(root < value) ++root;
     root <<= (REAL_BITS / 2);
     return root;
