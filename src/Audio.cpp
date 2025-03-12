@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0g
- *  Updated on: Mar 04.2025
+ *  Version 3.1.0h
+ *  Updated on: Mar 12.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2981,8 +2981,10 @@ uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media seq
             c = b + 1;
             lltoa(b, llasc, 10);
             int16_t idx_b = indexOf(m_playlistContent[linesWithURL[1]], llasc, pos - 1);
+            while(m_playlistContent[linesWithURL[1]][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
             lltoa(c, llasc, 10);
             int16_t idx_c = indexOf(m_playlistContent[linesWithURL[2]], llasc, pos - 1);
+            while(m_playlistContent[linesWithURL[2]][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
             if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;
                 AUDIO_INFO("media sequence number: %llu", MediaSeq);
