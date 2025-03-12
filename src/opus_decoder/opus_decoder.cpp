@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 21.12.2024
+ *  Updated on: 12.03.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -370,6 +370,26 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if(s_mode == MODE_HYBRID){
         log_w("Hybrid mode not yet supported");
         return samplesPerFrame;
+        int redundancy = 0;
+        int redundancy_bytes = 0;
+        int celt_to_silk=0; (void)celt_to_silk;
+        redundancy = ec_dec_bit_logp(12); /* Check if we have a redundant 0-8 kHz band */
+        if (redundancy) {
+            celt_to_silk = ec_dec_bit_logp(1); /* redundancy flag */
+            /* redundancy_bytes will be at least two, in the non-hybrid case due to the ec_tell() check above */
+            redundancy_bytes = s_mode == MODE_HYBRID ? (int32_t)ec_dec_uint(256) + 2 : packetLen - ((ec_tell() + 7) >> 3);
+            packetLen -= redundancy_bytes;
+            /* This is a sanity check. It should never happen for a valid packet, so the exact behaviour is not normative. */
+            if (packetLen * 8 < ec_tell()){
+                packetLen = 0;
+                redundancy_bytes = 0;
+                redundancy = 0;
+            }
+            /* Shrink decoder because of raw bits */
+            s_ec.storage -= redundancy_bytes;
+        }
+
+
         int decodedSamples = 0;
          int start_band = 0;
         int32_t silk_frame_size;
