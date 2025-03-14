@@ -12,6 +12,7 @@
 #pragma once
 #pragma GCC optimize ("Ofast")
 #include <vector>
+#include <regex>
 #include <Arduino.h>
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
@@ -214,6 +215,7 @@ private:
   const char*     parsePlaylist_PLS();
   const char*     parsePlaylist_ASX();
   const char*     parsePlaylist_M3U8();
+  const char*     parsePlaylist_DASH();
   const char*     m3u8redirection(uint8_t* codec);
   uint64_t        m3u8_findMediaSeqInURL();
   bool            STfromEXTINF(char* str);
@@ -574,7 +576,7 @@ private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
-    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
+    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4, FORMAT_DASH = 5};
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,

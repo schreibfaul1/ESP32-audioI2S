@@ -549,6 +549,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(endsWith(h_host, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
         if(endsWith(h_host, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
         if(endsWith(h_host, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
+        if(endsWith(h_host, ".mpd" )) m_expectedPlsFmt = FORMAT_DASH;
         if(endsWith(h_host, ".m3u8")) {
             m_expectedPlsFmt = FORMAT_M3U8;
             if(audio_lasthost) audio_lasthost(m_lastHost);
@@ -2341,6 +2342,7 @@ void Audio::loop() {
                 if(m_playlistFormat == FORMAT_M3U) connecttohost(parsePlaylist_M3U());
                 if(m_playlistFormat == FORMAT_PLS) connecttohost(parsePlaylist_PLS());
                 if(m_playlistFormat == FORMAT_ASX) connecttohost(parsePlaylist_ASX());
+                if(m_playlistFormat == FORMAT_DASH) connecttohost(parsePlaylist_DASH());
                 break;
             case AUDIO_DATA:
                 if(m_streamType == ST_WEBSTREAM) processWebStream();
@@ -2834,6 +2836,182 @@ const char* Audio::parsePlaylist_M3U8() {
         }
     }
     return NULL;
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+const char* Audio::parsePlaylist_DASH() {
+/*  <MPD xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ... maxSegmentDuration="PT2S" minBufferTime="PT2S" type="static" mediaPresentationDuration="PT1H">
+      <ProgramInformation moreInformationURL="https://github.com/dash-Industry-Forum/livesim-content">
+        <Title>Audio only 48kHz at 48kbps</Title>
+        <Source>VoD source for DASH-IF livesim2</Source>
+      </ProgramInformation>
+      <Period id="precambrian" start="PT0S">
+        <AdaptationSet contentType="audio" mimeType="audio/mp4" lang="en" segmentAlignment="true" startWithSAP="1">
+          <Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>
+          <SegmentTemplate startNumber="1" initialization="$RepresentationID$/init.mp4" duration="2" media="$RepresentationID$/$Number$.m4s"/>
+          <Representation id="A48" codecs="mp4a.40.2" bandwidth="48000" audioSamplingRate="48000">
+            <AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" value="2"/>
+          </Representation>
+        </AdaptationSet>
+      </Period>
+    </MPD>
+*/
+
+    // int lines = m_playlistContent.size();
+    // for(int i = 0; i < lines; i++) { // print all lines
+    //     log_w("pl=%i \"%s\"", i, m_playlistContent[i]);
+    // }
+
+    auto parse_iso8601_duration = [&](const char *duration) {
+        if (!duration || duration[0] != 'P') {
+            return -1; // duration must start with 'P'
+        }
+        int days = 0, hours = 0, minutes = 0, seconds = 0;
+        char *ptr = (char *)duration + 1; // skip 'P'
+        int value = 0;
+        int in_time = 0; (void)in_time;// flag for time part
+
+        while (*ptr) {
+            if (isdigit(*ptr)) {
+                value = value * 10 + (*ptr - '0'); // accumulate value
+            } else {
+                switch (*ptr) {
+                    case 'D': days = value; value = 0; break;
+                    case 'T': in_time = 1; value = 0; break; // delimiter for time part
+                    case 'H': hours = value; value = 0; break;
+                    case 'M': minutes = value; value = 0; break;
+                    case 'S': seconds = value; value = 0; break;
+                    default: return -1; // invalid character
+                }
+            }
+            ptr++;
+        }
+        return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
+    };
+
+    char* mediaPresentationDuration = nullptr;
+    char* initFile = nullptr;
+    char* mediaPattern = nullptr;
+    char* representationId = nullptr;
+    int segmentDuration = 0;
+    int sampleRate = 0;
+    int totalSegments = 0;
+    int mediaDuration = 0;
+
+    for (size_t i = 0; i < m_playlistContent.size(); i++) {
+        char* line = m_playlistContent[i];
+
+        // **duration of the stream** ()
+        if (char* mPD_Start = strstr(line, "mediaPresentationDuration=\"")) { // e.g. mediaPresentationDuration="PT1H", ISO 8601 Timeformat
+            mPD_Start += 27; // length of `mediaPresentationDuration="`
+            char* mPD_End = strchr(mPD_Start, '"');
+            if(mPD_End) {
+                int mPD_Length = mPD_End - mPD_Start;
+                mediaPresentationDuration = strndup(mPD_Start, mPD_Length);
+                mediaDuration = parse_iso8601_duration(mediaPresentationDuration);
+                log_w("🎵 Medien-Dauer: %s, Sekunden %i", mediaPresentationDuration, mediaDuration);
+            }
+
+        }
+
+        // **read SegmentTemplate** (initialization, duration, media)
+        if (strstr(line, "<SegmentTemplate")) {
+            char* initStart = strstr(line, "initialization=\"");
+            char* durStart = strstr(line, "duration=\"");
+            char* mediaStart = strstr(line, "media=\"");
+
+            if (initStart) {
+                initStart += 16; // length of `initialization="`
+                char* initEnd = strchr(initStart, '"');
+                if (initEnd) {
+                    int initLength = initEnd - initStart;
+                    initFile = strndup(initStart, initLength);
+                    log_w("🎵 Initialisierungsdatei: %s", initFile);
+                }
+            }
+
+            if (durStart) {
+                durStart += 10;
+                char* durEnd = strchr(durStart, '"');
+                if (durEnd) {
+                    int durLength = durEnd - durStart;
+                    char* dur = strndup(durStart, durLength);
+                    segmentDuration = atoi(dur);
+                    log_w("🎵 Segmentdauer: %is", segmentDuration);
+                    x_ps_free(&dur);
+                }
+            }
+
+            if (mediaStart) {
+                mediaStart += 7; // length of `media="`
+                char* mediaEnd = strchr(mediaStart, '"');
+                if (mediaEnd) {
+                    int mediaLength = mediaEnd - mediaStart;
+                    mediaPattern = strndup(mediaStart, mediaLength);
+                    log_w("🎵 Segmentmuster: %s", mediaPattern);
+                }
+            }
+        }
+
+        // **read Representation** (id, bitrate, codec)
+        if (strstr(line, "<Representation")) {
+            char* idStart = strstr(line, "id=\"");
+            char* sampleRateStart = strstr(line, "bandwidth=\"");
+            char* codecStart = strstr(line, "codecs=\"");
+
+            if (idStart) {
+                idStart += 4;
+                char* idEnd = strchr(idStart, '"');
+                if (idEnd) {
+                    int idLength = idEnd - idStart;
+                    representationId = strndup(idStart, idLength);
+                    log_w("🎵 Repräsentation: %s", representationId);
+                }
+            }
+
+            if (sampleRateStart) {
+                sampleRateStart += 11;
+                char* sampleRateEnd = strchr(sampleRateStart, '"');
+                if (sampleRateEnd) {
+                    int sampleRateLength = sampleRateEnd - sampleRateStart;
+                    char* sr = strndup(sampleRateStart, sampleRateLength);
+                    sampleRate = atoi(sr);
+                    log_w("🎵 SampleRate: %i", sampleRate);
+                    x_ps_free(&sr);
+                }
+            }
+
+            if (codecStart) {
+                codecStart += 8;
+                char* codecEnd = strchr(codecStart, '"');
+                if (codecEnd) {
+                    int codecLength = codecEnd - codecStart;
+                    char* codec = strndup(codecStart, codecLength);
+                    log_w("🎵 Codec: %s", codec);
+                }
+            }
+        }
+    }
+
+    // **Anzahl der Segmente berechnen**
+    if (segmentDuration > 0) {
+        totalSegments = mediaDuration / segmentDuration; // 1 Stunde = 3600s
+    }
+
+    // **Ergebnisse ausgeben**
+    log_w("🎥 MPD-Analyse abgeschlossen:");
+    log_w("   ➤ Medien-Dauer: %i ", mediaDuration);
+    log_w("   ➤ Initialisierungsdatei: %s", initFile ? initFile : "N/A");
+    log_w("   ➤ Segmentmuster: &s", mediaPattern ? mediaPattern : "N/A");
+    log_w("   ➤ Segmente: %i je %i", totalSegments, segmentDuration);
+
+    // **Speicher freigeben**
+    free(mediaPresentationDuration);
+    free(initFile);
+    free(mediaPattern);
+    free(representationId);
+
+
+    return "";
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const char* Audio::m3u8redirection(uint8_t* codec) {
@@ -3652,7 +3830,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             vTaskDelay(5);
             continue;
         }
-
         int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
         if(posColon >= 0) {
             for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
@@ -3942,7 +4119,7 @@ exit:
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format off
 bool Audio::parseContentType(char* ct) {
-    enum : int { CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX, CT_M3U8, CT_TXT, CT_AACP, CT_OPUS, CT_OGG, CT_VORBIS };
+    enum : int { CT_NONE, CT_MP3, CT_AAC, CT_M4A, CT_WAV, CT_FLAC, CT_PLS, CT_M3U, CT_ASX, CT_M3U8, CT_TXT, CT_XML, CT_MPD, CT_AACP, CT_OPUS, CT_OGG, CT_VORBIS };
 
     strlower(ct);
     trim(ct);
@@ -3980,6 +4157,7 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "application/x-mpegurl"))         ct_val = CT_M3U8;
     else if(!strcmp(ct, "application/octet-stream"))      ct_val = CT_TXT;  // ??? listen.radionomy.com/1oldies before redirection
     else if(!strcmp(ct, "text/html"))                     ct_val = CT_TXT;
+    else if(!strcmp(ct, "text/xml"))                      ct_val = CT_XML;
     else if(!strcmp(ct, "text/plain"))                    ct_val = CT_TXT;
     else if(ct_val == CT_NONE) {
         AUDIO_INFO("ContentType %s not supported", ct);
@@ -4048,6 +4226,12 @@ bool Audio::parseContentType(char* ct) {
             if(m_expectedPlsFmt == FORMAT_PLS) {
                 m_playlistFormat = FORMAT_PLS;
                 if(m_f_Log) log_i("set playlist format to PLS");
+            }
+            break;
+        case CT_XML:
+            if(m_expectedPlsFmt == FORMAT_DASH) {
+                m_playlistFormat = FORMAT_DASH;
+                if(m_f_Log) log_i("set playlist format to DASH");
             }
             break;
         default:
