@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0h
- *  Updated on: Mar 12.2025
+ *  Version 3.1.0i
+ *  Updated on: Mar 16.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -2939,21 +2939,60 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media sequence is
+/*
+myList:     #EXTM3U
+            #EXT-X-VERSION:3
+            #EXT-X-TARGETDURATION:4
+            #EXT-X-MEDIA-SEQUENCE:227213779
+            #EXT-X-DISCONTINUITY-SEQUENCE:0
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"
+            media-ur748eh1d_b192000_227213779.aac
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"
+            media-ur748eh1d_b192000_227213780.aac
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"
+            media-ur748eh1d_b192000_227213781.aac
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"
+            media-ur748eh1d_b192000_227213782.aac
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"
+            media-ur748eh1d_b192000_227213783.aac
+            #EXTINF:3.008,
+            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"
+            media-ur748eh1d_b192000_227213784.aac
 
-    char*    pEnd;
-    uint64_t MediaSeq = 0;
-    uint8_t  idx = 0;
-    uint16_t linesWithURL[3] = {0};
-    char     llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
+result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"media-ur748eh1d_b192000_227213779.aac
+            m_linesWithSeqNr[1] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"media-ur748eh1d_b192000_227213780.aac
+            m_linesWithSeqNr[2] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"media-ur748eh1d_b192000_227213781.aac
+            m_linesWithSeqNr[3] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"media-ur748eh1d_b192000_227213782.aac
+            m_linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
+            m_linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
 
+    std::vector<char*> m_linesWithSeqNr;
+    bool addNextLine = false;
+    int idx = -1;
     for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
+    //  log_w("pl%i = %s", i, m_playlistContent[i]);
+        if(!startsWith(m_playlistContent[i], "#EXTINF:") && addNextLine) {
+            m_linesWithSeqNr[idx] = x_ps_realloc(m_linesWithSeqNr[idx], strlen(m_linesWithSeqNr[idx]) + strlen(m_playlistContent[i]) + 1);
+            if(!m_linesWithSeqNr[idx]) { log_e("realloc failed"); return UINT64_MAX; }
+            strcat(m_linesWithSeqNr[idx], m_playlistContent[i]);
+        }
         if(startsWith(m_playlistContent[i], "#EXTINF:")) {
-            linesWithURL[idx] = i + 1;
             idx++;
-            if(idx == 3) break;
+            m_linesWithSeqNr.push_back(x_ps_strdup(m_playlistContent[i]));
+            addNextLine = true;
         }
     }
-    if(idx < 2) {
+
+    // for (uint16_t i = 0; i < m_linesWithSeqNr.size(); i++) {
+    //     log_w("m_linesWithSeqNr[%i] = %s", i, m_linesWithSeqNr[i]);
+    // }
+
+    if(m_linesWithSeqNr.size() < 2) {
         log_e("not enough lines with \"#EXTINF:\" found");
         return UINT64_MAX;
     }
@@ -2963,28 +3002,29 @@ uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media seq
     // http://lampsifmlive.mdc.akamaized.net/strmLampsi/userLampsi/l_50551_3318810050_229669.aac
     // go back to first digit:                                                        ∧
 
-    // log_i("m_playlistContent[linesWithURL[0]] %s", m_playlistContent[linesWithURL[0]]);
-    // log_i("m_playlistContent[linesWithURL[1]] %s", m_playlistContent[linesWithURL[1]]);
-    // log_i("m_playlistContent[linesWithURL[2]] %s", m_playlistContent[linesWithURL[2]]);
 
-    int16_t len = strlen(m_playlistContent[linesWithURL[0]]) - 1;
-    int16_t qm = indexOf(m_playlistContent[linesWithURL[0]], "?", 0);
+    int16_t len = strlen(m_linesWithSeqNr[0]) - 1;
+    int16_t qm = indexOf(m_linesWithSeqNr[0], "?", 0);
     if(qm > 0) len = qm; // If we find a question mark, look to the left of it
 
+    char*    pEnd;
+    uint64_t MediaSeq = 0;
+    char     llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
+
     for(int16_t pos = len; pos >= 0; pos--) {
-        if(isdigit(m_playlistContent[linesWithURL[0]][pos])) {
-            while(isdigit(m_playlistContent[linesWithURL[0]][pos])) pos--;
+        if(isdigit(m_linesWithSeqNr[0][pos])) {
+            while(isdigit(m_linesWithSeqNr[0][pos])) pos--;
             pos++;
             uint64_t a, b, c;
-            a = strtoull(m_playlistContent[linesWithURL[0]] + pos, &pEnd, 10);
+            a = strtoull(m_linesWithSeqNr[0] + pos, &pEnd, 10);
             b = a + 1;
             c = b + 1;
             lltoa(b, llasc, 10);
-            int16_t idx_b = indexOf(m_playlistContent[linesWithURL[1]], llasc, pos - 1);
-            while(m_playlistContent[linesWithURL[1]][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
+            int16_t idx_b = indexOf(m_linesWithSeqNr[1], llasc, pos - 1);
+            while(m_linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
             lltoa(c, llasc, 10);
-            int16_t idx_c = indexOf(m_playlistContent[linesWithURL[2]], llasc, pos - 1);
-            while(m_playlistContent[linesWithURL[2]][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
+            int16_t idx_c = indexOf(m_linesWithSeqNr[2], llasc, pos - 1);
+            while(m_linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
             if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;
                 AUDIO_INFO("media sequence number: %llu", MediaSeq);
@@ -2992,6 +3032,7 @@ uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media seq
             }
         }
     }
+    vector_clear_and_shrink(m_linesWithSeqNr);
     return MediaSeq;
 }
 

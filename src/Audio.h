@@ -4,8 +4,8 @@
  *
  *  Created on: Oct 28,2018
  *
- *  Version 3.1.0g
- *  Updated on: Feb 27.2025
+ *  Version 3.1.0i
+ *  Updated on: Mar 16.2025
  *      Author: Wolle (schreibfaul1)
  */
 
@@ -455,6 +455,14 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         if(!ps_str) log_e("oom");
         return ps_str;
     }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+char* x_ps_realloc(char* ptr, uint16_t len) {
+    char* ps_str = NULL;
+    if(psramFound()){ps_str = (char*) ps_realloc(ptr, len);}
+    else            {ps_str = (char*)    realloc(ptr, len);}
+    if(!ps_str) log_e("oom");
+    return ps_str;
+}
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_strdup(const char* str) {
         if(!str) {log_e("Input str is NULL"); return NULL;};
