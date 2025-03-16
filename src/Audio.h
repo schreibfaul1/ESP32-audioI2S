@@ -208,12 +208,15 @@ private:
   void            processWebFile();
   void            processWebStreamTS();
   void            processWebStreamHLS();
+  void            processWebStreamMPD();
   void            playAudioData();
   bool            readPlayListData();
   const char*     parsePlaylist_M3U();
   const char*     parsePlaylist_PLS();
   const char*     parsePlaylist_ASX();
   const char*     parsePlaylist_M3U8();
+  bool            parsePlaylist_DASH();
+  const char*     dashGetNextSegment();
   const char*     m3u8redirection(uint8_t* codec);
   uint64_t        m3u8_findMediaSeqInURL();
   bool            STfromEXTINF(char* str);
@@ -555,6 +558,54 @@ char* x_ps_realloc(char* ptr, uint16_t len) {
         return encoded;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool replacestr(char** line, const char* search, const char* replace) {
+    char* pos;          // Pointer on the position of the search string
+    int search_len = strlen(search);
+    int replace_len = strlen(replace);
+    int line_len = strlen(*line);
+
+    // Calculate the maximum possible size of the result
+    // Any occurrence of `Search` can be replaced by` replace`,
+    // what leads to a change in length.
+    // The maximum size is: line_len + (replace_len - Search_len) * Number of occurrence
+    int count = 0;
+    char* temp = *line;
+    while ((temp = strstr(temp, search)) != NULL) {
+        count++;
+        temp += search_len;
+    }
+
+    // Calculate the new size of the buffer
+    int buffer_size = line_len + (replace_len - search_len) * count + 1; // +1 for the zero termination sign
+
+    char* buffer = (char*)malloc(buffer_size);// allocate the buffer with the calculated size
+    if (!buffer) {
+        return false; // Storage assignment failed
+    }
+    buffer[0] = '\0';
+    char* current_pos = *line;  // Search for the search string and replace it
+    while ((pos = strstr(current_pos, search)) != NULL) {
+        strncat(buffer, current_pos, pos - current_pos); // copy the part before the search string into the buffer
+        strcat(buffer, replace); // Add the replacement string
+        current_pos = pos + search_len; // move the pointer to the rest of the character chain
+    }
+
+    strcat(buffer, current_pos); // Add the remaining part of the string
+
+    char* new_line = (char*)realloc(*line, buffer_size); // Pass the space of `line`, if necessary
+    if (!new_line) {
+        x_ps_free(&buffer);   // Release the memory if realoc fails
+        return false;         // Storage adjustment failed
+    }
+
+    strcpy(new_line, buffer); // Copy the result back into the original character chain
+    *line = new_line;         // Update the pointer to the new memory
+
+    // Clean up
+    x_ps_free(&buffer);
+    return true;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
     uint32_t bswap32(uint32_t x) {
         return ((x & 0xFF000000) >> 24) |
@@ -582,7 +633,7 @@ private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
-    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
+    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4, FORMAT_DASH = 5};
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
@@ -657,6 +708,13 @@ private:
     char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     char*           m_speechtxt = NULL;             // stores tts text
+    char*           m_mpdInitFile = NULL;           // stores the init file of a DASH stream     e.g. /initmp4
+    char*           m_mpdMediaPattern = NULL;       // stores the media file of a DASH stream    e.g. .m4s
+    char*           m_mpdMediaURL = NULL;           // stores the media URL of a DASH stream     e.g. https://livesim2.dashif.org/vod/testpic_2s/A48
+    char*           m_mpdNextURL = NULL;            // stores the next URL of a DASH stream
+    uint32_t        m_mpdMediaDuration = 0;         // stores the media duration of a DASH stream
+    uint32_t        m_mpdTotalSegments = 0;         // stores the segment duration of a DASH stream
+    uint16_t        m_mpdCurrentSequenceNumber = 0; // stores the current sequence number of a DASH stream
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header
