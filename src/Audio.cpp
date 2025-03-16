@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0j
+ *  Version 3.1.0k
  *  Updated on: Mar 16.2025
  *      Author: Wolle (schreibfaul1)
  *
@@ -3553,7 +3553,7 @@ void Audio::processWebStreamHLS() {
 
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 40000) {
+            if(InBuff.bufferFilled() < 50000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
