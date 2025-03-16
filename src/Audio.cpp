@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0k
+ *  Version 3.1.0l
  *  Updated on: Mar 16.2025
  *      Author: Wolle (schreibfaul1)
  *
@@ -3359,6 +3359,7 @@ void Audio::processWebStreamTS() {
     // first call, set some values to default ———————————————————————————————————
     if(m_f_firstCall) {   // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        m_f_m3u8data = true;
         f_firstPacket = true;
         f_chunkFinished = false;
         f_nextRound = false;
@@ -3479,6 +3480,7 @@ void Audio::processWebStreamHLS() {
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        m_f_m3u8data = true;
         f_chunkFinished = false;
         byteCounter = 0;
         chunkSize = 0;
