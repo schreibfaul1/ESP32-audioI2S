@@ -3,7 +3,7 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0i
+ *  Version 3.1.0j
  *  Updated on: Mar 16.2025
  *      Author: Wolle (schreibfaul1)
  *
@@ -1670,7 +1670,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         if(framesize == 0) return 0;
         size_t fs = framesize;
-        if(fs > 1024) fs = 1024;
+        if(fs >= m_ibuffSize - 1) fs = m_ibuffSize - 1;
         uint16_t dataLength = fs - 1;
         for(int i = 0; i < dataLength; i++) { m_ibuff[i] = *(data + i + 1);} // without encodingByte
         m_ibuff[dataLength] = 0;
@@ -1763,7 +1763,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 if(m_f_Log) log_i("Attached lyrics seen at pos %d length %d", SYLT_pos, SYLT_size);
             }
         }
-        else { showID3Tag(tag, value); }
+        else { showID3Tag(tag, value);}
         remainingHeaderBytes -= universal_tmp;
         universal_tmp -= dataLen;
 
@@ -2361,6 +2361,7 @@ void Audio::loop() {
                 }
                 else{
                     count = 0;
+                    if(!m_f_ts) m_f_firstCall = true; // for aac or aacp with ID3 Header
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
@@ -3257,6 +3258,7 @@ void Audio::processWebFile() {
         m_f_stream = false;
         m_audioDataSize = m_contentlength;
         m_webFilePos = 0;
+        m_controlCounter = 0;
     }
 
 
@@ -3356,6 +3358,7 @@ void Audio::processWebStreamTS() {
 
     // first call, set some values to default ———————————————————————————————————
     if(m_f_firstCall) {   // runs only ont time per connection, prepare for start
+        m_f_firstCall = false;
         f_firstPacket = true;
         f_chunkFinished = false;
         f_nextRound = false;
@@ -3363,8 +3366,6 @@ void Audio::processWebStreamTS() {
         chunkSize = 0;
         m_t0 = millis();
         ts_packetPtr = 0;
-        m_controlCounter = 0;
-        m_f_firstCall = false;
     } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -3477,13 +3478,13 @@ void Audio::processWebStreamHLS() {
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
+        m_f_firstCall = false;
         f_chunkFinished = false;
         byteCounter = 0;
         chunkSize = 0;
         ID3WritePtr = 0;
         ID3ReadPtr = 0;
         m_t0 = millis();
-        m_f_firstCall = false;
         firstBytes = true;
         ID3Buff = (uint8_t*)malloc(ID3BuffSize);
         m_controlCounter = 0;
@@ -3877,8 +3878,6 @@ lastToDo:
         }
         if(m_f_Log) { log_i("Switch to DATA, metaint is %d", m_metaint); }
         if(m_playlistFormat != FORMAT_M3U8 && audio_lasthost) audio_lasthost(m_lastHost);
-        m_controlCounter = 0;
-        m_f_firstCall = true;
     }
     else if(m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
