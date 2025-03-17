@@ -179,6 +179,7 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_num = i2sPort;  // i2s port number
 
     // -------- I2S configuration -------------------------------------------------------------------------------------------
+#if ESP_IDF_VERSION_MAJOR == 5
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
     m_i2s_chan_cfg.dma_desc_num  = 32;                     // number of DMA buffer
@@ -201,6 +202,7 @@ Audio::Audio(uint8_t i2sPort) {
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart(m_i2s_num);
     m_sampleRate = 44100;
+#endif // ESP_IDF_VERSION_MAJOR == 5
 
     for(int i = 0; i < 3; i++) {
         m_filter[i].a0 = 1;
@@ -218,9 +220,13 @@ Audio::~Audio() {
     // InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
     setDefaults();
 
+#if ESP_IDF_VERSION_MAJOR == 5
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
-
+#else
+    i2s_driver_uninstall((i2s_port_t)m_i2s_num); // #215 free I2S buffer
+#endif
+    
     x_ps_free(&m_playlistBuff);
     x_ps_free(&m_chbuf);
     x_ps_free(&m_lastHost);
@@ -245,11 +251,21 @@ void Audio::initInBuff() {
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
+#if ESP_IDF_VERSION_MAJOR == 5
     return i2s_channel_enable(m_i2s_tx_handle);
+#else
+    // It is not necessary to call this function after i2s_driver_install() (it is started automatically),
+    // however it is necessary to call it after i2s_stop()
+    return i2s_start((i2s_port_t)i2s_num);
+#endif
 }
 
 esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
+#if ESP_IDF_VERSION_MAJOR == 5
     return i2s_channel_disable(m_i2s_tx_handle);
+#else
+    return i2s_stop((i2s_port_t)i2s_num);
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDefaults() {
@@ -2291,7 +2307,11 @@ i2swrite:
 
     validSamples = m_validSamples;
 
+#if(ESP_IDF_VERSION_MAJOR == 5)
     err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * sampleSize, &i2s_bytesConsumed, 10);
+#else
+    err = i2s_write((i2s_port_t)m_i2s_num, (int16_t*)m_outBuff + count, validSamples * sampleSize, &i2s_bytesConsumed, 10);
+#endif
     if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= i2s_bytesConsumed / sampleSize;
     count += i2s_bytesConsumed / 2;
@@ -4736,6 +4756,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     log_e("Arduino Version must be 3.0.0 or higher!");
 #endif
 
+#if(ESP_IDF_VERSION_MAJOR == 5)
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
@@ -4745,7 +4766,15 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     I2Sstop(m_i2s_num);
     result = i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg);
     I2Sstart(m_i2s_num);
-
+#else
+    m_pin_config.bck_io_num = BCLK;
+    m_pin_config.ws_io_num = LRC; //  wclk = lrc
+    m_pin_config.data_out_num = DOUT;
+    m_pin_config.data_in_num = I2S_GPIO_UNUSED;
+    m_pin_config.mck_io_num = MCLK;
+    result = i2s_set_pin((i2s_port_t)m_i2s_num, &m_pin_config);
+#endif
+    
     return (result == ESP_OK);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4880,6 +4909,7 @@ uint8_t Audio::getChannels() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::reconfigI2S(){
 
+#if ESP_IDF_VERSION_MAJOR == 5
     I2Sstop(0);
 
     if(getBitsPerSample() == 8 && getChannels() == 2) m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate() * 2;
@@ -4894,7 +4924,11 @@ void Audio::reconfigI2S(){
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
     I2Sstart(m_i2s_num);
-
+#else
+    m_i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    i2s_set_clk((i2s_port_t)m_i2s_num, m_sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
+#endif
+    
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     return;
@@ -4917,6 +4951,18 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 
     m_f_commFMT = commFMT;
 
+#if ESP_IDF_VERSION_MAJOR < 5
+    if(commFMT) {
+        AUDIO_INFO("commFMT = LSBJ (Least Significant Bit Justified)");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_MSB);
+    }
+    else {
+        AUDIO_INFO("commFMT = Philips");
+        m_i2s_config.communication_format = (i2s_comm_format_t)(I2S_COMM_FORMAT_STAND_I2S);
+    }
+    i2s_driver_uninstall((i2s_port_t)m_i2s_num);
+    i2s_driver_install((i2s_port_t)m_i2s_num, &m_i2s_config, 0, NULL);
+#else
     i2s_channel_disable(m_i2s_tx_handle);
     if(commFMT) {
         AUDIO_INFO("commFMT = LSBJ (Least Significant Bit Justified)");
@@ -4928,6 +4974,7 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
+#endif
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::computeVUlevel(int16_t sample[2]) {
