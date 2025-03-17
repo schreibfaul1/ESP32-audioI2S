@@ -495,7 +495,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host[pos_colon] = '\0';
     }
     setDefaults();
-    rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
+    rqh = x_ps_calloc(lenHost + strlen(authorization) + 330, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
@@ -507,7 +507,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
                        strcat(rqh, "Accept:*/*\r\n");
-                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21\r\n");
+                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
@@ -538,6 +538,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         _client->print(rqh);
         if(endsWith(h_host, ".mp3" )) m_expectedCodec  = CODEC_MP3;
         if(endsWith(h_host, ".aac" )) m_expectedCodec  = CODEC_AAC;
+        if(endsWith(h_host, ".aacp" ))m_expectedCodec  = CODEC_AAC;
         if(endsWith(h_host, ".wav" )) m_expectedCodec  = CODEC_WAV;
         if(endsWith(h_host, ".m4a" )) m_expectedCodec  = CODEC_M4A;
         if(endsWith(h_host, ".m4s" )) m_expectedCodec  = CODEC_M4A; // m4s is a DASH segment of a m4a file
@@ -623,7 +624,7 @@ bool Audio::httpPrint(const char* host) {
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
 
-    char rqh[strlen(h_host) + 300]; // http request header
+    char rqh[strlen(h_host) + 330]; // http request header
     rqh[0] = '\0';
 
     strcat(rqh, "GET ");
@@ -633,7 +634,7 @@ bool Audio::httpPrint(const char* host) {
     strcat(rqh, hostwoext);
     strcat(rqh, "\r\n");
     strcat(rqh, "Accept: */*\r\n");
-    strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21\r\n");
+    strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
@@ -1596,7 +1597,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         frameid[3] = *(data + 3);
         frameid[4] = 0;
         for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
-
         remainingHeaderBytes -= 4;
         if(frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0 && frameid[3] == 0) {
             // We're in padding
@@ -1633,7 +1633,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         return 6;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == 5) { // If the frame is larger than 512 bytes, skip the rest
+    if(m_controlCounter == 5) { // If the frame is larger than len, skip the rest
         if(framesize > len) {
             framesize -= len;
             remainingHeaderBytes -= len;
@@ -1647,7 +1647,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 6) { // Read the value
-        m_controlCounter = 5;   // only read 256 bytes
+        m_controlCounter = 5;
         uint8_t encodingByte = *(data + 0);  // ID3v2 Text-Encoding-Byte
         // $00 – ISO-8859-1 (LATIN-1, Identical to ASCII for values smaller than 0x80).
         // $01 – UCS-2 encoded Unicode with BOM (Byte Order Mark), in ID3v2.2 and ID3v2.3.
@@ -1658,7 +1658,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         //    if(m_dataMode == AUDIO_LOCALFILE) {
                 APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
                 APIC_size[numID3Header] = framesize;
-                //    log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
+            //    log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
         //    }
             return 0;
         }
@@ -1680,7 +1680,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ibuff[dataLength] = 0;
         framesize -= fs;
         remainingHeaderBytes -= fs;
-        m_ibuff[fs] = 0;
+        m_ibuff[fs] = '\0';
 
         if(encodingByte == 0){  // latin
             latinToUTF8(m_ibuff, m_ibuffSize, false);
@@ -1715,8 +1715,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             showID3Tag(tag, converter.to_bytes(utf16_string).c_str());
         }
 
-        if(encodingByte == 3) { // utf8
-            showID3Tag(tag, m_ibuff);
+        static std::unordered_map<std::string, uint32_t> tagHashes; // Saves hash values ​​per day
+        if (encodingByte == 3) { // UTF-8
+            uint32_t newHash = simpleHash(m_ibuff);
+            if (tagHashes[tag] != newHash) {
+                showID3Tag(tag, m_ibuff); // Show only tag content that changes
+                tagHashes[tag] = newHash; // Update the hash value
+            }
         }
         return fs;
     }
@@ -1725,7 +1730,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // --- section V2.2 only , greater Vers above ----
     // see https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
     if(m_controlCounter == 10) { // frames in V2.2, 3bytes identifier, 3bytes size descriptor
-
         if(universal_tmp > 0) {
             if(universal_tmp > len) {
                 universal_tmp -= len;
@@ -1801,6 +1805,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         else {
             m_controlCounter = 100; // ok
+
             m_audioDataSize = m_contentlength - m_audioDataStart;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             if(APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
@@ -3807,6 +3812,7 @@ void Audio::processWebStreamHLS() {
                 return;
             }
             if(m_controlCounter < 100) {
+                if(m_f_chunked && InBuff.bufferFilled() < chunkSize) { return; }
                 int res = read_ID3_Header(&ID3Buff[ID3ReadPtr], ID3BuffSize - ID3ReadPtr);
                 if(res >= 0) ID3ReadPtr += res;
                 if(ID3ReadPtr > ID3BuffSize) {
@@ -3853,7 +3859,7 @@ void Audio::processWebStreamHLS() {
 
     if(f_chunkFinished) {
         if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {
+            if(InBuff.bufferFilled() < 60000) {
                 f_chunkFinished = false;
                 m_f_continue = true;
             }
@@ -4046,7 +4052,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         if(posColon >= 0) {
             for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
         }
-//        log_e("rhl: %s", rhl);
+        log_e("rhl: %s", rhl);
         if(startsWith(rhl, "HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];
@@ -4061,7 +4067,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(startsWith(rhl, "content-type:")) { // content-type: text/html; charset=UTF-8
-        //    log_w("cT: %s", rhl);
+            log_w("cT: %s", rhl);
             int idx = indexOf(rhl + 13, ";");
             if(idx > 0) rhl[13 + idx] = '\0';
             if(parseContentType(rhl + 13)) ct_seen = true;
