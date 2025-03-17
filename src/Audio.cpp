@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 28.2018
  *
- *  Version 3.1.0l
- *  Updated on: Mar 16.2025
+ *  Version 3.1.0m
+ *  Updated on: Mar 17.2025
  *      Author: Wolle (schreibfaul1)
  *
  */
@@ -496,7 +496,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host[pos_colon] = '\0';
     }
     setDefaults();
-    rqh = x_ps_calloc(lenHost + strlen(authorization) + 300, 1); // http request header
+    rqh = x_ps_calloc(lenHost + strlen(authorization) + 330, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
@@ -508,7 +508,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
                        strcat(rqh, "Accept:*/*\r\n");
-                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21\r\n");
+                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
                        strcat(rqh, authorization);
                        strcat(rqh, "\r\n"); }
@@ -621,7 +621,7 @@ bool Audio::httpPrint(const char* host) {
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
 
-    char rqh[strlen(h_host) + 300]; // http request header
+    char rqh[strlen(h_host) + 330]; // http request header
     rqh[0] = '\0';
 
     strcat(rqh, "GET ");
@@ -631,7 +631,7 @@ bool Audio::httpPrint(const char* host) {
     strcat(rqh, hostwoext);
     strcat(rqh, "\r\n");
     strcat(rqh, "Accept: */*\r\n");
-    strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21\r\n");
+    strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
