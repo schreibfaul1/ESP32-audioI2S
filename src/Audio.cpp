@@ -233,7 +233,7 @@ Audio::~Audio() {
     x_ps_free(&m_ibuff);
     x_ps_free(&m_lastM3U8host);
     x_ps_free(&m_speechtxt);
-
+    freeMPD();
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
     vSemaphoreDelete(mutex_audioTask);
@@ -323,9 +323,9 @@ void Audio::setDefaults() {
     m_chunkcount = 0;      // for chunked streams
     m_contentlength = 0;   // If Content-Length is known, count it
     m_curSample = 0;
-    m_metaint = 0;        // No metaint yet
-    m_LFcount = 0;        // For end of header detection
-    m_channels = 2;       // assume stereo #209
+    m_metaint = 0;         // No metaint yet
+    m_LFcount = 0;         // For end of header detection
+    m_channels = 2;        // assume stereo #209
     m_streamTitleHash = 0;
     m_fileSize = 0;
     m_ID3Size = 0;
@@ -336,6 +336,7 @@ void Audio::setDefaults() {
     m_M4A_sampleRate = 0;
     m_sumBytesDecoded = 0;
     m_vuLeft = m_vuRight = 0; // #835
+    freeMPD();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2430,8 +2431,8 @@ void Audio::loop() {
                 if(m_f_continue){
                     const char* res = dashGetNextSegment();
                     if(res){
-                        if(m_mpdCurrentSequenceNumber == 0) httpPrint(res);
-                        else                                httpPrint(res);
+                        if(m_mpd.mpdCurrentSequenceNumber == 0) httpPrint(res); // init file
+                        else                                    httpPrint(res); // segment file
                         m_dataMode = HTTP_RESPONSE_HEADER;
                     }
                     m_f_continue = false;
@@ -2934,6 +2935,21 @@ bool Audio::parsePlaylist_DASH() {
     </MPD>
 */
 
+    const char* ntpServer = "pool.ntp.org";
+    const int ntpPort = 123;
+    WiFiUDP udp;
+    uint8_t ntpPacket[48];
+    uint32_t timeStamp = 0;
+
+    if(!m_mpd.mpdTimeSegment){
+        timeStamp = millis();
+        memset(ntpPacket, 0, 48);
+        ntpPacket[0] = 0b11100011; // LI, Version, Mode
+        udp.beginPacket(ntpServer, ntpPort);
+        udp.write(ntpPacket, 48);
+        udp.endPacket();
+    }
+
     int lines = m_playlistContent.size();
     for(int i = 0; i < lines; i++) { // print all lines
         log_w("pl=%i %s", i, m_playlistContent[i]);
@@ -2969,8 +2985,11 @@ bool Audio::parsePlaylist_DASH() {
     char*    codec = nullptr;
     char*    representationId = nullptr;
     char*    baseUrl = nullptr;
-    uint32_t segmentDuration = 0;
+    uint32_t duration = 0;
     uint32_t sampleRate = 0;
+    uint32_t startNumber = 1;
+    uint32_t timeScale = 0;
+    float    segmentDuration = 0.0;
 
     for (size_t i = 0; i < m_playlistContent.size(); i++) {
         char* line = m_playlistContent[i];
@@ -2991,7 +3010,7 @@ bool Audio::parsePlaylist_DASH() {
             if(mPD_End) {
                 int mPD_Length = mPD_End - mPD_Start;
                 char* mediaPresentationDuration = strndup(mPD_Start, mPD_Length);
-                m_mpdMediaDuration = parse_iso8601_duration(mediaPresentationDuration);
+                m_mpd.mpdMediaDuration = parse_iso8601_duration(mediaPresentationDuration);
                 x_ps_free(&mediaPresentationDuration);
             }
         }
@@ -3000,6 +3019,8 @@ bool Audio::parsePlaylist_DASH() {
         if (strstr(line, "<SegmentTemplate")) {
             int cnt = 0;
             while(true){
+                char* timeScaleStart = strstr(line, "timescale=\"");
+                char* startNumberStart = strstr(line, "startNumber=\"");
                 char* initStart = strstr(line, "initialization=\"");
                 char* durStart = strstr(line, "duration=\"");
                 char* mediaStart = strstr(line, "media=\"");
@@ -3009,8 +3030,8 @@ bool Audio::parsePlaylist_DASH() {
                     char* initEnd = strchr(initStart, '"');
                     if (initEnd) {
                         int initLength = initEnd - initStart;
-                        x_ps_free(&m_mpdInitFile);
-                        m_mpdInitFile = strndup(initStart, initLength);
+                        x_ps_free(&m_mpd.mpdInitFile);
+                        m_mpd.mpdInitFile = strndup(initStart, initLength);
                     }
                 }
 
@@ -3020,7 +3041,7 @@ bool Audio::parsePlaylist_DASH() {
                     if (durEnd) {
                         int durLength = durEnd - durStart;
                         char* dur = strndup(durStart, durLength);
-                        segmentDuration = atol(dur);
+                        duration = atol(dur);
                         x_ps_free(&dur);
                     }
                 }
@@ -3030,11 +3051,34 @@ bool Audio::parsePlaylist_DASH() {
                     char* mediaEnd = strchr(mediaStart, '"');
                     if (mediaEnd) {
                         int mediaLength = mediaEnd - mediaStart;
-                        x_ps_free(&m_mpdMediaPattern);
-                        m_mpdMediaPattern = strndup(mediaStart, mediaLength);
+                        x_ps_free(&m_mpd.mpdMediaPattern);
+                        m_mpd.mpdMediaPattern = strndup(mediaStart, mediaLength);
                     }
                 }
-                if(m_mpdMediaPattern && m_mpdInitFile && segmentDuration) break;
+
+                if(timeScaleStart) {
+                    timeScaleStart += 11;
+                    char* timeScaleEnd = strchr(timeScaleStart, '"');
+                    if(timeScaleEnd) {
+                        int timeScaleLength = timeScaleEnd - timeScaleStart;
+                        char* ts = strndup(timeScaleStart, timeScaleLength);
+                        timeScale = atoi(ts);
+                        x_ps_free(&ts);
+                    }
+                }
+
+                if(startNumberStart) {
+                    startNumberStart += 13;
+                    char* startNumberEnd = strchr(startNumberStart, '"');
+                    if(startNumberEnd) {
+                        int startNumberLength = startNumberEnd - startNumberStart;
+                        char* sn = strndup(startNumberStart, startNumberLength);
+                        startNumber = atoi(sn);
+                        x_ps_free(&sn);
+                    }
+                }
+
+                if(m_mpd.mpdMediaPattern && m_mpd.mpdInitFile && duration) break;
                 i++; cnt++;
                 if(cnt > 3) break;
                 line = m_playlistContent[i];
@@ -3044,7 +3088,7 @@ bool Audio::parsePlaylist_DASH() {
         // **read Representation** (id, bitrate, codec)
         if (strstr(line, "<Representation")) {
             char* idStart = strstr(line, "id=\"");
-            char* sampleRateStart = strstr(line, "bandwidth=\"");
+            char* bandWidthStart = strstr(line, "bandwidth=\"");
 
             if (idStart && !representationId) { // only read the first representation
                 idStart += 4;
@@ -3055,13 +3099,13 @@ bool Audio::parsePlaylist_DASH() {
                 }
             }
 
-            if (sampleRateStart && !sampleRate) { // only read the first representation
-                sampleRateStart += 11;
-                char* sampleRateEnd = strchr(sampleRateStart, '"');
-                if (sampleRateEnd) {
-                    int sampleRateLength = sampleRateEnd - sampleRateStart;
-                    char* sr = strndup(sampleRateStart, sampleRateLength);
-                    sampleRate = atoi(sr);
+            if (bandWidthStart && !sampleRate) { // only read the first representation
+                bandWidthStart += 11;
+                char* bandWidthEnd = strchr(bandWidthStart, '"');
+                if (bandWidthEnd) {
+                    int sampleRateLength = bandWidthEnd - bandWidthStart;
+                    char* sr = strndup(bandWidthStart, sampleRateLength);
+                    m_mpd.mpdBandwidth = atoi(sr);
                     x_ps_free(&sr);
                 }
             }
@@ -3077,69 +3121,94 @@ bool Audio::parsePlaylist_DASH() {
         }
     }
 
-    if (segmentDuration > 0) { // **determine nr of segments**
-        if(m_mpdMediaDuration == 0) m_mpdMediaDuration = UINT32_MAX; // if no duration is given, set to max (is stream)
-        m_mpdTotalSegments = m_mpdMediaDuration / segmentDuration;
+    if (duration > 0) { // **determine nr of segments**
+        if(m_mpd.mpdMediaDuration == 0) m_mpd.mpdMediaDuration = UINT32_MAX; // if no duration is given, set to max (is stream)
+        m_mpd.mpdTotalSegments = m_mpd.mpdMediaDuration / duration;
     }
-    if(sampleRate > 0) m_sampleRate = sampleRate;
+    segmentDuration = (float)duration / timeScale;
 
 
-    x_ps_free(&m_mpdMediaURL);
+    if(m_mpd.mpdBandwidth > 0) m_sampleRate = m_mpd.mpdBandwidth;
+
+
+    x_ps_free(&m_mpd.mpdMediaURL);
     if(baseUrl){
-        m_mpdMediaURL = x_ps_malloc(strlen(baseUrl) + 2);
-        strcpy(m_mpdMediaURL, baseUrl);
+        m_mpd.mpdMediaURL = x_ps_malloc(strlen(baseUrl) + 2);
+        strcpy(m_mpd.mpdMediaURL, baseUrl);
     }
     else{
-        m_mpdMediaURL = x_ps_malloc(strlen(m_lastHost) +  2);
-        strcpy(m_mpdMediaURL, m_lastHost);
+        m_mpd.mpdMediaURL = x_ps_malloc(strlen(m_lastHost) +  2);
+        strcpy(m_mpd.mpdMediaURL, m_lastHost);
     }
 
-    replacestr(&m_mpdInitFile, "$RepresentationID$", representationId);
-    replacestr(&m_mpdMediaPattern, "$RepresentationID$", representationId);
+    replacestr(&m_mpd.mpdInitFile, "$RepresentationID$", representationId);
+    replacestr(&m_mpd.mpdMediaPattern, "$RepresentationID$", representationId);
 
-    log_w("🎥 MPD analysis completed:");
-    log_w("   ➤ Media duration: %lu ", m_mpdMediaDuration);
-    log_w("   ➤ Media-URL: %s", m_mpdMediaURL ? m_mpdMediaURL : "N/A");
-    log_w("   ➤ RepresentadionID: %s", representationId ? representationId : "N/A");
-    log_w("   ➤ Initialization File: %s", m_mpdInitFile ? m_mpdInitFile : "N/A");
-    log_w("   ➤ Media Pattern: %s", m_mpdMediaPattern ? m_mpdMediaPattern : "N/A");
-    log_w("   ➤ Segments: %lu", m_mpdTotalSegments);
-    log_w("   ➤ SampleRate: %i", m_sampleRate);
-    log_w("   ➤ Codec: %s", codec ? codec : "N/A");
+    if(!m_mpd.mpdMediaURL)     {log_e("❌ MPD media URL not found"); return false;}
+    if(!m_mpd.mpdInitFile)     {log_e("❌ MPD init file not found"); return false;}
+    if(!m_mpd.mpdMediaPattern) {log_e("❌ MPD media pattern not found"); return false;}
+
+    if(!m_mpd.mpdTimeSegment){
+        while(true){
+            if(timeStamp +5000 < millis()){log_e("NTP timeout"); return false;}
+            if (udp.parsePacket()) {
+                udp.read(ntpPacket, 48);
+                uint32_t ntpTime = (uint32_t)ntpPacket[40] << 24 |
+                                   (uint32_t)ntpPacket[41] << 16 |
+                                   (uint32_t)ntpPacket[42] << 8  |
+                                   (uint32_t)ntpPacket[43];
+                uint32_t elapsedTime = ntpTime - 2208988800UL;; // UNIX-time
+                m_mpd.mpdTimeSegment =  ((float)elapsedTime / segmentDuration);
+                break;
+            }
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
+    }
+
+    m_mpd.mpdCurrentSequenceNumber = startNumber + m_mpd.mpdTimeSegment;
+
+    log_w("🎵  MPD analysis completed: ✅");
+    log_w("🎵  ➤ Media duration: %lu ", m_mpd.mpdMediaDuration);
+    log_w("🎵  ➤ TimeScale: %i", timeScale);
+    log_w("🎵  ➤ Media-URL: %s", m_mpd.mpdMediaURL ? m_mpd.mpdMediaURL : "N/A");
+    log_w("🎵  ➤ RepresentadionID: %s", representationId ? representationId : "N/A");
+    log_w("🎵  ➤ Initialization File: %s", m_mpd.mpdInitFile ? m_mpd.mpdInitFile : "N/A");
+    log_w("🎵  ➤ Media Pattern: %s", m_mpd.mpdMediaPattern ? m_mpd.mpdMediaPattern : "N/A");
+    log_w("🎵  ➤ Segments: %lu", m_mpd.mpdTotalSegments);
+    log_w("🎵  ➤ SampleRate: %i", m_mpd.mpdBandwidth);
+    log_w("🎵  ➤ SegmentDuration: %.3f", segmentDuration);
+    log_w("🎵  ➤ StartNumber: %i", startNumber);
+    log_w("🎵  ➤ SegmentDuration: %lu", duration);
+    log_w("🎵  ➤ Codec: %s", codec ? codec : "N/A");
+    log_w("🎵  ➤ Current Sequence Number: %lu", m_mpd.mpdCurrentSequenceNumber);
 
     x_ps_free(&baseUrl);
     x_ps_free(&representationId);
     x_ps_free(&codec);
 
-    if(!m_mpdMediaURL) {log_e("MPD media URL not found"); return false;}
-    if(!m_mpdInitFile) {log_e("MPD init file not found"); return false;}
-    if(!m_mpdMediaPattern) {log_e("MPD media pattern not found"); return false;}
-
-
-    m_mpdCurrentSequenceNumber = 0;
     m_dataMode = AUDIO_DATA;
     return true;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const char* Audio::dashGetNextSegment() {
-    x_ps_free(&m_mpdNextURL);
-    if (!m_mpdMediaURL || !m_mpdInitFile || !m_mpdMediaPattern) {log_e("MPD data not found"); return nullptr;}
-    if(m_mpdCurrentSequenceNumber == 0){
-        m_mpdNextURL = x_ps_calloc(strlen(m_mpdMediaURL) + strlen(m_mpdInitFile) + 1, sizeof(char));
-        sprintf(m_mpdNextURL, "%s%s", m_mpdMediaURL, m_mpdInitFile);
-        m_mpdCurrentSequenceNumber++;
-        log_w("🎥 MPD init file: %s", m_mpdNextURL);
+    x_ps_free(&m_mpd.mpdNextURL);
+    if (!m_mpd.mpdMediaURL || !m_mpd.mpdInitFile || !m_mpd.mpdMediaPattern) {log_e("MPD data not found"); return nullptr;}
+    if(m_mpd.mpdCurrentSequenceNumber == 0){
+        m_mpd.mpdNextURL = x_ps_calloc(strlen(m_mpd.mpdMediaURL) + strlen(m_mpd.mpdInitFile) + 1, sizeof(char));
+        sprintf(m_mpd.mpdNextURL, "%s%s", m_mpd.mpdMediaURL, m_mpd.mpdInitFile);
+        m_mpd.mpdCurrentSequenceNumber++;
+        log_w("🎥 MPD init file: %s", m_mpd.mpdNextURL);
         if(_client->connected()) _client->stop();
-        return m_mpdNextURL;
+        return m_mpd.mpdNextURL;
     }
-    if(m_mpdCurrentSequenceNumber <= m_mpdTotalSegments) {
-        m_mpdNextURL = x_ps_calloc(strlen(m_mpdMediaURL) + strlen(m_mpdMediaPattern) + 20, sizeof(char));
-        sprintf(m_mpdNextURL, "%s/%s", m_mpdMediaURL, m_mpdMediaPattern);
+    if(m_mpd.mpdCurrentSequenceNumber <= m_mpd.mpdTotalSegments) {
+        m_mpd.mpdNextURL = x_ps_calloc(strlen(m_mpd.mpdMediaURL) + strlen(m_mpd.mpdMediaPattern) + 20, sizeof(char));
+        sprintf(m_mpd.mpdNextURL, "%s/%s", m_mpd.mpdMediaURL, m_mpd.mpdMediaPattern);
         char buff[10];
-        sprintf(buff, "%d", m_mpdCurrentSequenceNumber);
-        replacestr(&m_mpdNextURL, "$Number$", buff);
-        m_mpdCurrentSequenceNumber++;
-        return m_mpdNextURL;
+        sprintf(buff, "%lu", m_mpd.mpdCurrentSequenceNumber);
+        replacestr(&m_mpd.mpdNextURL, "$Number$", buff);
+        m_mpd.mpdCurrentSequenceNumber++;
+        return m_mpd.mpdNextURL;
     }
     return nullptr;
 }
@@ -3272,35 +3341,35 @@ myList:     #EXTM3U
             #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"
             media-ur748eh1d_b192000_227213784.aac
 
-result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"media-ur748eh1d_b192000_227213779.aac
-            m_linesWithSeqNr[1] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"media-ur748eh1d_b192000_227213780.aac
-            m_linesWithSeqNr[2] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"media-ur748eh1d_b192000_227213781.aac
-            m_linesWithSeqNr[3] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"media-ur748eh1d_b192000_227213782.aac
-            m_linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
-            m_linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
+result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"media-ur748eh1d_b192000_227213779.aac
+            linesWithSeqNr[1] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"media-ur748eh1d_b192000_227213780.aac
+            linesWithSeqNr[2] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"media-ur748eh1d_b192000_227213781.aac
+            linesWithSeqNr[3] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"media-ur748eh1d_b192000_227213782.aac
+            linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
+            linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
 
-    std::vector<char*> m_linesWithSeqNr;
+    std::vector<char*> linesWithSeqNr;
     bool addNextLine = false;
     int idx = -1;
     for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
     //  log_w("pl%i = %s", i, m_playlistContent[i]);
         if(!startsWith(m_playlistContent[i], "#EXTINF:") && addNextLine) {
-            m_linesWithSeqNr[idx] = x_ps_realloc(m_linesWithSeqNr[idx], strlen(m_linesWithSeqNr[idx]) + strlen(m_playlistContent[i]) + 1);
-            if(!m_linesWithSeqNr[idx]) { log_e("realloc failed"); return UINT64_MAX; }
-            strcat(m_linesWithSeqNr[idx], m_playlistContent[i]);
+            linesWithSeqNr[idx] = x_ps_realloc(linesWithSeqNr[idx], strlen(linesWithSeqNr[idx]) + strlen(m_playlistContent[i]) + 1);
+            if(!linesWithSeqNr[idx]) { log_e("realloc failed"); return UINT64_MAX; }
+            strcat(linesWithSeqNr[idx], m_playlistContent[i]);
         }
         if(startsWith(m_playlistContent[i], "#EXTINF:")) {
             idx++;
-            m_linesWithSeqNr.push_back(x_ps_strdup(m_playlistContent[i]));
+            linesWithSeqNr.push_back(x_ps_strdup(m_playlistContent[i]));
             addNextLine = true;
         }
     }
 
-    // for (uint16_t i = 0; i < m_linesWithSeqNr.size(); i++) {
-    //     log_w("m_linesWithSeqNr[%i] = %s", i, m_linesWithSeqNr[i]);
+    // for (uint16_t i = 0; i < linesWithSeqNr.size(); i++) {
+    //     log_w("linesWithSeqNr[%i] = %s", i, linesWithSeqNr[i]);
     // }
 
-    if(m_linesWithSeqNr.size() < 2) {
+    if(linesWithSeqNr.size() < 2) {
         log_e("not enough lines with \"#EXTINF:\" found");
         return UINT64_MAX;
     }
@@ -3311,8 +3380,8 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
     // go back to first digit:                                                        ∧
 
 
-    int16_t len = strlen(m_linesWithSeqNr[0]) - 1;
-    int16_t qm = indexOf(m_linesWithSeqNr[0], "?", 0);
+    int16_t len = strlen(linesWithSeqNr[0]) - 1;
+    int16_t qm = indexOf(linesWithSeqNr[0], "?", 0);
     if(qm > 0) len = qm; // If we find a question mark, look to the left of it
 
     char*    pEnd;
@@ -3320,19 +3389,19 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
     char     llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
 
     for(int16_t pos = len; pos >= 0; pos--) {
-        if(isdigit(m_linesWithSeqNr[0][pos])) {
-            while(isdigit(m_linesWithSeqNr[0][pos])) pos--;
+        if(isdigit(linesWithSeqNr[0][pos])) {
+            while(isdigit(linesWithSeqNr[0][pos])) pos--;
             pos++;
             uint64_t a, b, c;
-            a = strtoull(m_linesWithSeqNr[0] + pos, &pEnd, 10);
+            a = strtoull(linesWithSeqNr[0] + pos, &pEnd, 10);
             b = a + 1;
             c = b + 1;
             lltoa(b, llasc, 10);
-            int16_t idx_b = indexOf(m_linesWithSeqNr[1], llasc, pos - 1);
-            while(m_linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
+            int16_t idx_b = indexOf(linesWithSeqNr[1], llasc, pos - 1);
+            while(linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
             lltoa(c, llasc, 10);
-            int16_t idx_c = indexOf(m_linesWithSeqNr[2], llasc, pos - 1);
-            while(m_linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
+            int16_t idx_c = indexOf(linesWithSeqNr[2], llasc, pos - 1);
+            while(linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
             if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;
                 AUDIO_INFO("media sequence number: %llu", MediaSeq);
@@ -3340,7 +3409,7 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
             }
         }
     }
-    vector_clear_and_shrink(m_linesWithSeqNr);
+    vector_clear_and_shrink(linesWithSeqNr);
     return MediaSeq;
 }
 
@@ -5734,9 +5803,9 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     typedef struct {
         int number = 0;
         int pids[PID_ARRAY_LEN];
-    } pid_array;
+    } pid_array_t;
 
-    static pid_array pidsOfPMT;
+    static pid_array_t pidsOfPMT;
     static int       PES_DataLength = 0;
     static int       pidOfAAC = 0;
 

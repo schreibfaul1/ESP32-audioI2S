@@ -12,6 +12,7 @@
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <SD.h>
@@ -431,6 +432,13 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         vec.shrink_to_fit();
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    void freeMPD(){
+        x_ps_free(&m_mpd.mpdInitFile);
+        x_ps_free(&m_mpd.mpdMediaPattern);
+        x_ps_free(&m_mpd.mpdMediaURL);
+        x_ps_free(&m_mpd.mpdNextURL);
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
         if(str == NULL) return 0;
         uint32_t hash = 0;
@@ -652,11 +660,6 @@ private:
         float b2;
     } filter_t;
 
-    typedef struct _pis_array{
-        int number;
-        int pids[4];
-    } pid_array;
-
     File                  audiofile;
 #ifndef ETHERNET_IF
     WiFiClient            client;
@@ -706,13 +709,6 @@ private:
     char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     char*           m_speechtxt = NULL;             // stores tts text
-    char*           m_mpdInitFile = NULL;           // stores the init file of a DASH stream     e.g. /initmp4
-    char*           m_mpdMediaPattern = NULL;       // stores the media file of a DASH stream    e.g. .m4s
-    char*           m_mpdMediaURL = NULL;           // stores the media URL of a DASH stream     e.g. https://livesim2.dashif.org/vod/testpic_2s/A48
-    char*           m_mpdNextURL = NULL;            // stores the next URL of a DASH stream
-    uint32_t        m_mpdMediaDuration = 0;         // stores the media duration of a DASH stream
-    uint32_t        m_mpdTotalSegments = 0;         // stores the segment duration of a DASH stream
-    uint16_t        m_mpdCurrentSequenceNumber = 0; // stores the current sequence number of a DASH stream
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
     int             m_LFcount = 0;                  // Detection of end of header
@@ -817,11 +813,22 @@ private:
     int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
     int8_t          m_gain1 = 0;
     int8_t          m_gain2 = 0;
-
-    pid_array       m_pidsOfPMT;
     int16_t         m_pidOfAAC;
     uint8_t         m_packetBuff[m_tsPacketSize];
     int16_t         m_pesDataLength = 0;
+
+    typedef struct{
+        char*       mpdInitFile = NULL;           // stores the init file of a DASH stream     e.g. /initmp4
+        char*       mpdMediaPattern = NULL;       // stores the media file of a DASH stream    e.g. .m4s
+        char*       mpdMediaURL = NULL;           // stores the media URL of a DASH stream     e.g. https://livesim2.dashif.org/vod/testpic_2s/A48
+        char*       mpdNextURL = NULL;            // stores the next URL of a DASH stream
+        uint32_t    mpdBandwidth = 0;             // stores the bandwidth of a DASH stream
+        uint32_t    mpdMediaDuration = 0;         // stores the media duration of a DASH stream
+        uint32_t    mpdTotalSegments = 0;         // stores the segment duration of a DASH stream
+        uint32_t    mpdCurrentSequenceNumber = 0; // stores the current sequence number of a DASH stream
+        uint32_t    mpdTimeSegment = 0;           // determines the time of a DASH segment
+    } mpd_t;
+    mpd_t m_mpd;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
