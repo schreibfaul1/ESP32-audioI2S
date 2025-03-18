@@ -1,16 +1,11 @@
-#include "esp_arduino_version.h"
 /*
  * Audio.h
  *
- *  Created on: Oct 28,2018
- *
- *  Version 3.1.0l
- *  Updated on: Mar 16.2025
- *      Author: Wolle (schreibfaul1)
  */
 
 #pragma once
 #pragma GCC optimize ("Ofast")
+#include "esp_arduino_version.h"
 #include <vector>
 #include <Arduino.h>
 #include <libb64/cencode.h>
@@ -136,6 +131,7 @@ protected:
 static const size_t AUDIO_STACK_SIZE = 3300;
 static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
+extern char audioI2SVers[];
 
 class Audio : private AudioBuffer{
 
@@ -185,6 +181,7 @@ public:
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
     const char *getCodecname() {return codecname[m_codec];}
+    const char *getVersion() {return audioI2SVers;}
 
 private:
 

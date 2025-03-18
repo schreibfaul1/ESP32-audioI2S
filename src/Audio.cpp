@@ -1,13 +1,18 @@
-/*
- * Audio.cpp
- *
- *  Created on: Oct 28.2018
- *
- *  Version 3.1.0m
- *  Updated on: Mar 17.2025
- *      Author: Wolle (schreibfaul1)
- *
- */
+
+/*****************************************************************************************************************************************************
+    audio.cpp
+
+    Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
+    Version 3.1.0n                                                                                                                                  ";
+/*  Updated on: Mar 18.2025
+
+    Author: Wolle (schreibfaul1)
+    Audio library for ESP32 or ESP32-S3
+    Arduino Vers. V3 is mandatory
+    external DAC is mandatory
+
+*****************************************************************************************************************************************************/
+
 #include "Audio.h"
 #include "aac_decoder/aac_decoder.h"
 #include "flac_decoder/flac_decoder.h"
@@ -4735,6 +4740,8 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 #if(ESP_ARDUINO_VERSION_MAJOR < 3)
     log_e("Arduino Version must be 3.0.0 or higher!");
 #endif
+    trim(audioI2SVers);
+    AUDIO_INFO("audioI2S %s", audioI2SVers);
 
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
