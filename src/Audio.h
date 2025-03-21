@@ -433,10 +433,17 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     void freeMPD(){
-        x_ps_free(&m_mpd.mpdInitFile);
-        x_ps_free(&m_mpd.mpdMediaPattern);
-        x_ps_free(&m_mpd.mpdMediaURL);
-        x_ps_free(&m_mpd.mpdNextURL);
+        m_mpd.sendInitFile = false;
+        m_mpd.startNextSegment = false;
+        m_mpd.bandwidth = 0;
+        m_mpd.currentSequenceNumber = 0;
+        m_mpd.mediaDuration = 0;
+        m_mpd.timeSegment = 0;
+        m_mpd.totalSegments = 0;
+        x_ps_free(&m_mpd.initFile);
+        x_ps_free(&m_mpd.mediaPattern);
+        x_ps_free(&m_mpd.mediaURL);
+        x_ps_free(&m_mpd.nextURL);
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
@@ -818,15 +825,17 @@ private:
     int16_t         m_pesDataLength = 0;
 
     typedef struct{
-        char*       mpdInitFile = NULL;           // stores the init file of a DASH stream     e.g. /initmp4
-        char*       mpdMediaPattern = NULL;       // stores the media file of a DASH stream    e.g. .m4s
-        char*       mpdMediaURL = NULL;           // stores the media URL of a DASH stream     e.g. https://livesim2.dashif.org/vod/testpic_2s/A48
-        char*       mpdNextURL = NULL;            // stores the next URL of a DASH stream
-        uint32_t    mpdBandwidth = 0;             // stores the bandwidth of a DASH stream
-        uint32_t    mpdMediaDuration = 0;         // stores the media duration of a DASH stream
-        uint32_t    mpdTotalSegments = 0;         // stores the segment duration of a DASH stream
-        uint32_t    mpdCurrentSequenceNumber = 0; // stores the current sequence number of a DASH stream
-        uint32_t    mpdTimeSegment = 0;           // determines the time of a DASH segment
+        bool        sendInitFile = false;      // send init file of a DASH stream
+        bool        startNextSegment = false;  // start next segment of a DASH stream
+        char*       initFile = NULL;           // stores the init file of a DASH stream     e.g. /initmp4
+        char*       mediaPattern = NULL;       // stores the media file of a DASH stream    e.g. .m4s
+        char*       mediaURL = NULL;           // stores the media URL of a DASH stream     e.g. https://livesim2.dashif.org/vod/testpic_2s/A48
+        char*       nextURL = NULL;            // stores the next URL of a DASH stream
+        uint32_t    bandwidth = 0;             // stores the bandwidth of a DASH stream
+        uint32_t    mediaDuration = 0;         // stores the media duration of a DASH stream
+        uint32_t    totalSegments = 0;         // stores the segment duration of a DASH stream
+        uint32_t    currentSequenceNumber = 0; // stores the current sequence number of a DASH stream
+        uint32_t    timeSegment = 0;           // determines the time of a DASH segment
     } mpd_t;
     mpd_t m_mpd;
 };
