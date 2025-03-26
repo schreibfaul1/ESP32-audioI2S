@@ -352,13 +352,14 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     Request body:
     model (string) [Required] - One of the available TTS models: tts-1 or tts-1-hd
     input (string) [Required] - The text to generate audio for. The maximum length is 4096 characters.
+    instructions (string) [Optional] - A description of the desired characteristics of the generated audio.
     voice (string) [Required] - The voice to use when generating the audio. Supported voices are alloy, echo, fable, onyx, nova, and shimmer.
     response_format (string) [Optional] - Defaults to mp3. The format to audio in. Supported formats are mp3, opus, aac, and flac.
     speed (number) [Optional] - Defaults to 1. The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.
 
-    Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, "shimmer", "mp3", "1");
+    Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
-bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& voice, const String& response_format, const String& speed) {
+bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
     char host[] = "api.openai.com";
     char path[] = "/v1/audio/speech";
 
@@ -372,21 +373,56 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     setDefaults();
     m_f_ssl = true;
 
-    String input_clean = "";
+    // Escape special characters in input
+   String input_clean = "";
     for (int i = 0; i < input.length(); i++) {
         char c = input.charAt(i);
         if (c == '\"') {
             input_clean += "\\\"";
         } else if (c == '\n') {
             input_clean += "\\n";
+        } else if (c == '\r') {
+            input_clean += "\\r";
+        } else if (c == '\t') {
+            input_clean += "\\t";
+        } else if (c == '\\') {
+            input_clean += "\\\\";
+        } else if (c == '\b') {
+            input_clean += "\\b";
+        } else if (c == '\f') {
+            input_clean += "\\f";
         } else {
             input_clean += c;
+        }
+    }
+
+    // Escape special characters in instructions
+    String instructions_clean = "";
+    for (int i = 0; i < instructions.length(); i++) {
+        char c = instructions.charAt(i);
+        if (c == '\"') {
+            instructions_clean += "\\\"";
+        } else if (c == '\n') {
+            instructions_clean += "\\n";
+        } else if (c == '\r') {
+            instructions_clean += "\\r";
+        } else if (c == '\t') {
+            instructions_clean += "\\t";
+        } else if (c == '\\') {
+            instructions_clean += "\\\\";
+        } else if (c == '\b') {
+            instructions_clean += "\\b";
+        } else if (c == '\f') {
+            instructions_clean += "\\f";
+        } else {
+            instructions_clean += c;
         }
     }
 
     String post_body = "{"
         "\"model\": \"" + model + "\"," +
         "\"input\": \"" + input_clean + "\"," +
+        "\"instructions\": \"" + instructions_clean + "\"," +
         "\"voice\": \"" + voice + "\"," +
         "\"response_format\": \"" + response_format + "\"," +
         "\"speed\": \"" + speed + "\"" +

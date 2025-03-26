@@ -19,6 +19,14 @@
 WiFiMulti wifiMulti;
 Audio audio;
 
+
+String input = "Added OpenAI Text to speech API support";
+String instructions = "Voice: Gruff, fast-talking, and a little worn-out, like a New York cabbie who's seen it all but still keeps things moving.\n\n"
+                      "Tone: Slightly exasperated but still functional, with a mix of sarcasm and no-nonsense efficiency.\n\n"
+                      "Dialect: Strong New York accent, with dropped \"r\"s, sharp consonants, and classic phrases like whaddaya and lemme guess.\n\n"
+                      "Pronunciation: Quick and clipped, with a rhythm that mimics the natural hustle of a busy city conversation.\n\n"
+                      "Features: Uses informal, straight-to-the-point language, throws in some dry humor, and keeps the energy just on the edge of impatience but still";
+
 // Declaration
 void audio_info(const char *info);
 
@@ -40,7 +48,7 @@ void setup() {
     // Speech
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, -1);
     audio.setVolume(15); // 0...21
-    audio.openai_speech(OPENAI_API_KEY, "tts-1", "Added OpenAI Text to speech API support", "shimmer", "mp3", "1");
+    audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 }
 
 void loop(void) {

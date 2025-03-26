@@ -44,6 +44,7 @@ lib_deps =
 bool isWIFIConnected;
 
 String result = "Added OpenAI Text to speech API support";
+String instructions = "Voice: Gruff, fast-talking, and a little worn-out, like a New York cabbie who's seen it all but still keeps things moving.\n\n";
 
 // Inits
 WiFiMulti wifiMulti;
@@ -118,7 +119,7 @@ void playaudio(void *pvParameters) {
                 // Speech
                 audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, -1);
                 audio.setVolume(15); // 0...21
-                audio.openai_speech(OPENAI_API_KEY, "tts-1", result, "shimmer", "mp3", "1");
+                audio.openai_speech(OPENAI_API_KEY, "tts-1", result, instructions, "shimmer", "mp3", "1");
             }
         } else {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
