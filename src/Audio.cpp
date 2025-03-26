@@ -373,18 +373,30 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     setDefaults();
     m_f_ssl = true;
 
-    String input_clean = "";
+    // Escape special characters in input
+   String input_clean = "";
     for (int i = 0; i < input.length(); i++) {
         char c = input.charAt(i);
         if (c == '\"') {
             input_clean += "\\\"";
         } else if (c == '\n') {
             input_clean += "\\n";
+        } else if (c == '\r') {
+            input_clean += "\\r";
+        } else if (c == '\t') {
+            input_clean += "\\t";
+        } else if (c == '\\') {
+            input_clean += "\\\\";
+        } else if (c == '\b') {
+            input_clean += "\\b";
+        } else if (c == '\f') {
+            input_clean += "\\f";
         } else {
             input_clean += c;
         }
     }
 
+    // Escape special characters in instructions
     String instructions_clean = "";
     for (int i = 0; i < instructions.length(); i++) {
         char c = instructions.charAt(i);
