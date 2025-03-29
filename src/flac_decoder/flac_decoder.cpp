@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Nov 23,2024
+ * Updated on: Mar 29,2025
  *
  * Author: Wolle
  *
@@ -606,10 +606,10 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
     if(s_f_oggWrapper){
 
         if(segmLenTmp){ // can't skip more than 16K
-            if(segmLenTmp > 16384){
-                s_flacCurrentFilePos += 16384;
-                *bytesLeft -= 16384;
-                segmLenTmp -= 16384;
+            if(segmLenTmp > MAX_BLOCKSIZE){
+                s_flacCurrentFilePos += MAX_BLOCKSIZE;
+                *bytesLeft -= MAX_BLOCKSIZE;
+                segmLenTmp -= MAX_BLOCKSIZE;
             }
             else{
                 s_flacCurrentFilePos += segmLenTmp;
@@ -691,7 +691,7 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
                 return FLAC_PARSE_OGG_DONE;
                 break;
         }
-        if(segmLen > 16384){
+        if(segmLen > MAX_BLOCKSIZE){
             segmLenTmp = segmLen;
             return FLAC_PARSE_OGG_DONE;
         }
@@ -731,7 +731,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
     if(s_flacStatus == OUT_SAMPLES){  // Write the decoded samples
         // blocksize can be much greater than outbuff, so we can't stuff all in once
         // therefore we need often more than one loop (split outputblock into pieces)
-        uint16_t blockSize;
+        uint32_t blockSize;
         if(s_numOfOutSamples < s_flacOutBuffSize + s_offset) blockSize = s_numOfOutSamples - s_offset;
         else blockSize = s_flacOutBuffSize;
 
@@ -845,8 +845,8 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     return ERR_FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-uint16_t FLACGetOutputSamps(){
-    int32_t vs = s_flacValidSamples;
+uint32_t FLACGetOutputSamps(){
+    uint32_t vs = s_flacValidSamples;
     s_flacValidSamples=0;
     return vs;
 }

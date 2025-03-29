@@ -115,7 +115,7 @@ protected:
     size_t            m_writeSpace       = 0;
     size_t            m_dataLength       = 0;
     size_t            m_resBuffSizeRAM   = 2048;     // reserved buffspace, >= one wav  frame
-    size_t            m_resBuffSizePSRAM = 4096 * 4; // reserved buffspace, >= one flac frame
+    size_t            m_resBuffSizePSRAM = 4096 * 6; // reserved buffspace, >= one flac frame
     size_t            m_maxBlockSize     = 1600;
     uint8_t*          m_buffer           = NULL;
     uint8_t*          m_writePtr         = NULL;
@@ -637,7 +637,7 @@ private:
     const size_t    m_frameSizeWav    = 4096;
     const size_t    m_frameSizeMP3    = 1600;
     const size_t    m_frameSizeAAC    = 1600;
-    const size_t    m_frameSizeFLAC   = 4096 * 4;
+    const size_t    m_frameSizeFLAC   = 4096 * 6; // 24576
     const size_t    m_frameSizeOPUS   = 1024;
     const size_t    m_frameSizeVORBIS = 4096 * 2;
     const size_t    m_outbuffSize     = 4096 * 2;

@@ -164,7 +164,7 @@ void audio_info(const char *info){
 | aac        | n     | y           | y             |                          |
 | aacp       | n     | y (mono)    | y (+SBR, +PS) |                          |
 | wav        | y     | y           | y             |                          |
-| flac       | n     | y           | y             |blocksize max 16384 bytes |
+| flac       | n     | y           | y             |blocksize max 24576 bytes |
 | vorbis     | n     | y           | y             | <=196Kbit/s              |
 | m4a        | n     | y           | y             |                          |
 | opus       | n     | y           | y             |celt only                 |
