@@ -46,6 +46,7 @@ void setup() {
 }
 
 void loop(){
+    vTaskDelay(1);
     audio.loop();
     if(f_time == true){
         f_time = false;

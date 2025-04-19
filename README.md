@@ -42,7 +42,7 @@ void setup() {
     audio.setVolume(21); // default 0...21
 //  or alternative
 //  audio.setVolumeSteps(64); // max 255
-//  audio.setVolume(63);    
+//  audio.setVolume(63);
 //
 //  *** radio streams ***
     audio.connecttohost("http://stream.antennethueringen.de/live/aac-64/stream.antennethueringen.de/"); // aac

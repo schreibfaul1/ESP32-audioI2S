@@ -20,35 +20,33 @@ Audio audio = Audio(true);
 String ssid =     "xxxxxxxx";
 String password = "xxxxxxxx";
 
-
 void setup() {
-  M5.begin(false);  //Lcd disabled to reduce noise
-  M5.Axp.ScreenBreath(1); //Lower Lcd backlight
-  pinMode(36, INPUT);
-  gpio_pulldown_dis(GPIO_NUM_25);
-  gpio_pullup_dis(GPIO_NUM_25);
-  M5.Beep.tone(44100);  //Built-in buzzer tone
-  M5.Beep.end();        //disabled
-  
-  audio.setVolume(15); // 0...21
-  
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-  while (!WiFi.isConnected()) {
-    delay(10);
-  }
-  ESP_LOGI(TAG, "Connected");
-  ESP_LOGI(TAG, "Starting MP3...\n");
+    M5.begin(false);        // Lcd disabled to reduce noise
+    M5.Axp.ScreenBreath(1); // Lower Lcd backlight
+    pinMode(36, INPUT);
+    gpio_pulldown_dis(GPIO_NUM_25);
+    gpio_pullup_dis(GPIO_NUM_25);
+    M5.Beep.tone(44100); // Built-in buzzer tone
+    M5.Beep.end();       // disabled
 
-  audio.connecttohost("http://air.ofr.fm:8008/jazz/mp3/128");
-//  audio.connecttospeech("Миска вареників з картоплею та шкварками, змащених салом!", "uk-UA");
+    audio.setVolume(15); // 0...21
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    while (!WiFi.isConnected()) { delay(10); }
+    ESP_LOGI(TAG, "Connected");
+    ESP_LOGI(TAG, "Starting MP3...\n");
+
+    audio.connecttohost("http://air.ofr.fm:8008/jazz/mp3/128");
+    //  audio.connecttospeech("Миска вареників з картоплею та шкварками, змащених салом!", "uk-UA");
 }
 
 void loop() {
+    vTaskDelay(1);
     audio.loop();
     if(Serial.available()){ // put streamURL in serial monitor
         audio.stopSong();
-        String r=Serial.readString(); 
+        String r=Serial.readString();
         r.trim();
         if(r.length()>5) audio.connecttohost(r.c_str());
         log_i("free heap=%i", ESP.getFreeHeap());

@@ -60,19 +60,19 @@ void setup() {
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     Serial.begin(115200);
     SD.begin(SD_CS);
-	
+
     Network.onEvent(onEvent);
     ETH.begin();
     while (!eth_connected) delay(100);
-    // Eth Connected, 	
-	
+    // Eth Connected,
+
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(21); // default 0...21
     audio.connecttohost("https://wdr-wdr2-ruhrgebiet.icecastssl.wdr.de/wdr/wdr2/ruhrgebiet/mp3/128/stream.mp3"); // mp3
 }
 
-void loop()
-{
+void loop(){
+    vTaskDelay(1);
     audio.loop();
 }
 

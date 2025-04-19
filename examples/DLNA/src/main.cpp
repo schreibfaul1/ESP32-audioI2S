@@ -142,6 +142,7 @@ void setup() {
 //                                      L O O P
 //----------------------------------------------------------------------------------------------------------------------
 void loop() {
+    vTaskDelay(1);
     if(webSrv.loop()) return; // if true: ignore all other for faster response to web
     audio.loop();
 }

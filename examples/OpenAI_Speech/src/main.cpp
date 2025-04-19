@@ -33,7 +33,6 @@ void audio_info(const char *info);
 // Default
 void setup() {
     Serial.begin(115200);
-    
     // Wifi
     wifiMulti.addAP(WIFI_SSID, PASSWORD);
     Serial.println("Connecting to WiFi...");
@@ -52,6 +51,7 @@ void setup() {
 }
 
 void loop(void) {
+    vTaskDelay(1);
     audio.loop();
 }
 

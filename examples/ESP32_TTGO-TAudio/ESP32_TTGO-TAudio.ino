@@ -49,8 +49,8 @@ void setup() {
 }
 
 void loop() {
-  // Start the stream.
-  audio.loop();
+    vTaskDelay(1);
+    audio.loop();
 }
 
 // optional

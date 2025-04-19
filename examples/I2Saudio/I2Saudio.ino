@@ -59,8 +59,8 @@ void setup() {
       audio.connecttohost("http://mp3.ffh.de/radioffh/hqlivestream.mp3"); //  128k mp3
 }
 
-void loop()
-{
+void loop(){
+    vTaskDelay(1);
     audio.loop();
     if(Serial.available()){ // put streamURL in serial monitor
         audio.stopSong();

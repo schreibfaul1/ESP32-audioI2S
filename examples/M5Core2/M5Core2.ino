@@ -35,7 +35,7 @@ void setup() {
   M5.Lcd.fillScreen(BLACK);
   M5.Lcd.setTextColor(WHITE);
   M5.Lcd.setTextSize(2);
-    
+
   pinMode(SD_CS, OUTPUT);
   digitalWrite(SD_CS, HIGH);
   SPI.begin(SD_SCK, SD_MISO, SD_MOSI);
@@ -44,7 +44,7 @@ void setup() {
 
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(15); // 0...21
-  
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid.c_str(), password.c_str());
   while (!WiFi.isConnected()) {
@@ -60,10 +60,11 @@ void setup() {
 }
 
 void loop() {
+    vTaskDelay(1);
     audio.loop();
     if(Serial.available()){ // put streamURL in serial monitor
         audio.stopSong();
-        String r=Serial.readString(); 
+        String r=Serial.readString();
         r.trim();
         if(r.length()>5) audio.connecttohost(r.c_str());
         log_i("free heap=%i", ESP.getFreeHeap());

@@ -23,27 +23,26 @@ WM8978 dac;
 Audio audio;
 
 void setup() {
-  /* Setup wm8978 I2C interface */
-  if (!dac.begin(I2C_SDA, I2C_SCL)) {
-    log_e("Error setting up dac. System halted");
-    while (1) delay(100);
-  }
+    /* Setup wm8978 I2C interface */
+    if (!dac.begin(I2C_SDA, I2C_SCL)) {
+        log_e("Error setting up dac. System halted");
+        while (1) delay(100);
+    }
 
-  dac.setSPKvol(40); /* max 63 */
-  dac.setHPvol(32, 32);
+    dac.setSPKvol(40); /* max 63 */
+    dac.setHPvol(32, 32);
 
-  /* Setup wm8978 I2S interface */
-  audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_MCLKPIN);
+    /* Setup wm8978 I2S interface */
+    audio.setPinout(I2S_BCK, I2S_WS, I2S_DOUT, I2S_MCLKPIN);
 
-  WiFi.begin("xxx", "xxx");
-  while (!WiFi.isConnected()) {
-    delay(10);
-  }
+    WiFi.begin("xxx", "xxx");
+    while (!WiFi.isConnected()) { delay(10); }
 
-  log_i("Connected\nStarting MP3...\n");
-  audio.connecttohost("http://icecast.omroep.nl/3fm-bb-mp3");
+    log_i("Connected\nStarting MP3...\n");
+    audio.connecttohost("http://icecast.omroep.nl/3fm-bb-mp3");
 }
 
 void loop() {
-  audio.loop();
+    vTaskDelay(1);
+    audio.loop();
 }
