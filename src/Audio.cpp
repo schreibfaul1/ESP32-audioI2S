@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0n                                                                                                                                  ";
-/*  Updated on: Mar 29.2025
+    Version 3.1.0o                                                                                                                                  ";
+/*  Updated on: Apr 20.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -2703,7 +2703,7 @@ const char* Audio::parsePlaylist_M3U8() {
                 uint8_t codec = CODEC_NONE;
                 ret = m3u8redirection(&codec);
                 if(ret) {
-                    m_codec = codec; // can be AAC or MP3
+                    m_m3u8Codec = codec; // can be AAC or MP3
                     x_ps_free(&m_lastM3U8host);
                     m_lastM3U8host = strdup(ret);
                     x_ps_free_const(&ret);
@@ -4041,7 +4041,7 @@ bool Audio::parseContentType(char* ct) {
     else if(!strcmp(ct, "audio/aac"))                     ct_val = CT_AAC;
     else if(!strcmp(ct, "audio/x-aac"))                   ct_val = CT_AAC;
     else if(!strcmp(ct, "audio/aacp"))                    ct_val = CT_AAC;
-    else if(!strcmp(ct, "video/mp2t"))                    ct_val = CT_AAC;
+    else if(!strcmp(ct, "video/mp2t")){                   ct_val = CT_AAC;  if(m_m3u8Codec == CODEC_MP3) ct_val = CT_MP3;} // see m3u8redirection()
     else if(!strcmp(ct, "audio/mp4"))                     ct_val = CT_M4A;
     else if(!strcmp(ct, "audio/m4a"))                     ct_val = CT_M4A;
     else if(!strcmp(ct, "audio/x-m4a"))                   ct_val = CT_M4A;
@@ -5583,24 +5583,24 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         //  Program Map Table (PMT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         for(int i = 0; i < pidsOfPMT.number; i++) {
             if(PID == pidsOfPMT.pids[i]) {
-                if(m_f_Log) log_i("PMT");
+                if(log) log_w("PMT");
                 int staticLengthOfPMT = 12;
                 int sectionLength = ((packet[PLS + 1] & 0x0F) << 8) | (packet[PLS + 2] & 0xFF);
-                if(m_f_Log) log_i("Section Length: %d", sectionLength);
+                if(log) log_w("Section Length: %d", sectionLength);
                 int programInfoLength = ((packet[PLS + 10] & 0x0F) << 8) | (packet[PLS + 11] & 0xFF);
-                if(m_f_Log) log_i("Program Info Length: %d", programInfoLength);
+                if(log) log_w("Program Info Length: %d", programInfoLength);
                 int cursor = staticLengthOfPMT + programInfoLength;
                 while(cursor < sectionLength - 1) {
                     int streamType = packet[PLS + cursor] & 0xFF;
                     int elementaryPID = ((packet[PLS + cursor + 1] & 0x1F) << 8) | (packet[PLS + cursor + 2] & 0xFF);
-                    if(m_f_Log) log_i("Stream Type: 0x%02X Elementary PID: 0x%04X", streamType, elementaryPID);
+                    if(log) log_w("Stream Type: 0x%02X Elementary PID: 0x%04X", streamType, elementaryPID);
 
-                    if(streamType == 0x0F || streamType == 0x11) {
-                        if(m_f_Log) log_i("AAC PID discover");
+                    if(streamType == 0x0F || streamType == 0x11 || streamType == 0x04) {
+                        if(log) log_w("AAC PID discover");
                         pidOfAAC = elementaryPID;
                     }
                     int esInfoLength = ((packet[PLS + cursor + 3] & 0x0F) << 8) | (packet[PLS + cursor + 4] & 0xFF);
-                    if(m_f_Log) log_i("ES Info Length: 0x%04X", esInfoLength);
+                    if(log) log_w("ES Info Length: 0x%04X", esInfoLength);
                     cursor += 5 + esInfoLength;
                 }
             }

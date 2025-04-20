@@ -674,6 +674,7 @@ private:
     uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_codec = CODEC_NONE;           //
+    uint8_t         m_m3u8Codec = CODEC_AAC;        // codec of m3u8 stream
     uint8_t         m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
     uint8_t         m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
     uint8_t         m_filterType[2];                // lowpass, highpass
