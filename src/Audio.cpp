@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0o                                                                                                                                  ";
-/*  Updated on: Apr 20.2025
+    Version 3.1.0p                                                                                                                                  ";
+/*  Updated on: Apr 21.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -2711,7 +2711,7 @@ const char* Audio::parsePlaylist_M3U8() {
                     return NULL;
                 }
             }
-            if(m_codec == CODEC_NONE) m_codec = CODEC_AAC; // if we have no redirection
+            if(m_codec == CODEC_NONE) {m_codec = CODEC_AAC; if(m_m3u8Codec == CODEC_MP3) m_codec = CODEC_MP3;}  // if we have no redirection
 
             // "#EXT-X-DISCONTINUITY-SEQUENCE: // not used, 0: seek for continuity numbers, is sometimes not set
             // "#EXT-X-MEDIA-SEQUENCE:"        // not used, is unreliable
