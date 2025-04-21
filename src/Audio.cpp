@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0q                                                                                                                                  ";
+    Version 3.1.0r                                                                                                                                  ";
 /*  Updated on: Apr 21.2025
 
     Author: Wolle (schreibfaul1)
@@ -337,6 +337,10 @@ void Audio::setDefaults() {
     m_M4A_sampleRate = 0;
     m_sumBytesDecoded = 0;
     m_vuLeft = m_vuRight = 0; // #835
+
+    if(m_f_reset_m3u8Codec){m_m3u8Codec = CODEC_AAC;} // reset to default
+    m_f_reset_m3u8Codec = true;
+
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -674,7 +678,7 @@ bool Audio::httpPrint(const char* host) {
     strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
     strcat(rqh, "Connection: keep-alive\r\n\r\n");
 
-    AUDIO_INFO("connect to: \"%s\"", host);
+    AUDIO_INFO("next URL: \"%s\"", host);
 
     if(!_client->connected()) {
          if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
@@ -714,7 +718,7 @@ bool Audio::httpPrint(const char* host) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::httpRange(const char* host, uint32_t range){
-    // user and pwd for authentification only, can be empty
+
     if(!m_f_running) return false;
     if(host == NULL) {
         AUDIO_INFO("Hostaddress is empty");
@@ -2396,7 +2400,7 @@ void Audio::loop() {
             case HTTP_RESPONSE_HEADER:
                 static uint8_t count = 0;
                 if(!parseHttpResponseHeader()) {
-                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; connecttohost(m_lastHost);}
+                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; m_f_reset_m3u8Codec = false; connecttohost(m_lastHost);}
                 }
                 else{
                     count = 0;
@@ -2413,7 +2417,7 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
-                    if(m_lastM3U8host) {connecttohost(m_lastM3U8host);}
+                    if(m_lastM3U8host) {m_f_reset_m3u8Codec = false; connecttohost(m_lastM3U8host);}
                     else               {httpPrint(m_lastHost);}      // if url has no first redirection
                     m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
@@ -2862,6 +2866,7 @@ const char* Audio::parsePlaylist_M3U8() {
                         else { ; }
 
                         if(m_playlistURL.size() == 0) {
+                            m_f_reset_m3u8Codec = false;
                             connecttohost(m_lastHost);
                         }
                     }
@@ -2911,6 +2916,7 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
                 if(indexOf(m_playlistContent[i], codecString[j]) > 0){
                     if(j < cS){cS = j; choosenLine = i;}
                     found = true;
+                    // log_e("codeString %s found in line %i", codecString[j], i);
                 }
             }
             if(!found) log_w("codeString %s not in list", m_playlistContent[i] + posCodec);
@@ -3713,7 +3719,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(b == '\n') {
                 if(!pos) { // empty line received, is the last line of this responseHeader
                     if(ct_seen) goto lastToDo;
-                    else goto exit;
+                    else {if(!_client->available())  goto exit;}
                 }
                 break;
             }
@@ -3740,7 +3746,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         if(posColon >= 0) {
             for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
         }
-//        log_e("rhl: %s", rhl);
+        // log_e("rhl: %s", rhl);
         if(startsWith(rhl, "HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];
@@ -3785,6 +3791,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         }
                     }
                     AUDIO_INFO("redirect to new host \"%s\"", c_host);
+                    m_f_reset_m3u8Codec = false;
                     connecttohost(c_host);
                     return true;
                 }
@@ -5846,6 +5853,7 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
                 m_dataMode = AUDIO_NONE;
             } else {
                 AUDIO_INFO("Stream lost -> try new connection");
+                m_f_reset_m3u8Codec = false;
                 connecttohost(m_lastHost);
             }
             return true;
