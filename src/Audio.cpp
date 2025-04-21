@@ -2404,7 +2404,7 @@ void Audio::loop() {
                 }
                 else{
                     count = 0;
-                    if(!m_f_ts) m_f_firstCall = true; // for aac or aacp with ID3 Header
+                    m_f_firstCall  = true;
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
@@ -3449,7 +3449,6 @@ nextRound:
                     return;
                 }
             }
-
             ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
 
             if(ts_packetLength) {
