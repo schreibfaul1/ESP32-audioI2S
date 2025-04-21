@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0p                                                                                                                                  ";
+    Version 3.1.0q                                                                                                                                  ";
 /*  Updated on: Apr 21.2025
 
     Author: Wolle (schreibfaul1)
@@ -578,22 +578,20 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
         _client->print(rqh);
-        if(endsWith(h_host, ".mp3" )) m_expectedCodec  = CODEC_MP3;
-        if(endsWith(h_host, ".aac" )) m_expectedCodec  = CODEC_AAC;
-        if(endsWith(h_host, ".wav" )) m_expectedCodec  = CODEC_WAV;
-        if(endsWith(h_host, ".m4a" )) m_expectedCodec  = CODEC_M4A;
-        if(endsWith(h_host, ".ogg" )) m_expectedCodec  = CODEC_OGG;
-        if(endsWith(h_host, ".flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host, "-flac")) m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host, ".opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host, "/opus")) m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host, ".asx" )) m_expectedPlsFmt = FORMAT_ASX;
-        if(endsWith(h_host, ".m3u" )) m_expectedPlsFmt = FORMAT_M3U;
-        if(endsWith(h_host, ".pls" )) m_expectedPlsFmt = FORMAT_PLS;
-        if(endsWith(h_host, ".m3u8")) {
-            m_expectedPlsFmt = FORMAT_M3U8;
-            if(audio_lasthost) audio_lasthost(m_lastHost);
-        }
+        if(endsWith(h_host, ".mp3" ))      m_expectedCodec  = CODEC_MP3;
+        if(endsWith(h_host, ".aac" ))      m_expectedCodec  = CODEC_AAC;
+        if(endsWith(h_host, ".wav" ))      m_expectedCodec  = CODEC_WAV;
+        if(endsWith(h_host, ".m4a" ))      m_expectedCodec  = CODEC_M4A;
+        if(endsWith(h_host, ".ogg" ))      m_expectedCodec  = CODEC_OGG;
+        if(endsWith(h_host, ".flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host, "-flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host, ".opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host, "/opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host, ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
+        if(endsWith(h_host, ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
+        if(endsWith(h_host, ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
+        if(indexOf( h_host, ".m3u8") >= 0){m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost);}
+
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
     }
