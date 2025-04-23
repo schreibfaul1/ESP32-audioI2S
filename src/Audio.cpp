@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0s                                                                                                                                  ";
-/*  Updated on: Apr 22.2025
+    Version 3.1.0t                                                                                                                                  ";
+/*  Updated on: Apr 23.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -3189,9 +3189,8 @@ void Audio::processLocalFile() {
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             audiofile.seek(m_resumeFilePos);
             InBuff.resetBuffer();
-            m_sumBytesDecoded = m_haveNewFilePos = m_resumeFilePos;
+            m_haveNewFilePos = m_resumeFilePos;
             m_resumeFilePos = -1;
-            if(m_codec == CODEC_MP3) MP3Decoder_ClearBuffer();
         m_f_lockInBuffer = false;
     }
 
@@ -4875,6 +4874,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 
     int32_t pos = getFilePos() - inBufferFilled();
     pos += offset;
+    m_sumBytesDecoded += offset; // for the file length calculation
     if(pos < (int32_t)startAB) {pos = startAB;}
     if(pos >= (int32_t)endAB)  {pos = endAB;}
     setFilePos(pos);
