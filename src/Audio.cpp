@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0t                                                                                                                                  ";
-/*  Updated on: Apr 23.2025
+    Version 3.1.0u                                                                                                                                  ";
+/*  Updated on: Apr 26.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -469,7 +469,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
         m_dataMode = HTTP_RESPONSE_HEADER;
-        m_streamType = ST_WEBSTREAM;
+        m_streamType = ST_WEBFILE;
     } else {
         AUDIO_INFO("Request %s failed!", host);
     //    x_ps_free(&m_lastHost);
