@@ -469,7 +469,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
         m_dataMode = HTTP_RESPONSE_HEADER;
-        m_streamType = ST_WEBFILE;
+        m_streamType = ST_WEBSTREAM;
     } else {
         AUDIO_INFO("Request %s failed!", host);
     //    x_ps_free(&m_lastHost);
