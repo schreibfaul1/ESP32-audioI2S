@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0v                                                                                                                                  ";
+    Version 3.1.0w                                                                                                                                  ";
 /*  Updated on: Apr 28.2025
 
     Author: Wolle (schreibfaul1)
@@ -3309,12 +3309,13 @@ void Audio::processWebFile() {
         m_f_unknownFileLength = false; // no contentlength and no chunked data, maybe OpenAI-speech
     }
 
+    m_f_clientIsConnected = _client->connected();
     uint32_t availableBytes = _client->available(); // available from stream
 
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_waitingForPayload){
         if(availableBytes == 0){
-            if(m_t0 + 1000 > millis()) {
+            if(m_t0 + 3000 < millis()) {
                 f_waitingForPayload = false;
                 log_e("no payload received, timeout");
                 stopSong();
@@ -3350,8 +3351,9 @@ void Audio::processWebFile() {
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     if(m_controlCounter != 100) {
-        if(InBuff.bufferFilled() > maxFrameSize || (InBuff.bufferFilled() == m_contentlength)) { // at least one complete frame or the file is smaller
+        if(InBuff.bufferFilled() > maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
@@ -3668,11 +3670,12 @@ void Audio::playAudioData() {
     uint8_t next = 0;
     int bytesDecoded = 0;
     if(f_isFile) {
-        bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
-        if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
         if(!m_f_unknownFileLength) {
+            bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
+            if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
             if(m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded != 0) {m_f_eof = true; goto exit;} // file end reached
         }
+        else bytesToDecode = InBuff.bufferFilled();
     }
     if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;;
 
@@ -3700,7 +3703,7 @@ void Audio::playAudioData() {
 
 exit:
     if(m_f_unknownFileLength){
-        if(!_client->connected()){
+        if(m_f_clientIsConnected == false){
             // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
             if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
         }
