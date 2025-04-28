@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0u                                                                                                                                  ";
-/*  Updated on: Apr 26.2025
+    Version 3.1.0v                                                                                                                                  ";
+/*  Updated on: Apr 28.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -305,6 +305,7 @@ void Audio::setDefaults() {
     m_f_stream = false;
     m_f_decode_ready = false;
     m_f_eof = false;
+    m_f_unknownFileLength = false;
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
     m_f_acceptRanges = false;
@@ -469,7 +470,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
         m_dataMode = HTTP_RESPONSE_HEADER;
-        m_streamType = ST_WEBSTREAM;
+        m_streamType = ST_WEBFILE;
     } else {
         AUDIO_INFO("Request %s failed!", host);
     //    x_ps_free(&m_lastHost);
@@ -3291,10 +3292,12 @@ void Audio::processWebFile() {
     static uint32_t chunkSize;                               // chunkcount read from stream
     static size_t   audioDataCount;                          // counts the decoded audiodata only
     static uint32_t byteCounter;                             // count received data
+    static bool     f_waitingForPayload = false;             // waiting for payload
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
+        f_waitingForPayload = true;
         m_t0 = millis();
         byteCounter = 0;
         chunkSize = 0;
@@ -3303,10 +3306,26 @@ void Audio::processWebFile() {
         m_audioDataSize = m_contentlength;
         m_webFilePos = 0;
         m_controlCounter = 0;
+        m_f_unknownFileLength = false; // no contentlength and no chunked data, maybe OpenAI-speech
     }
 
-
     uint32_t availableBytes = _client->available(); // available from stream
+
+    // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(f_waitingForPayload){
+        if(availableBytes == 0){
+            if(m_t0 + 1000 > millis()) {
+                f_waitingForPayload = false;
+                log_e("no payload received, timeout");
+                stopSong();
+                m_f_running = false;
+            }
+            return;
+        }
+        else {
+            f_waitingForPayload = false;
+        }
+    }
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
@@ -3317,12 +3336,6 @@ void Audio::processWebFile() {
         }
         availableBytes = min(availableBytes, chunkSize - byteCounter);
     }
-
-    if(!m_contentlength && !chunkSize) {
-        log_e("webfile is not chunked or is without contentlength!");
-        stopSong();
-        return;
-    } // guard
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
@@ -3344,6 +3357,14 @@ void Audio::processWebFile() {
         }
         return;
     }
+
+    // the server does not provide information about the size of the Payoad - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(!m_contentlength && !chunkSize && !m_f_unknownFileLength) {
+        // log_w("no contentlength and no chunked data, maybe OpenAI-speech");
+        m_f_unknownFileLength = true;
+        m_audioDataSize = 0;                         // m_audioDataSize cannot be calculated in this way, set to zero
+    }
+
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
@@ -3649,7 +3670,9 @@ void Audio::playAudioData() {
     if(f_isFile) {
         bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
         if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
-        if(m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded != 0) { m_f_eof = true; goto exit; }
+        if(!m_f_unknownFileLength) {
+            if(m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded != 0) {m_f_eof = true; goto exit;} // file end reached
+        }
     }
     if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;;
 
@@ -3674,7 +3697,14 @@ void Audio::playAudioData() {
         }
         if(bytesDecoded == 0) goto exit; // syncword at pos0
     }
+
 exit:
+    if(m_f_unknownFileLength){
+        if(!_client->connected()){
+            // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
+            if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
+        }
+    }
     m_f_audioTaskIsDecoding = false;
     return;
 }
