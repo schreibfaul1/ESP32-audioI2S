@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0w                                                                                                                                  ";
-/*  Updated on: Apr 28.2025
+    Version 3.1.0x                                                                                                                                  ";
+/*  Updated on: Apr 29.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -2367,6 +2367,9 @@ exit:
 void Audio::loop() {
     if(!m_f_running) return;
 
+    if(_client->fd()) m_f_clientIsConnected = _client->connected(); // workaround, wifiClientSecure fails for _client->connected() if the server disconnect the TCP connection
+    else              m_f_clientIsConnected = false;
+
     if(m_playlistFormat != FORMAT_M3U8) { // normal process
         switch(m_dataMode) {
             case AUDIO_LOCALFILE:
@@ -3309,8 +3312,8 @@ void Audio::processWebFile() {
         m_f_unknownFileLength = false; // no contentlength and no chunked data, maybe OpenAI-speech
     }
 
-    m_f_clientIsConnected = _client->connected();
-    uint32_t availableBytes = _client->available(); // available from stream
+    uint32_t availableBytes = 0;
+    if(m_f_clientIsConnected) availableBytes = _client->available(); // available from stream
 
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_waitingForPayload){
@@ -3341,7 +3344,8 @@ void Audio::processWebFile() {
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-    int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    int32_t bytesAddedToBuffer = 0;
+    if(m_f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
         byteCounter += bytesAddedToBuffer;
