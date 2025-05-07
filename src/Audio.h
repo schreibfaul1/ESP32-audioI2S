@@ -195,6 +195,7 @@ private:
 
   void            UTF8toASCII(char* str);
   bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
+  void            htmlToUTF8(char* str);
   void            setDefaults(); // free buffers and set defaults
   void            initInBuff();
   bool            httpPrint(const char* host);
@@ -236,7 +237,7 @@ private:
   void            computeVUlevel(int16_t sample[2]);
   void            computeLimit();
   void            Gain(int16_t* sample);
-  void            showstreamtitle(const char* ml);
+  void            showstreamtitle(char* ml);
   bool            parseContentType(char* ct);
   bool            parseHttpResponseHeader();
   bool            initializeDecoder(uint8_t codec);

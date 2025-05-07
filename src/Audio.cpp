@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0x                                                                                                                                  ";
-/*  Updated on: Apr 29.2025
+    Version 3.1.0y                                                                                                                                  ";
+/*  Updated on: May 07.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32 or ESP32-S3
@@ -1151,6 +1151,64 @@ exit:
     return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
+
+    auto codepoint_to_utf8 = [&](uint32_t cp, char *dst) { // Convert a Codepoint (Unicode) to UTF-8, writes in DST, there is number of bytes back
+        if (cp <= 0x7F) {
+            dst[0] = cp;
+            return 1;
+        } else if (cp <= 0x7FF) {
+            dst[0] = 0xC0 | (cp >> 6);
+            dst[1] = 0x80 | (cp & 0x3F);
+            return 2;
+        } else if (cp <= 0xFFFF) {
+            dst[0] = 0xE0 | (cp >> 12);
+            dst[1] = 0x80 | ((cp >> 6) & 0x3F);
+            dst[2] = 0x80 | (cp & 0x3F);
+            return 3;
+        } else if (cp <= 0x10FFFF) {
+            dst[0] = 0xF0 | (cp >> 18);
+            dst[1] = 0x80 | ((cp >> 12) & 0x3F);
+            dst[2] = 0x80 | ((cp >> 6) & 0x3F);
+            dst[3] = 0x80 | (cp & 0x3F);
+            return 4;
+        }
+        return -1; // Ungültiger Codepoint
+    };
+
+    char *p = str;
+    while (*p != '\0') {
+        if (p[0] == '&' && p[1] == '#') {
+            char *endptr;
+            uint32_t codepoint = strtol(p + 2, &endptr, 10);
+
+            if (*endptr == ';' && codepoint <= 0x10FFFF) {
+                char utf8[5] = {0};
+                int utf8_len = codepoint_to_utf8(codepoint, utf8);
+                if (utf8_len > 0) {
+                //    size_t entity_len = endptr - p + 1;
+                    size_t tail_len = strlen(endptr + 1);
+
+                    // Show residual ring to the left
+                    memmove(p + utf8_len, endptr + 1, tail_len + 1);  // +1 because of '\0'
+
+                    // Copy UTF-8 characters
+                    memcpy(p, utf8, utf8_len);
+
+                    // weiter bei neuem Zeichen
+                    p += utf8_len;
+                    continue;
+                }
+            }
+        }
+        p++;
+    }
+}
+
+
+
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::readAudioHeader(uint32_t bytes) {
     size_t bytesReaded = 0;
     if(m_codec == CODEC_WAV) {
@@ -2271,10 +2329,10 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::playChunk() {
+void IRAM_ATTR Audio::playChunk() {
 
-    int16_t validSamples = 0;
-    static uint16_t count = 0;
+    int32_t validSamples = 0;
+    static uint32_t count = 0;
     size_t i2s_bytesConsumed = 0;
     int16_t* sample[2] = {0};
     int16_t* s2;
@@ -3681,7 +3739,7 @@ void Audio::playAudioData() {
         }
         else bytesToDecode = InBuff.bufferFilled();
     }
-    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;;
+    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;
 
     bytesDecoded = sendBytes(InBuff.getReadPtr(), InBuff.getMaxBlockSize());
     if(!m_f_running) return;
@@ -4182,10 +4240,14 @@ bool Audio::parseContentType(char* ct) {
 }
 // clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::showstreamtitle(const char* ml) {
+void Audio::showstreamtitle(char* ml) {
     // example for ml:
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
+    // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
+
+    if(!ml) return;
+    htmlToUTF8(ml); // convert to UTF-8
 
     int16_t  idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
     uint16_t i = 0, hash = 0;
@@ -5883,15 +5945,9 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         tmr_lost = millis() + 1000;
         if(cnt_lost == 5) { // 5s no data?
             cnt_lost = 0;
-            if (String(m_lastHost) == "api.openai.com") {
-                AUDIO_INFO("End of Stream.");
-                m_f_running = false;
-                m_dataMode = AUDIO_NONE;
-            } else {
-                AUDIO_INFO("Stream lost -> try new connection");
-                m_f_reset_m3u8Codec = false;
-                connecttohost(m_lastHost);
-            }
+            AUDIO_INFO("Stream lost -> try new connection");
+            m_f_reset_m3u8Codec = false;
+            connecttohost(m_lastHost);
             return true;
         }
     }
