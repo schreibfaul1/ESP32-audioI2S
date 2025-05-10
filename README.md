@@ -111,7 +111,7 @@ void audio_eof_speech(const char *info){
 ````
 
 ````c++
-/* ESP32-S3 EXAMPLE */
+/* ESP32-S3, ESP32-P4 EXAMPLE */
 
 #include "Arduino.h"
 #include "Audio.h"
@@ -158,16 +158,16 @@ void audio_info(const char *info){
 
 <br>
 
-|Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 PSRAM |                          |
-|------------|-------|-------------|---------------|--------------------------|
-| mp3        | y     | y           | y             |                          |
-| aac        | n     | y           | y             |                          |
-| aacp       | n     | y (mono)    | y (+SBR, +PS) |                          |
-| wav        | y     | y           | y             |                          |
-| flac       | n     | y           | y             |blocksize max 24576 bytes |
-| vorbis     | n     | y           | y             | <=196Kbit/s              |
-| m4a        | n     | y           | y             |                          |
-| opus       | n     | y           | y             |celt only                 |
+|Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 or ESP32-P4 + PSRAM |                          |
+|------------|-------|-------------|-----------------------------|--------------------------|
+| mp3        | y     | y           | y                           |                          |
+| aac        | n     | y           | y                           |                          |
+| aacp       | n     | y (mono)    | y (+SBR, +Parametric Stereo)|                          |
+| wav        | y     | y           | y                           |                          |
+| flac       | n     | y           | y                           |blocksize max 24576 bytes |
+| vorbis     | n     | y           | y                           | <=196Kbit/s              |
+| m4a        | n     | y           | y                           |                          |
+| opus       | n     | y           | y                           |celt only                 |
 
 <br>
 
