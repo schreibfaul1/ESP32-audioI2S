@@ -1,6 +1,6 @@
 # ESP32-audioI2S
 
-:warning: **This library only works on multi-core ESP32 chips like the ESP32-S3. It does not work on the ESP32-S2 or the ESP32-C3** :warning:
+:warning: **This library only works on multi-core chips like ESP32, ESP32-S3 and ESP32-P4. It does not work on the ESP32-S2, ESP32-C3 etc** :warning:
 
 Plays mp3, m4a and wav files from SD card via I2S with external hardware.
 HELIX-mp3 and -aac decoder is included. There is also an OPUS decoder for Fullband, n VORBIS decoder and a FLAC decoder.
