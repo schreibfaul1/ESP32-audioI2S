@@ -19,8 +19,8 @@
 ** For more info contact Nero AG through Mpeg4AAClicense@nero.com.
 **/
 
-// ESP32 Version 29.07.1961
-// updated:      02.01.2025
+// ESP32 Version 29.07.2024
+// updated:      10.05.2025
 
 #pragma once
 #include <stddef.h>
@@ -372,29 +372,29 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 
 
 /*    Complex multiplication */
-//    static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
-//        *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
-//        *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
-//    }
-static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) {
-    asm volatile (
-        //  y1 = (x1 * c1) + (x2 * c2)
-        "mulsh a2, %2, %4\n"        // a2 = x1 * c1 (Low 32 bits)
-        "mulsh a3, %3, %5\n"        // a3 = x2 * c2 (Low 32 bits)
-        "add   a2, a2, a3\n"        // a2 = (x1 * c1) + (x2 * c2)
-        "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
-        "s32i  a2, %0   \n"         // Store result in *y1
-        // y2 = (x2 * c1) - (x1 * c2)
-        "mulsh a2, %3, %4\n"        // a2 = x2 * c1 (Low 32 bits)
-        "mulsh a3, %2, %5\n"        // a3 = x1 * c2 (Low 32 bits)
-        "sub   a2, a2, a3\n"        // a2 = (x2 * c1) - (x1 * c2)
-        "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
-        "s32i  a2, %1    \n"        // Store result in *y2
-        : "=m" (*y1), "=m" (*y2)                  // Output
-        : "r" (x1), "r" (x2), "r" (c1), "r" (c2)  // Input
-        : "a2", "a3"                              // Clobbers
-    );
-}
+   static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
+       *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
+       *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
+   }
+// static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) { // only XTENSA chips
+//     asm volatile (
+//         //  y1 = (x1 * c1) + (x2 * c2)
+//         "mulsh a2, %2, %4\n"        // a2 = x1 * c1 (Low 32 bits)
+//         "mulsh a3, %3, %5\n"        // a3 = x2 * c2 (Low 32 bits)
+//         "add   a2, a2, a3\n"        // a2 = (x1 * c1) + (x2 * c2)
+//         "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
+//         "s32i  a2, %0   \n"         // Store result in *y1
+//         // y2 = (x2 * c1) - (x1 * c2)
+//         "mulsh a2, %3, %4\n"        // a2 = x2 * c1 (Low 32 bits)
+//         "mulsh a3, %2, %5\n"        // a3 = x1 * c2 (Low 32 bits)
+//         "sub   a2, a2, a3\n"        // a2 = (x2 * c1) - (x1 * c2)
+//         "slli  a2, a2,  1\n"        // a2 = a2 >> 31 (Fixed-Point scaling)
+//         "s32i  a2, %1    \n"        // Store result in *y2
+//         : "=m" (*y1), "=m" (*y2)                  // Output
+//         : "r" (x1), "r" (x2), "r" (c1), "r" (c2)  // Input
+//         : "a2", "a3"                              // Clobbers
+//     );
+// }
 
 
     #define DIV(A, B) (((int64_t)A << REAL_BITS) / B)
