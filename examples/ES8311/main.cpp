@@ -39,12 +39,8 @@ void setup() {
     pinMode(PA_ENABLE, OUTPUT);
     digitalWrite(PA_ENABLE, HIGH);
 
-    Wire.begin(I2C_SDA, I2C_SCL);
-
     if(!es.begin(I2C_SDA, I2C_SCL, 400000)) log_e("ES8311 begin failed");
-    else log_w("ES8311 begin success");
     es.setVolume(50);
-    log_w("ES8311 volume set to %d", es.getVolume());
     es.setBitsPerSample(16);
 
     //    es.setSampleRate(22050);
