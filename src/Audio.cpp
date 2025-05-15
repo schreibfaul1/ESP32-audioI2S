@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0a                                                                                                                                  ";
+    Version 3.2.0b                                                                                                                                  ";
 /*  Updated on: May 15.2025
 
     Author: Wolle (schreibfaul1)
@@ -1162,6 +1162,44 @@ exit:
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
 
+    typedef struct { // --- EntityMap Definition ---
+        const char *name;
+        uint32_t codepoint;
+    } EntityMap;
+
+    static const EntityMap entities[] = {
+        {"amp",   0x0026}, // &
+        {"lt",    0x003C}, // <
+        {"gt",    0x003E}, // >
+        {"quot",  0x0022}, // "
+        {"apos",  0x0027}, // '
+        {"nbsp",  0x00A0}, // non-breaking space
+        {"euro",  0x20AC}, // €
+        {"copy",  0x00A9}, // ©
+        {"reg",   0x00AE}, // ®
+        {"trade", 0x2122}, // ™
+        {"hellip",0x2026}, // …
+        {"ndash", 0x2013}, // –
+        {"mdash", 0x2014}, // —
+        {"sect",  0x00A7}, // §
+        {"para",  0x00B6}  // ¶
+    };
+
+    // --- EntityMap Lookup ---
+    auto find_entity = [&](const char *p, uint32_t *codepoint, int *entity_len) {
+        for (size_t i = 0; i < sizeof(entities)/sizeof(entities[0]); i++) {
+            const char *name = entities[i].name;
+            size_t len = strlen(name);
+            if (strncmp(p + 1, name, len) == 0 && p[len + 1] == ';') {
+                *codepoint = entities[i].codepoint;
+                *entity_len = (int)(len + 2); // &name;
+                return 1;
+            }
+        }
+        return 0;
+    };
+
+
     auto codepoint_to_utf8 = [&](uint32_t cp, char *dst) { // Convert a Codepoint (Unicode) to UTF-8, writes in DST, there is number of bytes back
         if (cp <= 0x7F) {
             dst[0] = cp;
@@ -1182,18 +1220,25 @@ void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
             dst[3] = 0x80 | (cp & 0x3F);
             return 4;
         }
-        return -1; // Ungültiger Codepoint
+        return -1; // invalid Codepoint
     };
 
     char *p = str;
     while (*p != '\0') {
         if(p[0] == '&'){
-            if(strncmp(p + 1 , "amp;",   4) == 0){*p = '&';  memmove(p + 1, p + 5, strlen(p + 5) + 1); p++; continue;}
-            if(strncmp(p + 1 , "lt;",    3) == 0){*p = '<';  memmove(p + 1, p + 4, strlen(p + 4) + 1); p++; continue;}
-            if(strncmp(p + 1 , "gt;",    3) == 0){*p = '>';  memmove(p + 1, p + 4, strlen(p + 4) + 1); p++; continue;}
-            if(strncmp(p + 1 , "quot;",  5) == 0){*p = '"';  memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
-            if(strncmp(p + 1 , "apos;",  5) == 0){*p = '\''; memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
-            if(strncmp(p + 1 , "nbsp;",  5) == 0){*p = ' ';  memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
+            uint32_t cp;
+            int consumed;
+            if (find_entity(p, &cp, &consumed)) { // looking for entity, such as &copy;
+                char utf8[5] = {0};
+                int len = codepoint_to_utf8(cp, utf8);
+                if (len > 0) {
+                    size_t tail_len = strlen(p + consumed);
+                    memmove(p + len, p + consumed, tail_len + 1);
+                    memcpy(p, utf8, len);
+                    p += len;
+                    continue;
+                }
+            }
         }
         if (p[0] == '&' && p[1] == '#') {
             char *endptr;
@@ -4265,9 +4310,7 @@ void Audio::showstreamtitle(char* ml) {
 
     if(!ml) return;
 
-log_e("showstreamtitle1: %s", ml);
     htmlToUTF8(ml); // convert to UTF-8
-log_e("showstreamtitle2: %s", ml);
 
     int16_t  idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
     uint16_t i = 0, hash = 0;
