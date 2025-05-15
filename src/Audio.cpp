@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0y                                                                                                                                  ";
+    Version 3.1.0z                                                                                                                                  ";
 /*  Updated on: May 07.2025
 
     Author: Wolle (schreibfaul1)
@@ -186,7 +186,7 @@ Audio::Audio(uint8_t i2sPort) {
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num  = 8;                      // number of DMA buffer
+    m_i2s_chan_cfg.dma_desc_num  = 4;                      // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 1024;                   // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
@@ -204,7 +204,7 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
     m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    I2Sstart(m_i2s_num);
+    I2Sstart();
     m_sampleRate = 44100;
 
     for(int i = 0; i < 3; i++) {
@@ -249,11 +249,11 @@ void Audio::initInBuff() {
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-esp_err_t Audio::I2Sstart(uint8_t i2s_num) {
+esp_err_t Audio::I2Sstart() {
     return i2s_channel_enable(m_i2s_tx_handle);
 }
 
-esp_err_t Audio::I2Sstop(uint8_t i2s_num) {
+esp_err_t Audio::I2Sstop() {
     return i2s_channel_disable(m_i2s_tx_handle);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4887,9 +4887,9 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     gpio_cfg.dout = (gpio_num_t)DOUT;
     gpio_cfg.mclk = (gpio_num_t)MCLK;
     gpio_cfg.ws = (gpio_num_t)LRC;
-    I2Sstop(m_i2s_num);
+    I2Sstop();
     result = i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg);
-    I2Sstart(m_i2s_num);
+    I2Sstart();
 
     return (result == ESP_OK);
 }
@@ -5026,7 +5026,7 @@ uint8_t Audio::getChannels() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::reconfigI2S(){
 
-    I2Sstop(0);
+    I2Sstop();
 
     if(getBitsPerSample() == 8 && getChannels() == 2) m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate() * 2;
     else m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate();
@@ -5039,7 +5039,7 @@ void Audio::reconfigI2S(){
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    I2Sstart(m_i2s_num);
+    I2Sstart();
 
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
