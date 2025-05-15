@@ -243,6 +243,7 @@ private:
   bool            initializeDecoder(uint8_t codec);
   esp_err_t       I2Sstart();
   esp_err_t       I2Sstop();
+  void            zeroI2Sbuff();
   void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
   void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);

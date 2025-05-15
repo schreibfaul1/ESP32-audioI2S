@@ -3,11 +3,11 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.1.0z                                                                                                                                  ";
-/*  Updated on: May 07.2025
+    Version 3.2.0                                                                                                                                  ";
+/*  Updated on: May 15.2025
 
     Author: Wolle (schreibfaul1)
-    Audio library for ESP32 or ESP32-S3
+    Audio library for ESP32, ESP32-S3 or ESP32-P4
     Arduino Vers. V3 is mandatory
     external DAC is mandatory
 
@@ -186,7 +186,7 @@ Audio::Audio(uint8_t i2sPort) {
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num  = 4;                      // number of DMA buffer
+    m_i2s_chan_cfg.dma_desc_num  = 8;                      // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 1024;                   // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
@@ -250,13 +250,22 @@ void Audio::initInBuff() {
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 esp_err_t Audio::I2Sstart() {
+    zeroI2Sbuff();
     return i2s_channel_enable(m_i2s_tx_handle);
 }
 
 esp_err_t Audio::I2Sstop() {
+    memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
     return i2s_channel_disable(m_i2s_tx_handle);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void Audio::zeroI2Sbuff(){
+    uint8_t *buff = (uint8_t*)calloc(128, sizeof(uint8_t)); // From IDF V5 there is no longer the zero_dma_buff() function.
+    size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
+    i2s_channel_preload_data(m_i2s_tx_handle, buff, 128, &bytes_loaded);
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
