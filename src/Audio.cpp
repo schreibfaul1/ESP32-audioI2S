@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0                                                                                                                                  ";
+    Version 3.2.0a                                                                                                                                  ";
 /*  Updated on: May 15.2025
 
     Author: Wolle (schreibfaul1)
@@ -1187,6 +1187,14 @@ void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
 
     char *p = str;
     while (*p != '\0') {
+        if(p[0] == '&'){
+            if(strncmp(p + 1 , "amp;",   4) == 0){*p = '&';  memmove(p + 1, p + 5, strlen(p + 5) + 1); p++; continue;}
+            if(strncmp(p + 1 , "lt;",    3) == 0){*p = '<';  memmove(p + 1, p + 4, strlen(p + 4) + 1); p++; continue;}
+            if(strncmp(p + 1 , "gt;",    3) == 0){*p = '>';  memmove(p + 1, p + 4, strlen(p + 4) + 1); p++; continue;}
+            if(strncmp(p + 1 , "quot;",  5) == 0){*p = '"';  memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
+            if(strncmp(p + 1 , "apos;",  5) == 0){*p = '\''; memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
+            if(strncmp(p + 1 , "nbsp;",  5) == 0){*p = ' ';  memmove(p + 1, p + 6, strlen(p + 6) + 1); p++; continue;}
+        }
         if (p[0] == '&' && p[1] == '#') {
             char *endptr;
             uint32_t codepoint = strtol(p + 2, &endptr, 10);
@@ -4256,7 +4264,10 @@ void Audio::showstreamtitle(char* ml) {
     // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
 
     if(!ml) return;
+
+log_e("showstreamtitle1: %s", ml);
     htmlToUTF8(ml); // convert to UTF-8
+log_e("showstreamtitle2: %s", ml);
 
     int16_t  idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
     uint16_t i = 0, hash = 0;
