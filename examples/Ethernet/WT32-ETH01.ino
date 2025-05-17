@@ -17,7 +17,7 @@
 #define ETH_PHY_TYPE  ETH_PHY_LAN8720
 #define ETH_PHY_MDC   23
 #define ETH_PHY_MDIO  18
-#define ETH_CLK_MODE  ETH_CLOCK_GPIO0_IN
+#define ETH_CLK_MODE  EMAC_CLK_EXT_IN
 
 #include "ETH.h"
 
