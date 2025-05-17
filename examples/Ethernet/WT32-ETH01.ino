@@ -17,7 +17,14 @@
 #define ETH_PHY_TYPE  ETH_PHY_LAN8720
 #define ETH_PHY_MDC   23
 #define ETH_PHY_MDIO  18
+
+#ifdef CONFIG_IDF_TARGET_ESP32
+#define ETH_CLK_MODE  ETH_CLOCK_GPIO0_IN
+#endif
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
 #define ETH_CLK_MODE  EMAC_CLK_EXT_IN
+#endif
 
 #include "ETH.h"
 
