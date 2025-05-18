@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0b                                                                                                                                  ";
-/*  Updated on: May 15.2025
+    Version 3.2.0c                                                                                                                                  ";
+/*  Updated on: May 18.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3309,6 +3309,8 @@ void Audio::processLocalFile() {
         if(m_codec == CODEC_VORBIS){m_resumeFilePos = ogg_correctResumeFilePos(m_resumeFilePos); if(m_resumeFilePos == -1) goto exit; VORBISDecoder_ClearBuffers();}
         if(m_codec == CODEC_OPUS){m_resumeFilePos = ogg_correctResumeFilePos(m_resumeFilePos);   if(m_resumeFilePos == -1) goto exit; OPUSDecoder_ClearBuffers();}
 
+        m_sumBytesDecoded = m_resumeFilePos - m_audioDataStart; // for the file length calculation
+
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             audiofile.seek(m_resumeFilePos);
@@ -3776,7 +3778,7 @@ void Audio::playAudioData() {
 
     static bool f_isFile = false;
     bool lastFrame = false;
-    uint32_t bytesToDecode = 0;
+    int32_t bytesToDecode = 0;
 
     if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
@@ -3798,6 +3800,7 @@ void Audio::playAudioData() {
             bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
             if(bytesToDecode < InBuff.getMaxBlockSize()) {lastFrame = true;}
             if(m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded != 0) {m_f_eof = true; goto exit;} // file end reached
+            if(bytesToDecode < 0) {m_f_eof = true; goto exit;} // file end reached
         }
         else bytesToDecode = InBuff.bufferFilled();
     }
@@ -5031,14 +5034,8 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     if(m_codec == CODEC_AAC) return false; // not impl. yet
     uint32_t oneSec = m_avr_bitrate / 8;                 // bytes decoded in one sec
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
-    uint32_t startAB = m_audioDataStart;                 // audioblock begin
-    uint32_t endAB = m_audioDataStart + m_audioDataSize; // audioblock end
-
     int32_t pos = getFilePos() - inBufferFilled();
     pos += offset;
-    m_sumBytesDecoded += offset; // for the file length calculation
-    if(pos < (int32_t)startAB) {pos = startAB;}
-    if(pos >= (int32_t)endAB)  {pos = endAB;}
     setFilePos(pos);
 
     return true;
@@ -5047,6 +5044,12 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 bool Audio::setFilePos(uint32_t pos) {
     if(m_dataMode == AUDIO_LOCALFILE && !audiofile) return false;
     if(m_codec == CODEC_AAC) return false;   // not impl. yet
+
+    uint32_t startAB = m_audioDataStart;                 // audioblock begin
+    uint32_t endAB = m_audioDataStart + m_audioDataSize; // audioblock end
+    if(pos < (int32_t)startAB) {pos = startAB;}
+    if(pos >= (int32_t)endAB)  {pos = endAB;}
+
     memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t));
     m_validSamples = 0;
     m_haveNewFilePos = pos; // used in computeAudioCurrentTime()
@@ -5056,6 +5059,7 @@ bool Audio::setFilePos(uint32_t pos) {
     }
 //    if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
 //        httpRange(m_lastHost, pos);
+//        m_sumBytesDecoded = pos - m_audioDataStart; // for the file length calculation
 //        return true;
 //    }
     return false;
@@ -6262,7 +6266,7 @@ uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos) {
 uint32_t Audio::ogg_correctResumeFilePos(uint32_t resumeFilePos) {
     // The starting point is the next OggS magic word
     vTaskDelay(1);
-    log_w("in_resumeFilePos %i", resumeFilePos);
+    // log_w("in_resumeFilePos %i", resumeFilePos);
 
     uint8_t  p1, p2, p3, p4;
     boolean  found = false;
@@ -6286,7 +6290,7 @@ uint32_t Audio::ogg_correctResumeFilePos(uint32_t resumeFilePos) {
         p4 = audiofile.read();
         pos++;
     }
-    if(found) { log_w("out_resumeFilePos %i", pos - 4);    return (pos - 4);}
+    if(found) { /*log_w("out_resumeFilePos %i", pos - 4);*/    return (pos - 4);}
     stopSong();
     return 0;
 }
