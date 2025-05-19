@@ -321,6 +321,7 @@ void Audio::setDefaults() {
     m_codec = CODEC_NONE;
     m_playlistFormat = FORMAT_NONE;
     m_dataMode = AUDIO_NONE;
+    m_resumeFilePos = -1;
     m_audioCurrentTime = 0; // Reset playtimer
     m_audioFileDuration = 0;
     m_audioDataStart = 0;
@@ -3285,12 +3286,18 @@ void Audio::processLocalFile() {
 
     if(newFilePos) { // we have a new file position
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return;
-        if(m_codec == CODEC_MP3) { offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
-            m_haveNewFilePos = newFilePos + offset;
-            m_sumBytesDecoded = newFilePos + offset;
-            newFilePos = 0;
-            m_resumeFilePos = -1;
-            InBuff.bytesWasRead(offset);
+        if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return;} // ogg frame <= 64kB
+        if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_fileSize) goto exit;}}  // must divisible by four
+        if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
+        if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; FLACDecoderReset();}
+        if(m_codec == CODEC_M4A)   {offset = m4a_correctResumeFilePos();  if(offset == -1) goto exit;}
+        if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
+        if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; OPUSDecoder_ClearBuffers();}
+        m_haveNewFilePos = newFilePos + offset;
+        m_sumBytesDecoded = newFilePos + offset - m_audioDataStart;
+        newFilePos = 0;
+        m_resumeFilePos = -1;
+        InBuff.bytesWasRead(offset);
     }
 
     if(!m_f_stream) {
@@ -3322,23 +3329,6 @@ void Audio::processLocalFile() {
         setFilePos(m_fileStartPos);
         m_fileStartPos = -1;
     }
-
-    // if(m_resumeFilePos >= 0) {
-    //     if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-    //     if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {goto exit;}
-    //     m_haveNewFilePos = m_resumeFilePos;
-
-    //     if(m_codec == CODEC_M4A) {m_resumeFilePos = m4a_correctResumeFilePos(m_resumeFilePos);   if(m_resumeFilePos == -1) goto exit;}
-    //     if(m_codec == CODEC_WAV) {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; if(m_resumeFilePos >= m_fileSize)   goto exit;}}  // must divisible by four
-    //     if(m_codec == CODEC_FLAC) {m_resumeFilePos = flac_correctResumeFilePos(m_resumeFilePos); if(m_resumeFilePos == -1) goto exit; FLACDecoderReset();}
-    // //    if(m_codec == CODEC_MP3) { m_resumeFilePos = mp3_correctResumeFilePos(m_resumeFilePos);  if(m_resumeFilePos == -1) goto exit; MP3Decoder_ClearBuffer();}
-    //     if(m_codec == CODEC_VORBIS){m_resumeFilePos = ogg_correctResumeFilePos(m_resumeFilePos); if(m_resumeFilePos == -1) goto exit; VORBISDecoder_ClearBuffers();}
-    //     if(m_codec == CODEC_OPUS){m_resumeFilePos = ogg_correctResumeFilePos(m_resumeFilePos);   if(m_resumeFilePos == -1) goto exit; OPUSDecoder_ClearBuffers();}
-
-    //     m_sumBytesDecoded = m_resumeFilePos - m_audioDataStart; // for the file length calculation
-
-
-    // }
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
@@ -3840,7 +3830,7 @@ void Audio::playAudioData() {
     else {
         if(bytesDecoded > 0) {
             InBuff.bytesWasRead(bytesDecoded);
-            m_sumBytesDecoded += bytesDecoded;
+            if(m_audioDataStart > 0) m_sumBytesDecoded += bytesDecoded;
             if(f_isFile && m_codec == CODEC_MP3){
                 if (m_audioDataSize - m_sumBytesDecoded == 128){m_f_ID3v1TagFound = true; m_f_eof = true; goto exit;}
             }
@@ -6257,7 +6247,7 @@ noSuccess:
     return;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos) {
+uint32_t Audio::m4a_correctResumeFilePos() {
     // In order to jump within an m4a file, the exact beginning of an aac block must be found. Since m4a cannot be
     // streamed, i.e. there is no syncword, an imprecise jump can lead to a crash.
 
@@ -6270,6 +6260,8 @@ uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos) {
     tu uu;
 
     uint32_t i = 0, pos = m_audioDataStart;
+    uint32_t filePtr = audiofile.position();
+    bool found = false;
     audiofile.seek(m_stsz_position);
 
     while(i < m_stsz_numEntries) {
@@ -6279,69 +6271,74 @@ uint32_t Audio::m4a_correctResumeFilePos(uint32_t resumeFilePos) {
         uu.u8[1] = audiofile.read();
         uu.u8[0] = audiofile.read();
         pos += uu.u32;
-        if(pos >= resumeFilePos) break;
+        if(pos >= m_resumeFilePos) {found = true; break;}
     }
-    return pos;
+    if(!found)  return -1; // not found
+
+    audiofile.seek(filePtr); // restore file pointer
+    return pos - m_resumeFilePos; // return the number of bytes to jump
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::ogg_correctResumeFilePos(uint32_t resumeFilePos) {
+uint32_t Audio::ogg_correctResumeFilePos() {
     // The starting point is the next OggS magic word
     vTaskDelay(1);
-    // log_w("in_resumeFilePos %i", resumeFilePos);
+    // // log_w("in_resumeFilePos %i", resumeFilePos);
 
-    uint8_t  p1, p2, p3, p4;
-    boolean  found = false;
-    uint32_t pos = resumeFilePos;
-    audiofile.seek(pos);
-
-    p1 = audiofile.read();
-    p2 = audiofile.read();
-    p3 = audiofile.read();
-    p4 = audiofile.read();
-
-    pos += 4;
-    while(!found || pos >= m_fileSize) {
-        if(p1 == 'O' && p2 == 'g'&& p3 == 'g' && p4 == 'S') {
-            found = true;
-            break;
+    auto find_sync_word = [&](uint8_t* pos, uint32_t av) -> int {
+        int steps = 0;
+        while(av--) {
+            if(pos[steps] == 'O'){
+                if(pos[steps + 1] == 'g') {
+                    if(pos[steps + 2] == 'g') {
+                        if(pos[steps + 3] == 'S') { // Check for the second part of magic word
+                            return steps;   // Magic word found, return the number of steps
+                        }
+                    }
+                }
+            }
+            steps++;
         }
-        p1 = p2;
-        p2 = p3;
-        p3 = p4;
-        p4 = audiofile.read();
-        pos++;
-    }
-    if(found) { /*log_w("out_resumeFilePos %i", pos - 4);*/    return (pos - 4);}
-    stopSong();
-    return 0;
+        return -1; // Return -1 if OggS magic word is not found
+    };
+
+    uint8_t*       readPtr = InBuff.getReadPtr();
+    size_t         av = InBuff.getMaxAvailableBytes();
+    int32_t        steps = 0;
+
+    if(av < InBuff.getMaxBlockSize()) return -1; // guard
+
+    steps = find_sync_word(readPtr, av);
+    if(steps == -1) return -1;
+    return steps; // Return the number of steps to the sync word
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t Audio::flac_correctResumeFilePos(uint32_t resumeFilePos) {
-    // The starting point is the next FLAC syncword
-    uint8_t  p1, p2;
-    boolean  found = false;
-    uint32_t pos = resumeFilePos;
-    uint32_t maxPos = m_audioDataStart + m_audioDataSize;
+int32_t Audio::flac_correctResumeFilePos() {
 
-    if(pos + 2 >= maxPos) goto exit;
-
-    audiofile.seek(pos);
-    p1 = audiofile.read();
-    p2 = audiofile.read();
-    pos += 2;
-    while(!found && pos < maxPos) {
-        if(p1 == 0xFF && p2 == 0xF8) {
-            found = true;
-            break;
+    auto find_sync_word = [&](uint8_t* pos, uint32_t av) -> int {
+        int steps = 0;
+        while(av--) {
+            char c = pos[steps];
+            steps++;
+            if(c == 0xFF) { // First byte of sync word found
+                char nextByte = pos[steps];
+                steps++;
+                if(nextByte == 0xF8) {     // Check for the second part of sync word
+                    return steps - 2;       // Sync word found, return the number of steps
+                }
+            }
         }
-        p1 = p2;
-        p2 = audiofile.read();
-        pos++;
-    }
-    if(found) return (pos - 2);
+        return -1; // Return -1 if sync word is not found
+    };
 
-exit:
-    return -1;
+    uint8_t*       readPtr = InBuff.getReadPtr();
+    size_t         av = InBuff.getMaxAvailableBytes();
+    int32_t        steps = 0;
+
+    if(av < InBuff.getMaxBlockSize()) return -1; // guard
+
+    steps = find_sync_word(readPtr, av);
+    if(steps == -1) return -1;
+    return steps; // Return the number of steps to the sync word
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::mp3_correctResumeFilePos() {
