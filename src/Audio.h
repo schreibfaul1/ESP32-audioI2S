@@ -273,7 +273,7 @@ private:
   uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
   uint32_t ogg_correctResumeFilePos(uint32_t resumeFilePos);
   int32_t  flac_correctResumeFilePos(uint32_t resumeFilePos);
-  int32_t  mp3_correctResumeFilePos(uint32_t resumeFilePos);
+  int32_t  mp3_correctResumeFilePos();
   uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
   //++++ implement several function with respect to the index of string ++++
