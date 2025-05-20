@@ -106,7 +106,10 @@ public:
     uint32_t getReadPos();                      // read position relative to the beginning
     void     resetBuffer();                     // restore defaults
     bool     havePSRAM() { return m_f_psram; };
-
+    void     setComplete() { m_complete = true; }; // indicates that the buffer contains the last data of a source
+    bool     isComplete() { return m_complete; }; // returns true if the buffer contains the last data of a source
+    bool     isEmpty() { return bufferFilled() == 0; }; // returns true if the buffer is empty
+    bool     isPlayable() { return isComplete() || (bufferFilled() >= m_maxBlockSize); }; // returns true if the buffer is either complete or has enough data to play
 protected:
     size_t            m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
     size_t            m_buffSizeRAM      = 1600 * 10;
@@ -124,6 +127,7 @@ protected:
     bool              m_f_init           = false;
     bool              m_f_isEmpty        = true;
     bool              m_f_psram          = false;    // PSRAM is available (and used...)
+    bool              m_complete         = false;    // true if the buffer contains the last data from a source.    
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -265,6 +269,7 @@ private:
 
   //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
   uint16_t readMetadata(uint16_t b, bool first = false);
+  bool     stripCRLF(int prevChar = 0);
   size_t   chunkedDataTransfer(uint8_t* bytes);
   bool     readID3V1Tag();
   boolean  streamDetection(uint32_t bytesAvail);
@@ -747,7 +752,7 @@ private:
     bool            m_f_decode_ready = false;       // if true data for decode are ready
     bool            m_f_eof = false;                // end of file
     bool            m_f_lockInBuffer = false;       // lock inBuffer for manipulation
-    bool            m_f_audioTaskIsDecoding = false;
+    bool            m_f_audioTaskIsDecoding = false; 
     bool            m_f_acceptRanges = false;
     bool            m_f_reset_m3u8Codec = true;     // reset codec for m3u8 stream
     uint8_t         m_f_channelEnabled = 3;         //
