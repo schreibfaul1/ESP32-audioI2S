@@ -155,6 +155,7 @@ void AudioBuffer::resetBuffer() {
     m_readPtr = m_buffer;
     m_endPtr = m_buffer + m_buffSize;
     m_f_isEmpty = true;
+    m_complete = false;
 }
 
 uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer; }
@@ -2487,6 +2488,11 @@ exit:
 void Audio::loop() {
     if(!m_f_running) return;
 
+    if(InBuff.isComplete() && InBuff.isEmpty()) {
+        stopSong();
+        return;
+    }
+
     if(_client->fd()) m_f_clientIsConnected = _client->connected(); // workaround, wifiClientSecure fails for _client->connected() if the server disconnect the TCP connection
     else              m_f_clientIsConnected = false;
 
@@ -3353,7 +3359,6 @@ exit:
 void Audio::processWebStream() {
     if(m_dataMode != AUDIO_DATA) return; // guard
 
-    const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3364,12 +3369,22 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         readMetadata(0, true); // reset all static vars
     }
+
+    if (InBuff.isComplete()) {
+        // We are waiting for the data to play out, so stop reading.
+        return;
+    }
+
     uint32_t availableBytes = _client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
         if(!chunkSize) chunkSize = chunkedDataTransfer(&readedBytes);
+        if(chunkSize == 0) {
+            // The buffer now contains the last chunk of data.
+            InBuff.setComplete();
+        }
         availableBytes = min(availableBytes, chunkSize);
     }
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3396,12 +3411,21 @@ void Audio::processWebStream() {
             if(m_f_chunked) chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
+
+        if(m_f_chunked && (chunkSize == 0)) {
+            // Strip off the CRLF after each chunk.
+            if (!stripCRLF()) {
+                log_e("CRLF not found");
+                stopSong();
+                return;
+            }
+        }
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
+    if(InBuff.isPlayable() && !m_f_stream) { // waiting for buffer filled
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), InBuff.bufferFilled());
             if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec;}
@@ -3777,7 +3801,7 @@ void Audio::playAudioData() {
     if(!m_f_stream) return; // guard
 
     static bool f_isFile = false;
-    bool lastFrame = false;
+
     int32_t bytesToDecode = 0;
 
     if(m_f_firstPlayCall) {
@@ -3795,6 +3819,7 @@ void Audio::playAudioData() {
     m_f_audioTaskIsDecoding = true;
     uint8_t next = 0;
     int bytesDecoded = 0;
+    bool lastFrame = InBuff.isComplete();    
     if(f_isFile) {
         if(!m_f_unknownFileLength) {
             bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
@@ -5854,31 +5879,70 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     return res;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-size_t Audio::chunkedDataTransfer(uint8_t* bytes) {
-    uint8_t  byteCounter = 0;
-    size_t   chunksize = 0;
-    int      b = 0;
-    uint32_t ctime = millis();
-    uint32_t timeout = 2000; // ms
+bool Audio::stripCRLF(int prevChar) {
+    if (prevChar && (prevChar != '\r')) {
+        // Non-zero, but not CR.
+        return false;
+    }
+    const uint32_t timeout = 2000; // ms    
+    const uint32_t startTime = millis();
     while(true) {
-        if(ctime + timeout < millis()) {
-            log_e("timeout");
-            stopSong();
+        if((millis() - startTime) >= timeout) {
+            log_e("CRLF timeout");
+            return false;
+        }
+        if(_client->available() > 0) {
+            int b = _client->read();
+            if(b == '\r') {
+                if(prevChar) {
+                    return false;
+                }
+                prevChar = '\r';
+            } else if(b == '\n') {
+                return (prevChar == '\r');
+            } else {
+                return false;
+            }
+        } else {
+            delay(1); // wait for next byte
+        }      
+    }
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+size_t Audio::chunkedDataTransfer(uint8_t* bytes) {
+    *bytes = 0;
+    size_t chunksize = 0;
+    const uint32_t timeout = 2000; // ms    
+    const uint32_t startTime = millis();
+    while(true) {
+        if((millis() - startTime) >= timeout) {
+            log_e("chunk size timeout");
             return 0;
         }
-        b = _client->read();  // e.g. 0x66 0x34 0x31 0x37 0x0D 0x0A --> 62487 Bytes + CR LF
-        byteCounter++;        //      0x30 0x0D 0x0A   --> last chunk, CAN
-        if(b < 0) continue;   // -1 nothing to read
-        if(b == '\n') break;
-        if(b < '0') continue;
-        // We have received a hexadecimal character.  Decode it and add to the result.
-        b = toupper(b) - '0'; // Be sure we have uppercase
-        if(b > 9) b = b - 7;  // Translate A..F to 10..15
-        chunksize = (chunksize << 4) + b;
+        if(_client->available() > 0) {
+            int b = _client->read();
+            int nibble = toupper(b) - '0'; // Be sure we have uppercase
+            if(nibble > 9) nibble -= 7;  // Translate A..F to 10..15
+            if(nibble < 0 || nibble > 15) {
+                if(*bytes == 0) {
+                    // no hex digits received.
+                    log_e("chunk size error");
+                    return 0;
+                } else if(stripCRLF(b)) {
+                    (*bytes) += 2;
+                    return chunksize;
+                } else {
+                    // CRLF failed
+                    log_e("no CRLF");
+                    return 0;
+                }
+            }
+            chunksize = (chunksize << 4) + nibble;
+            (*bytes)++;
+        } else {
+            delay(1); // wait for next byte
+        }
     }
-    // if(m_f_Log) log_i("chunksize %d", chunksize);
-    *bytes = byteCounter;
-    return chunksize;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readID3V1Tag() {
