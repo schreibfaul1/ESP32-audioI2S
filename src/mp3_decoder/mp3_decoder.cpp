@@ -1209,7 +1209,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
             log_d("wrong bitrate index");
             pos += mp3FHsize;
             nBytes -= mp3FHsize;
-           int32_t i = findSync(buf, pos, nBytes);
+            int32_t i = findSync(buf, pos, nBytes);
             pos += i;
             nBytes -= i;
             continue;

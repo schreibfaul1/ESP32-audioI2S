@@ -270,10 +270,10 @@ private:
   boolean  streamDetection(uint32_t bytesAvail);
   void     seek_m4a_stsz();
   void     seek_m4a_ilst();
-  uint32_t m4a_correctResumeFilePos(uint32_t resumeFilePos);
-  uint32_t ogg_correctResumeFilePos(uint32_t resumeFilePos);
-  int32_t  flac_correctResumeFilePos(uint32_t resumeFilePos);
-  int32_t  mp3_correctResumeFilePos(uint32_t resumeFilePos);
+  uint32_t m4a_correctResumeFilePos();
+  uint32_t ogg_correctResumeFilePos();
+  int32_t  flac_correctResumeFilePos();
+  int32_t  mp3_correctResumeFilePos();
   uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
   //++++ implement several function with respect to the index of string ++++
@@ -724,11 +724,11 @@ private:
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
     bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
+    bool            m_f_allDataReceived= false;     // set in processWebStream
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_unknownFileLength = false;  // file length unknown
-    bool            m_f_clientIsConnected = false;  // client connected, inter task communication
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_tts = false;                // text to speech
