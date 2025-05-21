@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0e                                                                                                                                  ";
+    Version 3.2.0f                                                                                                                                  ";
 /*  Updated on: May 21.2025
 
     Author: Wolle (schreibfaul1)
@@ -3384,6 +3384,9 @@ void Audio::processWebStream() {
             }
             f_firstChunk = false;
             chunkSize = readChunkSize(&readedBytes);
+            if(chunkSize == 0) {
+                m_f_allDataReceived = true; // end of stream
+            }
             // log_w("chunk size: %d", chunkSize);
         }
         availableBytes = min(availableBytes, chunkSize);
@@ -3483,7 +3486,7 @@ void Audio::processWebFile() {
             }
             chunkSize = readChunkSize(&readedBytes);
             if(chunkSize == 0) m_f_allDataReceived = true; // end of chunked data
-            log_w("chunk size: %d", chunkSize);
+            // log_w("chunk size: %d", chunkSize);
             m_contentlength += chunkSize;
         }
         availableBytes = min(availableBytes, m_contentlength - byteCounter);
@@ -3868,7 +3871,16 @@ exit:
             // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
             if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
         }
+
     }
+
+    if(m_streamType == ST_WEBSTREAM && (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) && m_f_allDataReceived) { // Exception: chunked stream 
+        m_f_eof = true; // file end reached
+        AUDIO_INFO("End of webstream: \"%s\"", m_lastHost);
+        if(audio_eof_stream) audio_eof_stream(m_lastHost);
+        stopSong();
+    }
+
     m_f_audioTaskIsDecoding = false;
     return;
 }
