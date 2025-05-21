@@ -729,7 +729,6 @@ private:
     bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
     bool            m_f_chunked = false ;           // Station provides chunked transfer
     bool            m_f_unknownFileLength = false;  // file length unknown
-    bool            m_f_clientIsConnected = false;  // client connected, inter task communication
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_tts = false;                // text to speech

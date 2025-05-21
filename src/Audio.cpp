@@ -2485,9 +2485,6 @@ exit:
 void Audio::loop() {
     if(!m_f_running) return;
 
-    if(_client->fd()) m_f_clientIsConnected = _client->connected(); // workaround, wifiClientSecure fails for _client->connected() if the server disconnect the TCP connection
-    else              m_f_clientIsConnected = false;
-
     if(m_playlistFormat != FORMAT_M3U8) { // normal process
         switch(m_dataMode) {
             case AUDIO_LOCALFILE:
@@ -3427,6 +3424,7 @@ void Audio::processWebFile() {
     static size_t   audioDataCount;                          // counts the decoded audiodata only
     static uint32_t byteCounter;                             // count received data
     static bool     f_waitingForPayload = false;             // waiting for payload
+    bool            f_clientIsConnected = _client;           // if _client is Nullptr, we are not connected
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3444,7 +3442,8 @@ void Audio::processWebFile() {
     }
 
     uint32_t availableBytes = 0;
-    if(m_f_clientIsConnected) availableBytes = _client->available(); // available from stream
+
+    if(f_clientIsConnected) availableBytes = _client->available(); // available from stream
 
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_waitingForPayload){
@@ -3476,7 +3475,7 @@ void Audio::processWebFile() {
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int32_t bytesAddedToBuffer = 0;
-    if(m_f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    if(f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
         byteCounter += bytesAddedToBuffer;
@@ -3484,7 +3483,8 @@ void Audio::processWebFile() {
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
-    if(byteCounter == m_contentlength) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data is received
+    if(byteCounter == m_contentlength) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data are received
+
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3497,12 +3497,13 @@ void Audio::processWebFile() {
     }
 
     // the server does not provide information about the size of the Payoad - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!m_contentlength && !chunkSize && !m_f_unknownFileLength) {
+    if(!m_contentlength && !m_f_chunked && !m_f_unknownFileLength) {
         // log_w("no contentlength and no chunked data, maybe OpenAI-speech");
         m_f_unknownFileLength = true;
         m_audioDataSize = 0;                         // m_audioDataSize cannot be calculated in this way, set to zero
     }
 
+    if(m_f_unknownFileLength && !f_clientIsConnected && !m_f_allDataReceived){m_f_allDataReceived = true;} // server closes the connection, all data received}
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
@@ -3842,11 +3843,7 @@ void Audio::playAudioData() {
 
 exit:
     if(m_f_unknownFileLength){
-        if(m_streamType == ST_WEBFILE && m_f_clientIsConnected == false){
-            // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
-            if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
-        }
-        if(m_dataMode == AUDIO_LOCALFILE){
+        if(m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE){
             // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
             if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
         }
