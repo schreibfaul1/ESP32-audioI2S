@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0c                                                                                                                                  ";
-/*  Updated on: May 18.2025
+    Version 3.2.0d                                                                                                                                  ";
+/*  Updated on: May 21.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -2560,7 +2560,7 @@ bool Audio::readPlayListData() {
 
     uint32_t chunksize = 0;
     uint8_t  readedBytes = 0;
-    if(m_f_chunked) chunksize = chunkedDataTransfer(&readedBytes);
+    if(m_f_chunked) chunksize = readChunkSize(&readedBytes);
 
     // reads the content of the playlist and stores it in the vector m_contentlength
     // m_contentlength is a table of pointers to the lines
@@ -3361,6 +3361,7 @@ void Audio::processWebStream() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
+    static bool     f_firstChunk;
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3368,6 +3369,7 @@ void Audio::processWebStream() {
         m_f_stream = false;
         chunkSize = 0;
         m_metacount = m_metaint;
+        f_firstChunk = true;
         readMetadata(0, true); // reset all static vars
     }
     uint32_t availableBytes = _client->available(); // available from stream
@@ -3375,9 +3377,18 @@ void Audio::processWebStream() {
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(!chunkSize) chunkSize = chunkedDataTransfer(&readedBytes);
+        if(!chunkSize){
+            if(!f_firstChunk){
+                int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
+                int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+            }
+            f_firstChunk = false;
+            chunkSize = readChunkSize(&readedBytes);
+            // log_w("chunk size: %d", chunkSize);
+        }
         availableBytes = min(availableBytes, chunkSize);
     }
+
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_metadata && availableBytes) {
         if(m_metacount == 0) {
@@ -3439,6 +3450,7 @@ void Audio::processWebFile() {
         m_webFilePos = 0;
         m_controlCounter = 0;
         m_f_unknownFileLength = false; // no contentlength and no chunked data, maybe OpenAI-speech
+        if(m_f_chunked) m_contentlength = 0; // chunked data transfer
     }
 
     uint32_t availableBytes = 0;
@@ -3464,11 +3476,17 @@ void Audio::processWebFile() {
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(m_f_chunked && chunkSize == byteCounter) {
-            chunkSize += chunkedDataTransfer(&readedBytes);
+        if(m_f_chunked && m_contentlength == byteCounter && !m_f_allDataReceived) {
+            if(chunkSize > 0){
+                int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
+                int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+            }
+            chunkSize = readChunkSize(&readedBytes);
+            if(chunkSize == 0) m_f_allDataReceived = true; // end of chunked data
+            log_w("chunk size: %d", chunkSize);
             m_contentlength += chunkSize;
         }
-        availableBytes = min(availableBytes, chunkSize - byteCounter);
+        availableBytes = min(availableBytes, m_contentlength - byteCounter);
     }
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3483,7 +3501,7 @@ void Audio::processWebFile() {
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
-    if(byteCounter == m_contentlength) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data are received
+    if(byteCounter == m_contentlength && !m_f_chunked) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data are received
 
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3584,7 +3602,7 @@ nextRound:
         */
         uint8_t readedBytes = 0;
         uint32_t minAvBytes = 0;
-        if(m_f_chunked && chunkSize == byteCounter) {chunkSize += chunkedDataTransfer(&readedBytes); goto exit;}
+        if(m_f_chunked && chunkSize == byteCounter) {chunkSize += readChunkSize(&readedBytes); goto exit;}
         if(chunkSize) minAvBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
         else          minAvBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
 
@@ -3702,7 +3720,7 @@ void Audio::processWebStreamHLS() {
         uint8_t readedBytes = 0;
 
         if(m_f_chunked && !chunkSize) {
-            chunkSize = chunkedDataTransfer(&readedBytes);
+            chunkSize = readChunkSize(&readedBytes);
             byteCounter += readedBytes;
         }
 
@@ -5867,30 +5885,103 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     return res;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-size_t Audio::chunkedDataTransfer(uint8_t* bytes) {
+size_t Audio::readChunkSize(uint8_t* bytes) {
+    // size_t chunkSize = 0;
+    // char c;
+    // bool inExtension = false;
+    // *bytes = 0;
+
+    // while (_client->available()) {
+    //     c = _client->read();
+    //     (*bytes)++;
+
+    //     if (c == '0' && !inExtension && chunkSize == 0) { // Recognize the end chunk ("0")
+    //         // optional: Extensions could follow here (e.g. "0; Footer = Xyz \ r \ n")
+    //         while (_client->available()) {
+    //             c = _client->read();
+    //             (*bytes)++;
+    //             if (c == '\n') break; // End of the line
+    //         }
+    //         return 0; // End-Chunk
+    //     }
+
+    //     if (c == ';') {// ignore chunk extension (after ';')
+    //         inExtension = true;
+    //         continue;
+    //     }
+
+    //     if (inExtension) {
+    //         if (c == '\r' || c == '\n') { // Extension skip until the end of the line
+    //             inExtension = false;
+    //             if (c == '\n') break; // End of the line
+    //         }
+    //         continue;
+    //     }
+
+    //     // Convert the hexadecimal character to a number
+    //     if (c >= '0' && c <= '9') {
+    //         chunkSize = (chunkSize << 4) + (c - '0');
+    //     } else if (c >= 'A' && c <= 'F') {
+    //         chunkSize = (chunkSize << 4) + (c - 'A' + 10);
+    //     } else if (c >= 'a' && c <= 'f') {
+    //         chunkSize = (chunkSize << 4) + (c - 'a' + 10);
+    //     } else if (c == '\r') {
+    //         continue; // Wait for '\n'
+    //     } else if (c == '\n') {
+    //         break; // End of the chunk-size line
+    //     } else {
+    //         // invalid sign (can optionally ignore or treat as an error)
+    //         continue;
+    //     }
+    // }
+    // return chunkSize;
+
     uint8_t  byteCounter = 0;
     size_t   chunksize = 0;
+    bool     parsingChunkSize = true;
     int      b = 0;
+    std::string chunkLine;
     uint32_t ctime = millis();
     uint32_t timeout = 2000; // ms
-    while(true) {
-        if(ctime + timeout < millis()) {
-            log_e("timeout");
+
+    while (true) {
+        if ((millis() - ctime) > timeout) {
+            log_e("chunkedDataTransfer: timeout");
             stopSong();
             return 0;
         }
-        b = _client->read();  // e.g. 0x66 0x34 0x31 0x37 0x0D 0x0A --> 62487 Bytes + CR LF
-        byteCounter++;        //      0x30 0x0D 0x0A   --> last chunk, CAN
-        if(b < 0) continue;   // -1 nothing to read
-        if(b == '\n') break;
-        if(b < '0') continue;
-        // We have received a hexadecimal character.  Decode it and add to the result.
-        b = toupper(b) - '0'; // Be sure we have uppercase
-        if(b > 9) b = b - 7;  // Translate A..F to 10..15
-        chunksize = (chunksize << 4) + b;
+
+        b = _client->read();
+        if (b < 0) continue; // -1 = no data
+
+        byteCounter++;
+        if (b == '\n') break; // End of chunk-size line
+        if (b == '\r') continue;
+
+        chunkLine += static_cast<char>(b);
     }
-    // if(m_f_Log) log_i("chunksize %d", chunksize);
+
+    // chunkLine z.B.: "2A", oder "2A;foo=bar"
+    size_t semicolonPos = chunkLine.find(';');
+    std::string hexSize = (semicolonPos != std::string::npos) ? chunkLine.substr(0, semicolonPos) : chunkLine;
+
+    // Konvertiere Hex-Zahl
+    chunksize = strtoul(hexSize.c_str(), nullptr, 16);
     *bytes = byteCounter;
+
+    // Spezialfall: Letzter Chunk erkannt (0) => nächstes "\r\n" lesen und verwerfen
+    if (chunksize == 0) {
+        // Lesen bis vollständiges "\r\n" empfangen wurde
+        uint8_t crlf[2] = {0}; (void)crlf; // suppress [-Wunused-variable]
+        uint8_t idx = 0;
+        ctime = millis();
+        while (idx < 2 && (millis() - ctime) < timeout) {
+            int ch = _client->read();
+            if (ch < 0) continue;
+            crlf[idx++] = static_cast<uint8_t>(ch);
+        }
+    }
+
     return chunksize;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
