@@ -316,6 +316,7 @@ void Audio::setDefaults() {
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
     m_f_acceptRanges = false;
+    m_f_allDataReceived = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -1265,9 +1266,6 @@ void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
         p++;
     }
 }
-
-
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::readAudioHeader(uint32_t bytes) {
@@ -3486,6 +3484,7 @@ void Audio::processWebFile() {
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
+    if(byteCounter == m_contentlength) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data is received
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3790,13 +3789,16 @@ void Audio::playAudioData() {
     if(m_validSamples) {playChunk();                               return;} // guard, play samples first
     //--------------------------------------------------------------------------------
     static bool f_isFile = false;
+    static uint8_t count = 0;
     bool        lastFrame = false;
     int32_t     bytesToDecode = InBuff.bufferFilled();
     uint8_t     next = 0;
     int16_t     bytesDecoded = 0;
 
+
     if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
+        count = 0;
         f_isFile = (m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE);
     }
     //--------------------------------------------------------------------------------
@@ -3811,12 +3813,18 @@ void Audio::playAudioData() {
         }
     }
     // log_w("bytesToDecode: %i, m_sumBytesDecoded: %i, m_audioDataSize: %i", bytesToDecode, m_sumBytesDecoded, m_audioDataSize);
-    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) goto exit;
+    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {count++; if(count == 5 && m_f_allDataReceived) m_f_eof = true; goto exit;} // in case of errors
 
-    if(bytesToDecode > InBuff.getMaxBlockSize()){bytesToDecode = InBuff.getMaxBlockSize();}
+    bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
     bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
-    // log_w("bytesDecoded: %i, bytesToDecode: %i", bytesDecoded, bytesToDecode);
-    if(bytesDecoded == 0) return; // syncword at pos0
+    // log_w("bytesToDecode: %i, bytesDecoded %i, m_sumBytesDecoded: %i, m_audioDataSize: %i, InBuff.bufferFilled() %i", bytesToDecode, bytesDecoded, m_sumBytesDecoded, m_audioDataSize, InBuff.bufferFilled());
+    if(bytesDecoded == 0) {
+        count++;
+        if(count == 5) m_f_eof = true; // in case of errors
+        return; // syncword at pos0
+    }
+
+    count = 0;
 
     if(bytesDecoded < 0) { // no syncword found or decode error, try next chunk
         next = min((size_t)200, InBuff.bufferFilled());

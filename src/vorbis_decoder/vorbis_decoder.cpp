@@ -225,7 +225,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         s_vorbisSegmentTableRdPtr = -1; // back to the parking position
         ret = VORBISparseOGG(inbuf, bytesLeft);
         s_f_parseOggDone = true;
-        if(!s_vorbisSegmentTableSize) { log_w("OggS without segments?"); }
+        if(!s_vorbisSegmentTableSize) {/* log_w("OggS without segments?") */; }
         return ret;
     }
 
