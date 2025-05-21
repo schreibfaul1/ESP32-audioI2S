@@ -265,7 +265,7 @@ private:
 
   //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
   uint16_t readMetadata(uint16_t b, bool first = false);
-  size_t   chunkedDataTransfer(uint8_t* bytes);
+  size_t   readChunkSize(uint8_t* bytes);
   bool     readID3V1Tag();
   boolean  streamDetection(uint32_t bytesAvail);
   void     seek_m4a_stsz();
