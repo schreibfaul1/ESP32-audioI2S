@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0d                                                                                                                                  ";
+    Version 3.2.0e                                                                                                                                  ";
 /*  Updated on: May 21.2025
 
     Author: Wolle (schreibfaul1)
@@ -3818,7 +3818,10 @@ void Audio::playAudioData() {
     if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
         count = 0;
-        f_isFile = (m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE);
+        if (m_playlistFormat == FORMAT_M3U8)     f_isFile = false;
+        else if(m_dataMode   == AUDIO_LOCALFILE) f_isFile = true;
+        else if(m_streamType == ST_WEBFILE)      f_isFile = true;
+        else                                     f_isFile = false;
     }
     //--------------------------------------------------------------------------------
 
