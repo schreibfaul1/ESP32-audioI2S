@@ -3988,6 +3988,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(startsWith(rhl, "content-encoding:")) {
+            AUDIO_INFO("%s", rhl);
             if(indexOf(rhl, "gzip")) {
                 AUDIO_INFO("can't extract gzip");
                 goto exit;
@@ -5886,59 +5887,9 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::readChunkSize(uint8_t* bytes) {
-    // size_t chunkSize = 0;
-    // char c;
-    // bool inExtension = false;
-    // *bytes = 0;
-
-    // while (_client->available()) {
-    //     c = _client->read();
-    //     (*bytes)++;
-
-    //     if (c == '0' && !inExtension && chunkSize == 0) { // Recognize the end chunk ("0")
-    //         // optional: Extensions could follow here (e.g. "0; Footer = Xyz \ r \ n")
-    //         while (_client->available()) {
-    //             c = _client->read();
-    //             (*bytes)++;
-    //             if (c == '\n') break; // End of the line
-    //         }
-    //         return 0; // End-Chunk
-    //     }
-
-    //     if (c == ';') {// ignore chunk extension (after ';')
-    //         inExtension = true;
-    //         continue;
-    //     }
-
-    //     if (inExtension) {
-    //         if (c == '\r' || c == '\n') { // Extension skip until the end of the line
-    //             inExtension = false;
-    //             if (c == '\n') break; // End of the line
-    //         }
-    //         continue;
-    //     }
-
-    //     // Convert the hexadecimal character to a number
-    //     if (c >= '0' && c <= '9') {
-    //         chunkSize = (chunkSize << 4) + (c - '0');
-    //     } else if (c >= 'A' && c <= 'F') {
-    //         chunkSize = (chunkSize << 4) + (c - 'A' + 10);
-    //     } else if (c >= 'a' && c <= 'f') {
-    //         chunkSize = (chunkSize << 4) + (c - 'a' + 10);
-    //     } else if (c == '\r') {
-    //         continue; // Wait for '\n'
-    //     } else if (c == '\n') {
-    //         break; // End of the chunk-size line
-    //     } else {
-    //         // invalid sign (can optionally ignore or treat as an error)
-    //         continue;
-    //     }
-    // }
-    // return chunkSize;
-
     uint8_t  byteCounter = 0;
     size_t   chunksize = 0;
-    bool     parsingChunkSize = true;
+    // bool     parsingChunkSize = true;
     int      b = 0;
     std::string chunkLine;
     uint32_t ctime = millis();
@@ -5965,13 +5916,12 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
     size_t semicolonPos = chunkLine.find(';');
     std::string hexSize = (semicolonPos != std::string::npos) ? chunkLine.substr(0, semicolonPos) : chunkLine;
 
-    // Konvertiere Hex-Zahl
+    // Converted hex number
     chunksize = strtoul(hexSize.c_str(), nullptr, 16);
     *bytes = byteCounter;
 
-    // Spezialfall: Letzter Chunk erkannt (0) => nächstes "\r\n" lesen und verwerfen
-    if (chunksize == 0) {
-        // Lesen bis vollständiges "\r\n" empfangen wurde
+    if (chunksize == 0) { // Special case: Last chunk recognized (0) => Next read and reject "\ r \ n"
+        // Reading to complete "\ r \ n" was received
         uint8_t crlf[2] = {0}; (void)crlf; // suppress [-Wunused-variable]
         uint8_t idx = 0;
         ctime = millis();
