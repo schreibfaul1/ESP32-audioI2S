@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0f                                                                                                                                  ";
-/*  Updated on: May 21.2025
+    Version 3.2.0g                                                                                                                                  ";
+/*  Updated on: May 23.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -308,15 +308,14 @@ void Audio::setDefaults() {
     m_f_m3u8data = false; // set again in processM3U8entries() if necessary
     m_f_continue = false;
     m_f_ts = false;
+    m_f_ogg = false;
     m_f_m4aID3dataAreRead = false;
     m_f_stream = false;
     m_f_decode_ready = false;
     m_f_eof = false;
-    m_f_unknownFileLength = false;
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
     m_f_acceptRanges = false;
-    m_f_allDataReceived = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -882,9 +881,9 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     if(endsWith(path, ".aac"))  codec = CODEC_AAC;
     if(endsWith(path, ".wav"))  codec = CODEC_WAV;
     if(endsWith(path, ".flac")) codec = CODEC_FLAC;
-    if(endsWith(path, ".opus")) codec = CODEC_OPUS;
-    if(endsWith(path, ".ogg"))  codec = CODEC_OGG;
-    if(endsWith(path, ".oga"))  codec = CODEC_OGG;
+    if(endsWith(path, ".opus")) {codec = CODEC_OPUS; m_f_ogg = true;}
+    if(endsWith(path, ".ogg"))  {codec = CODEC_OGG;  m_f_ogg = true;}
+    if(endsWith(path, ".oga"))  {codec = CODEC_OGG;  m_f_ogg = true;}
     if(codec == CODEC_NONE) {AUDIO_INFO("The %s format is not supported", path + dotPos); goto exit;}   // guard
 
     audioPath = (char *)x_ps_calloc(strlen(path) + 2, sizeof(char));
@@ -1293,7 +1292,6 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
     }
     if(m_codec == CODEC_AAC) {
         // stream only, no header
-        m_f_unknownFileLength = true;
         m_audioDataSize = getFileSize();
         m_controlCounter = 100;
     }
@@ -1682,7 +1680,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         remainingHeaderBytes = 0;
         ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
-            if(!m_f_m3u8data) {m_f_unknownFileLength = true;  AUDIO_INFO("file has no ID3 tag, skip metadata");}
+            if(!m_f_m3u8data) {AUDIO_INFO("file has no ID3 tag, skip metadata");}
             m_audioDataSize = m_contentlength;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             return -1; // error, no ID3 signature found
@@ -2354,7 +2352,6 @@ uint32_t Audio::stopSong() {
         if(m_f_running) {
             m_f_running = false;
             if(m_dataMode == AUDIO_LOCALFILE) {
-                m_streamType = ST_NONE;
                 pos = getFilePos() - inBufferFilled();
             }
             if(_client->connected()) _client->stop();
@@ -2365,11 +2362,19 @@ uint32_t Audio::stopSong() {
             audiofile.close();
         }
         memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
+        if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
+        if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
+        if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
+        if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
         m_validSamples = 0;
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
         m_codec = CODEC_NONE;
         m_dataMode = AUDIO_NONE;
+        m_streamType = ST_NONE;
+        m_playlistFormat = FORMAT_NONE;
         m_f_lockInBuffer = false;
     return pos;
 }
@@ -3244,6 +3249,8 @@ void Audio::processLocalFile() {
 
     static uint32_t ctime = 0;
     static uint32_t newFilePos = 0;
+    static uint32_t byteCounter = 0;
+    static bool     audioHeaderFound = false;
     const uint32_t  timeout = 8000;                          // ms
     const uint32_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     uint32_t        availableBytes = 0;
@@ -3253,17 +3260,20 @@ void Audio::processLocalFile() {
     if(m_f_firstCall) { // runs only one time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
+        audioHeaderFound = false;
         newFilePos = 0;
+        byteCounter = 0;
         ctime = millis();
-        uint32_t pos = audiofile.position();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
-        audiofile.seek(pos);
-        m_audioDataSize = audiofile.size();
+        m_audioDataSize = 0;
+        m_audioDataStart = 0;
+        m_f_allDataReceived = false;
         return;
     }
 
     if(m_resumeFilePos >= 0 && newFilePos == 0) { // we have a resume file position
+        if(!audioHeaderFound){log_w("timeOffset not possible"); m_resumeFilePos = -1; return;}
         if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {goto exit;}
 
@@ -3273,12 +3283,16 @@ void Audio::processLocalFile() {
         m_f_lockInBuffer = false;
         newFilePos = m_resumeFilePos;
         audiofile.seek(newFilePos);
+        m_f_allDataReceived = false;
+        byteCounter = newFilePos;
         return;
     }
 
     availableBytes = InBuff.writeSpace();
     bytesAddedToBuffer = audiofile.read(InBuff.getWritePtr(), availableBytes);
-    if(bytesAddedToBuffer > 0) {InBuff.bytesWritten(bytesAddedToBuffer);}
+    if(bytesAddedToBuffer > 0) {byteCounter += bytesAddedToBuffer; InBuff.bytesWritten(bytesAddedToBuffer);}
+    if(m_audioDataSize && byteCounter >= m_audioDataSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
+    // log_e("byteCounter %u >= m_audioDataSize %u, m_f_allDataReceived % i", byteCounter, m_audioDataSize, m_f_allDataReceived);
 
     if(newFilePos) { // we have a new file position
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return;
@@ -3294,10 +3308,11 @@ void Audio::processLocalFile() {
         newFilePos = 0;
         m_resumeFilePos = -1;
         InBuff.bytesWasRead(offset);
+        byteCounter += offset;
     }
 
     if(!m_f_stream) {
-        if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
+        if(m_codec == CODEC_OGG) { // log_e("determine correct codec here");
             uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
             if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = CODEC_FLAC;   return;}
             else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = CODEC_OPUS;   return;}
@@ -3312,6 +3327,11 @@ void Audio::processLocalFile() {
             }
             if(InBuff.bufferFilled() > maxFrameSize || (InBuff.bufferFilled() == m_fileSize)) { // at least one complete frame or the file is smaller
                 InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
+            }
+            if(m_controlCounter == 100){
+                if(m_audioDataStart > 0){ audioHeaderFound = true; }
+                if(!m_audioDataSize) m_audioDataSize = m_fileSize;
+                byteCounter = getFilePos();
             }
             return;
         }
@@ -3385,7 +3405,7 @@ void Audio::processWebStream() {
             f_firstChunk = false;
             chunkSize = readChunkSize(&readedBytes);
             if(chunkSize == 0) {
-                m_f_allDataReceived = true; // end of stream
+                ;
             }
             // log_w("chunk size: %d", chunkSize);
         }
@@ -3452,14 +3472,13 @@ void Audio::processWebFile() {
         m_audioDataSize = m_contentlength;
         m_webFilePos = 0;
         m_controlCounter = 0;
-        m_f_unknownFileLength = false; // no contentlength and no chunked data, maybe OpenAI-speech
-        if(m_f_chunked) m_contentlength = 0; // chunked data transfer
+        m_f_allDataReceived = false;
     }
 
     uint32_t availableBytes = 0;
 
     if(f_clientIsConnected) availableBytes = _client->available(); // available from stream
-
+    else log_e("client not connected");
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(f_waitingForPayload){
         if(availableBytes == 0){
@@ -3479,18 +3498,22 @@ void Audio::processWebFile() {
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(m_f_chunked && m_contentlength == byteCounter && !m_f_allDataReceived) {
+        if(m_f_chunked && m_contentlength == byteCounter) {
             if(chunkSize > 0){
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
             }
             chunkSize = readChunkSize(&readedBytes);
-            if(chunkSize == 0) m_f_allDataReceived = true; // end of chunked data
+            if(chunkSize == 0) m_f_allDataReceived = true; // last chunk
             // log_w("chunk size: %d", chunkSize);
             m_contentlength += chunkSize;
+            m_audioDataSize += chunkSize;
         }
         availableBytes = min(availableBytes, m_contentlength - byteCounter);
     }
+    if(!m_f_chunked && byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
+    if(!f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
+    // log_w("byteCounter %u >= m_audioDataSize %u, m_f_allDataReceived % i", byteCounter, m_contentlength, m_f_allDataReceived);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
@@ -3504,8 +3527,6 @@ void Audio::processWebFile() {
         if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
-    if(byteCounter == m_contentlength && !m_f_chunked) if(!m_f_allDataReceived){m_f_allDataReceived = true;} // if contentlength is set, all data are received
-
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3516,15 +3537,6 @@ void Audio::processWebFile() {
         }
         return;
     }
-
-    // the server does not provide information about the size of the Payoad - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(!m_contentlength && !m_f_chunked && !m_f_unknownFileLength) {
-        // log_w("no contentlength and no chunked data, maybe OpenAI-speech");
-        m_f_unknownFileLength = true;
-        m_audioDataSize = 0;                         // m_audioDataSize cannot be calculated in this way, set to zero
-    }
-
-    if(m_f_unknownFileLength && !f_clientIsConnected && !m_f_allDataReceived){m_f_allDataReceived = true;} // server closes the connection, all data received}
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
@@ -3545,15 +3557,7 @@ void Audio::processWebFile() {
     if(m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if(m_f_ID3v1TagFound) readID3V1Tag();
 
-        m_f_running = false;
-        m_streamType = ST_NONE;
-        if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
-        if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
-        if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
-        if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
-        m_codec = CODEC_NONE;
+        stopSong();
         if(m_f_tts) {
             AUDIO_INFO("End of speech \"%s\"", m_speechtxt);
             if(audio_eof_speech) audio_eof_speech(m_speechtxt);
@@ -3810,77 +3814,77 @@ void Audio::playAudioData() {
     if(m_dataMode == AUDIO_LOCALFILE && m_resumeFilePos != -1){    return;} // guard, m_resumeFilePos is set (-1 is default)
     if(m_validSamples) {playChunk();                               return;} // guard, play samples first
     //--------------------------------------------------------------------------------
-    static bool f_isFile = false;
     static uint8_t count = 0;
-    bool        lastFrame = false;
-    int32_t     bytesToDecode = InBuff.bufferFilled();
-    uint8_t     next = 0;
-    int16_t     bytesDecoded = 0;
-
+    static size_t oldAudioDataSize = 0;
+    static bool   lastFrames = false;
+    int32_t       bytesToDecode = InBuff.bufferFilled();
+    int16_t       bytesDecoded = 0;
 
     if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
         count = 0;
-        if (m_playlistFormat == FORMAT_M3U8)     f_isFile = false;
-        else if(m_dataMode   == AUDIO_LOCALFILE) f_isFile = true;
-        else if(m_streamType == ST_WEBFILE)      f_isFile = true;
-        else                                     f_isFile = false;
+        oldAudioDataSize = 0;
+        m_sumBytesDecoded = 0;
+        m_bytesNotDecoded = 0;
+        lastFrames = false;
+        m_f_eof = false;
     }
     //--------------------------------------------------------------------------------
 
     m_f_audioTaskIsDecoding = true;
 
-    if(f_isFile) {
-        if(!m_f_unknownFileLength) { // file length is known
-            bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
-            lastFrame = (bytesToDecode < InBuff.getMaxBlockSize());
-            if((m_sumBytesDecoded >= m_audioDataSize && m_sumBytesDecoded) || bytesToDecode < 0) {m_f_eof = true; goto exit;} // file end reached
+    if((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) && m_playlistFormat != FORMAT_M3U8)  { // local file or webfile but not m3u8 file
+        if(!m_audioDataSize) goto exit; // no data to decode if filesize is 0
+        if(m_audioDataSize != oldAudioDataSize) { // Special case: Metadata in ogg files are recognized by the decoder,
+            if(m_f_ogg)m_sumBytesDecoded = 0;     // after which m_audioDataStart and m_audioDataSize are updated.
+            if(m_f_ogg)m_bytesNotDecoded = 0;
+            oldAudioDataSize = m_audioDataSize;
+        }
+
+        bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
+
+        if(bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
+            lastFrames = true;
+            // log_e("last frames, m_sumBytesDecoded %i", m_sumBytesDecoded );
+        }
+        if(m_sumBytesDecoded > 0){
+            if(m_sumBytesDecoded >= m_audioDataSize) {m_f_eof = true; goto exit;} // file end reached
+            if(bytesToDecode <= 0)                   {m_f_eof = true; goto exit;} // file end reached
         }
     }
-    // log_w("bytesToDecode: %i, m_sumBytesDecoded: %i, m_audioDataSize: %i", bytesToDecode, m_sumBytesDecoded, m_audioDataSize);
-    if(!lastFrame) if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {count++; if(count == 5 && m_f_allDataReceived) m_f_eof = true; goto exit;} // in case of errors
+    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {goto exit;}} // maybe slow stream
 
     bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
-    bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
-    // log_w("bytesToDecode: %i, bytesDecoded %i, m_sumBytesDecoded: %i, m_audioDataSize: %i, InBuff.bufferFilled() %i", bytesToDecode, bytesDecoded, m_sumBytesDecoded, m_audioDataSize, InBuff.bufferFilled());
-    if(bytesDecoded == 0) {
-        count++;
-        if(count == 5) m_f_eof = true; // in case of errors
-        return; // syncword at pos0
+
+    if(lastFrames){
+        bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
+    }
+    else{
+        if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
+        else bytesDecoded = 0; // Inbuff not filled enough
     }
 
+    if(lastFrames && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {;} // do nothing {m_f_eof = true; log_e(); goto exit;}
+
+    if(bytesDecoded <= 0) {
+        if(lastFrames) {m_f_eof = true; goto exit;} // end of file reached
+        count++;
+        vTaskDelay(50); // wait for data
+        if(count == 10) {if(m_f_allDataReceived) m_f_eof = true;}  // maybe slow stream
+        goto exit; // syncword at pos0
+    }
     count = 0;
 
-    if(bytesDecoded < 0) { // no syncword found or decode error, try next chunk
-        next = min((size_t)200, InBuff.bufferFilled());
-        InBuff.bytesWasRead(next); // try next chunk
-        m_bytesNotDecoded += next;
-        m_sumBytesDecoded += next;
-    }
-    else {
+    if(bytesDecoded > 0) {
         InBuff.bytesWasRead(bytesDecoded);
-        if(m_audioDataStart > 0) m_sumBytesDecoded += bytesDecoded;
-        if(f_isFile && m_codec == CODEC_MP3 && m_audioDataSize - m_sumBytesDecoded == 128){
+        if(m_controlCounter == 100) m_sumBytesDecoded += bytesDecoded;
+        // log_w("m_audioDataSize: %d, m_sumBytesDecoded: %d, diff: %d", m_audioDataSize, m_sumBytesDecoded, m_audioDataSize - m_sumBytesDecoded);
+        if(m_codec == CODEC_MP3 && m_audioDataSize - m_sumBytesDecoded == 128){
             m_f_ID3v1TagFound = true; m_f_eof = true;
         }
     }
 
 exit:
-    if(m_f_unknownFileLength){
-        if(m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE){
-            // log_w("InBuff.bufferFilled: %d, bytesDecoded %i", InBuff.bufferFilled(), bytesDecoded);
-            if(bytesDecoded == 0) {m_f_eof = true;} // file end reached
-        }
-
-    }
-
-    if(m_streamType == ST_WEBSTREAM && (InBuff.bufferFilled() < InBuff.getMaxBlockSize()) && m_f_allDataReceived) { // Exception: chunked stream 
-        m_f_eof = true; // file end reached
-        AUDIO_INFO("End of webstream: \"%s\"", m_lastHost);
-        if(audio_eof_stream) audio_eof_stream(m_lastHost);
-        stopSong();
-    }
-
     m_f_audioTaskIsDecoding = false;
     return;
 }
@@ -4124,6 +4128,8 @@ exit: // termination condition
     return false;
 
 lastToDo:
+    if(m_f_chunked && !m_f_metadata) m_streamType = ST_WEBFILE; // Stream comes from a fileserver, metadata have webstreams
+
     if(m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
         if(!(m_codec == CODEC_OGG)){
@@ -4279,7 +4285,6 @@ bool Audio::parseContentType(char* ct) {
         return false; // nothing valid had been seen
     }
     else { ; }
-
     switch(ct_val) {
         case CT_MP3:
             m_codec = CODEC_MP3;
@@ -4299,10 +4304,12 @@ bool Audio::parseContentType(char* ct) {
             break;
         case CT_OPUS:
             m_codec = CODEC_OPUS;
+            m_f_ogg = true; // opus is ogg
             if(m_f_Log) { log_i("ContentType %s, format is opus", ct); }
             break;
         case CT_VORBIS:
             m_codec = CODEC_VORBIS;
+            m_f_ogg = true; // vorbis is ogg
             log_i("ContentType %s, format is vorbis", ct);
             break;
         case CT_WAV:
@@ -4311,6 +4318,7 @@ bool Audio::parseContentType(char* ct) {
             break;
         case CT_OGG:
             m_codec = CODEC_OGG; // determine in first OGG packet -OPUS, VORBIS, FLAC
+            m_f_ogg = true; // maybe flac or opus or vorbis
             break;
         case CT_PLS: m_playlistFormat = FORMAT_PLS; break;
         case CT_M3U: m_playlistFormat = FORMAT_M3U; break;
@@ -4635,9 +4643,9 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_playing) {
         f_setDecodeParamsOnce = true;
         nextSync = findNextSync(data, len);
-        if(nextSync == -1) return len;
+        if(nextSync <  0) return len;
         if(nextSync == 0) { m_f_playing = true; }
-        return nextSync;
+        if(nextSync >  0) return nextSync;
     }
     // m_f_playing is true at this pos
     bytesLeft = len;

@@ -580,7 +580,7 @@ private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
-    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4};
+    enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4}; // playlist formats
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
@@ -724,14 +724,13 @@ private:
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
     bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
-    bool            m_f_allDataReceived= false;     // set in processWebStream
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
     bool            m_f_chunked = false ;           // Station provides chunked transfer
-    bool            m_f_unknownFileLength = false;  // file length unknown
     bool            m_f_firstmetabyte = false;      // True if first metabyte (counter)
     bool            m_f_playing = false;            // valid mp3 stream recognized
     bool            m_f_tts = false;                // text to speech
+    bool            m_f_ogg = false;                // OGG stream
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
@@ -743,6 +742,7 @@ private:
     bool            m_f_timeout = false;            //
     bool            m_f_commFMT = false;            // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
     bool            m_f_audioTaskIsRunning = false;
+    bool            m_f_allDataReceived = false;
     bool            m_f_stream = false;             // stream ready for output?
     bool            m_f_decode_ready = false;       // if true data for decode are ready
     bool            m_f_eof = false;                // end of file
