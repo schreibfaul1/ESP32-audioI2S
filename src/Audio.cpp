@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
     Version 3.2.0g                                                                                                                                  ";
-/*  Updated on: May 23.2025
+/*  Updated on: May 24.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -924,21 +924,21 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
         return false;
     }
 
-    char resp[strlen(urlStr) + 200] = "";
-    strcat(resp, "GET ");
-    strcat(resp, path);
-    strcat(resp, "?ie=UTF-8&tl=");
-    strcat(resp, lang);
-    strcat(resp, "&client=tw-ob&q=");
-    strcat(resp, urlStr);
-    strcat(resp, " HTTP/1.1\r\n");
-    strcat(resp, "Host: ");
-    strcat(resp, host);
-    strcat(resp, "\r\n");
-    strcat(resp, "User-Agent: Mozilla/5.0 \r\n");
-    strcat(resp, "Accept-Encoding: identity\r\n");
-    strcat(resp, "Accept: text/html\r\n");
-    strcat(resp, "Connection: close\r\n\r\n");
+    char* req = x_ps_calloc(strlen(urlStr) + 200, sizeof(char)); // request header
+    strcat(req, "GET ");
+    strcat(req, path);
+    strcat(req, "?ie=UTF-8&tl=");
+    strcat(req, lang);
+    strcat(req, "&client=tw-ob&q=");
+    strcat(req, urlStr);
+    strcat(req, " HTTP/1.1\r\n");
+    strcat(req, "Host: ");
+    strcat(req, host);
+    strcat(req, "\r\n");
+    strcat(req, "User-Agent: Mozilla/5.0 \r\n");
+    strcat(req, "Accept-Encoding: identity\r\n");
+    strcat(req, "Accept: text/html\r\n");
+    strcat(req, "Connection: close\r\n\r\n");
 
     x_ps_free(&urlStr);
 
@@ -946,16 +946,18 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     AUDIO_INFO("connect to \"%s\"", host);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
+        x_ps_free(&req);
         xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
-    _client->print(resp);
+    _client->print(req);
 
     m_streamType = ST_WEBFILE;
     m_f_running = true;
     m_f_ssl = false;
     m_f_tts = true;
     m_dataMode = HTTP_RESPONSE_HEADER;
+    x_ps_free(&req);
     x_ps_free(&m_lastHost); m_lastHost = x_ps_strdup(host);
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;

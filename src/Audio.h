@@ -114,7 +114,7 @@ protected:
     size_t            m_freeSpace        = 0;
     size_t            m_writeSpace       = 0;
     size_t            m_dataLength       = 0;
-    size_t            m_resBuffSizeRAM   = 2048;     // reserved buffspace, >= one wav  frame
+    size_t            m_resBuffSizeRAM   = 4096;     // reserved buffspace, >= one wav  frame
     size_t            m_resBuffSizePSRAM = 4096 * 6; // reserved buffspace, >= one flac frame
     size_t            m_maxBlockSize     = 1600;
     uint8_t*          m_buffer           = NULL;
