@@ -3383,7 +3383,7 @@ void Audio::processWebStream() {
 
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
-    static bool     f_firstChunk;
+    static bool     f_skipCRLF;
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3391,7 +3391,7 @@ void Audio::processWebStream() {
         m_f_stream = false;
         chunkSize = 0;
         m_metacount = m_metaint;
-        f_firstChunk = true;
+        f_skipCRLF = false;
         readMetadata(0, true); // reset all static vars
     }
     uint32_t availableBytes = _client->available(); // available from stream
@@ -3400,16 +3400,18 @@ void Audio::processWebStream() {
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
         if(!chunkSize){
-            if(!f_firstChunk){
+            if(f_skipCRLF){
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+                f_skipCRLF = false;
             }
-            f_firstChunk = false;
-            chunkSize = readChunkSize(&readedBytes);
-            if(chunkSize == 0) {
-                ;
+            if(_client->available()){
+                chunkSize = readChunkSize(&readedBytes);
+                if(chunkSize > 0) {
+                    f_skipCRLF = true; // skip next CRLF
+                }
+                // log_w("chunk size: %d", chunkSize);
             }
-            // log_w("chunk size: %d", chunkSize);
         }
         availableBytes = min(availableBytes, chunkSize);
     }
@@ -3417,7 +3419,8 @@ void Audio::processWebStream() {
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_metadata && availableBytes) {
         if(m_metacount == 0) {
-            chunkSize -= readMetadata(availableBytes);
+            int metaLen = readMetadata(availableBytes);
+            chunkSize -= metaLen; // reduce chunkSize by metadata length
             return;
         }
         availableBytes = min(availableBytes, m_metacount);
@@ -4677,6 +4680,14 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     //                 < 0: there has been an error
 
     if(m_decodeError < 0) { // Error, skip the frame...
+        if((m_codec == CODEC_MP3) && (m_f_chunked == true)){ // http://bestof80s.stream.laut.fm/best_of_80s
+            if(specialIndexOf(data, "ID3", 4) == 0){
+                uint16_t  id3Size = bigEndian(data + 6, 4, 7);
+                id3Size += 10;
+                AUDIO_INFO("ID3 tag found, skip %i bytes", id3Size);
+                return id3Size; // skip ID3 tag
+            }
+        }
 
         printDecodeError(m_decodeError);
         m_f_playing = false; // seek for new syncword
@@ -4693,7 +4704,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
             return 0;
         }
-
         return 1; // skip one byte and seek for the next sync word
     }
     bytesDecoded = len - bytesLeft;
