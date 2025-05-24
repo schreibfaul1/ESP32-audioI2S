@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0g                                                                                                                                  ";
+    Version 3.2.0h                                                                                                                                  ";
 /*  Updated on: May 24.2025
 
     Author: Wolle (schreibfaul1)
@@ -5926,7 +5926,7 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
             stopSong();
             return 0;
         }
-
+        if(!_client->available()) continue; // no data available yet
         b = _client->read();
         if (b < 0) continue; // -1 = no data
 
