@@ -449,7 +449,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         + "User-Agent: nArija/1.0\r\n"
         + "Content-Type: application/json; charset=utf-8\r\n"
         + "Content-Length: " + post_body.length() + "\r\n"
-        + "Connection: keep-alive\r\n" + "\r\n"
+        + "Connection: close\r\n" + "\r\n"
         + post_body + "\r\n"
     ;
 
@@ -478,7 +478,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
         m_dataMode = HTTP_RESPONSE_HEADER;
-        m_streamType = ST_WEBFILE;
     } else {
         AUDIO_INFO("Request %s failed!", host);
     //    x_ps_free(&m_lastHost);
@@ -952,7 +951,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     }
     _client->print(req);
 
-    m_streamType = ST_WEBFILE;
     m_f_running = true;
     m_f_ssl = false;
     m_f_tts = true;
@@ -3355,14 +3353,6 @@ exit:
         char* afn = NULL;
         if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
         stopSong();
-
-        if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
-        if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_FLAC) FLACDecoder_FreeBuffers();
-        if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
-        if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
-
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
         m_resumeFilePos = -1;
@@ -3384,6 +3374,8 @@ void Audio::processWebStream() {
     const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     static uint32_t chunkSize;                               // chunkcount read from stream
     static bool     f_skipCRLF;
+    uint32_t        availableBytes = 0; // available from stream
+    bool            f_clientIsConnected = _client;           // if _client is Nullptr, we are not connected
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3392,9 +3384,10 @@ void Audio::processWebStream() {
         chunkSize = 0;
         m_metacount = m_metaint;
         f_skipCRLF = false;
+        m_f_allDataReceived = false;
         readMetadata(0, true); // reset all static vars
     }
-    uint32_t availableBytes = _client->available(); // available from stream
+    if(f_clientIsConnected) availableBytes = _client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
@@ -3429,6 +3422,7 @@ void Audio::processWebStream() {
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
         if(streamDetection(availableBytes)) return;
+        if(!f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
     }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3454,6 +3448,13 @@ void Audio::processWebStream() {
         AUDIO_INFO("stream ready");
         m_f_stream = true;  // ready to play the audio data
     }
+
+    if(m_f_eof) {
+        AUDIO_INFO("End of webstream: \"%s\"", m_lastHost);
+        if(audio_eof_stream) audio_eof_stream(m_lastHost);
+        stopSong();
+    }
+
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
@@ -3862,7 +3863,12 @@ void Audio::playAudioData() {
     bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
 
     if(lastFrames){
-        bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
+        bool f_skip = false;
+        switch(m_codec){
+            case CODEC_OPUS: if(bytesToDecode < InBuff.getMaxBlockSize()) {bytesDecoded = 0; f_skip = true;} break;
+            default: break;
+        }
+        if(!f_skip) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
     }
     else{
         if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
