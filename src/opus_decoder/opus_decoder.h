@@ -8,7 +8,8 @@
 #include <vector>
 using namespace std;
 
-enum : int8_t  {OPUS_CONTINUE = 110,
+enum : int8_t  {OPUS_END = 120,
+                OPUS_CONTINUE = 110,
                 OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_NONE = 0,
                 ERR_OPUS_CHANNELS_OUT_OF_RANGE = -1,

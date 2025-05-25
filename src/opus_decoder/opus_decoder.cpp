@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 12.03.2026
+ *  Updated on: 25.05.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -123,6 +123,7 @@ void OPUSsetDefaults(){
     s_f_newSteamTitle = false;  // streamTitle
     s_f_opusNewMetadataBlockPicture = false;
     s_f_opusStereoFlag = false;
+    s_f_lastPage = false;
     s_opusChannels = 0;
     s_frameCount = 0;
     s_mode = 0;
@@ -180,6 +181,11 @@ int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
             }
         }
         return OPUS_PARSE_OGG_DONE;
+    }
+
+    if(s_f_lastPage && s_opusSegmentTableSize == 0) {
+        *bytesLeft = segmLen; ret = OPUS_END;
+        return ret;
     }
 
     if(s_frameCount > 0) return opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf); // decode audio, next part

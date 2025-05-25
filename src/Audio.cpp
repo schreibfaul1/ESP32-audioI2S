@@ -3851,7 +3851,6 @@ void Audio::playAudioData() {
 
         if(bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
             lastFrames = true;
-            // log_e("last frames, m_sumBytesDecoded %i", m_sumBytesDecoded );
         }
         if(m_sumBytesDecoded > 0){
             if(m_sumBytesDecoded >= m_audioDataSize) {m_f_eof = true; goto exit;} // file end reached
@@ -3863,12 +3862,7 @@ void Audio::playAudioData() {
     bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
 
     if(lastFrames){
-        bool f_skip = false;
-        switch(m_codec){
-            case CODEC_OPUS: if(bytesToDecode < InBuff.getMaxBlockSize()) {bytesDecoded = 0; f_skip = true;} break;
-            default: break;
-        }
-        if(!f_skip) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
+        bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
     }
     else{
         if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
@@ -4139,7 +4133,11 @@ exit: // termination condition
     return false;
 
 lastToDo:
-    if(m_f_chunked && !m_f_metadata) m_streamType = ST_WEBFILE; // Stream comes from a fileserver, metadata have webstreams
+    m_streamType = ST_WEBSTREAM;
+    if(m_contentlength > 0)          m_streamType = ST_WEBFILE;
+    if(m_f_chunked)                  m_streamType = ST_WEBFILE; // Stream comes from a fileserver, metadata have webstreams
+    if(m_f_chunked && m_f_metadata)  m_streamType = ST_WEBSTREAM;
+
 
     if(m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
@@ -4687,6 +4685,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     if(m_decodeError < 0) { // Error, skip the frame...
         if((m_codec == CODEC_MP3) && (m_f_chunked == true)){ // http://bestof80s.stream.laut.fm/best_of_80s
+            // log_e("%02X %02X %02X %02X %02X %02X %02X %02X %02X", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
             if(specialIndexOf(data, "ID3", 4) == 0){
                 uint16_t  id3Size = bigEndian(data + 6, 4, 7);
                 id3Size += 10;
@@ -4767,6 +4766,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
         case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+                            if(m_decodeError == OPUS_END)            return bytesDecoded; // nothing to play
                             m_validSamples = OPUSGetOutputSamps();
                             st = OPUSgetStreamTitle();
                             if(st){
