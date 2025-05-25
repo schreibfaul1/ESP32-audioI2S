@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0h                                                                                                                                  ";
-/*  Updated on: May 24.2025
+    Version 3.2.0i                                                                                                                                  ";
+/*  Updated on: May 25.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3375,7 +3375,7 @@ void Audio::processWebStream() {
     static uint32_t chunkSize;                               // chunkcount read from stream
     static bool     f_skipCRLF;
     uint32_t        availableBytes = 0; // available from stream
-    bool            f_clientIsConnected = _client;           // if _client is Nullptr, we are not connected
+    bool            f_clientIsConnected = _client->connected();
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3421,8 +3421,8 @@ void Audio::processWebStream() {
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
-        if(streamDetection(availableBytes)) return;
-        if(!f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
+        if(!m_f_allDataReceived) if(streamDetection(availableBytes)) return;
+        if(!f_clientIsConnected) {if(!m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed
     }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3857,7 +3857,7 @@ void Audio::playAudioData() {
             if(bytesToDecode <= 0)                   {m_f_eof = true; goto exit;} // file end reached
         }
     }
-    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {goto exit;}} // maybe slow stream
+    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {lastFrames = true;}}
 
     bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
 
@@ -3868,8 +3868,6 @@ void Audio::playAudioData() {
         if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
         else bytesDecoded = 0; // Inbuff not filled enough
     }
-
-    if(lastFrames && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) {;} // do nothing {m_f_eof = true; log_e(); goto exit;}
 
     if(bytesDecoded <= 0) {
         if(lastFrames) {m_f_eof = true; goto exit;} // end of file reached
@@ -3886,6 +3884,9 @@ void Audio::playAudioData() {
         // log_w("m_audioDataSize: %d, m_sumBytesDecoded: %d, diff: %d", m_audioDataSize, m_sumBytesDecoded, m_audioDataSize - m_sumBytesDecoded);
         if(m_codec == CODEC_MP3 && m_audioDataSize - m_sumBytesDecoded == 128){
             m_f_ID3v1TagFound = true; m_f_eof = true;
+        }
+        if(m_f_allDataReceived && InBuff.bufferFilled() == 0) {
+            m_f_eof = true; // end of file reached
         }
     }
 
@@ -5885,7 +5886,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
         return res;
     } // metalen is 0
     if(metalen < m_chbufSize) {
-        uint16_t a = _client->readBytes(&m_chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes - 1)));
+        uint16_t a = _client->readBytes(&m_chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes)));
         res += a;
         pos_ml += a;
     }
