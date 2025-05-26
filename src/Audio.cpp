@@ -2391,11 +2391,6 @@ bool Audio::pauseResume() {
 
 size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputFrames) {
 
-    static uint8_t count = 0;
-    uint32_t t = micros();
-    uint16_t dt = 0;
-
-
     float exactOutputFrames = inputFrames * m_resampleRatio;;
     size_t outputFrames = static_cast<size_t>(std::floor(exactOutputFrames + m_resampleError));
     m_resampleError += exactOutputFrames - outputFrames;
@@ -2418,13 +2413,6 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputFrames) {
         m_samplesBuff48K[i * 2]     = static_cast<int16_t>(left1 * (1.0f - frac) + left2 * frac);
         m_samplesBuff48K[i * 2 + 1] = static_cast<int16_t>(right1 * (1.0f - frac) + right2 * frac);
     }
-
-     dt = micros() - t;
-    if(count == 100) {
-        count = 0;
-        log_w("inputFrames: %zu, outputFrames: %zu, ratio: %.2f, error: %.2f, t %i", inputFrames, outputFrames, m_resampleRatio, m_resampleError, dt);
-    }
-    count++;
 
     return outputFrames;
 }
@@ -2485,7 +2473,7 @@ void IRAM_ATTR Audio::playChunk() {
     if(audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)m_samplesBuff48K, samples48K, 16, 2, &continueI2S);
+        audio_process_i2s((int16_t*)m_samplesBuff48K, samples48K, &continueI2S); // 48KHz stereo 16bps
         if(!continueI2S) {
             samples48K = 0;
             count = 0;
