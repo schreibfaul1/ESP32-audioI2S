@@ -3,12 +3,13 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0i                                                                                                                                  ";
-/*  Updated on: May 25.2025
+    Version 3.3.0                                                                                                                                  ";
+/*  Updated on: May 26.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
     Arduino Vers. V3 is mandatory
+    PSRAM is mandatory
     external DAC is mandatory
 
 *****************************************************************************************************************************************************/
@@ -41,16 +42,11 @@ void AudioBuffer::setBufsize(size_t mbs) {
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    if(psramInit() && m_buffSizePSRAM > 0) { // PSRAM found, AudioBuffer will be allocated in PSRAM
+    if(m_buffSizePSRAM > 0) { // PSRAM found, AudioBuffer will be allocated in PSRAM
         m_f_psram = true;
         m_buffSize = m_buffSizePSRAM;
         m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
         m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
-    }
-    if(m_buffer == NULL) { // PSRAM not found, not configured or not enough available
-        m_f_psram = false;
-        m_buffer = (uint8_t*)heap_caps_calloc(m_buffSizeRAM, sizeof(uint8_t), MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
-        m_buffSize = m_buffSizeRAM - m_resBuffSizeRAM;
     }
     if(!m_buffer) return 0;
     m_f_init = true;
@@ -167,13 +163,7 @@ Audio::Audio(uint8_t i2sPort) {
     mutex_playAudioData = xSemaphoreCreateMutex();
     mutex_audioTask     = xSemaphoreCreateMutex();
 
-    m_chbufSize = 512 + 64;
-    m_ibuffSize = 512 + 64;
-
-    m_chbuf    = (char*) malloc(m_chbufSize);
-    m_ibuff    = (char*) malloc(m_ibuffSize);
-    m_outBuff  = (int16_t*)malloc(m_outbuffSize * sizeof(int16_t));
-    if(!m_chbuf || !m_outBuff || !m_ibuff) log_e("oom");
+    if(!psramFound()) log_e("audioI2S requires PSRAM!");
 
 #ifdef AUDIO_LOG
     m_f_Log = true;
@@ -200,12 +190,12 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
     m_i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
     m_i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
-    m_sampleRate = 44100;
+    m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
     for(int i = 0; i < 3; i++) {
         m_filter[i].a0 = 1;
@@ -230,6 +220,7 @@ Audio::~Audio() {
     x_ps_free(&m_chbuf);
     x_ps_free(&m_lastHost);
     x_ps_free(&m_outBuff);
+    x_ps_free(&m_samplesBuff48K);
     x_ps_free(&m_ibuff);
     x_ps_free(&m_lastM3U8host);
     x_ps_free(&m_speechtxt);
@@ -256,11 +247,12 @@ esp_err_t Audio::I2Sstart() {
 
 esp_err_t Audio::I2Sstop() {
     memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
+    memset(m_samplesBuff48K, 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::zeroI2Sbuff(){
-    uint8_t *buff = (uint8_t*)calloc(128, sizeof(uint8_t)); // From IDF V5 there is no longer the zero_dma_buff() function.
+    uint8_t *buff = (uint8_t*)x_ps_calloc(128, sizeof(uint8_t)); // From IDF V5 there is no longer the zero_dma_buff() function.
     size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
     i2s_channel_preload_data(m_i2s_tx_handle, buff, 128, &bytes_loaded);
 }
@@ -276,6 +268,7 @@ void Audio::setDefaults() {
     OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
     memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
+    memset(m_samplesBuff48K, 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
     x_ps_free(&m_playlistBuff);
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
@@ -549,7 +542,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host[pos_colon] = '\0';
     }
     setDefaults();
-    rqh = x_ps_calloc(lenHost + strlen(authorization) + 330, 1); // http request header
+    rqh = (char*)x_ps_calloc(lenHost + strlen(authorization) + 330, 1); // http request header
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
@@ -657,7 +650,7 @@ bool Audio::httpPrint(const char* host) {
     char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
 
     if(pos_slash > 1) {
-        hostwoext = (char*)malloc(pos_slash + 1);
+        hostwoext = (char*)x_ps_malloc(pos_slash + 1);
         memcpy(hostwoext, h_host, pos_slash);
         hostwoext[pos_slash] = '\0';
         extension = urlencode(h_host + pos_slash, true);
@@ -756,7 +749,7 @@ bool Audio::httpRange(const char* host, uint32_t range){
     char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
 
     if(pos_slash > 1) {
-        hostwoext = (char*)malloc(pos_slash + 1);
+        hostwoext = (char*)x_ps_malloc(pos_slash + 1);
         memcpy(hostwoext, h_host, pos_slash);
         hostwoext[pos_slash] = '\0';
         extension = urlencode(h_host + pos_slash, true);
@@ -923,7 +916,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
         return false;
     }
 
-    char* req = x_ps_calloc(strlen(urlStr) + 200, sizeof(char)); // request header
+    char* req = (char*)x_ps_calloc(strlen(urlStr) + 200, sizeof(char)); // request header
     strcat(req, "GET ");
     strcat(req, path);
     strcat(req, "?ie=UTF-8&tl=");
@@ -2387,6 +2380,7 @@ bool Audio::pauseResume() {
         retVal = true;
         if(!m_f_running) {
             memset(m_outBuff, 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
+            memset(m_samplesBuff48K, 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear SamplesBuffer
             m_validSamples = 0;
         }
     }
@@ -2394,9 +2388,51 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputFrames) {
+
+    static uint8_t count = 0;
+    uint32_t t = micros();
+    uint16_t dt = 0;
+
+
+    float exactOutputFrames = inputFrames * m_resampleRatio;;
+    size_t outputFrames = static_cast<size_t>(std::floor(exactOutputFrames + m_resampleError));
+    m_resampleError += exactOutputFrames - outputFrames;
+
+    std::vector<int16_t> output(outputFrames * 2);
+
+    for (size_t i = 0; i < outputFrames; ++i) {
+        float inFramePos = i / m_resampleRatio;
+        size_t idx = static_cast<size_t>(inFramePos);
+        float frac = inFramePos - idx;
+
+        size_t i1 = idx * 2;
+        size_t i2 = (idx + 1 < inputFrames) ? (idx + 1) * 2 : i1;
+
+        int16_t left1 = input[i1];
+        int16_t right1 = input[i1 + 1];
+        int16_t left2 = input[i2];
+        int16_t right2 = input[i2 + 1];
+
+        m_samplesBuff48K[i * 2]     = static_cast<int16_t>(left1 * (1.0f - frac) + left2 * frac);
+        m_samplesBuff48K[i * 2 + 1] = static_cast<int16_t>(right1 * (1.0f - frac) + right2 * frac);
+    }
+
+     dt = micros() - t;
+    if(count == 100) {
+        count = 0;
+        log_w("inputFrames: %zu, outputFrames: %zu, ratio: %.2f, error: %.2f, t %i", inputFrames, outputFrames, m_resampleRatio, m_resampleError, dt);
+    }
+    count++;
+
+    return outputFrames;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void IRAM_ATTR Audio::playChunk() {
 
     int32_t validSamples = 0;
+    static int32_t samples48K = 0; // samples in 48kHz
     static uint32_t count = 0;
     size_t i2s_bytesConsumed = 0;
     int16_t* sample[2] = {0};
@@ -2443,12 +2479,15 @@ void IRAM_ATTR Audio::playChunk() {
         i += 2;
         validSamples -= 1;
     }
+    //------------------------------------------------------------------------------------------
+    samples48K = resampleTo48kStereo(m_outBuff, m_validSamples);
+
     if(audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)m_outBuff, m_validSamples, 16, 2, &continueI2S);
+        audio_process_i2s((int16_t*)m_samplesBuff48K, samples48K, 16, 2, &continueI2S);
         if(!continueI2S) {
-            m_validSamples = 0;
+            samples48K = 0;
             count = 0;
             return;
         }
@@ -2456,14 +2495,11 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
 
-    validSamples = m_validSamples;
-
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_outBuff + count, validSamples * sampleSize, &i2s_bytesConsumed, 10);
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K + count, samples48K * sampleSize, &i2s_bytesConsumed, 10);
     if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
-    m_validSamples -= i2s_bytesConsumed / sampleSize;
+    samples48K -= i2s_bytesConsumed / sampleSize;
     count += i2s_bytesConsumed / 2;
-    if(m_validSamples < 0) { m_validSamples = 0; }
-    if(m_validSamples == 0) { count = 0; }
+    if(samples48K <= 0) { m_validSamples = 0; count = 0; }
 
 // ---- statistics, bytes written to I2S (every 10s)
     // static int cnt = 0;
@@ -2872,11 +2908,11 @@ const char* Audio::parsePlaylist_M3U8() {
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
                     if(m_lastM3U8host) {
-                        tmp = x_ps_calloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1, sizeof(char));
+                        tmp = (char*)x_ps_calloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1, sizeof(char));
                         strcpy(tmp, m_lastM3U8host);
                     }
                     else {
-                        tmp = x_ps_calloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1, sizeof(char));
+                        tmp = (char*)x_ps_calloc(strlen(m_lastHost) + strlen(m_playlistContent[i]) + 1, sizeof(char));
                         strcpy(tmp, m_lastHost);
                     }
 
@@ -3077,7 +3113,7 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
         // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
         // http://livees.com/chunklist022.m3u8
 
-        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
+        tmp = (char*)x_ps_malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
         strcpy(tmp, m_lastHost);
         int idx1 = lastIndexOf(tmp, "/");
         strcpy(tmp + idx1 + 1, m_playlistContent[choosenLine]);
@@ -3087,7 +3123,7 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     if(startsWith(m_playlistContent[choosenLine], "../")){
         // ../../2093120-b/RISMI/stream01/streamPlaylist.m3u8
         x_ps_free(&tmp);
-        tmp = (char*)malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine] + 1));
+        tmp = (char*)x_ps_malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine] + 1));
         strcpy(tmp, m_lastHost);
         int idx1 = lastIndexOf(tmp, "/");
         tmp[idx1] = '\0';
@@ -3722,7 +3758,7 @@ void Audio::processWebStreamHLS() {
         ID3ReadPtr = 0;
         m_t0 = millis();
         firstBytes = true;
-        ID3Buff = (uint8_t*)malloc(ID3BuffSize);
+        ID3Buff = (uint8_t*)x_ps_malloc(ID3BuffSize);
         m_controlCounter = 0;
     }
 
@@ -4418,7 +4454,7 @@ void Audio::showstreamtitle(char* ml) {
             }
 
             char* title = NULL;
-            title = (char*)malloc(titleLen + artistLen + 4);
+            title = (char*)x_ps_malloc(titleLen + artistLen + 4);
             memcpy(title, ml + idx4, titleLen);
             title[titleLen] = '\0';
 
@@ -4641,7 +4677,8 @@ void Audio::setDecoderItems() {
         AUDIO_INFO("Num of channels must be 1 or 2, found %i", getChannels());
         stopSong();
     }
-    reconfigI2S();
+    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
+    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     showCodecParams();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5007,11 +5044,13 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         x_ps_free(&m_chbuf);
         x_ps_free(&m_ibuff);
         x_ps_free(&m_outBuff);
+        x_ps_free(&m_samplesBuff48K);
         x_ps_free(&m_lastHost);
-        m_outBuff  = (int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
-        m_chbuf    = (char*)   x_ps_malloc(m_chbufSize);
-        m_ibuff    = (char*)   x_ps_malloc(m_ibuffSize);
-        if(!m_chbuf || !m_outBuff || !m_ibuff) log_e("oom");
+        m_outBuff  = (      int16_t*)x_ps_malloc(m_outbuffSize * sizeof(int16_t));
+        m_samplesBuff48K = (int16_t*)x_ps_malloc(m_samplesBuff48KSize * sizeof(int16_t));
+        m_chbuf    =       (char*)   x_ps_malloc(m_chbufSize);
+        m_ibuff    =       (char*)   x_ps_malloc(m_ibuffSize);
+        if(!m_chbuf || !m_outBuff || !m_samplesBuff48K || !m_ibuff) log_e("oom");
     }
     esp_err_t result = ESP_OK;
 
@@ -5140,8 +5179,13 @@ bool Audio::setFilePos(uint32_t pos) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
-    if(!sampRate) sampRate = 44100; // fuse, if there is no value -> set default #209
+    if(!sampRate) sampRate = 48000;
+    if(sampRate < 8000 ) {
+        AUDIO_INFO("Sample rate must not be smaller than 8kHz, found: %lu", sampRate);
+        m_sampleRate = 8000;
+    }
     m_sampleRate = sampRate;
+    m_resampleRatio = 48000.0f / (float)m_sampleRate;
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5163,28 +5207,6 @@ uint8_t Audio::getChannels() {
         m_channels = 2;
     }
     return m_channels;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::reconfigI2S(){
-
-    I2Sstop();
-
-    if(getBitsPerSample() == 8 && getChannels() == 2) m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate() * 2;
-    else m_i2s_std_cfg.clk_cfg.sample_rate_hz = getSampleRate();
-
-    if(!m_f_commFMT) m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-    else             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-
-    m_i2s_std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
-
-    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
-
-    I2Sstart();
-
-    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
-    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
-    return;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setBitrate(int br) {
@@ -6182,7 +6204,7 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
     if(len > 1024) len = 1024;
         log_w("found at pos %i, len %i", seekpos, len);
 
-    uint8_t* data = (uint8_t*)calloc(len, sizeof(uint8_t));
+    uint8_t* data = (uint8_t*)x_ps_calloc(len, sizeof(uint8_t));
     if(!data) {
         log_e("out od memory");
         audiofile.seek(0);
