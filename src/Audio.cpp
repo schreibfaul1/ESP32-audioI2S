@@ -3394,6 +3394,10 @@ void Audio::processWebStream() {
         uint8_t readedBytes = 0;
         if(!chunkSize){
             if(f_skipCRLF){
+                if(_client->available() < 2) { // avoid getting out of sync
+                    AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
+                    return;
+                }
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
                 f_skipCRLF = false;
@@ -3506,6 +3510,10 @@ void Audio::processWebFile() {
         uint8_t readedBytes = 0;
         if(m_f_chunked && m_contentlength == byteCounter) {
             if(chunkSize > 0){
+                if(_client->available() < 2) { // avoid getting out of sync
+                    AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
+                    return;
+                }
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
             }
