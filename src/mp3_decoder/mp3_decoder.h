@@ -455,9 +455,9 @@ const uint32_t csa[8][2] PROGMEM = {
  */
 
 // prototypes
-bool MP3Decoder_AllocateBuffers(void);
-bool MP3Decoder_IsInit();
-void MP3Decoder_FreeBuffers();
+bool     MP3Decoder_AllocateBuffers(void);
+bool     MP3Decoder_IsInit();
+void     MP3Decoder_FreeBuffers();
 int32_t  MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t useSize);
 void     MP3GetLastFrameInfo();
 int32_t  MP3GetNextFrameInfo(uint8_t *buf);
@@ -471,6 +471,7 @@ int32_t  MP3GetLayer();
 int32_t  MP3GetVersion();
 
 //internally used
+int  MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len);
 void MP3Decoder_ClearBuffer(void);
 void PolyphaseMono(int16_t *pcm, int32_t *vbuf, const uint32_t* coefBase);
 void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t* coefBase);
