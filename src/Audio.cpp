@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
     Version 3.3.0                                                                                                                                  ";
-/*  Updated on: May 26.2025
+/*  Updated on: May 27.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4717,6 +4717,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 id3Size += 10;
                 AUDIO_INFO("ID3 tag found, skip %i bytes", id3Size);
                 return id3Size; // skip ID3 tag
+            }
+            if(m_decodeError == ERR_MP3_INVALID_HUFFCODES) {
+                AUDIO_INFO("last mp3 frame is invalid");
+                MP3Decoder_ClearBuffer();
+                return findNextSync(data, bytesLeft); // skip last mp3 frame and search for next syncword
             }
         }
 
