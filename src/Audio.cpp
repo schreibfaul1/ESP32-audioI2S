@@ -5884,6 +5884,10 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 
     if(!metalen) {
         int b = _client->read(); // First byte of metadata?
+        if (b < 0) {
+            AUDIO_INFO("client->read() failed (%d)", b);
+            return 0;
+        }
         metalen = b * 16;        // New count for metadata including length byte, max 4096
         pos_ml = 0;
         m_chbuf[pos_ml] = 0; // Prepare for new line
