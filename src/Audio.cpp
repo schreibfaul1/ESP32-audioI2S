@@ -255,6 +255,7 @@ void Audio::zeroI2Sbuff(){
     uint8_t *buff = (uint8_t*)calloc(128, sizeof(uint8_t)); // From IDF V5 there is no longer the zero_dma_buff() function.
     size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
     i2s_channel_preload_data(m_i2s_tx_handle, buff, 128, &bytes_loaded);
+    x_ps_free(&buff);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -5899,6 +5900,10 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
 
     if(!metalen) {
         int b = _client->read(); // First byte of metadata?
+        if (b < 0) {
+            AUDIO_INFO("client->read() failed (%d)", b);
+            return 0;
+        }
         metalen = b * 16;        // New count for metadata including length byte, max 4096
         pos_ml = 0;
         m_chbuf[pos_ml] = 0; // Prepare for new line
