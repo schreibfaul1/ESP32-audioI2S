@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.2.0i                                                                                                                                  ";
+    Version 3.2.1                                                                                                                                  ";
 /*  Updated on: May 25.2025
 
     Author: Wolle (schreibfaul1)
