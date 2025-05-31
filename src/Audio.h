@@ -53,7 +53,7 @@ extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
-extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, uint16_t validSamples, uint8_t bitsPerSample, uint8_t channels, bool *continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, uint16_t validSamples, bool *continueI2S); // record audiodata or send via BT
 extern __attribute__((weak)) void audio_log(uint8_t logLevel, const char* msg, const char* arg);
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -231,8 +231,8 @@ private:
   bool            setSampleRate(uint32_t hz);
   bool            setBitsPerSample(int bits);
   bool            setChannels(int channels);
-  void            reconfigI2S();
   bool            setBitrate(int br);
+  size_t          resampleTo48kStereo(const int16_t* input, size_t inputFrames);
   void            playChunk();
   void            computeVUlevel(int16_t sample[2]);
   void            computeLimit();
@@ -438,36 +438,32 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return hash;
 	  }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_malloc(uint16_t len) {
+    char* x_ps_malloc(uint32_t len) {
         char* ps_str = NULL;
-        if(psramFound()){ps_str = (char*) ps_malloc(len);}
-        else            {ps_str = (char*)    malloc(len);}
-        if(!ps_str) log_e("oom");
+        ps_str = (char*) ps_malloc(len);
+        if(!ps_str) log_e("oom, no space for %d bytes", len);
         return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_calloc(uint16_t len, uint8_t size) {
+    char* x_ps_calloc(uint32_t len, uint8_t size) {
         char* ps_str = NULL;
-        if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
-        else            {ps_str = (char*)    calloc(len, size);}
-        if(!ps_str) log_e("oom");
+        ps_str = (char*) ps_calloc(len, size);
+        if(!ps_str) log_e("oom, no space for %d bytes", len);
         return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-char* x_ps_realloc(char* ptr, uint16_t len) {
-    char* ps_str = NULL;
-    if(psramFound()){ps_str = (char*) ps_realloc(ptr, len);}
-    else            {ps_str = (char*)    realloc(ptr, len);}
-    if(!ps_str) log_e("oom");
-    return ps_str;
-}
+    char* x_ps_realloc(char* ptr, uint16_t len) {
+        char* ps_str = NULL;
+        ps_str = (char*) ps_realloc(ptr, len);
+        if(!ps_str) log_e("oom, no space for %d bytes", len);
+        return ps_str;
+    }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_strdup(const char* str) {
         if(!str) {log_e("Input str is NULL"); return NULL;};
         char* ps_str = NULL;
-        if(psramFound()) { ps_str = (char*)ps_malloc(strlen(str) + 1); }
-        else { ps_str = (char*)malloc(strlen(str) + 1); }
-        if(!ps_str){log_e("oom"); return NULL;}
+        ps_str = (char*)ps_malloc(strlen(str) + 1);
+        if(!ps_str) {log_e("oom, no space for %d bytes", strlen(str) + 1); return NULL;}
         strcpy(ps_str, str);
         return ps_str;
     }
@@ -636,13 +632,14 @@ private:
     std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
     std::vector<uint32_t> m_hashQueue;
 
-    const size_t    m_frameSizeWav    = 4096;
-    const size_t    m_frameSizeMP3    = 1600;
-    const size_t    m_frameSizeAAC    = 1600;
-    const size_t    m_frameSizeFLAC   = 4096 * 6; // 24576
-    const size_t    m_frameSizeOPUS   = 1024;
-    const size_t    m_frameSizeVORBIS = 4096 * 2;
-    const size_t    m_outbuffSize     = 4096 * 2;
+    const size_t    m_frameSizeWav       = 4096;
+    const size_t    m_frameSizeMP3       = 1600;
+    const size_t    m_frameSizeAAC       = 1600;
+    const size_t    m_frameSizeFLAC      = 4096 * 6; // 24576
+    const size_t    m_frameSizeOPUS      = 1024;
+    const size_t    m_frameSizeVORBIS    = 4096 * 2;
+    const size_t    m_outbuffSize        = 4096 * 2;
+    const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
@@ -689,6 +686,7 @@ private:
     uint8_t         m_M4A_chConfig = 0;             // set in read_M4A_Header
     uint16_t        m_M4A_sampleRate = 0;           // set in read_M4A_Header
     int16_t*        m_outBuff = NULL;               // Interleaved L/R
+    int16_t*        m_samplesBuff48K = NULL;        // Interleaved L/R
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
     uint16_t        m_dataMode{0};                  // Statemaschine
@@ -753,6 +751,8 @@ private:
     uint8_t         m_f_channelEnabled = 3;         //
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
+    float           m_resampleError = 0.0f;
+    float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP

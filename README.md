@@ -1,12 +1,12 @@
 # ESP32-audioI2S
 
-:warning: **This library only works on multi-core chips like ESP32, ESP32-S3 and ESP32-P4. It does not work on the ESP32-S2, ESP32-C3 etc** :warning:
+:warning: **This library only works on multi-core chips like ESP32, ESP32-S3 and ESP32-P4. Your board must have PSRAM! It does not work on the ESP32-S2, ESP32-C3 etc** :warning:
 
 Plays mp3, m4a and wav files from SD card via I2S with external hardware.
-HELIX-mp3 and -aac decoder is included. There is also an OPUS decoder for Fullband, n VORBIS decoder and a FLAC decoder.
-Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S.
+HELIX-mp3 and faad2-aac decoder is included. There is also an OPUS decoder for Fullband, an VORBIS decoder and a FLAC decoder.
+Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S. The I2S output frequency is always 48kHz, regardless of the input source, so Bluetooth devices can also be connected without any problems.
 For stereo are two MAX98357A necessary. AudioI2S works with UDA1334A (Adafruit I2S Stereo Decoder Breakout Board), PCM5102A and CS4344.
-Other HW may work but not tested. Plays also icy-streams and GoogleTTS. Can be compiled with Arduino IDE. [WIKI](https://github.com/schreibfaul1/ESP32-audioI2S/wiki)
+Other HW may work but not tested. Plays also icy-streams, GoogleTTS and OpenAIspeech. Can be compiled with Arduino IDE. [WIKI](https://github.com/schreibfaul1/ESP32-audioI2S/wiki)
 
 ```` c++
 #include "Arduino.h"
@@ -158,16 +158,16 @@ void audio_info(const char *info){
 
 <br>
 
-|Codec       |ESP32  |ESP32 PSRAM  |ESP32-S3 or ESP32-P4 + PSRAM |                          |
-|------------|-------|-------------|-----------------------------|--------------------------|
-| mp3        | y     | y           | y                           |                          |
-| aac        | n     | y           | y                           |                          |
-| aacp       | n     | y (mono)    | y (+SBR, +Parametric Stereo)|                          |
-| wav        | y     | y           | y                           |                          |
-| flac       | n     | y           | y                           |blocksize max 24576 bytes |
-| vorbis     | n     | y           | y                           | <=196Kbit/s              |
-| m4a        | n     | y           | y                           |                          |
-| opus       | n     | y           | y                           |celt only                 |
+|Codec       | ESP32       |ESP32-S3 or ESP32-P4         |                          |
+|------------|-------------|-----------------------------|--------------------------|
+| mp3        | y           | y                           |                          |
+| aac        | y           | y                           |                          |
+| aacp       | y (mono)    | y (+SBR, +Parametric Stereo)|                          |
+| wav        | y           | y                           |                          |
+| flac       | y           | y                           |blocksize max 24576 bytes |
+| vorbis     | y           | y                           | <=196Kbit/s              |
+| m4a        | y           | y                           |                          |
+| opus       | y           | y                           |hybrid mode not impl yet  |
 
 <br>
 

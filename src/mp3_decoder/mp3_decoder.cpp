@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 09.09.2024
+ *  Updated on: 27.05.2025
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1381,8 +1381,12 @@ void MP3ClearBadFrame(int16_t *outbuf) {
  *                is not supported (bit reservoir is not maintained if useSize on)
  **********************************************************************************************************************/
 int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t useSize){
-   int32_t offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
-   int32_t prevBitOffset, sfBlockBits, huffBlockBits;
+
+    // int main_data_begin_val = MP3_AnalyzeFrame(inbuf, *bytesLeft);
+    // log_w("Main_Data_Begin %d", main_data_begin_val);
+
+    int32_t offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
+    int32_t prevBitOffset, sfBlockBits, huffBlockBits;
     uint8_t *mainPtr;
     static uint8_t underflowCounter = 0; // http://macslons-irish-pub-radio.stream.laut.fm/macslons-irish-pub-radio
 
@@ -3865,4 +3869,149 @@ void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase){
         *(pcm + 2*2*i + 1) = ClipToShort((int32_t)SAR64(sum2R, (32-m_CSHIFT)), m_DQ_FRACBITS_OUT - 2 - 2 - 15);
         pcm += 2;
     }
+}
+
+/***********************************************************************************************************************
+ * Function:    AnalyzeFrame
+ *
+ * Description: filter one subband and produce 32 output PCM samples for each channel
+ *
+ * Inputs:      pointer to inpit buffer and length
+ *
+ * Outputs:     MPEG_VERSION
+ *              LAYER
+ *              CHANNEL_MODE
+ *
+ * Return:      main_data_begin
+ *
+ **********************************************************************************************************************/
+int MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len) {
+    if (frame_len < 4) {
+        log_e("Error: Frame data too short for header (need 4 bytes, got %zu).\n", frame_len);
+        return -3; // Frame too short for header
+    }
+
+    // Define constants for better readability
+    const uint8_t MPEG_VERSION_2_5           = 0; // 00 - unofficial, but often so coded
+    const uint8_t MPEG_VERSION_RESERVED      = 1; // 01
+    const uint8_t MPEG_VERSION_2             = 2; // 10
+    const uint8_t MPEG_VERSION_1             = 3; // 11
+
+    const uint8_t  LAYER_RESERVED            = 0; // 00
+    const uint8_t  LAYER_III                 = 1; // 01
+    const uint8_t  LAYER_II                  = 2; // 10
+    const uint8_t  LAYER_I                   = 3; // 11
+
+    const uint8_t  CHANNEL_MODE_STEREO       = 0; // 00
+    const uint8_t  CHANNEL_MODE_JOINT_STEREO = 1; // 01
+    const uint8_t  CHANNEL_MODE_DUAL_CHANNEL = 2; // 10
+    const uint8_t  CHANNEL_MODE_MONO         = 3; // 11
+
+    (void)MPEG_VERSION_RESERVED; (void)LAYER_III; (void)LAYER_II; (void)LAYER_I; (void)CHANNEL_MODE_STEREO;
+    (void)CHANNEL_MODE_JOINT_STEREO; (void)CHANNEL_MODE_DUAL_CHANNEL; (void)LAYER_RESERVED;
+
+    // ---- 1. Analyze frame header (first 4 bytes) ---
+    // combine the first 4 bytes into a 32-bit integer (Big Endian)
+    uint32_t header = ((uint32_t)frame_data[0] << 24) |
+                      ((uint32_t)frame_data[1] << 16) |
+                      ((uint32_t)frame_data[2] << 8)  |
+                      ((uint32_t)frame_data[3]);
+
+    // check sync word (first 11 bits must be 1)
+    // MPEG 2.5 Layer III often uses 12 bits (0xfff), other 11 bits (0xffe)
+    // simple check: data [0] == 0xff and (data [1] & 0xe0) == 0xe0
+    if (! (frame_data[0] == 0xFF && (frame_data[1] & 0xE0) == 0xE0) ) {
+        log_e("Error: Invalid MP3 sync word.\n");
+        return -4;
+    }
+
+    // MPEG version ID (Bits 11-12 of the header, or Bits 19-20 from right in the Uint32_t)
+    // Header: SSSS SSSS SSSV Vllp PBBB BFFM MCCE (S = Sync, V = version, L = layer, p = Protection ...)
+    // In our `Header` Uint32_t:
+    // Bit 31..21: Sync word (11 bits)
+    // Bit 20..19: MPEG Audio version ID
+    // Bit 18..17: Layer description
+    // Bit 16:     Protection bit
+    // Bit 15..12: Bitrate index
+    // Bit 11..10: Sampling rate frequency index
+    // Bit 9:      Padding bit
+    // Bit 8:      Private bit
+    // Bit 7..6:   Channel mode
+    // Bit 5..4:   Mode extension (for Joint Stereo)
+    // Bit 3:      Copyright
+    // Bit 2:      Original
+    // Bit 1..0:   Emphasis
+
+    uint8_t mpeg_version_id = (header >> 19) & 0x03;
+    uint8_t layer_description = (header >> 17) & 0x03;
+    uint8_t protection_bit = (header >> 16) & 0x01;
+    uint8_t channel_mode = (header >> 6) & 0x03;
+
+    // Debug output(optional)
+    // log_w("MPEG Version ID raw: %u\n", mpeg_version_id);
+    // log_w("Layer Description raw: %u\n", layer_description);
+    // log_w("Protection Bit: %u\n", protection_bit);
+    // log_w("Channel Mode raw: %u\n", channel_mode);
+
+
+    // --- 2. Check whether it is Layer III ---
+    if (layer_description != LAYER_III) {
+        //fprintf(stderr, "Info: Not an MPEG Layer III frame (Layer: %u).\n", layer_description);
+        return -1; // no Layer III
+    }
+
+    // --- 3. Side Information, Determine offset and size ---
+    int side_info_offset = 4;  // after the 4-Byte Header
+    if (protection_bit == 0) { // 0 means CRC is available
+        side_info_offset += 2; // Skip 16-bit CRC
+    }
+
+    int side_info_size; (void)side_info_size;
+    // Derive MPEG versions from the ID (according to ISO/IEC 13818-3 Table B.1)
+    // ID '00' -> MPEG 2.5
+    // ID '01' -> reserved
+    // ID '10' -> MPEG 2
+    // ID '11' -> MPEG 1
+    if (mpeg_version_id == MPEG_VERSION_1) { // MPEG-1
+        if (channel_mode == CHANNEL_MODE_MONO) {
+            side_info_size = 17; // Mono
+        } else {
+            side_info_size = 32; // Stereo, Joint Stereo, Dual Channel
+        }
+    } else if (mpeg_version_id == MPEG_VERSION_2 || mpeg_version_id == MPEG_VERSION_2_5) { // MPEG-2 oder MPEG-2.5
+        if (channel_mode == CHANNEL_MODE_MONO) {
+            side_info_size = 9;  // Mono
+        } else {
+            side_info_size = 17; // Stereo, Joint Stereo, Dual Channel
+        }
+    } else {
+        fprintf(stderr, "Error: Reserved or unknown MPEG version ID: %u.\n", mpeg_version_id);
+        return -2; //Unknown/reserved MPEG version
+    }
+
+    // ensure that the frame is long enough for the side information
+    // We need at least 2 bytes of the side info for Main_data_begin
+    if (frame_len < (size_t)(side_info_offset + 2)) {
+        fprintf(stderr, "Error: Frame data too short for side information (need %d bytes, got %zu).\n", side_info_offset + 2, frame_len);
+        return -3;
+    }
+    // (optional) Check whether the entire Side Information is available
+    /*
+    if (frame_len < (size_t)(side_info_offset + side_info_size)) {
+        fprintf(stderr, "Warning: Frame data might be too short for full side information (expected %d, got %zu available after header/CRC).\n", side_info_size, frame_len - side_info_offset);
+        // Fortfahren, da main_data_begin am Anfang ist, aber es ist ein Hinweis
+    }
+    */
+
+    // --- 4. Main_data_begin extract from the Side Information ---
+    // Main_data_begin are the first 9 bits of the Side Information
+    // Side information begins with frame_data [side_info_offset]
+    const uint8_t *side_info_ptr = frame_data + side_info_offset;
+
+    // The 9 bits consist of:
+    // - the complete 8 bits of the first bytes of the Side Information
+    // - the MSB (highest quality bit) of the second bytes of the Side Information
+    uint16_t main_data_begin_val = ((uint16_t)side_info_ptr[0] << 1) | (side_info_ptr[1] >> 7);
+
+    return main_data_begin_val;
 }
