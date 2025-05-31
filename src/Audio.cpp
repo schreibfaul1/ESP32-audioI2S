@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.0                                                                                                                                  ";
+    Version 3.3.0a                                                                                                                                ";
 /*  Updated on: May 27.2025
 
     Author: Wolle (schreibfaul1)
@@ -432,7 +432,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         "\"instructions\": \"" + instructions_clean + "\"," +
         "\"voice\": \"" + voice + "\"," +
         "\"response_format\": \"" + response_format + "\"," +
-        "\"speed\": \"" + speed + "\"" +
+        "\"speed\": " + speed +
     "}";
 
     String http_request =
