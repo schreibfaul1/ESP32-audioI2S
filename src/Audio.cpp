@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.0b                                                                                                                                ";
-/*  Updated on: Jun 01.2025
+    Version 3.3.0c                                                                                                                                ";
+/*  Updated on: Jun 02.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4732,6 +4732,22 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                 MP3Decoder_ClearBuffer();
                 return findNextSync(data, bytesLeft); // skip last mp3 frame and search for next syncword
             }
+        }
+        //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
+        //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
+        //  This triggers error -21 because the faad2 decoder cannot switch automatically.
+        if(m_codec == CODEC_AAC && m_decodeError == -21){ // mono <-> stereo change
+            static uint8_t channels = 0;
+            if ((data[0] == 0xFF) || ((data[1] & 0xF0) == 0xF0)){
+                int channel_config = ((data[2] & 0x01) << 2) | ((data[3] & 0xC0) >> 6);
+                if(channel_config != channels) {
+                    channels = channel_config;
+                    AUDIO_INFO("AAC channel config changed to %d", channels);
+                }
+            }
+            AACDecoder_FreeBuffers();
+            AACDecoder_AllocateBuffers();
+            return 0;
         }
 
         printDecodeError(m_decodeError);

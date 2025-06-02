@@ -7214,8 +7214,8 @@ uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, ele
             sizeof(uint8_t) * (MAX_SYNTAX_ELEMENTS - hDecoder->fr_ch_ele));
 
         hDecoder->element_output_channels[hDecoder->fr_ch_ele] = output_channels;
-        //retval = 21;
-        //goto exit;
+        retval = 21;
+        goto exit;
     }
     if (hDecoder->element_alloced[hDecoder->fr_ch_ele] == 0) {
         retval = allocate_single_channel(hDecoder, sce->channel, output_channels);
