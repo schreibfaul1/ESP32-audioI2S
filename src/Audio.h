@@ -21,17 +21,9 @@
 #include <atomic>
 #include <codecvt>
 #include <locale>
-
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
-#endif
-
-#if ESP_IDF_VERSION_MAJOR == 5
 #include <driver/i2s_std.h>
-#else
-#include <driver/i2s.h>
-#endif
 
 #ifndef I2S_GPIO_UNUSED
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -183,12 +175,6 @@ public:
     const char *getVersion() {return audioI2SVers;}
 
 private:
-
-    #ifndef ESP_ARDUINO_VERSION_VAL
-        #define ESP_ARDUINO_VERSION_MAJOR 0
-        #define ESP_ARDUINO_VERSION_MINOR 0
-        #define ESP_ARDUINO_VERSION_PATCH 0
-    #endif
 
   enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4,
                   AUDIOLOG_M4A_ATOM_NOT_FOUND = -5,  AUDIOLOG_ERR_UNKNOWN = -127 };
@@ -618,14 +604,11 @@ private:
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#if ESP_IDF_VERSION_MAJOR == 5
+
     i2s_chan_handle_t     m_i2s_tx_handle = {};
     i2s_chan_config_t     m_i2s_chan_cfg = {}; // stores I2S channel values
     i2s_std_config_t      m_i2s_std_cfg = {};  // stores I2S driver values
-#else
-    i2s_config_t          m_i2s_config = {};
-    i2s_pin_config_t      m_pin_config = {};
-#endif
+
 #pragma GCC diagnostic pop
 
     std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
