@@ -469,6 +469,54 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
     void x_ps_free(uint8_t** b){
         if(*b){free(*b); *b = NULL;}
     }
+
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    // PSRAM deleter for Unique_PTR
+    struct PsramDeleter {
+        void operator()(void* ptr) const {
+            if (ptr) free(ptr);  // ps_malloc kann mit free freigegeben werden
+        }
+    };
+
+    // Request memory for an array of T
+    template <typename T>
+    std::unique_ptr<T[], PsramDeleter> audio_malloc(std::size_t count) {
+        T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
+        if (!raw) {
+            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
+        }
+        return std::unique_ptr<T[], PsramDeleter>(raw);
+    }
+
+    // Copies raw data into a Unique_PTR goal (e.g. like memcpy)
+    template <typename T>
+    void audio_memcpy(std::unique_ptr<T[]>& dest, const T* src, std::size_t count) {
+        static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
+        if (dest && src && count > 0) {
+            memcpy(dest.get(), src, count * sizeof(T));
+        }
+    }
+
+
+    std::unique_ptr<char[], PsramDeleter> audio_strdup(const char* str) {
+        if (!str) {
+            log_e("audio_strdup: input str is NULL");
+            return nullptr;
+        }
+
+        size_t len = strlen(str);
+        auto ps_str = audio_malloc<char>(len + 1);
+
+        if (!ps_str) {
+            log_e("audio_strdup: OOM, no space for %zu bytes", len + 1);
+            return nullptr;
+        }
+
+        strcpy(ps_str.get(), str);
+        return ps_str;
+    }
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* urlencode(const char* str, bool spacesOnly) {
         if (str == NULL) {
@@ -623,14 +671,17 @@ private:
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
+    const size_t    m_chbufSize          = 8192;
+    const size_t    m_ibuffSize          = 8192;
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    char*           m_ibuff = nullptr;              // used in audio_info()
-    char*           m_chbuf = NULL;
-    uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
-    uint16_t        m_ibuffSize = 0;                // will set in constructor (depending on PSRAM)
+    std::unique_ptr<int16_t[], PsramDeleter> m_outBuff;        // Interleaved L/R
+    std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K; // Interleaved L/R
+    std::unique_ptr<char[],    PsramDeleter> m_chbuf;          // universal buffer
+    std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in audio_info()
+
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
     char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
@@ -668,8 +719,7 @@ private:
     uint8_t         m_M4A_objectType = 0;           // set in read_M4A_Header
     uint8_t         m_M4A_chConfig = 0;             // set in read_M4A_Header
     uint16_t        m_M4A_sampleRate = 0;           // set in read_M4A_Header
-    int16_t*        m_outBuff = NULL;               // Interleaved L/R
-    int16_t*        m_samplesBuff48K = NULL;        // Interleaved L/R
+
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
     uint16_t        m_dataMode{0};                  // Statemaschine
