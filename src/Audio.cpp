@@ -1635,41 +1635,45 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_ID3_Header(uint8_t* data, size_t len) {
-    static size_t   id3Size;
-    static size_t   totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-    static size_t   remainingHeaderBytes;
-    static size_t   universal_tmp = 0;
-    static uint8_t  ID3version;
-    static int      ehsz = 0;
-    static char     tag[5];
-    static char     frameid[5];
-    static size_t   framesize = 0;
-    static bool     compressed = false;
-    static size_t   APIC_size[3] = {0};
-    static uint32_t APIC_pos[3] = {0};
-    static bool     SYLT_seen = false;
-    static size_t   SYLT_size = 0;
-    static uint32_t SYLT_pos = 0;
-    static uint8_t  numID3Header = 0;
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0) { /* read ID3 tag and ID3 header size */
+        m_controlCounter++;
+
+        ID3Hdr.id3Size = 0;
+        ID3Hdr.totalId3Size = 0; // if we have more header, id3_1_size + id3_2_size + ....
+        ID3Hdr.remainingHeaderBytes = 0;
+        ID3Hdr.universal_tmp = 0;
+        ID3Hdr.ID3version = 0;
+        ID3Hdr.ehsz = 0;
+        ID3Hdr.framesize = 0;
+        ID3Hdr.compressed = false;
+        ID3Hdr.SYLT_seen = false;
+        ID3Hdr.SYLT_size = 0;
+        ID3Hdr.SYLT_pos = 0;
+        ID3Hdr.numID3Header = 0;
+        memset(ID3Hdr.tag, 0, sizeof(ID3Hdr.tag));
+        memset(ID3Hdr.APIC_size, 0, sizeof(ID3Hdr.APIC_size));
+        memset(ID3Hdr.APIC_pos, 0, sizeof(ID3Hdr.APIC_pos));
+        memset(ID3Hdr.tag, 0, sizeof(ID3Hdr.tag));
+
         if(m_dataMode == AUDIO_LOCALFILE) {
-            ID3version = 0;
+            ID3Hdr.ID3version = 0;
             m_contentlength = getFileSize();
             log_info("Content-Length: %lu", (long unsigned int)m_contentlength);
         }
-        m_controlCounter++;
-        SYLT_seen = false;
-        remainingHeaderBytes = 0;
-        ehsz = 0;
+
+        ID3Hdr.SYLT_seen = false;
+        ID3Hdr.remainingHeaderBytes = 0;
+        ID3Hdr.ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
             if(!m_f_m3u8data) {log_info("file has no ID3 tag, skip metadata");}
             m_audioDataSize = m_contentlength;
             if(!m_f_m3u8data) log_info("Audio-Length: %u", m_audioDataSize);
             return -1; // error, no ID3 signature found
         }
-        ID3version = *(data + 3);
-        switch(ID3version) {
+        ID3Hdr.ID3version = *(data + 3);
+        switch(ID3Hdr.ID3version) {
             case 2:
                 m_f_unsync = (*(data + 5) & 0x80);
                 m_f_exthdr = false;
@@ -1680,17 +1684,17 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_f_exthdr = (*(data + 5) & 0x40); // bit6 extended header
                 break;
         };
-        id3Size = bigEndian(data + 6, 4, 7); //  ID3v2 size  4 * %0xxxxxxx (shift left seven times!!)
-        id3Size += 10;
+        ID3Hdr.id3Size = bigEndian(data + 6, 4, 7); //  ID3v2 size  4 * %0xxxxxxx (shift left seven times!!)
+        ID3Hdr.id3Size += 10;
 
         // Every read from now may be unsync'd
-        if(!m_f_m3u8data) log_info("ID3 framesSize: %i", id3Size);
-        if(!m_f_m3u8data) log_info("ID3 version: 2.%i", ID3version);
+        if(!m_f_m3u8data) log_info("ID3 framesSize: %i", ID3Hdr.id3Size);
+        if(!m_f_m3u8data) log_info("ID3 version: 2.%i", ID3Hdr.ID3version);
 
-        if(ID3version == 2) { m_controlCounter = 10; }
-        remainingHeaderBytes = id3Size;
-        m_ID3Size = id3Size;
-        remainingHeaderBytes -= 10;
+        if(ID3Hdr.ID3version == 2) { m_controlCounter = 10; }
+        ID3Hdr.remainingHeaderBytes = ID3Hdr.id3Size;
+        m_ID3Size = ID3Hdr.id3Size;
+        ID3Hdr.remainingHeaderBytes -= 10;
 
         return 10;
     }
@@ -1699,9 +1703,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_controlCounter++;
         if(m_f_exthdr) {
             log_info("ID3 extended header");
-            ehsz = bigEndian(data, 4);
-            remainingHeaderBytes -= 4;
-            ehsz -= 4;
+            ID3Hdr.ehsz = bigEndian(data, 4);
+            ID3Hdr.remainingHeaderBytes -= 4;
+            ID3Hdr.ehsz -= 4;
             return 4;
         }
         else {
@@ -1711,33 +1715,33 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 2) { // skip extended header if exists
-        if(ehsz > len) {
-            ehsz -= len;
-            remainingHeaderBytes -= len;
+        if(ID3Hdr.ehsz > len) {
+            ID3Hdr.ehsz -= len;
+            ID3Hdr.remainingHeaderBytes -= len;
             return len;
         } // Throw it away
         else {
             m_controlCounter++;
-            remainingHeaderBytes -= ehsz;
-            return ehsz;
+            ID3Hdr.remainingHeaderBytes -= ID3Hdr.ehsz;
+            return ID3Hdr.ehsz;
         } // Throw it away
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 3) { // read a ID3 frame, get the tag
-        if(remainingHeaderBytes == 0) {
+        if(ID3Hdr.remainingHeaderBytes == 0) {
             m_controlCounter = 99;
             return 0;
         }
         m_controlCounter++;
-        frameid[0] = *(data + 0);
-        frameid[1] = *(data + 1);
-        frameid[2] = *(data + 2);
-        frameid[3] = *(data + 3);
-        frameid[4] = 0;
-        for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
+        ID3Hdr.frameid[0] = *(data + 0);
+        ID3Hdr.frameid[1] = *(data + 1);
+        ID3Hdr.frameid[2] = *(data + 2);
+        ID3Hdr.frameid[3] = *(data + 3);
+        ID3Hdr.frameid[4] = 0;
+        for(uint8_t i = 0; i < 4; i++) ID3Hdr.tag[i] = ID3Hdr.frameid[i]; // tag = frameid
 
-        remainingHeaderBytes -= 4;
-        if(frameid[0] == 0 && frameid[1] == 0 && frameid[2] == 0 && frameid[3] == 0) {
+        ID3Hdr.remainingHeaderBytes -= 4;
+        if(ID3Hdr.frameid[0] == 0 && ID3Hdr.frameid[1] == 0 && ID3Hdr.frameid[2] == 0 && ID3Hdr.frameid[3] == 0) {
             // We're in padding
             m_controlCounter = 98; // all ID3 metadata processed
         }
@@ -1747,24 +1751,24 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 4) { // get the frame size
         m_controlCounter = 6;
 
-        if(ID3version == 4) {
-            framesize = bigEndian(data, 4, 7); // << 7
+        if(ID3Hdr.ID3version == 4) {
+            ID3Hdr.framesize = bigEndian(data, 4, 7); // << 7
         }
         else {
-            framesize = bigEndian(data, 4); // << 8
+            ID3Hdr.framesize = bigEndian(data, 4); // << 8
         }
-        remainingHeaderBytes -= 4;
+        ID3Hdr.remainingHeaderBytes -= 4;
         uint8_t flag = *(data + 4); // skip 1st flag
         (void)flag;
-        remainingHeaderBytes--;
-        compressed = (*(data + 5)) & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
+        ID3Hdr.remainingHeaderBytes--;
+        ID3Hdr.compressed = (*(data + 5)) & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
                                            // size' appended to the frame header.
-        remainingHeaderBytes--;
+        ID3Hdr.remainingHeaderBytes--;
         uint32_t decompsize = 0;
-        if(compressed) {
+        if(ID3Hdr.compressed) {
             if(m_f_Log) log_i("iscompressed");
             decompsize = bigEndian(data + 6, 4);
-            remainingHeaderBytes -= 4;
+            ID3Hdr.remainingHeaderBytes -= 4;
             (void)decompsize;
             if(m_f_Log) log_i("decompsize=%u", decompsize);
             return 6 + 4;
@@ -1773,15 +1777,15 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 5) { // If the frame is larger than 512 bytes, skip the rest
-        if(framesize > len) {
-            framesize -= len;
-            remainingHeaderBytes -= len;
+        if(ID3Hdr.framesize > len) {
+            ID3Hdr.framesize -= len;
+            ID3Hdr.remainingHeaderBytes -= len;
             return len;
         }
         else {
             m_controlCounter = 3; // check next frame
-            remainingHeaderBytes -= framesize;
-            return framesize;
+            ID3Hdr.remainingHeaderBytes -= ID3Hdr.framesize;
+            return ID3Hdr.framesize;
         }
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1793,39 +1797,39 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         // $02 – UTF-16BE encoded Unicode without BOM (Byte Order Mark) , in ID3v2.4.
         // $03 – UTF-8 encoded Unicode, in ID3v2.4.
 
-        if(startsWith(tag, "APIC")) { // a image embedded in file, passing it to external function
+        if(startsWith(ID3Hdr.tag, "APIC")) { // a image embedded in file, passing it to external function
         //    if(m_dataMode == AUDIO_LOCALFILE) {
-                APIC_pos[numID3Header] = totalId3Size + id3Size - remainingHeaderBytes;
-                APIC_size[numID3Header] = framesize;
+                ID3Hdr.APIC_pos[ID3Hdr.numID3Header] = ID3Hdr.totalId3Size + ID3Hdr.id3Size - ID3Hdr.remainingHeaderBytes;
+                ID3Hdr.APIC_size[ID3Hdr.numID3Header] = ID3Hdr.framesize;
                 //    log_e("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
         //    }
             return 0;
         }
 
         if( // any lyrics embedded in file, passing it to external function
-            startsWith(tag, "SYLT") || startsWith(tag, "TXXX") || startsWith(tag, "USLT")) {
+            startsWith(ID3Hdr.tag, "SYLT") || startsWith(ID3Hdr.tag, "TXXX") || startsWith(ID3Hdr.tag, "USLT")) {
             if(m_dataMode == AUDIO_LOCALFILE) {
-                SYLT_seen = true;
-                SYLT_pos = id3Size - remainingHeaderBytes;
-                SYLT_size = framesize;
+                ID3Hdr.SYLT_seen = true;
+                ID3Hdr.SYLT_pos = ID3Hdr.id3Size - ID3Hdr.remainingHeaderBytes;
+                ID3Hdr.SYLT_size = ID3Hdr.framesize;
             }
             return 0;
         }
-        if(framesize == 0) return 0;
+        if(ID3Hdr.framesize == 0) return 0;
 
-        size_t fs = framesize;
-log_w("framesize %i", framesize);
+        size_t fs = ID3Hdr.framesize;
+log_w("framesize %i", ID3Hdr.framesize);
         if(fs >= m_ibuffSize - 1) fs = m_ibuffSize - 1;
         uint16_t dataLength = fs - 1;
         for(int i = 0; i < dataLength; i++) { m_ibuff[i] = *(data + i + 1);} // without encodingByte
         m_ibuff[dataLength] = 0;
-        framesize -= fs;
-        remainingHeaderBytes -= fs;
+        ID3Hdr.framesize -= fs;
+        ID3Hdr.remainingHeaderBytes -= fs;
         m_ibuff[fs] = 0;
 
         if(encodingByte == 0){  // latin
             latinToUTF8(m_ibuff.get(), dataLength, false);
-            showID3Tag(tag, m_ibuff.get());
+            showID3Tag(ID3Hdr.tag, m_ibuff.get());
         }
 
         if(encodingByte == 1  && dataLength > 1) { // UTF16 with BOM
@@ -1842,7 +1846,7 @@ log_w("framesize %i", framesize);
             }
 
             std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-            showID3Tag(tag, converter.to_bytes(utf16_string).c_str());
+            showID3Tag(ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
         }
 
         if(encodingByte == 2 && dataLength > 1) { // UTF16BE
@@ -1853,11 +1857,11 @@ log_w("framesize %i", framesize);
             }
 
             std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-            showID3Tag(tag, converter.to_bytes(utf16_string).c_str());
+            showID3Tag(ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
         }
 
         if(encodingByte == 3) { // utf8
-            showID3Tag(tag, m_ibuff.get());
+            showID3Tag(ID3Hdr.tag, m_ibuff.get());
         }
         return fs;
     }
@@ -1867,53 +1871,53 @@ log_w("framesize %i", framesize);
     // see https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
     if(m_controlCounter == 10) { // frames in V2.2, 3bytes identifier, 3bytes size descriptor
 
-        if(universal_tmp > 0) {
-            if(universal_tmp > len) {
-                universal_tmp -= len;
+        if(ID3Hdr.universal_tmp > 0) {
+            if(ID3Hdr.universal_tmp > len) {
+                ID3Hdr.universal_tmp -= len;
                 return len;
             } // Throw it away
             else {
-                uint32_t t = universal_tmp;
-                universal_tmp = 0;
+                uint32_t t = ID3Hdr.universal_tmp;
+                ID3Hdr.universal_tmp = 0;
                 return t;
             } // Throw it away
         }
 
-        frameid[0] = *(data + 0);
-        frameid[1] = *(data + 1);
-        frameid[2] = *(data + 2);
-        frameid[3] = 0;
-        for(uint8_t i = 0; i < 4; i++) tag[i] = frameid[i]; // tag = frameid
-        remainingHeaderBytes -= 3;
+        ID3Hdr.frameid[0] = *(data + 0);
+        ID3Hdr.frameid[1] = *(data + 1);
+        ID3Hdr.frameid[2] = *(data + 2);
+        ID3Hdr.frameid[3] = 0;
+        for(uint8_t i = 0; i < 4; i++) ID3Hdr.tag[i] = ID3Hdr.frameid[i]; // tag = frameid
+        ID3Hdr.remainingHeaderBytes -= 3;
         size_t dataLen = bigEndian(data + 3, 3);
-        universal_tmp = dataLen;
-        remainingHeaderBytes -= 3;
+        ID3Hdr.universal_tmp = dataLen;
+        ID3Hdr.remainingHeaderBytes -= 3;
         char value[256];
         if(dataLen > 249) { dataLen = 249; }
         memcpy(value, (data + 7), dataLen);
         value[dataLen + 1] = 0;
         m_chbuf[0] = 0;
-        if(startsWith(tag, "PIC")) { // image embedded in header
+        if(startsWith(ID3Hdr.tag, "PIC")) { // image embedded in header
             if(m_dataMode == AUDIO_LOCALFILE) {
-                APIC_pos[numID3Header] = id3Size - remainingHeaderBytes;
-                APIC_size[numID3Header] = universal_tmp;
+                ID3Hdr.APIC_pos[ID3Hdr.numID3Header] = ID3Hdr.id3Size - ID3Hdr.remainingHeaderBytes;
+                ID3Hdr.APIC_size[ID3Hdr.numID3Header] = ID3Hdr.universal_tmp;
                 if(m_f_Log) log_i("Attached picture seen at pos %d length %d", APIC_pos[0], APIC_size[0]);
             }
         }
-        else if(startsWith(tag, "SLT")) { // lyrics embedded in header
+        else if(startsWith(ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if(m_dataMode == AUDIO_LOCALFILE) {
-                SYLT_seen = true; // #460
-                SYLT_pos = id3Size - remainingHeaderBytes;
-                SYLT_size = universal_tmp;
+                ID3Hdr.SYLT_seen = true; // #460
+                ID3Hdr.SYLT_pos = ID3Hdr.id3Size - ID3Hdr.remainingHeaderBytes;
+                ID3Hdr.SYLT_size = ID3Hdr.universal_tmp;
                 if(m_f_Log) log_i("Attached lyrics seen at pos %d length %d", SYLT_pos, SYLT_size);
             }
         }
-        else { showID3Tag(tag, value);}
-        remainingHeaderBytes -= universal_tmp;
-        universal_tmp -= dataLen;
+        else { showID3Tag(ID3Hdr.tag, value);}
+        ID3Hdr.remainingHeaderBytes -= ID3Hdr.universal_tmp;
+        ID3Hdr.universal_tmp -= dataLen;
 
         if(dataLen == 0) m_controlCounter = 98;
-        if(remainingHeaderBytes == 0) m_controlCounter = 98;
+        if(ID3Hdr.remainingHeaderBytes == 0) m_controlCounter = 98;
 
         return 3 + 3 + dataLen;
     }
@@ -1921,43 +1925,43 @@ log_w("framesize %i", framesize);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 98) { // skip all ID3 metadata (mostly spaces)
-        if(remainingHeaderBytes > len) {
-            remainingHeaderBytes -= len;
+        if(ID3Hdr.remainingHeaderBytes > len) {
+            ID3Hdr.remainingHeaderBytes -= len;
             return len;
         } // Throw it away
         else {
             m_controlCounter = 99;
-            return remainingHeaderBytes;
+            return ID3Hdr.remainingHeaderBytes;
         } // Throw it away
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 99) { //  exist another ID3tag?
-        m_audioDataStart += id3Size;
+        m_audioDataStart += ID3Hdr.id3Size;
         //    vTaskDelay(30);
         if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
             m_controlCounter = 0;
-            numID3Header++;
-            totalId3Size += id3Size;
+            ID3Hdr.numID3Header++;
+            ID3Hdr.totalId3Size += ID3Hdr.id3Size;
             return 0;
         }
         else {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_contentlength - m_audioDataStart;
             if(!m_f_m3u8data) log_info("Audio-Length: %u", m_audioDataSize);
-            if(APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
+            if(ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
                 size_t pos = audiofile.position();
-                audio_id3image(audiofile, APIC_pos[0], APIC_size[0]);
+                audio_id3image(audiofile, ID3Hdr.APIC_pos[0], ID3Hdr.APIC_size[0]);
                 audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
             }
-            if(SYLT_seen && audio_id3lyrics) {
+            if(ID3Hdr.SYLT_seen && audio_id3lyrics) {
                 size_t pos = audiofile.position();
-                audio_id3lyrics(audiofile, SYLT_pos, SYLT_size);
+                audio_id3lyrics(audiofile, ID3Hdr.SYLT_pos, ID3Hdr.SYLT_size);
                 audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
             }
-            numID3Header = 0;
-            totalId3Size = 0;
-            for(int i = 0; i < 3; i++) APIC_pos[i] = 0;  // delete all
-            for(int i = 0; i < 3; i++) APIC_size[i] = 0; // delete all
+            ID3Hdr.numID3Header = 0;
+            ID3Hdr.totalId3Size = 0;
+            for(int i = 0; i < 3; i++) ID3Hdr.APIC_pos[i] = 0;  // delete all
+            for(int i = 0; i < 3; i++) ID3Hdr.APIC_size[i] = 0; // delete all
             return 0;
         }
     }
