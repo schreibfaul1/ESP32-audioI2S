@@ -127,7 +127,9 @@ extern char audioI2SVers[];
 // ------- UNIQUE_PTR for PSRAM memory management ----------------
 struct PsramDeleter { // PSRAM deleter for Unique_PTR
     void operator()(void* ptr) const {
-        if (ptr) free(ptr);  // ps_malloc kann mit free freigegeben werden
+        if (ptr){
+            free(ptr);  // ps_malloc kann mit free freigegeben werden
+        }
     }
 };
 template<typename T>
@@ -247,6 +249,7 @@ private:
     void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
+    void            log_info(const char* fmt, ...); // audio_info() message
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -668,7 +671,7 @@ private:
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
     const size_t    m_chbufSize          = 8192;
-    const size_t    m_ibuffSize          = 8192;
+
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
@@ -676,7 +679,7 @@ private:
     std::unique_ptr<int16_t[], PsramDeleter> m_outBuff;        // Interleaved L/R
     std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K; // Interleaved L/R
     std::unique_ptr<char[],    PsramDeleter> m_chbuf;          // universal buffer
-    std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in audio_info()
+    std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in log_info()
 
     char*           m_lastHost = NULL;              // Store the last URL to a webstream
     char*           m_lastM3U8host = NULL;
@@ -784,6 +787,7 @@ private:
     float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
+    size_t          m_ibuffSize = 0;                // log buffer size for audio_info()
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
     float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
