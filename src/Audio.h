@@ -680,8 +680,9 @@ private:
     std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K; // Interleaved L/R
     std::unique_ptr<char[],    PsramDeleter> m_chbuf;          // universal buffer
     std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in log_info()
+    std::unique_ptr<char[],    PsramDeleter> m_lastHost;       // Store the last URL to a webstream
 
-    typedef struct _ID3Hdr{
+    typedef struct _ID3Hdr{ // used only in readID3header()
         size_t      id3Size;
         size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
         size_t      remainingHeaderBytes;
@@ -703,7 +704,21 @@ private:
     } ID3Hdr_t;
     ID3Hdr_t ID3Hdr;
 
-    char*           m_lastHost = NULL;              // Store the last URL to a webstream
+    typedef struct _pwsHLS{  // used in processWebStreamHLS()
+        uint16_t     maxFrameSize;
+        uint16_t     ID3BuffSize;
+        uint32_t     availableBytes;
+        bool         firstBytes;
+        bool         f_chunkFinished;
+        uint32_t     byteCounter;
+        size_t       chunkSize;
+        uint16_t     ID3WritePtr;
+        uint16_t     ID3ReadPtr;
+        ps_ptr<uint8_t>ID3Buff;
+    } pwsHLS_t;
+    pwsHLS_t pwsHLS;
+
+
     char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     ps_ptr<char>    m_speechtxt = NULL;             // stores tts text
