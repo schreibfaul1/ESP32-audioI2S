@@ -4447,27 +4447,26 @@ void Audio::showstreamtitle(char* ml) {
         }
 
         idx2 = indexOf(ml, ";", idx1);
-        char* sTit;
+        ps_ptr<char> sTit;
         if(idx2 >= 0) {
-            sTit = strndup(ml + idx1, idx2 + 1);
+            sTit = audio_strndup(ml + idx1, idx2 + 1);
             sTit[idx2] = '\0';
         }
-        else sTit = strdup(ml);
+        else sTit = audio_strdup(ml);
 
-        while(i < strlen(sTit)) {
+        while(i < strlen(sTit.get())) {
             hash += sTit[i] * i + 1;
             i++;
         }
 
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            log_info("%.*s", m_ibuffSize, sTit);
+            log_info("%.*s", m_ibuffSize, sTit.get());
             uint8_t pos = 12;                                                 // remove "StreamTitle="
             if(sTit[pos] == '\'') pos++;                                      // remove leading  \'
-            if(sTit[strlen(sTit) - 1] == '\'') sTit[strlen(sTit) - 1] = '\0'; // remove trailing \'
-            if(audio_showstreamtitle) audio_showstreamtitle(sTit + pos);
+            if(sTit[strlen(sTit.get()) - 1] == '\'') sTit[strlen(sTit.get()) - 1] = '\0'; // remove trailing \'
+            if(audio_showstreamtitle) audio_showstreamtitle(sTit.get() + pos);
         }
-        x_ps_free(&sTit);
     }
 
     idx1 = indexOf(ml, "StreamUrl=", 0);

@@ -525,6 +525,30 @@ private:
         return ps_str;
     }
 
+    std::unique_ptr<char[], PsramDeleter> audio_strndup(const char* str, size_t maxlen) {
+        if (!str) {
+            log_e("audio_strndup: input str is NULL");
+            return nullptr;
+        }
+
+        // Effektive Länge der zu kopierenden Zeichen (nicht mehr als maxlen, nicht über das Ende hinaus)
+        size_t len = strnlen(str, maxlen);
+
+        // Speicher reservieren (+1 für Nullterminierung)
+        auto ps_str = audio_malloc<char>(len + 1);
+
+        if (!ps_str) {
+            log_e("audio_strndup: OOM, no space for %zu bytes", len + 1);
+            return nullptr;
+        }
+
+        // Sicher kopieren (genau len Zeichen)
+        memcpy(ps_str.get(), str, len);
+        ps_str[len] = '\0'; // Nullterminierung hinzufügen
+
+        return ps_str;
+    }
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
         if (!str) {return nullptr;}  // Enter is zero
