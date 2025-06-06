@@ -1813,28 +1813,31 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         if(framesize == 0) return 0;
 
-        size_t retVal = framesize;
-        uint16_t dataLength = framesize - 1;
-        auto ibuff = audio_malloc<char>(framesize);
-        for(int i = 0; i < dataLength; i++) {ibuff[i] = *(data + i + 1);} // without encodingByte
-        ibuff[dataLength] = 0;
-        remainingHeaderBytes -= framesize;
-        framesize = 0;
+        size_t fs = framesize;
+log_w("framesize %i", framesize);
+        if(fs >= m_ibuffSize - 1) fs = m_ibuffSize - 1;
+        uint16_t dataLength = fs - 1;
+        for(int i = 0; i < dataLength; i++) { m_ibuff[i] = *(data + i + 1);} // without encodingByte
+        m_ibuff[dataLength] = 0;
+        framesize -= fs;
+        remainingHeaderBytes -= fs;
+        m_ibuff[fs] = 0;
+
         if(encodingByte == 0){  // latin
-            latinToUTF8(ibuff.get(), dataLength, false);
-            showID3Tag(tag, ibuff.get());
+            latinToUTF8(m_ibuff.get(), dataLength, false);
+            showID3Tag(tag, m_ibuff.get());
         }
 
         if(encodingByte == 1  && dataLength > 1) { // UTF16 with BOM
-            bool big_endian = static_cast<unsigned char>(ibuff[0]) == 0xFE && static_cast<unsigned char>(ibuff[1]) == 0xFF;
+            bool big_endian = static_cast<unsigned char>(m_ibuff[0]) == 0xFE && static_cast<unsigned char>(m_ibuff[1]) == 0xFF;
 
             uint8_t data_start = 2; // skip the BOM (2 bytes)
 
             std::u16string utf16_string;
             for (size_t i = data_start; i < dataLength; i += 2) {
                 char16_t wchar;
-                if(big_endian)  wchar = (static_cast<unsigned char>(ibuff[i]) << 8) | static_cast<unsigned char>(ibuff[i + 1]);
-                else            wchar = (static_cast<unsigned char>(ibuff[i + 1]) << 8) | static_cast<unsigned char>(ibuff[i]);
+                if(big_endian)  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
+                else            wchar = (static_cast<unsigned char>(m_ibuff[i + 1]) << 8) | static_cast<unsigned char>(m_ibuff[i]);
                 utf16_string.push_back(wchar);
             }
 
@@ -1845,7 +1848,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(encodingByte == 2 && dataLength > 1) { // UTF16BE
             std::u16string utf16_string;
             for (size_t i = 0; i < dataLength; i += 2) {
-                char16_t  wchar = (static_cast<unsigned char>(ibuff[i]) << 8) | static_cast<unsigned char>(ibuff[i + 1]);
+                char16_t  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
                 utf16_string.push_back(wchar);
             }
 
@@ -1854,9 +1857,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
 
         if(encodingByte == 3) { // utf8
-            showID3Tag(tag, ibuff.get());
+            showID3Tag(tag, m_ibuff.get());
         }
-        return retVal;
+        return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -6530,7 +6533,6 @@ uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
     void Audio::log_info(const char* fmt, ...) {
         if (!audio_info) return;
 
-        constexpr size_t initialSize = 256;
         va_list args1, args2;
         va_start(args1, fmt);
         va_copy(args2, args1);
