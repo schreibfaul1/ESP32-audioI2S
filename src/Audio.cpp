@@ -219,7 +219,6 @@ Audio::~Audio() {
     x_ps_free(&m_playlistBuff);
     x_ps_free(&m_lastHost);
     x_ps_free(&m_lastM3U8host);
-    x_ps_free(&m_speechtxt);
 
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
@@ -276,7 +275,6 @@ void Audio::setDefaults() {
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     x_ps_free(&m_lastM3U8host);
-    x_ps_free(&m_speechtxt);
 
     AUDIO_INFO("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
@@ -376,8 +374,10 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     setDefaults();
     m_f_ssl = true;
 
+    m_speechtxt = audio_strdup(input.c_str());
+
     // Escape special characters in input
-   String input_clean = "";
+    String input_clean = "";
     for (int i = 0; i < input.length(); i++) {
         char c = input.charAt(i);
         if (c == '\"') {
@@ -490,10 +490,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint32_t timestamp     = 0;     // timeout surveillance
     uint16_t hostwoext_begin = 0;
 
-    // char*    authorization = NULL;  // authorization
-    char*    rqh           = NULL;  // request header
-    char*    toEncode      = NULL;  // temporary memory for base64 encoding
-    char*    h_host        = NULL;
+    ps_ptr<char> h_host;
+    char*        rqh           = NULL;  // request header
+    char*        toEncode      = NULL;  // temporary memory for base64 encoding
+
 
 //    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
 //        |   |                                     |    |                              |
@@ -520,18 +520,18 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     c_host = x_ps_strdup(host); // make a copy
     h_host = urlencode(c_host, true);
 
-    trim(h_host);  // remove leading and trailing spaces
-    lenHost = strlen(h_host);
+    trim(h_host.get());  // remove leading and trailing spaces
+    lenHost = strlen(h_host.get());
 
-    if(!startsWith(h_host, "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
+    if(!startsWith(h_host.get(), "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
 
-    if(startsWith(h_host, "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
+    if(startsWith(h_host.get(), "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
     else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = indexOf(h_host, "/", 10); // position of "/" in hostname
-    pos_colon     = indexOf(h_host, ":", 10); if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(h_host, "&", 10); // position of "&" in hostname
+    pos_slash     = indexOf(h_host.get(), "/", 10); // position of "/" in hostname
+    pos_colon     = indexOf(h_host.get(), ":", 10); if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = indexOf(h_host.get(), "&", 10); // position of "&" in hostname
 
     if(pos_slash > 0) h_host[pos_slash] = '\0';
     if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
@@ -543,10 +543,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(!rqh) {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
                        strcat(rqh, "GET /");
-    if(pos_slash > 0){ strcat(rqh, h_host + pos_slash + 1);}
+    if(pos_slash > 0){ strcat(rqh, h_host.get() + pos_slash + 1);}
                        strcat(rqh, " HTTP/1.1\r\n");
                        strcat(rqh, "Host: ");
-                       strcat(rqh, h_host + hostwoext_begin);
+                       strcat(rqh, h_host.get() + hostwoext_begin);
                        strcat(rqh, "\r\n");
                        strcat(rqh, "Icy-MetaData:1\r\n");
                        strcat(rqh, "Icy-MetaData:2\r\n");
@@ -564,8 +564,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     timestamp = millis();
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
 
-    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", h_host + hostwoext_begin, port, h_host + pos_slash + 1);
-    res = _client->connect(h_host + hostwoext_begin, port);
+    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", h_host.get() + hostwoext_begin, port, h_host.get() + pos_slash + 1);
+    res = _client->connect(h_host.get() + hostwoext_begin, port);
 
     if(pos_slash > 0) h_host[pos_slash] = '/';
     if(pos_colon > 0) h_host[pos_colon] = ':';
@@ -580,19 +580,19 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
         _client->print(rqh);
-        if(endsWith(h_host, ".mp3" ))      m_expectedCodec  = CODEC_MP3;
-        if(endsWith(h_host, ".aac" ))      m_expectedCodec  = CODEC_AAC;
-        if(endsWith(h_host, ".wav" ))      m_expectedCodec  = CODEC_WAV;
-        if(endsWith(h_host, ".m4a" ))      m_expectedCodec  = CODEC_M4A;
-        if(endsWith(h_host, ".ogg" ))      m_expectedCodec  = CODEC_OGG;
-        if(endsWith(h_host, ".flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host, "-flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host, ".opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host, "/opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host, ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
-        if(endsWith(h_host, ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
-        if(endsWith(h_host, ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
-        if(indexOf( h_host, ".m3u8") >= 0){m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost);}
+        if(endsWith(h_host.get(), ".mp3" ))      m_expectedCodec  = CODEC_MP3;
+        if(endsWith(h_host.get(), ".aac" ))      m_expectedCodec  = CODEC_AAC;
+        if(endsWith(h_host.get(), ".wav" ))      m_expectedCodec  = CODEC_WAV;
+        if(endsWith(h_host.get(), ".m4a" ))      m_expectedCodec  = CODEC_M4A;
+        if(endsWith(h_host.get(), ".ogg" ))      m_expectedCodec  = CODEC_OGG;
+        if(endsWith(h_host.get(), ".flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host.get(), "-flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(endsWith(h_host.get(), ".opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host.get(), "/opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(endsWith(h_host.get(), ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
+        if(endsWith(h_host.get(), ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
+        if(endsWith(h_host.get(), ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
+        if(indexOf( h_host.get(), ".m3u8") >= 0){m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost);}
 
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
@@ -609,7 +609,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
     x_ps_free(&c_host);
-    x_ps_free(&h_host);
     x_ps_free(&rqh);
     x_ps_free(&toEncode);
     return res;
@@ -644,7 +643,7 @@ bool Audio::httpPrint(const char* host) {
     pos_ampersand = indexOf(h_host, "&", 0);
 
     char* hostwoext = NULL; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
 
     if(pos_slash > 1) {
         hostwoext = (char*)x_ps_malloc(pos_slash + 1);
@@ -654,7 +653,7 @@ bool Audio::httpPrint(const char* host) {
     }
     else { // url has no extension
         hostwoext = strdup(h_host);
-        extension = strdup("/");
+        extension = audio_strdup("/");
     }
 
     if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
@@ -666,7 +665,7 @@ bool Audio::httpPrint(const char* host) {
     rqh[0] = '\0';
 
     strcat(rqh, "GET ");
-    strcat(rqh, extension);
+    strcat(rqh, extension.get());
     strcat(rqh, " HTTP/1.1\r\n");
     strcat(rqh, "Host: ");
     strcat(rqh, hostwoext);
@@ -690,17 +689,17 @@ bool Audio::httpPrint(const char* host) {
     }
     _client->print(rqh);
 
-    if(     endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
-    else if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
-    else if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
-    else if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
-    else if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
+    if(     endsWith(extension.get(), ".mp3"))       m_expectedCodec  = CODEC_MP3;
+    else if(endsWith(extension.get(), ".aac"))       m_expectedCodec  = CODEC_AAC;
+    else if(endsWith(extension.get(), ".wav"))       m_expectedCodec  = CODEC_WAV;
+    else if(endsWith(extension.get(), ".m4a"))       m_expectedCodec  = CODEC_M4A;
+    else if(endsWith(extension.get(), ".flac"))      m_expectedCodec  = CODEC_FLAC;
     else                                       m_expectedCodec  = CODEC_NONE;
 
-    if(     endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    else if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    else if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
-    else if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+    if(     endsWith(extension.get(), ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    else if(endsWith(extension.get(), ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    else if(indexOf( extension.get(), ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    else if(endsWith(extension.get(), ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
     else                                       m_expectedPlsFmt = FORMAT_NONE;
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
@@ -709,7 +708,6 @@ bool Audio::httpPrint(const char* host) {
     m_f_chunked = false;
 
     x_ps_free(&hostwoext);
-    x_ps_free(&extension);
     x_ps_free(&h_host);
 
     return true;
@@ -743,7 +741,7 @@ bool Audio::httpRange(const char* host, uint32_t range){
     pos_ampersand = indexOf(h_host, "&", 0);
 
     char* hostwoext = NULL; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    char* extension = NULL; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
 
     if(pos_slash > 1) {
         hostwoext = (char*)x_ps_malloc(pos_slash + 1);
@@ -753,7 +751,7 @@ bool Audio::httpRange(const char* host, uint32_t range){
     }
     else { // url has no extension
         hostwoext = strdup(h_host);
-        extension = strdup("/");
+        extension = audio_strdup("/");
     }
 
     if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
@@ -767,7 +765,7 @@ bool Audio::httpRange(const char* host, uint32_t range){
     ltoa(range, ch_range, 10);
     AUDIO_INFO("skip to position: %li", (long int)range);
     strcat(rqh, "GET ");
-    strcat(rqh, extension);
+    strcat(rqh, extension.get());
     strcat(rqh, " HTTP/1.1\r\n");
     strcat(rqh, "Host: ");
     strcat(rqh, hostwoext);
@@ -793,15 +791,15 @@ log_e("%s", rqh);
         return false;
     }
     _client->print(rqh);
-    if(endsWith(extension, ".mp3"))       m_expectedCodec  = CODEC_MP3;
-    if(endsWith(extension, ".aac"))       m_expectedCodec  = CODEC_AAC;
-    if(endsWith(extension, ".wav"))       m_expectedCodec  = CODEC_WAV;
-    if(endsWith(extension, ".m4a"))       m_expectedCodec  = CODEC_M4A;
-    if(endsWith(extension, ".flac"))      m_expectedCodec  = CODEC_FLAC;
-    if(endsWith(extension, ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    if(endsWith(extension, ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    if(indexOf( extension, ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
-    if(endsWith(extension, ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+    if(endsWith(extension.get(), ".mp3"))       m_expectedCodec  = CODEC_MP3;
+    if(endsWith(extension.get(), ".aac"))       m_expectedCodec  = CODEC_AAC;
+    if(endsWith(extension.get(), ".wav"))       m_expectedCodec  = CODEC_WAV;
+    if(endsWith(extension.get(), ".m4a"))       m_expectedCodec  = CODEC_M4A;
+    if(endsWith(extension.get(), ".flac"))      m_expectedCodec  = CODEC_FLAC;
+    if(endsWith(extension.get(), ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    if(endsWith(extension.get(), ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    if(indexOf( extension.get(), ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    if(endsWith(extension.get(), ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBFILE;
@@ -809,7 +807,6 @@ log_e("%s", rqh);
     m_f_chunked = false;
 
     x_ps_free(&hostwoext);
-    x_ps_free(&extension);
     x_ps_free(&h_host);
 
     return true;
@@ -904,22 +901,21 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     char host[] = "translate.google.com.vn";
     char path[] = "/translate_tts";
 
-    x_ps_free(&m_speechtxt);
-    m_speechtxt = x_ps_strdup(speech);
-    char* urlStr = urlencode(speech, false); // percent encoding
+    m_speechtxt = audio_strdup(speech); // unique pointer takes care of the memory management
+    auto urlStr = urlencode(speech, false); // percent encoding
     if(!urlStr) {
         log_e("out of memory");
         xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
 
-    char* req = (char*)x_ps_calloc(strlen(urlStr) + 200, sizeof(char)); // request header
+    char* req = (char*)x_ps_calloc(strlen(urlStr.get()) + 200, sizeof(char)); // request header
     strcat(req, "GET ");
     strcat(req, path);
     strcat(req, "?ie=UTF-8&tl=");
     strcat(req, lang);
     strcat(req, "&client=tw-ob&q=");
-    strcat(req, urlStr);
+    strcat(req, urlStr.get());
     strcat(req, " HTTP/1.1\r\n");
     strcat(req, "Host: ");
     strcat(req, host);
@@ -928,8 +924,6 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     strcat(req, "Accept-Encoding: identity\r\n");
     strcat(req, "Accept: text/html\r\n");
     strcat(req, "Connection: close\r\n\r\n");
-
-    x_ps_free(&urlStr);
 
     _client = static_cast<WiFiClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
@@ -2836,7 +2830,7 @@ const char* Audio::parsePlaylist_M3U8() {
 
     uint8_t     lines = m_playlistContent.size();
     bool        f_begin = false;
-    const char* ret;
+
     if(lines) {
         for(uint16_t i = 0; i < lines; i++) {
             if(strlen(m_playlistContent[i]) == 0) continue; // empty line
@@ -2848,12 +2842,11 @@ const char* Audio::parsePlaylist_M3U8() {
 
             if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")) {
                 uint8_t codec = CODEC_NONE;
-                ret = m3u8redirection(&codec);
+                ps_ptr<char> ret = m3u8redirection(&codec);
                 if(ret) {
                     m_m3u8Codec = codec; // can be AAC or MP3
                     x_ps_free(&m_lastM3U8host);
-                    m_lastM3U8host = strdup(ret);
-                    x_ps_free_const(&ret);
+                    m_lastM3U8host = strdup(ret.get());
                     vector_clear_and_shrink(m_playlistContent);
                     return NULL;
                 }
@@ -3026,7 +3019,8 @@ const char* Audio::parsePlaylist_M3U8() {
     return NULL;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-const char* Audio::m3u8redirection(uint8_t* codec) {
+
+ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     // example: redirection
     // #EXTM3U
     // #EXT-X-STREAM-INF:BANDWIDTH=117500,AVERAGE-BANDWIDTH=117000,CODECS="mp4a.40.2"
@@ -3036,7 +3030,7 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     // #EXT-X-STREAM-INF:BANDWIDTH=37500,AVERAGE-BANDWIDTH=37000,CODECS="mp4a.40.29"
     // 32/playlist.m3u8?hlssid=7562d0e101b84aeea0fa35f8b963a174
 
-    if(!m_lastHost) {log_e("m_lastHost is NULL"); return NULL;} // guard
+    if(!m_lastHost) {log_e("m_lastHost is NULL"); return nullptr;} // guard
     const char codecString[9][11]={
         "mp4a.40.34", // mp3 stream
         "mp4a.40.01", // AAC Main
@@ -3056,21 +3050,19 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
     for(uint16_t i = 0; i < plcSize; i++) { // looking for lowest codeString
         int16_t posCodec = indexOf(m_playlistContent[i], "CODECS=\"mp4a");
         if(posCodec > 0){
-            bool found = false;
-            for(uint8_t j = 0; j < sizeof(codecString); j++){
-                if(indexOf(m_playlistContent[i], codecString[j]) > 0){
-                    if(j < cS){cS = j; choosenLine = i;}
-                    found = true;
-                    // log_e("codeString %s found in line %i", codecString[j], i);
+            for (uint8_t j = 0; j < 9; j++) {
+                if (indexOf(m_playlistContent[i], codecString[j]) > 0) {
+                    if (j < cS) {
+                        cS = j;
+                        choosenLine = i;
+                    }
                 }
             }
-            if(!found) log_w("codeString %s not in list", m_playlistContent[i] + posCodec);
         }
-        if(cS == 0)            *codec = CODEC_MP3;
-        if(cS > 0 && cS < 100) *codec = CODEC_AAC;
     }
+    if (cS == 0)            *codec = CODEC_MP3;
+    else if (cS < 100)      *codec = CODEC_AAC;
 
-    char* tmp = nullptr;
     choosenLine++; // next line is the redirection url
 
     if(cS == 100) {                             // "mp4a.xx.xx" not found
@@ -3080,53 +3072,43 @@ const char* Audio::m3u8redirection(uint8_t* codec) {
         }
     }
 
-    // if((!endsWith(m_playlistContent[choosenLine], "m3u8") && indexOf(m_playlistContent[choosenLine], "m3u8?") == -1)) {
-    //     // we have a new m3u8 playlist, skip to next line
-    //     int pos = indexOf(m_playlistContent[choosenLine - 1], "CODECS=\"mp4a", 18);
-    //     if(pos < 0) { // not found
-    //         int pos1 = indexOf(m_playlistContent[choosenLine - 1], "CODECS=", 18);
-    //         if(pos1 < 0) pos1 = 0;
-    //         log_e("codec %s in m3u8 playlist not supported", m_playlistContent[choosenLine - 1] + pos1);
-    //         goto exit;
-    //     }
-    // }
+    const char* line = m_playlistContent[choosenLine];
+    ps_ptr<char> result;
 
-
-    if(!startsWith(m_playlistContent[choosenLine], "http")) {
+    if(!startsWith(line, "http")) {
 
         // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
         // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
         // http://livees.com/chunklist022.m3u8
 
-        tmp = (char*)x_ps_malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine]));
-        strcpy(tmp, m_lastHost);
-        int idx1 = lastIndexOf(tmp, "/");
-        strcpy(tmp + idx1 + 1, m_playlistContent[choosenLine]);
+        size_t len = strlen(m_lastHost) + strlen(line) + 1;
+        result = audio_malloc<char>(len);
+        strcpy(result.get(), m_lastHost);
+        int idx1 = lastIndexOf(result.get(), "/");
+        strcpy(result.get() + idx1 + 1, line);
+    } else {
+        size_t len = strlen(line) + 1;
+        result = audio_malloc<char>(len);
+        strcpy(result.get(), line);
     }
-    else { tmp = strdup(m_playlistContent[choosenLine]); }
 
-    if(startsWith(m_playlistContent[choosenLine], "../")){
+    if(startsWith(line, "../")){
         // ../../2093120-b/RISMI/stream01/streamPlaylist.m3u8
-        x_ps_free(&tmp);
-        tmp = (char*)x_ps_malloc(strlen(m_lastHost) + strlen(m_playlistContent[choosenLine] + 1));
-        strcpy(tmp, m_lastHost);
-        int idx1 = lastIndexOf(tmp, "/");
-        tmp[idx1] = '\0';
+        char* base = result.get();
+        int idx1 = lastIndexOf(base, "/");
+        base[idx1] = '\0';
 
-        while(startsWith(m_playlistContent[choosenLine], "../")){
-            memcpy(m_playlistContent[choosenLine], m_playlistContent[choosenLine] + 3, strlen(m_playlistContent[choosenLine] +3) + 1); // shift << 3
-            idx1 = lastIndexOf(tmp, "/");
-            tmp[idx1] = '\0';
+        while (startsWith(line, "../")) {
+            memmove((void*)line, line + 3, strlen(line + 3) + 1);
+            idx1 = lastIndexOf(base, "/");
+            base[idx1] = '\0';
         }
-        strcat(tmp, "/");
-        strcat(tmp, m_playlistContent[choosenLine]);
+
+        strcat(base, "/");
+        strcat(base, line);
     }
 
-    if(m_playlistContent[choosenLine]) {
-        x_ps_free(&m_playlistContent[choosenLine]);
-    }
-
-    return tmp; // it's a redirection, a new m3u8 playlist
+    return result; // it's a redirection, a new m3u8 playlist
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media sequence is
@@ -3595,9 +3577,8 @@ void Audio::processWebFile() {
 
         stopSong();
         if(m_f_tts) {
-            AUDIO_INFO("End of speech \"%s\"", m_speechtxt);
-            if(audio_eof_speech) audio_eof_speech(m_speechtxt);
-            x_ps_free(&m_speechtxt);
+            AUDIO_INFO("End of speech \"%s\"", m_speechtxt.get());
+            if(audio_eof_speech) audio_eof_speech(m_speechtxt.get());
         }
         else {
             AUDIO_INFO("End of webstream: \"%s\"", m_lastHost);
