@@ -682,22 +682,24 @@ private:
     std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in log_info()
 
     typedef struct _ID3Hdr{
-        size_t   id3Size;
-        size_t   totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-        size_t   remainingHeaderBytes;
-        size_t   universal_tmp;
-        uint8_t  ID3version;
-        int      ehsz;
-        char     tag[5];
-        char     frameid[5];
-        size_t   framesize;
-        bool     compressed;
-        size_t   APIC_size[3];
-        uint32_t APIC_pos[3];
-        bool     SYLT_seen;
-        size_t   SYLT_size;
-        uint32_t SYLT_pos;
-        uint8_t  numID3Header;
+        size_t      id3Size;
+        size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t      remainingHeaderBytes;
+        size_t      universal_tmp;
+        uint8_t     ID3version;
+        int         ehsz;
+        char        tag[5];
+        char        frameid[5];
+        size_t      framesize;
+        bool        compressed;
+        size_t      APIC_size[3];
+        uint32_t    APIC_pos[3];
+        bool        SYLT_seen;
+        size_t      SYLT_size;
+        uint32_t    SYLT_pos;
+        uint8_t     numID3Header;
+        uint16_t    iBuffSize;
+        ps_ptr<char>iBuff;
     } ID3Hdr_t;
     ID3Hdr_t ID3Hdr;
 

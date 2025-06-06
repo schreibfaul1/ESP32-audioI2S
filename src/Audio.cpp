@@ -1652,6 +1652,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         ID3Hdr.SYLT_size = 0;
         ID3Hdr.SYLT_pos = 0;
         ID3Hdr.numID3Header = 0;
+        ID3Hdr.iBuffSize = 4096;
+        ID3Hdr.iBuff = audio_malloc<char>(ID3Hdr.iBuffSize);
         memset(ID3Hdr.tag, 0, sizeof(ID3Hdr.tag));
         memset(ID3Hdr.APIC_size, 0, sizeof(ID3Hdr.APIC_size));
         memset(ID3Hdr.APIC_pos, 0, sizeof(ID3Hdr.APIC_pos));
@@ -1821,27 +1823,27 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 log_w("framesize %i", ID3Hdr.framesize);
         if(fs >= m_ibuffSize - 1) fs = m_ibuffSize - 1;
         uint16_t dataLength = fs - 1;
-        for(int i = 0; i < dataLength; i++) { m_ibuff[i] = *(data + i + 1);} // without encodingByte
-        m_ibuff[dataLength] = 0;
+        for(int i = 0; i < dataLength; i++) { ID3Hdr.iBuff[i] = *(data + i + 1);} // without encodingByte
+        ID3Hdr.iBuff[dataLength] = 0;
         ID3Hdr.framesize -= fs;
         ID3Hdr.remainingHeaderBytes -= fs;
-        m_ibuff[fs] = 0;
+        ID3Hdr.iBuff[fs] = 0;
 
         if(encodingByte == 0){  // latin
-            latinToUTF8(m_ibuff.get(), dataLength, false);
-            showID3Tag(ID3Hdr.tag, m_ibuff.get());
+            latinToUTF8(ID3Hdr.iBuff.get(), dataLength, false);
+            showID3Tag(ID3Hdr.tag, ID3Hdr.iBuff.get());
         }
 
         if(encodingByte == 1  && dataLength > 1) { // UTF16 with BOM
-            bool big_endian = static_cast<unsigned char>(m_ibuff[0]) == 0xFE && static_cast<unsigned char>(m_ibuff[1]) == 0xFF;
+            bool big_endian = static_cast<unsigned char>(ID3Hdr.iBuff[0]) == 0xFE && static_cast<unsigned char>(ID3Hdr.iBuff[1]) == 0xFF;
 
             uint8_t data_start = 2; // skip the BOM (2 bytes)
 
             std::u16string utf16_string;
             for (size_t i = data_start; i < dataLength; i += 2) {
                 char16_t wchar;
-                if(big_endian)  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
-                else            wchar = (static_cast<unsigned char>(m_ibuff[i + 1]) << 8) | static_cast<unsigned char>(m_ibuff[i]);
+                if(big_endian)  wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]);
+                else            wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i]);
                 utf16_string.push_back(wchar);
             }
 
@@ -1852,7 +1854,7 @@ log_w("framesize %i", ID3Hdr.framesize);
         if(encodingByte == 2 && dataLength > 1) { // UTF16BE
             std::u16string utf16_string;
             for (size_t i = 0; i < dataLength; i += 2) {
-                char16_t  wchar = (static_cast<unsigned char>(m_ibuff[i]) << 8) | static_cast<unsigned char>(m_ibuff[i + 1]);
+                char16_t  wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]);
                 utf16_string.push_back(wchar);
             }
 
@@ -1861,7 +1863,7 @@ log_w("framesize %i", ID3Hdr.framesize);
         }
 
         if(encodingByte == 3) { // utf8
-            showID3Tag(ID3Hdr.tag, m_ibuff.get());
+            showID3Tag(ID3Hdr.tag, ID3Hdr.iBuff.get());
         }
         return fs;
     }
@@ -1962,6 +1964,7 @@ log_w("framesize %i", ID3Hdr.framesize);
             ID3Hdr.totalId3Size = 0;
             for(int i = 0; i < 3; i++) ID3Hdr.APIC_pos[i] = 0;  // delete all
             for(int i = 0; i < 3; i++) ID3Hdr.APIC_size[i] = 0; // delete all
+            ID3Hdr.iBuff.reset();
             return 0;
         }
     }
