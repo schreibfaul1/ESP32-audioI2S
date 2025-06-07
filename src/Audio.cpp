@@ -563,7 +563,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(res) {
         uint32_t dt = millis() - timestamp;
         m_lastHost = audio_strdup(c_host.get());
-        log_info("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
+        log_info("%s has been established in %lu ms %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
         _client->print(rqh.get());
         if(endsWith(h_host.get(), ".mp3" ))      m_expectedCodec  = CODEC_MP3;
@@ -2941,7 +2941,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         ps_ptr<char>m_playlistBuff = nullptr;
         if(m_playlistURL[m_playlistURL.size() - 1]) {
             m_playlistBuff = audio_strdup(m_playlistURL[m_playlistURL.size() - 1].get());
-            // m_playlistURL.pop_back();
+            m_playlistURL.pop_back();
             m_playlistURL.shrink_to_fit();
         }
         if(m_f_Log) log_i("now playing %s", m_playlistBuff);
