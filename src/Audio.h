@@ -208,7 +208,7 @@ private:
     const char*     parsePlaylist_M3U();
     const char*     parsePlaylist_PLS();
     const char*     parsePlaylist_ASX();
-    const char*     parsePlaylist_M3U8();
+    ps_ptr<char>    parsePlaylist_M3U8();
     ps_ptr<char>    m3u8redirection(uint8_t* codec);
     uint64_t        m3u8_findMediaSeqInURL();
     bool            STfromEXTINF(char* str);
@@ -497,6 +497,16 @@ private:
         return std::unique_ptr<T[], PsramDeleter>(raw);
     }
 
+    // Request memory for an array of T
+    template <typename T>
+    std::unique_ptr<T[], PsramDeleter> audio_calloc(std::size_t count) {
+        T* raw = static_cast<T*>(ps_calloc(count, sizeof(T)));
+        if (!raw) {
+            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
+        }
+        return std::unique_ptr<T[], PsramDeleter>(raw);
+    }
+
     // Copies raw data into a Unique_PTR goal (e.g. like memcpy)
     template <typename T>
     void audio_memcpy(std::unique_ptr<T[]>& dest, const T* src, std::size_t count) {
@@ -505,7 +515,6 @@ private:
             memcpy(dest.get(), src, count * sizeof(T));
         }
     }
-
 
     std::unique_ptr<char[], PsramDeleter> audio_strdup(const char* str) {
         if (!str) {

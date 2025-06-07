@@ -214,8 +214,6 @@ Audio::~Audio() {
 
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
-
-    x_ps_free(&m_playlistBuff);
     x_ps_free(&m_lastM3U8host);
 
     stopAudioTask();
@@ -263,7 +261,6 @@ void Audio::setDefaults() {
     VORBISDecoder_FreeBuffers();
     memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
     memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
-    x_ps_free(&m_playlistBuff);
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear();
@@ -2535,7 +2532,7 @@ void Audio::loop() {
         }
     }
     else { // m3u8 datastream only
-        const char* host = NULL;
+        ps_ptr<char> host = NULL;
         static uint8_t no_host_cnt = 0;
         static uint32_t no_host_timer = millis();
         if(no_host_timer > millis()) {return;}
@@ -2556,7 +2553,7 @@ void Audio::loop() {
                 if(!host) no_host_cnt++; else {no_host_cnt = 0; no_host_timer = millis();}
                 if(no_host_cnt == 2){no_host_timer = millis() + 2000;} // no new url? wait 2 seconds
                 if(host) { // host contains the next playlist URL
-                    httpPrint(host);
+                    httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
@@ -2809,7 +2806,7 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     return host;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-const char* Audio::parsePlaylist_M3U8() {
+ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     // example: audio chunks
     // #EXTM3U
@@ -2967,17 +2964,16 @@ const char* Audio::parsePlaylist_M3U8() {
     }
 
     if(m_playlistURL.size() > 0) {
-        x_ps_free(&m_playlistBuff);
-
+        ps_ptr<char>m_playlistBuff = nullptr;
         if(m_playlistURL[m_playlistURL.size() - 1]) {
-            m_playlistBuff = strdup(m_playlistURL[m_playlistURL.size() - 1]);
+            m_playlistBuff = audio_strdup(m_playlistURL[m_playlistURL.size() - 1]);
             x_ps_free(&m_playlistURL[m_playlistURL.size() - 1]);
             m_playlistURL.pop_back();
             m_playlistURL.shrink_to_fit();
         }
         if(m_f_Log) log_i("now playing %s", m_playlistBuff);
-        if(endsWith(m_playlistBuff, "ts")) m_f_ts = true;
-        if(indexOf(m_playlistBuff, ".ts?") > 0) m_f_ts = true;
+        if(endsWith(m_playlistBuff.get(), "ts")) m_f_ts = true;
+        if(indexOf(m_playlistBuff.get(), ".ts?") > 0) m_f_ts = true;
         return m_playlistBuff;
     }
     else {
@@ -6186,26 +6182,21 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
     if(len > 1024) len = 1024;
         log_w("found at pos %i, len %i", seekpos, len);
 
-    uint8_t* data = (uint8_t*)x_ps_calloc(len, sizeof(uint8_t));
-    if(!data) {
-        log_e("out od memory");
-        audiofile.seek(0);
-        return;
-    }
+    auto data = audio_calloc<uint8_t>(len);
     len -= 4;
     audiofile.seek(seekpos);
-    audiofile.read(data, len);
+    audiofile.read(data.get(), len);
 
     int offset = 0;
     for(int i = 0; i < 12; i++) {
-        offset = specialIndexOf(data, info[i], len, true); // seek info[] with '\0'
+        offset = specialIndexOf(data.get(), info[i], len, true); // seek info[] with '\0'
         if(offset > 0) {
             offset += 19;
-            if(*(data + offset) == 0) offset++;
+            if(*(data.get() + offset) == 0) offset++;
             char   value[256] = {0};
-            size_t temp = strlen((const char*)data + offset);
+            size_t temp = strlen((const char*)data.get() + offset);
             if(temp > 254) temp = 254;
-            memcpy(value, (data + offset), temp);
+            memcpy(value, (data.get() + offset), temp);
             value[temp] = '\0';
             m_chbuf[0] = '\0';
             if(i == 0)  sprintf(m_chbuf.get(), "Title: %s", value);
@@ -6226,7 +6217,6 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
         }
     }
     m_f_m4aID3dataAreRead = true;
-    x_ps_free(&data);
     audiofile.seek(0);
     return;
 }
