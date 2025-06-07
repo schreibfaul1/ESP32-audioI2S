@@ -434,38 +434,8 @@ private:
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_realloc(char* ptr, uint16_t len) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_realloc(ptr, len);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
-    }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_strdup(const char* str) {
-        if(!str) {log_e("Input str is NULL"); return NULL;};
-        char* ps_str = NULL;
-        ps_str = (char*)ps_malloc(strlen(str) + 1);
-        if(!ps_str) {log_e("oom, no space for %d bytes", strlen(str) + 1); return NULL;}
-        strcpy(ps_str, str);
-        return ps_str;
-    }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void x_ps_free(char** b){
-        if(*b){free(*b); *b = NULL;}
-    }
-    void x_ps_free_const(const char** b) {
-        if (b && *b) {
-            free((void*)*b); // remove const
-            *b = NULL;
-        }
-    }
-    void x_ps_free(int16_t** b){
-        if(*b){free(*b); *b = NULL;}
-    }
-    void x_ps_free(uint8_t** b){
-        if(*b){free(*b); *b = NULL;}
-    }
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
@@ -715,11 +685,12 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    std::unique_ptr<int16_t[], PsramDeleter> m_outBuff;        // Interleaved L/R
-    std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K; // Interleaved L/R
-    std::unique_ptr<char[],    PsramDeleter> m_chbuf;          // universal buffer
-    std::unique_ptr<char[],    PsramDeleter> m_ibuff;          // used in log_info()
-    std::unique_ptr<char[],    PsramDeleter> m_lastHost;       // Store the last URL to a webstream
+    std::unique_ptr<int16_t[], PsramDeleter> m_outBuff        = nullptr; // Interleaved L/R
+    std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K = nullptr; // Interleaved L/R
+    std::unique_ptr<char[],    PsramDeleter> m_chbuf          = nullptr; // universal buffer
+    std::unique_ptr<char[],    PsramDeleter> m_ibuff          = nullptr; // used in log_info()
+    std::unique_ptr<char[],    PsramDeleter> m_lastHost       = nullptr; // Store the last URL to a webstream
+    std::unique_ptr<char[],    PsramDeleter> m_lastM3U8host   = nullptr;
 
     typedef struct _ID3Hdr{ // used only in readID3header()
         size_t      id3Size;
@@ -758,7 +729,6 @@ private:
     pwsHLS_t pwsHLS;
 
 
-    char*           m_lastM3U8host = NULL;
     char*           m_playlistBuff = NULL;          // stores playlistdata
     ps_ptr<char>    m_speechtxt = NULL;             // stores tts text
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff

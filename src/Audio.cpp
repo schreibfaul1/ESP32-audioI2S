@@ -208,14 +208,11 @@ Audio::Audio(uint8_t i2sPort) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Audio::~Audio() {
-    // I2Sstop(m_i2s_num);
-    // InBuff.~AudioBuffer(); #215 the AudioBuffer is automatically destroyed by the destructor
+    stopSong();
     setDefaults();
 
     i2s_channel_disable(m_i2s_tx_handle);
     i2s_del_channel(m_i2s_tx_handle);
-    x_ps_free(&m_lastM3U8host);
-
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
     vSemaphoreDelete(mutex_audioTask);
@@ -243,10 +240,9 @@ esp_err_t Audio::I2Sstop() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::zeroI2Sbuff(){
-    uint8_t *buff = (uint8_t*)calloc(128, sizeof(uint8_t)); // From IDF V5 there is no longer the zero_dma_buff() function.
+    auto buff = audio_calloc<uint8_t>(128); // From IDF V5 there is no longer the zero_dma_buff() function.
     size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
-    i2s_channel_preload_data(m_i2s_tx_handle, buff, 128, &bytes_loaded);
-    x_ps_free(&buff);
+    i2s_channel_preload_data(m_i2s_tx_handle, buff.get(), 128, &bytes_loaded);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -269,7 +265,7 @@ void Audio::setDefaults() {
     clientsecure.stop();
     _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
-    x_ps_free(&m_lastM3U8host);
+    m_lastM3U8host.reset();
 
     log_info("buffers freed, free Heap: %lu bytes", (long unsigned int)ESP.getFreeHeap());
 
@@ -2539,7 +2535,7 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 }
                 else { // host == NULL means connect to m3u8 URL
-                    if(m_lastM3U8host) {m_f_reset_m3u8Codec = false; connecttohost(m_lastM3U8host);}
+                    if(m_lastM3U8host) {m_f_reset_m3u8Codec = false; connecttohost(m_lastM3U8host.get());}
                     else               {httpPrint(m_lastHost.get());}      // if url has no first redirection
                     m_dataMode = HTTP_RESPONSE_HEADER;               // we have a new playlist now
                 }
@@ -2828,8 +2824,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 ps_ptr<char> ret = m3u8redirection(&codec);
                 if(ret) {
                     m_m3u8Codec = codec; // can be AAC or MP3
-                    x_ps_free(&m_lastM3U8host);
-                    m_lastM3U8host = strdup(ret.get());
+                    m_lastM3U8host = audio_strdup(ret.get());
                     vector_clear_and_shrink(m_playlistContent);
                     return NULL;
                 }
@@ -2869,8 +2864,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
                     if(m_lastM3U8host) {
-                        tmp = audio_calloc<char>(strlen(m_lastM3U8host) + strlen(m_playlistContent[i].get()) + 1);
-                        strcpy(tmp.get(), m_lastM3U8host);
+                        tmp = audio_calloc<char>(strlen(m_lastM3U8host.get()) + strlen(m_playlistContent[i].get()) + 1);
+                        strcpy(tmp.get(), m_lastM3U8host.get());
                     }
                     else {
                         tmp = audio_calloc<char>(strlen(m_lastHost.get()) + strlen(m_playlistContent[i].get()) + 1);
@@ -3332,8 +3327,8 @@ void Audio::processLocalFile() {
     if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
-        char* afn = NULL;
-        if(audiofile) afn = strdup(audiofile.name()); // store temporary the name
+        ps_ptr<char>afn = nullptr;
+        if(audiofile) afn = audio_strdup(audiofile.name()); // store temporary the name
         stopSong();
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -3342,9 +3337,8 @@ exit:
         m_codec = CODEC_NONE;
 
         if(afn) {
-            if(audio_eof_mp3) audio_eof_mp3(afn);
-            log_info("End of file \"%s\"", afn);
-            x_ps_free(&afn);
+            if(audio_eof_mp3) audio_eof_mp3(afn.get());
+            log_info("End of file \"%s\"", afn.get());
         }
         return;
     }
@@ -4447,19 +4441,17 @@ void Audio::showstreamtitle(char* ml) {
     idx2 = indexOf(ml, ";", idx1);
     if(idx1 >= 0 && idx2 > idx1) { // StreamURL found
         uint16_t len = idx2 - idx1;
-        char*    sUrl;
-        sUrl = strndup(ml + idx1, len + 1);
+        auto sUrl = audio_strndup(ml + idx1, len + 1);
         sUrl[len] = '\0';
 
-        while(i < strlen(sUrl)) {
+        while(i < strlen(sUrl.get())) {
             hash += sUrl[i] * i + 1;
             i++;
         }
         if(m_streamTitleHash != hash) {
             m_streamTitleHash = hash;
-            log_info("%.*s", m_ibuffSize, sUrl);
+            log_info("%.*s", m_ibuffSize, sUrl.get());
         }
-        x_ps_free(&sUrl);
     }
 
     idx1 = indexOf(ml, "adw_ad=", 0);
@@ -4468,15 +4460,13 @@ void Audio::showstreamtitle(char* ml) {
         idx2 = indexOf(ml, ";", idx1);
         if(idx1 >= 0 && idx2 > idx1) {
             uint16_t len = idx2 - idx1;
-            char*    sAdv;
-            sAdv = strndup(ml + idx1, len + 1);
+            auto sAdv = audio_strndup(ml + idx1, len + 1);
             sAdv[len] = '\0';
-            log_info("%s", sAdv);
+            log_info("%s", sAdv.get());
             uint8_t pos = 21;                                                 // remove "StreamTitle="
             if(sAdv[pos] == '\'') pos++;                                      // remove leading  \'
-            if(sAdv[strlen(sAdv) - 1] == '\'') sAdv[strlen(sAdv) - 1] = '\0'; // remove trailing \'
-            if(audio_commercial) audio_commercial(sAdv + pos);
-            x_ps_free(&sAdv);
+            if(sAdv[strlen(sAdv.get()) - 1] == '\'') sAdv[strlen(sAdv.get()) - 1] = '\0'; // remove trailing \'
+            if(audio_commercial) audio_commercial(sAdv.get() + pos);
         }
     }
 }
