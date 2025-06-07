@@ -483,9 +483,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint32_t timestamp     = 0;     // timeout surveillance
     uint16_t hostwoext_begin = 0;
 
-    ps_ptr<char> h_host;
-    char*        rqh           = NULL;  // request header
-    char*        toEncode      = NULL;  // temporary memory for base64 encoding
+    ps_ptr<char> h_host        = nullptr;
+    ps_ptr<char> rqh           = nullptr;  // request header
+    char*        toEncode      = nullptr;  // temporary memory for base64 encoding
 
 
 //    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
@@ -497,14 +497,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // optional basic authorization
     if(user && pwd) authLen = strlen(user) + strlen(pwd);
-    char authorization[base64_encode_expected_len(authLen + 1) + 1];
+    auto authorization = audio_malloc<char>(base64_encode_expected_len(authLen + 1) + 1);
     authorization[0] = '\0';
     if(authLen > 0) {
-        char toEncode[authLen + 4];
-        strcpy(toEncode, user);
-        strcat(toEncode, ":");
-        strcat(toEncode, pwd);
-        b64encode((const char*)toEncode, strlen(toEncode), authorization);
+        auto toEncode = audio_malloc<char>(authLen + 4);
+        strcpy(toEncode.get(), user);
+        strcat(toEncode.get(), ":");
+        strcat(toEncode.get(), pwd);
+        b64encode((const char*)toEncode.get(), strlen(toEncode.get()), authorization.get());
     }
 
     if (host == NULL)              { log_info("Hostaddress is empty");     stopSong(); goto exit;}
@@ -532,24 +532,24 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host[pos_colon] = '\0';
     }
     setDefaults();
-    rqh = (char*)x_ps_calloc(lenHost + strlen(authorization) + 330, 1); // http request header
+    rqh = audio_calloc<char>(lenHost + strlen(authorization.get()) + 330); // http request header
     if(!rqh) {log_info("out of memory"); stopSong(); goto exit;}
 
-                       strcat(rqh, "GET /");
-    if(pos_slash > 0){ strcat(rqh, h_host.get() + pos_slash + 1);}
-                       strcat(rqh, " HTTP/1.1\r\n");
-                       strcat(rqh, "Host: ");
-                       strcat(rqh, h_host.get() + hostwoext_begin);
-                       strcat(rqh, "\r\n");
-                       strcat(rqh, "Icy-MetaData:1\r\n");
-                       strcat(rqh, "Icy-MetaData:2\r\n");
-                       strcat(rqh, "Accept:*/*\r\n");
-                       strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
-    if(authLen > 0) {  strcat(rqh, "Authorization: Basic ");
-                       strcat(rqh, authorization);
-                       strcat(rqh, "\r\n"); }
-                       strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
-                       strcat(rqh, "Connection: keep-alive\r\n\r\n");
+                       strcat(rqh.get(), "GET /");
+    if(pos_slash > 0){ strcat(rqh.get(), h_host.get() + pos_slash + 1);}
+                       strcat(rqh.get(), " HTTP/1.1\r\n");
+                       strcat(rqh.get(), "Host: ");
+                       strcat(rqh.get(), h_host.get() + hostwoext_begin);
+                       strcat(rqh.get(), "\r\n");
+                       strcat(rqh.get(), "Icy-MetaData:1\r\n");
+                       strcat(rqh.get(), "Icy-MetaData:2\r\n");
+                       strcat(rqh.get(), "Accept:*/*\r\n");
+                       strcat(rqh.get(), "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+    if(authLen > 0) {  strcat(rqh.get(), "Authorization: Basic ");
+                       strcat(rqh.get(), authorization.get());
+                       strcat(rqh.get(), "\r\n"); }
+                       strcat(rqh.get(), "Accept-Encoding: identity;q=1,*;q=0\r\n");
+                       strcat(rqh.get(), "Connection: keep-alive\r\n\r\n");
 
     if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
     else        { _client = static_cast<WiFiClient*>(&client); }
@@ -571,7 +571,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         m_lastHost = audio_strdup(c_host);
         log_info("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
-        _client->print(rqh);
+        _client->print(rqh.get());
         if(endsWith(h_host.get(), ".mp3" ))      m_expectedCodec  = CODEC_MP3;
         if(endsWith(h_host.get(), ".aac" ))      m_expectedCodec  = CODEC_AAC;
         if(endsWith(h_host.get(), ".wav" ))      m_expectedCodec  = CODEC_WAV;
@@ -600,9 +600,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
 exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
-    x_ps_free(&c_host);
-    x_ps_free(&rqh);
-    x_ps_free(&toEncode);
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -894,37 +891,35 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
         return false;
     }
 
-    char* req = (char*)x_ps_calloc(strlen(urlStr.get()) + 200, sizeof(char)); // request header
-    strcat(req, "GET ");
-    strcat(req, path);
-    strcat(req, "?ie=UTF-8&tl=");
-    strcat(req, lang);
-    strcat(req, "&client=tw-ob&q=");
-    strcat(req, urlStr.get());
-    strcat(req, " HTTP/1.1\r\n");
-    strcat(req, "Host: ");
-    strcat(req, host);
-    strcat(req, "\r\n");
-    strcat(req, "User-Agent: Mozilla/5.0 \r\n");
-    strcat(req, "Accept-Encoding: identity\r\n");
-    strcat(req, "Accept: text/html\r\n");
-    strcat(req, "Connection: close\r\n\r\n");
+    auto req = audio_calloc<char>(strlen(urlStr.get()) + 200); // request header
+    strcat(req.get(), "GET ");
+    strcat(req.get(), path);
+    strcat(req.get(), "?ie=UTF-8&tl=");
+    strcat(req.get(), lang);
+    strcat(req.get(), "&client=tw-ob&q=");
+    strcat(req.get(), urlStr.get());
+    strcat(req.get(), " HTTP/1.1\r\n");
+    strcat(req.get(), "Host: ");
+    strcat(req.get(), host);
+    strcat(req.get(), "\r\n");
+    strcat(req.get(), "User-Agent: Mozilla/5.0 \r\n");
+    strcat(req.get(), "Accept-Encoding: identity\r\n");
+    strcat(req.get(), "Accept: text/html\r\n");
+    strcat(req.get(), "Connection: close\r\n\r\n");
 
     _client = static_cast<WiFiClient*>(&client);
     log_info("connect to \"%s\"", host);
     if(!_client->connect(host, 80)) {
         log_e("Connection failed");
-        x_ps_free(&req);
         xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
-    _client->print(req);
+    _client->print(req.get());
 
     m_f_running = true;
     m_f_ssl = false;
     m_f_tts = true;
     m_dataMode = HTTP_RESPONSE_HEADER;
-    x_ps_free(&req);
     m_lastHost = audio_strdup(host);
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
@@ -2871,7 +2866,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 if(startsWith(m_playlistContent[i], "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
                 if(i == lines) continue; // and exit for()
 
-                char* tmp = nullptr;
+                ps_ptr<char> tmp = nullptr;
                 if(!startsWith(m_playlistContent[i], "http")) {
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
@@ -2879,12 +2874,12 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
                     if(m_lastM3U8host) {
-                        tmp = (char*)x_ps_calloc(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1, sizeof(char));
-                        strcpy(tmp, m_lastM3U8host);
+                        tmp = audio_calloc<char>(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1);
+                        strcpy(tmp.get(), m_lastM3U8host);
                     }
                     else {
-                        tmp = (char*)x_ps_calloc(strlen(m_lastHost.get()) + strlen(m_playlistContent[i]) + 1, sizeof(char));
-                        strcpy(tmp, m_lastHost.get());
+                        tmp = audio_calloc<char>(strlen(m_lastHost.get()) + strlen(m_playlistContent[i]) + 1);
+                        strcpy(tmp.get(), m_lastHost.get());
                     }
 
                     if(m_playlistContent[i][0] != '/'){
@@ -2893,9 +2888,9 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  chunklist:  ddd.aac                              // m_playlistContent[i]
                         //  result:     http://station.com/aaa/bbb/ddd.aac   // m_playlistContent[i]
 
-                        int idx = lastIndexOf(tmp, "/");
+                        int idx = lastIndexOf(tmp.get(), "/");
                         tmp[idx  + 1] = '\0';
-                        strcat(tmp, m_playlistContent[i]);
+                        strcat(tmp.get(), m_playlistContent[i]);
                     }
                     else{
 
@@ -2903,52 +2898,49 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  chunklist:  /aaa/bbb/ddd.aac
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
-                        int idx = indexOf(tmp, "/", 8);
+                        int idx = indexOf(tmp.get(), "/", 8);
                         tmp[idx] = '\0';
-                        strcat(tmp, m_playlistContent[i]);
+                        strcat(tmp.get(), m_playlistContent[i]);
                     }
                 }
-                else { tmp = strdup(m_playlistContent[i]); }
+                else { tmp = audio_strdup(m_playlistContent[i]); }
 
                 if(f_mediaSeq_found) {
                     lltoa(xMedSeq, llasc, 10);
-                    if(indexOf(tmp, llasc) > 0) {
-                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                    if(indexOf(tmp.get(), llasc) > 0) {
+                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
                         xMedSeq++;
                     }
                     else{
                         lltoa(xMedSeq + 1, llasc, 10);
-                        if(indexOf(tmp, llasc) > 0) {
-                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                        if(indexOf(tmp.get(), llasc) > 0) {
+                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
                             log_w("mediaseq %llu skipped", xMedSeq);
                             xMedSeq+= 2;
                         }
                     }
                 }
                 else { // without mediaSeqNr, with hash
-                    uint32_t hash = simpleHash(tmp);
+                    uint32_t hash = simpleHash(tmp.get());
                     if(m_hashQueue.size() == 0) {
                         m_hashQueue.insert(m_hashQueue.begin(), hash);
-                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
                     }
                     else {
                         bool known = false;
                         for(int i = 0; i < m_hashQueue.size(); i++) {
                             if(hash == m_hashQueue[i]) {
-                                if(m_f_Log) log_i("file already known %s", tmp);
+                                // log_i("file already known %s", tmp);
                                 known = true;
                             }
                         }
                         if(!known) {
                             m_hashQueue.insert(m_hashQueue.begin(), hash);
-                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp));
+                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
                         }
                     }
                     if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
                 }
-
-                x_ps_free(&tmp);
-
                 continue;
             }
         }
