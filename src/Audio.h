@@ -500,7 +500,7 @@ private:
     // Request memory for an array of T
     template <typename T>
     std::unique_ptr<T[], PsramDeleter> audio_calloc(std::size_t count) {
-        T* raw = static_cast<T*>(ps_calloc(count, sizeof(T)));
+        T* raw = static_cast<T*>(ps_calloc(sizeof(T) * count, sizeof(char)));
         if (!raw) {
             log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
         }
