@@ -473,7 +473,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
     bool     res           = false; // return value
-    char*    c_host        = NULL;  // copy of host
     uint16_t lenHost       = 0;     // length of hostname
     uint16_t port          = 0;     // port number
     uint16_t authLen       = 0;     // length of authorization
@@ -483,10 +482,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint32_t timestamp     = 0;     // timeout surveillance
     uint16_t hostwoext_begin = 0;
 
+    ps_ptr<char> c_host        = nullptr;  // copy of host
     ps_ptr<char> h_host        = nullptr;
     ps_ptr<char> rqh           = nullptr;  // request header
-    char*        toEncode      = nullptr;  // temporary memory for base64 encoding
-
 
 //    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
 //        |   |                                     |    |                              |
@@ -510,8 +508,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if (host == NULL)              { log_info("Hostaddress is empty");     stopSong(); goto exit;}
     if (strlen(host) > 2048)       { log_info("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
 
-    c_host = x_ps_strdup(host); // make a copy
-    h_host = urlencode(c_host, true);
+    c_host = audio_strdup(host); // make a copy
+    h_host = urlencode(c_host.get(), true);
 
     trim(h_host.get());  // remove leading and trailing spaces
     lenHost = strlen(h_host.get());
@@ -528,7 +526,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(pos_slash > 0) h_host[pos_slash] = '\0';
     if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(c_host + pos_colon + 1);   // Get portnumber as integer
+        port = atoi(c_host.get() + pos_colon + 1);   // Get portnumber as integer
         h_host[pos_colon] = '\0';
     }
     setDefaults();
@@ -568,7 +566,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(res) {
         uint32_t dt = millis() - timestamp;
-        m_lastHost = audio_strdup(c_host);
+        m_lastHost = audio_strdup(c_host.get());
         log_info("%s has been established in %lu ms, free Heap: %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt, (long unsigned int)ESP.getFreeHeap());
         m_f_running = true;
         _client->print(rqh.get());
@@ -590,7 +588,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         m_streamType = ST_WEBSTREAM;
     }
     else {
-        log_info("Request %s failed!", c_host);
+        log_info("Request %s failed!", c_host.get());
         m_f_running = false;
         if(audio_showstation) audio_showstation("");
         if(audio_showstreamtitle) audio_showstreamtitle("");
@@ -1095,8 +1093,7 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
         if(isUTF8 == true) return true; // is UTF-8, do nothing
     }
 
-    char* iso8859_1 = x_ps_strdup(buff);
-    if(!iso8859_1){log_e("oom"); return false;}
+    auto iso8859_1 = audio_strdup(buff);
 
     while(iso8859_1[in] != '\0'){
         if(iso8859_1[in] < 0x80){
@@ -1115,11 +1112,9 @@ bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
         }
     }
     buff[out] = '\0';
-    x_ps_free(&iso8859_1);
     return true;
 
 exit:
-    x_ps_free(&iso8859_1);
     return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2624,7 +2619,7 @@ bool Audio::readPlayListData() {
 
             if(ctime + timeout < millis()) {
                 log_e("timeout");
-                for(int i = 0; i < m_playlistContent.size(); i++) log_e("pl%i = %s", i, m_playlistContent[i]);
+                for(int i = 0; i < m_playlistContent.size(); i++) log_e("pl%i = %s", i, m_playlistContent[i].get());
                 goto exit;
             }
         } // inner while
@@ -2637,7 +2632,7 @@ bool Audio::readPlayListData() {
             log_info("url is a webpage!");
             goto exit;
         }
-        if(strlen(pl) > 0) m_playlistContent.push_back(x_ps_strdup(pl));
+        if(strlen(pl) > 0) m_playlistContent.push_back(audio_strdup(pl));
         if(!m_f_psramFound && m_playlistContent.size() == 101) {
             log_info("the number of lines in playlist > 100, for bigger playlist use PSRAM!");
             break;
@@ -2678,29 +2673,29 @@ const char* Audio::parsePlaylist_M3U() {
     char*   host = nullptr;
 
     for(int i = 0; i < lines; i++) {
-        if(indexOf(m_playlistContent[i], "#EXTINF:") >= 0) { // Info?
-            pos = indexOf(m_playlistContent[i], ",");        // Comma in this line?
+        if(indexOf(m_playlistContent[i].get(), "#EXTINF:") >= 0) { // Info?
+            pos = indexOf(m_playlistContent[i].get(), ",");        // Comma in this line?
             if(pos > 0) {
                 // Show artist and title if present in metadata
-                log_info(m_playlistContent[i] + pos + 1);
+                log_info(m_playlistContent[i].get() + pos + 1);
             }
             continue;
         }
-        if(startsWith(m_playlistContent[i], "#")) { // Commentline?
+        if(startsWith(m_playlistContent[i].get(), "#")) { // Commentline?
             continue;
         }
 
-        pos = indexOf(m_playlistContent[i], "http://:@", 0); // ":@"??  remove that!
+        pos = indexOf(m_playlistContent[i].get(), "http://:@", 0); // ":@"??  remove that!
         if(pos >= 0) {
-            log_info("Entry in playlist found: %s", (m_playlistContent[i] + pos + 9));
-            host = m_playlistContent[i] + pos + 9;
+            log_info("Entry in playlist found: %s", (m_playlistContent[i].get() + pos + 9));
+            host = m_playlistContent[i].get() + pos + 9;
             break;
         }
         // log_info("Entry in playlist found: %s", pl);
-        pos = indexOf(m_playlistContent[i], "http", 0); // Search for "http"
+        pos = indexOf(m_playlistContent[i].get(), "http", 0); // Search for "http"
         if(pos >= 0) {                                  // Does URL contain "http://"?
                                                         //    log_e("%s pos=%i", m_playlistContent[i], pos);
-            host = m_playlistContent[i] + pos;          // Yes, set new host
+            host = m_playlistContent[i].get() + pos;          // Yes, set new host
             break;
         }
     }
@@ -2715,30 +2710,30 @@ const char* Audio::parsePlaylist_PLS() {
 
     for(int i = 0; i < lines; i++) {
         if(i == 0) {
-            if(strlen(m_playlistContent[0]) == 0) goto exit;      // empty line
-            if(strcmp(m_playlistContent[0], "[playlist]") != 0) { // first entry in valid pls
+            if(strlen(m_playlistContent[0].get()) == 0) goto exit;      // empty line
+            if(strcmp(m_playlistContent[0].get(), "[playlist]") != 0) { // first entry in valid pls
                 m_dataMode = HTTP_RESPONSE_HEADER;                // pls is not valid
                 log_info("pls is not valid, switch to HTTP_RESPONSE_HEADER");
                 goto exit;
             }
             continue;
         }
-        if(startsWith(m_playlistContent[i], "File1")) {
+        if(startsWith(m_playlistContent[i].get(), "File1")) {
             if(host) continue;                              // we have already a url
-            pos = indexOf(m_playlistContent[i], "http", 0); // File1=http://streamplus30.leonex.de:14840/;
+            pos = indexOf(m_playlistContent[i].get(), "http", 0); // File1=http://streamplus30.leonex.de:14840/;
             if(pos >= 0) {                                  // yes, URL contains "http"?
-                host = m_playlistContent[i] + pos;          // Now we have an URL for a stream in host.
+                host = m_playlistContent[i].get() + pos;          // Now we have an URL for a stream in host.
             }
             continue;
         }
-        if(startsWith(m_playlistContent[i], "Title1")) { // Title1=Antenne Tirol
-            const char* plsStationName = (m_playlistContent[i] + 7);
+        if(startsWith(m_playlistContent[i].get(), "Title1")) { // Title1=Antenne Tirol
+            const char* plsStationName = (m_playlistContent[i].get() + 7);
             if(audio_showstation) audio_showstation(plsStationName);
             log_info("StationName: \"%s\"", plsStationName);
             continue;
         }
-        if(startsWith(m_playlistContent[i], "Length1")) { continue; }
-        if(indexOf(m_playlistContent[i], "Invalid username") >= 0) { // Unable to access account:
+        if(startsWith(m_playlistContent[i].get(), "Length1")) { continue; }
+        if(indexOf(m_playlistContent[i].get(), "Invalid username") >= 0) { // Unable to access account:
             goto exit;                                               // Invalid username or password
         }
     }
@@ -2759,25 +2754,25 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     char*   host = nullptr;
 
     for(int i = 0; i < lines; i++) {
-        int p1 = indexOf(m_playlistContent[i], "<", 0);
-        int p2 = indexOf(m_playlistContent[i], ">", 1);
+        int p1 = indexOf(m_playlistContent[i].get(), "<", 0);
+        int p2 = indexOf(m_playlistContent[i].get(), ">", 1);
         if(p1 >= 0 && p2 > p1) { // #196 set all between "< ...> to lowercase
             for(uint8_t j = p1; j < p2; j++) { m_playlistContent[i][j] = toLowerCase(m_playlistContent[i][j]); }
         }
-        if(indexOf(m_playlistContent[i], "<entry>") >= 0) f_entry = true; // found entry tag (returns -1 if not found)
+        if(indexOf(m_playlistContent[i].get(), "<entry>") >= 0) f_entry = true; // found entry tag (returns -1 if not found)
         if(f_entry) {
-            if(indexOf(m_playlistContent[i], "ref href") > 0) { //  <ref href="http://87.98.217.63:24112/stream" />
-                pos = indexOf(m_playlistContent[i], "http", 0);
+            if(indexOf(m_playlistContent[i].get(), "ref href") > 0) { //  <ref href="http://87.98.217.63:24112/stream" />
+                pos = indexOf(m_playlistContent[i].get(), "http", 0);
                 if(pos > 0) {
-                    host = (m_playlistContent[i] + pos); // http://87.98.217.63:24112/stream" />
+                    host = (m_playlistContent[i].get() + pos); // http://87.98.217.63:24112/stream" />
                     int pos1 = indexOf(host, "\"", 0);   // http://87.98.217.63:24112/stream
                     if(pos1 > 0) host[pos1] = '\0';      // Now we have an URL for a stream in host.
                 }
             }
         }
-        pos = indexOf(m_playlistContent[i], "<title>", 0);
+        pos = indexOf(m_playlistContent[i].get(), "<title>", 0);
         if(pos >= 0) {
-            char* plsStationName = (m_playlistContent[i] + pos + 7); // remove <Title>
+            char* plsStationName = (m_playlistContent[i].get() + pos + 7); // remove <Title>
             pos = indexOf(plsStationName, "</", 0);
             if(pos >= 0) {
                 *(plsStationName + pos) = 0; // remove </Title>
@@ -2786,8 +2781,8 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
             log_info("StationName: \"%s\"", plsStationName);
         }
 
-        if(indexOf(m_playlistContent[i], "http") == 0 && !f_entry) { // url only in asx
-            host = m_playlistContent[i];
+        if(indexOf(m_playlistContent[i].get(), "http") == 0 && !f_entry) { // url only in asx
+            host = m_playlistContent[i].get();
         }
     }
     return host;
@@ -2821,14 +2816,14 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if(lines) {
         for(uint16_t i = 0; i < lines; i++) {
-            if(strlen(m_playlistContent[i]) == 0) continue; // empty line
-            if(startsWith(m_playlistContent[i], "#EXTM3U")) {
+            if(strlen(m_playlistContent[i].get()) == 0) continue; // empty line
+            if(startsWith(m_playlistContent[i].get(), "#EXTM3U")) {
                 f_begin = true;
                 continue;
             } // what we expected
             if(!f_begin) continue;
 
-            if(startsWith(m_playlistContent[i], "#EXT-X-STREAM-INF:")) {
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-STREAM-INF:")) {
                 uint8_t codec = CODEC_NONE;
                 ps_ptr<char> ret = m3u8redirection(&codec);
                 if(ret) {
@@ -2843,11 +2838,11 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
             // "#EXT-X-DISCONTINUITY-SEQUENCE: // not used, 0: seek for continuity numbers, is sometimes not set
             // "#EXT-X-MEDIA-SEQUENCE:"        // not used, is unreliable
-            if(startsWith(m_playlistContent[i], "#EXT-X-VERSION:")) continue;
-            if(startsWith(m_playlistContent[i], "#EXT-X-ALLOW-CACHE:")) continue;
-            if(startsWith(m_playlistContent[i], "##")) continue;
-            if(startsWith(m_playlistContent[i], "#EXT-X-INDEPENDENT-SEGMENTS")) continue;
-            if(startsWith(m_playlistContent[i], "#EXT-X-PROGRAM-DATE-TIME:")) continue;
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-VERSION:")) continue;
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-ALLOW-CACHE:")) continue;
+            if(startsWith(m_playlistContent[i].get(), "##")) continue;
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-INDEPENDENT-SEGMENTS")) continue;
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-PROGRAM-DATE-TIME:")) continue;
 
             if(!f_mediaSeq_found) {
                 xMedSeq = m3u8_findMediaSeqInURL();
@@ -2859,26 +2854,26 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 else f_mediaSeq_found = true;
             }
 
-            if(startsWith(m_playlistContent[i], "#EXTINF")) {
+            if(startsWith(m_playlistContent[i].get(), "#EXTINF")) {
                 f_EXTINF_found = true;
-                if(STfromEXTINF(m_playlistContent[i])) { showstreamtitle(m_chbuf.get()); }
+                if(STfromEXTINF(m_playlistContent[i].get())) { showstreamtitle(m_chbuf.get()); }
                 i++;
-                if(startsWith(m_playlistContent[i], "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
+                if(startsWith(m_playlistContent[i].get(), "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
                 if(i == lines) continue; // and exit for()
 
                 ps_ptr<char> tmp = nullptr;
-                if(!startsWith(m_playlistContent[i], "http")) {
+                if(!startsWith(m_playlistContent[i].get(), "http")) {
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                         //  chunklist:  http://station.com/aaa/bbb/ddd.aac
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
                     if(m_lastM3U8host) {
-                        tmp = audio_calloc<char>(strlen(m_lastM3U8host) + strlen(m_playlistContent[i]) + 1);
+                        tmp = audio_calloc<char>(strlen(m_lastM3U8host) + strlen(m_playlistContent[i].get()) + 1);
                         strcpy(tmp.get(), m_lastM3U8host);
                     }
                     else {
-                        tmp = audio_calloc<char>(strlen(m_lastHost.get()) + strlen(m_playlistContent[i]) + 1);
+                        tmp = audio_calloc<char>(strlen(m_lastHost.get()) + strlen(m_playlistContent[i].get()) + 1);
                         strcpy(tmp.get(), m_lastHost.get());
                     }
 
@@ -2890,7 +2885,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
                         int idx = lastIndexOf(tmp.get(), "/");
                         tmp[idx  + 1] = '\0';
-                        strcat(tmp.get(), m_playlistContent[i]);
+                        strcat(tmp.get(), m_playlistContent[i].get());
                     }
                     else{
 
@@ -2900,21 +2895,21 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
                         int idx = indexOf(tmp.get(), "/", 8);
                         tmp[idx] = '\0';
-                        strcat(tmp.get(), m_playlistContent[i]);
+                        strcat(tmp.get(), m_playlistContent[i].get());
                     }
                 }
-                else { tmp = audio_strdup(m_playlistContent[i]); }
+                else { tmp = audio_strdup(m_playlistContent[i].get()); }
 
                 if(f_mediaSeq_found) {
                     lltoa(xMedSeq, llasc, 10);
                     if(indexOf(tmp.get(), llasc) > 0) {
-                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
+                        m_playlistURL.insert(m_playlistURL.begin(), audio_strdup(tmp.get()));
                         xMedSeq++;
                     }
                     else{
                         lltoa(xMedSeq + 1, llasc, 10);
                         if(indexOf(tmp.get(), llasc) > 0) {
-                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
+                            m_playlistURL.insert(m_playlistURL.begin(), audio_strdup(tmp.get()));
                             log_w("mediaseq %llu skipped", xMedSeq);
                             xMedSeq+= 2;
                         }
@@ -2924,7 +2919,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                     uint32_t hash = simpleHash(tmp.get());
                     if(m_hashQueue.size() == 0) {
                         m_hashQueue.insert(m_hashQueue.begin(), hash);
-                        m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
+                        m_playlistURL.insert(m_playlistURL.begin(), audio_strdup(tmp.get()));
                     }
                     else {
                         bool known = false;
@@ -2936,7 +2931,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         }
                         if(!known) {
                             m_hashQueue.insert(m_hashQueue.begin(), hash);
-                            m_playlistURL.insert(m_playlistURL.begin(), strdup(tmp.get()));
+                            m_playlistURL.insert(m_playlistURL.begin(), audio_strdup(tmp.get()));
                         }
                     }
                     if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
@@ -2950,9 +2945,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     if(m_playlistURL.size() > 0) {
         ps_ptr<char>m_playlistBuff = nullptr;
         if(m_playlistURL[m_playlistURL.size() - 1]) {
-            m_playlistBuff = audio_strdup(m_playlistURL[m_playlistURL.size() - 1]);
-            x_ps_free(&m_playlistURL[m_playlistURL.size() - 1]);
-            m_playlistURL.pop_back();
+            m_playlistBuff = audio_strdup(m_playlistURL[m_playlistURL.size() - 1].get());
+            // m_playlistURL.pop_back();
             m_playlistURL.shrink_to_fit();
         }
         if(m_f_Log) log_i("now playing %s", m_playlistBuff);
@@ -3032,10 +3026,10 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     int8_t   cS = 100;
 
     for(uint16_t i = 0; i < plcSize; i++) { // looking for lowest codeString
-        int16_t posCodec = indexOf(m_playlistContent[i], "CODECS=\"mp4a");
+        int16_t posCodec = indexOf(m_playlistContent[i].get(), "CODECS=\"mp4a");
         if(posCodec > 0){
             for (uint8_t j = 0; j < 9; j++) {
-                if (indexOf(m_playlistContent[i], codecString[j]) > 0) {
+                if (indexOf(m_playlistContent[i].get(), codecString[j]) > 0) {
                     if (j < cS) {
                         cS = j;
                         choosenLine = i;
@@ -3052,11 +3046,11 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     if(cS == 100) {                             // "mp4a.xx.xx" not found
         *codec = CODEC_AAC;                     // assume AAC
         for(uint16_t i = 0; i < plcSize; i++) { // we have no codeString, looking for "http"
-            if(startsWith(m_playlistContent[i], "http")) choosenLine = i;
+            if(startsWith(m_playlistContent[i].get(), "http")) choosenLine = i;
         }
     }
 
-    const char* line = m_playlistContent[choosenLine];
+    const char* line = m_playlistContent[choosenLine].get();
     ps_ptr<char> result;
 
     if(!startsWith(line, "http")) {
@@ -3128,19 +3122,19 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
             m_linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
             m_linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
 
-    std::vector<char*> m_linesWithSeqNr;
+    std::vector<ps_ptr<char>> m_linesWithSeqNr;
     bool addNextLine = false;
     int idx = -1;
     for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
     //  log_w("pl%i = %s", i, m_playlistContent[i]);
-        if(!startsWith(m_playlistContent[i], "#EXTINF:") && addNextLine) {
-            m_linesWithSeqNr[idx] = x_ps_realloc(m_linesWithSeqNr[idx], strlen(m_linesWithSeqNr[idx]) + strlen(m_playlistContent[i]) + 1);
-            if(!m_linesWithSeqNr[idx]) { log_e("realloc failed"); return UINT64_MAX; }
-            strcat(m_linesWithSeqNr[idx], m_playlistContent[i]);
+        if(!startsWith(m_playlistContent[i].get(), "#EXTINF:") && addNextLine) {
+            size_t len = strlen(m_linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
+            m_linesWithSeqNr[idx] = audio_realloc(std::move(m_linesWithSeqNr[idx]), len);
+            strcat(m_linesWithSeqNr[idx].get(), m_playlistContent[i].get());
         }
-        if(startsWith(m_playlistContent[i], "#EXTINF:")) {
+        if(startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
             idx++;
-            m_linesWithSeqNr.push_back(x_ps_strdup(m_playlistContent[i]));
+            m_linesWithSeqNr.push_back(audio_strdup(m_playlistContent[i].get()));
             addNextLine = true;
         }
     }
@@ -3160,8 +3154,8 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
     // go back to first digit:                                                        ∧
 
 
-    int16_t len = strlen(m_linesWithSeqNr[0]) - 1;
-    int16_t qm = indexOf(m_linesWithSeqNr[0], "?", 0);
+    int16_t len = strlen(m_linesWithSeqNr[0].get()) - 1;
+    int16_t qm = indexOf(m_linesWithSeqNr[0].get(), "?", 0);
     if(qm > 0) len = qm; // If we find a question mark, look to the left of it
 
     char*    pEnd;
@@ -3173,14 +3167,14 @@ result:     m_linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DA
             while(isdigit(m_linesWithSeqNr[0][pos])) pos--;
             pos++;
             uint64_t a, b, c;
-            a = strtoull(m_linesWithSeqNr[0] + pos, &pEnd, 10);
+            a = strtoull(m_linesWithSeqNr[0].get() + pos, &pEnd, 10);
             b = a + 1;
             c = b + 1;
             lltoa(b, llasc, 10);
-            int16_t idx_b = indexOf(m_linesWithSeqNr[1], llasc, pos - 1);
+            int16_t idx_b = indexOf(m_linesWithSeqNr[1].get(), llasc, pos - 1);
             while(m_linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
             lltoa(c, llasc, 10);
-            int16_t idx_c = indexOf(m_linesWithSeqNr[2], llasc, pos - 1);
+            int16_t idx_c = indexOf(m_linesWithSeqNr[2].get(), llasc, pos - 1);
             while(m_linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
             if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;

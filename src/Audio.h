@@ -415,16 +415,9 @@ private:
         return false;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void vector_clear_and_shrink(std::vector<char*>&vec){
-        uint size = vec.size();
-        for (int i = 0; i < size; i++) {
-            if(vec[i]){
-                free(vec[i]);
-                vec[i] = NULL;
-            }
-        }
-        vec.clear();
-        vec.shrink_to_fit();
+    void vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec){
+        vec.clear();            // unique_ptr takes care of free()
+        vec.shrink_to_fit();    // put back memory
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
@@ -437,19 +430,9 @@ private:
         return hash;
 	  }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_malloc(uint32_t len) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_malloc(len);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
-    }
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_calloc(uint32_t len, uint8_t size) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_calloc(len, size);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
-    }
+
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     char* x_ps_realloc(char* ptr, uint16_t len) {
         char* ps_str = NULL;
@@ -484,7 +467,6 @@ private:
     }
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
 
 
     // Request memory for an array of T
@@ -557,6 +539,30 @@ private:
 
         return ps_str;
     }
+
+    ps_ptr<char> audio_realloc(ps_ptr<char> old_ptr, size_t new_size) {
+        if (new_size == 0) {
+            return nullptr;
+        }
+
+        auto new_ptr = audio_malloc<char>(new_size);
+        if (!new_ptr) {
+            log_e("audio_realloc_: OOM for %zu bytes", new_size);
+            return nullptr;
+        }
+
+        if (old_ptr) {
+            size_t len = strlen(old_ptr.get());
+            size_t copy_len = std::min(len, new_size - 1);
+            memcpy(new_ptr.get(), old_ptr.get(), copy_len);
+            new_ptr[copy_len] = '\0';
+        } else {
+            new_ptr[0] = '\0';
+        }
+
+        return new_ptr;
+    }
+
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
@@ -691,9 +697,9 @@ private:
 
 #pragma GCC diagnostic pop
 
-    std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
-    std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
-    std::vector<uint32_t> m_hashQueue;
+    std::vector<ps_ptr<char>> m_playlistContent;  // m3u8 playlist buffer
+    std::vector<ps_ptr<char>> m_playlistURL;      // m3u8 streamURLs buffer
+    std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;
     const size_t    m_frameSizeMP3       = 1600;
