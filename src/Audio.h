@@ -46,7 +46,6 @@ extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
-extern __attribute__((weak)) void audio_log(uint8_t logLevel, const char* msg, const char* arg);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -124,6 +123,18 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
+// ------- UNIQUE_PTR for PSRAM memory management ----------------
+struct PsramDeleter { // PSRAM deleter for Unique_PTR
+    void operator()(void* ptr) const {
+        if (ptr){
+            free(ptr);  // ps_malloc kann mit free freigegeben werden
+        }
+    }
+};
+template<typename T>
+using ps_ptr = std::unique_ptr<T[], PsramDeleter>;
+
+
 class Audio : private AudioBuffer{
 
     AudioBuffer InBuff; // instance of input buffer
@@ -175,121 +186,119 @@ public:
     const char *getVersion() {return audioI2SVers;}
 
 private:
+    // ------- PRIVATE MEMBERS ----------------------------------------
 
-  enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4,
-                  AUDIOLOG_M4A_ATOM_NOT_FOUND = -5,  AUDIOLOG_ERR_UNKNOWN = -127 };
+    void            UTF8toASCII(char* str);
+    bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
+    void            htmlToUTF8(char* str);
+    void            setDefaults(); // free buffers and set defaults
+    void            initInBuff();
+    bool            httpPrint(const char* host);
+    bool            httpRange(const char* host, uint32_t range);
+    void            processLocalFile();
+    void            processWebStream();
+    void            processWebFile();
+    void            processWebStreamTS();
+    void            processWebStreamHLS();
+    void            playAudioData();
+    bool            readPlayListData();
+    const char*     parsePlaylist_M3U();
+    const char*     parsePlaylist_PLS();
+    const char*     parsePlaylist_ASX();
+    ps_ptr<char>    parsePlaylist_M3U8();
+    ps_ptr<char>    m3u8redirection(uint8_t* codec);
+    uint64_t        m3u8_findMediaSeqInURL();
+    bool            STfromEXTINF(char* str);
+    void            showCodecParams();
+    int             findNextSync(uint8_t* data, size_t len);
+    int             sendBytes(uint8_t* data, size_t len);
+    void            setDecoderItems();
+    void            computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
+    void            printDecodeError(int r);
+    void            showID3Tag(const char* tag, const char* val);
+    size_t          readAudioHeader(uint32_t bytes);
+    int             read_WAV_Header(uint8_t* data, size_t len);
+    int             read_FLAC_Header(uint8_t* data, size_t len);
+    int             read_ID3_Header(uint8_t* data, size_t len);
+    int             read_M4A_Header(uint8_t* data, size_t len);
+    size_t          process_m3u8_ID3_Header(uint8_t* packet);
+    bool            setSampleRate(uint32_t hz);
+    bool            setBitsPerSample(int bits);
+    bool            setChannels(int channels);
+    bool            setBitrate(int br);
+    size_t          resampleTo48kStereo(const int16_t* input, size_t inputFrames);
+    void            playChunk();
+    void            computeVUlevel(int16_t sample[2]);
+    void            computeLimit();
+    void            Gain(int16_t* sample);
+    void            showstreamtitle(char* ml);
+    bool            parseContentType(char* ct);
+    bool            parseHttpResponseHeader();
+    bool            initializeDecoder(uint8_t codec);
+    esp_err_t       I2Sstart();
+    esp_err_t       I2Sstop();
+    void            zeroI2Sbuff();
+    void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
+    void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
+    void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+    inline uint32_t streamavail() { return _client ? _client->available() : 0; }
+    void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
+    bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+    uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
+    void            log_info(const char* fmt, ...); // audio_info() message
 
-  void            UTF8toASCII(char* str);
-  bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
-  void            htmlToUTF8(char* str);
-  void            setDefaults(); // free buffers and set defaults
-  void            initInBuff();
-  bool            httpPrint(const char* host);
-  bool            httpRange(const char* host, uint32_t range);
-  void            processLocalFile();
-  void            processWebStream();
-  void            processWebFile();
-  void            processWebStreamTS();
-  void            processWebStreamHLS();
-  void            playAudioData();
-  bool            readPlayListData();
-  const char*     parsePlaylist_M3U();
-  const char*     parsePlaylist_PLS();
-  const char*     parsePlaylist_ASX();
-  const char*     parsePlaylist_M3U8();
-  const char*     m3u8redirection(uint8_t* codec);
-  uint64_t        m3u8_findMediaSeqInURL();
-  bool            STfromEXTINF(char* str);
-  void            showCodecParams();
-  int             findNextSync(uint8_t* data, size_t len);
-  int             sendBytes(uint8_t* data, size_t len);
-  void            setDecoderItems();
-  void            computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
-  void            printProcessLog(int r, const char* s = "");
-  void            printDecodeError(int r);
-  void            showID3Tag(const char* tag, const char* val);
-  size_t          readAudioHeader(uint32_t bytes);
-  int             read_WAV_Header(uint8_t* data, size_t len);
-  int             read_FLAC_Header(uint8_t* data, size_t len);
-  int             read_ID3_Header(uint8_t* data, size_t len);
-  int             read_M4A_Header(uint8_t* data, size_t len);
-  size_t          process_m3u8_ID3_Header(uint8_t* packet);
-  bool            setSampleRate(uint32_t hz);
-  bool            setBitsPerSample(int bits);
-  bool            setChannels(int channels);
-  bool            setBitrate(int br);
-  size_t          resampleTo48kStereo(const int16_t* input, size_t inputFrames);
-  void            playChunk();
-  void            computeVUlevel(int16_t sample[2]);
-  void            computeLimit();
-  void            Gain(int16_t* sample);
-  void            showstreamtitle(char* ml);
-  bool            parseContentType(char* ct);
-  bool            parseHttpResponseHeader();
-  bool            initializeDecoder(uint8_t codec);
-  esp_err_t       I2Sstart();
-  esp_err_t       I2Sstop();
-  void            zeroI2Sbuff();
-  void            IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-  void            IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-  void            IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-  inline uint32_t streamavail() { return _client ? _client->available() : 0; }
-  void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
-  bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
-  uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
+    //+++ create a T A S K  for playAudioData(), output via I2S +++
+  public:
+    void            setAudioTaskCore(uint8_t coreID);
+    uint32_t        getHighWatermark();
+  private:
+    void            startAudioTask(); // starts a task for decode and play
+    void            stopAudioTask();  // stops task for audio
+    static void     taskWrapper(void *param);
+    void            audioTask();
+    void            performAudioTask();
 
-  //+++ create a T A S K  for playAudioData(), output via I2S +++
-public:
-  void            setAudioTaskCore(uint8_t coreID);
-  uint32_t        getHighWatermark();
-private:
-  void            startAudioTask(); // starts a task for decode and play
-  void            stopAudioTask();  // stops task for audio
-  static void     taskWrapper(void *param);
-  void            audioTask();
-  void            performAudioTask();
+    //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
+    uint16_t readMetadata(uint16_t b, bool first = false);
+    size_t   readChunkSize(uint8_t* bytes);
+    bool     readID3V1Tag();
+    boolean  streamDetection(uint32_t bytesAvail);
+    void     seek_m4a_stsz();
+    void     seek_m4a_ilst();
+    uint32_t m4a_correctResumeFilePos();
+    uint32_t ogg_correctResumeFilePos();
+    int32_t  flac_correctResumeFilePos();
+    int32_t  mp3_correctResumeFilePos();
+    uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
-  //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
-  uint16_t readMetadata(uint16_t b, bool first = false);
-  size_t   readChunkSize(uint8_t* bytes);
-  bool     readID3V1Tag();
-  boolean  streamDetection(uint32_t bytesAvail);
-  void     seek_m4a_stsz();
-  void     seek_m4a_ilst();
-  uint32_t m4a_correctResumeFilePos();
-  uint32_t ogg_correctResumeFilePos();
-  int32_t  flac_correctResumeFilePos();
-  int32_t  mp3_correctResumeFilePos();
-  uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
-
-  //++++ implement several function with respect to the index of string ++++
-  void strlower(char* str) {
-      unsigned char* p = (unsigned char*)str;
-      while(*p) {
-          *p = tolower((unsigned char)*p);
-          p++;
-      }
+    //++++ implement several function with respect to the index of string ++++
+    void strlower(char* str) {
+        unsigned char* p = (unsigned char*)str;
+        while(*p) {
+            *p = tolower((unsigned char)*p);
+            p++;
+        }
     }
 
 
-void trim(char *str) {
-    char *start = str;  // keep the original pointer
-    char *end;
-    while (isspace((unsigned char)*start)) start++; // find the first non-space character
+    void trim(char *str) {
+        char *start = str;  // keep the original pointer
+        char *end;
+        while (isspace((unsigned char)*start)) start++; // find the first non-space character
 
-    if (*start == 0) {  // all characters were spaces
-        str[0] = '\0';  // return a empty string
-        return;
+        if (*start == 0) {  // all characters were spaces
+            str[0] = '\0';  // return a empty string
+            return;
+        }
+
+        end = start + strlen(start) - 1;  // find the end of the string
+
+        while (end > start && isspace((unsigned char)*end)) end--;
+        end[1] = '\0';  // Null-terminate the string after the last non-space character
+
+        // Move the trimmed string to the beginning of the memory area
+        memmove(str, start, strlen(start) + 1);  // +1 for '\0'
     }
-
-    end = start + strlen(start) - 1;  // find the end of the string
-
-    while (end > start && isspace((unsigned char)*end)) end--;
-    end[1] = '\0';  // Null-terminate the string after the last non-space character
-
-    // Move the trimmed string to the beginning of the memory area
-    memmove(str, start, strlen(start) + 1);  // +1 for '\0'
-}
 
     bool startsWith (const char* base, const char* str) {
     //fb
@@ -373,18 +382,18 @@ void trim(char *str) {
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // some other functions
-uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
-    uint64_t result = 0;  // Use uint64_t for greater caching
-    if(numBytes < 1 || numBytes > 8) return 0;
-    for (int i = 0; i < numBytes; i++) {
-        result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); //Make sure the calculation is done correctly
+    uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
+        uint64_t result = 0;  // Use uint64_t for greater caching
+        if(numBytes < 1 || numBytes > 8) return 0;
+        for (int i = 0; i < numBytes; i++) {
+            result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); //Make sure the calculation is done correctly
+        }
+        if(result > SIZE_MAX) {
+            log_e("range overflow");
+            return 0;
+        }
+        return result;
     }
-    if(result > SIZE_MAX) {
-        log_e("range overflow");
-        return 0;
-    }
-    return result;
-}
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     bool b64encode(const char* source, uint16_t sourceLength, char* dest){
         size_t size = base64_encode_expected_len(sourceLength) + 1;
@@ -402,16 +411,9 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return false;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void vector_clear_and_shrink(std::vector<char*>&vec){
-        uint size = vec.size();
-        for (int i = 0; i < size; i++) {
-            if(vec[i]){
-                free(vec[i]);
-                vec[i] = NULL;
-            }
-        }
-        vec.clear();
-        vec.shrink_to_fit();
+    void vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec){
+        vec.clear();            // unique_ptr takes care of free()
+        vec.shrink_to_fit();    // put back memory
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
@@ -424,67 +426,111 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         return hash;
 	  }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_malloc(uint32_t len) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_malloc(len);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
+    // Request memory for an array of T
+    template <typename T>
+    std::unique_ptr<T[], PsramDeleter> audio_malloc(std::size_t count) {
+        T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
+        if (!raw) {
+            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
+        }
+        return std::unique_ptr<T[], PsramDeleter>(raw);
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_calloc(uint32_t len, uint8_t size) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_calloc(len, size);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
+    // Request memory for an array of T
+    template <typename T>
+    std::unique_ptr<T[], PsramDeleter> audio_calloc(std::size_t count) {
+        T* raw = static_cast<T*>(ps_calloc(sizeof(T) * count, sizeof(char)));
+        if (!raw) {
+            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
+        }
+        return std::unique_ptr<T[], PsramDeleter>(raw);
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_realloc(char* ptr, uint16_t len) {
-        char* ps_str = NULL;
-        ps_str = (char*) ps_realloc(ptr, len);
-        if(!ps_str) log_e("oom, no space for %d bytes", len);
-        return ps_str;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* x_ps_strdup(const char* str) {
-        if(!str) {log_e("Input str is NULL"); return NULL;};
-        char* ps_str = NULL;
-        ps_str = (char*)ps_malloc(strlen(str) + 1);
-        if(!ps_str) {log_e("oom, no space for %d bytes", strlen(str) + 1); return NULL;}
-        strcpy(ps_str, str);
-        return ps_str;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void x_ps_free(char** b){
-        if(*b){free(*b); *b = NULL;}
-    }
-    void x_ps_free_const(const char** b) {
-        if (b && *b) {
-            free((void*)*b); // remove const
-            *b = NULL;
+    // Copies raw data into a Unique_PTR goal (e.g. like memcpy)
+    template <typename T>
+    void audio_memcpy(std::unique_ptr<T[]>& dest, const T* src, std::size_t count) {
+        static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
+        if (dest && src && count > 0) {
+            memcpy(dest.get(), src, count * sizeof(T));
         }
     }
-    void x_ps_free(int16_t** b){
-        if(*b){free(*b); *b = NULL;}
-    }
-    void x_ps_free(uint8_t** b){
-        if(*b){free(*b); *b = NULL;}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    std::unique_ptr<char[], PsramDeleter> audio_strdup(const char* str) {
+        if (!str) {
+            log_e("audio_strdup: input str is NULL");
+            return nullptr;
+        }
+
+        size_t len = strlen(str);
+        auto ps_str = audio_malloc<char>(len + 1);
+
+        if (!ps_str) {
+            log_e("audio_strdup: OOM, no space for %zu bytes", len + 1);
+            return nullptr;
+        }
+
+        strcpy(ps_str.get(), str);
+        return ps_str;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    char* urlencode(const char* str, bool spacesOnly) {
-        if (str == NULL) {
-            return NULL;  // Eingabe ist NULL
+    std::unique_ptr<char[], PsramDeleter> audio_strndup(const char* str, size_t maxlen) {
+        if (!str) {
+            log_e("audio_strndup: input str is NULL");
+            return nullptr;
         }
+
+        // Effektive Länge der zu kopierenden Zeichen (nicht mehr als maxlen, nicht über das Ende hinaus)
+        size_t len = strnlen(str, maxlen);
+
+        // Speicher reservieren (+1 für Nullterminierung)
+        auto ps_str = audio_malloc<char>(len + 1);
+
+        if (!ps_str) {
+            log_e("audio_strndup: OOM, no space for %zu bytes", len + 1);
+            return nullptr;
+        }
+
+        // Sicher kopieren (genau len Zeichen)
+        memcpy(ps_str.get(), str, len);
+        ps_str[len] = '\0'; // Nullterminierung hinzufügen
+
+        return ps_str;
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    ps_ptr<char> audio_realloc(ps_ptr<char> old_ptr, size_t new_size) {
+        if (new_size == 0) {
+            return nullptr;
+        }
+
+        auto new_ptr = audio_malloc<char>(new_size);
+        if (!new_ptr) {
+            log_e("audio_realloc_: OOM for %zu bytes", new_size);
+            return nullptr;
+        }
+
+        if (old_ptr) {
+            size_t len = strlen(old_ptr.get());
+            size_t copy_len = std::min(len, new_size - 1);
+            memcpy(new_ptr.get(), old_ptr.get(), copy_len);
+            new_ptr[copy_len] = '\0';
+        } else {
+            new_ptr[0] = '\0';
+        }
+
+        return new_ptr;
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
+        if (!str) {return nullptr;}  // Enter is zero
 
         // Reserve memory for the result (3x the length of the input string, worst-case)
         size_t inputLength = strlen(str);
         size_t bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
-        char *encoded = (char *)x_ps_malloc(bufferSize);
-        if (encoded == NULL) {
-            return NULL;  // memory allocation failed
-        }
+        auto encoded = audio_malloc<char>(bufferSize);
+        if (!encoded) {return nullptr; } // memory allocation failed
 
         const char *p_input = str;  // Copy of the input pointer
-        char *p_encoded = encoded;  // pointer of the output buffer
+        char *p_encoded = encoded.get();  // pointer of the output buffer
         size_t remainingSpace = bufferSize; // remaining space in the output buffer
 
         while (*p_input) {
@@ -494,8 +540,7 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
                     *p_encoded++ = *p_input;
                     remainingSpace--;
                 } else {
-                    free(encoded);
-                    return NULL; // security check failed
+                    return nullptr; // security check failed
                 }
             } else if (spacesOnly && *p_input != 0x20) {
                 // Nur Leerzeichen nicht kodieren
@@ -503,22 +548,19 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
                     *p_encoded++ = *p_input;
                     remainingSpace--;
                 } else {
-                    free(encoded);
-                    return NULL; // security check failed
+                    return nullptr; // security check failed
                 }
             } else {
                 // encode unsafe characters as '%XX'
                 if (remainingSpace > 3) {
                     int written = snprintf(p_encoded, remainingSpace, "%%%02X", (unsigned char)*p_input);
                     if (written < 0 || written >= (int)remainingSpace) {
-                        free(encoded);
-                        return NULL; // error writing to buffer
+                        return nullptr; // error writing to buffer
                     }
                     p_encoded += written;
                     remainingSpace -= written;
                 } else {
-                    free(encoded);
-                    return NULL; // security check failed
+                    return nullptr; // security check failed
                 }
             }
             p_input++;
@@ -528,8 +570,7 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
         if (remainingSpace > 0) {
             *p_encoded = '\0';
         } else {
-            free(encoded);
-            return NULL; // security check failed
+            return nullptr; // security check failed
         }
 
         return encoded;
@@ -555,8 +596,6 @@ uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
                ((x & 0x00000000000000FFULL) << 56);
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-
 
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
@@ -611,9 +650,9 @@ private:
 
 #pragma GCC diagnostic pop
 
-    std::vector<char*>    m_playlistContent;  // m3u8 playlist buffer
-    std::vector<char*>    m_playlistURL;      // m3u8 streamURLs buffer
-    std::vector<uint32_t> m_hashQueue;
+    std::vector<ps_ptr<char>> m_playlistContent;  // m3u8 playlist buffer
+    std::vector<ps_ptr<char>> m_playlistURL;      // m3u8 streamURLs buffer
+    std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;
     const size_t    m_frameSizeMP3       = 1600;
@@ -623,22 +662,60 @@ private:
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
+    const size_t    m_chbufSize          = 8192;
+
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    char*           m_ibuff = nullptr;              // used in audio_info()
-    char*           m_chbuf = NULL;
-    uint16_t        m_chbufSize = 0;                // will set in constructor (depending on PSRAM)
-    uint16_t        m_ibuffSize = 0;                // will set in constructor (depending on PSRAM)
-    char*           m_lastHost = NULL;              // Store the last URL to a webstream
-    char*           m_lastM3U8host = NULL;
-    char*           m_playlistBuff = NULL;          // stores playlistdata
-    char*           m_speechtxt = NULL;             // stores tts text
-    const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
+    std::unique_ptr<int16_t[], PsramDeleter> m_outBuff        = nullptr; // Interleaved L/R
+    std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K = nullptr; // Interleaved L/R
+    std::unique_ptr<char[],    PsramDeleter> m_chbuf          = nullptr; // universal buffer
+    std::unique_ptr<char[],    PsramDeleter> m_ibuff          = nullptr; // used in log_info()
+    std::unique_ptr<char[],    PsramDeleter> m_lastHost       = nullptr; // Store the last URL to a webstream
+    std::unique_ptr<char[],    PsramDeleter> m_lastM3U8host   = nullptr;
+    std::unique_ptr<char[],    PsramDeleter> m_speechtxt      = nullptr; // stores tts text
+    typedef struct _ID3Hdr{ // used only in readID3header()
+        size_t      id3Size;
+        size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t      remainingHeaderBytes;
+        size_t      universal_tmp;
+        uint8_t     ID3version;
+        int         ehsz;
+        char        tag[5];
+        char        frameid[5];
+        size_t      framesize;
+        bool        compressed;
+        size_t      APIC_size[3];
+        uint32_t    APIC_pos[3];
+        bool        SYLT_seen;
+        size_t      SYLT_size;
+        uint32_t    SYLT_pos;
+        uint8_t     numID3Header;
+        uint16_t    iBuffSize;
+        ps_ptr<char>iBuff;
+    } ID3Hdr_t;
+    ID3Hdr_t ID3Hdr;
+
+    typedef struct _pwsHLS{  // used in processWebStreamHLS()
+        uint16_t     maxFrameSize;
+        uint16_t     ID3BuffSize;
+        uint32_t     availableBytes;
+        bool         firstBytes;
+        bool         f_chunkFinished;
+        uint32_t     byteCounter;
+        size_t       chunkSize;
+        uint16_t     ID3WritePtr;
+        uint16_t     ID3ReadPtr;
+        ps_ptr<uint8_t>ID3Buff;
+    } pwsHLS_t;
+    pwsHLS_t pwsHLS;
+
+
     filter_t        m_filter[3];                    // digital filters
+    const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     int             m_LFcount = 0;                  // Detection of end of header
-    uint32_t        m_sampleRate=16000;
+    uint32_t        m_sampleRate=48000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
     int             m_readbytes = 0;                // bytes read
@@ -668,8 +745,7 @@ private:
     uint8_t         m_M4A_objectType = 0;           // set in read_M4A_Header
     uint8_t         m_M4A_chConfig = 0;             // set in read_M4A_Header
     uint16_t        m_M4A_sampleRate = 0;           // set in read_M4A_Header
-    int16_t*        m_outBuff = NULL;               // Interleaved L/R
-    int16_t*        m_samplesBuff48K = NULL;        // Interleaved L/R
+
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
     uint16_t        m_dataMode{0};                  // Statemaschine
@@ -715,7 +791,6 @@ private:
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
-    bool            m_f_Log = false;                // set in platformio.ini  -DAUDIO_LOG and -DCORE_DEBUG_LEVEL=3 or 4
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
     bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
@@ -738,6 +813,7 @@ private:
     float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
+    size_t          m_ibuffSize = 0;                // log buffer size for audio_info()
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
     float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
