@@ -21,6 +21,7 @@
 #include <atomic>
 #include <codecvt>
 #include <locale>
+#include <memory>
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
 #include <driver/i2s_std.h>
