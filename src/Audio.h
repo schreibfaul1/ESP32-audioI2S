@@ -46,7 +46,6 @@ extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
-extern __attribute__((weak)) void audio_log(uint8_t logLevel, const char* msg, const char* arg);
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -188,8 +187,6 @@ public:
 
 private:
     // ------- PRIVATE MEMBERS ----------------------------------------
-    enum : int8_t { AUDIOLOG_PATH_IS_NULL = -1, AUDIOLOG_FILE_NOT_FOUND = -2, AUDIOLOG_OUT_OF_MEMORY = -3, AUDIOLOG_FILE_READ_ERR = -4,
-                  AUDIOLOG_M4A_ATOM_NOT_FOUND = -5,  AUDIOLOG_ERR_UNKNOWN = -127 };
 
     void            UTF8toASCII(char* str);
     bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
@@ -217,7 +214,6 @@ private:
     int             sendBytes(uint8_t* data, size_t len);
     void            setDecoderItems();
     void            computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
-    void            printProcessLog(int r, const char* s = "");
     void            printDecodeError(int r);
     void            showID3Tag(const char* tag, const char* val);
     size_t          readAudioHeader(uint32_t bytes);
@@ -430,15 +426,6 @@ private:
         return hash;
 	  }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-
     // Request memory for an array of T
     template <typename T>
     std::unique_ptr<T[], PsramDeleter> audio_malloc(std::size_t count) {
@@ -448,7 +435,7 @@ private:
         }
         return std::unique_ptr<T[], PsramDeleter>(raw);
     }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // Request memory for an array of T
     template <typename T>
     std::unique_ptr<T[], PsramDeleter> audio_calloc(std::size_t count) {
@@ -458,7 +445,7 @@ private:
         }
         return std::unique_ptr<T[], PsramDeleter>(raw);
     }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // Copies raw data into a Unique_PTR goal (e.g. like memcpy)
     template <typename T>
     void audio_memcpy(std::unique_ptr<T[]>& dest, const T* src, std::size_t count) {
@@ -467,7 +454,7 @@ private:
             memcpy(dest.get(), src, count * sizeof(T));
         }
     }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     std::unique_ptr<char[], PsramDeleter> audio_strdup(const char* str) {
         if (!str) {
             log_e("audio_strdup: input str is NULL");
@@ -485,7 +472,7 @@ private:
         strcpy(ps_str.get(), str);
         return ps_str;
     }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     std::unique_ptr<char[], PsramDeleter> audio_strndup(const char* str, size_t maxlen) {
         if (!str) {
             log_e("audio_strndup: input str is NULL");
@@ -509,7 +496,7 @@ private:
 
         return ps_str;
     }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     ps_ptr<char> audio_realloc(ps_ptr<char> old_ptr, size_t new_size) {
         if (new_size == 0) {
             return nullptr;
@@ -532,8 +519,6 @@ private:
 
         return new_ptr;
     }
-
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
         if (!str) {return nullptr;}  // Enter is zero
@@ -612,8 +597,6 @@ private:
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-
-
 private:
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -691,7 +674,7 @@ private:
     std::unique_ptr<char[],    PsramDeleter> m_ibuff          = nullptr; // used in log_info()
     std::unique_ptr<char[],    PsramDeleter> m_lastHost       = nullptr; // Store the last URL to a webstream
     std::unique_ptr<char[],    PsramDeleter> m_lastM3U8host   = nullptr;
-
+    std::unique_ptr<char[],    PsramDeleter> m_speechtxt      = nullptr; // stores tts text
     typedef struct _ID3Hdr{ // used only in readID3header()
         size_t      id3Size;
         size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
@@ -729,12 +712,10 @@ private:
     pwsHLS_t pwsHLS;
 
 
-    char*           m_playlistBuff = NULL;          // stores playlistdata
-    ps_ptr<char>    m_speechtxt = NULL;             // stores tts text
-    const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     filter_t        m_filter[3];                    // digital filters
+    const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     int             m_LFcount = 0;                  // Detection of end of header
-    uint32_t        m_sampleRate=16000;
+    uint32_t        m_sampleRate=48000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
     int             m_readbytes = 0;                // bytes read
@@ -810,7 +791,6 @@ private:
     bool            m_f_forceMono = false;          // if true stereo -> mono
     bool            m_f_rtsp = false;               // set if RTSP is used (m3u8 stream)
     bool            m_f_m3u8data = false;           // used in processM3U8entries
-    bool            m_f_Log = false;                // set in platformio.ini  -DAUDIO_LOG and -DCORE_DEBUG_LEVEL=3 or 4
     bool            m_f_continue = false;           // next m3u8 chunk is available
     bool            m_f_ts = true;                  // transport stream
     bool            m_f_m4aID3dataAreRead = false;  // has the m4a-ID3data already been read?
