@@ -236,9 +236,9 @@ esp_err_t Audio::I2Sstop() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::zeroI2Sbuff(){
-    auto buff = audio_calloc<uint8_t>(128); // From IDF V5 there is no longer the zero_dma_buff() function.
+    uint8_t buff[2] = {0, 0}; // From IDF V5 there is no longer the zero_dma_buff() function.
     size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
-    i2s_channel_preload_data(m_i2s_tx_handle, buff.get(), 128, &bytes_loaded);
+    i2s_channel_preload_data(m_i2s_tx_handle, buff, 2, &bytes_loaded);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
