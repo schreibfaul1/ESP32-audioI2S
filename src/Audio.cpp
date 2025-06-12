@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.1                                                                                                                                ";
-/*  Updated on: Jun 08.2025
+    Version 3.3.1a                                                                                                                                ";
+/*  Updated on: Jun 12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -232,12 +232,13 @@ esp_err_t Audio::I2Sstart() {
 esp_err_t Audio::I2Sstop() {
     memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
     memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
+    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::zeroI2Sbuff(){
     uint8_t buff[2] = {0, 0}; // From IDF V5 there is no longer the zero_dma_buff() function.
-    size_t bytes_loaded = 0;                                // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
+    size_t bytes_loaded = 0;  // As a replacement, we write a small amount of zeros in the buffer and thus reset the entire buffer.
     i2s_channel_preload_data(m_i2s_tx_handle, buff, 2, &bytes_loaded);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -321,7 +322,7 @@ void Audio::setDefaults() {
     m_M4A_sampleRate = 0;
     m_sumBytesDecoded = 0;
     m_vuLeft = m_vuRight = 0; // #835
-
+    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
     if(m_f_reset_m3u8Codec){m_m3u8Codec = CODEC_AAC;} // reset to default
     m_f_reset_m3u8Codec = true;
 
@@ -2353,34 +2354,83 @@ bool Audio::pauseResume() {
     return retVal;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
+    float ratio = static_cast<float>(m_sampleRate) / 48000.0f;
+    float cursor = m_resampleCursor;
 
-size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputFrames) {
+    // Anzahl Input-Samples + 3 History-Samples (vorherige 3 Stereo-Frames)
+    size_t extendedSamples = inputSamples + 3;
 
-    float exactOutputFrames = inputFrames * m_resampleRatio;;
-    size_t outputFrames = static_cast<size_t>(std::floor(exactOutputFrames + m_resampleError));
-    m_resampleError += exactOutputFrames - outputFrames;
+    // Temporärer Buffer: History + aktueller Input
+    std::vector<int16_t> extendedInput(extendedSamples * 2);
 
-    std::vector<int16_t> output(outputFrames * 2);
+    // Historie an den Anfang kopieren (6 Werte = 3 Stereo-Samples)
+    memcpy(&extendedInput[0], m_inputHistory, 6 * sizeof(int16_t));
 
-    for (size_t i = 0; i < outputFrames; ++i) {
-        float inFramePos = i / m_resampleRatio;
-        size_t idx = static_cast<size_t>(inFramePos);
-        float frac = inFramePos - idx;
+    // Aktuelles Input danach einfügen
+    memcpy(&extendedInput[6], input, inputSamples * 2 * sizeof(int16_t));
 
-        size_t i1 = idx * 2;
-        size_t i2 = (idx + 1 < inputFrames) ? (idx + 1) * 2 : i1;
+    size_t outputIndex = 0;
 
-        int16_t left1 = input[i1];
-        int16_t right1 = input[i1 + 1];
-        int16_t left2 = input[i2];
-        int16_t right2 = input[i2 + 1];
+    auto clipToInt16 = [](float value) -> int16_t {
+        if (value > 32767.0f){log_e("overflow +"); return 32767;}
+        if (value < -32768.0f) {log_e("overflow -");return -32768;}
+        return static_cast<int16_t>(value);
+    };
 
-        m_samplesBuff48K[i * 2]     = static_cast<int16_t>(left1 * (1.0f - frac) + left2 * frac);
-        m_samplesBuff48K[i * 2 + 1] = static_cast<int16_t>(right1 * (1.0f - frac) + right2 * frac);
+    for (size_t inIdx = 1; inIdx < extendedSamples - 2; ++inIdx) {
+        int32_t xm1_l = clipToInt16(extendedInput[(inIdx - 1) * 2]);
+        int32_t x0_l  = clipToInt16(extendedInput[(inIdx + 0) * 2]);
+        int32_t x1_l  = clipToInt16(extendedInput[(inIdx + 1) * 2]);
+        int32_t x2_l  = clipToInt16(extendedInput[(inIdx + 2) * 2]);
+
+        int32_t xm1_r = clipToInt16(extendedInput[(inIdx - 1) * 2 + 1]);
+        int32_t x0_r  = clipToInt16(extendedInput[(inIdx + 0) * 2 + 1]);
+        int32_t x1_r  = clipToInt16(extendedInput[(inIdx + 1) * 2 + 1]);
+        int32_t x2_r  = clipToInt16(extendedInput[(inIdx + 2) * 2 + 1]);
+
+        while (cursor < 1.0f) {
+            float t = cursor;
+
+            // Catmull-Rom spline, construct a cubic curve
+            auto catmullRom = [](float t, float xm1, float x0, float x1, float x2) {
+                return 0.5f * (
+                    (2.0f * x0) +
+                    (-xm1 + x1) * t +
+                    (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2) * t * t +
+                    (-xm1 + 3.0f * x0 - 3.0f * x1 + x2) * t * t * t
+                );
+            };
+
+
+
+            int16_t outLeft = static_cast<int16_t>(
+                catmullRom(t, xm1_l, x0_l, x1_l, x2_l)
+            );
+            int16_t outRight = static_cast<int16_t>(
+                catmullRom(t, xm1_r, x0_r, x1_r, x2_r)
+            );
+
+            m_samplesBuff48K[outputIndex * 2]     = clipToInt16(outLeft);
+            m_samplesBuff48K[outputIndex * 2 + 1] = clipToInt16(outRight);
+
+            ++outputIndex;
+            cursor += ratio;
+        }
+
+        cursor -= 1.0f;
     }
 
-    return outputFrames;
+    // Letzte 3 Stereo-Samples als neue Historie sichern
+    for (int i = 0; i < 3; ++i) {
+        size_t idx = inputSamples - 3 + i;
+        m_inputHistory[i * 2]     = input[idx * 2];
+        m_inputHistory[i * 2 + 1] = input[idx * 2 + 1];
+    }
+    m_resampleCursor = cursor;
+    return outputIndex;
 }
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void IRAM_ATTR Audio::playChunk() {
 
@@ -2448,7 +2498,7 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
 
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K.get() + count, samples48K * sampleSize, &i2s_bytesConsumed, 10);
+    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K.get() + count, samples48K * sampleSize, &i2s_bytesConsumed, 50);
     if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
     samples48K -= i2s_bytesConsumed / sampleSize;
     count += i2s_bytesConsumed / 2;

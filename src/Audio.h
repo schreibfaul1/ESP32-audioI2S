@@ -725,6 +725,7 @@ private:
     int8_t          m_balance = 0;                  // -16 (mute left) ... +16 (mute right)
     uint16_t        m_vol = 21;                     // volume
     uint16_t        m_vol_steps = 21;               // default
+    int16_t         m_inputHistory[6] = {0};        // used in resampleTo48kStereo()
     double          m_limit_left = 0;               // limiter 0 ... 1, left channel
     double          m_limit_right = 0;              // limiter 0 ... 1, right channel
     uint8_t         m_timeoutCounter = 0;           // timeout counter
@@ -746,7 +747,6 @@ private:
     uint8_t         m_M4A_objectType = 0;           // set in read_M4A_Header
     uint8_t         m_M4A_chConfig = 0;             // set in read_M4A_Header
     uint16_t        m_M4A_sampleRate = 0;           // set in read_M4A_Header
-
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
     uint16_t        m_dataMode{0};                  // Statemaschine
@@ -812,6 +812,10 @@ private:
     float           m_audioCurrentTime = 0;
     float           m_resampleError = 0.0f;
     float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
+    float           m_resampleCursor = 0.0f;        // next frac in resampleTo48kStereo
+
+
+
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //
     size_t          m_ibuffSize = 0;                // log buffer size for audio_info()
