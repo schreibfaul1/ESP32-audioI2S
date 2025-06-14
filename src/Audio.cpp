@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2                                                                                                                                ";
+    Version 3.3.2a                                                                                                                                ";
 /*  Updated on: Jun 14.2025
 
     Author: Wolle (schreibfaul1)
@@ -456,6 +456,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
         m_dataMode = HTTP_RESPONSE_HEADER;
+        m_f_tts = true;
     } else {
         log_info("Request %s failed!", host);
     }
@@ -3448,7 +3449,7 @@ void Audio::processWebStream() {
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
         if(!m_f_allDataReceived) if(streamDetection(availableBytes)) return;
-        if(!f_clientIsConnected) {if(!m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed
+        if(!f_clientIsConnected) {if(m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed (OpenAi)
     }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
