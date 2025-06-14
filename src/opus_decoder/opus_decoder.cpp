@@ -67,7 +67,7 @@ uint16_t *s_opusSegmentTable;
 uint8_t   s_opusSegmentTableSize = 0;
 int16_t   s_opusSegmentTableRdPtr = -1;
 int8_t    s_opusError = 0;
-int8_t    s_prev_mode = 0;
+int16_t   s_prev_mode = 0;
 float     s_opusCompressionRatio = 0;
 
 std::vector <uint32_t>s_opusBlockPicItem;
@@ -79,6 +79,7 @@ bool OPUSDecoder_AllocateBuffers(){
     s_opusSegmentTable = (uint16_t*)__malloc_heap_psram(256 * sizeof(uint16_t));
     if(!s_opusSegmentTable) {log_e("CELT not init"); return false;}
     CELTDecoder_ClearBuffer();
+    SILKDecoder_ClearBuffers();
     OPUSDecoder_ClearBuffers();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
     s_opusError = celt_decoder_init(2); if(s_opusError < 0) {log_e("CELT not init"); return false;}
@@ -152,7 +153,7 @@ void OPUSsetDefaults(){
     s_opusPageNr = 0;
     s_opusError = 0;
     s_endband = 0;
-    s_prev_mode = MODE_CELT_ONLY;
+    s_prev_mode = MODE_NONE;
     s_opusBlockPicItem.clear(); s_opusBlockPicItem.shrink_to_fit();
 }
 
@@ -347,59 +348,108 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
-
-    int32_t  ret = 0;
-    uint8_t  payloadSize_ms = 0;
+if(!packetLen) {log_e("packetLen = 0"); return 0;}
+    int i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
-    int32_t silk_frame_size;
+    uint8_t payloadSize_ms = 20;
 
-    if(s_mode == MODE_HYBRID || s_mode == MODE_SILK_ONLY){
+    s_silk_DecControlStruct->nChannelsAPI = s_opusChannels;
+    s_silk_DecControlStruct->nChannelsInternal = s_opusChannels;
+    s_silk_DecControlStruct->API_sampleRate = 48000;
+
+    if(s_mode != s_prev_mode) {
+        if(s_mode == MODE_CELT_ONLY) log_w("Celt");
+        if(s_mode == MODE_SILK_ONLY) log_w("Silk");
+        if(s_mode == MODE_HYBRID)    log_w("Hybrid");
+    }
+    if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+
+    ec_dec_init(inbuf, packetLen);
+
+    /* Don't allocate any memory when in CELT-only mode */
+    int pcm_silk_size = (s_mode != MODE_CELT_ONLY) ? samplesPerFrame * 4 : ALLOC_NONE;
+    int16_t *pcm_silk = (int16_t *)ps_malloc(pcm_silk_size * sizeof(int16_t));
+    if(!pcm_silk)log_e("oom");
+
+    /* SILK processing */
+    if (s_mode != MODE_CELT_ONLY) {
         int decoded_samples;
-        if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
-        payloadSize_ms = max(10, 1000 * audiosize / 48000);  /* The SILK PLC cannot produce frames of less than 10 ms */
-        s_silk_DecControlStruct->nChannelsAPI = 2;
-        s_silk_DecControlStruct->nChannelsInternal = 2;
-        s_silk_DecControlStruct->API_sampleRate = 48000;
+        int16_t *pcm_ptr;
+        pcm_ptr = pcm_silk;
 
-        if (s_mode == MODE_SILK_ONLY) {
-            if (s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) {
-                s_internalSampleRate = 8000;
-            } else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {
-                s_internalSampleRate = 12000;
-            } else if (s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) {
-                s_internalSampleRate = 16000;
-            } else {
+        if (s_prev_mode == MODE_CELT_ONLY || s_prev_mode == MODE_NONE) silk_InitDecoder();
+
+            if (s_mode == MODE_SILK_ONLY) {
+                if (s_bandWidth == OPUS_BANDWIDTH_NARROWBAND)      {s_internalSampleRate = 8000;}
+                else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {s_internalSampleRate = 12000;}
+                else if (s_bandWidth == OPUS_BANDWIDTH_WIDEBAND)   {s_internalSampleRate = 16000;}
+                else                                               {s_internalSampleRate = 16000;}
+            } else { /* Hybrid mode */
                 s_internalSampleRate = 16000;
             }
-        } else { /* Hybrid mode */
-            s_internalSampleRate = 16000;
-        }
-        ec_dec_init((uint8_t *)inbuf, packetLen);
+
         decoded_samples = 0;
         silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
-        do {
-            /* Call SILK decoder */
+        do { /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
-            int silk_ret = silk_Decode(0, first_frame, (int16_t*)outbuf + decoded_samples, &silk_frame_size);
-            if(silk_ret)log_w("silk_ret %i", silk_ret);
-            decoded_samples += silk_frame_size;
-        } while(decoded_samples < samplesPerFrame);
-
-        ret = decoded_samples;
-        if(s_mode == MODE_SILK_ONLY) return ret;
+            int32_t nSamplesOut;
+            silk_ret = silk_Decode(0, first_frame, pcm_ptr, &nSamplesOut);
+            if (silk_ret) {
+                    if(pcm_silk){free(pcm_silk); pcm_silk = nullptr;}
+                    return OPUS_INTERNAL_ERROR;
+            }
+            pcm_ptr += nSamplesOut * s_opusChannels;
+            decoded_samples += nSamplesOut;
+        } while (decoded_samples < audiosize);
     }
 
-    if (s_mode == MODE_CELT_ONLY){
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
-        ec_dec_init((uint8_t *)inbuf, packetLen);
-        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+    uint8_t start_band = 0;
+    if (s_mode != MODE_CELT_ONLY && ec_tell() + 17 + 20 * (s_mode == MODE_HYBRID) <= 8 * packetLen) {
+        /* Check if we have a redundant 0-8 kHz band */
+        if (s_mode == MODE_HYBRID) ec_dec_bit_logp(12);
+    }
+    if (s_mode != MODE_CELT_ONLY) start_band = 17;
+
+    if (s_bandWidth) {
+        int endband = 21;
+
+        switch (s_bandWidth) {
+            case OPUS_BANDWIDTH_NARROWBAND:   endband = 13; break;
+            case OPUS_BANDWIDTH_MEDIUMBAND:
+            case OPUS_BANDWIDTH_WIDEBAND:     endband = 17; break;
+            case OPUS_BANDWIDTH_SUPERWIDEBAND:endband = 19; break;
+            case OPUS_BANDWIDTH_FULLBAND:     endband = 21; break;
+            default:  break;
+        }
+        const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
+        celt_decoder_ctl((int32_t)CELT_SET_END_BAND_REQUEST,(endband));
+        celt_decoder_ctl((int32_t)CELT_SET_CHANNELS_REQUEST,(s_opusChannels));
     }
 
-    if (s_mode == MODE_HYBRID){
-        log_w("Hybrid mode mot supported yet");
-        return packetLen;
+    /* MUST be after PLC */
+    celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, start_band);
+
+    if (s_mode != MODE_SILK_ONLY) {
+        /* Make sure to discard any previous CELT state */
+        if (s_mode != s_prev_mode  && s_prev_mode > 0 ) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+        celt_ret = celt_decode_with_ec(outbuf, audiosize);
+    } else {
+        // unsigned char silence[2] = {0xFF, 0xFF};
+        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = 0;
+        /* For hybrid -> SILK transitions, we let the CELT MDCT do a fade-out by decoding a silence frame */
+        if (s_prev_mode == MODE_HYBRID) {
+            celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
+            celt_decode_with_ec(outbuf, 120);
+        }
     }
-    return ret;
+
+    if (s_mode != MODE_CELT_ONLY) {
+        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = SAT16(ADD32(outbuf[i], pcm_silk[i]));
+    }
+
+    s_prev_mode = s_mode;
+    if(pcm_silk){free(pcm_silk); pcm_silk = nullptr;}
+    return celt_ret < 0 ? celt_ret : audiosize;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame){

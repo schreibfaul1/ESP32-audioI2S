@@ -435,6 +435,14 @@ bool SILKDecoder_AllocateBuffers(){
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void SILKDecoder_ClearBuffers(){
+    memset(s_resampler_state.get(), 0, sizeof(silk_resampler_state_struct_t) * DECODER_NUM_CHANNELS);
+    memset(s_channel_state.get(), 0, sizeof(silk_decoder_state_t) * DECODER_NUM_CHANNELS);
+    memset(s_silk_decoder.get(), 0, sizeof(silk_decoder_t));
+    memset(s_silk_decoder_control.get(), 0, sizeof(silk_decoder_control_t));
+    memset(s_silk_DecControlStruct.get(), 0, sizeof(silk_DecControlStruct_t));
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void SILKDecoder_FreeBuffers(){
     s_resampler_state.reset();
     s_channel_state.reset();
