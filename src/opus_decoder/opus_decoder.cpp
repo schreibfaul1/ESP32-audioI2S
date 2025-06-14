@@ -30,7 +30,7 @@ extern silk_ptr_obj<silk_DecControlStruct_t>    s_silk_DecControlStruct;
 
 enum {OPUS_BANDWIDTH_NARROWBAND = 1101,    OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103,
       OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105};
-enum {MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001,  MODE_CELT_ONLY = 1002};
+
 
 bool      s_f_opusParseOgg = false;
 bool      s_f_newSteamTitle = false;  // streamTitle
@@ -67,8 +67,12 @@ uint16_t *s_opusSegmentTable;
 uint8_t   s_opusSegmentTableSize = 0;
 int16_t   s_opusSegmentTableRdPtr = -1;
 int8_t    s_opusError = 0;
-int8_t    s_prev_mode = 0;
+int16_t   s_prev_mode = 0;
 float     s_opusCompressionRatio = 0;
+
+ofp2  s_ofp2; // used in opus_FramePacking_Code2
+ofp3  s_ofp3; // used in opus_FramePacking_Code3
+odp3  s_odp3; // used in opusDecodePage3
 
 std::vector <uint32_t>s_opusBlockPicItem;
 
@@ -79,6 +83,7 @@ bool OPUSDecoder_AllocateBuffers(){
     s_opusSegmentTable = (uint16_t*)__malloc_heap_psram(256 * sizeof(uint16_t));
     if(!s_opusSegmentTable) {log_e("CELT not init"); return false;}
     CELTDecoder_ClearBuffer();
+    SILKDecoder_ClearBuffers();
     OPUSDecoder_ClearBuffers();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
     s_opusError = celt_decoder_init(2); if(s_opusError < 0) {log_e("CELT not init"); return false;}
@@ -124,6 +129,9 @@ void OPUSDecoder_ClearBuffers(){
     s_opusCountCode = 0;
 }
 void OPUSsetDefaults(){
+    memset(&s_ofp2, 0, sizeof(s_ofp2));
+    memset(&s_ofp3, 0, sizeof(s_ofp3));
+    memset(&s_odp3, 0, sizeof(s_odp3));
     s_f_opusParseOgg = false;
     s_f_newSteamTitle = false;  // streamTitle
     s_f_opusNewMetadataBlockPicture = false;
@@ -152,7 +160,8 @@ void OPUSsetDefaults(){
     s_opusPageNr = 0;
     s_opusError = 0;
     s_endband = 0;
-    s_prev_mode = MODE_CELT_ONLY;
+    s_prev_mode = MODE_NONE;
+    s_ofp3.firstCall = true;
     s_opusBlockPicItem.clear(); s_opusBlockPicItem.shrink_to_fit();
 }
 
@@ -255,20 +264,16 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     if(s_opusAudioDataStart == 0){
         s_opusAudioDataStart = s_opusCurrentFilePos;
     }
-
-
     s_endband = 21;
-    static int8_t configNr = 0;
-    static uint16_t samplesPerFrame = 0;
 
     int32_t ret = 0;
 
     if(s_frameCount > 0) goto FramePacking; // more than one frame in the packet
 
-    configNr = parseOpusTOC(inbuf[0]);
-    if(configNr < 0) {log_e("something went wrong");  return configNr;} // SILK or Hybrid mode
+    s_odp3.configNr = parseOpusTOC(inbuf[0]);
+    if(s_odp3.configNr < 0) {log_e("something went wrong");  return s_odp3.configNr;} // SILK or Hybrid mode
 
-    switch(configNr){
+    switch(s_odp3.configNr){
         case  0 ... 3:  s_endband  = 0; // OPUS_BANDWIDTH_SILK_NARROWBAND
                         s_mode = MODE_SILK_ONLY;
                         s_bandWidth = OPUS_BANDWIDTH_NARROWBAND;
@@ -308,7 +313,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
                         s_mode = MODE_CELT_ONLY;
                         s_bandWidth = OPUS_BANDWIDTH_FULLBAND;
                         break;
-        default:        log_e("unknown bandwidth, configNr is: %d", configNr);
+        default:        log_e("unknown bandwidth, configNr is: %d", s_odp3.configNr);
                         s_endband = 21; // assume OPUS_BANDWIDTH_FULLBAND
                         break;
     }
@@ -321,23 +326,23 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
         // silk_InitDecoder();
     }
 
-    samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, /*s_opusSamplerate*/ 48000);
+    s_odp3.samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, /*s_opusSamplerate*/ 48000);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
 //log_i("s_opusCountCode %i, configNr %i", s_opusCountCode, configNr);
 
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
-            ret = opus_FramePacking_Code0(inbuf, bytesLeft, outbuf, segmentLength, samplesPerFrame);
+            ret = opus_FramePacking_Code0(inbuf, bytesLeft, outbuf, segmentLength, s_odp3.samplesPerFrame);
             break;
         case 1:  // Code 1: Two Frames in the Packet, Each with Equal Compressed Size
-            ret = opus_FramePacking_Code1(inbuf, bytesLeft, outbuf, segmentLength, samplesPerFrame, &s_frameCount);
+            ret = opus_FramePacking_Code1(inbuf, bytesLeft, outbuf, segmentLength, s_odp3.samplesPerFrame, &s_frameCount);
             break;
         case 2:  // Code 2: Two Frames in the Packet, with Different Compressed Sizes
-            ret = opus_FramePacking_Code2(inbuf, bytesLeft, outbuf, segmentLength, samplesPerFrame, &s_frameCount);
+            ret = opus_FramePacking_Code2(inbuf, bytesLeft, outbuf, segmentLength, s_odp3.samplesPerFrame, &s_frameCount);
             break;
         case 3: // Code 3: A Signaled Number of Frames in the Packet
-            ret = opus_FramePacking_Code3(inbuf, bytesLeft, outbuf, segmentLength, samplesPerFrame, &s_frameCount);
+            ret = opus_FramePacking_Code3(inbuf, bytesLeft, outbuf, segmentLength, s_odp3.samplesPerFrame, &s_frameCount);
             break;
         default:
             log_e("unknown countCode %i", s_opusCountCode);
@@ -347,59 +352,103 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
-
-    int32_t  ret = 0;
-    uint8_t  payloadSize_ms = 0;
+if(!packetLen) {log_e("packetLen = 0"); return 0;}
+    int i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
-    int32_t silk_frame_size;
+    uint8_t payloadSize_ms = 20;
 
-    if(s_mode == MODE_HYBRID || s_mode == MODE_SILK_ONLY){
+    s_silk_DecControlStruct->nChannelsAPI = s_opusChannels;
+    s_silk_DecControlStruct->nChannelsInternal = s_opusChannels;
+    s_silk_DecControlStruct->API_sampleRate = 48000;
+
+    if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+
+    ec_dec_init(inbuf, packetLen);
+
+    /* Don't allocate any memory when in CELT-only mode */
+    int pcm_silk_size = (s_mode != MODE_CELT_ONLY) ? samplesPerFrame * 4 : ALLOC_NONE;
+    int16_t *pcm_silk = (int16_t *)ps_malloc(pcm_silk_size * sizeof(int16_t));
+    if(!pcm_silk)log_e("oom");
+
+    /* SILK processing */
+    if (s_mode != MODE_CELT_ONLY) {
         int decoded_samples;
-        if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
-        payloadSize_ms = max(10, 1000 * audiosize / 48000);  /* The SILK PLC cannot produce frames of less than 10 ms */
-        s_silk_DecControlStruct->nChannelsAPI = 2;
-        s_silk_DecControlStruct->nChannelsInternal = 2;
-        s_silk_DecControlStruct->API_sampleRate = 48000;
+        int16_t *pcm_ptr;
+        pcm_ptr = pcm_silk;
 
-        if (s_mode == MODE_SILK_ONLY) {
-            if (s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) {
-                s_internalSampleRate = 8000;
-            } else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {
-                s_internalSampleRate = 12000;
-            } else if (s_bandWidth == OPUS_BANDWIDTH_WIDEBAND) {
-                s_internalSampleRate = 16000;
-            } else {
+        if (s_prev_mode == MODE_CELT_ONLY || s_prev_mode == MODE_NONE) silk_InitDecoder();
+
+            if (s_mode == MODE_SILK_ONLY) {
+                if (s_bandWidth == OPUS_BANDWIDTH_NARROWBAND)      {s_internalSampleRate = 8000;}
+                else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {s_internalSampleRate = 12000;}
+                else if (s_bandWidth == OPUS_BANDWIDTH_WIDEBAND)   {s_internalSampleRate = 16000;}
+                else                                               {s_internalSampleRate = 16000;}
+            } else { /* Hybrid mode */
                 s_internalSampleRate = 16000;
             }
-        } else { /* Hybrid mode */
-            s_internalSampleRate = 16000;
-        }
-        ec_dec_init((uint8_t *)inbuf, packetLen);
+
         decoded_samples = 0;
         silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
-        do {
-            /* Call SILK decoder */
+        do { /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
-            int silk_ret = silk_Decode(0, first_frame, (int16_t*)outbuf + decoded_samples, &silk_frame_size);
-            if(silk_ret)log_w("silk_ret %i", silk_ret);
-            decoded_samples += silk_frame_size;
-        } while(decoded_samples < samplesPerFrame);
-
-        ret = decoded_samples;
-        if(s_mode == MODE_SILK_ONLY) return ret;
+            int32_t nSamplesOut;
+            silk_ret = silk_Decode(0, first_frame, pcm_ptr, &nSamplesOut);
+            if (silk_ret) {
+                    if(pcm_silk){free(pcm_silk); pcm_silk = nullptr;}
+                    return OPUS_INTERNAL_ERROR;
+            }
+            pcm_ptr += nSamplesOut * s_opusChannels;
+            decoded_samples += nSamplesOut;
+        } while (decoded_samples < audiosize);
     }
 
-    if (s_mode == MODE_CELT_ONLY){
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
-        ec_dec_init((uint8_t *)inbuf, packetLen);
-        ret = celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+    uint8_t start_band = 0;
+    if (s_mode != MODE_CELT_ONLY && ec_tell() + 17 + 20 * (s_mode == MODE_HYBRID) <= 8 * packetLen) {
+        /* Check if we have a redundant 0-8 kHz band */
+        if (s_mode == MODE_HYBRID) ec_dec_bit_logp(12);
+    }
+    if (s_mode != MODE_CELT_ONLY) start_band = 17;
+
+    if (s_bandWidth) {
+        int endband = 21;
+
+        switch (s_bandWidth) {
+            case OPUS_BANDWIDTH_NARROWBAND:   endband = 13; break;
+            case OPUS_BANDWIDTH_MEDIUMBAND:
+            case OPUS_BANDWIDTH_WIDEBAND:     endband = 17; break;
+            case OPUS_BANDWIDTH_SUPERWIDEBAND:endband = 19; break;
+            case OPUS_BANDWIDTH_FULLBAND:     endband = 21; break;
+            default:  break;
+        }
+        const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
+        celt_decoder_ctl((int32_t)CELT_SET_END_BAND_REQUEST,(endband));
+        celt_decoder_ctl((int32_t)CELT_SET_CHANNELS_REQUEST,(s_opusChannels));
     }
 
-    if (s_mode == MODE_HYBRID){
-        log_w("Hybrid mode mot supported yet");
-        return packetLen;
+    /* MUST be after PLC */
+    celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, start_band);
+
+    if (s_mode != MODE_SILK_ONLY) {
+        /* Make sure to discard any previous CELT state */
+        if (s_mode != s_prev_mode  && s_prev_mode > 0 ) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+        celt_ret = celt_decode_with_ec(outbuf, audiosize);
+    } else {
+        // unsigned char silence[2] = {0xFF, 0xFF};
+        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = 0;
+        /* For hybrid -> SILK transitions, we let the CELT MDCT do a fade-out by decoding a silence frame */
+        if (s_prev_mode == MODE_HYBRID) {
+            celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
+            celt_decode_with_ec(outbuf, 120);
+        }
     }
-    return ret;
+
+    if (s_mode != MODE_CELT_ONLY) {
+        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = SAT16(ADD32(outbuf[i], pcm_silk[i]));
+    }
+
+    s_prev_mode = s_mode;
+    if(pcm_silk){free(pcm_silk); pcm_silk = nullptr;}
+    return celt_ret < 0 ? celt_ret : audiosize;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame){
@@ -456,26 +505,25 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
     int32_t ret = 0;
-    static uint16_t c1fs = 0;
     if(*frameCount == 0){
         packetLen--;
         inbuf++;
         *bytesLeft -= 1;
         s_opusCurrentFilePos += 1;
-        c1fs = packetLen / 2;
+        s_ofp3.c1fs = packetLen / 2;
         // log_w("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
         *frameCount = 2;
     }
     if(*frameCount > 0){
-        ret = opus_decode_frame(inbuf, outbuf, c1fs, samplesPerFrame);
+        ret = opus_decode_frame(inbuf, outbuf, s_ofp3.c1fs, samplesPerFrame);
         // log_w("code 1, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
         }
         s_opusValidSamples = ret;
-        *bytesLeft -= c1fs;
-        s_opusCurrentFilePos += c1fs;
+        *bytesLeft -= s_ofp3.c1fs;
+        s_opusCurrentFilePos += s_ofp3.c1fs;
     }
     *frameCount -= 1;
     return ERR_OPUS_NONE;
@@ -511,50 +559,48 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
     int32_t ret = 0;
-    static uint16_t firstFrameLength = 0;
-    static uint16_t secondFrameLength = 0;
 
     if(*frameCount == 0){
         uint8_t b1 = inbuf[1];
         uint8_t b2 = inbuf[2];
         if(b1 < 252){
-            firstFrameLength = b1;
+            s_ofp2.firstFrameLength = b1;
             packetLen -= 2;
             *bytesLeft -= 2;
             s_opusCurrentFilePos += 2;
             inbuf += 2;
         }
         else{
-            firstFrameLength = b1 + (b2 * 4);
+            s_ofp2.firstFrameLength = b1 + (b2 * 4);
             packetLen -= 3;
             *bytesLeft -= 3;
             s_opusCurrentFilePos += 3;
             inbuf += 3;
         }
-        secondFrameLength = packetLen - firstFrameLength;
+        s_ofp2.secondFrameLength = packetLen - s_ofp2.firstFrameLength;
         *frameCount = 2;
     }
     if(*frameCount == 2){
-        ret = opus_decode_frame(inbuf, outbuf, firstFrameLength, samplesPerFrame);
+        ret = opus_decode_frame(inbuf, outbuf, s_ofp2.firstFrameLength, samplesPerFrame);
         // log_w("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
         }
         s_opusValidSamples = ret;
-        *bytesLeft -= firstFrameLength;
-        s_opusCurrentFilePos += firstFrameLength;
+        *bytesLeft -= s_ofp2.firstFrameLength;
+        s_opusCurrentFilePos += s_ofp2.firstFrameLength;
     }
     if(*frameCount == 1){
-        ret = opus_decode_frame(inbuf, outbuf, secondFrameLength, samplesPerFrame);
+        ret = opus_decode_frame(inbuf, outbuf, s_ofp2.secondFrameLength, samplesPerFrame);
         // log_w("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
         }
         s_opusValidSamples = ret;
-        *bytesLeft -= secondFrameLength;
-        s_opusCurrentFilePos += secondFrameLength;
+        *bytesLeft -= s_ofp2.secondFrameLength;
+        s_opusCurrentFilePos += s_ofp2.secondFrameLength;
     }
     *frameCount -= 1;
     return ERR_OPUS_NONE;
@@ -660,37 +706,31 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 */
-    static bool    firstCall = true;
-    static bool    v = false; // VBR indicator
-    static bool    p = false; // padding exists
-    static int16_t fs = 0;    // frame size
-    static uint8_t M = 0;     // nr of frames
-    static int32_t spf = 0;   // static samples per frame
-    static int32_t paddingLength = 0;
+
     uint32_t       idx = 0;   // includes TOC byte
     int32_t        ret = 0;
     int32_t        remainingBytes = 0;
     uint16_t       vfs[48] = {0}; // variable frame size
 
-    if (firstCall) {
-        firstCall = false;
+    if (s_ofp3.firstCall) {
+        s_ofp3.firstCall = false;
         s_opusCurrentFilePos += packetLen;
-        paddingLength = 0;
+        s_ofp3.paddingLength = 0;
         idx = 1; // skip TOC byte
-        spf = samplesPerFrame;
-        if (inbuf[idx] & 0b10000000) v = true; // VBR indicator
-        if (inbuf[idx] & 0b01000000) p = true; // padding bit
-        M = inbuf[idx] & 0b00111111;           // framecount
-        *frameCount = M;
+        s_ofp3.spf = samplesPerFrame;
+        if (inbuf[idx] & 0b10000000) s_ofp3.v = true; // VBR indicator
+        if (inbuf[idx] & 0b01000000) s_ofp3.p = true; // padding bit
+        s_ofp3.M = inbuf[idx] & 0b00111111;           // framecount
+        *frameCount = s_ofp3.M;
         idx++;
-        if (p) {
-            while (inbuf[idx] == 255) { paddingLength += 255, idx++; }
-            paddingLength += inbuf[idx];
+        if (s_ofp3.p) {
+            while (inbuf[idx] == 255) { s_ofp3.paddingLength += 255, idx++; }
+            s_ofp3.paddingLength += inbuf[idx];
             idx++;
         }
-        if (v && M) { // variable frame size
+        if (s_ofp3.v && s_ofp3.M) { // variable frame size
             uint8_t m = 0;
-            while(m <  M) {
+            while(m <  s_ofp3.M) {
                 vfs[m] = inbuf[idx];
                 if(vfs[m] == 255) {vfs[m] = 255; idx++;}
                 idx++;
@@ -698,38 +738,38 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
                 // log_e("vfs[m] %i", vfs[m]);
             }
         }
-        remainingBytes = packetLen - paddingLength - idx;
+        remainingBytes = packetLen - s_ofp3.paddingLength - idx;
         if (remainingBytes < 0) {
             // log_e("fs %i", fs);
             *bytesLeft -= packetLen;
             *frameCount = 0;
-            firstCall = true;
+            s_ofp3.firstCall = true;
             return ERR_OPUS_NONE;
         }
-        if(!v){
-            fs = remainingBytes / M;
+        if(!s_ofp3.v){
+            s_ofp3.fs = remainingBytes / s_ofp3.M;
         }
-        if (fs > remainingBytes) {
+        if (s_ofp3.fs > remainingBytes) {
             *bytesLeft -= packetLen;
             *frameCount = 0;
-            firstCall = true;
+            s_ofp3.firstCall = true;
             return ERR_OPUS_NONE;
         }
         //  log_w("remainingBytes %i, packetLen %i, paddingLength %i, idx %i, fs %i, frameCount %i", remainingBytes, packetLen, paddingLength, idx, fs, *frameCount);
         *bytesLeft -= idx;
     }
     if(*frameCount > 0){
-        if(v){ret = opus_decode_frame(inbuf + idx, outbuf, vfs[M - (*frameCount)], spf); *bytesLeft -= vfs[M - (*frameCount)]; /* log_e("code 3, vfs[M - (*frameCount)], spf) %i",  vfs[M - (*frameCount)], spf); */ }
-        else{ ret = opus_decode_frame(inbuf + idx, outbuf, fs, spf); *bytesLeft -= fs; /* log_e("code 3, fs, spf) %i", fs, spf); */ }
+        if(s_ofp3.v){ret = opus_decode_frame(inbuf + idx, outbuf, vfs[s_ofp3.M - (*frameCount)], s_ofp3.spf); *bytesLeft -= vfs[s_ofp3.M - (*frameCount)]; /* log_e("code 3, vfs[M - (*frameCount)], spf) %i",  vfs[M - (*frameCount)], spf); */ }
+        else{ ret = opus_decode_frame(inbuf + idx, outbuf, s_ofp3.fs, s_ofp3.spf); *bytesLeft -= s_ofp3.fs; /* log_e("code 3, fs, spf) %i", fs, spf); */ }
         // log_w("code 3, ret %i", ret);
         *frameCount -= 1;
         s_opusValidSamples = ret;
         if(*frameCount > 0) return OPUS_CONTINUE;
     }
-    *bytesLeft -= paddingLength;
+    *bytesLeft -= s_ofp3.paddingLength;
     *frameCount = 0;
     s_opusValidSamples = samplesPerFrame;
-    firstCall = true;
+    s_ofp3.firstCall = true;
     return ERR_OPUS_NONE;
 }
 
@@ -782,6 +822,9 @@ char* OPUSgetStreamTitle(){
         return s_opusChbuf;
     }
     return NULL;
+}
+uint16_t OPUSgetMode(){
+    return s_mode;
 }
 vector<uint32_t> OPUSgetMetadataBlockPicture(){
     if(s_f_opusNewMetadataBlockPicture){

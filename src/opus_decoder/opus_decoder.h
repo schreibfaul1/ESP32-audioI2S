@@ -35,6 +35,28 @@ enum : int8_t  {OPUS_END = 120,
                 ERR_OPUS_CELT_START_BAND = -27,
                 ERR_CELT_OPUS_INTERNAL_ERROR = -28};
 
+enum {MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001,  MODE_CELT_ONLY = 1002};
+typedef struct _ofp2 {
+    uint16_t firstFrameLength;
+    uint16_t secondFrameLength;
+} ofp2;
+
+typedef struct _ofp3 { // opus_FramePacking_Code
+    bool        firstCall = true;
+    bool        v = false; // VBR indicator
+    bool        p = false; // padding exists
+    int16_t     fs = 0;    // frame size
+    uint8_t     M = 0;     // nr of frames
+    int32_t     spf = 0;   // samples per frame
+    int32_t     paddingLength = 0;
+    uint16_t    c1fs = 0;
+} ofp3;
+
+typedef struct _odp3 {
+    int8_t configNr;
+    uint16_t samplesPerFrame;
+} odp3;
+
 bool             OPUSDecoder_AllocateBuffers();
 void             OPUSDecoder_FreeBuffers();
 void             OPUSDecoder_ClearBuffers();
@@ -53,6 +75,7 @@ uint32_t         OPUSGetBitRate();
 uint16_t         OPUSGetOutputSamps();
 uint32_t         OPUSGetAudioDataStart();
 char*            OPUSgetStreamTitle();
+uint16_t         OPUSgetMode();
 vector<uint32_t> OPUSgetMetadataBlockPicture();
 int32_t          OPUSFindSyncWord(unsigned char* buf, int32_t nBytes);
 int32_t          OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft);

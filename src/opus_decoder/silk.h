@@ -1041,6 +1041,7 @@ using silk_ptr_obj = std::unique_ptr<T, Silk_PsramDeleter>;
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 bool SILKDecoder_AllocateBuffers();
+void SILKDecoder_ClearBuffers();
 void SILKDecoder_FreeBuffers();
 void silk_ana_filt_bank_1(const int16_t *in, int32_t *S, int16_t *outL, int16_t *outH, const int32_t N);
 void silk_biquad_alt_stride1(const int16_t *in, const int32_t *B_Q28, const int32_t *A_Q28, int32_t *S,

@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.1a                                                                                                                                ";
-/*  Updated on: Jun 12.2025
+    Version 3.3.2                                                                                                                                ";
+/*  Updated on: Jun 14.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -321,6 +321,7 @@ void Audio::setDefaults() {
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_sumBytesDecoded = 0;
+    m_opus_mode = 0;
     m_vuLeft = m_vuRight = 0; // #835
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
     if(m_f_reset_m3u8Codec){m_m3u8Codec = CODEC_AAC;} // reset to default
@@ -4814,7 +4815,16 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 // log_i("---------------------------------------------------------------------------");
                                 if(audio_oggimage) audio_oggimage(audiofile, vec);
                             }
+
+                            if(m_opus_mode != OPUSgetMode()){
+                                m_opus_mode = OPUSgetMode();
+                                if(m_opus_mode == MODE_CELT_ONLY) log_info("Opus Mode: CELT_ONLY");
+                                if(m_opus_mode == MODE_HYBRID)    log_info("Opus Mode: HYBRID");
+                                if(m_opus_mode == MODE_SILK_ONLY) log_info("Opus Mode: SILK_ONLY");
+                                if(m_opus_mode == MODE_NONE)      log_info("Opus Mode: NONE");
+                            }
                             break;
+
         case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
                             m_validSamples = VORBISGetOutputSamps();
                             st = VORBISgetStreamTitle();
