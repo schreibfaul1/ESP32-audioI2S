@@ -726,6 +726,7 @@ private:
     uint16_t        m_vol = 21;                     // volume
     uint16_t        m_vol_steps = 21;               // default
     int16_t         m_inputHistory[6] = {0};        // used in resampleTo48kStereo()
+    uint16_t        m_opus_mode = 0;                // celt_only, silk_only or hybrid
     double          m_limit_left = 0;               // limiter 0 ... 1, left channel
     double          m_limit_right = 0;              // limiter 0 ... 1, right channel
     uint8_t         m_timeoutCounter = 0;           // timeout counter
