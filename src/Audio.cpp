@@ -461,7 +461,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     if (res) {
         uint32_t dt = millis() - t;
         m_lastHost.assign(host.get());
-        AUDIO_INFO("%s has been established in %lu ms, free Heap: %lu bytes", "SSL", (long unsigned int) dt, (long unsigned int) ESP.getFreeHeap());
+        AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
     }
 
@@ -525,7 +525,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     c_host.assign(host); // make a copy
     h_host = urlencode(c_host.get(), true);
-
     trim(h_host.get());  // remove leading and trailing spaces
     lenHost = strlen(h_host.get());
 
@@ -583,7 +582,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(res) {
         uint32_t dt = millis() - timestamp;
         m_lastHost.assign(c_host.get());
-        AUDIO_INFO("%s has been established in %lu ms %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
+        AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
         _client->print(rqh.get());
         if(h_host.ends_with_icase( ".mp3" ))      m_expectedCodec  = CODEC_MP3;
@@ -4001,11 +4000,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-        // int16_t posColon = rhl.index_of(':', 0); // lowercase all letters up to the colon
-        // if(posColon >= 0) {
-        //     for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
-        // }
-        // log_e("rhl: %s", rhl);
         if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl.get()[9];
@@ -4031,7 +4025,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("location:")) {
-            int pos = rhl.index_of("http", 0);
+            int pos = rhl.index_of_icase("http", 0);
             if(pos >= 0) {
                 const char* c_host = (rhl.get() + pos);
                 if(strcmp(c_host, m_lastHost.get()) != 0) { // prevent a loop
@@ -4058,40 +4052,37 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if(rhl.starts_with_icase("content-encoding:")) {
             AUDIO_INFO("%s", rhl.get());
-            if(rhl.index_of("gzip")) {
+            if(rhl.index_of_icase("gzip")) {
                 AUDIO_INFO("can't extract gzip");
                 goto exit;
             }
         }
 
-        else if(rhl.starts_with_icase("content-disposition:")) {
-            int pos1, pos2; // pos3;
-            // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
-            // filename is: "stream.asx"
-            pos1 = rhl.index_of("filename=", 0);
-            if(pos1 > 0) {
-                pos1 += 9;
-                if(rhl.get()[pos1] == '\"') pos1++; // remove '\"' around filename if present
-                pos2 = rhl.strlen();
-                if(rhl.get()[pos2 - 1] == '\"') rhl.get()[pos2 - 1] = '\0';
+        else if(rhl.starts_with_icase("content-disposition:")) { // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
+            int idx = rhl.index_of_icase("filename=");
+            if (idx >= 0)  {
+                ps_ptr<char> fn;
+                fn.assign(rhl.get() + idx + 9); // Position directly after "filename="
+                fn.replace("\"", ""); // remove '\"' around filename if present
+                fn.replace("\'", ""); // remove '\'' around filename if present
+                AUDIO_INFO("Filename is %s", fn.get());
             }
-            AUDIO_INFO("Filename is %s", rhl.get() + pos1);
         }
-
         else if(rhl.starts_with_icase("connection:")) {
-            if(rhl.index_of("close", 0) >= 0) { ; /* do nothing */ }
+            if(rhl.index_of_icase("close", 0) >= 0) { ; /* do nothing */ }
         }
 
         else if(rhl.starts_with_icase("icy-genre:")) {
-            ; // do nothing Ambient, Rock, etc
+            AUDIO_INFO("icy-genre: %s", rhl.get() + 10 ); // Ambient, Rock, etc
         }
 
         else if(rhl.starts_with_icase("icy-logo:")) {
-            char* c_icylogo = (rhl.get() + 9); // Get logo URL
-            trim(c_icylogo);
-            if(strlen(c_icylogo) > 0) {
-                // AUDIO_INFO("icy-logo: %s", c_icylogo);
-                if(audio_icylogo) audio_icylogo(c_icylogo);
+            ps_ptr<char> icyLogo;
+            icyLogo.assign(rhl.get() + 9); // Get logo URL
+            icyLogo.trim();
+            if(icyLogo.strlen() > 0){
+                AUDIO_INFO("icy-logo: %s", icyLogo.get());
+                if(audio_icylogo) audio_icylogo(icyLogo.get());
             }
         }
 
@@ -4112,11 +4103,12 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-name:")) {
-            char* c_icyname = (rhl.get() + 9); // Get station name
-            trim(c_icyname);
-            if(strlen(c_icyname) > 0) {
-                // AUDIO_INFO("icy-name: %s", c_icyname);
-                if(audio_showstation) audio_showstation(c_icyname);
+            ps_ptr<char> icyName;
+            icyName.assign(rhl.get() + 9); // Get station name
+            icyName.trim();
+            if(icyName.strlen() > 0) {
+                AUDIO_INFO("icy-name: %s", icyName.get());
+                if(audio_showstation) audio_showstation(icyName.get());
             }
         }
 
