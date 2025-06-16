@@ -1,0 +1,526 @@
+#pragma once
+
+#include "Arduino.h"
+#include <memory>
+#include <cstring>
+#include <cstdio>
+#include <algorithm>
+#include <type_traits>
+
+/** Auxiliary functions for using Unique Pointers in PSRAM **/
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// PSRAM Deleter (ps_malloc → free)
+struct PsramDeleter {
+    void operator()(void* ptr) const {
+        if (ptr) {
+            free(ptr);
+        }
+    }
+};
+
+// Uniform smart pointer with optional strdup support for T = char
+template <typename T>
+
+class ps_ptr {
+    std::unique_ptr<void, PsramDeleter> mem;
+    size_t allocated_size = 0;
+
+
+public:
+    ps_ptr() = default;
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A L L O C  📌📌📌
+
+    // ps_ptr <char>test;
+    // test.alloc(100, "test"); // ps_malloc, It is not necessary to specify a name, only for debugging OOM etc.
+    // if(test.valid()) {
+    //     printf("Größe: %u\n", test.size());
+    //     test.clear(); // memset "0"
+    // }
+
+    void alloc(std::size_t size, const char* name = nullptr) {
+        mem.reset(ps_malloc(size));
+        allocated_size = size;
+        if (!mem) {
+            printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
+        }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E A L L O C  📌📌📌
+
+    // test.realloc(200, "test"); // It is not necessary to specify a name, only for debugging OOM etc.
+    // printf("new size:  %i\n", test.size());
+    // printf("%s\n", test.get());
+
+    void realloc(size_t new_size, const char* name = nullptr) {
+        void* new_mem = ps_malloc(new_size);
+        if (!new_mem) {
+            printf("OOM: failed to realloc %zu bytes for %s\n", new_size, name ? name : "unnamed");
+            return;
+        }
+
+        if (mem && allocated_size > 0) {
+            std::memcpy(new_mem, mem.get(), std::min(allocated_size, new_size));
+        }
+
+        mem.reset(new_mem);
+        allocated_size = new_size;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A S S I G N  📌📌📌
+
+    // ps_ptr <char> my_str1;
+    // my_str1.assign("Hallo", "my_str1"); // ps_strdup()
+    // printf("%s\n", my_str1.get());
+    // my_str1.get()[3] = 'x';
+    // printf("%s\n", my_str1.get());
+
+
+    void assign(const char* src, const char* name = nullptr) { // Only for T = char: Is similar to strdup (full copy)
+        static_assert(std::is_same_v<T, char>, "assign(const char*) is only valid for ps_ptr<char>");
+        if (!src) {
+            reset();
+            return;
+        }
+        std::size_t len = std::strlen(src) + 1;
+        alloc(len, name);
+        if (mem) {
+            std::memcpy(mem.get(), src, len);
+        }
+    }
+
+    // ps_ptr <char> my_str2;
+    // my_str2.assign("Hallo", 5, "my_str1"); // ps_strndup()
+    // printf("%s\n", my_str2.get());
+
+
+    // Only for T T = char: similar to strndup (max. n chars)
+    void assign(const char* src, std::size_t max_len, const char* name = nullptr) {
+        static_assert(std::is_same_v<T, char>, "assign(const char*, size_t) is only valid for ps_ptr<char>");
+        if (!src) {
+            reset();
+            return;
+        }
+        std::size_t actual_len = strnlen(src, max_len);
+        std::size_t total = actual_len + 1;
+        alloc(total, name);
+        if (mem) {
+            std::memcpy(mem.get(), src, actual_len);
+            static_cast<char*>(mem.get())[actual_len] = '\0';
+        }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C O P Y _ F R O M   📌📌📌
+    // Counted Count elements from the external pointer to the PSRAM, similar to memcpy
+
+    // Strings
+    // const char* msg = "Hallo";
+    // ps_ptr<char> text;
+    // text.copy_from(msg, strlen(msg) + 1, "text");
+
+    // Integer-Array
+    // int32_t values[] = {10, 20, 30};
+    // ps_ptr<int32_t> data;
+    // data.copy_from(values, 3, "data");
+
+    // Float-Array
+    // float samples[] = {0.1f, 0.2f, 0.3f};
+    // ps_ptr<float> buf;
+    // buf.copy_from(samples, 3, "buffer");
+    // printf("%f\n", buf.get()[2]);
+    // buf.get()[2] = 4.5;
+    // printf("%f\n", buf.get()[2]);
+
+    void copy_from(const T* src, std::size_t count, const char* name = nullptr) {
+        std::size_t bytes = count * sizeof(T);
+        alloc(bytes, name);
+        if (mem && src) {
+            std::memcpy(mem.get(), src, bytes);
+        }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A P P E N D  📌📌📌
+
+    // ps_ptr<char> text1; // like Strcat with automatic new allocation
+    // text1.assign("Hallo", "text");
+    // text1.append(", Welt!");
+    // printf("%s\n", text1.get());  // → "Hallo, Welt!"
+
+    template <typename U = T>// Only activate if T = char, similar to strcat
+    typename std::enable_if<std::is_same<U, char>::value, void>::type
+    append(const char* suffix) {
+        if (!suffix || !*suffix) return;
+
+        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
+        std::size_t add_len = std::strlen(suffix);
+        std::size_t new_len = old_len + add_len + 1; // +1 für null-Terminator
+
+        // Alten Speicher übernehmen
+        char* old_data = static_cast<char*>(mem.release());
+
+        // Neu allokieren
+        mem.reset(ps_malloc(new_len));
+        if (!mem) {
+            printf("OOM: append() failed for %zu bytes\n", new_len);
+            return;
+        }
+
+        // Copy existing content
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
+
+        // Suffix anhängen
+        std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, add_len + 1);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F O R M A T   📌📌📌
+
+    // ps_ptr<char> greeting;
+    // greeting.format("Value: %d, Text: %s", 42, "Hello"); // sprintf
+    // printf("%s\n", greeting.get());  // → Wert: 42, Text: Hello
+
+    template <typename U = T> // Only activate if T = char
+    typename std::enable_if<std::is_same<U, char>::value, void>::type
+    format(const char* fmt, ...) {
+        if (!fmt) return;
+
+        va_list args;
+        va_start(args, fmt);
+
+        // Erstmal herausfinden, wie groß der Formatstring ist
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int len = vsnprintf(nullptr, 0, fmt, args_copy);
+        va_end(args_copy);
+
+        if (len < 0) {
+            va_end(args);
+            return;
+        }
+
+        // +1 für null-Terminator
+        std::size_t buf_size = static_cast<std::size_t>(len) + 1;
+        alloc(buf_size, "formatted_string");
+
+        if (mem) {
+            vsnprintf(static_cast<char*>(mem.get()), buf_size, fmt, args);
+        }
+
+        va_end(args);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A P P E N D F   📌📌📌
+
+    // ps_ptr<char> message;
+    // message.assign("Error: ");
+    // message.appendf("Code %d, Modul %s", 404, "Network");
+    // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
+
+    // Nur aktivieren, wenn T = char
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, void>::type
+    appendf(const char* fmt, ...) {
+        if (!fmt) return;
+
+        // Formatstring vorbereiten
+        va_list args;
+        va_start(args, fmt);
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int add_len = vsnprintf(nullptr, 0, fmt, args_copy);
+        va_end(args_copy);
+
+        if (add_len < 0) {
+            va_end(args);
+            return;
+        }
+
+        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
+        std::size_t new_len = old_len + static_cast<std::size_t>(add_len) + 1;
+
+        // Speicher reservieren
+        char* old_data = static_cast<char*>(mem.release());
+        mem.reset(ps_malloc(new_len));
+        if (!mem) {
+            printf("OOM: appendf() failed for %zu bytes\n", new_len);
+            if (old_data) free(old_data);
+            va_end(args);
+            return;
+        }
+
+        // Vorherigen Inhalt übernehmen
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
+
+        // Formatierter Teil wird angehängt
+        vsnprintf(static_cast<char*>(mem.get()) + old_len, new_len - old_len, fmt, args);
+        va_end(args);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌 I N D E X _ O F   📌📌📌
+
+    // Strings
+    // ps_ptr<char> text3;
+    // text3.assign("Hello, World!");
+    // int pos = text3.index_of('l');     // → 2
+    // printf("found  %i\n", pos);
+    // int not_found = text3.index_of('x'); // → -1
+    // printf("not_found  %i\n", not_found);
+    // pos = text3.index_of('l', 5);
+    // printf("found  %i\n", pos);
+
+    // Array
+    // ps_ptr<int> numbers;
+    // numbers.copy_from((int[]){10, 20, 30, 40, 50}, 5);
+    // int idx = numbers.index_of(30);  // → 2
+    // printf("pos  %i\n", idx);
+
+    // General version: for any T (e.g. Int, Float, Structs)
+    int index_of(const T& value, std::size_t start = 0) const {
+        if (!mem || allocated_size < sizeof(T)) return -1;
+
+        std::size_t count = allocated_size / sizeof(T);
+        if (start >= count) return -1;
+
+        T* data = get();
+        for (std::size_t i = start; i < count; ++i) {
+            if (data[i] == value) return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    // Spezialisierte Version: nur für T = char (einzelnes Zeichen suchen)
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, int>::type
+    index_of(char ch, std::size_t start = 0) const {
+        if (!mem) return -1;
+
+        const char* str = static_cast<const char*>(mem.get());
+        std::size_t len = std::strlen(str);
+        if (start >= len) return -1;
+
+        for (std::size_t i = start; i < len; ++i) {
+            if (str[i] == ch) return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, int>::type
+    last_index_of(char ch) const {
+        if (!mem) return -1;
+
+        const char* str = static_cast<const char*>(mem.get());
+        int len = static_cast<int>(std::strlen(str));
+        for (int i = len - 1; i >= 0; --i) {
+            if (str[i] == ch) return i;
+        }
+        return -1;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌 L A S T _ I N D E X _ O F   📌📌📌
+
+    // ps_ptr<char> str1;
+    // str1.assign("OpenAI API Test");
+    // int last_i = str1.last_index_of('i');  // → -1 (kein 'i', aber 'I' ≠ 'i')
+    // int last_A = str1.last_index_of('A');  // → 5
+    // printf("last_i  %i\n", last_i);
+    // printf("last_A  %i\n", last_A);
+
+    int last_index_of(const T& value) const {
+        if (!mem || allocated_size < sizeof(T)) return -1;
+
+        std::size_t count = allocated_size / sizeof(T);
+        T* data = get();
+        for (int i = static_cast<int>(count) - 1; i >= 0; --i) {
+            if (data[i] == value) return i;
+        }
+        return -1;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌 I N D E X _ O F _ S U B S T R   📌📌📌
+
+    // ps_ptr<char> buffer;
+    // buffer.assign("abc123ID3TAGthisisjustatest...", "mp3scan");
+    // int pos1 = buffer.index_of_substr("ID3", 20); // → findet "ID3" bei Index 6
+    // printf("ID3 found at: %d\n", pos1);
+
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, int>::type
+    index_of_substr(const char* needle, std::size_t max_pos = SIZE_MAX) const {
+        if (!mem || !needle || !*needle) return -1;
+
+        const char* haystack = static_cast<const char*>(mem.get());
+        std::size_t hay_len = std::min(std::strlen(haystack), max_pos);
+        std::size_t needle_len = std::strlen(needle);
+
+        if (needle_len > hay_len) return -1;
+
+        for (std::size_t i = 0; i <= hay_len - needle_len; ++i) {
+            if (std::memcmp(haystack + i, needle, needle_len) == 0) {
+                return static_cast<int>(i);
+            }
+        }
+
+        return -1;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T R I M   📌📌📌
+
+    // ps_ptr<char> text3;
+    // text3.assign("  Hello, World!  ");
+    // text3.trim();  // → "Hello, World!"
+
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, void>::type
+    trim() {
+        if (!mem) return;
+
+        char* str = static_cast<char*>(mem.get());
+        std::size_t len = std::strlen(str);
+        if (len == 0) return;
+
+        // Links trimmen
+        char* start = str;
+        while (*start && isspace(*start)) ++start;
+
+        // Rechts trimmen
+        char* end = str + std::strlen(start);
+        while (end > start && isspace(*(end - 1))) --end;
+        *end = '\0';
+
+        // Wenn Anfang nicht gleich str, alles nach vorne kopieren
+        if (start != str) {
+            std::memmove(str, start, std::strlen(start) + 1);
+        }
+    }
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  G E T   📌📌📌
+    T* get() const { return static_cast<T*>(mem.get()); }
+    T* operator->() const { return get(); }
+    T& operator*() const { return *get(); }
+
+    void clear() {
+        if (mem && allocated_size > 0) {
+            std::memset(mem.get(), 0, allocated_size);
+        }
+    }
+
+    std::size_t size() const { return allocated_size; }
+
+    bool valid() const { return mem != nullptr; }
+
+    void reset() {
+        mem.reset();
+        allocated_size = 0;
+    }
+};
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  S T R U C T U R E S    📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    // This declaration must be in the header or in the global area
+    // typedef struct _s {
+    //     int a[100];
+    //     char* b;
+    //     char* c;
+    // } myS;
+    // // Important macro to release the strings
+    // PS_STRUCT_FREE_MEMBERS(myS, ptr->b, ptr->c)
+
+
+    // ps_struct_ptr<myS> mySt;
+    // mySt.alloc("myS");
+    // mySt->a[5] = 123;
+    // mySt.set_ptr_field(&mySt->b, "Hallo");
+    // mySt.set_ptr_field(&mySt->c, "Welt");
+
+    // printf("a[5]=%d, b=%s, c=%s\n", mySt->a[5], mySt->b, mySt->c);
+
+    // // Automatisch: b und c werden bei reset()/Destruktor freigegeben
+    // mySt.reset();
+
+template <typename T>
+class ps_struct_ptr {
+    ps_ptr<T> inner;
+
+public:
+    ps_struct_ptr() = default;
+
+    void alloc(const char* name = nullptr) {
+        inner.alloc(sizeof(T), name);
+        if (inner.valid()) inner.clear();
+    }
+
+    T* get() const { return inner.get(); }
+    T* operator->() const { return get(); }
+    T& operator*() const { return *inner; }
+
+    void set_ptr_field(char** field, const char* text) {
+        if (!valid() || !field) return;
+        if (*field) {
+            free(*field);
+            *field = nullptr;
+        }
+        if (text) {
+            std::size_t len = strlen(text) + 1;
+            char* p = static_cast<char*>(ps_malloc(len));
+            if (p) {
+                memcpy(p, text, len);
+                *field = p;
+            }
+        }
+    }
+
+    bool valid() const { return inner.valid(); }
+    std::size_t size() const { return inner.size(); }
+    void clear() { inner.clear(); }
+
+    void reset() {
+        if (inner.valid()) {
+            free_all_ptr_members();
+        }
+        inner.reset();
+    }
+
+    ~ps_struct_ptr() {
+        reset();
+    }
+
+protected:
+    // Wird über Makro PS_STRUCT_FREE_MEMBERS spezialisiert
+    inline void free_all_ptr_members() {}
+};
+
+
+
+// ——————————————————————————————————————————————————————————————
+// Macro for the declaration of releasing fields for a structure
+
+#define PS_STRUCT_FREE_MEMBERS(TYPE, ...) \
+    template <> \
+    inline void ps_struct_ptr<TYPE>::free_all_ptr_members() { \
+        auto ptr = get(); \
+        free_fields(__VA_ARGS__); \
+    }
+
+inline void free_field(char*& field) {
+    if (field) {
+        free(field);
+        field = nullptr;
+    }
+}
+
+// Variadic Auxiliary function
+template <typename... Args>
+inline void free_fields(Args&... fields) {
+    (free_field(fields), ...);
+}
