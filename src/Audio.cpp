@@ -248,8 +248,8 @@ esp_err_t Audio::I2Sstart() {
 }
 
 esp_err_t Audio::I2Sstop() {
-    memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
-    memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
+    m_outBuff.clear(); // Clear OutputBuffer
+    m_samplesBuff48K.clear(); // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
 }
@@ -270,8 +270,8 @@ void Audio::setDefaults() {
     AACDecoder_FreeBuffers();
     OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
-    memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
-    memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear samplesBuff48K
+    m_outBuff.clear(); // Clear OutputBuffer
+    m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     m_hashQueue.clear();
@@ -499,6 +499,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     ps_ptr<char> c_host; // copy of host
     ps_ptr<char> h_host;
     ps_ptr<char> rqh; // request header
+    ps_ptr<char> toEncode;
 
 //    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
 //        |   |                                     |    |                              |
@@ -513,11 +514,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     authorization.alloc(base64_encode_expected_len(authLen + 1) + 1);
     authorization.clear();
     if(authLen > 0) {
-        ps_ptr<char>toEncode; toEncode.alloc(authLen + 4);
-        strcpy(toEncode.get(), user);
-        strcat(toEncode.get(), ":");
-        strcat(toEncode.get(), pwd);
-        b64encode((const char*)toEncode.get(), strlen(toEncode.get()), authorization.get());
+        toEncode.assign(user);
+        toEncode.append(":");
+        toEncode.append(pwd);
+        b64encode((const char*)toEncode.get(), toEncode.strlen(), authorization.get());
     }
 
     if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
@@ -535,9 +535,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = indexOf(h_host.get(), "/", 10); // position of "/" in hostname
-    pos_colon     = indexOf(h_host.get(), ":", 10); if(isalpha(c_host.get()[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = indexOf(h_host.get(), "&", 10); // position of "&" in hostname
+    pos_slash     = h_host.index_of('/', 10); // position of "/" in hostname
+    pos_colon     = h_host.index_of(':', 10); if(isalpha(c_host.get()[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_ampersand = h_host.index_of('&', 10); // position of "&" in hostname
 
     if(pos_slash > 0) h_host.get()[pos_slash] = '\0';
     if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
@@ -545,25 +545,25 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         h_host.get()[pos_colon] = '\0';
     }
     setDefaults();
-    rqh.alloc(lenHost + strlen(authorization.get()) + 330); // http request header
+    rqh.alloc(lenHost + authorization.strlen() + 330); // http request header
     if(rqh.valid()) rqh.clear();
     else {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
 
-                       strcat(rqh.get(), "GET /");
-    if(pos_slash > 0){ strcat(rqh.get(), h_host.get() + pos_slash + 1);}
-                       strcat(rqh.get(), " HTTP/1.1\r\n");
-                       strcat(rqh.get(), "Host: ");
-                       strcat(rqh.get(), h_host.get() + hostwoext_begin);
-                       strcat(rqh.get(), "\r\n");
-                       strcat(rqh.get(), "Icy-MetaData:1\r\n");
-                       strcat(rqh.get(), "Icy-MetaData:2\r\n");
-                       strcat(rqh.get(), "Accept:*/*\r\n");
-                       strcat(rqh.get(), "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
-    if(authLen > 0) {  strcat(rqh.get(), "Authorization: Basic ");
-                       strcat(rqh.get(), authorization.get());
-                       strcat(rqh.get(), "\r\n"); }
-                       strcat(rqh.get(), "Accept-Encoding: identity;q=1,*;q=0\r\n");
-                       strcat(rqh.get(), "Connection: keep-alive\r\n\r\n");
+                       rqh.assign("GET /");
+    if(pos_slash > 0){ rqh.append(h_host.get() + pos_slash + 1);}
+                       rqh.append(" HTTP/1.1\r\n");
+                       rqh.append("Host: ");
+                       rqh.append(h_host.get() + hostwoext_begin);
+                       rqh.append("\r\n");
+                       rqh.append("Icy-MetaData:1\r\n");
+                       rqh.append("Icy-MetaData:2\r\n");
+                       rqh.append("Accept:*/*\r\n");
+                       rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+    if(authLen > 0) {  rqh.append("Authorization: Basic ");
+                       rqh.append(authorization.get());
+                       rqh.append("\r\n"); }
+                       rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
+                       rqh.append("Connection: keep-alive\r\n\r\n");
 
     if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
     else        { _client = static_cast<WiFiClient*>(&client); }
@@ -586,19 +586,19 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_INFO("%s has been established in %lu ms %lu bytes", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
         _client->print(rqh.get());
-        if(endsWith(h_host.get(), ".mp3" ))      m_expectedCodec  = CODEC_MP3;
-        if(endsWith(h_host.get(), ".aac" ))      m_expectedCodec  = CODEC_AAC;
-        if(endsWith(h_host.get(), ".wav" ))      m_expectedCodec  = CODEC_WAV;
-        if(endsWith(h_host.get(), ".m4a" ))      m_expectedCodec  = CODEC_M4A;
-        if(endsWith(h_host.get(), ".ogg" ))      m_expectedCodec  = CODEC_OGG;
-        if(endsWith(h_host.get(), ".flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host.get(), "-flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(endsWith(h_host.get(), ".opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host.get(), "/opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(endsWith(h_host.get(), ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
-        if(endsWith(h_host.get(), ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
-        if(endsWith(h_host.get(), ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
-        if(indexOf( h_host.get(), ".m3u8") >= 0){m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost.get());}
+        if(h_host.ends_with_icase( ".mp3" ))      m_expectedCodec  = CODEC_MP3;
+        if(h_host.ends_with_icase( ".aac" ))      m_expectedCodec  = CODEC_AAC;
+        if(h_host.ends_with_icase( ".wav" ))      m_expectedCodec  = CODEC_WAV;
+        if(h_host.ends_with_icase( ".m4a" ))      m_expectedCodec  = CODEC_M4A;
+        if(h_host.ends_with_icase( ".ogg" ))      m_expectedCodec  = CODEC_OGG;
+        if(h_host.ends_with_icase( ".flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(h_host.ends_with_icase( "-flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(h_host.ends_with_icase( ".opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(h_host.ends_with_icase( "/opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(h_host.ends_with_icase( ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
+        if(h_host.ends_with_icase( ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
+        if(h_host.ends_with_icase( ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
+        if(h_host.index_of(".m3u8") >= 0)        {m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost.get());}
 
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
@@ -869,9 +869,8 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
     if(endsWith(path, ".oga"))  {codec = CODEC_OGG;  m_f_ogg = true;}
     if(codec == CODEC_NONE) {AUDIO_INFO("The %s format is not supported", path + dotPos); goto exit;}   // guard
 
-    audioPath.alloc(strlen(path) + 2);
-    if(path[0] != '/')audioPath.get()[0] = '/';
-    strcat(audioPath.get(), path);
+    audioPath.assign(path);
+    if(!audioPath.starts_with("/")) audioPath.insert("/", 0);
 
     if(!fs.exists(audioPath.get())) {AUDIO_INFO("file not found: %s", audioPath.get()); goto exit;}
     AUDIO_INFO("Reading file: \"%s\"", audioPath.get());
@@ -3962,7 +3961,9 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     }
     f_time = false;
 
-    char rhl[512] = {0}; // responseHeaderline
+    ps_ptr<char>rhl;
+    rhl.alloc(1024, "rhl"); // responseHeaderline
+    rhl.clear();
     bool ct_seen = false;
 
     while(true) { // outer while
@@ -3981,16 +3982,16 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 }
                 break;
             }
-            if(b == '\r') rhl[pos] = 0;
+            if(b == '\r') rhl.get()[pos] = 0;
             if(b < 0x20) continue;
-            rhl[pos] = b;
+            rhl.get()[pos] = b;
             pos++;
-            if(pos == 511) {
-                pos = 510;
+            if(pos == 1023) {
+                pos = 1022;
                 continue;
             }
-            if(pos == 510) {
-                rhl[pos] = '\0';
+            if(pos == 1022) {
+                rhl.get()[pos] = '\0';
                 log_w("responseHeaderline overflow");
             }
         } // inner while
@@ -4000,39 +4001,39 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             continue;
         }
 
-        int16_t posColon = indexOf(rhl, ":", 0); // lowercase all letters up to the colon
-        if(posColon >= 0) {
-            for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
-        }
+        // int16_t posColon = rhl.index_of(':', 0); // lowercase all letters up to the colon
+        // if(posColon >= 0) {
+        //     for(int i = 0; i < posColon; i++) { rhl[i] = toLowerCase(rhl[i]); }
+        // }
         // log_e("rhl: %s", rhl);
-        if(startsWith(rhl, "HTTP/")) { // HTTP status error code
+        if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
-            statusCode[0] = rhl[9];
-            statusCode[1] = rhl[10];
-            statusCode[2] = rhl[11];
+            statusCode[0] = rhl.get()[9];
+            statusCode[1] = rhl.get()[10];
+            statusCode[2] = rhl.get()[11];
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
             if(sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                if(audio_showstreamtitle) audio_showstreamtitle(rhl);
+                if(audio_showstreamtitle) audio_showstreamtitle(rhl.get());
                 goto exit;
             }
         }
 
-        else if(startsWith(rhl, "content-type:")) { // content-type: text/html; charset=UTF-8
+        else if(rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
         //    log_w("cT: %s", rhl);
-            int idx = indexOf(rhl + 13, ";");
-            if(idx > 0) rhl[13 + idx] = '\0';
-            if(parseContentType(rhl + 13)) ct_seen = true;
+            int idx = rhl.index_of(';', 13);
+            if(idx > 0) rhl.get()[13 + idx] = '\0';
+            if(parseContentType(rhl.get() + 13)) ct_seen = true;
             else{
-                log_w("unknown contentType %s", rhl + 13);
+                log_w("unknown contentType %s", rhl.get() + 13);
                 goto exit;
             }
         }
 
-        else if(startsWith(rhl, "location:")) {
-            int pos = indexOf(rhl, "http", 0);
+        else if(rhl.starts_with_icase("location:")) {
+            int pos = rhl.index_of("http", 0);
             if(pos >= 0) {
-                const char* c_host = (rhl + pos);
+                const char* c_host = (rhl.get() + pos);
                 if(strcmp(c_host, m_lastHost.get()) != 0) { // prevent a loop
                     int pos_slash = indexOf(c_host, "/", 9);
                     if(pos_slash > 9) {
@@ -4055,38 +4056,38 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             }
         }
 
-        else if(startsWith(rhl, "content-encoding:")) {
-            AUDIO_INFO("%s", rhl);
-            if(indexOf(rhl, "gzip")) {
+        else if(rhl.starts_with_icase("content-encoding:")) {
+            AUDIO_INFO("%s", rhl.get());
+            if(rhl.index_of("gzip")) {
                 AUDIO_INFO("can't extract gzip");
                 goto exit;
             }
         }
 
-        else if(startsWith(rhl, "content-disposition:")) {
+        else if(rhl.starts_with_icase("content-disposition:")) {
             int pos1, pos2; // pos3;
             // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
             // filename is: "stream.asx"
-            pos1 = indexOf(rhl, "filename=", 0);
+            pos1 = rhl.index_of("filename=", 0);
             if(pos1 > 0) {
                 pos1 += 9;
-                if(rhl[pos1] == '\"') pos1++; // remove '\"' around filename if present
-                pos2 = strlen(rhl);
-                if(rhl[pos2 - 1] == '\"') rhl[pos2 - 1] = '\0';
+                if(rhl.get()[pos1] == '\"') pos1++; // remove '\"' around filename if present
+                pos2 = rhl.strlen();
+                if(rhl.get()[pos2 - 1] == '\"') rhl.get()[pos2 - 1] = '\0';
             }
-            AUDIO_INFO("Filename is %s", rhl + pos1);
+            AUDIO_INFO("Filename is %s", rhl.get() + pos1);
         }
 
-        else if(startsWith(rhl, "connection:")) {
-            if(indexOf(rhl, "close", 0) >= 0) { ; /* do nothing */ }
+        else if(rhl.starts_with_icase("connection:")) {
+            if(rhl.index_of("close", 0) >= 0) { ; /* do nothing */ }
         }
 
-        else if(startsWith(rhl, "icy-genre:")) {
+        else if(rhl.starts_with_icase("icy-genre:")) {
             ; // do nothing Ambient, Rock, etc
         }
 
-        else if(startsWith(rhl, "icy-logo:")) {
-            char* c_icylogo = (rhl + 9); // Get logo URL
+        else if(rhl.starts_with_icase("icy-logo:")) {
+            char* c_icylogo = (rhl.get() + 9); // Get logo URL
             trim(c_icylogo);
             if(strlen(c_icylogo) > 0) {
                 // AUDIO_INFO("icy-logo: %s", c_icylogo);
@@ -4094,8 +4095,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             }
         }
 
-        else if(startsWith(rhl, "icy-br:")) {
-            const char* c_bitRate = (rhl + 7);
+        else if(rhl.starts_with_icase("icy-br:")) {
+            const char* c_bitRate = (rhl.get() + 7);
             int32_t     br = atoi(c_bitRate); // Found bitrate tag, read the bitrate in Kbit
             br = br * 1000;
             setBitrate(br);
@@ -4103,15 +4104,15 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(audio_bitrate) audio_bitrate(m_chbuf.get());
         }
 
-        else if(startsWith(rhl, "icy-metaint:")) {
-            const char* c_metaint = (rhl + 12);
+        else if(rhl.starts_with_icase("icy-metaint:")) {
+            const char* c_metaint = (rhl.get() + 12);
             int32_t     i_metaint = atoi(c_metaint);
             m_metaint = i_metaint;
             if(m_metaint) m_f_metadata = true; // Multimediastream
         }
 
-        else if(startsWith(rhl, "icy-name:")) {
-            char* c_icyname = (rhl + 9); // Get station name
+        else if(rhl.starts_with_icase("icy-name:")) {
+            char* c_icyname = (rhl.get() + 9); // Get station name
             trim(c_icyname);
             if(strlen(c_icyname) > 0) {
                 // AUDIO_INFO("icy-name: %s", c_icyname);
@@ -4119,18 +4120,18 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             }
         }
 
-        else if(startsWith(rhl, "content-length:")) {
-            const char* c_cl = (rhl + 15);
+        else if(rhl.starts_with_icase("content-length:")) {
+            const char* c_cl = (rhl.get() + 15);
             int32_t     i_cl = atoi(c_cl);
             m_contentlength = i_cl;
             m_streamType = ST_WEBFILE; // Stream comes from a fileserver
             // AUDIO_INFO("content-length: %lu", (long unsigned int)m_contentlength);
         }
 
-        else if(startsWith(rhl, "icy-description:")) {
-            const char* c_idesc = (rhl + 16);
+        else if(rhl.starts_with_icase("icy-description:")) {
+            const char* c_idesc = (rhl.get() + 16);
             while(c_idesc[0] == ' ') c_idesc++;
-            latinToUTF8(rhl, sizeof(rhl)); // if already UTF-8 do nothing, otherwise convert to UTF-8
+            latinToUTF8(rhl.get(), rhl.size()); // if already UTF-8 do nothing, otherwise convert to UTF-8
             if(strlen(c_idesc) > 0 && specialIndexOf((uint8_t*)c_idesc, "24bit", 0) > 0) {
                 AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
                 stopSong();
@@ -4138,30 +4139,30 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(audio_icydescription) audio_icydescription(c_idesc);
         }
 
-        else if(startsWith(rhl, "transfer-encoding:")) {
-            if(endsWith(rhl, "chunked") || endsWith(rhl, "Chunked")) { // Station provides chunked transfer
+        else if(rhl.starts_with_icase("transfer-encoding:")) {
+            if(rhl.ends_with_icase("chunked")) { // Station provides chunked transfer
                 m_f_chunked = true;
                 AUDIO_INFO("chunked data transfer");
                 m_chunkcount = 0; // Expect chunkcount in DATA
             }
         }
 
-        else if(startsWith(rhl, "accept-ranges:")) {
-            if(endsWith(rhl, "bytes")) m_f_acceptRanges = true;
+        else if(rhl.starts_with("accept-ranges:")) {
+            if(rhl.ends_with_icase("bytes")) m_f_acceptRanges = true;
         //    log_w("%s", rhl);
         }
 
-        else if(startsWith(rhl, "content-range:")) {
+        else if(rhl.starts_with("content-range:")) {
         //    log_w("%s", rhl);
         }
 
-        else if(startsWith(rhl, "icy-url:")) {
-            char* icyurl = (rhl + 8);
+        else if(rhl.starts_with_icase("icy-url:")) {
+            char* icyurl = (rhl.get() + 8);
             trim(icyurl);
             if(audio_icyurl) audio_icyurl(icyurl);
         }
 
-        else if(startsWith(rhl, "www-authenticate:")) {
+        else if(rhl.starts_with_icase("www-authenticate:")) {
             AUDIO_INFO("authentification failed, wrong credentials?");
             goto exit;
         }

@@ -391,7 +391,7 @@ ends_with_icase(const char* suffix) const {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F   📌📌📌
 
-    // Strings
+    // char
     // ps_ptr<char> text3;
     // text3.assign("Hello, World!");
     // int pos = text3.index_of('l');     // → 2
@@ -400,6 +400,16 @@ ends_with_icase(const char* suffix) const {
     // printf("not_found  %i\n", not_found);
     // pos = text3.index_of('l', 5);
     // printf("found  %i\n", pos);
+
+    // const char*
+    // ps_ptr<char> path;
+    // path.assign("audio/music/song.mp3");
+    // 
+    // int i1 = path.index_of('s');           // → z.B. 6
+    // int i2 = path.index_of("song");        // → 12
+    // int i3 = path.index_of("audio");       // → 0
+    // int i4 = path.index_of("test");        // → -1
+    // int i5 = path.index_of("music", 7);    // → -1
 
     // Array
     // ps_ptr<int> numbers;
@@ -421,7 +431,7 @@ ends_with_icase(const char* suffix) const {
         return -1;
     }
 
-    // Spezialisierte Version: nur für T = char (einzelnes Zeichen suchen)
+    // Specialized version: only for T = char (search for individual characters)
     template <typename U = T>
     typename std::enable_if<std::is_same<U, char>::value, int>::type
     index_of(char ch, std::size_t start = 0) const {
@@ -436,7 +446,24 @@ ends_with_icase(const char* suffix) const {
         }
         return -1;
     }
+    // Overload for const char* (substring search)
+    template <typename U = T>
+    typename std::enable_if<std::is_same<U, char>::value, int>::type
+    index_of(const char* substr, std::size_t start = 0) const {
+        if (!mem || !substr || !*substr) return -1;
 
+        const char* str = static_cast<const char*>(mem.get());
+        std::size_t len = std::strlen(str);
+        if (start >= len) return -1;
+
+        const char* found = std::strstr(str + start, substr);
+        if (!found) return -1;
+
+        return static_cast<int>(found - str);
+    }
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌 L A S T _ I N D E X _ O F   📌📌📌
 
     template <typename U = T>
     typename std::enable_if<std::is_same<U, char>::value, int>::type
@@ -450,12 +477,10 @@ ends_with_icase(const char* suffix) const {
         }
         return -1;
     }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌 L A S T _ I N D E X _ O F   📌📌📌
 
     // ps_ptr<char> str1;
     // str1.assign("OpenAI API Test");
-    // int last_i = str1.last_index_of('i');  // → -1 (kein 'i', aber 'I' ≠ 'i')
+    // int last_i = str1.last_index_of('i');  // → -1 (no 'i', but 'I' ≠ 'i')
     // int last_A = str1.last_index_of('A');  // → 5
     // printf("last_i  %i\n", last_i);
     // printf("last_A  %i\n", last_A);
@@ -547,6 +572,100 @@ ends_with_icase(const char* suffix) const {
         return count;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  G E T   📌📌📌
+    T* get() const { return static_cast<T*>(mem.get()); }
+    T* operator->() const { return get(); }
+    T& operator*() const { return *get(); }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  I N S E R T  📌📌📌
+
+    // ps_ptr<char> audioPath;
+    // audioPath.assign("mp3files/test.mp3", "audioPath");
+    // audioPath.insert("/", 0);  // result: "/mp3files/test.mp3"
+    //
+    // audioPath.insert("local/", 1);  // result: "/local/mp3files/test.mp3"
+
+    bool insert(const char* insertStr, std::size_t pos) {
+        if (!insertStr || !valid()) return false;
+
+        std::size_t originalLen = std::strlen(get());
+        std::size_t insertLen = std::strlen(insertStr);
+
+        // Position outside the valid area?Then add to the end
+        if (pos > originalLen) pos = originalLen;
+
+        // New total length + 1 for '\ 0'
+        std::size_t newLen = originalLen + insertLen + 1;
+        ps_ptr<char> temp;
+        temp.alloc(newLen);
+        if (!temp.valid()) return false;
+
+        char* dst = temp.get();
+
+        // Copy up to the insertion position
+        std::memcpy(dst, get(), pos);
+        // Add new content
+        std::memcpy(dst + pos, insertStr, insertLen);
+        // Copy the rest of the original
+        std::memcpy(dst + pos + insertLen, get() + pos, originalLen - pos + 1); // +1 für \0
+
+        // Take over new content
+        this->assign(temp.get());
+        return true;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E P L A C E   📌📌📌
+
+    // ps_ptr<char> path;
+    // path.assign("/user/temp/file.tmp");
+    // path.replace("temp", "music");
+    // result: "/user/music/file.tmp"
+
+    bool replace(const char* from, const char* to) {
+        if (!valid() || !from || !to || !*from) return false;
+
+        const char* src = get();
+        std::size_t fromLen = std::strlen(from);
+        std::size_t toLen = std::strlen(to);
+
+        // Count how often `from' occurs
+        std::size_t count = 0;
+        const char* p = src;
+        while ((p = std::strstr(p, from)) != nullptr) {
+            count++;
+            p += fromLen;
+        }
+
+        if (count == 0) return false;
+
+        // Calculate length
+        std::size_t newLen = std::strlen(src) + (toLen - fromLen) * count + 1;
+        ps_ptr<char> result;
+        result.alloc(newLen);
+        if (!result.valid()) return false;
+
+        // Substitute
+        const char* read = src;
+        char* write = result.get();
+        while (*read) {
+            const char* pos = std::strstr(read, from);
+            if (pos) {
+                std::size_t bytes = pos - read;
+                std::memcpy(write, read, bytes);
+                write += bytes;
+                std::memcpy(write, to, toLen);
+                write += toLen;
+                read = pos + fromLen;
+            } else {
+                std::strcpy(write, read);
+                break;
+            }
+        }
+
+        this->copy_from(result.get());
+        return true;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  T R I M   📌📌📌
 
     // ps_ptr<char> text3;
@@ -562,11 +681,11 @@ ends_with_icase(const char* suffix) const {
         std::size_t len = std::strlen(str);
         if (len == 0) return;
 
-        // Links trimmen
+        // trim on the left
         char* start = str;
         while (*start && isspace(*start)) ++start;
 
-        // Rechts trimmen
+        // trim on the right
         char* end = str + std::strlen(start);
         while (end > start && isspace(*(end - 1))) --end;
         *end = '\0';
@@ -576,12 +695,8 @@ ends_with_icase(const char* suffix) const {
             std::memmove(str, start, std::strlen(start) + 1);
         }
     }
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  G E T   📌📌📌
-    T* get() const { return static_cast<T*>(mem.get()); }
-    T* operator->() const { return get(); }
-    T& operator*() const { return *get(); }
+    // 📌📌📌  C L E A R   📌📌📌
 
     void clear() {
         if (mem && allocated_size > 0) {
