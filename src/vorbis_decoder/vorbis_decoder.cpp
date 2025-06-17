@@ -1200,7 +1200,7 @@ int32_t _determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, int32_t maptype) {
-    uint32_t *work = nullptr;
+    ps_ptr<uint32_t>work;
 
     if(s->dec_nodeb == 4) {
         s->dec_table = ps_malloc((s->used_entries * 2 + 1) * sizeof(*work));
@@ -1210,11 +1210,10 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
         return 0;
     }
 
-    work = (uint32_t *)ps_calloc((uint32_t)(s->used_entries * 2 - 2) , sizeof(uint32_t));
-    if(!work) log_e("oom");
+    work.alloc((s->used_entries * 2 - 2) * sizeof(uint32_t));
+    work.clear();
 
-    if(_make_words(lengthlist, s->entries, work, quantvals, s, maptype)) {
-        if(work) {free(work); work = NULL;}
+    if(_make_words(lengthlist, s->entries, work.get(), quantvals, s, maptype)) {
         return 1;
     }
     s->dec_table = ps_malloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
@@ -1303,7 +1302,6 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
             }
         }
     }
-    if(work) {free(work); work = NULL;}
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
