@@ -142,10 +142,10 @@ typedef struct _coupling_step{  // Mapping backend generic
 } coupling_step_t;
 
 typedef struct _vorbis_info_mapping{
-    int32_t              submaps;
+    int32_t          submaps;
     uint8_t         *chmuxlist;
     submap_t        *submaplist;
-    int32_t              coupling_steps;
+    int32_t          coupling_steps;
     coupling_step_t *coupling;
 } vorbis_info_mapping_t;
 
@@ -159,10 +159,10 @@ typedef struct _vorbis_dsp_state{  // vorbis_dsp_state buffers the current vorbi
 //    oggpack_buffer_t opb;
     int32_t        **work;
     int32_t        **mdctright;
-    int32_t              out_begin;
-    int32_t              out_end;
-    int32_t          lW;        // last window
-    uint32_t         W;         // Window
+    int32_t        out_begin;
+    int32_t        out_end;
+    int32_t        lW;        // last window
+    uint32_t       W;         // Window
 } vorbis_dsp_state_t;
 
 typedef struct _bitreader{

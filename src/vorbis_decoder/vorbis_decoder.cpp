@@ -44,7 +44,7 @@ uint16_t  s_oggHeaderSize = 0;
 uint8_t   s_vorbisChannels = 0;
 uint16_t  s_vorbisSamplerate = 0;
 uint16_t  s_lastSegmentTableLen = 0;
-uint8_t  *s_lastSegmentTable = NULL;
+
 uint32_t  s_vorbisBitRate = 0;
 uint32_t  s_vorbisSegmentLength = 0;
 uint32_t  s_vorbisBlockPicLenUntilFrameEnd = 0;
@@ -76,6 +76,7 @@ float     s_vorbisCompressionRatio = 0;
 bitReader_t            s_bitReader;
 
 ps_ptr<char>           s_vorbisChbuf;
+ps_ptr<uint8_t>        s_lastSegmentTable;
 ps_ptr<uint16_t>       s_vorbisSegmentTable;
 ps_ptr<codebook_t>     s_codebooks;
 vorbis_info_floor_t  **s_floor_param = NULL;
@@ -90,19 +91,18 @@ vector<uint32_t>s_vorbisBlockPicItem;
 
 bool VORBISDecoder_AllocateBuffers(){
     s_vorbisSegmentTable.alloc(256 * sizeof(uint16_t)); s_vorbisSegmentTable.clear();
-    s_lastSegmentTable = (uint8_t*)ps_malloc(4096);
+    s_lastSegmentTable.alloc(4096);
     VORBISsetDefaults();
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
     s_vorbisSegmentTable.reset();
-    if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
-
+    s_lastSegmentTable.reset();
     clearGlobalConfigurations();
 }
 void VORBISDecoder_ClearBuffers(){
     bitReader_clear();
-    if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
+    s_lastSegmentTable.clear();
     s_vorbisSegmentTable.clear();
     s_vorbisSegmentTableSize = 0;
     s_vorbisSegmentTableRdPtr = -1;}
@@ -333,9 +333,9 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         if(s_f_oggContinuedPage) {
             if(s_lastSegmentTableLen > 0 || segmentLength > 0) {
                 if(s_lastSegmentTableLen + segmentLength > 1024) log_e("continued page too big");
-                memcpy(s_lastSegmentTable + s_lastSegmentTableLen, inbuf, segmentLength);
-                bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen + segmentLength);
-                ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen + segmentLength, outbuf);
+                memcpy(s_lastSegmentTable.get() + s_lastSegmentTableLen, inbuf, segmentLength);
+                bitReader_setData(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength);
+                ret = vorbis_dsp_synthesis(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength, outbuf);
                 uint16_t outBuffSize = 2048 * 2;
                 s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
                 s_lastSegmentTableLen = 0;
@@ -349,8 +349,8 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         }
         else { // last segment without continued Page
             if(s_lastSegmentTableLen) {
-                bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen);
-                ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen, outbuf);
+                bitReader_setData(s_lastSegmentTable.get(), s_lastSegmentTableLen);
+                ret = vorbis_dsp_synthesis(s_lastSegmentTable.get(), s_lastSegmentTableLen, outbuf);
                 uint16_t outBuffSize = 2048 * 2;
                 s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
                 s_lastSegmentTableLen = 0;
@@ -376,7 +376,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         }
         else { // last segment
             if(segmentLength) {
-                memcpy(s_lastSegmentTable, inbuf, segmentLength);
+                memcpy(s_lastSegmentTable.get(), inbuf, segmentLength);
                 s_lastSegmentTableLen = segmentLength;
                 s_vorbisValidSamples = 0;
                 ret = 0;
