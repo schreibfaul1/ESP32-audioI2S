@@ -28,6 +28,7 @@
 
 #include "Arduino.h"
 #include <vector>
+#include "psram_unique_ptr.hpp"
 using namespace std;
 #define VI_FLOORB       2
 #define VIF_POSIT      63
@@ -254,8 +255,8 @@ void                  res_clear_info(vorbis_info_residue_t* info);
 void                  mapping_clear_info(vorbis_info_mapping_t* info);
 // vorbis decoder impl
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
-vorbis_dsp_state_t*   vorbis_dsp_create();
-void                  vorbis_dsp_destroy(vorbis_dsp_state_t* v);
+ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
+void                  vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v);
 void                  mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
 int32_t               mapping_inverse(vorbis_info_mapping_t* info);
 int32_t               floor0_memosize(vorbis_info_floor_t* i);

@@ -84,7 +84,7 @@ ps_ptr<int8_t>                s_floor_type;
 ps_ptr<vorbis_info_residue_t> s_residue_param;
 ps_ptr<vorbis_info_mapping_t> s_map_param;
 ps_ptr<vorbis_info_mode_t>    s_mode_param;
-vorbis_dsp_state_t    *s_dsp_state = NULL;
+ps_ptr<vorbis_dsp_state_t>    s_dsp_state;
 
 vector<uint32_t>s_vorbisBlockPicItem;
 
@@ -96,9 +96,17 @@ bool VORBISDecoder_AllocateBuffers(){
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
-    s_vorbisSegmentTable.reset();
-    s_lastSegmentTable.reset();
     clearGlobalConfigurations();
+    if(s_vorbisChbuf.valid())       s_vorbisChbuf.reset();
+    if(s_lastSegmentTable.valid())  s_lastSegmentTable.reset();
+    if(s_vorbisSegmentTable.valid())s_vorbisSegmentTable.reset();
+    if(s_codebooks.valid())         s_codebooks.reset();
+    if(s_floor_param.valid())       s_floor_param.reset();
+    if(s_floor_type.valid())        s_floor_type.reset();
+    if(s_residue_param.valid())     s_residue_param.reset();
+    if(s_map_param.valid())         s_map_param.reset();
+    if(s_mode_param.valid())        s_mode_param.reset();
+    if(s_dsp_state.valid())         s_dsp_state.reset();
 }
 void VORBISDecoder_ClearBuffers(){
     bitReader_clear();
@@ -106,6 +114,7 @@ void VORBISDecoder_ClearBuffers(){
     s_vorbisSegmentTable.clear();
     s_vorbisSegmentTableSize = 0;
     s_vorbisSegmentTableRdPtr = -1;}
+
 void VORBISsetDefaults(){
     s_pageNr = 0;
     s_f_vorbisNewSteamTitle = false;  // streamTitle
@@ -116,7 +125,7 @@ void VORBISsetDefaults(){
     s_f_oggContinuedPage = false;
     s_f_oggLastPage = false;
     s_f_vorbisStr_found = false;
-    if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
+    if(s_dsp_state.valid()){vorbis_dsp_destroy(s_dsp_state);}
     s_vorbisChannels = 0;
     s_vorbisSamplerate = 0;
     s_vorbisBitRate = 0;
@@ -140,15 +149,14 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    s_codebooks.reset();
-    s_floor_type.reset();
-    if(s_dsp_state) {
+    // s_codebooks.reset();
+    // s_floor_type.reset();
+    if(s_dsp_state.valid()) {
         vorbis_dsp_destroy(s_dsp_state);
-        s_dsp_state = NULL;
     }
     if(s_nrOfFloors) {
         for(int32_t i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param.get()[i]);
-        s_floor_param.reset();
+       // s_floor_param.reset();
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
@@ -160,9 +168,9 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfMaps = 0;
     }
 
-    s_residue_param.reset();
-    s_map_param.reset();
-    s_mode_param.reset();
+    // s_residue_param.reset();
+    // s_map_param.reset();
+    // s_mode_param.reset();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -1736,13 +1744,13 @@ void mapping_clear_info(vorbis_info_mapping_t *info) {
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
 //---------------------------------------------------------------------------------------------------------------------
-vorbis_dsp_state_t *vorbis_dsp_create() {
+ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create() {
     int32_t i;
 
-    vorbis_dsp_state_t *v = (vorbis_dsp_state_t *)ps_calloc(1, sizeof(vorbis_dsp_state_t));
+    ps_ptr<vorbis_dsp_state_t> v; v.alloc(sizeof(vorbis_dsp_state_t)); v.clear();
 
-    v->work = (int32_t **)ps_malloc(s_vorbisChannels * sizeof(int32_t));
-    v->mdctright = (int32_t **)ps_malloc(s_vorbisChannels* sizeof(int32_t));
+    v->work = (int32_t **)ps_malloc(s_vorbisChannels * sizeof(int32_t *));
+    v->mdctright = (int32_t **)ps_malloc(s_vorbisChannels* sizeof(int32_t *));
 
     for(i = 0; i < s_vorbisChannels; i++) {
         v->work[i] = (int32_t *)ps_calloc(1, (s_blocksizes[1] >> 1) * sizeof(int32_t));
@@ -1758,9 +1766,9 @@ vorbis_dsp_state_t *vorbis_dsp_create() {
     return v;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_dsp_destroy(vorbis_dsp_state_t *v) {
+void vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v) {
     int32_t i;
-    if(v) {
+    if(v.valid()) {
         if(v->work) {
             for(i = 0; i < s_vorbisChannels; i++) {
                 if(v->work[i]) {free(v->work[i]); v->work[i] = NULL;}
@@ -1773,8 +1781,7 @@ void vorbis_dsp_destroy(vorbis_dsp_state_t *v) {
             }
             if(v->mdctright){free(v->mdctright); v->mdctright = NULL;}
         }
-        free(v);
-        v = NULL;
+        v.reset();
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
