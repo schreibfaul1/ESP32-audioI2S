@@ -50,7 +50,7 @@ uint32_t  s_vorbisSegmentLength = 0;
 uint32_t  s_vorbisBlockPicLenUntilFrameEnd = 0;
 uint32_t  s_vorbisCurrentFilePos = 0;
 uint32_t  s_vorbisAudioDataStart = 0;
-char     *s_vorbisChbuf = NULL;
+
 int32_t   s_vorbisValidSamples = 0;
 int32_t   s_commentBlockSegmentSize = 0;
 uint8_t   s_vorbisOldMode = 0;
@@ -66,6 +66,7 @@ uint8_t   s_nrOfResidues = 0;
 uint8_t   s_nrOfMaps = 0;
 uint8_t   s_nrOfModes = 0;
 
+ps_ptr<char>     s_vorbisChbuf;
 ps_ptr<uint16_t> s_vorbisSegmentTable;
 uint16_t  s_oggPage3Len = 0; // length of the current audio segment
 uint8_t   s_vorbisSegmentTableSize = 0;
@@ -88,20 +89,21 @@ vector<uint32_t>s_vorbisBlockPicItem;
 
 bool VORBISDecoder_AllocateBuffers(){
     s_vorbisSegmentTable.alloc(256 * sizeof(uint16_t)); s_vorbisSegmentTable.clear();
-    s_vorbisChbuf = (char*)ps_calloc(256, sizeof(char));
+    s_vorbisChbuf.alloc(256 * sizeof(char)); s_vorbisChbuf.clear();
     s_lastSegmentTable = (uint8_t*)ps_malloc(4096);
     VORBISsetDefaults();
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
     s_vorbisSegmentTable.reset();
-    if(s_vorbisChbuf){free(s_vorbisChbuf); s_vorbisChbuf = NULL;}
+    s_vorbisChbuf.reset();
+    
     if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
 
     clearGlobalConfigurations();
 }
 void VORBISDecoder_ClearBuffers(){
-    if(s_vorbisChbuf) memset(s_vorbisChbuf, 0, 256);
+    s_vorbisChbuf.clear();
     bitReader_clear();
     if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
     s_vorbisSegmentTable.clear();
@@ -442,7 +444,7 @@ uint16_t VORBISGetOutputSamps(){
 char* VORBISgetStreamTitle(){
     if(s_f_vorbisNewSteamTitle){
         s_f_vorbisNewSteamTitle = false;
-        return s_vorbisChbuf;
+        return s_vorbisChbuf.get();
     }
     return NULL;
 }
@@ -539,8 +541,7 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
        return 0;
     }
 
-    memcpy(s_vorbisChbuf, inbuf + 11, vendorLength);
-    s_vorbisChbuf[vendorLength] = '\0';
+    s_vorbisChbuf.assign((char*)(inbuf + 11), vendorLength);
     pos += 4 + vendorLength;
     s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
 
@@ -552,9 +553,8 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
     pos += 4;
     s_vorbisCommentHeaderLength -= 4;
 
-    int32_t idx = 0;
-    char* artist = NULL;
-    char* title  = NULL;
+    ps_ptr<char>artist;
+    ps_ptr<char>title;
     uint32_t commentLength = 0;
     for(int32_t i = 0; i < nrOfComments; i++){
         commentLength  = 0;
@@ -565,22 +565,21 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         s_commentLength = commentLength;
 
         uint8_t cl = min((uint32_t)254, commentLength);
-        memcpy(s_vorbisChbuf, inbuf + pos +  4, cl);
-        s_vorbisChbuf[cl] = '\0';
+        s_vorbisChbuf.assign((char*)(inbuf + pos +  4), cl);
 
         // log_i("commentLength %i comment %s", commentLength, s_vorbisChbuf);
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "artist=", 10);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "ARTIST=", 10);
-        if(idx == 0){ artist = strndup((const char*)(s_vorbisChbuf + 7), commentLength - 7); s_commentLength = 0;}
+        if(s_vorbisChbuf.starts_with_icase("artist=")){
+            artist.assign(s_vorbisChbuf.get() + 7, commentLength - 7);
+            s_commentLength = 0;
+        }
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "title=", 10);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "TITLE=", 10);
-        if(idx == 0){ title = strndup((const char*)(s_vorbisChbuf + 6), commentLength - 6); s_commentLength = 0;}
+        if(s_vorbisChbuf.starts_with_icase("title=")){
+            title.assign(s_vorbisChbuf.get() + 6, commentLength - 6);
+            s_commentLength = 0;
+        }
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "metadata_block_picture=", 25);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "METADATA_BLOCK_PICTURE", 25);
-        if(idx == 0){
+        if(s_vorbisChbuf.starts_with_icase("metadata_block_picture=")){
             s_vorbisBlockPicLen = commentLength - 23;
             s_vorbisBlockPicPos += s_vorbisCurrentFilePos + 4 +pos + 23;
             s_vorbisBlockPicLenUntilFrameEnd = s_vorbisCommentHeaderLength - 4 - 23;
@@ -588,23 +587,20 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         pos += commentLength + 4;
         s_vorbisCommentHeaderLength -= (4 + commentLength);
     }
-    if(artist && title){
-        strcpy(s_vorbisChbuf, artist);
-        strcat(s_vorbisChbuf, " - ");
-        strcat(s_vorbisChbuf, title);
+    if(artist.valid() && title.valid()){
+        s_vorbisChbuf.assign(artist.get());
+        s_vorbisChbuf.append(" - ");
+        s_vorbisChbuf.append(title.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    else if(artist){
-        strcpy(s_vorbisChbuf, artist);
+    else if(artist.valid()){
+        s_vorbisChbuf.assign(artist.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    else if(title){
-        strcpy(s_vorbisChbuf, title);
+    else if(title.valid()){
+        s_vorbisChbuf.assign(title.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    if(artist){free(artist); artist = NULL;}
-    if(title) {free(title);  title = NULL;}
-
     return VORBIS_PARSE_OGG_DONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
