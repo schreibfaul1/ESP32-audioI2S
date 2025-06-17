@@ -143,11 +143,11 @@ typedef struct _coupling_step{  // Mapping backend generic
 } coupling_step_t;
 
 typedef struct _vorbis_info_mapping{
-    int32_t          submaps;
-    uint8_t         *chmuxlist;
-    submap_t        *submaplist;
-    int32_t          coupling_steps;
-    coupling_step_t *coupling;
+    int32_t                 submaps;
+    ps_ptr<uint8_t>         chmuxlist;
+    ps_ptr<submap_t>        submaplist;
+    int32_t                 coupling_steps;
+    ps_ptr<coupling_step_t> coupling;
 } vorbis_info_mapping_t;
 
 typedef struct {  // mode
@@ -250,7 +250,6 @@ int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 void                  vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
 void                  floor_free_info(vorbis_info_floor_t* i);
 void                  res_clear_info(vorbis_info_residue_t* info);
-void                  mapping_clear_info(vorbis_info_mapping_t* info);
 // vorbis decoder impl
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();

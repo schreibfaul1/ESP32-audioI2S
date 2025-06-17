@@ -164,7 +164,6 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfResidues = 0;
     }
     if(s_nrOfMaps) {
-        for(int32_t i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param.get() + i); }
         s_nrOfMaps = 0;
     }
 
@@ -1636,11 +1635,11 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
 
     if(bitReader(1)) {
         info->coupling_steps = bitReader(8) + 1;
-        info->coupling = (coupling_step_t *)ps_malloc(info->coupling_steps * sizeof(*info->coupling));
+        info->coupling.alloc(info->coupling_steps * sizeof(coupling_step_t));
 
         for(i = 0; i < info->coupling_steps; i++) {
-            int32_t testM = info->coupling[i].mag = bitReader(ilog(s_vorbisChannels));
-            int32_t testA = info->coupling[i].ang = bitReader(ilog(s_vorbisChannels));
+            int32_t testM = info->coupling.get()[i].mag = bitReader(ilog(s_vorbisChannels));
+            int32_t testA = info->coupling.get()[i].ang = bitReader(ilog(s_vorbisChannels));
 
             if(testM < 0 || testA < 0 || testM == testA || testM >= s_vorbisChannels || testA >= s_vorbisChannels) goto err_out;
         }
@@ -1650,14 +1649,14 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
     /* 2,3:reserved */
 
     if(info->submaps > 1) {
-        info->chmuxlist = (uint8_t *)ps_malloc(sizeof(uint8_t) * s_vorbisChannels);
+        info->chmuxlist.alloc(sizeof(uint8_t) * s_vorbisChannels);
         for(i = 0; i < s_vorbisChannels; i++) {
             info->chmuxlist[i] = bitReader(4);
             if(info->chmuxlist[i] >= info->submaps) goto err_out;
         }
     }
 
-    info->submaplist = (submap_t *)ps_malloc(sizeof(submap_t) * info->submaps);
+    info->submaplist.alloc(sizeof(submap_t) * info->submaps);
     for(i = 0; i < info->submaps; i++) {
         int32_t temp = bitReader(8);
         (void)temp;
@@ -1670,7 +1669,6 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
     return 0;
 
 err_out:
-    mapping_clear_info(info);
     return -1;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1730,14 +1728,7 @@ void res_clear_info(vorbis_info_residue_t *info) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void mapping_clear_info(vorbis_info_mapping_t *info) {
-    if(info) {
-        if(info->chmuxlist) free(info->chmuxlist);
-        if(info->submaplist) free(info->submaplist);
-        if(info->coupling) free(info->coupling);
-        memset(info, 0, sizeof(*info));
-    }
-}
+
 //---------------------------------------------------------------------------------------------------------------------
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
@@ -1876,7 +1867,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     for(i = 0; i < info->submaps; i++) {
         uint8_t ch_in_bundle = 0;
         for(j = 0; j < s_vorbisChannels; j++) {
-            if(!info->chmuxlist || info->chmuxlist[j] == i) {
+            if(!info->chmuxlist.get() || info->chmuxlist.get()[j] == i) {
                 if(nonzero[j]) zerobundle[ch_in_bundle] = 1;
                 else
                     zerobundle[ch_in_bundle] = 0;
