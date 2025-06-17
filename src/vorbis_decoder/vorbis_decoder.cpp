@@ -1448,7 +1448,10 @@ int32_t oggpack_eop() {
 
     int32_t               j;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_malloc(sizeof(vorbis_info_floor_t));
+    ps_ptr<vorbis_info_floor_t> info;
+    info.alloc(sizeof(vorbis_info_floor_t));
+    info.clear();
+
     info->order =    bitReader( 8);
     info->rate =     bitReader(16);
     info->barkmap =  bitReader(16);
@@ -1466,7 +1469,7 @@ int32_t oggpack_eop() {
     }
 
     if(oggpack_eop()) goto err_out;
-    return (info);
+    return (info.get());
 
 err_out:
     return (NULL);
