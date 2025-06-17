@@ -160,7 +160,6 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
-        for(int32_t i = 0; i < s_nrOfResidues; i++) res_clear_info(s_residue_param.get() + i);
         s_nrOfResidues = 0;
     }
     if(s_nrOfMaps) {
@@ -1594,8 +1593,8 @@ int32_t res_unpack(vorbis_info_residue_t *info){
     info->groupbook =  bitReader(8);
     if(info->groupbook >= s_nrOfCodebooks) goto errout;
 
-    info->stagemasks = (uint8_t *)ps_malloc(info->partitions * sizeof(uint8_t));
-    info->stagebooks = (uint8_t *)ps_malloc(info->partitions * 8 * sizeof(uint8_t));
+    info->stagemasks.alloc(info->partitions * sizeof(uint8_t));
+    info->stagebooks.alloc(info->partitions * 8 * sizeof(uint8_t));
 
     for(j = 0; j < info->partitions; j++) {
         int32_t cascade = bitReader(3);
@@ -1620,7 +1619,6 @@ int32_t res_unpack(vorbis_info_residue_t *info){
 
     return 0;
 errout:
-    res_clear_info(info);
     return 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1720,13 +1718,6 @@ void floor_free_info(vorbis_info_floor_t *i) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void res_clear_info(vorbis_info_residue_t *info) {
-    if(info) {
-        if(info->stagemasks) free(info->stagemasks);
-        if(info->stagebooks) free(info->stagebooks);
-        memset(info, 0, sizeof(*info));
-    }
-}
 //---------------------------------------------------------------------------------------------------------------------
 
 //---------------------------------------------------------------------------------------------------------------------

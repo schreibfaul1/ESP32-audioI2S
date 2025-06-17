@@ -119,17 +119,17 @@ typedef struct{
 } vorbis_info_floor_t;
 
 typedef struct _vorbis_info_residue {
-    int32_t      type;
-    uint8_t *stagemasks;
-    uint8_t *stagebooks;
+    int32_t         type;
+    ps_ptr<uint8_t> stagemasks;
+    ps_ptr<uint8_t> stagebooks;
     /* block-partitioned VQ coded straight residue */
-    uint32_t begin;
-    uint32_t end;
+    uint32_t        begin;
+    uint32_t        end;
     /* first stage (lossless partitioning) */
-    uint32_t grouping;   /* group n vectors per partition */
-    char     partitions; /* possible codebooks for a partition */
-    uint8_t  groupbook;  /* huffbook for partitioning */
-    char     stages;
+    uint32_t        grouping;   /* group n vectors per partition */
+    char            partitions; /* possible codebooks for a partition */
+    uint8_t         groupbook;  /* huffbook for partitioning */
+    char            stages;
 } vorbis_info_residue_t;
 
 typedef struct _submap{
@@ -249,7 +249,6 @@ int32_t               res_unpack(vorbis_info_residue_t* info);
 int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 void                  vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
 void                  floor_free_info(vorbis_info_floor_t* i);
-void                  res_clear_info(vorbis_info_residue_t* info);
 // vorbis decoder impl
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
