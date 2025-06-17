@@ -24,13 +24,8 @@
 #include "lookup.h"
 #include "alloca.h"
 #include <vector>
+#include "psram_unique_ptr.hpp"
 using namespace std;
-
-#define __malloc_heap_psram(size) \
-    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
-#define __calloc_heap_psram(ch, size) \
-    heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
-
 
 // global vars
 bool      s_f_vorbisNewSteamTitle = false;  // streamTitle
@@ -71,7 +66,7 @@ uint8_t   s_nrOfResidues = 0;
 uint8_t   s_nrOfMaps = 0;
 uint8_t   s_nrOfModes = 0;
 
-uint16_t *s_vorbisSegmentTable = NULL;
+ps_ptr<uint16_t> s_vorbisSegmentTable;
 uint16_t  s_oggPage3Len = 0; // length of the current audio segment
 uint8_t   s_vorbisSegmentTableSize = 0;
 int16_t   s_vorbisSegmentTableRdPtr = -1;
@@ -92,14 +87,14 @@ vector<uint32_t>s_vorbisBlockPicItem;
 
 
 bool VORBISDecoder_AllocateBuffers(){
-    s_vorbisSegmentTable = (uint16_t*)__calloc_heap_psram(256, sizeof(uint16_t));
-    s_vorbisChbuf = (char*)__calloc_heap_psram(256, sizeof(char));
-    s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(4096);
+    s_vorbisSegmentTable.alloc(256 * sizeof(uint16_t)); s_vorbisSegmentTable.clear();
+    s_vorbisChbuf = (char*)ps_calloc(256, sizeof(char));
+    s_lastSegmentTable = (uint8_t*)ps_malloc(4096);
     VORBISsetDefaults();
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
-    if(s_vorbisSegmentTable) {free(s_vorbisSegmentTable); s_vorbisSegmentTable = NULL;}
+    s_vorbisSegmentTable.reset();
     if(s_vorbisChbuf){free(s_vorbisChbuf); s_vorbisChbuf = NULL;}
     if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
 
@@ -109,7 +104,7 @@ void VORBISDecoder_ClearBuffers(){
     if(s_vorbisChbuf) memset(s_vorbisChbuf, 0, 256);
     bitReader_clear();
     if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
-    if(s_vorbisSegmentTable) memset(s_vorbisSegmentTable, 0, 256);
+    s_vorbisSegmentTable.clear();
     s_vorbisSegmentTableSize = 0;
     s_vorbisSegmentTableRdPtr = -1;}
 void VORBISsetDefaults(){
@@ -237,7 +232,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         if(s_vorbisSegmentTableSize) {
             s_vorbisSegmentTableRdPtr++;
             s_vorbisSegmentTableSize--;
-            segmentLength = s_vorbisSegmentTable[s_vorbisSegmentTableRdPtr];
+            segmentLength = s_vorbisSegmentTable.get()[s_vorbisSegmentTableRdPtr];
         }
     }
 
@@ -622,7 +617,7 @@ int32_t parseVorbisCodebook(){
     int32_t ret = 0;
 
     s_nrOfCodebooks = bitReader(8) +1;
-    s_codebooks = (codebook_t*) __calloc_heap_psram(s_nrOfCodebooks, sizeof(*s_codebooks));
+    s_codebooks = (codebook_t*) ps_calloc(s_nrOfCodebooks, sizeof(codebook_t));
 
     for(i = 0; i < s_nrOfCodebooks; i++){
         ret = vorbis_book_unpack(s_codebooks + i);
@@ -642,8 +637,8 @@ int32_t parseVorbisCodebook(){
     /* floor backend settings */
     s_nrOfFloors  = bitReader(6) + 1;
 
-    s_floor_param = (vorbis_info_floor_t **)__malloc_heap_psram(sizeof(*s_floor_param) * s_nrOfFloors);
-    s_floor_type  = (int8_t *)__malloc_heap_psram(sizeof(int8_t) * s_nrOfFloors);
+    s_floor_param = (vorbis_info_floor_t **)ps_malloc(sizeof(vorbis_info_floor_t) * s_nrOfFloors);
+    s_floor_type  = (int8_t *)ps_malloc(sizeof(int8_t) * s_nrOfFloors);
     for(i = 0; i < s_nrOfFloors; i++) {
         s_floor_type[i] = bitReader(16);
         if(s_floor_type[i] < 0 || s_floor_type[i] >= VI_FLOORB) {
@@ -664,7 +659,7 @@ int32_t parseVorbisCodebook(){
 
     /* residue backend settings */
     s_nrOfResidues = bitReader(6) + 1;
-    s_residue_param = (vorbis_info_residue_t *)__malloc_heap_psram(sizeof(*s_residue_param) * s_nrOfResidues);
+    s_residue_param = (vorbis_info_residue_t *)ps_malloc(sizeof(vorbis_info_residue_t) * s_nrOfResidues);
     for(i = 0; i < s_nrOfResidues; i++){
          if(res_unpack(s_residue_param + i)){
             log_e("err while unpacking residues");
@@ -674,7 +669,7 @@ int32_t parseVorbisCodebook(){
 
     // /* map backend settings */
     s_nrOfMaps = bitReader(6) + 1;
-    s_map_param = (vorbis_info_mapping_t *)__malloc_heap_psram(sizeof(*s_map_param) * s_nrOfMaps);
+    s_map_param = (vorbis_info_mapping_t *)ps_malloc(sizeof(vorbis_info_mapping_t) * s_nrOfMaps);
     for(i = 0; i < s_nrOfMaps; i++) {
         if(bitReader(16) != 0) goto err_out;
         if(mapping_info_unpack(s_map_param + i)){
@@ -685,7 +680,7 @@ int32_t parseVorbisCodebook(){
 
     /* mode settings */
     s_nrOfModes = bitReader(6) + 1;
-    s_mode_param = (vorbis_info_mode_t *)__malloc_heap_psram(s_nrOfModes* sizeof(*s_mode_param));
+    s_mode_param = (vorbis_info_mode_t *)ps_malloc(sizeof(vorbis_info_mode_t) * s_nrOfModes);
     for(i = 0; i < s_nrOfModes; i++) {
         s_mode_param[i].blockflag = bitReader(1);
         if(bitReader(16)) goto err_out;
@@ -766,7 +761,7 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
             n+= *(inbuf + 27 + i);
         }
         segmentTableWrPtr++;
-        s_vorbisSegmentTable[segmentTableWrPtr] = n;
+        s_vorbisSegmentTable.get()[segmentTableWrPtr] = n;
         s_vorbisSegmentLength += n;
     }
     s_vorbisSegmentTableSize = segmentTableWrPtr + 1;
@@ -872,7 +867,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
     switch(bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
+            lengthlist = (char *)ps_malloc(sizeof(char) * s->entries);
 
             /* allocated but unused entries? */
             if(bitReader(1)) {
@@ -908,7 +903,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
+                lengthlist = (char *)ps_malloc(sizeof(char) * s->entries);
 
                 for(i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
@@ -964,7 +959,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 if(total1 <= 4 && total1 <= total2) {
                     /* use dec_type 1: vector of packed values */
                     /* need quantized values before  */
-                    s->q_val = __malloc_heap_psram(sizeof(uint16_t) * quantvals);
+                    s->q_val = ps_malloc(sizeof(uint16_t) * quantvals);
                     for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
 
                     if(oggpack_eop()) {
@@ -987,11 +982,11 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                     /* use dec_type 2: packed vector of column offsets */
                     /* need quantized values before */
                     if(s->q_bits <= 8) {
-                        s->q_val = __malloc_heap_psram(quantvals);
+                        s->q_val = ps_malloc(quantvals);
                         for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val)[i] = bitReader(s->q_bits);
                     }
                     else {
-                        s->q_val = __malloc_heap_psram(quantvals * 2);
+                        s->q_val = ps_malloc(quantvals * 2);
                         for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
                     }
 
@@ -1032,7 +1027,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
-                s->q_val = __malloc_heap_psram(s->q_pack * s->used_entries);
+                s->q_val = ps_malloc(s->q_pack * s->used_entries);
 
                 if(s->q_bits <= 8) {
                     for(i = 0; i < s->used_entries * s->dim; i++)
@@ -1226,21 +1221,21 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
     uint32_t *work = nullptr;
 
     if(s->dec_nodeb == 4) {
-        s->dec_table = __malloc_heap_psram((s->used_entries * 2 + 1) * sizeof(*work));
+        s->dec_table = ps_malloc((s->used_entries * 2 + 1) * sizeof(*work));
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
         if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table, quantvals, s, maptype)) return 1;
 
         return 0;
     }
 
-    work = (uint32_t *)__calloc_heap_psram((uint32_t)(s->used_entries * 2 - 2) , sizeof(*work));
+    work = (uint32_t *)ps_calloc((uint32_t)(s->used_entries * 2 - 2) , sizeof(uint32_t));
     if(!work) log_e("oom");
 
     if(_make_words(lengthlist, s->entries, work, quantvals, s, maptype)) {
         if(work) {free(work); work = NULL;}
         return 1;
     }
-    s->dec_table = __malloc_heap_psram((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    s->dec_table = ps_malloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
     if(s->dec_leafw == 1) {
         switch(s->dec_nodeb) {
             case 1:
@@ -1492,7 +1487,7 @@ void vorbis_book_clear(codebook_t *b) {
 
     int32_t               j;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)__malloc_heap_psram(sizeof(*info));
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_malloc(sizeof(vorbis_info_floor_t));
     info->order =    bitReader( 8);
     info->rate =     bitReader(16);
     info->barkmap =  bitReader(16);
@@ -1521,17 +1516,17 @@ vorbis_info_floor_t* floor1_info_unpack() {
 
     int32_t j, k, count = 0, maxclass = -1, rangebits;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)__calloc_heap_psram(1, sizeof(vorbis_info_floor_t));
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_calloc(1, sizeof(vorbis_info_floor_t));
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
-    info->partitionclass = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->partitionclass));
+    info->partitionclass = (uint8_t *)ps_malloc(info->partitions * sizeof(uint8_t));
     for(j = 0; j < info->partitions; j++) {
         info->partitionclass[j] = bitReader(4); /* only 0 to 15 legal */
         if(maxclass < info->partitionclass[j]) maxclass = info->partitionclass[j];
     }
 
     /* read partition classes */
-    info->_class = (floor1class_t *)__malloc_heap_psram((uint32_t)(maxclass + 1) * sizeof(*info->_class));
+    info->_class = (floor1class_t *)ps_malloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t));
     for(j = 0; j < maxclass + 1; j++) {
         info->_class[j].class_dim = bitReader(3) + 1; /* 1 to 8 */
         info->_class[j].class_subs = bitReader(2);    /* 0,1,2,3 bits */
@@ -1554,10 +1549,10 @@ vorbis_info_floor_t* floor1_info_unpack() {
     rangebits = bitReader(4);
 
     for(j = 0, k = 0; j < info->partitions; j++) count += info->_class[info->partitionclass[j]].class_dim;
-    info->postlist = (uint16_t *)__malloc_heap_psram((count + 2) * sizeof(*info->postlist));
-    info->forward_index = (uint8_t *)__malloc_heap_psram((count + 2) * sizeof(*info->forward_index));
-    info->loneighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->loneighbor));
-    info->hineighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->hineighbor));
+    info->postlist = (uint16_t *)ps_malloc((count + 2) * sizeof(uint16_t));
+    info->forward_index = (uint8_t *)ps_malloc((count + 2) * sizeof(uint8_t));
+    info->loneighbor = (uint8_t *)ps_malloc(count * sizeof(uint8_t));
+    info->hineighbor = (uint8_t *)ps_malloc(count * sizeof(uint8_t));
 
     count = 0;
     for(j = 0, k = 0; j < info->partitions; j++) {
@@ -1620,8 +1615,8 @@ int32_t res_unpack(vorbis_info_residue_t *info){
     info->groupbook =  bitReader(8);
     if(info->groupbook >= s_nrOfCodebooks) goto errout;
 
-    info->stagemasks = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->stagemasks));
-    info->stagebooks = (uint8_t *)__malloc_heap_psram(info->partitions * 8 * sizeof(*info->stagebooks));
+    info->stagemasks = (uint8_t *)ps_malloc(info->partitions * sizeof(uint8_t));
+    info->stagebooks = (uint8_t *)ps_malloc(info->partitions * 8 * sizeof(uint8_t));
 
     for(j = 0; j < info->partitions; j++) {
         int32_t cascade = bitReader(3);
@@ -1661,7 +1656,7 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
 
     if(bitReader(1)) {
         info->coupling_steps = bitReader(8) + 1;
-        info->coupling = (coupling_step_t *)__malloc_heap_psram(info->coupling_steps * sizeof(*info->coupling));
+        info->coupling = (coupling_step_t *)ps_malloc(info->coupling_steps * sizeof(*info->coupling));
 
         for(i = 0; i < info->coupling_steps; i++) {
             int32_t testM = info->coupling[i].mag = bitReader(ilog(s_vorbisChannels));
@@ -1675,14 +1670,14 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
     /* 2,3:reserved */
 
     if(info->submaps > 1) {
-        info->chmuxlist = (uint8_t *)__malloc_heap_psram(sizeof(*info->chmuxlist) * s_vorbisChannels);
+        info->chmuxlist = (uint8_t *)ps_malloc(sizeof(uint8_t) * s_vorbisChannels);
         for(i = 0; i < s_vorbisChannels; i++) {
             info->chmuxlist[i] = bitReader(4);
             if(info->chmuxlist[i] >= info->submaps) goto err_out;
         }
     }
 
-    info->submaplist = (submap_t *)__malloc_heap_psram(sizeof(*info->submaplist) * info->submaps);
+    info->submaplist = (submap_t *)ps_malloc(sizeof(submap_t) * info->submaps);
     for(i = 0; i < info->submaps; i++) {
         int32_t temp = bitReader(8);
         (void)temp;
@@ -1703,7 +1698,7 @@ void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
     uint16_t i, j;
     uint8_t *temp;
     uint8_t *A = index;
-    uint8_t *B = (uint8_t *)__malloc_heap_psram(n * sizeof(*B));
+    uint8_t *B = (uint8_t *)ps_malloc(n * sizeof(uint8_t));
 
     for(i = 1; i < n; i <<= 1) {
         for(j = 0; j + i < n;) {
@@ -1770,14 +1765,14 @@ void mapping_clear_info(vorbis_info_mapping_t *info) {
 vorbis_dsp_state_t *vorbis_dsp_create() {
     int32_t i;
 
-    vorbis_dsp_state_t *v = (vorbis_dsp_state_t *)__calloc_heap_psram(1, sizeof(vorbis_dsp_state_t));
+    vorbis_dsp_state_t *v = (vorbis_dsp_state_t *)ps_calloc(1, sizeof(vorbis_dsp_state_t));
 
-    v->work = (int32_t **)__malloc_heap_psram(s_vorbisChannels * sizeof(*v->work));
-    v->mdctright = (int32_t **)__malloc_heap_psram(s_vorbisChannels* sizeof(*v->mdctright));
+    v->work = (int32_t **)ps_malloc(s_vorbisChannels * sizeof(int32_t));
+    v->mdctright = (int32_t **)ps_malloc(s_vorbisChannels* sizeof(int32_t));
 
     for(i = 0; i < s_vorbisChannels; i++) {
-        v->work[i] = (int32_t *)__calloc_heap_psram(1, (s_blocksizes[1] >> 1) * sizeof(*v->work[i]));
-        v->mdctright[i] = (int32_t *)__calloc_heap_psram(1, (s_blocksizes[1] >> 2) * sizeof(*v->mdctright[i]));
+        v->work[i] = (int32_t *)ps_calloc(1, (s_blocksizes[1] >> 1) * sizeof(int32_t));
+        v->mdctright[i] = (int32_t *)ps_calloc(1, (s_blocksizes[1] >> 2) * sizeof(int32_t));
     }
 
     v->lW = 0; /* previous window size */

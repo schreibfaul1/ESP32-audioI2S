@@ -99,12 +99,12 @@ typedef struct{
 } floor1class_t;
 
 typedef struct{
-    int32_t            order;
+    int32_t        order;
     int32_t        rate;
     int32_t        barkmap;
-    int32_t            ampbits;
-    int32_t            ampdB;
-    int32_t            numbooks; /* <= 16 */
+    int32_t        ampbits;
+    int32_t        ampdB;
+    int32_t        numbooks; /* <= 16 */
     char           books[16];
     floor1class_t *_class;         /* [VIF_CLASS] */
     uint8_t       *partitionclass; /* [VIF_PARTS]; 0 to 15 */
@@ -112,9 +112,9 @@ typedef struct{
     uint8_t       *forward_index;  /* [VIF_POSIT+2]; */
     uint8_t       *hineighbor;     /* [VIF_POSIT]; */
     uint8_t       *loneighbor;     /* [VIF_POSIT]; */
-    int32_t            partitions;     /* 0 to 31 */
-    int32_t            posts;
-    int32_t            mult;           /* 1 2 3 or 4 */
+    int32_t        partitions;     /* 0 to 31 */
+    int32_t        posts;
+    int32_t        mult;           /* 1 2 3 or 4 */
 } vorbis_info_floor_t;
 
 typedef struct _vorbis_info_residue {
