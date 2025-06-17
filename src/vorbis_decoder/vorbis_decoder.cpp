@@ -81,8 +81,8 @@ ps_ptr<codebook_t>     s_codebooks;
 vorbis_info_floor_t  **s_floor_param = NULL;
 ps_ptr<int8_t>                s_floor_type;
 ps_ptr<vorbis_info_residue_t> s_residue_param;
-vorbis_info_mapping_t *s_map_param = NULL;
-vorbis_info_mode_t    *s_mode_param = NULL;
+ps_ptr<vorbis_info_mapping_t> s_map_param;
+ps_ptr<vorbis_info_mode_t>    s_mode_param;
 vorbis_dsp_state_t    *s_dsp_state = NULL;
 
 vector<uint32_t>s_vorbisBlockPicItem;
@@ -156,22 +156,14 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfResidues = 0;
     }
     if(s_nrOfMaps) {
-        for(int32_t i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param + i); }
+        for(int32_t i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param.get() + i); }
         s_nrOfMaps = 0;
     }
 
     s_residue_param.reset();
-
-    if(s_map_param) {
-        free(s_map_param);
-        s_map_param = NULL;
-    }
-    if(s_mode_param) {
-        free(s_mode_param);
-        s_mode_param = NULL;
-    }
+    s_map_param.reset();
+    s_mode_param.reset();
 }
-
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
@@ -651,10 +643,10 @@ int32_t parseVorbisCodebook(){
 
     // /* map backend settings */
     s_nrOfMaps = bitReader(6) + 1;
-    s_map_param = (vorbis_info_mapping_t *)ps_malloc(sizeof(vorbis_info_mapping_t) * s_nrOfMaps);
+    s_map_param.alloc(sizeof(vorbis_info_mapping_t) * s_nrOfMaps);
     for(i = 0; i < s_nrOfMaps; i++) {
         if(bitReader(16) != 0) goto err_out;
-        if(mapping_info_unpack(s_map_param + i)){
+        if(mapping_info_unpack(s_map_param.get() + i)){
             log_e("err while unpacking mappings");
             goto err_out;
         }
@@ -662,13 +654,13 @@ int32_t parseVorbisCodebook(){
 
     /* mode settings */
     s_nrOfModes = bitReader(6) + 1;
-    s_mode_param = (vorbis_info_mode_t *)ps_malloc(sizeof(vorbis_info_mode_t) * s_nrOfModes);
+    s_mode_param.alloc(sizeof(vorbis_info_mode_t) * s_nrOfModes);
     for(i = 0; i < s_nrOfModes; i++) {
-        s_mode_param[i].blockflag = bitReader(1);
+        s_mode_param.get()[i].blockflag = bitReader(1);
         if(bitReader(16)) goto err_out;
         if(bitReader(16)) goto err_out;
-        s_mode_param[i].mapping = bitReader(8);
-        if(s_mode_param[i].mapping >= s_nrOfMaps){
+        s_mode_param.get()[i].mapping = bitReader(8);
+        if(s_mode_param.get()[i].mapping >= s_nrOfMaps){
             log_e("too many modes");
             goto err_out;
         }
@@ -1802,7 +1794,7 @@ int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
 
     /* shift information we still need from last window */
     s_dsp_state->lW = s_dsp_state->W;
-    s_dsp_state->W = s_mode_param[mode].blockflag;
+    s_dsp_state->W = s_mode_param.get()[mode].blockflag;
     for(i = 0; i < s_vorbisChannels; i++){
         mdct_shift_right(s_blocksizes[s_dsp_state->lW], s_dsp_state->work[i], s_dsp_state->mdctright[i]);
     }
@@ -1815,7 +1807,7 @@ int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
 
     /* packet decode and portions of synthesis that rely on only this block */
     {
-        mapping_inverse(s_map_param + s_mode_param[mode].mapping);
+        mapping_inverse(s_map_param.get() + s_mode_param.get()[mode].mapping);
 
         if(s_dsp_state->out_begin == -1) {
             s_dsp_state->out_begin = 0;
