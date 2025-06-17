@@ -75,11 +75,11 @@ float     s_vorbisCompressionRatio = 0;
 
 bitReader_t            s_bitReader;
 
-ps_ptr<char>           s_vorbisChbuf;
-ps_ptr<uint8_t>        s_lastSegmentTable;
-ps_ptr<uint16_t>       s_vorbisSegmentTable;
-ps_ptr<codebook_t>     s_codebooks;
-vorbis_info_floor_t  **s_floor_param = NULL;
+ps_ptr<char>                  s_vorbisChbuf;
+ps_ptr<uint8_t>               s_lastSegmentTable;
+ps_ptr<uint16_t>              s_vorbisSegmentTable;
+ps_ptr<codebook_t>            s_codebooks;
+ps_ptr<vorbis_info_floor_t*>  s_floor_param;
 ps_ptr<int8_t>                s_floor_type;
 ps_ptr<vorbis_info_residue_t> s_residue_param;
 ps_ptr<vorbis_info_mapping_t> s_map_param;
@@ -147,8 +147,8 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_dsp_state = NULL;
     }
     if(s_nrOfFloors) {
-        for(int32_t i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param[i]);
-        free(s_floor_param);
+        for(int32_t i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param.get()[i]);
+        s_floor_param.reset();
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
@@ -611,7 +611,7 @@ int32_t parseVorbisCodebook(){
     /* floor backend settings */
     s_nrOfFloors  = bitReader(6) + 1;
 
-    s_floor_param = (vorbis_info_floor_t **)ps_malloc(sizeof(vorbis_info_floor_t) * s_nrOfFloors);
+    s_floor_param.alloc(s_nrOfFloors);
     s_floor_type.alloc(sizeof(int8_t) * s_nrOfFloors);
     for(i = 0; i < s_nrOfFloors; i++) {
         s_floor_type.get()[i] = bitReader(16);
@@ -620,12 +620,12 @@ int32_t parseVorbisCodebook(){
             goto err_out;
         }
         if(s_floor_type.get()[i]){
-            s_floor_param[i] = floor1_info_unpack();
+            s_floor_param.get()[i] = floor1_info_unpack();
         }
         else{
-            s_floor_param[i] = floor0_info_unpack();
+            s_floor_param.get()[i] = floor0_info_unpack();
         }
-        if(!s_floor_param[i]){
+        if(!s_floor_param.get()[i]){
             log_e("floor parameter not found");
             goto err_out;
         }
@@ -1851,13 +1851,13 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param[floorno]));
-            floormemo[i] = floor1_inverse1(s_floor_param[floorno], floormemo[i]);
+            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param.get()[floorno]));
+            floormemo[i] = floor1_inverse1(s_floor_param.get()[floorno], floormemo[i]);
         }
         else {
             /* floor 0 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param[floorno]));
-            floormemo[i] = floor0_inverse1(s_floor_param[floorno], floormemo[i]);
+            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param.get()[floorno]));
+            floormemo[i] = floor0_inverse1(s_floor_param.get()[floorno], floormemo[i]);
         }
 
         if(floormemo[i]) nonzero[i] = 1;
@@ -1936,11 +1936,11 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floor1_inverse2(s_floor_param[floorno], floormemo[i], pcm);
+            floor1_inverse2(s_floor_param.get()[floorno], floormemo[i], pcm);
         }
         else {
             /* floor 0 */
-            floor0_inverse2(s_floor_param[floorno], floormemo[i], pcm);
+            floor0_inverse2(s_floor_param.get()[floorno], floormemo[i], pcm);
         }
 
     }
