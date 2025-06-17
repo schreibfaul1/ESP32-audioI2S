@@ -819,7 +819,7 @@ int32_t VORBISFindSyncWord(unsigned char *buf, int32_t nBytes){
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_book_unpack(codebook_t *s) {
-    char   *lengthlist = NULL;
+    ps_ptr<char> lengthlist;
     uint8_t quantvals = 0;
     int32_t i, j;
     int32_t     maptype;
@@ -845,7 +845,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
     switch(bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist = (char *)ps_malloc(sizeof(char) * s->entries);
+            lengthlist.alloc(sizeof(char) * s->entries);
 
             /* allocated but unused entries? */
             if(bitReader(1)) {
@@ -881,7 +881,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist = (char *)ps_malloc(sizeof(char) * s->entries);
+                lengthlist.alloc(sizeof(char) * s->entries);
 
                 for(i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
@@ -917,7 +917,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
             s->dec_nodeb = _determine_node_bytes(s->used_entries, _ilog(s->entries) / 8 + 1);
             s->dec_leafw = _determine_leaf_words(s->dec_nodeb, _ilog(s->entries) / 8 + 1);
             s->dec_type = 0;
-            ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+            ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
             if(ret != 0) {
                  goto _errout;
             }
@@ -947,7 +947,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                     s->dec_type = 1;
                     s->dec_nodeb = _determine_node_bytes(s->used_entries, (s->q_bits * s->dim + 8) / 8);
                     s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (s->q_bits * s->dim + 8) / 8);
-                    ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+                    ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
                     if(ret) {
                         goto _errout;
                     }
@@ -971,7 +971,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                     s->dec_nodeb = _determine_node_bytes(s->used_entries, (_ilog(quantvals - 1) * s->dim + 8) / 8);
                     s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (_ilog(quantvals - 1) * s->dim + 8) / 8);
 
-                    ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+                    ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
                     if(ret){
                         goto _errout;
                     }
@@ -989,7 +989,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 s->dec_type = 1;
                 s->dec_nodeb = _determine_node_bytes(s->used_entries, (s->q_bits * s->dim + 8) / 8);
                 s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (s->q_bits * s->dim + 8) / 8);
-                if(_make_decode_table(s, lengthlist, quantvals, maptype)) goto _errout;
+                if(_make_decode_table(s, lengthlist.get(), quantvals, maptype)) goto _errout;
             }
             else {
                 /* use dec_type 3: scalar offset into packed value array */
@@ -997,7 +997,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 s->dec_type = 3;
                 s->dec_nodeb = _determine_node_bytes(s->used_entries, _ilog(s->used_entries - 1) / 8 + 1);
                 s->dec_leafw = _determine_leaf_words(s->dec_nodeb, _ilog(s->used_entries - 1) / 8 + 1);
-                if(_make_decode_table(s, lengthlist, quantvals, maptype)) goto _errout;
+                if(_make_decode_table(s, lengthlist.get(), quantvals, maptype)) goto _errout;
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
@@ -1018,11 +1018,9 @@ int32_t vorbis_book_unpack(codebook_t *s) {
             goto _errout;
     }
     if(oggpack_eop()) goto _eofout;
-    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
     return 0; // ok
 _errout:
 _eofout:
-    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
     return -1; // error
 }
 //---------------------------------------------------------------------------------------------------------------------
