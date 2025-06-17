@@ -79,8 +79,8 @@ ps_ptr<char>           s_vorbisChbuf;
 ps_ptr<uint16_t>       s_vorbisSegmentTable;
 ps_ptr<codebook_t>     s_codebooks;
 vorbis_info_floor_t  **s_floor_param = NULL;
-int8_t                *s_floor_type = NULL;
-vorbis_info_residue_t *s_residue_param = NULL;
+ps_ptr<int8_t>                s_floor_type;
+ps_ptr<vorbis_info_residue_t> s_residue_param;
 vorbis_info_mapping_t *s_map_param = NULL;
 vorbis_info_mode_t    *s_mode_param = NULL;
 vorbis_dsp_state_t    *s_dsp_state = NULL;
@@ -140,15 +140,8 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    // if(s_nrOfCodebooks) {  // if we have a stream with changing codebooks, delete the old one
-    //     for(int32_t i = 0; i < s_nrOfCodebooks; i++) { vorbis_book_clear(s_codebooks + i); }
-    //     s_nrOfCodebooks = 0;
-    // }
-    // if(s_codebooks) {
-    //     free(s_codebooks);
-    //     s_codebooks = NULL;
-    // }
     s_codebooks.reset();
+    s_floor_type.reset();
     if(s_dsp_state) {
         vorbis_dsp_destroy(s_dsp_state);
         s_dsp_state = NULL;
@@ -159,21 +152,16 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
-        for(int32_t i = 0; i < s_nrOfResidues; i++) res_clear_info(s_residue_param + i);
+        for(int32_t i = 0; i < s_nrOfResidues; i++) res_clear_info(s_residue_param.get() + i);
         s_nrOfResidues = 0;
     }
     if(s_nrOfMaps) {
         for(int32_t i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param + i); }
         s_nrOfMaps = 0;
     }
-    if(s_floor_type) {
-        free(s_floor_type);
-        s_floor_type = NULL;
-    }
-    if(s_residue_param) {
-        free(s_residue_param);
-        s_residue_param = NULL;
-    }
+
+    s_residue_param.reset();
+
     if(s_map_param) {
         free(s_map_param);
         s_map_param = NULL;
@@ -632,14 +620,14 @@ int32_t parseVorbisCodebook(){
     s_nrOfFloors  = bitReader(6) + 1;
 
     s_floor_param = (vorbis_info_floor_t **)ps_malloc(sizeof(vorbis_info_floor_t) * s_nrOfFloors);
-    s_floor_type  = (int8_t *)ps_malloc(sizeof(int8_t) * s_nrOfFloors);
+    s_floor_type.alloc(sizeof(int8_t) * s_nrOfFloors);
     for(i = 0; i < s_nrOfFloors; i++) {
-        s_floor_type[i] = bitReader(16);
-        if(s_floor_type[i] < 0 || s_floor_type[i] >= VI_FLOORB) {
+        s_floor_type.get()[i] = bitReader(16);
+        if(s_floor_type.get()[i] < 0 || s_floor_type.get()[i] >= VI_FLOORB) {
             log_e("err while reading floors");
             goto err_out;
         }
-        if(s_floor_type[i]){
+        if(s_floor_type.get()[i]){
             s_floor_param[i] = floor1_info_unpack();
         }
         else{
@@ -653,9 +641,9 @@ int32_t parseVorbisCodebook(){
 
     /* residue backend settings */
     s_nrOfResidues = bitReader(6) + 1;
-    s_residue_param = (vorbis_info_residue_t *)ps_malloc(sizeof(vorbis_info_residue_t) * s_nrOfResidues);
+    s_residue_param.alloc(sizeof(vorbis_info_residue_t) * s_nrOfResidues);
     for(i = 0; i < s_nrOfResidues; i++){
-         if(res_unpack(s_residue_param + i)){
+         if(res_unpack(s_residue_param.get() + i)){
             log_e("err while unpacking residues");
             goto err_out;
          }
@@ -1869,7 +1857,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
         if(info->submaps > 1) submap = info->chmuxlist[i];
         floorno = info->submaplist[submap].floor;
 
-        if(s_floor_type[floorno]) {
+        if(s_floor_type.get()[floorno]) {
             /* floor 1 */
             floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param[floorno]));
             floormemo[i] = floor1_inverse1(s_floor_param[floorno], floormemo[i]);
@@ -1906,7 +1894,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
             }
         }
 
-        res_inverse(s_residue_param + info->submaplist[i].residue, pcmbundle, zerobundle, ch_in_bundle);
+        res_inverse(s_residue_param.get() + info->submaplist[i].residue, pcmbundle, zerobundle, ch_in_bundle);
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -1954,7 +1942,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
         if(info->submaps > 1) submap = info->chmuxlist[i];
         floorno = info->submaplist[submap].floor;
 
-        if(s_floor_type[floorno]) {
+        if(s_floor_type.get()[floorno]) {
             /* floor 1 */
             floor1_inverse2(s_floor_param[floorno], floormemo[i], pcm);
         }
