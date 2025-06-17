@@ -36,7 +36,6 @@ class ps_ptr {
     std::unique_ptr<void, PsramDeleter> mem;
     size_t allocated_size = 0;
 
-
 public:
     ps_ptr() = default;
 
@@ -57,6 +56,10 @@ public:
         if (!mem) {
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
         }
+    }
+    // Within the class ps_ptr<T>
+    void alloc() {
+        alloc(sizeof(T));
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E A L L O C  📌📌📌
@@ -612,11 +615,32 @@ ends_with_icase(const char* suffix) const {
     T* operator->() const { return get(); }
     T& operator*() const { return *get(); }
 
-    // Access to elements if t is a pointer type (e.g. t = int32_t*)
+    // Zugriff auf ps_ptr<T>[], wenn T selbst ein ps_ptr<U> ist
     template <typename U = T>
-    typename std::enable_if<std::is_pointer<U>::value, typename std::remove_pointer<U>::type&>::type operator[](std::size_t index) const {
+    typename std::enable_if<
+        std::is_class<U>::value &&
+        std::is_same<decltype(std::declval<U>().alloc(0)), void>::value,
+        U&>::type
+    operator[](std::size_t index) const {
         return get()[index];
     }
+
+    // Für einfache Typen (int32_t, etc.)
+    T& operator[](size_t index) {
+        return get()[index];
+    }
+
+    // Spezialmethode für ps_ptr<ps_ptr<T>>
+    template <typename U = T>
+    auto at(size_t index) -> typename std::enable_if<
+        std::is_same<U, ps_ptr<typename U::element_type>>::value,
+        ps_ptr<typename U::element_type>&
+    >::type {
+        return static_cast<ps_ptr<typename U::element_type>*>(get())[index];
+    }
+
+    using element_type = T;
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  I N S E R T  📌📌📌
 

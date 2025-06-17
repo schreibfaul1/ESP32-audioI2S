@@ -1745,44 +1745,36 @@ void mapping_clear_info(vorbis_info_mapping_t *info) {
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
 //---------------------------------------------------------------------------------------------------------------------
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create() {
-    int32_t i;
+    ps_ptr<vorbis_dsp_state_t> v;
+    v.alloc(sizeof(vorbis_dsp_state_t));
+    v.clear();
 
-    ps_ptr<vorbis_dsp_state_t> v; v.alloc(sizeof(vorbis_dsp_state_t)); v.clear();
+    v->work.alloc(s_vorbisChannels * sizeof(ps_ptr<int32_t>));
+    v->work.clear();  // Important!
 
-    v->work = (int32_t **)ps_malloc(s_vorbisChannels * sizeof(int32_t *));
-    v->mdctright = (int32_t **)ps_malloc(s_vorbisChannels* sizeof(int32_t *));
+    v->mdctright.alloc(s_vorbisChannels * sizeof(ps_ptr<int32_t>));
+    v->mdctright.clear();  // Important!
 
-    for(i = 0; i < s_vorbisChannels; i++) {
-        v->work[i] = (int32_t *)ps_calloc(1, (s_blocksizes[1] >> 1) * sizeof(int32_t));
-        v->mdctright[i] = (int32_t *)ps_calloc(1, (s_blocksizes[1] >> 2) * sizeof(int32_t));
+    for (uint8_t i = 0; i < s_vorbisChannels; ++i) {
+        size_t work_size = (s_blocksizes[1] >> 1) * sizeof(int32_t);
+        v->work.at(i).alloc(work_size);
+        v->work.at(i).clear();
+
+        size_t mdct_size = (s_blocksizes[1] >> 2) * sizeof(int32_t);
+        v->mdctright.at(i).alloc(mdct_size);
+        v->mdctright.at(i).clear();
     }
 
-    v->lW = 0; /* previous window size */
-    v->W = 0;  /* current window size  */
-
-    v->out_end = -1; // vorbis_dsp_restart
+    v->lW = 0;
+    v->W = 0;
     v->out_begin = -1;
+    v->out_end = -1;
 
     return v;
 }
 //---------------------------------------------------------------------------------------------------------------------
 void vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v) {
-    int32_t i;
-    if(v.valid()) {
-        if(v->work) {
-            for(i = 0; i < s_vorbisChannels; i++) {
-                if(v->work[i]) {free(v->work[i]); v->work[i] = NULL;}
-            }
-            if(v->work){free(v->work); v->work = NULL;}
-        }
-        if(v->mdctright) {
-            for(i = 0; i < s_vorbisChannels; i++) {
-                if(v->mdctright[i]){free(v->mdctright[i]); v->mdctright[i] = NULL;}
-            }
-            if(v->mdctright){free(v->mdctright); v->mdctright = NULL;}
-        }
-        v.reset();
-    }
+    v.reset(); // Alle zugewiesenen ps_ptrs werden automatisch freigegeben
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
@@ -1803,7 +1795,7 @@ int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
     s_dsp_state->lW = s_dsp_state->W;
     s_dsp_state->W = s_mode_param.get()[mode].blockflag;
     for(i = 0; i < s_vorbisChannels; i++){
-        mdct_shift_right(s_blocksizes[s_dsp_state->lW], s_dsp_state->work[i], s_dsp_state->mdctright[i]);
+        mdct_shift_right(s_blocksizes[s_dsp_state->lW], s_dsp_state->work[i].get(), s_dsp_state->mdctright[i].get());
     }
     if(s_dsp_state->W) {
         int32_t temp;
@@ -1870,7 +1862,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
         if(floormemo[i]) nonzero[i] = 1;
         else
             nonzero[i] = 0;
-        memset(s_dsp_state->work[i], 0, sizeof(*s_dsp_state->work[i]) * n / 2);
+        memset(s_dsp_state->work[i].get(), 0, sizeof(*s_dsp_state->work[i]) * n / 2);
     }
 
     /* channel coupling can 'dirty' the nonzero listing */
@@ -1889,7 +1881,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
                 if(nonzero[j]) zerobundle[ch_in_bundle] = 1;
                 else
                     zerobundle[ch_in_bundle] = 0;
-                pcmbundle[ch_in_bundle++] = s_dsp_state->work[j];
+                pcmbundle[ch_in_bundle++] = s_dsp_state->work[j].get();
             }
         }
 
@@ -1901,8 +1893,8 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
     /* channel coupling */
     for(i = info->coupling_steps - 1; i >= 0; i--) {
-        int32_t *pcmM = s_dsp_state->work[info->coupling[i].mag];
-        int32_t *pcmA = s_dsp_state->work[info->coupling[i].ang];
+        int32_t *pcmM = s_dsp_state->work[info->coupling[i].mag].get();
+        int32_t *pcmA = s_dsp_state->work[info->coupling[i].ang].get();
 
         for(j = 0; j < n / 2; j++) {
             int32_t mag = pcmM[j];
@@ -1934,7 +1926,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     /* compute and apply spectral envelope */
 
     for(i = 0; i < s_vorbisChannels; i++) {
-        int32_t *pcm = s_dsp_state->work[i];
+        int32_t *pcm = s_dsp_state->work[i].get();
         int32_t      submap = 0;
         int32_t      floorno;
 
@@ -1958,7 +1950,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     /* transform the PCM data; takes PCM vector, vb; modifies PCM vector */
     /* only MDCT right now.... */
     for(i = 0; i < s_vorbisChannels; i++){
-        mdct_backward(n, s_dsp_state->work[i]);
+        mdct_backward(n, s_dsp_state->work[i].get());
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -3158,8 +3150,8 @@ int32_t vorbis_dsp_pcmout(int16_t *outBuff, int32_t outBuffSize) {
             }
             for(i = 0; i < s_vorbisChannels; i++){
                 mdct_unroll_lap(s_blocksizes[0], s_blocksizes[1],
-                                s_dsp_state->lW, s_dsp_state->W, s_dsp_state->work[i],
-                                s_dsp_state->mdctright[i], _vorbis_window(s_blocksizes[0] >> 1),
+                                s_dsp_state->lW, s_dsp_state->W, s_dsp_state->work[i].get(),
+                                s_dsp_state->mdctright[i].get(), _vorbis_window(s_blocksizes[0] >> 1),
                                 _vorbis_window(s_blocksizes[1] >> 1),
                                 outBuff + i, s_vorbisChannels,
                                 s_dsp_state->out_begin,

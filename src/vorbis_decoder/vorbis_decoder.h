@@ -156,14 +156,12 @@ typedef struct {  // mode
 } vorbis_info_mode_t;
 
 typedef struct _vorbis_dsp_state{  // vorbis_dsp_state buffers the current vorbis audio analysis/synthesis state.
-//    vorbis_info     *vi;  // The DSP state be int32_ts to a specific logical bitstream
-//    oggpack_buffer_t opb;
-    int32_t        **work;
-    int32_t        **mdctright;
-    int32_t        out_begin;
-    int32_t        out_end;
-    int32_t        lW;        // last window
-    uint32_t       W;         // Window
+    ps_ptr<ps_ptr<int32_t>> work;
+    ps_ptr<ps_ptr<int32_t>> mdctright;
+    int32_t    lW = 0; // last window
+    int32_t    W = 0;  // window
+    int32_t    out_begin = -1;
+    int32_t    out_end = -1;
 } vorbis_dsp_state_t;
 
 typedef struct _bitreader{
@@ -171,7 +169,7 @@ typedef struct _bitreader{
     uint8_t    length;
     uint16_t   headbit;
     uint8_t   *headptr;
-    int32_t        headend;
+    int32_t    headend;
 } bitReader_t;
 
 //----------------------------------------------------------------------------------------------------------------------
