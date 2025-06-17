@@ -107,12 +107,12 @@ typedef struct{
     int32_t        ampdB;
     int32_t        numbooks; /* <= 16 */
     char           books[16];
-    floor1class_t *_class;         /* [VIF_CLASS] */
-    uint8_t       *partitionclass; /* [VIF_PARTS]; 0 to 15 */
-    uint16_t      *postlist;       /* [VIF_POSIT+2]; first two implicit */
-    uint8_t       *forward_index;  /* [VIF_POSIT+2]; */
-    uint8_t       *hineighbor;     /* [VIF_POSIT]; */
-    uint8_t       *loneighbor;     /* [VIF_POSIT]; */
+    ps_ptr<floor1class_t> _class;         /* [VIF_CLASS] */
+    ps_ptr<uint8_t>       partitionclass; /* [VIF_PARTS]; 0 to 15 */
+    ps_ptr<uint16_t>      postlist;       /* [VIF_POSIT+2]; first two implicit */
+    ps_ptr<uint8_t>       forward_index;  /* [VIF_POSIT+2]; */
+    ps_ptr<uint8_t>       hineighbor;     /* [VIF_POSIT]; */
+    ps_ptr<uint8_t>       loneighbor;     /* [VIF_POSIT]; */
     int32_t        partitions;     /* 0 to 31 */
     int32_t        posts;
     int32_t        mult;           /* 1 2 3 or 4 */
@@ -248,7 +248,6 @@ vorbis_info_floor_t*  floor1_info_unpack();
 int32_t               res_unpack(vorbis_info_residue_t* info);
 int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 void                  vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
-void                  floor_free_info(vorbis_info_floor_t* i);
 // vorbis decoder impl
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();

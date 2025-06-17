@@ -155,8 +155,6 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         vorbis_dsp_destroy(s_dsp_state);
     }
     if(s_nrOfFloors) {
-        for(int32_t i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param.get()[i]);
-       // s_floor_param.reset();
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
@@ -1486,7 +1484,6 @@ void vorbis_book_clear(codebook_t *b) {
     return (info);
 
 err_out:
-    floor_free_info(info);
     return (NULL);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1497,14 +1494,14 @@ vorbis_info_floor_t* floor1_info_unpack() {
     vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_calloc(1, sizeof(vorbis_info_floor_t));
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
-    info->partitionclass = (uint8_t *)ps_malloc(info->partitions * sizeof(uint8_t));
+    info->partitionclass.alloc(info->partitions * sizeof(uint8_t));
     for(j = 0; j < info->partitions; j++) {
         info->partitionclass[j] = bitReader(4); /* only 0 to 15 legal */
         if(maxclass < info->partitionclass[j]) maxclass = info->partitionclass[j];
     }
 
     /* read partition classes */
-    info->_class = (floor1class_t *)ps_malloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t));
+    info->_class.alloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t));
     for(j = 0; j < maxclass + 1; j++) {
         info->_class[j].class_dim = bitReader(3) + 1; /* 1 to 8 */
         info->_class[j].class_subs = bitReader(2);    /* 0,1,2,3 bits */
@@ -1527,10 +1524,10 @@ vorbis_info_floor_t* floor1_info_unpack() {
     rangebits = bitReader(4);
 
     for(j = 0, k = 0; j < info->partitions; j++) count += info->_class[info->partitionclass[j]].class_dim;
-    info->postlist = (uint16_t *)ps_malloc((count + 2) * sizeof(uint16_t));
-    info->forward_index = (uint8_t *)ps_malloc((count + 2) * sizeof(uint8_t));
-    info->loneighbor = (uint8_t *)ps_malloc(count * sizeof(uint8_t));
-    info->hineighbor = (uint8_t *)ps_malloc(count * sizeof(uint8_t));
+    info->postlist.alloc((count + 2) * sizeof(uint16_t));
+    info->forward_index.alloc((count + 2) * sizeof(uint8_t));
+    info->loneighbor.alloc(count * sizeof(uint8_t));
+    info->hineighbor.alloc(count * sizeof(uint8_t));
 
     count = 0;
     for(j = 0, k = 0; j < info->partitions; j++) {
@@ -1548,7 +1545,7 @@ vorbis_info_floor_t* floor1_info_unpack() {
 
     /* also store a sorted position index */
     for(j = 0; j < info->posts; j++) info->forward_index[j] = j;
-    vorbis_mergesort(info->forward_index, info->postlist, info->posts);
+    vorbis_mergesort(info->forward_index.get(), info->postlist.get(), info->posts);
 
     /* discover our neighbors for decode where we don't use fit flags (that would push the neighbors outward) */
     for(j = 0; j < info->posts - 2; j++) {
@@ -1575,7 +1572,6 @@ vorbis_info_floor_t* floor1_info_unpack() {
     return (info);
 
 err_out:
-    floor_free_info(info);
     return (NULL);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1704,19 +1700,6 @@ void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
         free(B);
 }
 //---------------------------------------------------------------------------------------------------------------------
-void floor_free_info(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    if(info) {
-        if(info->_class)         {free(info->_class);        }
-        if(info->partitionclass) {free(info->partitionclass);}
-        if(info->postlist)       {free(info->postlist);      }
-        if(info->forward_index)  {free(info->forward_index); }
-        if(info->hineighbor)     {free(info->hineighbor);    }
-        if(info->loneighbor)     {free(info->loneighbor);    }
-        memset(info, 0, sizeof(*info));
-        if(info) free(info);
-    }
-}
 //---------------------------------------------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------------------------------------------
 
