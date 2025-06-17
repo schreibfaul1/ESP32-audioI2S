@@ -1756,15 +1756,16 @@ ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create() {
     v->mdctright.clear();  // Important!
 
     for (uint8_t i = 0; i < s_vorbisChannels; ++i) {
-        size_t work_size = (s_blocksizes[1] >> 1) * sizeof(int32_t);
+        const size_t work_size = (s_blocksizes[1] >> 1) * sizeof(int32_t);
         v->work.at(i).alloc(work_size);
         v->work.at(i).clear();
 
-        size_t mdct_size = (s_blocksizes[1] >> 2) * sizeof(int32_t);
+        const size_t mdct_size = (s_blocksizes[1] >> 2) * sizeof(int32_t);
         v->mdctright.at(i).alloc(mdct_size);
         v->mdctright.at(i).clear();
     }
 
+    // Initialize state
     v->lW = 0;
     v->W = 0;
     v->out_begin = -1;
