@@ -66,8 +66,7 @@ uint8_t   s_nrOfResidues = 0;
 uint8_t   s_nrOfMaps = 0;
 uint8_t   s_nrOfModes = 0;
 
-ps_ptr<char>     s_vorbisChbuf;
-ps_ptr<uint16_t> s_vorbisSegmentTable;
+
 uint16_t  s_oggPage3Len = 0; // length of the current audio segment
 uint8_t   s_vorbisSegmentTableSize = 0;
 int16_t   s_vorbisSegmentTableRdPtr = -1;
@@ -76,7 +75,9 @@ float     s_vorbisCompressionRatio = 0;
 
 bitReader_t            s_bitReader;
 
-codebook_t            *s_codebooks = NULL;
+ps_ptr<char>           s_vorbisChbuf;
+ps_ptr<uint16_t>       s_vorbisSegmentTable;
+ps_ptr<codebook_t>     s_codebooks;
 vorbis_info_floor_t  **s_floor_param = NULL;
 int8_t                *s_floor_type = NULL;
 vorbis_info_residue_t *s_residue_param = NULL;
@@ -89,21 +90,17 @@ vector<uint32_t>s_vorbisBlockPicItem;
 
 bool VORBISDecoder_AllocateBuffers(){
     s_vorbisSegmentTable.alloc(256 * sizeof(uint16_t)); s_vorbisSegmentTable.clear();
-    s_vorbisChbuf.alloc(256 * sizeof(char)); s_vorbisChbuf.clear();
     s_lastSegmentTable = (uint8_t*)ps_malloc(4096);
     VORBISsetDefaults();
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
     s_vorbisSegmentTable.reset();
-    s_vorbisChbuf.reset();
-    
     if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
 
     clearGlobalConfigurations();
 }
 void VORBISDecoder_ClearBuffers(){
-    s_vorbisChbuf.clear();
     bitReader_clear();
     if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
     s_vorbisSegmentTable.clear();
@@ -143,14 +140,15 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    if(s_nrOfCodebooks) {  // if we have a stream with changing codebooks, delete the old one
-        for(int32_t i = 0; i < s_nrOfCodebooks; i++) { vorbis_book_clear(s_codebooks + i); }
-        s_nrOfCodebooks = 0;
-    }
-    if(s_codebooks) {
-        free(s_codebooks);
-        s_codebooks = NULL;
-    }
+    // if(s_nrOfCodebooks) {  // if we have a stream with changing codebooks, delete the old one
+    //     for(int32_t i = 0; i < s_nrOfCodebooks; i++) { vorbis_book_clear(s_codebooks + i); }
+    //     s_nrOfCodebooks = 0;
+    // }
+    // if(s_codebooks) {
+    //     free(s_codebooks);
+    //     s_codebooks = NULL;
+    // }
+    s_codebooks.reset();
     if(s_dsp_state) {
         vorbis_dsp_destroy(s_dsp_state);
         s_dsp_state = NULL;
@@ -613,10 +611,10 @@ int32_t parseVorbisCodebook(){
     int32_t ret = 0;
 
     s_nrOfCodebooks = bitReader(8) +1;
-    s_codebooks = (codebook_t*) ps_calloc(s_nrOfCodebooks, sizeof(codebook_t));
+    s_codebooks.alloc(s_nrOfCodebooks * sizeof(codebook_t));
 
     for(i = 0; i < s_nrOfCodebooks; i++){
-        ret = vorbis_book_unpack(s_codebooks + i);
+        ret = vorbis_book_unpack(s_codebooks.get() + i);
         if(ret) log_e("codebook %i returned err", i);
         if(ret) goto err_out;
     }
@@ -2005,7 +2003,7 @@ int32_t *floor0_inverse1(vorbis_info_floor_t *i, int32_t *lsp) {
         int32_t     booknum = bitReader(_ilog(info->numbooks));
 
         if(booknum != -1 && booknum < info->numbooks) { /* be paranoid */
-            codebook_t        *b = s_codebooks + info->books[booknum];
+            codebook_t        *b = s_codebooks.get() + info->books[booknum];
             int32_t           last = 0;
 
             if(vorbis_book_decodev_set(b, lsp, info->order, -24) == -1) goto eop;
@@ -2028,7 +2026,7 @@ int32_t *floor1_inverse1(vorbis_info_floor_t *in, int32_t *fit_value) {
     int32_t                 quant_look[4] = {256, 128, 86, 64};
     int32_t                 i, j, k;
     int32_t                 quant_q = quant_look[info->mult - 1];
-    codebook_t         *books = s_codebooks;
+    codebook_t         *books = s_codebooks.get();
 
     /* unpack wrapped/predicted values from stream */
     if(bitReader(1) == 1) {
@@ -2295,7 +2293,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
     int32_t               j, k, s;
     uint8_t           m = 0, n = 0;
     uint8_t           used = 0;
-    codebook_t         *phrasebook = s_codebooks + info->groupbook;
+    codebook_t         *phrasebook = s_codebooks.get() + info->groupbook;
     uint32_t          samples_per_partition = info->grouping;
     uint8_t           partitions_per_word = phrasebook->dim;
     uint32_t          pcmend = s_blocksizes[s_dsp_state->W];
@@ -2351,7 +2349,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
                             for(j = 0; j < ch; j++) {
                                 uint32_t offset = info->begin + i * samples_per_partition;
                                 if(info->stagemasks[(int32_t)partword[j][i]] & (1 << s)) {
-                                    codebook_t *stagebook = s_codebooks + info->stagebooks[(partword[j][i] << 3) + s];
+                                    codebook_t *stagebook = s_codebooks.get() + info->stagebooks[(partword[j][i] << 3) + s];
                                     if(info->type) {
                                         if(vorbis_book_decodev_add(stagebook, in[j] + offset,
                                                                    samples_per_partition, -8) == -1)
@@ -2412,7 +2410,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
                     /* now we decode residual values for the partitions */
                     for(k = 0; k < partitions_per_word && i < partvals; k++, i++)
                         if(info->stagemasks[(int32_t)partword[i]] & (1 << s)) {
-                            codebook_t *stagebook = s_codebooks + info->stagebooks[(partword[i] << 3) + s];
+                            codebook_t *stagebook = s_codebooks.get() + info->stagebooks[(partword[i] << 3) + s];
                             if(vorbis_book_decodevv_add(stagebook, in, i * samples_per_partition + beginoff, ch,
                                                         samples_per_partition, -8) == -1)
                                 goto eopbreak;
