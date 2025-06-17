@@ -75,7 +75,7 @@ typedef struct _codebook{
     int16_t  entries;      /* codebook entries */
     uint16_t used_entries; /* populated codebook entries */
     uint32_t dec_maxlength;
-    void    *dec_table;
+    ps_ptr<uint16_t>  dec_table;
     uint32_t dec_nodeb;
     uint32_t dec_leafw;
     uint32_t dec_type; /* 0 = entry number
@@ -89,7 +89,7 @@ typedef struct _codebook{
     int32_t     q_seq;
     int32_t     q_bits;
     uint8_t q_pack;
-    void   *q_val;
+    ps_ptr<uint16_t> q_val;
 } codebook_t;
 
 typedef struct{
@@ -306,5 +306,4 @@ int32_t  _determine_leaf_words(int32_t nodeb, int32_t leafwidth);
 int32_t  _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, int32_t maptype);
 int32_t  _make_words(char *l, uint16_t n, uint32_t *r, uint8_t quantvals, codebook_t *b, int32_t maptype);
 uint8_t  _book_maptype1_quantvals(codebook_t *b);
-void     vorbis_book_clear(codebook_t *b);
 int32_t *_vorbis_window(int32_t left);

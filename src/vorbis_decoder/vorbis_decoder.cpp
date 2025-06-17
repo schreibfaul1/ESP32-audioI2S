@@ -937,11 +937,10 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 if(total1 <= 4 && total1 <= total2) {
                     /* use dec_type 1: vector of packed values */
                     /* need quantized values before  */
-                    s->q_val = ps_malloc(sizeof(uint16_t) * quantvals);
-                    for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
+                    s->q_val.alloc(sizeof(uint16_t) * quantvals);
+                    for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val.get())[i] = bitReader(s->q_bits);
 
                     if(oggpack_eop()) {
-                        if(s->q_val) {free(s->q_val), s->q_val = NULL;}
                         goto _eofout;
                     }
 
@@ -950,22 +949,19 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                     s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (s->q_bits * s->dim + 8) / 8);
                     ret = _make_decode_table(s, lengthlist, quantvals, maptype);
                     if(ret) {
-                        if(s->q_val) {free(s->q_val), s->q_val = NULL;}
                         goto _errout;
                     }
-
-                    if(s->q_val) {free(s->q_val), s->q_val = NULL;} /* about to go out of scope; _make_decode_table was using it */
                 }
                 else {
                     /* use dec_type 2: packed vector of column offsets */
                     /* need quantized values before */
                     if(s->q_bits <= 8) {
-                        s->q_val = ps_malloc(quantvals);
-                        for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val)[i] = bitReader(s->q_bits);
+                        s->q_val.alloc(quantvals);
+                        for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val.get())[i] = bitReader(s->q_bits);
                     }
                     else {
-                        s->q_val = ps_malloc(quantvals * 2);
-                        for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
+                        s->q_val.alloc(quantvals * 2);
+                        for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val.get())[i] = bitReader(s->q_bits);
                     }
 
                     if(oggpack_eop()) goto _eofout;
@@ -1005,15 +1001,15 @@ int32_t vorbis_book_unpack(codebook_t *s) {
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
-                s->q_val = ps_malloc(s->q_pack * s->used_entries);
+                s->q_val.alloc(s->q_pack * s->used_entries);
 
                 if(s->q_bits <= 8) {
                     for(i = 0; i < s->used_entries * s->dim; i++)
-                        ((uint8_t *)(s->q_val))[i] = bitReader(s->q_bits);
+                        ((uint8_t *)(s->q_val.get()))[i] = bitReader(s->q_bits);
                 }
                 else {
                     for(i = 0; i < s->used_entries * s->dim; i++)
-                        ((uint16_t *)(s->q_val))[i] = bitReader(s->q_bits);
+                        ((uint16_t *)(s->q_val.get()))[i] = bitReader(s->q_bits);
                 }
             }
             break;
@@ -1023,13 +1019,10 @@ int32_t vorbis_book_unpack(codebook_t *s) {
     }
     if(oggpack_eop()) goto _eofout;
     if(lengthlist) {free(lengthlist); lengthlist = NULL;}
-    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
     return 0; // ok
 _errout:
 _eofout:
-    vorbis_book_clear(s);
     if(lengthlist) {free(lengthlist); lengthlist = NULL;}
-    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
     return -1; // error
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1199,9 +1192,9 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
     ps_ptr<uint32_t>work;
 
     if(s->dec_nodeb == 4) {
-        s->dec_table = ps_malloc((s->used_entries * 2 + 1) * sizeof(*work));
+        s->dec_table.alloc((s->used_entries * 2 + 1) * sizeof(*work));
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
-        if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table, quantvals, s, maptype)) return 1;
+        if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table.get(), quantvals, s, maptype)) return 1;
 
         return 0;
     }
@@ -1212,16 +1205,16 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
     if(_make_words(lengthlist, s->entries, work.get(), quantvals, s, maptype)) {
         return 1;
     }
-    s->dec_table = ps_malloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    s->dec_table.alloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
     if(s->dec_leafw == 1) {
         switch(s->dec_nodeb) {
             case 1:
                 for(uint32_t i = 0; i < s->used_entries * 2 - 2; i++)
-                    ((uint8_t *)s->dec_table)[i] = (uint16_t)((work[i] & 0x80000000UL) >> 24) | work[i];
+                    ((uint8_t *)s->dec_table.get())[i] = (uint16_t)((work[i] & 0x80000000UL) >> 24) | work[i];
                 break;
             case 2:
                 for(uint32_t i = 0; i < s->used_entries * 2 - 2; i++)
-                    ((uint16_t *)s->dec_table)[i] = (uint16_t)((work[i] & 0x80000000UL) >> 16) | work[i];
+                    ((uint16_t *)s->dec_table.get())[i] = (uint16_t)((work[i] & 0x80000000UL) >> 16) | work[i];
                 break;
         }
     }
@@ -1229,7 +1222,7 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
         /* more complex; we have to do a two-pass repack that updates the node indexing. */
         uint32_t top = s->used_entries * 3 - 2;
         if(s->dec_nodeb == 1) {
-            uint8_t *out = (uint8_t *)s->dec_table;
+            uint8_t *out = (uint8_t *)s->dec_table.get();
 
             for(int32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
                 if(work[i] & 0x80000000UL) {
@@ -1264,7 +1257,7 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
             }
         }
         else {
-            uint16_t *out = (uint16_t *)s->dec_table;
+            uint16_t *out = (uint16_t *)s->dec_table.get();
             for(int32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
                 if(work[i] & 0x80000000UL) {
                     if(work[i + 1] & 0x80000000UL) {
@@ -1382,7 +1375,7 @@ uint32_t decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_
                     entry /= quantvals;
                     assert((b->q_bits * j) >= 0);
                     uint32_t shift = (uint32_t)b->q_bits * j;
-                    ret |= ((uint16_t *)(b->q_val))[off] << shift;
+                    ret |= ((uint16_t *)(b->q_val.get()))[off] << shift;
                 }
             }
             else {
@@ -1450,14 +1443,6 @@ int32_t oggpack_eop() {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_book_clear(codebook_t *b) {
-    /* static book is not cleared; we're likely called on the lookup and the static codebook beint32_ts to the
-   info struct */
-    if(b->q_val) free(b->q_val);
-    if(b->dec_table) free(b->dec_table);
-
-    memset(b, 0, sizeof(*b));
-}
 //---------------------------------------------------------------------------------------------------------------------
  vorbis_info_floor_t* floor0_info_unpack() {
 
@@ -2062,7 +2047,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
     if(book->dec_nodeb == 1) {
         if(book->dec_leafw == 1) {
             /* 8/8 */
-            uint8_t *t = (uint8_t *)book->dec_table;
+            uint8_t *t = (uint8_t *)book->dec_table.get();
             for(i = 0; i < read; i++) {
                 chase = t[chase * 2 + ((lok >> i) & 1)];
                 if(chase & 0x80UL) break;
@@ -2071,7 +2056,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
         }
         else {
             /* 8/16 */
-            uint8_t *t = (uint8_t *)book->dec_table;
+            uint8_t *t = (uint8_t *)book->dec_table.get();
             for(i = 0; i < read; i++) {
                 int32_t bit = (lok >> i) & 1;
                 int32_t next = t[chase + bit];
@@ -2091,7 +2076,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
                 int32_t idx;
                 for(i = 0; i < read; i++) {
                     idx = chase * 2 + ((lok >> i) & 1);
-                    chase = ((uint16_t *)(book->dec_table))[idx];
+                    chase = ((uint16_t *)(book->dec_table.get()))[idx];
                     if(chase & 0x8000UL){
                         break;
                     }
@@ -2100,7 +2085,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
             }
             else {
                 /* 16/32 */
-                uint16_t *t = (uint16_t *)book->dec_table;
+                uint16_t *t = (uint16_t *)book->dec_table.get();
                 for(i = 0; i < read; i++) {
                     int32_t bit = (lok >> i) & 1;
                     int32_t next = t[chase + bit];
@@ -2115,7 +2100,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
         }
         else {
             for(i = 0; i < read; i++) {
-                chase = ((uint32_t *)(book->dec_table))[chase * 2 + ((lok >> i) & 1)];
+                chase = ((uint32_t *)(book->dec_table.get()))[chase * 2 + ((lok >> i) & 1)];
                 if(chase & 0x80000000UL) break;
             }
             chase &= 0x7fffffffUL;
@@ -2189,16 +2174,16 @@ int32_t decode_map(codebook_t *s, int32_t *v, int32_t point) {
             /* packed vector of column offsets */
             int32_t mask = (1 << s->q_pack) - 1;
             for(uint8_t i = 0; i < s->dim; i++) {
-                if(s->q_bits <= 8) v[i] = ((uint8_t *)(s->q_val))[entry & mask];
+                if(s->q_bits <= 8) v[i] = ((uint8_t *)(s->q_val.get()))[entry & mask];
                 else
-                    v[i] = ((uint16_t *)(s->q_val))[entry & mask];
+                    v[i] = ((uint16_t *)(s->q_val.get()))[entry & mask];
                 entry >>= s->q_pack;
             }
             break;
         }
         case 3: {
             /* offset into array */
-            void *ptr = (int32_t *)s->q_val + entry * s->q_pack;
+            void *ptr = (int32_t *)s->q_val.get() + entry * s->q_pack;
 
             if(s->q_bits <= 8) {
                 for(uint8_t i = 0; i < s->dim; i++) v[i] = ((uint8_t *)ptr)[i];
