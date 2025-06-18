@@ -208,7 +208,6 @@ public:
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  S W A P   📌📌📌
-
     // A.swap(B);
     void swap(ps_ptr<T>& other) noexcept {
         std::swap(this->mem, other.mem);
@@ -216,12 +215,12 @@ public:
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  S W A P   W I T H   R A W   P O I N T E R   📌📌📌
-void swap_with_pointer(T*& raw_ptr) noexcept {
-    T* temp = get();
-    mem.release(); // Gib Besitz auf, ohne zu löschen
-    mem = std::unique_ptr<T, PsramDeleter>(raw_ptr); // Übernehme neuen Zeiger
-    raw_ptr = temp;
-}
+    void swap_with_pointer(T*& raw_ptr) noexcept {
+        T* temp = get();
+        mem.release(); // Gib Besitz auf, ohne zu löschen
+        mem = std::unique_ptr<T, PsramDeleter>(raw_ptr); // Übernehme neuen Zeiger
+        raw_ptr = temp;
+    }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D  📌📌📌
 
@@ -230,9 +229,9 @@ void swap_with_pointer(T*& raw_ptr) noexcept {
     // text1.append(", Welt!");
     // printf("%s\n", text1.get());  // → "Hallo, Welt!"
 
-    template <typename U = T>// Only activate if T = char, similar to strcat
-    typename std::enable_if<std::is_same<U, char>::value, void>::type
-    append(const char* suffix) {
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void append(const char* suffix) {
         if (!suffix || !*suffix) return;
 
         std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
@@ -271,16 +270,13 @@ void swap_with_pointer(T*& raw_ptr) noexcept {
 
     // Only for T = Char: Check whether the string begins with the given prefix
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, bool>::type
-    starts_with(const char* prefix) const {
+    requires std::is_same_v<U, char>
+    bool starts_with(const char* prefix) const {
         if (!mem || !prefix) return false;
 
         const char* str = static_cast<const char*>(mem.get());
-        std::size_t prefix_len = std::strlen(prefix);
-        std::size_t str_len = std::strlen(str);
-        if (prefix_len > str_len) return false;
-
-        return std::strncmp(str, prefix, prefix_len) == 0;
+        std::string_view sv(str);  // C++17, sicherer als strlen
+        return sv.starts_with(prefix);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  E N D S _ W I T H   📌📌📌
@@ -295,16 +291,13 @@ void swap_with_pointer(T*& raw_ptr) noexcept {
 
     // Only for T = Char: Check whether the string ends with the given suffix
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, bool>::type
-    ends_with(const char* suffix) const {
-        if (!mem || !suffix) return false;
+    requires std::is_same_v<U, char>
+    bool ends_with(const char* prefix) const {
+        if (!mem || !prefix) return false;
 
         const char* str = static_cast<const char*>(mem.get());
-        std::size_t suffix_len = std::strlen(suffix);
-        std::size_t str_len = std::strlen(str);
-        if (suffix_len > str_len) return false;
-
-        return std::strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
+        std::string_view sv(str);  // C++17, sicherer als strlen
+        return sv.ends_with(prefix);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T A R T S _ W I T H _ I C A S E   📌📌📌
@@ -319,8 +312,8 @@ void swap_with_pointer(T*& raw_ptr) noexcept {
 
     // case non-sensitive: starts with Prefix?
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, bool>::type
-    starts_with_icase(const char* prefix) const {
+    requires std::is_same_v<U, char>
+    bool starts_with_icase(const char* prefix) const {
         if (!mem || !prefix) return false;
 
         const char* str = static_cast<const char*>(mem.get());
@@ -340,19 +333,19 @@ void swap_with_pointer(T*& raw_ptr) noexcept {
     //     printf("MP3 recognized (case-insensitive)\n");
     // }
 
-// case non-sensitive: ends with suffix?
-template <typename U = T>
-typename std::enable_if<std::is_same<U, char>::value, bool>::type
-ends_with_icase(const char* suffix) const {
-    if (!mem || !suffix) return false;
+    // case non-sensitive: ends with suffix?
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    bool ends_with_icase(const char* suffix) const {
+        if (!mem || !suffix) return false;
 
-    const char* str = static_cast<const char*>(mem.get());
-    std::size_t suffix_len = std::strlen(suffix);
-    std::size_t str_len = std::strlen(str);
-    if (suffix_len > str_len) return false;
+        const char* str = static_cast<const char*>(mem.get());
+        std::size_t suffix_len = std::strlen(suffix);
+        std::size_t str_len = std::strlen(str);
+        if (suffix_len > str_len) return false;
 
-    return strncasecmp_local(str + str_len - suffix_len, suffix, suffix_len) == 0;
-}
+        return strncasecmp_local(str + str_len - suffix_len, suffix, suffix_len) == 0;
+    }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  F O R M A T   📌📌📌
 
@@ -360,9 +353,9 @@ ends_with_icase(const char* suffix) const {
     // greeting.format("Value: %d, Text: %s", 42, "Hello"); // sprintf
     // printf("%s\n", greeting.get());  // → Wert: 42, Text: Hello
 
-    template <typename U = T> // Only activate if T = char
-    typename std::enable_if<std::is_same<U, char>::value, void>::type
-    format(const char* fmt, ...) {
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void format(const char* fmt, ...) {
         if (!fmt) return;
 
         va_list args;
@@ -399,8 +392,8 @@ ends_with_icase(const char* suffix) const {
 
     // Nur aktivieren, wenn T = char
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, void>::type
-    appendf(const char* fmt, ...) {
+    requires std::is_same_v<U, char>
+    void appendf(const char* fmt, ...) {
         if (!fmt) return;
 
         // Formatstring vorbereiten
@@ -483,8 +476,8 @@ ends_with_icase(const char* suffix) const {
 
     // Specialized version: only for T = char (search for individual characters)
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, int>::type
-    index_of(char ch, std::size_t start = 0) const {
+    requires std::is_same_v<U, char>
+    int index_of(char ch, std::size_t start = 0) const {
         if (!mem) return -1;
 
         const char* str = static_cast<const char*>(mem.get());
@@ -498,8 +491,8 @@ ends_with_icase(const char* suffix) const {
     }
     // Overload for const char* (substring search)
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, int>::type
-    index_of(const char* substr, std::size_t start = 0) const {
+    requires std::is_same_v<U, char>
+    int index_of(const char* substr, std::size_t start = 0) const {
         if (!mem || !substr || !*substr) return -1;
 
         const char* str = static_cast<const char*>(mem.get());
@@ -524,8 +517,8 @@ ends_with_icase(const char* suffix) const {
 
     // Case-insensitive substring search
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, int>::type
-    index_of_icase(const char* substr, std::size_t start = 0) const {
+    requires std::is_same_v<U, char>
+    int index_of_icase(const char* substr, std::size_t start = 0) const {
         if (!mem || !substr || !*substr) return -1;
 
         const char* str = static_cast<const char*>(mem.get());
@@ -549,8 +542,8 @@ ends_with_icase(const char* suffix) const {
     // 📌📌📌 L A S T _ I N D E X _ O F   📌📌📌
 
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, int>::type
-    last_index_of(char ch) const {
+    requires std::is_same_v<U, char>
+    int last_index_of(char ch) const {
         if (!mem) return -1;
 
         const char* str = static_cast<const char*>(mem.get());
@@ -588,8 +581,8 @@ ends_with_icase(const char* suffix) const {
     // printf("ID3 found at: %d\n", pos1);
 
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, int>::type
-    index_of_substr(const char* needle, std::size_t max_pos = SIZE_MAX) const {
+    requires std::is_same_v<U, char>
+    int index_of_substr(const char* needle, std::size_t max_pos = SIZE_MAX) const {
         if (!mem || !needle || !*needle) return -1;
 
         const char* haystack = static_cast<const char*>(mem.get());
@@ -614,8 +607,8 @@ ends_with_icase(const char* suffix) const {
     // text.strlen();  // --> 5
 
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, std::size_t>::type
-    strlen() const {
+    requires std::is_same_v<U, char>
+    size_t strlen() const {
         if (!valid()) return 0;
         return std::strlen(get());
     }
@@ -758,9 +751,9 @@ ends_with_icase(const char* suffix) const {
     // 📌📌📌  S H R I N K _ T O _ F I T  📌📌📌
 
     // Only for Char: Put the buffer on the actual length +1 (for \ 0)
-    template<typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, void>::type
-    shrink_to_fit() {
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void shrink_to_fit() {
         if (!mem) return;
         std::size_t len = std::strlen(get());
         if (len == 0) return;
@@ -780,9 +773,9 @@ ends_with_icase(const char* suffix) const {
     // ps_ptr<char> addr = "0x1A3B";
     // uint64_t val = addr.to_uint64(16);
 
-    template<typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, uint64_t>::type
-    to_uint64(int base = 10) const {
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    uint64_t to_uint64(int base = 10) const {
         if (!mem || !get()) return 0;
 
         char* end = nullptr;
@@ -853,8 +846,8 @@ ends_with_icase(const char* suffix) const {
     // text3.trim();  // → "Hello, World!"
 
     template <typename U = T>
-    typename std::enable_if<std::is_same<U, char>::value, void>::type
-    trim() {
+    requires std::is_same_v<U, char>
+    void trim() {
         if (!mem) return;
 
         char* str = static_cast<char*>(mem.get());
@@ -886,7 +879,7 @@ ends_with_icase(const char* suffix) const {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S I Z E   📌📌📌
 
-    std::size_t size() const { return allocated_size; }
+    size_t size() const { return allocated_size; }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  V A L I D   📌📌📌
