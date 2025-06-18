@@ -1784,10 +1784,10 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     int32_t     i, j;
     int32_t n = s_blocksizes[s_dsp_state->W];
 
-    int32_t **pcmbundle = (int32_t **)alloca(sizeof(*pcmbundle) * s_vorbisChannels);
-    int32_t      *zerobundle = (int32_t *)alloca(sizeof(*zerobundle) * s_vorbisChannels);
-    int32_t      *nonzero = (int32_t *)alloca(sizeof(*nonzero) * s_vorbisChannels);
-    int32_t **floormemo = (int32_t **)alloca(sizeof(*floormemo) * s_vorbisChannels);
+    ps_ptr<int32_t*> pcmbundle; pcmbundle.alloc(sizeof(int32_t*) * s_vorbisChannels);
+    ps_ptr<int32_t> zerobundle; zerobundle.alloc(sizeof(int32_t) * s_vorbisChannels);
+    ps_ptr<int32_t> nonzero;    nonzero.alloc(sizeof(int32_t) * s_vorbisChannels);
+    ps_ptr<int32_t*>floormemo;  floormemo.alloc(sizeof(int32_t*) * s_vorbisChannels);
 
     /* recover the spectral envelope; store it in the PCM vector for now */
     for(i = 0; i < s_vorbisChannels; i++) {
@@ -1835,7 +1835,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
             }
         }
 
-        res_inverse(s_residue_param.get() + info->submaplist[i].residue, pcmbundle, zerobundle, ch_in_bundle);
+        res_inverse(s_residue_param.get() + info->submaplist[i].residue, pcmbundle.get(), zerobundle.get(), ch_in_bundle);
     }
 
     // for(j=0;j<vi->channels;j++)
