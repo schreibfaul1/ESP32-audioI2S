@@ -1475,8 +1475,7 @@ err_out:
 //---------------------------------------------------------------------------------------------------------------------
 vorbis_info_floor_t* floor1_info_unpack() {
 
-    uint8_t *B;
-
+    ps_ptr<uint8_t> B;
     int32_t j, k, count = 0, maxclass = -1, rangebits;
 
     vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_calloc(1, sizeof(vorbis_info_floor_t));
@@ -1535,7 +1534,7 @@ vorbis_info_floor_t* floor1_info_unpack() {
     for(j = 0; j < info->posts; j++) info->forward_index[j] = j;
 
     // vorbis_mergesort
-    B = (uint8_t *)ps_malloc(info->posts* sizeof(uint8_t));
+    B.alloc(info->posts * sizeof(uint8_t));
 
     for(uint16_t i = 1; i < info->posts; i <<= 1) {
         for(uint16_t j = 0; j + i < info->posts;) {
@@ -1555,14 +1554,12 @@ vorbis_info_floor_t* floor1_info_unpack() {
             while(k2 < end) B[j++] = info->forward_index.get()[k2++];
         }
         for(; j < info->posts; j++) B[j] = info->forward_index.get()[j];
-        info->forward_index.swap_with_pointer(B);
+        info->forward_index.swap(B);
     }
 
-    if(B == info->forward_index.get()) {
+    if(B.get() == info->forward_index.get()) {
         for(j = 0; j < info->posts; j++) B[j] = info->forward_index.get()[j];
     }
-    else
-        free(B);
 
     /* discover our neighbors for decode where we don't use fit flags (that would push the neighbors outward) */
     for(j = 0; j < info->posts - 2; j++) {
