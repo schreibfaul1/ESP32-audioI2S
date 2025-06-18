@@ -1478,7 +1478,9 @@ vorbis_info_floor_t* floor1_info_unpack() {
     ps_ptr<uint8_t> B;
     int32_t j, k, count = 0, maxclass = -1, rangebits;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_calloc(1, sizeof(vorbis_info_floor_t));
+    ps_ptr<vorbis_info_floor_t> info;
+    info.alloc(sizeof(vorbis_info_floor_t));
+    info.clear();
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
     info->partitionclass.alloc(info->partitions * sizeof(uint8_t));
@@ -1583,10 +1585,10 @@ vorbis_info_floor_t* floor1_info_unpack() {
         info->hineighbor[j] = hi;
     }
 
-    return (info);
+    return (info.release());
 
 err_out:
-    return (NULL);
+    return {};
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* vorbis_info is for range checking */
