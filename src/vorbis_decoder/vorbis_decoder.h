@@ -247,7 +247,7 @@ vorbis_info_floor_t*  floor0_info_unpack();
 vorbis_info_floor_t*  floor1_info_unpack();
 int32_t               res_unpack(vorbis_info_residue_t* info);
 int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
-void                  vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
+
 // vorbis decoder impl
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();

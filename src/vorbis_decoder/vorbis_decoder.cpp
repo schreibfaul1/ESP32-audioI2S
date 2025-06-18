@@ -1475,6 +1475,8 @@ err_out:
 //---------------------------------------------------------------------------------------------------------------------
 vorbis_info_floor_t* floor1_info_unpack() {
 
+    uint8_t *B;
+
     int32_t j, k, count = 0, maxclass = -1, rangebits;
 
     vorbis_info_floor_t *info = (vorbis_info_floor_t *)ps_calloc(1, sizeof(vorbis_info_floor_t));
@@ -1531,7 +1533,36 @@ vorbis_info_floor_t* floor1_info_unpack() {
 
     /* also store a sorted position index */
     for(j = 0; j < info->posts; j++) info->forward_index[j] = j;
-    vorbis_mergesort(info->forward_index.get(), info->postlist.get(), info->posts);
+
+    // vorbis_mergesort
+    B = (uint8_t *)ps_malloc(info->posts* sizeof(uint8_t));
+
+    for(uint16_t i = 1; i < info->posts; i <<= 1) {
+        for(uint16_t j = 0; j + i < info->posts;) {
+            uint16_t k1 = j;
+            uint16_t mid = j + i;
+            uint16_t k2 = mid;
+            int32_t      end = (j + i * 2 < info->posts ? j + i * 2 : info->posts);
+            while(k1 < mid && k2 < end) {
+                if(info->postlist.get()[info->forward_index.get()[k1]] < info->postlist.get()[info->forward_index.get()[k2]]){
+                    B[j++] = info->forward_index.get()[k1++];
+                }
+                else{
+                    B[j++] = info->forward_index.get()[k2++];
+                }
+            }
+            while(k1 < mid) B[j++] = info->forward_index.get()[k1++];
+            while(k2 < end) B[j++] = info->forward_index.get()[k2++];
+        }
+        for(; j < info->posts; j++) B[j] = info->forward_index.get()[j];
+        info->forward_index.swap_with_pointer(B);
+    }
+
+    if(B == info->forward_index.get()) {
+        for(j = 0; j < info->posts; j++) B[j] = info->forward_index.get()[j];
+    }
+    else
+        free(B);
 
     /* discover our neighbors for decode where we don't use fit flags (that would push the neighbors outward) */
     for(j = 0; j < info->posts - 2; j++) {
@@ -1651,44 +1682,6 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
 err_out:
     return -1;
 }
-//---------------------------------------------------------------------------------------------------------------------
-void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
-    uint16_t i, j;
-    uint8_t *temp;
-    uint8_t *A = index;
-    uint8_t *B = (uint8_t *)ps_malloc(n * sizeof(uint8_t));
-
-    for(i = 1; i < n; i <<= 1) {
-        for(j = 0; j + i < n;) {
-            uint16_t k1 = j;
-            uint16_t mid = j + i;
-            uint16_t k2 = mid;
-            int32_t      end = (j + i * 2 < n ? j + i * 2 : n);
-            while(k1 < mid && k2 < end) {
-                if(vals[A[k1]] < vals[A[k2]]) B[j++] = A[k1++];
-                else
-                    B[j++] = A[k2++];
-            }
-            while(k1 < mid) B[j++] = A[k1++];
-            while(k2 < end) B[j++] = A[k2++];
-        }
-        for(; j < n; j++) B[j] = A[j];
-        temp = A;
-        A = B;
-        B = temp;
-    }
-
-    if(B == index) {
-        for(j = 0; j < n; j++) B[j] = A[j];
-        free(A);
-    }
-    else
-        free(B);
-}
-//---------------------------------------------------------------------------------------------------------------------
-//---------------------------------------------------------------------------------------------------------------------
-//---------------------------------------------------------------------------------------------------------------------
-
 //---------------------------------------------------------------------------------------------------------------------
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
