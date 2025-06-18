@@ -679,7 +679,6 @@ int32_t parseVorbisCodebook(){
     //     goto err_out;
     // }
     /* top level EOP check */
-
     return VORBIS_PARSE_OGG_DONE;
 
 err_out:
@@ -1779,7 +1778,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     ps_ptr<int32_t*> pcmbundle;  pcmbundle.alloc_array(s_vorbisChannels); pcmbundle.clear();
     ps_ptr<int32_t>  zerobundle; zerobundle.alloc(sizeof(int32_t) * s_vorbisChannels);
     ps_ptr<int32_t>  nonzero;    nonzero.alloc(sizeof(int32_t) * s_vorbisChannels);
-    ps_ptr<int32_t*> floormemo;  floormemo.alloc_array(s_vorbisChannels);
+    ps_ptr<ps_ptr<int32_t>> floormemo;  floormemo.alloc_array(s_vorbisChannels);
 
     /* recover the spectral envelope; store it in the PCM vector for now */
     for(i = 0; i < s_vorbisChannels; i++) {
@@ -1792,16 +1791,16 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param.get()[floorno]));
-            floormemo[i] = floor1_inverse1(s_floor_param.get()[floorno], floormemo[i]);
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param.get()[floorno]));
+            floormemo[i] = floor1_inverse1(s_floor_param.get()[floorno], floormemo[i].get());
         }
         else {
             /* floor 0 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param.get()[floorno]));
-            floormemo[i] = floor0_inverse1(s_floor_param.get()[floorno], floormemo[i]);
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param.get()[floorno]));
+            floormemo[i] = floor0_inverse1(s_floor_param.get()[floorno], floormemo[i].get());
         }
 
-        if(floormemo[i]) nonzero[i] = 1;
+        if(floormemo[i].get()) nonzero[i] = 1;
         else
             nonzero[i] = 0;
         memset(s_dsp_state->work[i].get(), 0, sizeof(*s_dsp_state->work[i]) * n / 2);
@@ -1877,11 +1876,11 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floor1_inverse2(s_floor_param.get()[floorno], floormemo[i], pcm);
+            floor1_inverse2(s_floor_param.get()[floorno], floormemo[i].get(), pcm);
         }
         else {
             /* floor 0 */
-            floor0_inverse2(s_floor_param.get()[floorno], floormemo[i], pcm);
+            floor0_inverse2(s_floor_param.get()[floorno], floormemo[i].get(), pcm);
         }
 
     }
