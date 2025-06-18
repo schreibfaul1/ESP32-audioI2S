@@ -79,7 +79,7 @@ ps_ptr<char>                  s_vorbisChbuf;
 ps_ptr<uint8_t>               s_lastSegmentTable;
 ps_ptr<uint16_t>              s_vorbisSegmentTable;
 ps_ptr<codebook_t>            s_codebooks;
-ps_ptr<vorbis_info_floor_t*>  s_floor_param;
+ps_ptr<ps_ptr<vorbis_info_floor_t>> s_floor_param;
 ps_ptr<int8_t>                s_floor_type;
 ps_ptr<vorbis_info_residue_t> s_residue_param;
 ps_ptr<vorbis_info_mapping_t> s_map_param;
@@ -149,8 +149,10 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    // s_codebooks.reset();
-    // s_floor_type.reset();
+    s_codebooks.reset();
+    s_nrOfCodebooks = 0;
+
+    s_floor_type.reset();
     if(s_dsp_state.valid()) {
         vorbis_dsp_destroy(s_dsp_state);
     }
@@ -164,9 +166,9 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfMaps = 0;
     }
 
-    // s_residue_param.reset();
-    // s_map_param.reset();
-    // s_mode_param.reset();
+    s_residue_param.reset();
+    s_map_param.reset();
+    s_mode_param.reset();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -522,7 +524,7 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
        log_e("vorbis comment too long, vendorLength %i", vendorLength);
        return 0;
     }
-
+    s_vorbisChbuf.reset();
     s_vorbisChbuf.assign((char*)(inbuf + 11), vendorLength);
     pos += 4 + vendorLength;
     s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
@@ -614,8 +616,7 @@ int32_t parseVorbisCodebook(){
     }
     /* floor backend settings */
     s_nrOfFloors  = bitReader(6) + 1;
-
-    s_floor_param.alloc(s_nrOfFloors);
+    s_floor_param.alloc_array(s_nrOfFloors);
     s_floor_type.alloc(sizeof(int8_t) * s_nrOfFloors);
     for(i = 0; i < s_nrOfFloors; i++) {
         s_floor_type.get()[i] = bitReader(16);
@@ -624,12 +625,12 @@ int32_t parseVorbisCodebook(){
             goto err_out;
         }
         if(s_floor_type.get()[i]){
-            s_floor_param.get()[i] = floor1_info_unpack();
+            s_floor_param[i] = floor1_info_unpack();
         }
         else{
-            s_floor_param.get()[i] = floor0_info_unpack();
+            s_floor_param[i] = floor0_info_unpack();
         }
-        if(!s_floor_param.get()[i]){
+        if(!s_floor_param[i].valid()){
             log_e("floor parameter not found");
             goto err_out;
         }
@@ -679,10 +680,11 @@ int32_t parseVorbisCodebook(){
     //     goto err_out;
     // }
     /* top level EOP check */
+
     return VORBIS_PARSE_OGG_DONE;
 
 err_out:
-//    vorbis_info_clear(vi);
+    //    vorbis_info_clear(vi);
     log_e("err in codebook!  at pos %d", s_bitReader.headptr - s_bitReader.data);
     return (OV_EBADHEADER);
 }
@@ -1441,7 +1443,7 @@ int32_t oggpack_eop() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------------------------------------------
- vorbis_info_floor_t* floor0_info_unpack() {
+ ps_ptr<vorbis_info_floor_t> floor0_info_unpack() {
 
     int32_t               j;
 
@@ -1466,13 +1468,13 @@ int32_t oggpack_eop() {
     }
 
     if(oggpack_eop()) goto err_out;
-    return (info.get());
+    return (info);
 
 err_out:
-    return (NULL);
+    return {};
 }
 //---------------------------------------------------------------------------------------------------------------------
-vorbis_info_floor_t* floor1_info_unpack() {
+ps_ptr<vorbis_info_floor_t> floor1_info_unpack() {
 
     ps_ptr<uint8_t> B;
     int32_t j, k, count = 0, maxclass = -1, rangebits;
@@ -1584,7 +1586,7 @@ vorbis_info_floor_t* floor1_info_unpack() {
         info->hineighbor[j] = hi;
     }
 
-    return (info.release());
+    return (info);
 
 err_out:
     return {};
@@ -1775,10 +1777,10 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     int32_t     i, j;
     int32_t n = s_blocksizes[s_dsp_state->W];
 
-    ps_ptr<int32_t*> pcmbundle;  pcmbundle.alloc_array(s_vorbisChannels); pcmbundle.clear();
+    ps_ptr<int32_t*> pcmbundle;  pcmbundle.alloc_array(s_vorbisChannels);
     ps_ptr<int32_t>  zerobundle; zerobundle.alloc(sizeof(int32_t) * s_vorbisChannels);
     ps_ptr<int32_t>  nonzero;    nonzero.alloc(sizeof(int32_t) * s_vorbisChannels);
-    ps_ptr<ps_ptr<int32_t>> floormemo;  floormemo.alloc_array(s_vorbisChannels);
+    ps_ptr<ps_ptr<int32_t>> floormemo; floormemo.alloc_array(s_vorbisChannels);
 
     /* recover the spectral envelope; store it in the PCM vector for now */
     for(i = 0; i < s_vorbisChannels; i++) {
@@ -1791,13 +1793,13 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floormemo[i].alloc(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param.get()[floorno]));
-            floormemo[i] = floor1_inverse1(s_floor_param.get()[floorno], floormemo[i].get());
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param[floorno]));
+            floormemo[i] = floor1_inverse1(s_floor_param[floorno], floormemo[i].get());
         }
         else {
             /* floor 0 */
-            floormemo[i].alloc(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param.get()[floorno]));
-            floormemo[i] = floor0_inverse1(s_floor_param.get()[floorno], floormemo[i].get());
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param[floorno]));
+            floormemo[i] = floor0_inverse1(s_floor_param[floorno], floormemo[i].get());
         }
 
         if(floormemo[i].get()) nonzero[i] = 1;
@@ -1825,7 +1827,6 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
                 pcmbundle[ch_in_bundle++] = s_dsp_state->work[j].get();
             }
         }
-
         res_inverse(s_residue_param.get() + info->submaplist[i].residue, pcmbundle.get(), zerobundle.get(), ch_in_bundle);
     }
 
@@ -1876,13 +1877,13 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
         if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floor1_inverse2(s_floor_param.get()[floorno], floormemo[i].get(), pcm);
+            floor1_inverse2(s_floor_param[floorno], floormemo[i].get(), pcm);
         }
         else {
             /* floor 0 */
-            floor0_inverse2(s_floor_param.get()[floorno], floormemo[i].get(), pcm);
+            floor0_inverse2(s_floor_param[floorno], floormemo[i].get(), pcm);
         }
-
+        floormemo[i].reset();
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -1901,18 +1902,16 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     return (0);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor0_memosize(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    return info->order + 1;
+int32_t floor0_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+    return i.get()->order + 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor1_memosize(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    return info->posts;
+int32_t floor1_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+    return i.get()->posts;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t *floor0_inverse1(vorbis_info_floor_t *i, int32_t *lsp) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
+int32_t *floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t *lsp) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i.get();
     int32_t                 j;
 
     int32_t ampraw = bitReader(info->ampbits);
@@ -1940,8 +1939,8 @@ eop:
     return (NULL);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t *floor1_inverse1(vorbis_info_floor_t *in, int32_t *fit_value) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in;
+int32_t *floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in.get();
 
     int32_t                 quant_look[4] = {256, 128, 86, 64};
     int32_t                 i, j, k;
@@ -2374,8 +2373,8 @@ int32_t vorbis_book_decodevs_add(codebook_t *book, int32_t *a, int32_t n, int32_
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor0_inverse2(vorbis_info_floor_t *i, int32_t *lsp, int32_t *out) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
+int32_t floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t *lsp, int32_t *out) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i.get();
 
 
     if(lsp) {
@@ -2391,8 +2390,8 @@ int32_t floor0_inverse2(vorbis_info_floor_t *i, int32_t *lsp, int32_t *out) {
 }
 
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor1_inverse2(vorbis_info_floor_t *in, int32_t *fit_value, int32_t *out) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in;
+int32_t floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value, int32_t *out) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in.get();
 
     int32_t               n = s_blocksizes[s_dsp_state->W] / 2;
     int32_t               j;

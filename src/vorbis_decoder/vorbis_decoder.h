@@ -82,13 +82,13 @@ typedef struct _codebook{
                           1 = packed vector of values
                           2 = packed vector of column offsets, maptype 1
                           3 = scalar offset into value array,  maptype 2  */
-    int32_t q_min;
+    int32_t     q_min;
     int32_t     q_minp;
-    int32_t q_del;
+    int32_t     q_del;
     int32_t     q_delp;
     int32_t     q_seq;
     int32_t     q_bits;
-    uint8_t q_pack;
+    uint8_t     q_pack;
     ps_ptr<uint16_t> q_val;
 } codebook_t;
 
@@ -243,8 +243,8 @@ uint16_t              continuedOggPackets(uint8_t* inbuf);
 int32_t               vorbis_book_unpack(codebook_t* s);
 uint32_t              decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype);
 int32_t               oggpack_eop();
-vorbis_info_floor_t*  floor0_info_unpack();
-vorbis_info_floor_t*  floor1_info_unpack();
+ps_ptr<vorbis_info_floor_t> floor0_info_unpack();
+ps_ptr<vorbis_info_floor_t> floor1_info_unpack();
 int32_t               res_unpack(vorbis_info_residue_t* info);
 int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 
@@ -254,10 +254,10 @@ ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
 void                  vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v);
 void                  mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
 int32_t               mapping_inverse(vorbis_info_mapping_t* info);
-int32_t               floor0_memosize(vorbis_info_floor_t* i);
-int32_t               floor1_memosize(vorbis_info_floor_t* i);
-int32_t*              floor0_inverse1(vorbis_info_floor_t* i, int32_t* lsp);
-int32_t*              floor1_inverse1(vorbis_info_floor_t* in, int32_t* fit_value);
+int32_t               floor0_memosize(ps_ptr<vorbis_info_floor_t>& i);
+int32_t               floor1_memosize(ps_ptr<vorbis_info_floor_t>& i);
+int32_t*              floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp);
+int32_t*              floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value);
 int32_t               vorbis_book_decode(codebook_t* book);
 int32_t               decode_packed_entry_number(codebook_t* book);
 int32_t               render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x);
@@ -266,8 +266,8 @@ int32_t               decode_map(codebook_t* s, int32_t* v, int32_t point);
 int32_t               res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch);
 int32_t               vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
 int32_t               vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
-int32_t               floor0_inverse2(vorbis_info_floor_t* i, int32_t* lsp, int32_t* out);
-int32_t               floor1_inverse2(vorbis_info_floor_t* in, int32_t* fit_value, int32_t* out);
+int32_t               floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out);
+int32_t               floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out);
 void                  render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d);
 void                  vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp, int32_t m, int32_t amp, int32_t ampoffset, int32_t nyq);
 int32_t               toBARK(int32_t n);
