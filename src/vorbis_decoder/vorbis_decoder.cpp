@@ -149,14 +149,14 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    s_codebooks.reset();
-    s_nrOfCodebooks = 0;
+    vorbis_book_clear(s_codebooks);
+    vorbis_dsp_destroy(s_dsp_state);
 
-    s_floor_type.reset();
-    if(s_dsp_state.valid()) {
-        vorbis_dsp_destroy(s_dsp_state);
-    }
+ //   s_floor_type.reset();
+
     if(s_nrOfFloors) {
+        // for(int32_t i = 0; i < s_nrOfFloors; i++)  s_floor_param->  floor_free_info(s_floor_param[i]);
+        // free(s_floor_param);
         s_nrOfFloors = 0;
     }
     if(s_nrOfResidues) {
@@ -166,9 +166,9 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
         s_nrOfMaps = 0;
     }
 
-    s_residue_param.reset();
-    s_map_param.reset();
-    s_mode_param.reset();
+    // s_residue_param.reset();
+    // s_map_param.reset();
+    // s_mode_param.reset();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -1022,6 +1022,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
     return 0; // ok
 _errout:
 _eofout:
+    vorbis_book_clear(s_codebooks);
     return -1; // error
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1717,7 +1718,25 @@ ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create() {
 }
 //---------------------------------------------------------------------------------------------------------------------
 void vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v) {
-    v.reset(); // Alle zugewiesenen ps_ptrs werden automatisch freigegeben
+    if(!v.valid())return;
+
+    for (uint8_t i = 0; i < s_vorbisChannels; ++i) {
+        v->work.at(i).reset();
+        v->mdctright.at(i).reset();
+    }
+    v->mdctright.reset();
+    v->work.reset();
+    v.reset();
+}
+//---------------------------------------------------------------------------------------------------------------------
+void vorbis_book_clear(ps_ptr<codebook_t> &v){
+    if(!v.valid())return;
+    for(int i = 0; i < s_nrOfCodebooks; i++){
+        if(v->q_val.valid()) v->q_val.reset();
+        if(v->dec_table.valid()) v->dec_table.reset();
+    }
+    v.clear();
+    s_nrOfCodebooks = 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {

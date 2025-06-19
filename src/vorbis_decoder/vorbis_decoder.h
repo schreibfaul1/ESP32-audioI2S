@@ -252,6 +252,7 @@ int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
 ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
 void                  vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v);
+void                  vorbis_book_clear(ps_ptr<codebook_t> &v);
 void                  mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
 int32_t               mapping_inverse(vorbis_info_mapping_t* info);
 int32_t               floor0_memosize(ps_ptr<vorbis_info_floor_t>& i);
