@@ -653,6 +653,17 @@ public:
     T* get() const { return static_cast<T*>(mem.get()); }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S E T   📌📌📌
+
+    // ps_ptr<uint32_t> p;
+    // uint32_t* raw = (uint32_t*)malloc(100 * sizeof(uint32_t)); // create memory manually
+
+    // for (int i = 0; i < 100; ++i) {// write data
+    //     raw[i] = i * i;
+    // }
+    // p.set(raw, 100 * sizeof(uint32_t)); // ps_ptr takes over the pointer and remembers the size
+    // for (int i = 0; i < 5; ++i) {// access with ps_ptr
+    //     printf("%u ", p[i]);
+    // } // later at p.reset () or automatically in the destructor `free(raw)`
     void set(T* ptr, std::size_t size = 0) {
         if (mem.get() != ptr) {
             mem.reset(ptr);
@@ -661,13 +672,27 @@ public:
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  O P E R A T O R   📌📌📌
+
+    // struct MyStruct {
+    //     int x;
+    //     void hello() const {log_w("Hello, x = %i", x);}
+    // };
+    // ps_ptr<MyStruct> ptr;
+    // ptr.alloc(sizeof(MyStruct));
+    // ptr.clear();  // optional, setzt x auf 0
+    // ptr->x = 123;         // 👈 uses operator->()
+    // ptr->hello();         // 👈 uses operator->()
+    // (*ptr).x = 456;       // 👈 uses operator*()
+    // std::cout << (*ptr).x << "\n";
     T* operator->() const { return get(); }
     T& operator*() const { return *get(); }
+
+    //ps_ptr<int32_t> p;
+    //int32_t x = p[5];
     T& operator[](size_t index) {return get()[index];}
-   // T& operator[](size_t index) {return static_cast<T*>(get())[index];}
 
-
-    // Zugriff auf ps_ptr<T>[], wenn T selbst ein ps_ptr<U> ist
+    // ps_ptr<ps_ptr<int32_t>> array_of_ptrs;
+    // array_of_ptrs[0].alloc(...);
     template <typename U = T>
     typename std::enable_if<
         std::is_class<U>::value &&
@@ -677,6 +702,16 @@ public:
         return get()[index];
     }
 
+
+    // struct MyStruct {
+    //     int value;
+    // };
+    // ps_ptr<MyStruct> smart_ptr;
+    //
+    // MyStruct* raw = (MyStruct*)malloc(sizeof(MyStruct));// Manually allocated raw memory
+    // raw->value = 123;
+    // smart_ptr = raw; // Smart_PTR is now taking over the property
+    // std::cout << smart_ptr->value << std::endl;  // access as usual gives: 123
     ps_ptr<T>& operator=(T* raw_ptr) {
         if (mem.get() != raw_ptr) {
             mem.reset(raw_ptr);
@@ -695,6 +730,13 @@ public:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌   M O V E    📌📌📌
 
+    // ps_ptr<int32_t> a;
+    // ps_ptr<int32_t> b;
+    //
+    // b.alloc(128);// allocate mem
+    //
+    // // Move semantics (no copy of the content!)
+    // a = std::move(b);  // 👉 Call your Move Assignment operator
     ps_ptr& operator=(ps_ptr&& other) noexcept {
         if (this != &other) {
             mem = std::move(other.mem);
