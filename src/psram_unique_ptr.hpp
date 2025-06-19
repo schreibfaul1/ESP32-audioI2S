@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <type_traits>
 
-/** Auxiliary functions for using Unique Pointers in PSRAM **/
+/** Auxiliary functions for using Unique Pointers in ESP32 PSRAM **/
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // PSRAM Deleter (ps_malloc → free)
