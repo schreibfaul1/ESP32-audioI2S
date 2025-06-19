@@ -1588,39 +1588,44 @@ err_out:
     return {};
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
+void vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
     uint16_t i, j;
-    uint8_t *temp;
-    uint8_t *A = index;
-    uint8_t *B = (uint8_t *)ps_malloc(n * sizeof(*B));
+    ps_ptr<uint8_t> B_mem;
+    B_mem.alloc(n * sizeof(uint8_t), "vorbis_temp");
 
-    for(i = 1; i < n; i <<= 1) {
-        for(j = 0; j + i < n;) {
+    if (!B_mem.valid()) return;
+
+    uint8_t* A = index;
+    uint8_t* B = B_mem.get();
+    bool flipped = false;
+
+    for (i = 1; i < n; i <<= 1) {
+        for (j = 0; j + i < n;) {
             uint16_t k1 = j;
             uint16_t mid = j + i;
             uint16_t k2 = mid;
-            int      end = (j + i * 2 < n ? j + i * 2 : n);
-            while(k1 < mid && k2 < end) {
-                if(vals[A[k1]] < vals[A[k2]]) B[j++] = A[k1++];
+            uint16_t end = (j + i * 2 < n ? j + i * 2 : n);
+            while (k1 < mid && k2 < end) {
+                if (vals[A[k1]] < vals[A[k2]])
+                    B[j++] = A[k1++];
                 else
                     B[j++] = A[k2++];
             }
-            while(k1 < mid) B[j++] = A[k1++];
-            while(k2 < end) B[j++] = A[k2++];
+            while (k1 < mid) B[j++] = A[k1++];
+            while (k2 < end) B[j++] = A[k2++];
         }
-        for(; j < n; j++) B[j] = A[j];
-        temp = A;
-        A = B;
-        B = temp;
+
+        for (; j < n; j++) B[j] = A[j];
+
+        std::swap(A, B); // swap pointer
+        flipped = !flipped;
     }
 
-    if(B == index) {
-        for(j = 0; j < n; j++) B[j] = A[j];
-        free(A);
+    if (A != index) {
+        std::memcpy(index, A, n); // result back to index
     }
-    else
-        free(B);
 }
+
 //---------------------------------------------------------------------------------------------------------------------
 /* vorbis_info is for range checking */
 int32_t res_unpack(vorbis_info_residue_t *info){
