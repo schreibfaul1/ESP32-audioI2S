@@ -152,23 +152,43 @@ void clearGlobalConfigurations() { // mode, mapping, floor etc
     vorbis_book_clear(s_codebooks);
     vorbis_dsp_destroy(s_dsp_state);
 
- //   s_floor_type.reset();
-
     if(s_nrOfFloors) {
-        // for(int32_t i = 0; i < s_nrOfFloors; i++)  s_floor_param->  floor_free_info(s_floor_param[i]);
-        // free(s_floor_param);
+        for(int32_t i = 0; i < s_nrOfFloors; i++){
+            s_floor_param[i]->_class.reset();
+            s_floor_param[i]->partitionclass.reset();
+            s_floor_param[i]->postlist.reset();
+            s_floor_param[i]->forward_index.reset();
+            s_floor_param[i]->hineighbor.reset();
+            s_floor_param[i]->loneighbor.reset();
+            s_floor_param[i].reset();
+        }
+        s_floor_param.reset();
         s_nrOfFloors = 0;
     }
+
     if(s_nrOfResidues) {
+        for(int32_t i = 0; i < s_nrOfResidues; i++){
+            s_residue_param[i].stagemasks.reset();
+            s_residue_param[i].stagebooks.reset();
+        }
+        s_residue_param.reset();
         s_nrOfResidues = 0;
     }
+
     if(s_nrOfMaps) {
+        for(int32_t i = 0; i < s_nrOfMaps; i++){
+            s_map_param[i].chmuxlist.reset();
+            s_map_param[i].submaplist.reset();
+            s_map_param[i].coupling.reset();
+        }
+        s_map_param.reset();
         s_nrOfMaps = 0;
     }
 
-    // s_residue_param.reset();
-    // s_map_param.reset();
-    // s_mode_param.reset();
+    if(s_floor_type.valid()) s_floor_type.reset();
+    if(s_residue_param.valid()) s_residue_param.reset();
+    if(s_map_param.valid()) s_map_param.reset();
+    if(s_mode_param.valid()) s_mode_param.reset();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -1731,12 +1751,16 @@ void vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v) {
 //---------------------------------------------------------------------------------------------------------------------
 void vorbis_book_clear(ps_ptr<codebook_t> &v){
     if(!v.valid())return;
+    int s = 0;
     for(int i = 0; i < s_nrOfCodebooks; i++){
-        if(v->q_val.valid()) v->q_val.reset();
-        if(v->dec_table.valid()) v->dec_table.reset();
+        if(v[i].q_val.valid())    {s += v[i].q_val.size();     v[i].q_val.reset();}
+        if(v[i].dec_table.valid()){s += v[i].dec_table.size(); v[i].dec_table.reset();}
     }
-    v.clear();
+    if(v->dec_table.valid())   {s += v->dec_table.size(); v->dec_table.reset();}
+    if(v->q_val.valid())       {s += v ->q_val.size(); v ->q_val.reset();}
+    s += v.size(); v.reset();
     s_nrOfCodebooks = 0;
+    // log_w("free codebook_t %i bytes", s);
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
