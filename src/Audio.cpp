@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2a                                                                                                                                ";
-/*  Updated on: Jun 14.2025
+    Version 3.3.2b                                                                                                                                ";
+/*  Updated on: Jun 19.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -2455,55 +2455,6 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
     m_resampleCursor = cursor;
     return outputIndex;
 }
-
-// size_t Audio::resampleTo48kStereo(const int16_t* input, size_t samplesPerFrame) {
-
-//     float cursor = m_resampleCursor;
-//     float ratio = static_cast<float>(m_sampleRate) / 48000.0f;
-
-//     size_t outputIndex = 0;
-//     int16_t left1, right1, left2, right2;
-
-//     for (int i = 0; i < samplesPerFrame; ++i) {
-//         float outFramePos = i / m_resampleRatio;
-//         size_t idx = static_cast<size_t>(outFramePos);
-//         float frac = outFramePos - idx;
-
-//         if(i == 0){
-//             left1 =  m_inputHistory[0];
-//             right1 = m_inputHistory[1];
-//         }
-//         else{
-//             left1 =  input[(i - 1) * 2];
-//             right1 = input[(i - 1) * 2 + 1];
-//         }
-//         left2 =  input[i * 2];
-//         right2 = input[i * 2 + 1];
-
-//         if(i == samplesPerFrame - 1){
-
-//         }
-
-//         while (cursor < 1.0f) {
-
-//             m_samplesBuff48K.get()[outputIndex * 2]     = static_cast<int16_t>(left1 * (1.0f - frac) + left2 * frac);
-//             m_samplesBuff48K.get()[outputIndex * 2 + 1] = static_cast<int16_t>(right1 * (1.0f - frac) + right2 * frac);
-
-
-//             ++outputIndex;
-//             cursor += ratio;
-//         }
-//         cursor -= 1.0f;
-//     }
-//     m_resampleCursor = cursor;
-//     m_inputHistory[0] = input[(samplesPerFrame - 1) * 2];
-//     m_inputHistory[1] = input[(samplesPerFrame - 1) * 2 + 1];
-
-// // log_w("samplesPerFrame %i, outputIndex %i, cursor %f", samplesPerFrame, outputIndex, cursor);
-//     return outputIndex;
-// }
-
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void IRAM_ATTR Audio::playChunk() {

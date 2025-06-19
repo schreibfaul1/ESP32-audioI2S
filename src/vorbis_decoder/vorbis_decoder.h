@@ -20,11 +20,8 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 03.04.2024
+ *  Updated on: 19.06.2025
  */
-
-
-
 
 #include "Arduino.h"
 #include <vector>
