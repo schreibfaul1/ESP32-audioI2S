@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2b                                                                                                                                ";
+    Version 3.3.2c                                                                                                                                ";
 /*  Updated on: Jun 19.2025
 
     Author: Wolle (schreibfaul1)
@@ -4483,7 +4483,7 @@ void Audio::showstreamtitle(char* ml) {
         idx2 = indexOf(ml, ";", idx1);
         ps_ptr<char> sTit;
         if(idx2 >= 0) {
-            sTit.assign(ml + idx1, idx2 + 1);
+            sTit.assign(ml + idx1, idx2 - 1);
         }
         else sTit.assign(ml);
 
