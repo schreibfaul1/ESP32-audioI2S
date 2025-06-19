@@ -24,13 +24,8 @@
 #include "lookup.h"
 #include "alloca.h"
 #include <vector>
+#include "psram_unique_ptr.hpp"
 using namespace std;
-
-#define __malloc_heap_psram(size) \
-    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
-#define __calloc_heap_psram(ch, size) \
-    heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
-
 
 // global vars
 bool      s_f_vorbisNewSteamTitle = false;  // streamTitle
@@ -49,13 +44,13 @@ uint16_t  s_oggHeaderSize = 0;
 uint8_t   s_vorbisChannels = 0;
 uint16_t  s_vorbisSamplerate = 0;
 uint16_t  s_lastSegmentTableLen = 0;
-uint8_t  *s_lastSegmentTable = NULL;
+
 uint32_t  s_vorbisBitRate = 0;
 uint32_t  s_vorbisSegmentLength = 0;
 uint32_t  s_vorbisBlockPicLenUntilFrameEnd = 0;
 uint32_t  s_vorbisCurrentFilePos = 0;
 uint32_t  s_vorbisAudioDataStart = 0;
-char     *s_vorbisChbuf = NULL;
+
 int32_t   s_vorbisValidSamples = 0;
 int32_t   s_commentBlockSegmentSize = 0;
 uint8_t   s_vorbisOldMode = 0;
@@ -71,7 +66,7 @@ uint8_t   s_nrOfResidues = 0;
 uint8_t   s_nrOfMaps = 0;
 uint8_t   s_nrOfModes = 0;
 
-uint16_t *s_vorbisSegmentTable = NULL;
+
 uint16_t  s_oggPage3Len = 0; // length of the current audio segment
 uint8_t   s_vorbisSegmentTableSize = 0;
 int16_t   s_vorbisSegmentTableRdPtr = -1;
@@ -80,38 +75,46 @@ float     s_vorbisCompressionRatio = 0;
 
 bitReader_t            s_bitReader;
 
-codebook_t            *s_codebooks = NULL;
-vorbis_info_floor_t  **s_floor_param = NULL;
-int8_t                *s_floor_type = NULL;
-vorbis_info_residue_t *s_residue_param = NULL;
-vorbis_info_mapping_t *s_map_param = NULL;
-vorbis_info_mode_t    *s_mode_param = NULL;
-vorbis_dsp_state_t    *s_dsp_state = NULL;
+ps_ptr<char>                  s_vorbisChbuf;
+ps_ptr<uint8_t>               s_lastSegmentTable;
+ps_ptr<uint16_t>              s_vorbisSegmentTable;
+ps_ptr<codebook_t>            s_codebooks;
+ps_ptr<ps_ptr<vorbis_info_floor_t>> s_floor_param;
+ps_ptr<int8_t>                s_floor_type;
+ps_ptr<vorbis_info_residue_t> s_residue_param;
+ps_ptr<vorbis_info_mapping_t> s_map_param;
+ps_ptr<vorbis_info_mode_t>    s_mode_param;
+ps_ptr<vorbis_dsp_state_t>    s_dsp_state;
 
 vector<uint32_t>s_vorbisBlockPicItem;
 
 
 bool VORBISDecoder_AllocateBuffers(){
-    s_vorbisSegmentTable = (uint16_t*)__calloc_heap_psram(256, sizeof(uint16_t));
-    s_vorbisChbuf = (char*)__calloc_heap_psram(256, sizeof(char));
-    s_lastSegmentTable = (uint8_t*)__malloc_heap_psram(4096);
+    s_vorbisSegmentTable.alloc(256 * sizeof(uint16_t)); s_vorbisSegmentTable.clear();
+    s_lastSegmentTable.alloc(4096);
     VORBISsetDefaults();
     return true;
 }
 void VORBISDecoder_FreeBuffers(){
-    if(s_vorbisSegmentTable) {free(s_vorbisSegmentTable); s_vorbisSegmentTable = NULL;}
-    if(s_vorbisChbuf){free(s_vorbisChbuf); s_vorbisChbuf = NULL;}
-    if(s_lastSegmentTable){free(s_lastSegmentTable); s_lastSegmentTable = NULL;}
-
     clearGlobalConfigurations();
+    if(s_vorbisChbuf.valid())       s_vorbisChbuf.reset();
+    if(s_lastSegmentTable.valid())  s_lastSegmentTable.reset();
+    if(s_vorbisSegmentTable.valid())s_vorbisSegmentTable.reset();
+    if(s_codebooks.valid())         s_codebooks.reset();
+    if(s_floor_param.valid())       s_floor_param.reset();
+    if(s_floor_type.valid())        s_floor_type.reset();
+    if(s_residue_param.valid())     s_residue_param.reset();
+    if(s_map_param.valid())         s_map_param.reset();
+    if(s_mode_param.valid())        s_mode_param.reset();
+    if(s_dsp_state.valid())         s_dsp_state.reset();
 }
 void VORBISDecoder_ClearBuffers(){
-    if(s_vorbisChbuf) memset(s_vorbisChbuf, 0, 256);
     bitReader_clear();
-    if(s_lastSegmentTable) memset(s_lastSegmentTable, 0, 4096);
-    if(s_vorbisSegmentTable) memset(s_vorbisSegmentTable, 0, 256);
+    s_lastSegmentTable.clear();
+    s_vorbisSegmentTable.clear();
     s_vorbisSegmentTableSize = 0;
     s_vorbisSegmentTableRdPtr = -1;}
+
 void VORBISsetDefaults(){
     s_pageNr = 0;
     s_f_vorbisNewSteamTitle = false;  // streamTitle
@@ -122,7 +125,7 @@ void VORBISsetDefaults(){
     s_f_oggContinuedPage = false;
     s_f_oggLastPage = false;
     s_f_vorbisStr_found = false;
-    if(s_dsp_state){vorbis_dsp_destroy(s_dsp_state); s_dsp_state = NULL;}
+    if(s_dsp_state.valid()){vorbis_dsp_destroy(s_dsp_state);}
     s_vorbisChannels = 0;
     s_vorbisSamplerate = 0;
     s_vorbisBitRate = 0;
@@ -146,49 +149,47 @@ void VORBISsetDefaults(){
 }
 
 void clearGlobalConfigurations() { // mode, mapping, floor etc
-    if(s_nrOfCodebooks) {  // if we have a stream with changing codebooks, delete the old one
-        for(int32_t i = 0; i < s_nrOfCodebooks; i++) { vorbis_book_clear(s_codebooks + i); }
-        s_nrOfCodebooks = 0;
-    }
-    if(s_codebooks) {
-        free(s_codebooks);
-        s_codebooks = NULL;
-    }
-    if(s_dsp_state) {
-        vorbis_dsp_destroy(s_dsp_state);
-        s_dsp_state = NULL;
-    }
+    vorbis_book_clear(s_codebooks);
+    vorbis_dsp_destroy(s_dsp_state);
+
     if(s_nrOfFloors) {
-        for(int32_t i = 0; i < s_nrOfFloors; i++) floor_free_info(s_floor_param[i]);
-        free(s_floor_param);
+        for(int32_t i = 0; i < s_nrOfFloors; i++){
+            s_floor_param[i]->_class.reset();
+            s_floor_param[i]->partitionclass.reset();
+            s_floor_param[i]->postlist.reset();
+            s_floor_param[i]->forward_index.reset();
+            s_floor_param[i]->hineighbor.reset();
+            s_floor_param[i]->loneighbor.reset();
+            s_floor_param[i].reset();
+        }
+        s_floor_param.reset();
         s_nrOfFloors = 0;
     }
+
     if(s_nrOfResidues) {
-        for(int32_t i = 0; i < s_nrOfResidues; i++) res_clear_info(s_residue_param + i);
+        for(int32_t i = 0; i < s_nrOfResidues; i++){
+            s_residue_param[i].stagemasks.reset();
+            s_residue_param[i].stagebooks.reset();
+        }
+        s_residue_param.reset();
         s_nrOfResidues = 0;
     }
+
     if(s_nrOfMaps) {
-        for(int32_t i = 0; i < s_nrOfMaps; i++) { mapping_clear_info(s_map_param + i); }
+        for(int32_t i = 0; i < s_nrOfMaps; i++){
+            s_map_param[i].chmuxlist.reset();
+            s_map_param[i].submaplist.reset();
+            s_map_param[i].coupling.reset();
+        }
+        s_map_param.reset();
         s_nrOfMaps = 0;
     }
-    if(s_floor_type) {
-        free(s_floor_type);
-        s_floor_type = NULL;
-    }
-    if(s_residue_param) {
-        free(s_residue_param);
-        s_residue_param = NULL;
-    }
-    if(s_map_param) {
-        free(s_map_param);
-        s_map_param = NULL;
-    }
-    if(s_mode_param) {
-        free(s_mode_param);
-        s_mode_param = NULL;
-    }
-}
 
+    if(s_floor_type.valid()) s_floor_type.reset();
+    if(s_residue_param.valid()) s_residue_param.reset();
+    if(s_map_param.valid()) s_map_param.reset();
+    if(s_mode_param.valid()) s_mode_param.reset();
+}
 //----------------------------------------------------------------------------------------------------------------------
 
 int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
@@ -237,7 +238,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         if(s_vorbisSegmentTableSize) {
             s_vorbisSegmentTableRdPtr++;
             s_vorbisSegmentTableSize--;
-            segmentLength = s_vorbisSegmentTable[s_vorbisSegmentTableRdPtr];
+            segmentLength = s_vorbisSegmentTable.get()[s_vorbisSegmentTableRdPtr];
         }
     }
 
@@ -358,9 +359,9 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         if(s_f_oggContinuedPage) {
             if(s_lastSegmentTableLen > 0 || segmentLength > 0) {
                 if(s_lastSegmentTableLen + segmentLength > 1024) log_e("continued page too big");
-                memcpy(s_lastSegmentTable + s_lastSegmentTableLen, inbuf, segmentLength);
-                bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen + segmentLength);
-                ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen + segmentLength, outbuf);
+                memcpy(s_lastSegmentTable.get() + s_lastSegmentTableLen, inbuf, segmentLength);
+                bitReader_setData(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength);
+                ret = vorbis_dsp_synthesis(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength, outbuf);
                 uint16_t outBuffSize = 2048 * 2;
                 s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
                 s_lastSegmentTableLen = 0;
@@ -374,8 +375,8 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         }
         else { // last segment without continued Page
             if(s_lastSegmentTableLen) {
-                bitReader_setData(s_lastSegmentTable, s_lastSegmentTableLen);
-                ret = vorbis_dsp_synthesis(s_lastSegmentTable, s_lastSegmentTableLen, outbuf);
+                bitReader_setData(s_lastSegmentTable.get(), s_lastSegmentTableLen);
+                ret = vorbis_dsp_synthesis(s_lastSegmentTable.get(), s_lastSegmentTableLen, outbuf);
                 uint16_t outBuffSize = 2048 * 2;
                 s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
                 s_lastSegmentTableLen = 0;
@@ -401,7 +402,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
         }
         else { // last segment
             if(segmentLength) {
-                memcpy(s_lastSegmentTable, inbuf, segmentLength);
+                memcpy(s_lastSegmentTable.get(), inbuf, segmentLength);
                 s_lastSegmentTableLen = segmentLength;
                 s_vorbisValidSamples = 0;
                 ret = 0;
@@ -447,7 +448,7 @@ uint16_t VORBISGetOutputSamps(){
 char* VORBISgetStreamTitle(){
     if(s_f_vorbisNewSteamTitle){
         s_f_vorbisNewSteamTitle = false;
-        return s_vorbisChbuf;
+        return s_vorbisChbuf.get();
     }
     return NULL;
 }
@@ -543,9 +544,8 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
        log_e("vorbis comment too long, vendorLength %i", vendorLength);
        return 0;
     }
-
-    memcpy(s_vorbisChbuf, inbuf + 11, vendorLength);
-    s_vorbisChbuf[vendorLength] = '\0';
+    s_vorbisChbuf.reset();
+    s_vorbisChbuf.assign((char*)(inbuf + 11), vendorLength);
     pos += 4 + vendorLength;
     s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
 
@@ -557,9 +557,8 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
     pos += 4;
     s_vorbisCommentHeaderLength -= 4;
 
-    int32_t idx = 0;
-    char* artist = NULL;
-    char* title  = NULL;
+    ps_ptr<char>artist;
+    ps_ptr<char>title;
     uint32_t commentLength = 0;
     for(int32_t i = 0; i < nrOfComments; i++){
         commentLength  = 0;
@@ -570,22 +569,21 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         s_commentLength = commentLength;
 
         uint8_t cl = min((uint32_t)254, commentLength);
-        memcpy(s_vorbisChbuf, inbuf + pos +  4, cl);
-        s_vorbisChbuf[cl] = '\0';
+        s_vorbisChbuf.assign((char*)(inbuf + pos +  4), cl);
 
         // log_i("commentLength %i comment %s", commentLength, s_vorbisChbuf);
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "artist=", 10);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "ARTIST=", 10);
-        if(idx == 0){ artist = strndup((const char*)(s_vorbisChbuf + 7), commentLength - 7); s_commentLength = 0;}
+        if(s_vorbisChbuf.starts_with_icase("artist=")){
+            artist.assign(s_vorbisChbuf.get() + 7, commentLength - 7);
+            s_commentLength = 0;
+        }
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "title=", 10);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "TITLE=", 10);
-        if(idx == 0){ title = strndup((const char*)(s_vorbisChbuf + 6), commentLength - 6); s_commentLength = 0;}
+        if(s_vorbisChbuf.starts_with_icase("title=")){
+            title.assign(s_vorbisChbuf.get() + 6, commentLength - 6);
+            s_commentLength = 0;
+        }
 
-        idx =        VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "metadata_block_picture=", 25);
-        if(idx != 0) idx =  VORBIS_specialIndexOf((uint8_t*)s_vorbisChbuf, "METADATA_BLOCK_PICTURE", 25);
-        if(idx == 0){
+        if(s_vorbisChbuf.starts_with_icase("metadata_block_picture=")){
             s_vorbisBlockPicLen = commentLength - 23;
             s_vorbisBlockPicPos += s_vorbisCurrentFilePos + 4 +pos + 23;
             s_vorbisBlockPicLenUntilFrameEnd = s_vorbisCommentHeaderLength - 4 - 23;
@@ -593,23 +591,20 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         pos += commentLength + 4;
         s_vorbisCommentHeaderLength -= (4 + commentLength);
     }
-    if(artist && title){
-        strcpy(s_vorbisChbuf, artist);
-        strcat(s_vorbisChbuf, " - ");
-        strcat(s_vorbisChbuf, title);
+    if(artist.valid() && title.valid()){
+        s_vorbisChbuf.assign(artist.get());
+        s_vorbisChbuf.append(" - ");
+        s_vorbisChbuf.append(title.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    else if(artist){
-        strcpy(s_vorbisChbuf, artist);
+    else if(artist.valid()){
+        s_vorbisChbuf.assign(artist.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    else if(title){
-        strcpy(s_vorbisChbuf, title);
+    else if(title.valid()){
+        s_vorbisChbuf.assign(title.get());
         s_f_vorbisNewSteamTitle = true;
     }
-    if(artist){free(artist); artist = NULL;}
-    if(title) {free(title);  title = NULL;}
-
     return VORBIS_PARSE_OGG_DONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -622,10 +617,10 @@ int32_t parseVorbisCodebook(){
     int32_t ret = 0;
 
     s_nrOfCodebooks = bitReader(8) +1;
-    s_codebooks = (codebook_t*) __calloc_heap_psram(s_nrOfCodebooks, sizeof(*s_codebooks));
+    s_codebooks.alloc(s_nrOfCodebooks * sizeof(codebook_t));
 
     for(i = 0; i < s_nrOfCodebooks; i++){
-        ret = vorbis_book_unpack(s_codebooks + i);
+        ret = vorbis_book_unpack(s_codebooks.get() + i);
         if(ret) log_e("codebook %i returned err", i);
         if(ret) goto err_out;
     }
@@ -641,22 +636,21 @@ int32_t parseVorbisCodebook(){
     }
     /* floor backend settings */
     s_nrOfFloors  = bitReader(6) + 1;
-
-    s_floor_param = (vorbis_info_floor_t **)__malloc_heap_psram(sizeof(*s_floor_param) * s_nrOfFloors);
-    s_floor_type  = (int8_t *)__malloc_heap_psram(sizeof(int8_t) * s_nrOfFloors);
+    s_floor_param.alloc_array(s_nrOfFloors);
+    s_floor_type.alloc(sizeof(int8_t) * s_nrOfFloors);
     for(i = 0; i < s_nrOfFloors; i++) {
-        s_floor_type[i] = bitReader(16);
-        if(s_floor_type[i] < 0 || s_floor_type[i] >= VI_FLOORB) {
+        s_floor_type.get()[i] = bitReader(16);
+        if(s_floor_type.get()[i] < 0 || s_floor_type.get()[i] >= VI_FLOORB) {
             log_e("err while reading floors");
             goto err_out;
         }
-        if(s_floor_type[i]){
+        if(s_floor_type.get()[i]){
             s_floor_param[i] = floor1_info_unpack();
         }
         else{
             s_floor_param[i] = floor0_info_unpack();
         }
-        if(!s_floor_param[i]){
+        if(!s_floor_param[i].valid()){
             log_e("floor parameter not found");
             goto err_out;
         }
@@ -664,9 +658,9 @@ int32_t parseVorbisCodebook(){
 
     /* residue backend settings */
     s_nrOfResidues = bitReader(6) + 1;
-    s_residue_param = (vorbis_info_residue_t *)__malloc_heap_psram(sizeof(*s_residue_param) * s_nrOfResidues);
+    s_residue_param.alloc(sizeof(vorbis_info_residue_t) * s_nrOfResidues);
     for(i = 0; i < s_nrOfResidues; i++){
-         if(res_unpack(s_residue_param + i)){
+         if(res_unpack(s_residue_param.get() + i)){
             log_e("err while unpacking residues");
             goto err_out;
          }
@@ -674,10 +668,10 @@ int32_t parseVorbisCodebook(){
 
     // /* map backend settings */
     s_nrOfMaps = bitReader(6) + 1;
-    s_map_param = (vorbis_info_mapping_t *)__malloc_heap_psram(sizeof(*s_map_param) * s_nrOfMaps);
+    s_map_param.alloc(sizeof(vorbis_info_mapping_t) * s_nrOfMaps);
     for(i = 0; i < s_nrOfMaps; i++) {
         if(bitReader(16) != 0) goto err_out;
-        if(mapping_info_unpack(s_map_param + i)){
+        if(mapping_info_unpack(s_map_param.get() + i)){
             log_e("err while unpacking mappings");
             goto err_out;
         }
@@ -685,13 +679,13 @@ int32_t parseVorbisCodebook(){
 
     /* mode settings */
     s_nrOfModes = bitReader(6) + 1;
-    s_mode_param = (vorbis_info_mode_t *)__malloc_heap_psram(s_nrOfModes* sizeof(*s_mode_param));
+    s_mode_param.alloc(sizeof(vorbis_info_mode_t) * s_nrOfModes);
     for(i = 0; i < s_nrOfModes; i++) {
-        s_mode_param[i].blockflag = bitReader(1);
+        s_mode_param.get()[i].blockflag = bitReader(1);
         if(bitReader(16)) goto err_out;
         if(bitReader(16)) goto err_out;
-        s_mode_param[i].mapping = bitReader(8);
-        if(s_mode_param[i].mapping >= s_nrOfMaps){
+        s_mode_param.get()[i].mapping = bitReader(8);
+        if(s_mode_param.get()[i].mapping >= s_nrOfMaps){
             log_e("too many modes");
             goto err_out;
         }
@@ -710,7 +704,7 @@ int32_t parseVorbisCodebook(){
     return VORBIS_PARSE_OGG_DONE;
 
 err_out:
-//    vorbis_info_clear(vi);
+    //    vorbis_info_clear(vi);
     log_e("err in codebook!  at pos %d", s_bitReader.headptr - s_bitReader.data);
     return (OV_EBADHEADER);
 }
@@ -766,7 +760,7 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
             n+= *(inbuf + 27 + i);
         }
         segmentTableWrPtr++;
-        s_vorbisSegmentTable[segmentTableWrPtr] = n;
+        s_vorbisSegmentTable.get()[segmentTableWrPtr] = n;
         s_vorbisSegmentLength += n;
     }
     s_vorbisSegmentTableSize = segmentTableWrPtr + 1;
@@ -846,7 +840,7 @@ int32_t VORBISFindSyncWord(unsigned char *buf, int32_t nBytes){
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_book_unpack(codebook_t *s) {
-    char   *lengthlist = NULL;
+    ps_ptr<char> lengthlist;
     uint8_t quantvals = 0;
     int32_t i, j;
     int32_t     maptype;
@@ -872,7 +866,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
     switch(bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
+            lengthlist.alloc(sizeof(char) * s->entries);
 
             /* allocated but unused entries? */
             if(bitReader(1)) {
@@ -908,7 +902,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist = (char *)__malloc_heap_psram(sizeof(*lengthlist) * s->entries);
+                lengthlist.alloc(sizeof(char) * s->entries);
 
                 for(i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
@@ -944,7 +938,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
             s->dec_nodeb = _determine_node_bytes(s->used_entries, _ilog(s->entries) / 8 + 1);
             s->dec_leafw = _determine_leaf_words(s->dec_nodeb, _ilog(s->entries) / 8 + 1);
             s->dec_type = 0;
-            ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+            ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
             if(ret != 0) {
                  goto _errout;
             }
@@ -964,35 +958,31 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 if(total1 <= 4 && total1 <= total2) {
                     /* use dec_type 1: vector of packed values */
                     /* need quantized values before  */
-                    s->q_val = __malloc_heap_psram(sizeof(uint16_t) * quantvals);
-                    for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
+                    s->q_val.alloc(sizeof(uint16_t) * quantvals);
+                    for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val.get())[i] = bitReader(s->q_bits);
 
                     if(oggpack_eop()) {
-                        if(s->q_val) {free(s->q_val), s->q_val = NULL;}
                         goto _eofout;
                     }
 
                     s->dec_type = 1;
                     s->dec_nodeb = _determine_node_bytes(s->used_entries, (s->q_bits * s->dim + 8) / 8);
                     s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (s->q_bits * s->dim + 8) / 8);
-                    ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+                    ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
                     if(ret) {
-                        if(s->q_val) {free(s->q_val), s->q_val = NULL;}
                         goto _errout;
                     }
-
-                    if(s->q_val) {free(s->q_val), s->q_val = NULL;} /* about to go out of scope; _make_decode_table was using it */
                 }
                 else {
                     /* use dec_type 2: packed vector of column offsets */
                     /* need quantized values before */
                     if(s->q_bits <= 8) {
-                        s->q_val = __malloc_heap_psram(quantvals);
-                        for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val)[i] = bitReader(s->q_bits);
+                        s->q_val.alloc(quantvals);
+                        for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val.get())[i] = bitReader(s->q_bits);
                     }
                     else {
-                        s->q_val = __malloc_heap_psram(quantvals * 2);
-                        for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = bitReader(s->q_bits);
+                        s->q_val.alloc(quantvals * 2);
+                        for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val.get())[i] = bitReader(s->q_bits);
                     }
 
                     if(oggpack_eop()) goto _eofout;
@@ -1002,7 +992,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                     s->dec_nodeb = _determine_node_bytes(s->used_entries, (_ilog(quantvals - 1) * s->dim + 8) / 8);
                     s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (_ilog(quantvals - 1) * s->dim + 8) / 8);
 
-                    ret = _make_decode_table(s, lengthlist, quantvals, maptype);
+                    ret = _make_decode_table(s, lengthlist.get(), quantvals, maptype);
                     if(ret){
                         goto _errout;
                     }
@@ -1020,7 +1010,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 s->dec_type = 1;
                 s->dec_nodeb = _determine_node_bytes(s->used_entries, (s->q_bits * s->dim + 8) / 8);
                 s->dec_leafw = _determine_leaf_words(s->dec_nodeb, (s->q_bits * s->dim + 8) / 8);
-                if(_make_decode_table(s, lengthlist, quantvals, maptype)) goto _errout;
+                if(_make_decode_table(s, lengthlist.get(), quantvals, maptype)) goto _errout;
             }
             else {
                 /* use dec_type 3: scalar offset into packed value array */
@@ -1028,19 +1018,19 @@ int32_t vorbis_book_unpack(codebook_t *s) {
                 s->dec_type = 3;
                 s->dec_nodeb = _determine_node_bytes(s->used_entries, _ilog(s->used_entries - 1) / 8 + 1);
                 s->dec_leafw = _determine_leaf_words(s->dec_nodeb, _ilog(s->used_entries - 1) / 8 + 1);
-                if(_make_decode_table(s, lengthlist, quantvals, maptype)) goto _errout;
+                if(_make_decode_table(s, lengthlist.get(), quantvals, maptype)) goto _errout;
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
-                s->q_val = __malloc_heap_psram(s->q_pack * s->used_entries);
+                s->q_val.alloc(s->q_pack * s->used_entries);
 
                 if(s->q_bits <= 8) {
                     for(i = 0; i < s->used_entries * s->dim; i++)
-                        ((uint8_t *)(s->q_val))[i] = bitReader(s->q_bits);
+                        ((uint8_t *)(s->q_val.get()))[i] = bitReader(s->q_bits);
                 }
                 else {
                     for(i = 0; i < s->used_entries * s->dim; i++)
-                        ((uint16_t *)(s->q_val))[i] = bitReader(s->q_bits);
+                        ((uint16_t *)(s->q_val.get()))[i] = bitReader(s->q_bits);
                 }
             }
             break;
@@ -1049,14 +1039,10 @@ int32_t vorbis_book_unpack(codebook_t *s) {
             goto _errout;
     }
     if(oggpack_eop()) goto _eofout;
-    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
-    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
     return 0; // ok
 _errout:
 _eofout:
-    vorbis_book_clear(s);
-    if(lengthlist) {free(lengthlist); lengthlist = NULL;}
-    if(s->q_val)   {free(s->q_val), s->q_val = NULL;}
+    vorbis_book_clear(s_codebooks);
     return -1; // error
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1223,33 +1209,32 @@ int32_t _determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, int32_t maptype) {
-    uint32_t *work = nullptr;
+    ps_ptr<uint32_t>work;
 
     if(s->dec_nodeb == 4) {
-        s->dec_table = __malloc_heap_psram((s->used_entries * 2 + 1) * sizeof(*work));
+        s->dec_table.alloc((s->used_entries * 2 + 1) * sizeof(*work));
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
-        if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table, quantvals, s, maptype)) return 1;
+        if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table.get(), quantvals, s, maptype)) return 1;
 
         return 0;
     }
 
-    work = (uint32_t *)__calloc_heap_psram((uint32_t)(s->used_entries * 2 - 2) , sizeof(*work));
-    if(!work) log_e("oom");
+    work.alloc((s->used_entries * 2 - 2) * sizeof(uint32_t));
+    work.clear();
 
-    if(_make_words(lengthlist, s->entries, work, quantvals, s, maptype)) {
-        if(work) {free(work); work = NULL;}
+    if(_make_words(lengthlist, s->entries, work.get(), quantvals, s, maptype)) {
         return 1;
     }
-    s->dec_table = __malloc_heap_psram((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    s->dec_table.alloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
     if(s->dec_leafw == 1) {
         switch(s->dec_nodeb) {
             case 1:
                 for(uint32_t i = 0; i < s->used_entries * 2 - 2; i++)
-                    ((uint8_t *)s->dec_table)[i] = (uint16_t)((work[i] & 0x80000000UL) >> 24) | work[i];
+                    ((uint8_t *)s->dec_table.get())[i] = (uint16_t)((work[i] & 0x80000000UL) >> 24) | work[i];
                 break;
             case 2:
                 for(uint32_t i = 0; i < s->used_entries * 2 - 2; i++)
-                    ((uint16_t *)s->dec_table)[i] = (uint16_t)((work[i] & 0x80000000UL) >> 16) | work[i];
+                    ((uint16_t *)s->dec_table.get())[i] = (uint16_t)((work[i] & 0x80000000UL) >> 16) | work[i];
                 break;
         }
     }
@@ -1257,7 +1242,7 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
         /* more complex; we have to do a two-pass repack that updates the node indexing. */
         uint32_t top = s->used_entries * 3 - 2;
         if(s->dec_nodeb == 1) {
-            uint8_t *out = (uint8_t *)s->dec_table;
+            uint8_t *out = (uint8_t *)s->dec_table.get();
 
             for(int32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
                 if(work[i] & 0x80000000UL) {
@@ -1292,7 +1277,7 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
             }
         }
         else {
-            uint16_t *out = (uint16_t *)s->dec_table;
+            uint16_t *out = (uint16_t *)s->dec_table.get();
             for(int32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
                 if(work[i] & 0x80000000UL) {
                     if(work[i + 1] & 0x80000000UL) {
@@ -1326,7 +1311,6 @@ int32_t _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, i
             }
         }
     }
-    if(work) {free(work); work = NULL;}
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1411,7 +1395,7 @@ uint32_t decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_
                     entry /= quantvals;
                     assert((b->q_bits * j) >= 0);
                     uint32_t shift = (uint32_t)b->q_bits * j;
-                    ret |= ((uint16_t *)(b->q_val))[off] << shift;
+                    ret |= ((uint16_t *)(b->q_val.get()))[off] << shift;
                 }
             }
             else {
@@ -1479,20 +1463,15 @@ int32_t oggpack_eop() {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_book_clear(codebook_t *b) {
-    /* static book is not cleared; we're likely called on the lookup and the static codebook beint32_ts to the
-   info struct */
-    if(b->q_val) free(b->q_val);
-    if(b->dec_table) free(b->dec_table);
-
-    memset(b, 0, sizeof(*b));
-}
 //---------------------------------------------------------------------------------------------------------------------
- vorbis_info_floor_t* floor0_info_unpack() {
+ ps_ptr<vorbis_info_floor_t> floor0_info_unpack() {
 
     int32_t               j;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)__malloc_heap_psram(sizeof(*info));
+    ps_ptr<vorbis_info_floor_t> info;
+    info.alloc(sizeof(vorbis_info_floor_t));
+    info.clear();
+
     info->order =    bitReader( 8);
     info->rate =     bitReader(16);
     info->barkmap =  bitReader(16);
@@ -1513,25 +1492,27 @@ void vorbis_book_clear(codebook_t *b) {
     return (info);
 
 err_out:
-    floor_free_info(info);
-    return (NULL);
+    return {};
 }
 //---------------------------------------------------------------------------------------------------------------------
-vorbis_info_floor_t* floor1_info_unpack() {
+ps_ptr<vorbis_info_floor_t> floor1_info_unpack() {
 
+    ps_ptr<uint8_t> B;
     int32_t j, k, count = 0, maxclass = -1, rangebits;
 
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)__calloc_heap_psram(1, sizeof(vorbis_info_floor_t));
+    ps_ptr<vorbis_info_floor_t> info;
+    info.alloc(sizeof(vorbis_info_floor_t));
+    info.clear();
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
-    info->partitionclass = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->partitionclass));
+    info->partitionclass.alloc(info->partitions * sizeof(uint8_t));
     for(j = 0; j < info->partitions; j++) {
         info->partitionclass[j] = bitReader(4); /* only 0 to 15 legal */
         if(maxclass < info->partitionclass[j]) maxclass = info->partitionclass[j];
     }
 
     /* read partition classes */
-    info->_class = (floor1class_t *)__malloc_heap_psram((uint32_t)(maxclass + 1) * sizeof(*info->_class));
+    info->_class.alloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t));
     for(j = 0; j < maxclass + 1; j++) {
         info->_class[j].class_dim = bitReader(3) + 1; /* 1 to 8 */
         info->_class[j].class_subs = bitReader(2);    /* 0,1,2,3 bits */
@@ -1554,10 +1535,10 @@ vorbis_info_floor_t* floor1_info_unpack() {
     rangebits = bitReader(4);
 
     for(j = 0, k = 0; j < info->partitions; j++) count += info->_class[info->partitionclass[j]].class_dim;
-    info->postlist = (uint16_t *)__malloc_heap_psram((count + 2) * sizeof(*info->postlist));
-    info->forward_index = (uint8_t *)__malloc_heap_psram((count + 2) * sizeof(*info->forward_index));
-    info->loneighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->loneighbor));
-    info->hineighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->hineighbor));
+    info->postlist.alloc((count + 2) * sizeof(uint16_t));
+    info->forward_index.alloc((count + 2) * sizeof(uint8_t));
+    info->loneighbor.alloc(count * sizeof(uint8_t));
+    info->hineighbor.alloc(count * sizeof(uint8_t));
 
     count = 0;
     for(j = 0, k = 0; j < info->partitions; j++) {
@@ -1575,7 +1556,34 @@ vorbis_info_floor_t* floor1_info_unpack() {
 
     /* also store a sorted position index */
     for(j = 0; j < info->posts; j++) info->forward_index[j] = j;
-    vorbis_mergesort(info->forward_index, info->postlist, info->posts);
+
+    // vorbis_mergesort
+    B.alloc(info->posts * sizeof(uint8_t));
+
+    for(uint16_t i = 1; i < info->posts; i <<= 1) {
+        for(uint16_t j = 0; j + i < info->posts;) {
+            uint16_t k1 = j;
+            uint16_t mid = j + i;
+            uint16_t k2 = mid;
+            int32_t      end = (j + i * 2 < info->posts ? j + i * 2 : info->posts);
+            while(k1 < mid && k2 < end) {
+                if(info->postlist.get()[info->forward_index.get()[k1]] < info->postlist.get()[info->forward_index.get()[k2]]){
+                    B[j++] = info->forward_index.get()[k1++];
+                }
+                else{
+                    B[j++] = info->forward_index.get()[k2++];
+                }
+            }
+            while(k1 < mid) B[j++] = info->forward_index.get()[k1++];
+            while(k2 < end) B[j++] = info->forward_index.get()[k2++];
+        }
+        for(; j < info->posts; j++) B[j] = info->forward_index.get()[j];
+        info->forward_index.swap(B);
+    }
+
+    if(B.get() == info->forward_index.get()) {
+        for(j = 0; j < info->posts; j++) B[j] = info->forward_index.get()[j];
+    }
 
     /* discover our neighbors for decode where we don't use fit flags (that would push the neighbors outward) */
     for(j = 0; j < info->posts - 2; j++) {
@@ -1602,8 +1610,7 @@ vorbis_info_floor_t* floor1_info_unpack() {
     return (info);
 
 err_out:
-    floor_free_info(info);
-    return (NULL);
+    return {};
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* vorbis_info is for range checking */
@@ -1620,8 +1627,8 @@ int32_t res_unpack(vorbis_info_residue_t *info){
     info->groupbook =  bitReader(8);
     if(info->groupbook >= s_nrOfCodebooks) goto errout;
 
-    info->stagemasks = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->stagemasks));
-    info->stagebooks = (uint8_t *)__malloc_heap_psram(info->partitions * 8 * sizeof(*info->stagebooks));
+    info->stagemasks.alloc(info->partitions * sizeof(uint8_t));
+    info->stagebooks.alloc(info->partitions * 8 * sizeof(uint8_t));
 
     for(j = 0; j < info->partitions; j++) {
         int32_t cascade = bitReader(3);
@@ -1646,7 +1653,6 @@ int32_t res_unpack(vorbis_info_residue_t *info){
 
     return 0;
 errout:
-    res_clear_info(info);
     return 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1661,11 +1667,11 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
 
     if(bitReader(1)) {
         info->coupling_steps = bitReader(8) + 1;
-        info->coupling = (coupling_step_t *)__malloc_heap_psram(info->coupling_steps * sizeof(*info->coupling));
+        info->coupling.alloc(info->coupling_steps * sizeof(coupling_step_t));
 
         for(i = 0; i < info->coupling_steps; i++) {
-            int32_t testM = info->coupling[i].mag = bitReader(ilog(s_vorbisChannels));
-            int32_t testA = info->coupling[i].ang = bitReader(ilog(s_vorbisChannels));
+            int32_t testM = info->coupling.get()[i].mag = bitReader(ilog(s_vorbisChannels));
+            int32_t testA = info->coupling.get()[i].ang = bitReader(ilog(s_vorbisChannels));
 
             if(testM < 0 || testA < 0 || testM == testA || testM >= s_vorbisChannels || testA >= s_vorbisChannels) goto err_out;
         }
@@ -1675,14 +1681,14 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
     /* 2,3:reserved */
 
     if(info->submaps > 1) {
-        info->chmuxlist = (uint8_t *)__malloc_heap_psram(sizeof(*info->chmuxlist) * s_vorbisChannels);
+        info->chmuxlist.alloc(sizeof(uint8_t) * s_vorbisChannels);
         for(i = 0; i < s_vorbisChannels; i++) {
             info->chmuxlist[i] = bitReader(4);
             if(info->chmuxlist[i] >= info->submaps) goto err_out;
         }
     }
 
-    info->submaplist = (submap_t *)__malloc_heap_psram(sizeof(*info->submaplist) * info->submaps);
+    info->submaplist.alloc(sizeof(submap_t) * info->submaps);
     for(i = 0; i < info->submaps; i++) {
         int32_t temp = bitReader(8);
         (void)temp;
@@ -1695,118 +1701,66 @@ int32_t mapping_info_unpack(vorbis_info_mapping_t *info) {
     return 0;
 
 err_out:
-    mapping_clear_info(info);
     return -1;
-}
-//---------------------------------------------------------------------------------------------------------------------
-void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
-    uint16_t i, j;
-    uint8_t *temp;
-    uint8_t *A = index;
-    uint8_t *B = (uint8_t *)__malloc_heap_psram(n * sizeof(*B));
-
-    for(i = 1; i < n; i <<= 1) {
-        for(j = 0; j + i < n;) {
-            uint16_t k1 = j;
-            uint16_t mid = j + i;
-            uint16_t k2 = mid;
-            int32_t      end = (j + i * 2 < n ? j + i * 2 : n);
-            while(k1 < mid && k2 < end) {
-                if(vals[A[k1]] < vals[A[k2]]) B[j++] = A[k1++];
-                else
-                    B[j++] = A[k2++];
-            }
-            while(k1 < mid) B[j++] = A[k1++];
-            while(k2 < end) B[j++] = A[k2++];
-        }
-        for(; j < n; j++) B[j] = A[j];
-        temp = A;
-        A = B;
-        B = temp;
-    }
-
-    if(B == index) {
-        for(j = 0; j < n; j++) B[j] = A[j];
-        free(A);
-    }
-    else
-        free(B);
-}
-//---------------------------------------------------------------------------------------------------------------------
-void floor_free_info(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    if(info) {
-        if(info->_class)         {free(info->_class);        }
-        if(info->partitionclass) {free(info->partitionclass);}
-        if(info->postlist)       {free(info->postlist);      }
-        if(info->forward_index)  {free(info->forward_index); }
-        if(info->hineighbor)     {free(info->hineighbor);    }
-        if(info->loneighbor)     {free(info->loneighbor);    }
-        memset(info, 0, sizeof(*info));
-        if(info) free(info);
-    }
-}
-//---------------------------------------------------------------------------------------------------------------------
-void res_clear_info(vorbis_info_residue_t *info) {
-    if(info) {
-        if(info->stagemasks) free(info->stagemasks);
-        if(info->stagebooks) free(info->stagebooks);
-        memset(info, 0, sizeof(*info));
-    }
-}
-//---------------------------------------------------------------------------------------------------------------------
-void mapping_clear_info(vorbis_info_mapping_t *info) {
-    if(info) {
-        if(info->chmuxlist) free(info->chmuxlist);
-        if(info->submaplist) free(info->submaplist);
-        if(info->coupling) free(info->coupling);
-        memset(info, 0, sizeof(*info));
-    }
 }
 //---------------------------------------------------------------------------------------------------------------------
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
 //---------------------------------------------------------------------------------------------------------------------
-vorbis_dsp_state_t *vorbis_dsp_create() {
-    int32_t i;
+ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create() {
+    ps_ptr<vorbis_dsp_state_t> v;
+    v.alloc(sizeof(vorbis_dsp_state_t));
+    v.clear();
 
-    vorbis_dsp_state_t *v = (vorbis_dsp_state_t *)__calloc_heap_psram(1, sizeof(vorbis_dsp_state_t));
+    v->work.alloc(s_vorbisChannels * sizeof(ps_ptr<int32_t>));
+    v->work.clear();  // Important!
 
-    v->work = (int32_t **)__malloc_heap_psram(s_vorbisChannels * sizeof(*v->work));
-    v->mdctright = (int32_t **)__malloc_heap_psram(s_vorbisChannels* sizeof(*v->mdctright));
+    v->mdctright.alloc(s_vorbisChannels * sizeof(ps_ptr<int32_t>));
+    v->mdctright.clear();  // Important!
 
-    for(i = 0; i < s_vorbisChannels; i++) {
-        v->work[i] = (int32_t *)__calloc_heap_psram(1, (s_blocksizes[1] >> 1) * sizeof(*v->work[i]));
-        v->mdctright[i] = (int32_t *)__calloc_heap_psram(1, (s_blocksizes[1] >> 2) * sizeof(*v->mdctright[i]));
+    for (uint8_t i = 0; i < s_vorbisChannels; ++i) {
+        const size_t work_size = (s_blocksizes[1] >> 1) * sizeof(int32_t);
+        v->work.at(i).alloc(work_size);
+        v->work.at(i).clear();
+
+        const size_t mdct_size = (s_blocksizes[1] >> 2) * sizeof(int32_t);
+        v->mdctright.at(i).alloc(mdct_size);
+        v->mdctright.at(i).clear();
     }
 
-    v->lW = 0; /* previous window size */
-    v->W = 0;  /* current window size  */
-
-    v->out_end = -1; // vorbis_dsp_restart
+    // Initialize state
+    v->lW = 0;
+    v->W = 0;
     v->out_begin = -1;
+    v->out_end = -1;
 
     return v;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_dsp_destroy(vorbis_dsp_state_t *v) {
-    int32_t i;
-    if(v) {
-        if(v->work) {
-            for(i = 0; i < s_vorbisChannels; i++) {
-                if(v->work[i]) {free(v->work[i]); v->work[i] = NULL;}
-            }
-            if(v->work){free(v->work); v->work = NULL;}
-        }
-        if(v->mdctright) {
-            for(i = 0; i < s_vorbisChannels; i++) {
-                if(v->mdctright[i]){free(v->mdctright[i]); v->mdctright[i] = NULL;}
-            }
-            if(v->mdctright){free(v->mdctright); v->mdctright = NULL;}
-        }
-        free(v);
-        v = NULL;
+void vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v) {
+    if(!v.valid())return;
+
+    for (uint8_t i = 0; i < s_vorbisChannels; ++i) {
+        v->work.at(i).reset();
+        v->mdctright.at(i).reset();
     }
+    v->mdctright.reset();
+    v->work.reset();
+    v.reset();
+}
+//---------------------------------------------------------------------------------------------------------------------
+void vorbis_book_clear(ps_ptr<codebook_t> &v){
+    if(!v.valid())return;
+    int s = 0;
+    for(int i = 0; i < s_nrOfCodebooks; i++){
+        if(v[i].q_val.valid())    {s += v[i].q_val.size();     v[i].q_val.reset();}
+        if(v[i].dec_table.valid()){s += v[i].dec_table.size(); v[i].dec_table.reset();}
+    }
+    if(v->dec_table.valid())   {s += v->dec_table.size(); v->dec_table.reset();}
+    if(v->q_val.valid())       {s += v ->q_val.size(); v ->q_val.reset();}
+    s += v.size(); v.reset();
+    s_nrOfCodebooks = 0;
+    // log_w("free codebook_t %i bytes", s);
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
@@ -1825,9 +1779,9 @@ int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
 
     /* shift information we still need from last window */
     s_dsp_state->lW = s_dsp_state->W;
-    s_dsp_state->W = s_mode_param[mode].blockflag;
+    s_dsp_state->W = s_mode_param.get()[mode].blockflag;
     for(i = 0; i < s_vorbisChannels; i++){
-        mdct_shift_right(s_blocksizes[s_dsp_state->lW], s_dsp_state->work[i], s_dsp_state->mdctright[i]);
+        mdct_shift_right(s_blocksizes[s_dsp_state->lW], s_dsp_state->work[i].get(), s_dsp_state->mdctright[i].get());
     }
     if(s_dsp_state->W) {
         int32_t temp;
@@ -1838,7 +1792,7 @@ int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
 
     /* packet decode and portions of synthesis that rely on only this block */
     {
-        mapping_inverse(s_map_param + s_mode_param[mode].mapping);
+        mapping_inverse(s_map_param.get() + s_mode_param.get()[mode].mapping);
 
         if(s_dsp_state->out_begin == -1) {
             s_dsp_state->out_begin = 0;
@@ -1866,10 +1820,10 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     int32_t     i, j;
     int32_t n = s_blocksizes[s_dsp_state->W];
 
-    int32_t **pcmbundle = (int32_t **)alloca(sizeof(*pcmbundle) * s_vorbisChannels);
-    int32_t      *zerobundle = (int32_t *)alloca(sizeof(*zerobundle) * s_vorbisChannels);
-    int32_t      *nonzero = (int32_t *)alloca(sizeof(*nonzero) * s_vorbisChannels);
-    int32_t **floormemo = (int32_t **)alloca(sizeof(*floormemo) * s_vorbisChannels);
+    ps_ptr<int32_t*> pcmbundle;  pcmbundle.alloc_array(s_vorbisChannels);
+    ps_ptr<int32_t>  zerobundle; zerobundle.alloc(sizeof(int32_t) * s_vorbisChannels);
+    ps_ptr<int32_t>  nonzero;    nonzero.alloc(sizeof(int32_t) * s_vorbisChannels);
+    ps_ptr<ps_ptr<int32_t>> floormemo; floormemo.alloc_array(s_vorbisChannels);
 
     /* recover the spectral envelope; store it in the PCM vector for now */
     for(i = 0; i < s_vorbisChannels; i++) {
@@ -1880,21 +1834,21 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
         if(info->submaps > 1) submap = info->chmuxlist[i];
         floorno = info->submaplist[submap].floor;
 
-        if(s_floor_type[floorno]) {
+        if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param[floorno]));
-            floormemo[i] = floor1_inverse1(s_floor_param[floorno], floormemo[i]);
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor1_memosize(s_floor_param[floorno]));
+            floormemo[i] = floor1_inverse1(s_floor_param[floorno], floormemo[i].get());
         }
         else {
             /* floor 0 */
-            floormemo[i] = (int32_t *)alloca(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param[floorno]));
-            floormemo[i] = floor0_inverse1(s_floor_param[floorno], floormemo[i]);
+            floormemo[i].alloc(sizeof(*floormemo[i]) * floor0_memosize(s_floor_param[floorno]));
+            floormemo[i] = floor0_inverse1(s_floor_param[floorno], floormemo[i].get());
         }
 
-        if(floormemo[i]) nonzero[i] = 1;
+        if(floormemo[i].get()) nonzero[i] = 1;
         else
             nonzero[i] = 0;
-        memset(s_dsp_state->work[i], 0, sizeof(*s_dsp_state->work[i]) * n / 2);
+        memset(s_dsp_state->work[i].get(), 0, sizeof(*s_dsp_state->work[i]) * n / 2);
     }
 
     /* channel coupling can 'dirty' the nonzero listing */
@@ -1909,15 +1863,14 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     for(i = 0; i < info->submaps; i++) {
         uint8_t ch_in_bundle = 0;
         for(j = 0; j < s_vorbisChannels; j++) {
-            if(!info->chmuxlist || info->chmuxlist[j] == i) {
+            if(!info->chmuxlist.get() || info->chmuxlist.get()[j] == i) {
                 if(nonzero[j]) zerobundle[ch_in_bundle] = 1;
                 else
                     zerobundle[ch_in_bundle] = 0;
-                pcmbundle[ch_in_bundle++] = s_dsp_state->work[j];
+                pcmbundle[ch_in_bundle++] = s_dsp_state->work[j].get();
             }
         }
-
-        res_inverse(s_residue_param + info->submaplist[i].residue, pcmbundle, zerobundle, ch_in_bundle);
+        res_inverse(s_residue_param.get() + info->submaplist[i].residue, pcmbundle.get(), zerobundle.get(), ch_in_bundle);
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -1925,8 +1878,8 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
 
     /* channel coupling */
     for(i = info->coupling_steps - 1; i >= 0; i--) {
-        int32_t *pcmM = s_dsp_state->work[info->coupling[i].mag];
-        int32_t *pcmA = s_dsp_state->work[info->coupling[i].ang];
+        int32_t *pcmM = s_dsp_state->work[info->coupling[i].mag].get();
+        int32_t *pcmA = s_dsp_state->work[info->coupling[i].ang].get();
 
         for(j = 0; j < n / 2; j++) {
             int32_t mag = pcmM[j];
@@ -1958,22 +1911,22 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     /* compute and apply spectral envelope */
 
     for(i = 0; i < s_vorbisChannels; i++) {
-        int32_t *pcm = s_dsp_state->work[i];
+        int32_t *pcm = s_dsp_state->work[i].get();
         int32_t      submap = 0;
         int32_t      floorno;
 
         if(info->submaps > 1) submap = info->chmuxlist[i];
         floorno = info->submaplist[submap].floor;
 
-        if(s_floor_type[floorno]) {
+        if(s_floor_type.get()[floorno]) {
             /* floor 1 */
-            floor1_inverse2(s_floor_param[floorno], floormemo[i], pcm);
+            floor1_inverse2(s_floor_param[floorno], floormemo[i].get(), pcm);
         }
         else {
             /* floor 0 */
-            floor0_inverse2(s_floor_param[floorno], floormemo[i], pcm);
+            floor0_inverse2(s_floor_param[floorno], floormemo[i].get(), pcm);
         }
-
+        floormemo[i].reset();
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -1982,7 +1935,7 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     /* transform the PCM data; takes PCM vector, vb; modifies PCM vector */
     /* only MDCT right now.... */
     for(i = 0; i < s_vorbisChannels; i++){
-        mdct_backward(n, s_dsp_state->work[i]);
+        mdct_backward(n, s_dsp_state->work[i].get());
     }
 
     // for(j=0;j<vi->channels;j++)
@@ -1992,18 +1945,16 @@ int32_t mapping_inverse(vorbis_info_mapping_t *info) {
     return (0);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor0_memosize(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    return info->order + 1;
+int32_t floor0_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+    return i.get()->order + 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor1_memosize(vorbis_info_floor_t *i) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
-    return info->posts;
+int32_t floor1_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+    return i.get()->posts;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t *floor0_inverse1(vorbis_info_floor_t *i, int32_t *lsp) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
+int32_t *floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t *lsp) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i.get();
     int32_t                 j;
 
     int32_t ampraw = bitReader(info->ampbits);
@@ -2014,7 +1965,7 @@ int32_t *floor0_inverse1(vorbis_info_floor_t *i, int32_t *lsp) {
         int32_t     booknum = bitReader(_ilog(info->numbooks));
 
         if(booknum != -1 && booknum < info->numbooks) { /* be paranoid */
-            codebook_t        *b = s_codebooks + info->books[booknum];
+            codebook_t        *b = s_codebooks.get() + info->books[booknum];
             int32_t           last = 0;
 
             if(vorbis_book_decodev_set(b, lsp, info->order, -24) == -1) goto eop;
@@ -2031,13 +1982,13 @@ eop:
     return (NULL);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t *floor1_inverse1(vorbis_info_floor_t *in, int32_t *fit_value) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in;
+int32_t *floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in.get();
 
     int32_t                 quant_look[4] = {256, 128, 86, 64};
     int32_t                 i, j, k;
     int32_t                 quant_q = quant_look[info->mult - 1];
-    codebook_t         *books = s_codebooks;
+    codebook_t         *books = s_codebooks.get();
 
     /* unpack wrapped/predicted values from stream */
     if(bitReader(1) == 1) {
@@ -2130,7 +2081,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
     if(book->dec_nodeb == 1) {
         if(book->dec_leafw == 1) {
             /* 8/8 */
-            uint8_t *t = (uint8_t *)book->dec_table;
+            uint8_t *t = (uint8_t *)book->dec_table.get();
             for(i = 0; i < read; i++) {
                 chase = t[chase * 2 + ((lok >> i) & 1)];
                 if(chase & 0x80UL) break;
@@ -2139,7 +2090,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
         }
         else {
             /* 8/16 */
-            uint8_t *t = (uint8_t *)book->dec_table;
+            uint8_t *t = (uint8_t *)book->dec_table.get();
             for(i = 0; i < read; i++) {
                 int32_t bit = (lok >> i) & 1;
                 int32_t next = t[chase + bit];
@@ -2159,7 +2110,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
                 int32_t idx;
                 for(i = 0; i < read; i++) {
                     idx = chase * 2 + ((lok >> i) & 1);
-                    chase = ((uint16_t *)(book->dec_table))[idx];
+                    chase = ((uint16_t *)(book->dec_table.get()))[idx];
                     if(chase & 0x8000UL){
                         break;
                     }
@@ -2168,7 +2119,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
             }
             else {
                 /* 16/32 */
-                uint16_t *t = (uint16_t *)book->dec_table;
+                uint16_t *t = (uint16_t *)book->dec_table.get();
                 for(i = 0; i < read; i++) {
                     int32_t bit = (lok >> i) & 1;
                     int32_t next = t[chase + bit];
@@ -2183,7 +2134,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
         }
         else {
             for(i = 0; i < read; i++) {
-                chase = ((uint32_t *)(book->dec_table))[chase * 2 + ((lok >> i) & 1)];
+                chase = ((uint32_t *)(book->dec_table.get()))[chase * 2 + ((lok >> i) & 1)];
                 if(chase & 0x80000000UL) break;
             }
             chase &= 0x7fffffffUL;
@@ -2257,16 +2208,16 @@ int32_t decode_map(codebook_t *s, int32_t *v, int32_t point) {
             /* packed vector of column offsets */
             int32_t mask = (1 << s->q_pack) - 1;
             for(uint8_t i = 0; i < s->dim; i++) {
-                if(s->q_bits <= 8) v[i] = ((uint8_t *)(s->q_val))[entry & mask];
+                if(s->q_bits <= 8) v[i] = ((uint8_t *)(s->q_val.get()))[entry & mask];
                 else
-                    v[i] = ((uint16_t *)(s->q_val))[entry & mask];
+                    v[i] = ((uint16_t *)(s->q_val.get()))[entry & mask];
                 entry >>= s->q_pack;
             }
             break;
         }
         case 3: {
             /* offset into array */
-            void *ptr = (int32_t *)s->q_val + entry * s->q_pack;
+            void *ptr = (int32_t *)s->q_val.get() + entry * s->q_pack;
 
             if(s->q_bits <= 8) {
                 for(uint8_t i = 0; i < s->dim; i++) v[i] = ((uint8_t *)ptr)[i];
@@ -2304,7 +2255,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
     int32_t               j, k, s;
     uint8_t           m = 0, n = 0;
     uint8_t           used = 0;
-    codebook_t         *phrasebook = s_codebooks + info->groupbook;
+    codebook_t         *phrasebook = s_codebooks.get() + info->groupbook;
     uint32_t          samples_per_partition = info->grouping;
     uint8_t           partitions_per_word = phrasebook->dim;
     uint32_t          pcmend = s_blocksizes[s_dsp_state->W];
@@ -2360,7 +2311,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
                             for(j = 0; j < ch; j++) {
                                 uint32_t offset = info->begin + i * samples_per_partition;
                                 if(info->stagemasks[(int32_t)partword[j][i]] & (1 << s)) {
-                                    codebook_t *stagebook = s_codebooks + info->stagebooks[(partword[j][i] << 3) + s];
+                                    codebook_t *stagebook = s_codebooks.get() + info->stagebooks[(partword[j][i] << 3) + s];
                                     if(info->type) {
                                         if(vorbis_book_decodev_add(stagebook, in[j] + offset,
                                                                    samples_per_partition, -8) == -1)
@@ -2421,7 +2372,7 @@ int32_t res_inverse(vorbis_info_residue_t *info, int32_t **in, int32_t *nonzero,
                     /* now we decode residual values for the partitions */
                     for(k = 0; k < partitions_per_word && i < partvals; k++, i++)
                         if(info->stagemasks[(int32_t)partword[i]] & (1 << s)) {
-                            codebook_t *stagebook = s_codebooks + info->stagebooks[(partword[i] << 3) + s];
+                            codebook_t *stagebook = s_codebooks.get() + info->stagebooks[(partword[i] << 3) + s];
                             if(vorbis_book_decodevv_add(stagebook, in, i * samples_per_partition + beginoff, ch,
                                                         samples_per_partition, -8) == -1)
                                 goto eopbreak;
@@ -2465,8 +2416,8 @@ int32_t vorbis_book_decodevs_add(codebook_t *book, int32_t *a, int32_t n, int32_
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor0_inverse2(vorbis_info_floor_t *i, int32_t *lsp, int32_t *out) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i;
+int32_t floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t *lsp, int32_t *out) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)i.get();
 
 
     if(lsp) {
@@ -2482,8 +2433,8 @@ int32_t floor0_inverse2(vorbis_info_floor_t *i, int32_t *lsp, int32_t *out) {
 }
 
 //---------------------------------------------------------------------------------------------------------------------
-int32_t floor1_inverse2(vorbis_info_floor_t *in, int32_t *fit_value, int32_t *out) {
-    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in;
+int32_t floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value, int32_t *out) {
+    vorbis_info_floor_t *info = (vorbis_info_floor_t *)in.get();
 
     int32_t               n = s_blocksizes[s_dsp_state->W] / 2;
     int32_t               j;
@@ -3182,8 +3133,8 @@ int32_t vorbis_dsp_pcmout(int16_t *outBuff, int32_t outBuffSize) {
             }
             for(i = 0; i < s_vorbisChannels; i++){
                 mdct_unroll_lap(s_blocksizes[0], s_blocksizes[1],
-                                s_dsp_state->lW, s_dsp_state->W, s_dsp_state->work[i],
-                                s_dsp_state->mdctright[i], _vorbis_window(s_blocksizes[0] >> 1),
+                                s_dsp_state->lW, s_dsp_state->W, s_dsp_state->work[i].get(),
+                                s_dsp_state->mdctright[i].get(), _vorbis_window(s_blocksizes[0] >> 1),
                                 _vorbis_window(s_blocksizes[1] >> 1),
                                 outBuff + i, s_vorbisChannels,
                                 s_dsp_state->out_begin,

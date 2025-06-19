@@ -25,6 +25,7 @@
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
 #include <driver/i2s_std.h>
+#include "psram_unique_ptr.hpp"
 
 #ifndef I2S_GPIO_UNUSED
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -123,18 +124,6 @@ static const size_t AUDIO_STACK_SIZE = 3300;
 static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
-
-// ------- UNIQUE_PTR for PSRAM memory management ----------------
-struct PsramDeleter { // PSRAM deleter for Unique_PTR
-    void operator()(void* ptr) const {
-        if (ptr){
-            free(ptr);  // ps_malloc kann mit free freigegeben werden
-        }
-    }
-};
-template<typename T>
-using ps_ptr = std::unique_ptr<T[], PsramDeleter>;
-
 
 class Audio : private AudioBuffer{
 
@@ -246,7 +235,6 @@ private:
     void            IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool            ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint32_t        find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
-    void            log_info(const char* fmt, ...); // audio_info() message
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -427,108 +415,15 @@ private:
         return hash;
 	  }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Request memory for an array of T
-    template <typename T>
-    std::unique_ptr<T[], PsramDeleter> audio_malloc(std::size_t count) {
-        T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
-        if (!raw) {
-            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
-        }
-        return std::unique_ptr<T[], PsramDeleter>(raw);
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Request memory for an array of T
-    template <typename T>
-    std::unique_ptr<T[], PsramDeleter> audio_calloc(std::size_t count) {
-        T* raw = static_cast<T*>(ps_calloc(sizeof(T) * count, sizeof(char)));
-        if (!raw) {
-            log_e("audio_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
-        }
-        return std::unique_ptr<T[], PsramDeleter>(raw);
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Copies raw data into a Unique_PTR goal (e.g. like memcpy)
-    template <typename T>
-    void audio_memcpy(std::unique_ptr<T[]>& dest, const T* src, std::size_t count) {
-        static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
-        if (dest && src && count > 0) {
-            memcpy(dest.get(), src, count * sizeof(T));
-        }
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    std::unique_ptr<char[], PsramDeleter> audio_strdup(const char* str) {
-        if (!str) {
-            log_e("audio_strdup: input str is NULL");
-            return nullptr;
-        }
-
-        size_t len = strlen(str);
-        auto ps_str = audio_malloc<char>(len + 1);
-
-        if (!ps_str) {
-            log_e("audio_strdup: OOM, no space for %zu bytes", len + 1);
-            return nullptr;
-        }
-
-        strcpy(ps_str.get(), str);
-        return ps_str;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    std::unique_ptr<char[], PsramDeleter> audio_strndup(const char* str, size_t maxlen) {
-        if (!str) {
-            log_e("audio_strndup: input str is NULL");
-            return nullptr;
-        }
-
-        // Effektive Länge der zu kopierenden Zeichen (nicht mehr als maxlen, nicht über das Ende hinaus)
-        size_t len = strnlen(str, maxlen);
-
-        // Speicher reservieren (+1 für Nullterminierung)
-        auto ps_str = audio_malloc<char>(len + 1);
-
-        if (!ps_str) {
-            log_e("audio_strndup: OOM, no space for %zu bytes", len + 1);
-            return nullptr;
-        }
-
-        // Sicher kopieren (genau len Zeichen)
-        memcpy(ps_str.get(), str, len);
-        ps_str[len] = '\0'; // Nullterminierung hinzufügen
-
-        return ps_str;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    ps_ptr<char> audio_realloc(ps_ptr<char> old_ptr, size_t new_size) {
-        if (new_size == 0) {
-            return nullptr;
-        }
-
-        auto new_ptr = audio_malloc<char>(new_size);
-        if (!new_ptr) {
-            log_e("audio_realloc_: OOM for %zu bytes", new_size);
-            return nullptr;
-        }
-
-        if (old_ptr) {
-            size_t len = strlen(old_ptr.get());
-            size_t copy_len = std::min(len, new_size - 1);
-            memcpy(new_ptr.get(), old_ptr.get(), copy_len);
-            new_ptr[copy_len] = '\0';
-        } else {
-            new_ptr[0] = '\0';
-        }
-
-        return new_ptr;
-    }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
-        if (!str) {return nullptr;}  // Enter is zero
+        if (!str) {return {};}  // Enter is zero
 
         // Reserve memory for the result (3x the length of the input string, worst-case)
         size_t inputLength = strlen(str);
         size_t bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
-        auto encoded = audio_malloc<char>(bufferSize);
-        if (!encoded) {return nullptr; } // memory allocation failed
+        ps_ptr<char>encoded;
+        encoded.alloc(bufferSize);
+        if (!encoded.valid()) {return {}; } // memory allocation failed
 
         const char *p_input = str;  // Copy of the input pointer
         char *p_encoded = encoded.get();  // pointer of the output buffer
@@ -541,7 +436,7 @@ private:
                     *p_encoded++ = *p_input;
                     remainingSpace--;
                 } else {
-                    return nullptr; // security check failed
+                    return {}; // security check failed
                 }
             } else if (spacesOnly && *p_input != 0x20) {
                 // Nur Leerzeichen nicht kodieren
@@ -549,19 +444,19 @@ private:
                     *p_encoded++ = *p_input;
                     remainingSpace--;
                 } else {
-                    return nullptr; // security check failed
+                    return {}; // security check failed
                 }
             } else {
                 // encode unsafe characters as '%XX'
                 if (remainingSpace > 3) {
                     int written = snprintf(p_encoded, remainingSpace, "%%%02X", (unsigned char)*p_input);
                     if (written < 0 || written >= (int)remainingSpace) {
-                        return nullptr; // error writing to buffer
+                        return {}; // error writing to buffer
                     }
                     p_encoded += written;
                     remainingSpace -= written;
                 } else {
-                    return nullptr; // security check failed
+                    return {}; // security check failed
                 }
             }
             p_input++;
@@ -571,9 +466,9 @@ private:
         if (remainingSpace > 0) {
             *p_encoded = '\0';
         } else {
-            return nullptr; // security check failed
+            return {}; // security check failed
         }
-
+        encoded.shrink_to_fit();
         return encoded;
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -669,13 +564,13 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    std::unique_ptr<int16_t[], PsramDeleter> m_outBuff        = nullptr; // Interleaved L/R
-    std::unique_ptr<int16_t[], PsramDeleter> m_samplesBuff48K = nullptr; // Interleaved L/R
-    std::unique_ptr<char[],    PsramDeleter> m_chbuf          = nullptr; // universal buffer
-    std::unique_ptr<char[],    PsramDeleter> m_ibuff          = nullptr; // used in log_info()
-    std::unique_ptr<char[],    PsramDeleter> m_lastHost       = nullptr; // Store the last URL to a webstream
-    std::unique_ptr<char[],    PsramDeleter> m_lastM3U8host   = nullptr;
-    std::unique_ptr<char[],    PsramDeleter> m_speechtxt      = nullptr; // stores tts text
+    ps_ptr<int16_t> m_outBuff;        // Interleaved L/R
+    ps_ptr<int16_t> m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<char>    m_chbuf;          // universal buffer
+    ps_ptr<char>    m_ibuff;          // used in log_info()
+    ps_ptr<char>    m_lastHost;       // Store the last URL to a webstream
+    ps_ptr<char>    m_lastM3U8host;
+    ps_ptr<char>    m_speechtxt;      // stores tts text
     typedef struct _ID3Hdr{ // used only in readID3header()
         size_t      id3Size;
         size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
