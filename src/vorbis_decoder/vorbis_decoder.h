@@ -242,6 +242,7 @@ uint32_t              decpack(int32_t entry, int32_t used_entry, uint8_t quantva
 int32_t               oggpack_eop();
 ps_ptr<vorbis_info_floor_t> floor0_info_unpack();
 ps_ptr<vorbis_info_floor_t> floor1_info_unpack();
+void                  vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n);
 int32_t               res_unpack(vorbis_info_residue_t* info);
 int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
 
