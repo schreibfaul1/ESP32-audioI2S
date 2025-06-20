@@ -2,6 +2,7 @@
 /*
     I2S Bluetooth Transmitter
     Can be connected to an I2S Master.Sampling rate must be 48KHz
+    Include PSchatzmann /ESP32-A2DP     https://github.com/pschatzmann/ESP32-A2DP.git
 */
 
 #include "Arduino.h"
