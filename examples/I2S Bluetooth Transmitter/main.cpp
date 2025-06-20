@@ -18,7 +18,6 @@
 
 BluetoothA2DPSource a2dp_source;
 AudioResampleBuffer resampler;
-String btDeviceName;
 
 char BT_SINK_NAME[]   = " Pebble V3\r\n"; // set your sink devicename here
 //char BT_SINK_NAME[]   = "Manhattan-165327";
@@ -40,16 +39,16 @@ void i2s_install(){
 
     i2s_std_cfg.slot_cfg                = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
     i2s_std_cfg.gpio_cfg.bclk           = (gpio_num_t)RX_I2S_BCLK;          // BCLK Assignment
-    i2s_std_cfg.gpio_cfg.din            = (gpio_num_t)RX_I2S_DIN;           // not used
-    i2s_std_cfg.gpio_cfg.dout           = I2S_GPIO_UNUSED;                  // DIN Assignment
-    i2s_std_cfg.gpio_cfg.mclk           = I2S_GPIO_UNUSED;                  // MCLK Assignment
+    i2s_std_cfg.gpio_cfg.din            = (gpio_num_t)RX_I2S_DIN;           // DIN  Assignment
+    i2s_std_cfg.gpio_cfg.dout           = I2S_GPIO_UNUSED;                  //
+    i2s_std_cfg.gpio_cfg.mclk           = I2S_GPIO_UNUSED;                  //
     i2s_std_cfg.gpio_cfg.ws             = (gpio_num_t)RX_I2S_LRC;           // LRC  Assignment
     i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     i2s_std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
     i2s_std_cfg.clk_cfg.sample_rate_hz = 44800;
     i2s_std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;        // Select PLL_F160M as the default source clock
-    i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // mclk = sample_rate * 256
+    i2s_std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_128;      // 
     i2s_channel_init_std_mode(i2s_rx_handle, &i2s_std_cfg);
     i2s_channel_enable(i2s_rx_handle);
 }
