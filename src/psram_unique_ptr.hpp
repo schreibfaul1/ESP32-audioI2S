@@ -919,7 +919,7 @@ public:
         // trim on the right
         char* end = str + std::strlen(start);
         while (end > start && isspace(*(end - 1))) --end;
-        *(end + 1) = '\0';
+        *(end) = '\0';
 
         // Wenn Anfang nicht gleich str, alles nach vorne kopieren
         if (start != str) {
