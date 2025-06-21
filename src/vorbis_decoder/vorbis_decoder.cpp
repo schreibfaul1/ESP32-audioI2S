@@ -24,7 +24,7 @@
 #include "lookup.h"
 #include "alloca.h"
 #include <vector>
-#include "psram_unique_ptr.hpp"
+#include "./psram_unique_ptr.hpp"
 using namespace std;
 
 // global vars
