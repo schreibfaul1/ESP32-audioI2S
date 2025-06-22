@@ -179,7 +179,7 @@ private:
     // ------- PRIVATE MEMBERS ----------------------------------------
 
     void            UTF8toASCII(char* str);
-    bool            latinToUTF8(char* buff, size_t bufflen, bool UTF8check = true);
+    void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void            htmlToUTF8(char* str);
     void            setDefaults(); // free buffers and set defaults
     void            initInBuff();

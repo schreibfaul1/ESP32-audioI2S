@@ -1036,7 +1036,7 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "WOAR")) sprintf(m_chbuf.get(), "OfficialArtistWebpage: %s", value);
     if(!strcmp(tag, "XDOR")) sprintf(m_chbuf.get(), "OriginalReleaseTime: %s", value);
 
-    latinToUTF8(m_chbuf.get(), sizeof(m_chbuf));
+    latinToUTF8(m_chbuf);
     if(indexOf(m_chbuf.get(), "?xml", 0) > 0) {
         showstreamtitle(m_chbuf.get());
         return;
@@ -1046,92 +1046,77 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::latinToUTF8(char* buff, size_t bufflen, bool UTF8check) {
+void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
     // most stations send  strings in UTF-8 but a few sends in latin. To standardize this, all latin strings are
     // converted to UTF-8. If UTF-8 is already present, nothing is done and true is returned.
     // A conversion to UTF-8 extends the string. Therefore it is necessary to know the buffer size. If the converted
     // string does not fit into the buffer, false is returned
 
-    bool     isUTF8 = true;  // assume UTF8
     uint16_t pos = 0;
     uint16_t in = 0;
     uint16_t out = 0;
-    uint16_t len = strlen(buff);
-    uint8_t  c;
+    bool     isUTF8 = true;
 
     // We cannot detect if a given string (or byte sequence) is a UTF-8 encoded text as for example each and every series
     // of UTF-8 octets is also a valid (if nonsensical) series of Latin-1 (or some other encoding) octets.
     // However not every series of valid Latin-1 octets are valid UTF-8 series. So you can rule out strings that do not conform
     // to the UTF-8 encoding schema:
 
-    if(UTF8check){
-        while(pos < len) {  // check first, if we have a clear UTF-8 string
-            c = buff[pos];
-            if(c >= 0xC2 && c <= 0xDF) { // may be 2 bytes UTF8, e.g. 0xC2B5 is 'µ' (MICRO SIGN)
-                if(pos + 1 == len){
-                    isUTF8 = false;
-                    break;
-                }
-                if(buff[pos + 1] < 0x80){
-                    isUTF8 = false;
-                    break;
-                }
+    if (UTF8check) {
+        while (buff[pos] != '\0') {
+            if (buff[pos] <= 0x7F) {// 0xxxxxxx: ASCII
+                pos++;
+            }
+            else if ((buff[pos] & 0xE0) == 0xC0) {
+                // 110xxxxx 10xxxxxx: 2-byte
+                if ((buff[pos + 1] & 0xC0) != 0x80) isUTF8 = false;
+                if (buff[pos] < 0xC2) isUTF8 = false; // Overlong encoding
                 pos += 2;
-                continue;
             }
-            if(c >= 0xE0 && c <= 0xEF){ // may  be 3 bytes UTF8, e.g. 0xE0A484 is 'ऄ' (DEVANAGARI LETTER SHORT A)
-                if(pos + 2 >= len){ //
-                    isUTF8 = false;
-                    break;
-                }
-                if(buff[pos + 1] < 0x80 || buff[pos + 2] < 0x80){
-                    isUTF8 = false;
-                    break;
-                }
+            else if  ((buff[pos] & 0xF0) == 0xE0) {
+                // 1110xxxx 10xxxxxx 10xxxxxx: 3-byte
+                if ((buff[pos + 1] & 0xC0) != 0x80 || (buff[pos + 22] & 0xC0) != 0x80) isUTF8 = false;
+                if (buff[pos] == 0xE0 && buff[pos + 1 ] < 0xA0) isUTF8 = false; // Overlong
+                if (buff[pos] == 0xED && buff[pos + 1] >= 0xA0) isUTF8 = false; // UTF-16 surrogate
                 pos += 3;
-                continue;
             }
-            if(c >= 0xF0){ // may  be 4 bytes UTF8, e.g. 0xF0919AA6 (TAKRI LETTER VA)
-                if(pos + 3 >= len){ //
-                    isUTF8 = false;
-                    break;
-                }
-                if(buff[pos + 1] < 0x80 || buff[pos + 2] < 0x80 || buff[pos + 3] < 0x80){
-                    isUTF8 = false;
-                    break;
-                }
+            else if ((buff[pos] & 0xF8) == 0xF0) {
+                // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx: 4-byte
+                if ((buff[pos + 1] & 0xC0) != 0x80 ||
+                    (buff[pos + 2] & 0xC0) != 0x80 ||
+                    (buff[pos + 3] & 0xC0) != 0x80) isUTF8 = false;
+                if (buff[pos] == 0xF0 && buff[pos + 1] < 0x90) isUTF8 = false; // Overlong
+                if (buff[pos] > 0xF4 || (buff[pos] == 0xF4 && buff[pos + 1] > 0x8F)) isUTF8 = false; // > U+10FFFF
                 pos += 4;
-                continue;
             }
-            pos++;
+            else{
+                isUTF8 = false; // Invalid first byte
+            }
+            if(!isUTF8)break;
         }
-        if(isUTF8 == true) return true; // is UTF-8, do nothing
+        if (isUTF8) return; // is UTF-8, do nothing
+    }
+    ps_ptr<char> iso8859_1;
+    iso8859_1.assign(buff.get());
+
+    // Worst-case: all chars are latin1 > 0x7F became 2 Bytes → max length is twice +1
+    std::size_t requiredSize = strlen(iso8859_1.get()) * 2 + 1;
+
+    if (buff.size() < requiredSize) {
+        buff.realloc(requiredSize, "utf8_conv");
     }
 
-    ps_ptr<char> iso8859_1;
-    iso8859_1.assign(buff);
-
-    while(iso8859_1[in] != '\0'){
-        if(iso8859_1[in] < 0x80){
-            buff[out] = iso8859_1[in];
-            out++;
-            in++;
-            if(out > bufflen) goto exit;
-        }
-        else{
-            buff[out] = (0xC0 | iso8859_1[in] >> 6);
-            out++;
-            if(out + 1 > bufflen) goto exit;
-            buff[out] = (0x80 | (iso8859_1[in] & 0x3F));
-            out++;
+    // coding into UTF-8
+    while (iso8859_1[in] != '\0') {
+        if (iso8859_1[in] < 0x80) {
+            buff[out++] = iso8859_1[in++];
+        } else {
+            buff[out++] = (0xC0 | (iso8859_1[in] >> 6));
+            buff[out++] = (0x80 | (iso8859_1[in] & 0x3F));
             in++;
         }
     }
     buff[out] = '\0';
-    return true;
-
-exit:
-    return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
@@ -1821,7 +1806,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         ID3Hdr.iBuff[fs] = 0;
 
         if(encodingByte == 0){  // latin
-            latinToUTF8(ID3Hdr.iBuff.get(), dataLength, false);
+            latinToUTF8(ID3Hdr.iBuff, false);
             showID3Tag(ID3Hdr.tag, ID3Hdr.iBuff.get());
         }
 
@@ -4125,7 +4110,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(rhl.starts_with_icase("icy-description:")) {
             const char* c_idesc = (rhl.get() + 16);
             while(c_idesc[0] == ' ') c_idesc++;
-            latinToUTF8(rhl.get(), rhl.size()); // if already UTF-8 do nothing, otherwise convert to UTF-8
+            latinToUTF8(rhl); // if already UTF-8 do nothing, otherwise convert to UTF-8
             if(strlen(c_idesc) > 0 && specialIndexOf((uint8_t*)c_idesc, "24bit", 0) > 0) {
                 AUDIO_INFO("icy-description: %s has to be 8 or 16", c_idesc);
                 stopSong();
@@ -5932,7 +5917,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
             // Sometimes it is just other info like:
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
-            latinToUTF8(m_chbuf.get(), m_chbufSize);          // convert to UTF-8 if necessary
+            latinToUTF8(m_chbuf);          // convert to UTF-8 if necessary
             int pos = indexOf(m_chbuf.get(), "song_spot", 0); // remove some irrelevant infos
             if(pos > 3) {                               // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
                 m_chbuf[pos] = 0;
@@ -5999,98 +5984,104 @@ bool Audio::readID3V1Tag() {
     // this is an V1.x id3tag after an audio block, ID3 v1 tags are ASCII
     // Version 1.x is a fixed size at the end of the file (128 bytes) after a <TAG> keyword.
     if(m_codec != CODEC_MP3) return false;
+    ps_ptr<char>title = {};
+    ps_ptr<char>artist = {};
+    ps_ptr<char>album = {};
+    ps_ptr<char>year = {};
+    ps_ptr<char>comment = {};
+    ps_ptr<char>genre = {};
     if(InBuff.bufferFilled() == 128 && startsWith((const char*)InBuff.getReadPtr(), "TAG")) { // maybe a V1.x TAG
-        char title[31];
-        memcpy(title, InBuff.getReadPtr() + 3 + 0, 30);
+        title.alloc(31);
+        memcpy(title.get(), InBuff.getReadPtr() + 3 + 0, 30);
         title[30] = '\0';
-        latinToUTF8(title, sizeof(title));
-        char artist[31];
-        memcpy(artist, InBuff.getReadPtr() + 3 + 30, 30);
+        latinToUTF8(title);
+        artist.alloc(31);
+        memcpy(artist.get(), InBuff.getReadPtr() + 3 + 30, 30);
         artist[30] = '\0';
-        latinToUTF8(artist, sizeof(artist));
-        char album[31];
-        memcpy(album, InBuff.getReadPtr() + 3 + 60, 30);
+        latinToUTF8(artist);
+        album.alloc(31);
+        memcpy(album.get(), InBuff.getReadPtr() + 3 + 60, 30);
         album[30] = '\0';
-        latinToUTF8(album, sizeof(album));
-        char year[5];
-        memcpy(year, InBuff.getReadPtr() + 3 + 90, 4);
+        latinToUTF8(album);
+        year.alloc(5);
+        memcpy(year.get(), InBuff.getReadPtr() + 3 + 90, 4);
         year[4] = '\0';
-        latinToUTF8(year, sizeof(year));
-        char comment[31];
-        memcpy(comment, InBuff.getReadPtr() + 3 + 94, 30);
+        latinToUTF8(year);
+        comment.alloc(31);
+        memcpy(comment.get(), InBuff.getReadPtr() + 3 + 94, 30);
         comment[30] = '\0';
-        latinToUTF8(comment, sizeof(comment));
+        latinToUTF8(comment);
         uint8_t zeroByte = *(InBuff.getReadPtr() + 125);
         uint8_t track = *(InBuff.getReadPtr() + 126);
-        uint8_t genre = *(InBuff.getReadPtr() + 127);
+        uint8_t genre8 = *(InBuff.getReadPtr() + 127);
         if(zeroByte) { AUDIO_INFO("ID3 version: 1"); } //[2]
         else { AUDIO_INFO("ID3 Version 1.1"); }
-        if(strlen(title)) {
-            sprintf(m_chbuf.get(), "Title: %s", title);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(title.strlen() > 0) {
+            title.insert("Title: ", 0);
+            if(audio_id3data) audio_id3data(title.get());
         }
-        if(strlen(artist)) {
-            sprintf(m_chbuf.get(), "Artist: %s", artist);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(artist.strlen() > 0) {
+            artist.insert("Artist: ",0);
+            if(audio_id3data) audio_id3data(artist.get());
         }
-        if(strlen(album)) {
-            sprintf(m_chbuf.get(), "Album: %s", album);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(album.strlen()) {
+            album.insert("Album: ", 0);
+            if(audio_id3data) audio_id3data(album.get());
         }
-        if(strlen(year)) {
-            sprintf(m_chbuf.get(), "Year: %s", year);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(year.strlen()) {
+            year.insert("Year: ", 0);
+            if(audio_id3data) audio_id3data(year.get());
         }
-        if(strlen(comment)) {
-            sprintf(m_chbuf.get(), "Comment: %s", comment);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(comment.strlen()) {
+            comment.insert("Comment: ", 0);
+            if(audio_id3data) audio_id3data(comment.get());
         }
         if(zeroByte == 0) {
             sprintf(m_chbuf.get(), "Track Number: %d", track);
             if(audio_id3data) audio_id3data(m_chbuf.get());
         }
-        if(genre < 192) {
-            sprintf(m_chbuf.get(), "Genre: %d", genre);
+        if(genre8 < 192) {
+            sprintf(m_chbuf.get(), "Genre: %d", genre8);
             if(audio_id3data) audio_id3data(m_chbuf.get());
         } //[1]
         return true;
     }
     if(InBuff.bufferFilled() == 227 && startsWith((const char*)InBuff.getReadPtr(), "TAG+")) { // ID3V1EnhancedTAG
         AUDIO_INFO("ID3 version: 1 - Enhanced TAG");
-        char title[61];
-        memcpy(title, InBuff.getReadPtr() + 4 + 0, 60);
+        title.alloc(61);
+        memcpy(title.get(), InBuff.getReadPtr() + 4 + 0, 60);
         title[60] = '\0';
-        latinToUTF8(title, sizeof(title));
-        char artist[61];
-        memcpy(artist, InBuff.getReadPtr() + 4 + 60, 60);
+        latinToUTF8(title);
+        artist.alloc(61);
+        memcpy(artist.get(), InBuff.getReadPtr() + 4 + 60, 60);
         artist[60] = '\0';
-        latinToUTF8(artist, sizeof(artist));
-        char album[61];
-        memcpy(album, InBuff.getReadPtr() + 4 + 120, 60);
+        latinToUTF8(artist);
+        album.alloc(61);
+        memcpy(album.get(), InBuff.getReadPtr() + 4 + 120, 60);
         album[60] = '\0';
-        latinToUTF8(album, sizeof(album));
+        latinToUTF8(album);
         // one byte "speed" 0=unset, 1=slow, 2= medium, 3=fast, 4=hardcore
-        char genre[31];
-        memcpy(genre, InBuff.getReadPtr() + 5 + 180, 30);
+        genre.alloc(31);
+        memcpy(genre.get(), InBuff.getReadPtr() + 5 + 180, 30);
         genre[30] = '\0';
-        latinToUTF8(genre, sizeof(genre));
+        latinToUTF8(genre);
         // six bytes "start-time", the start of the music as mmm:ss
         // six bytes "end-time",   the end of the music as mmm:ss
-        if(strlen(title)) {
-            sprintf(m_chbuf.get(), "Title: %s", title);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(title.strlen() > 0) {
+            title.insert("Title: ", 0);
+            if(audio_id3data) audio_id3data(title.get());
         }
-        if(strlen(artist)) {
-            sprintf(m_chbuf.get(), "Artist: %s", artist);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(artist.strlen() > 0) {
+            artist.insert("Artist: ", 0);
+            if(audio_id3data) audio_id3data(artist.get());
         }
-        if(strlen(album)) {
-            sprintf(m_chbuf.get(), "Album: %s", album);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(album.strlen() > 0) {
+            album.insert("Album: ", 0);
+            if(audio_id3data) audio_id3data(album.get());
         }
-        if(strlen(genre)) {
-            sprintf(m_chbuf.get(), "Genre: %s", genre);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
+        if(genre.strlen() > 0) {
+            genre.insert("Genre: ", 0);
+            if(audio_id3data) audio_id3data(genre.get());
         }
         return true;
     }

@@ -111,7 +111,7 @@ public:
             std::memcpy(new_mem, mem.get(), std::min(allocated_size, new_size));
         }
 
-        mem.reset(new_mem);
+        mem.reset(static_cast<T*>(new_mem));
         allocated_size = new_size;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
