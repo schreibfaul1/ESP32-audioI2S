@@ -4104,7 +4104,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-name:")) {
-        log_w("%s", rhl.get());
+        // log_w("%s", rhl.get());
             ps_ptr<char> icyName;
             icyName.assign(rhl.get() + 9); // Get station name
             icyName.trim();
