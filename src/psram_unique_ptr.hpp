@@ -259,6 +259,37 @@ public:
         // Suffix anhängen
         std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, add_len + 1);
     }
+
+    // ps_ptr<char> text1; // like Strcat with automatic new allocation
+    // text1.assign("Hallo", "text");
+    // text1.append(", Welt!", 4);
+    // printf("%s\n", text1.get());  // → "Hallo, We"
+
+
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void append(const char* suffix, std::size_t len) {
+        if (!suffix || len == 0) return;
+
+        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
+        std::size_t new_len = old_len + len + 1; // +1 für null-Terminator
+
+        char* old_data = static_cast<char*>(mem.release());
+
+        mem.reset(static_cast<T*>(ps_malloc(new_len)));
+        if (!mem) {
+            printf("OOM: append(len) failed for %zu bytes\n", new_len);
+            return;
+        }
+
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
+
+        std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, len);
+        static_cast<char*>(mem.get())[old_len + len] = '\0';
+    }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T A R T S _ W I T H   📌📌📌
 

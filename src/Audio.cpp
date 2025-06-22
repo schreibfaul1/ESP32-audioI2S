@@ -1876,7 +1876,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(dataLen > 249) { dataLen = 249; }
         memcpy(value, (data + 7), dataLen);
         value[dataLen + 1] = 0;
-        m_chbuf[0] = 0;
         if(startsWith(ID3Hdr.tag, "PIC")) { // image embedded in header
             if(m_dataMode == AUDIO_LOCALFILE) {
                 ID3Hdr.APIC_pos[ID3Hdr.numID3Header] = ID3Hdr.id3Size - ID3Hdr.remainingHeaderBytes;
@@ -2186,6 +2185,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         // If it's a local file, the metadata has already been read, even if it comes after the audio block.
         // In the event that they are in front of the audio block in a web stream, read them now
         if(!m_f_m4aID3dataAreRead) {
+            ps_ptr<char>id3tag = {};
             for(int i = 0; i < 12; i++) {
                 offset = specialIndexOf(data, info[i], len, true); // seek info[] with '\0'
                 if(offset > 0) {
@@ -2196,21 +2196,20 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                     if(tmp > 254) tmp = 254;
                     memcpy(value, (data + offset), tmp);
                     value[tmp] = '\0';
-                    m_chbuf[0] = '\0';
-                    if(i == 0) sprintf(m_chbuf.get(), "Title: %s", value);
-                    if(i == 1) sprintf(m_chbuf.get(), "Artist: %s", value);
-                    if(i == 2) sprintf(m_chbuf.get(), "Album: %s", value);
-                    if(i == 3) sprintf(m_chbuf.get(), "Encoder: %s", value);
-                    if(i == 4) sprintf(m_chbuf.get(), "Comment: %s", value);
-                    if(i == 5) sprintf(m_chbuf.get(), "Composer: %s", value);
-                    if(i == 6) sprintf(m_chbuf.get(), "BPM: %s", value);
-                    if(i == 7) sprintf(m_chbuf.get(), "Track Number: %s", value);
-                    if(i == 8) sprintf(m_chbuf.get(), "Year: %s", value);
-                    if(i == 9) sprintf(m_chbuf.get(), "Compile: %s", value);
-                    if(i == 10)sprintf(m_chbuf.get(), "Album Artist: %s", value);
-                    if(i == 11)sprintf(m_chbuf.get(), "Types of: %s", value);
-                    if(m_chbuf[0] != 0) {
-                        if(audio_id3data) audio_id3data(m_chbuf.get());
+                    if(i == 0) id3tag.appendf("Title: %s", value);
+                    if(i == 1) id3tag.appendf("Artist: %s", value);
+                    if(i == 2) id3tag.appendf("Album: %s", value);
+                    if(i == 3) id3tag.appendf("Encoder: %s", value);
+                    if(i == 4) id3tag.appendf("Comment: %s", value);
+                    if(i == 5) id3tag.appendf("Composer: %s", value);
+                    if(i == 6) id3tag.appendf("BPM: %s", value);
+                    if(i == 7) id3tag.appendf("Track Number: %s", value);
+                    if(i == 8) id3tag.appendf("Year: %s", value);
+                    if(i == 9) id3tag.appendf("Compile: %s", value);
+                    if(i == 10)id3tag.appendf("Album Artist: %s", value);
+                    if(i == 11)id3tag.appendf("Types of: %s", value);
+                    if(id3tag.valid()) {
+                        if(audio_id3data) audio_id3data(id3tag.get());
                     }
                 }
             }
@@ -2920,13 +2919,10 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  result:     http://station.com/aaa/bbb/ddd.aac
 
                     if(m_lastM3U8host.valid()) {
-                        tmp.alloc(m_lastM3U8host.size() + strlen(m_playlistContent[i].get()) + 1, "tmp");
-                        tmp.clear();
-                        strcpy(tmp.get(), m_lastM3U8host.get());
+                        tmp.clone_from(m_lastM3U8host, "tmp");
                     }
                     else {
-                        tmp.alloc(m_lastHost.size() + strlen(m_playlistContent[i].get()) + 1, "tmp");
-                        strcpy(tmp.get(), m_lastHost.get());
+                        tmp.clone_from(m_lastHost, "tmp");
                     }
 
                     if(m_playlistContent[i][0] != '/'){
@@ -2935,19 +2931,18 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  chunklist:  ddd.aac                              // m_playlistContent[i]
                         //  result:     http://station.com/aaa/bbb/ddd.aac   // m_playlistContent[i]
 
-                        int idx = lastIndexOf(tmp.get(), "/");
+                        int idx = tmp.last_index_of('/');
                         tmp[idx  + 1] = '\0';
-                        strcat(tmp.get(), m_playlistContent[i].get());
+                        tmp.append(m_playlistContent[i].get());
                     }
                     else{
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                         //  chunklist:  /aaa/bbb/ddd.aac
                         //  result:     http://station.com/aaa/bbb/ddd.aac
-
-                        int idx = indexOf(tmp.get(), "/", 8);
+                        int idx = tmp.index_of('/', 8);
                         tmp[idx] = '\0';
-                        strcat(tmp.get(), m_playlistContent[i].get());
+                        tmp.append(m_playlistContent[i].get());
                     }
                 }
                 else { tmp.append(m_playlistContent[i].get()); }
