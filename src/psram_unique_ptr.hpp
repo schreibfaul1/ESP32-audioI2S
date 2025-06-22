@@ -35,8 +35,9 @@ template <typename T>
 
 class ps_ptr {
     // std::unique_ptr<void, PsramDeleter> mem;
-    std::unique_ptr<T, PsramDeleter> mem;
+    std::unique_ptr<T[], PsramDeleter> mem;
     size_t allocated_size = 0;
+    static inline T dummy{}; // For invalid accesses
 
 public:
     ps_ptr() = default;
@@ -687,19 +688,36 @@ public:
     T* operator->() const { return get(); }
     T& operator*() const { return *get(); }
 
-    //ps_ptr<int32_t> p;
-    //int32_t x = p[5];
-    T& operator[](size_t index) {return get()[index];}
+    // //ps_ptr<int32_t> p;
+    // //int32_t x = p[5];
+    // T& operator[](size_t index) {return get()[index];}
 
-    // ps_ptr<ps_ptr<int32_t>> array_of_ptrs;
-    // array_of_ptrs[0].alloc(...);
-    template <typename U = T>
-    typename std::enable_if<
-        std::is_class<U>::value &&
-        std::is_same<decltype(std::declval<U>().alloc(0)), void>::value,
-        U&>::type
-    operator[](std::size_t index) const {
-        return get()[index];
+    // // ps_ptr<ps_ptr<int32_t>> array_of_ptrs;
+    // // array_of_ptrs[0].alloc(...);
+    // template <typename U = T>
+    // typename std::enable_if<
+    //     std::is_class<U>::value &&
+    //     std::is_same<decltype(std::declval<U>().alloc(0)), void>::value,
+    //     U&>::type
+    // operator[](std::size_t index) const {
+    //     return get()[index];
+    // }
+
+    // Sicherer operator[] mit Logging
+    T& operator[](std::size_t index) {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy; // Access allowed, but ineffective
+        }
+        return mem[index];
+    }
+
+    const T& operator[](std::size_t index) const {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy;
+        }
+        return mem[index];
     }
 
 
