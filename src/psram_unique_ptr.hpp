@@ -935,13 +935,14 @@ public:
         while (*start && isspace(*start)) ++start;
 
         // trim on the right
-        char* end = str + std::strlen(start);
-        while (end > start && isspace(*(end - 1))) --end;
-        *(end) = '\0';
+        char* end = str + len - 1;
+        while (end >= start && isspace(*end)) --end;
+        *(end + 1) = '\0';
 
-        // Wenn Anfang nicht gleich str, alles nach vorne kopieren
+        // If not at the beginning, copy everything forward
         if (start != str) {
-            std::memmove(str, start, std::strlen(start) + 1);
+            std::size_t new_len = end - start + 1;
+            std::memmove(str, start, new_len + 1);
         }
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
