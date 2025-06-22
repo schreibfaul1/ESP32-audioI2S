@@ -5981,110 +5981,66 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readID3V1Tag() {
-    // this is an V1.x id3tag after an audio block, ID3 v1 tags are ASCII
-    // Version 1.x is a fixed size at the end of the file (128 bytes) after a <TAG> keyword.
-    if(m_codec != CODEC_MP3) return false;
-    ps_ptr<char>title = {};
-    ps_ptr<char>artist = {};
-    ps_ptr<char>album = {};
-    ps_ptr<char>year = {};
-    ps_ptr<char>comment = {};
-    ps_ptr<char>genre = {};
-    if(InBuff.bufferFilled() == 128 && startsWith((const char*)InBuff.getReadPtr(), "TAG")) { // maybe a V1.x TAG
-        title.alloc(31);
-        memcpy(title.get(), InBuff.getReadPtr() + 3 + 0, 30);
-        title[30] = '\0';
-        latinToUTF8(title);
-        artist.alloc(31);
-        memcpy(artist.get(), InBuff.getReadPtr() + 3 + 30, 30);
-        artist[30] = '\0';
-        latinToUTF8(artist);
-        album.alloc(31);
-        memcpy(album.get(), InBuff.getReadPtr() + 3 + 60, 30);
-        album[30] = '\0';
-        latinToUTF8(album);
-        year.alloc(5);
-        memcpy(year.get(), InBuff.getReadPtr() + 3 + 90, 4);
-        year[4] = '\0';
-        latinToUTF8(year);
-        comment.alloc(31);
-        memcpy(comment.get(), InBuff.getReadPtr() + 3 + 94, 30);
-        comment[30] = '\0';
-        latinToUTF8(comment);
-        uint8_t zeroByte = *(InBuff.getReadPtr() + 125);
-        uint8_t track = *(InBuff.getReadPtr() + 126);
-        uint8_t genre8 = *(InBuff.getReadPtr() + 127);
-        if(zeroByte) { AUDIO_INFO("ID3 version: 1"); } //[2]
-        else { AUDIO_INFO("ID3 Version 1.1"); }
-        if(title.strlen() > 0) {
-            title.insert("Title: ", 0);
-            if(audio_id3data) audio_id3data(title.get());
+    if (m_codec != CODEC_MP3) return false;
+    ps_ptr<char>chBuff;
+    chBuff.alloc(256);
+
+    const uint8_t* p = InBuff.getReadPtr();
+
+    // Lambda for simplification
+    auto readID3Field = [&](ps_ptr<char>& field, const uint8_t* src, size_t len, const char* label = nullptr) {
+        field.alloc(len + 1);
+        memcpy(field.get(), src, len);
+        field[len] = '\0';
+        latinToUTF8(field);
+        if (field.strlen() > 0 && label && audio_id3data) {
+            field.insert(label, 0);
+            audio_id3data(field.get());
         }
-        if(artist.strlen() > 0) {
-            artist.insert("Artist: ",0);
-            if(audio_id3data) audio_id3data(artist.get());
+    };
+
+    if (InBuff.bufferFilled() == 128 && startsWith((const char*)p, "TAG")) {
+        ps_ptr<char> title, artist, album, year, comment;
+
+        readID3Field(title,   p + 3,     30, "Title: ");
+        readID3Field(artist,  p + 33,    30, "Artist: ");
+        readID3Field(album,   p + 63,    30, "Album: ");
+        readID3Field(year,    p + 93,    4,  "Year: ");
+        readID3Field(comment, p + 97,    30, "Comment: ");
+
+        uint8_t zeroByte = p[125];
+        uint8_t track = p[126];
+        uint8_t genre8 = p[127];
+
+        AUDIO_INFO(zeroByte ? "ID3 version: 1" : "ID3 Version 1.1");
+
+        if (zeroByte == 0) {
+            sprintf(chBuff.get(), "Track Number: %d", track);
+            if (audio_id3data) audio_id3data(chBuff.get());
         }
-        if(album.strlen()) {
-            album.insert("Album: ", 0);
-            if(audio_id3data) audio_id3data(album.get());
+
+        if (genre8 < 192) {
+            sprintf(chBuff.get(), "Genre: %d", genre8);
+            if (audio_id3data) audio_id3data(chBuff.get());
         }
-        if(year.strlen()) {
-            year.insert("Year: ", 0);
-            if(audio_id3data) audio_id3data(year.get());
-        }
-        if(comment.strlen()) {
-            comment.insert("Comment: ", 0);
-            if(audio_id3data) audio_id3data(comment.get());
-        }
-        if(zeroByte == 0) {
-            sprintf(m_chbuf.get(), "Track Number: %d", track);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
-        }
-        if(genre8 < 192) {
-            sprintf(m_chbuf.get(), "Genre: %d", genre8);
-            if(audio_id3data) audio_id3data(m_chbuf.get());
-        } //[1]
+
         return true;
     }
-    if(InBuff.bufferFilled() == 227 && startsWith((const char*)InBuff.getReadPtr(), "TAG+")) { // ID3V1EnhancedTAG
+
+    if (InBuff.bufferFilled() == 227 && startsWith((const char*)p, "TAG+")) { // "TAG+" "can exist as an extension, does not overwrite" TAG"
         AUDIO_INFO("ID3 version: 1 - Enhanced TAG");
-        title.alloc(61);
-        memcpy(title.get(), InBuff.getReadPtr() + 4 + 0, 60);
-        title[60] = '\0';
-        latinToUTF8(title);
-        artist.alloc(61);
-        memcpy(artist.get(), InBuff.getReadPtr() + 4 + 60, 60);
-        artist[60] = '\0';
-        latinToUTF8(artist);
-        album.alloc(61);
-        memcpy(album.get(), InBuff.getReadPtr() + 4 + 120, 60);
-        album[60] = '\0';
-        latinToUTF8(album);
-        // one byte "speed" 0=unset, 1=slow, 2= medium, 3=fast, 4=hardcore
-        genre.alloc(31);
-        memcpy(genre.get(), InBuff.getReadPtr() + 5 + 180, 30);
-        genre[30] = '\0';
-        latinToUTF8(genre);
-        // six bytes "start-time", the start of the music as mmm:ss
-        // six bytes "end-time",   the end of the music as mmm:ss
-        if(title.strlen() > 0) {
-            title.insert("Title: ", 0);
-            if(audio_id3data) audio_id3data(title.get());
-        }
-        if(artist.strlen() > 0) {
-            artist.insert("Artist: ", 0);
-            if(audio_id3data) audio_id3data(artist.get());
-        }
-        if(album.strlen() > 0) {
-            album.insert("Album: ", 0);
-            if(audio_id3data) audio_id3data(album.get());
-        }
-        if(genre.strlen() > 0) {
-            genre.insert("Genre: ", 0);
-            if(audio_id3data) audio_id3data(genre.get());
-        }
+
+        ps_ptr<char> title, artist, album, genre;
+
+        readID3Field(title,  p + 4,     60, "Title: ");
+        readID3Field(artist, p + 64,    60, "Artist: ");
+        readID3Field(album,  p + 124,   60, "Album: ");
+        readID3Field(genre,  p + 185,   30, "Genre: ");
+
+        // optional expansion: speed, start-time, end-time
         return true;
     }
+
     return false;
     // [1] https://en.wikipedia.org/wiki/List_of_ID3v1_Genres
     // [2] https://en.wikipedia.org/wiki/ID3#ID3v1_and_ID3v1.1[5]
