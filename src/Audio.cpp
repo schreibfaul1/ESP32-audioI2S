@@ -1044,7 +1044,7 @@ void Audio::showID3Tag(const char* tag, const char* value) {
         showstreamtitle(id3tag.get());
         return;
     }
-    if(m_chbuf.strlen()) {
+    if(id3tag.strlen()) {
         if(audio_id3data) audio_id3data(id3tag.get());
     }
 }
@@ -1562,16 +1562,16 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_VORBIS) { /* VORBIS COMMENT */ // field names
+        ps_ptr<char>vendorString = {};
         size_t vendorLength = bigEndian(data, 3);
         size_t idx = 0;
         data += 3; idx += 3;
         size_t vendorStringLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
         if(vendorStringLength) {data += 4; idx += 4;}
         if(vendorStringLength > 495) vendorStringLength = 495; // guard
-        strcpy(m_chbuf.get(), "VENDOR_STRING: ");
-        strncpy(m_chbuf.get() + 15, (const char*)data, vendorStringLength);
-        m_chbuf[15 + vendorStringLength] = '\0';
-        if(audio_id3data) audio_id3data(m_chbuf.get());
+        vendorString.assign((const char*)data, vendorStringLength, "vendorString");
+        vendorString.insert("VENDOR_STRING: ", 0);
+        if(audio_id3data) audio_id3data(vendorString.get());
         data += vendorStringLength; idx += vendorStringLength;
         size_t commentListLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
         data += 4; idx += 4;
@@ -1580,10 +1580,9 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             (void)i;
             size_t commentLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
             data += 4; idx += 4;
-            if(commentLength < 512) { // guard
-                strncpy(m_chbuf.get(), (const char *)data , commentLength);
-                m_chbuf[commentLength] = '\0';
-                if(audio_id3data) audio_id3data(m_chbuf.get());
+            if(commentLength) { // guard
+                vendorString.assign((const char*)data , commentLength, "vendorString");
+                if(audio_id3data) audio_id3data(vendorString.get());
             }
             data += commentLength; idx += commentLength;
             if(idx > vendorLength + 3) {log_e("VORBIS COMMENT section is too long");}
