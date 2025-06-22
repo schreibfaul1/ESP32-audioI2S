@@ -535,8 +535,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash     = h_host.index_of('/', 10); // position of "/" in hostname
-    pos_colon     = h_host.index_of(':', 10); if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_colon     = h_host.index_of(':', 10); // position of ":" in hostname
     pos_ampersand = h_host.index_of('&', 10); // position of "&" in hostname
+
+    if(pos_colon > 0 && h_host.size() > pos_colon){
+        if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows)
+    }
 
     if(pos_slash > 0) h_host[pos_slash] = '\0';
     if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
@@ -640,8 +644,10 @@ bool Audio::httpPrint(const char* host) {
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
     pos_slash = indexOf(h_host.get(), "/", 0);
-    pos_colon = indexOf(h_host.get(), ":", 0);
-    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    pos_colon = h_host.index_of(":", 0);
+    if(pos_colon > 0 && h_host.size() > pos_colon){
+        if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
+    }
     pos_ampersand = indexOf(h_host.get(), "&", 0);
 
     ps_ptr<char> hostwoext; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
@@ -2840,7 +2846,6 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ps_ptr<char> Audio::parsePlaylist_M3U8() {
-
     // example: audio chunks
     // #EXTM3U
     // #EXT-X-TARGETDURATION:10
@@ -2903,7 +2908,6 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 }
                 else f_mediaSeq_found = true;
             }
-
             if(startsWith(m_playlistContent[i].get(), "#EXTINF")) {
                 f_EXTINF_found = true;
                 if(STfromEXTINF(m_playlistContent[i].get())) { showstreamtitle(m_chbuf.get()); }
@@ -2988,7 +2992,6 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         }
         vector_clear_and_shrink(m_playlistContent); // clear after reading everything, m_playlistContent.size is now 0
     }
-
     if(m_playlistURL.size() > 0) {
         ps_ptr<char>m_playlistBuff;
         if(m_playlistURL[m_playlistURL.size() - 1].valid()) {
@@ -3172,8 +3175,9 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
     std::vector<ps_ptr<char>> linesWithSeqNr;
     bool addNextLine = false;
     int idx = -1;
+
     for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
-    //  log_w("pl%i = %s", i, m_playlistContent[i]);
+    //  log_w("pl%i = %s", i, m_playlistContent[i].get());
         if(!startsWith(m_playlistContent[i].get(), "#EXTINF:") && addNextLine) {
             // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
             linesWithSeqNr[idx].assign(linesWithSeqNr[idx].get());
@@ -3200,7 +3204,6 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
     // http://lampsifmlive.mdc.akamaized.net/strmLampsi/userLampsi/l_50551_3318810050_229669.aac
     // go back to first digit:                                                        ∧
 
-
     int16_t len = strlen(linesWithSeqNr[0].get()) - 1;
     int16_t qm = indexOf(linesWithSeqNr[0].get(), "?", 0);
     if(qm > 0) len = qm; // If we find a question mark, look to the left of it
@@ -3211,6 +3214,7 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
 
     for(int16_t pos = len; pos >= 0; pos--) {
         if(isdigit(linesWithSeqNr[0][pos])) {
+
             while(isdigit(linesWithSeqNr[0][pos])) pos--;
             pos++;
             uint64_t a, b, c;
@@ -3219,10 +3223,12 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
             c = b + 1;
             lltoa(b, llasc, 10);
             int16_t idx_b = indexOf(linesWithSeqNr[1].get(), llasc, pos - 1);
-            while(linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
+            if(idx_b < 1) break;
+            while(idx_b > 0 && linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
             lltoa(c, llasc, 10);
             int16_t idx_c = indexOf(linesWithSeqNr[2].get(), llasc, pos - 1);
-            while(linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
+            if(idx_c < 1) break;
+            while(idx_c > 0 && linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
             if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
                 MediaSeq = a;
                 AUDIO_INFO("media sequence number: %llu", MediaSeq);

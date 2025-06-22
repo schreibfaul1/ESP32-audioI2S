@@ -258,6 +258,7 @@ public:
 
         // Suffix anhängen
         std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, add_len + 1);
+        allocated_size = new_len;
     }
 
     // ps_ptr<char> text1; // like Strcat with automatic new allocation
