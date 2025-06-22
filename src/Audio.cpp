@@ -4016,9 +4016,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
-        //    log_w("cT: %s", rhl);
             int idx = rhl.index_of(';', 13);
-            if(idx > 0) rhl[13 + idx] = '\0';
+            if(idx > 0) rhl[idx] = '\0';
             if(parseContentType(rhl.get() + 13)) ct_seen = true;
             else{
                 log_w("unknown contentType %s", rhl.get() + 13);
