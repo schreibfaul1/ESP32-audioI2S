@@ -6146,7 +6146,7 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
         len = bigEndian((uint8_t*)buff, 4) + 16;
     }
     if(len > 1024) len = 1024;
-        log_w("found at pos %i, len %i", seekpos, len);
+    //    log_w("found at pos %i, len %i", seekpos, len);
 
     ps_ptr<uint8_t> data;
     data.alloc(len, "data");
@@ -6166,21 +6166,21 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
             if(temp > 254) temp = 254;
             memcpy(value, (data.get() + offset), temp);
             value[temp] = '\0';
-            m_chbuf[0] = '\0';
-            if(i == 0)  sprintf(m_chbuf.get(), "Title: %s", value);
-            if(i == 1)  sprintf(m_chbuf.get(), "Artist: %s", value);
-            if(i == 2)  sprintf(m_chbuf.get(), "Album: %s", value);
-            if(i == 3)  sprintf(m_chbuf.get(), "Encoder: %s", value);
-            if(i == 4)  sprintf(m_chbuf.get(), "Comment: %s", value);
-            if(i == 5)  sprintf(m_chbuf.get(), "Composer: %s", value);
-            if(i == 6)  sprintf(m_chbuf.get(), "BPM: %s", value);
-            if(i == 7)  sprintf(m_chbuf.get(), "Track Number: %s", value);
-            if(i == 8)  sprintf(m_chbuf.get(), "Year: %s", value);
-            if(i == 9)  sprintf(m_chbuf.get(), "Compile: %s", value);
-            if(i == 10) sprintf(m_chbuf.get(), "Album Artist: %s", value);
-            if(i == 11) sprintf(m_chbuf.get(), "Types of: %s", value);
-            if(m_chbuf[0] != 0) {
-                if(audio_id3data) audio_id3data(m_chbuf.get());
+            ps_ptr<char>chBuf = {};
+            if(i == 0)  chBuf.appendf("Title: %s", value);
+            if(i == 1)  chBuf.appendf("Artist: %s", value);
+            if(i == 2)  chBuf.appendf("Album: %s", value);
+            if(i == 3)  chBuf.appendf("Encoder: %s", value);
+            if(i == 4)  chBuf.appendf("Comment: %s", value);
+            if(i == 5)  chBuf.appendf("Composer: %s", value);
+            if(i == 6)  chBuf.appendf("BPM: %s", value);
+            if(i == 7)  chBuf.appendf("Track Number: %s", value);
+            if(i == 8)  chBuf.appendf("Year: %s", value);
+            if(i == 9)  chBuf.appendf("Compile: %s", value);
+            if(i == 10) chBuf.appendf("Album Artist: %s", value);
+            if(i == 11) chBuf.appendf("Types of: %s", value);
+            if(chBuf.valid()) {
+                if(audio_id3data) audio_id3data(chBuf.get());
             }
         }
     }

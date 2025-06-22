@@ -415,7 +415,7 @@ public:
 
         // Speicher reservieren
         char* old_data = static_cast<char*>(mem.release());
-        mem.reset(ps_malloc(new_len));
+        reset(); alloc(new_len);
         if (!mem) {
             printf("OOM: appendf() failed for %zu bytes\n", new_len);
             if (old_data) free(old_data);
