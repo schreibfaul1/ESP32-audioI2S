@@ -331,7 +331,6 @@ void Audio::setDefaults() {
     m_LFcount = 0;        // For end of header detection
     m_controlCounter = 0; // Status within readID3data() and readWaveHeader()
     m_channels = 2;       // assume stereo #209
-    m_streamTitleHash = 0;
     m_fileSize = 0;
     m_ID3Size = 0;
     m_haveNewFilePos = 0;
@@ -4308,11 +4307,11 @@ void Audio::showstreamtitle(char* ml) {
     ps_ptr<char>title = {};
     ps_ptr<char>artist = {};
     ps_ptr<char>streamTitle = {};
+    ps_ptr<char>sUrl = {};
 
     htmlToUTF8(ml); // convert to UTF-8
 
     int16_t  idx1 = 0, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0, titleStart = 0, artistStart = 0;
-    uint16_t i = 0, hash = 0;
 
     // if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0); // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
     // if(idx1 < 0) idx1 = indexOf(ml, "title:", 0); // Title found (e.g. #EXTINF:10,title="The Dan Patrick Show (M-F 9a-12p ET)",artist="zc1401"
@@ -4360,11 +4359,12 @@ void Audio::showstreamtitle(char* ml) {
     }
 
     else if(indexOf(ml, "StreamTitle='") == 0){
-        idx2 = indexOf(ml, ";", 13);
-        if(idx2 >= 15) {
-            streamTitle.assign(ml + 13, idx2 - 15);
+        titleStart = 13;
+        idx2 = indexOf(ml, ";", 12);
+        if(idx2 > titleStart + 1){
+            titleLen = idx2 - 1 - titleStart;
+            streamTitle.assign(ml + 13, titleLen);
         }
-        else streamTitle.assign(ml);
     }
 
     else if(startsWith(ml, "#EXTINF")){
@@ -4422,15 +4422,9 @@ void Audio::showstreamtitle(char* ml) {
         idx2 = indexOf(ml, ";", idx1);
         if(idx1 >= 0 && idx2 > idx1) { // StreamURL found
             uint16_t len = idx2 - idx1;
-            ps_ptr<char>sUrl;
-            sUrl.assign(ml + idx1, len - 1);
-            while(i < strlen(sUrl.get())) {
-                hash += sUrl[i] * i + 1;
-                i++;
-            }
-            if(m_streamTitleHash != hash) {
-                m_streamTitleHash = hash;
-                AUDIO_INFO("%.*s", m_ibuffSize, sUrl.get());
+            sUrl.assign(ml + idx1, len);
+            if(sUrl.valid()){
+                AUDIO_INFO("%s", sUrl.get());
             }
         }
     }
