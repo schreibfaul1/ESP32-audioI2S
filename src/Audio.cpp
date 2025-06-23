@@ -870,23 +870,21 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
         return false;
     }
 
-    ps_ptr<char> req;
-    req.alloc(strlen(urlStr.get()) + 200, "rqh"); // request header
-    req.clear();
-    strcat(req.get(), "GET ");
-    strcat(req.get(), path);
-    strcat(req.get(), "?ie=UTF-8&tl=");
-    strcat(req.get(), lang);
-    strcat(req.get(), "&client=tw-ob&q=");
-    strcat(req.get(), urlStr.get());
-    strcat(req.get(), " HTTP/1.1\r\n");
-    strcat(req.get(), "Host: ");
-    strcat(req.get(), host);
-    strcat(req.get(), "\r\n");
-    strcat(req.get(), "User-Agent: Mozilla/5.0 \r\n");
-    strcat(req.get(), "Accept-Encoding: identity\r\n");
-    strcat(req.get(), "Accept: text/html\r\n");
-    strcat(req.get(), "Connection: close\r\n\r\n");
+    ps_ptr<char> req; // request header
+    req.assign("GET ");
+    req.append(path);
+    req.append("?ie=UTF-8&tl=");
+    req.append(lang);
+    req.append("&client=tw-ob&q=");
+    req.append(urlStr.get());
+    req.append(" HTTP/1.1\r\n");
+    req.append("Host: ");
+    req.append(host);
+    req.append("\r\n");
+    req.append("User-Agent: Mozilla/5.0 \r\n");
+    req.append("Accept-Encoding: identity\r\n");
+    req.append("Accept: text/html\r\n");
+    req.append("Connection: close\r\n\r\n");
 
     _client = static_cast<WiFiClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
