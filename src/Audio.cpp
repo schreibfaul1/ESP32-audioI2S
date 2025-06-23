@@ -315,6 +315,7 @@ void Audio::setDefaults() {
     m_codec = CODEC_NONE;
     m_playlistFormat = FORMAT_NONE;
     m_dataMode = AUDIO_NONE;
+    m_streamTitle.assign("");
     m_resumeFilePos = -1;
     m_audioCurrentTime = 0; // Reset playtimer
     m_audioFileDuration = 0;
@@ -2868,7 +2869,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         vector_clear_and_shrink(m_linesWithEXTINF);
         for(uint8_t i = 0; i < lines; i++) {
             //  log_w("pl%i = %s", i, m_playlistContent[i].get());
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-STREAM-INF:")) { f_haveRedirection = true; log_e("we have a redirection");}
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*log_e("we have a redirection");*/}
             if(addNextLine) {
                 addNextLine = false;
                 // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
@@ -2881,8 +2882,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         }
     }
 
-    for(int i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {log_w("%s", m_linesWithSeqNrAndURL[i].get());}
-    for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {log_w("%s", m_linesWithEXTINF[i].get()); showstreamtitle(m_linesWithEXTINF[i].get()); }
+    for(int i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {/*log_w("%s", m_linesWithSeqNrAndURL[i].get())*/;}
+    for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {/*log_w("%s", m_linesWithEXTINF[i].get());*/ showstreamtitle(m_linesWithEXTINF[i].get());}
 
     if(f_haveRedirection) {
         ps_ptr<char> ret = m3u8redirection(&m_m3u8Codec);
@@ -2897,96 +2898,89 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         pplM3U8.f_mediaSeq_found = false;
     }
 
-    if(!pplM3U8.f_mediaSeq_found) {pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &pplM3U8.xMedSeq); log_e("found %lli", pplM3U8.xMedSeq);}
+    if(!pplM3U8.f_mediaSeq_found) {pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &pplM3U8.xMedSeq); /*log_e("found %lli", pplM3U8.xMedSeq);*/}
     if(m_codec == CODEC_NONE) {m_codec = CODEC_AAC; if(m_m3u8Codec == CODEC_MP3) m_codec = CODEC_MP3;}  // if we have no redirection
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-    boolean         f_EXTINF_found = false;
+    boolean f_EXTINF_found = false;
 
     if(lines) {
         for(uint16_t i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {
 
-            {
-                f_EXTINF_found = true;
+            f_EXTINF_found = true;
 
-                if(startsWith(m_linesWithSeqNrAndURL[i].get(), "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
-                if(i == lines) continue; // and exit for()
+            ps_ptr<char> tmp;
+            if(!startsWith(m_linesWithSeqNrAndURL[i].get(), "http")) {
 
-                ps_ptr<char> tmp;
-                if(!startsWith(m_linesWithSeqNrAndURL[i].get(), "http")) {
+                //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                //  chunklist:  http://station.com/aaa/bbb/ddd.aac
+                //  result:     http://station.com/aaa/bbb/ddd.aac
 
-                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
-                        //  chunklist:  http://station.com/aaa/bbb/ddd.aac
-                        //  result:     http://station.com/aaa/bbb/ddd.aac
+                if(m_lastM3U8host.valid()) {
+                    tmp.clone_from(m_lastM3U8host, "tmp");
+                }
+                else {
+                    tmp.clone_from(m_lastHost, "tmp");
+                }
+                if(m_linesWithSeqNrAndURL[i][0] != '/'){
 
-                    if(m_lastM3U8host.valid()) {
-                        tmp.clone_from(m_lastM3U8host, "tmp");
-                    }
-                    else {
-                        tmp.clone_from(m_lastHost, "tmp");
-                    }
+                    //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
+                    //  chunklist:  ddd.aac                              // m_linesWithSeqNrAndURL[i]
+                    //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithSeqNrAndURL[i]
 
-                    if(m_linesWithSeqNrAndURL[i][0] != '/'){
+                    int idx = tmp.last_index_of('/');
+                    tmp[idx  + 1] = '\0';
+                    tmp.append(m_linesWithSeqNrAndURL[i].get());
+                }
+                else{
 
-                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
-                        //  chunklist:  ddd.aac                              // m_linesWithSeqNrAndURL[i]
-                        //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithSeqNrAndURL[i]
+                    //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                    //  chunklist:  /aaa/bbb/ddd.aac
+                    //  result:     http://station.com/aaa/bbb/ddd.aac
+                    int idx = tmp.index_of('/', 8);
+                    tmp[idx] = '\0';
+                    tmp.append(m_linesWithSeqNrAndURL[i].get());
+                }
+            }
+            else {tmp.append(m_linesWithSeqNrAndURL[i].get());}
 
-                        int idx = tmp.last_index_of('/');
-                        tmp[idx  + 1] = '\0';
-                        tmp.append(m_linesWithSeqNrAndURL[i].get());
-                    }
-                    else{
-
-                        //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
-                        //  chunklist:  /aaa/bbb/ddd.aac
-                        //  result:     http://station.com/aaa/bbb/ddd.aac
-                        int idx = tmp.index_of('/', 8);
-                        tmp[idx] = '\0';
-                        tmp.append(m_linesWithSeqNrAndURL[i].get());
+            if(pplM3U8.f_mediaSeq_found) {
+                lltoa(pplM3U8.xMedSeq, llasc, 10);
+                if(indexOf(tmp.get(), llasc) > 0) {
+                    m_playlistURL.insert(m_playlistURL.begin(), std:: move(tmp));
+                    pplM3U8.xMedSeq++;
+                }
+                else{
+                    lltoa(pplM3U8.xMedSeq + 1, llasc, 10);
+                    if(indexOf(tmp.get(), llasc) > 0) {
+                        m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
+                        log_w("mediaseq %llu skipped", pplM3U8.xMedSeq);
+                        pplM3U8.xMedSeq+= 2;
                     }
                 }
-                else { tmp.append(m_linesWithSeqNrAndURL[i].get()); }
-
-                if(pplM3U8.f_mediaSeq_found) {
-                    lltoa(pplM3U8.xMedSeq, llasc, 10);
-                    if(indexOf(tmp.get(), llasc) > 0) {
-                        m_playlistURL.insert(m_playlistURL.begin(), std:: move(tmp));
-                        pplM3U8.xMedSeq++;
-                    }
-                    else{
-                        lltoa(pplM3U8.xMedSeq + 1, llasc, 10);
-                        if(indexOf(tmp.get(), llasc) > 0) {
-                            m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                            log_w("mediaseq %llu skipped", pplM3U8.xMedSeq);
-                            pplM3U8.xMedSeq+= 2;
+            }
+            else { // without mediaSeqNr, with hash
+                uint32_t hash = simpleHash(tmp.get());
+                if(m_hashQueue.size() == 0) {
+                    m_hashQueue.insert(m_hashQueue.begin(), hash);
+                    m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
+                }
+                else {
+                    bool known = false;
+                    for(int i = 0; i < m_hashQueue.size(); i++) {
+                        if(hash == m_hashQueue[i]) {
+                            // log_i("file already known %s", tmp);
+                            known = true;
                         }
                     }
-                }
-                else { // without mediaSeqNr, with hash
-                    uint32_t hash = simpleHash(tmp.get());
-                    if(m_hashQueue.size() == 0) {
+                    if(!known) {
                         m_hashQueue.insert(m_hashQueue.begin(), hash);
                         m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
                     }
-                    else {
-                        bool known = false;
-                        for(int i = 0; i < m_hashQueue.size(); i++) {
-                            if(hash == m_hashQueue[i]) {
-                                // log_i("file already known %s", tmp);
-                                known = true;
-                            }
-                        }
-                        if(!known) {
-                            m_hashQueue.insert(m_hashQueue.begin(), hash);
-                            m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                        }
-                    }
-                    if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
                 }
-                continue;
+                if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
             }
+            continue;
         }
         vector_clear_and_shrink(m_playlistContent); // clear after reading everything, m_playlistContent.size is now 0
     }
@@ -3006,9 +3000,10 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         if(f_EXTINF_found) {
             if(pplM3U8.f_mediaSeq_found) {
                 if(m_playlistContent.size() == 0) return {};
-log_e("");
-                uint64_t mediaSeq = 0;//m3u8_findMediaSeqInURL();
-                if(mediaSeq == 0 || mediaSeq == UINT64_MAX) {
+
+                uint64_t mediaSeq;
+                pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &mediaSeq);
+                if(!pplM3U8.f_mediaSeq_found) {
                     log_e("xMediaSequence not found");
                     connecttohost(m_lastHost.get());
                 }
@@ -3172,7 +3167,6 @@ bool Audio::m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNr, uin
     // numbers[2] 10 31 630738364 405063
     // then the absolute value is formed (-234 is also possible if there is a hyphen) and it is searched for three consecutive numbers
 
-    
     uint16_t idx = 0;
     while(idx < numbers[0].size()){
         // log_w("%lli, %lli, %lli", abs(numbers[0][idx]), abs(numbers[1][idx]), abs(numbers[2][idx]));
@@ -4311,104 +4305,75 @@ void Audio::showstreamtitle(char* ml) {
     // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
 
     if(!ml) return;
+    ps_ptr<char>title = {};
+    ps_ptr<char>artist = {};
+    ps_ptr<char>streamTitle = {};
 
     htmlToUTF8(ml); // convert to UTF-8
 
-    int16_t  idx1, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0;
+    int16_t  idx1 = 0, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0, titleStart = 0, artistStart = 0;
     uint16_t i = 0, hash = 0;
 
-    idx1 = indexOf(ml, "StreamTitle=", 0);        // Streamtitle found
-    if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0); // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
-    if(idx1 < 0) idx1 = indexOf(ml, "title:", 0); // Title found (e.g. #EXTINF:10,title="The Dan Patrick Show (M-F 9a-12p ET)",artist="zc1401"
+    // if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0); // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
+    // if(idx1 < 0) idx1 = indexOf(ml, "title:", 0); // Title found (e.g. #EXTINF:10,title="The Dan Patrick Show (M-F 9a-12p ET)",artist="zc1401"
 
-    if(idx1 >= 0) {
-        if(indexOf(ml, "xml version=", 7) > 0) {
-            /* e.g. xmlStreamTitle
-                  StreamTitle='<?xml version="1.0" encoding="utf-8"?><RadioInfo><Table><DB_ALBUM_ID>37364</DB_ALBUM_ID>
-                  <DB_ALBUM_IMAGE>00000037364.jpg</DB_ALBUM_IMAGE><DB_ALBUM_NAME>Boyfriend</DB_ALBUM_NAME>
-                  <DB_ALBUM_TYPE>Single</DB_ALBUM_TYPE><DB_DALET_ARTIST_NAME>DOVE CAMERON</DB_DALET_ARTIST_NAME>
-                  <DB_DALET_ITEM_CODE>CD4161</DB_DALET_ITEM_CODE><DB_DALET_TITLE_NAME>BOYFRIEND</DB_DALET_TITLE_NAME>
-                  <DB_FK_SITE_ID>2</DB_FK_SITE_ID><DB_IS_MUSIC>1</DB_IS_MUSIC><DB_LEAD_ARTIST_ID>26303</DB_LEAD_ARTIST_ID>
-                  <DB_LEAD_ARTIST_NAME>Dove Cameron</DB_LEAD_ARTIST_NAME><DB_RADIO_IMAGE>cidadefm.jpg</DB_RADIO_IMAGE>
-                  <DB_RADIO_NAME>Cidade</DB_RADIO_NAME><DB_SONG_ID>120126</DB_SONG_ID><DB_SONG_LYRIC>60981</DB_SONG_LYRIC>
-                  <DB_SONG_NAME>Boyfriend</DB_SONG_NAME></Table><AnimadorInfo><TITLE>Cidade</TITLE>
-                  <START_TIME_UTC>2022-11-15T22:00:00+00:00</START_TIME_UTC><END_TIME_UTC>2022-11-16T06:59:59+00:00
-                  </END_TIME_UTC><SHOW_NAME>Cidade</SHOW_NAME><SHOW_HOURS>22h às 07h</SHOW_HOURS><SHOW_PANEL>0</SHOW_PANEL>
-                  </AnimadorInfo></RadioInfo>';StreamUrl='';
-            */
+    if(indexOf(ml, "StreamTitle='<?xml version=", 0) == 0) {
+        /* e.g. xmlStreamTitle
+              StreamTitle='<?xml version="1.0" encoding="utf-8"?><RadioInfo><Table><DB_ALBUM_ID>37364</DB_ALBUM_ID>
+              <DB_ALBUM_IMAGE>00000037364.jpg</DB_ALBUM_IMAGE><DB_ALBUM_NAME>Boyfriend</DB_ALBUM_NAME>
+              <DB_ALBUM_TYPE>Single</DB_ALBUM_TYPE><DB_DALET_ARTIST_NAME>DOVE CAMERON</DB_DALET_ARTIST_NAME>
+              <DB_DALET_ITEM_CODE>CD4161</DB_DALET_ITEM_CODE><DB_DALET_TITLE_NAME>BOYFRIEND</DB_DALET_TITLE_NAME>
+              <DB_FK_SITE_ID>2</DB_FK_SITE_ID><DB_IS_MUSIC>1</DB_IS_MUSIC><DB_LEAD_ARTIST_ID>26303</DB_LEAD_ARTIST_ID>
+              <DB_LEAD_ARTIST_NAME>Dove Cameron</DB_LEAD_ARTIST_NAME><DB_RADIO_IMAGE>cidadefm.jpg</DB_RADIO_IMAGE>
+              <DB_RADIO_NAME>Cidade</DB_RADIO_NAME><DB_SONG_ID>120126</DB_SONG_ID><DB_SONG_LYRIC>60981</DB_SONG_LYRIC>
+              <DB_SONG_NAME>Boyfriend</DB_SONG_NAME></Table><AnimadorInfo><TITLE>Cidade</TITLE>
+              <START_TIME_UTC>2022-11-15T22:00:00+00:00</START_TIME_UTC><END_TIME_UTC>2022-11-16T06:59:59+00:00
+              </END_TIME_UTC><SHOW_NAME>Cidade</SHOW_NAME><SHOW_HOURS>22h às 07h</SHOW_HOURS><SHOW_PANEL>0</SHOW_PANEL>
+              </AnimadorInfo></RadioInfo>';StreamUrl='';
+        */
+        idx4 = indexOf(ml, "<DB_DALET_TITLE_NAME>");
+        idx5 = indexOf(ml, "</DB_DALET_TITLE_NAME>");
+        idx6 = indexOf(ml, "<DB_LEAD_ARTIST_NAME>");
+        idx7 = indexOf(ml, "</DB_LEAD_ARTIST_NAME>");
+        if(idx4 == -1 || idx5 == -1) return;
+        titleStart = idx4 + 21; // <DB_DALET_TITLE_NAME>
+        titleLen = idx5 - titleStart;
 
-            idx4 = indexOf(ml, "<DB_DALET_TITLE_NAME>");
-            idx5 = indexOf(ml, "</DB_DALET_TITLE_NAME>");
-
-            idx6 = indexOf(ml, "<DB_LEAD_ARTIST_NAME>");
-            idx7 = indexOf(ml, "</DB_LEAD_ARTIST_NAME>");
-
-            if(idx4 == -1 || idx5 == -1) return;
-            idx4 += 21; // <DB_DALET_TITLE_NAME>
-            titleLen = idx5 - idx4;
-
-            if(idx6 != -1 && idx7 != -1) {
-                idx6 += 21; // <DB_LEAD_ARTIST_NAME>
-                artistLen = idx7 - idx6;
-            }
-
-            ps_ptr<char>title;
-            title.alloc(titleLen + artistLen + 4, "title"); // +4 for " - "
-            memcpy(title.get(), ml + idx4, titleLen);
-            title[titleLen] = '\0';
-
-            if(artistLen) {
-                memcpy(title.get() + titleLen, " - ", 3);
-                memcpy(title.get() + titleLen + 3, ml + idx6, artistLen);
-                title[titleLen + 3 + artistLen] = '\0';
-            }
-
-            if(title.valid()) {
-                while(i < strlen(title.get())) {
-                    hash += title[i] * i + 1;
-                    i++;
-                }
-                if(m_streamTitleHash != hash) {
-                    m_streamTitleHash = hash;
-                    if(audio_showstreamtitle) audio_showstreamtitle(title.get());
-                }
-            }
-            return;
+        if(idx6 != -1 && idx7 != -1) {
+            artistStart = idx6 + 21; // <DB_LEAD_ARTIST_NAME>
+            artistLen = idx7 - artistStart;
         }
+        if(titleLen) title.assign(ml + titleStart, titleLen);
+        if(artistLen) artist.assign(ml + artistStart, artistLen);
 
-        idx2 = indexOf(ml, ";", idx1);
-        ps_ptr<char> sTit;
-        if(idx2 >= 0) {
-            sTit.assign(ml + idx1, idx2 - 1);
+        if(title.valid() && artist.valid()){
+            streamTitle.assign(title.get());
+            streamTitle.append(" - ");
+            streamTitle.append(artist.get());
         }
-        else sTit.assign(ml);
-
-        while(i < strlen(sTit.get())) {
-            hash += sTit[i] * i + 1;
-            i++;
+        else if(title.valid()){
+            streamTitle.assign(title.get());
         }
-
-        if(m_streamTitleHash != hash) {
-            m_streamTitleHash = hash;
-            AUDIO_INFO("%.*s", m_ibuffSize, sTit.get());
-            uint8_t pos = 12;                                                           // remove "StreamTitle="
-            if(sTit[pos] == '\'') pos++;                                          // remove leading  \'
-            if(sTit.valid() && sTit.ends_with("\\")){
-                size_t len = strlen(sTit.get());
-                if (len > 0 && sTit[len - 1] == '\\') sTit[len - 1] = '\0'; // Remove trailing '\'
-            }
-            if(audio_showstreamtitle) audio_showstreamtitle(sTit.get() + pos);
+        else if(artist.valid()){
+            streamTitle.assign(artist.get());
         }
     }
-    if(startsWith(ml, "#EXTINF")){
+
+    else if(indexOf(ml, "StreamTitle='") == 0){
+        idx2 = indexOf(ml, ";", 13);
+        if(idx2 >= 15) {
+            streamTitle.assign(ml + 13, idx2 - 15);
+        }
+        else streamTitle.assign(ml);
+    }
+
+    else if(startsWith(ml, "#EXTINF")){
         // extraxt StreamTitle from m3u #EXTINF line to icy-format
         // orig: #EXTINF:10,title="text="TitleName",artist="ArtistName"
         // conv: StreamTitle=TitleName - ArtistName
         // orig: #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
         // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
-        ps_ptr<char>title = {};
-        ps_ptr<char>artist = {};
-        ps_ptr<char>streamtitle = {};
+
         idx1 = indexOf(ml, "title=\"");
         idx2 = indexOf(ml, "artist=\"");
         if(idx1 > 0){
@@ -4417,9 +4382,9 @@ void Audio::showstreamtitle(char* ml) {
             if(idx3 > titleStart){
                 int titleLength = idx3 - titleStart;
                 title.assign(ml + titleStart, titleLength);
-                if(strcmp(title.get(), "text=\"") == 0){
-                    titleStart += 6;
-                    idx3 = indexOf(ml, "\"", titleStart);
+                 if(title.starts_with("text=\\")){ // #EXTINF:10,title="text=\"Spot Block End\"",artist=" ",
+                    titleStart += 7;
+                    idx3 = indexOf(ml, "\\", titleStart);
                     if(idx3 > titleStart){
                         int titleLength = idx3 - titleStart;
                         title.assign(ml + titleStart, titleLength);
@@ -4437,49 +4402,65 @@ void Audio::showstreamtitle(char* ml) {
             }
         }
         if(title.valid() && artist.valid()){
-            streamtitle.assign(title.get());
-            streamtitle.append(" - ");
-            streamtitle.append(artist.get());
+            streamTitle.assign(title.get());
+            streamTitle.append(" - ");
+            streamTitle.append(artist.get());
         }
         else if(title.valid()){
-            streamtitle.assign(title.get());
+            streamTitle.assign(title.get());
         }
         else if(artist.valid()){
-            streamtitle.assign(artist.get());
-        }
-        if(audio_showstreamtitle && streamtitle.valid()) audio_showstreamtitle(streamtitle.get());
-    }
-
-    idx1 = indexOf(ml, "StreamUrl=", 0);
-    idx2 = indexOf(ml, ";", idx1);
-    if(idx1 >= 0 && idx2 > idx1) { // StreamURL found
-        uint16_t len = idx2 - idx1;
-        ps_ptr<char>sUrl;
-        sUrl.assign(ml + idx1, len + 1);
-
-        while(i < strlen(sUrl.get())) {
-            hash += sUrl[i] * i + 1;
-            i++;
-        }
-        if(m_streamTitleHash != hash) {
-            m_streamTitleHash = hash;
-            AUDIO_INFO("%.*s", m_ibuffSize, sUrl.get());
+            streamTitle.assign(artist.get());
         }
     }
+    else{
+        ;
+    }
 
-    idx1 = indexOf(ml, "adw_ad=", 0);
-    if(idx1 >= 0) { // Advertisement found
-        idx1 = indexOf(ml, "durationMilliseconds=", 0);
+    if(indexOf(ml, "StreamUrl=", 0) > 0){
+        idx1 = indexOf(ml, "StreamUrl=", 0);
         idx2 = indexOf(ml, ";", idx1);
-        if(idx1 >= 0 && idx2 > idx1) {
+        if(idx1 >= 0 && idx2 > idx1) { // StreamURL found
             uint16_t len = idx2 - idx1;
-            ps_ptr<char> sAdv;
-            sAdv.assign(ml + idx1, len + 1);
-            AUDIO_INFO("%s", sAdv.get());
-            uint8_t pos = 21;                                                 // remove "StreamTitle="
-            if(sAdv[pos] == '\'') pos++;                                      // remove leading  \'
-            if(sAdv[strlen(sAdv.get()) - 1] == '\'') sAdv[strlen(sAdv.get()) - 1] = '\0'; // remove trailing \'
-            if(audio_commercial) audio_commercial(sAdv.get() + pos);
+            ps_ptr<char>sUrl;
+            sUrl.assign(ml + idx1, len - 1);
+            while(i < strlen(sUrl.get())) {
+                hash += sUrl[i] * i + 1;
+                i++;
+            }
+            if(m_streamTitleHash != hash) {
+                m_streamTitleHash = hash;
+                AUDIO_INFO("%.*s", m_ibuffSize, sUrl.get());
+            }
+        }
+    }
+
+    if(indexOf(ml, "adw_ad=", 0) > 0){
+        idx1 = indexOf(ml, "adw_ad=", 0);
+        if(idx1 >= 0) { // Advertisement found
+            idx1 = indexOf(ml, "durationMilliseconds=", 0);
+            idx2 = indexOf(ml, ";", idx1);
+            if(idx1 >= 0 && idx2 > idx1) {
+                uint16_t len = idx2 - idx1;
+                ps_ptr<char> sAdv;
+                sAdv.assign(ml + idx1, len + 1);
+                AUDIO_INFO("%s", sAdv.get());
+                uint8_t pos = 21;                                                 // remove "StreamTitle="
+                if(sAdv[pos] == '\'') pos++;                                      // remove leading  \'
+                if(sAdv[strlen(sAdv.get()) - 1] == '\'') sAdv[strlen(sAdv.get()) - 1] = '\0'; // remove trailing \'
+                if(audio_commercial) audio_commercial(sAdv.get() + pos);
+            }
+        }
+    }
+
+    if(streamTitle.valid()){
+        if(!m_streamTitle.valid()){
+            m_streamTitle.clone_from(streamTitle); // first init
+            if(audio_showstreamtitle) audio_showstreamtitle(streamTitle.get());
+        }
+        if(!m_streamTitle.equals(streamTitle)){
+            if(audio_showstreamtitle) audio_showstreamtitle(streamTitle.get());
+            m_streamTitle.clone_from(streamTitle);
         }
     }
 }

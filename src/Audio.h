@@ -307,7 +307,7 @@ private:
     }
 
     int indexOf (const char* base, const char* str, int startIndex = 0) {
-    //fb
+    //fbi
         const char *p = base;
         for (; startIndex > 0; startIndex--)
             if (*p++ == '\0') return -1;
@@ -573,6 +573,7 @@ private:
     ps_ptr<char>    m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>    m_lastM3U8host;
     ps_ptr<char>    m_speechtxt;      // stores tts text
+    ps_ptr<char>    m_streamTitle;    // stores the last StreamTitle
     typedef struct _ID3Hdr{ // used only in readID3header()
         size_t      id3Size;
         size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
