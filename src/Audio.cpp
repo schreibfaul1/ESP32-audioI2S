@@ -5800,6 +5800,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     static uint16_t pos_ml = 0; // determines the current position in metaline
     static uint16_t metalen = 0;
     uint16_t        res = 0;
+    ps_ptr<char>buff; buff.alloc(4096); buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(first) {
         pos_ml = 0;
@@ -5817,48 +5818,31 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
         }
         metalen = b * 16;        // New count for metadata including length byte, max 4096
         pos_ml = 0;
-        m_chbuf[pos_ml] = 0; // Prepare for new line
+        buff[pos_ml] = 0; // Prepare for new line
         res = 1;
     }
     if(!metalen) {
         m_metacount = m_metaint;
         return res;
     } // metalen is 0
-    if(metalen < m_chbufSize) {
-        uint16_t a = _client->readBytes(&m_chbuf[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes)));
-        res += a;
-        pos_ml += a;
-    }
-    else { // metadata doesn't fit in m_chbuf
-        uint8_t c = 0;
-        int8_t  i = 0;
-        while(pos_ml != metalen) {
-            i = _client->read(&c, 1); // fake read
-            if(i != -1) {
-                pos_ml++;
-                res++;
-            }
-            else { return res; }
-        }
-        m_metacount = m_metaint;
-        metalen = 0;
-        pos_ml = 0;
-        return res;
-    }
+    uint16_t a = _client->readBytes(&buff[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes)));
+    res += a;
+    pos_ml += a;
+
     if(pos_ml == metalen) {
-        m_chbuf[pos_ml] = '\0';
-        if(strlen(m_chbuf.get())) { // Any info present?
+        buff[pos_ml] = '\0';
+        if(strlen(buff.get())) { // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
             // Sometimes it is just other info like:
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
-            latinToUTF8(m_chbuf);          // convert to UTF-8 if necessary
-            int pos = indexOf(m_chbuf.get(), "song_spot", 0); // remove some irrelevant infos
+            latinToUTF8(buff);          // convert to UTF-8 if necessary
+            int pos = buff.index_of_icase("song_spot", 0); // remove some irrelevant infos
             if(pos > 3) {                               // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
-                m_chbuf[pos] = 0;
+                buff[pos] = 0;
             }
-            showstreamtitle(m_chbuf.get()); // Show artist and title if present in metadata
+            showstreamtitle(buff.get()); // Show artist and title if present in metadata
         }
         m_metacount = m_metaint;
         metalen = 0;
