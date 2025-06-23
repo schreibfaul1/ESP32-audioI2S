@@ -560,15 +560,12 @@ private:
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
-    const size_t    m_chbufSize          = 8192;
-
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
     ps_ptr<int16_t> m_outBuff;        // Interleaved L/R
     ps_ptr<int16_t> m_samplesBuff48K; // Interleaved L/R
-    ps_ptr<char>    m_chbuf;          // universal buffer
     ps_ptr<char>    m_ibuff;          // used in log_info()
     ps_ptr<char>    m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>    m_lastM3U8host;

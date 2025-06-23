@@ -3977,12 +3977,12 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-br:")) {
-            const char* c_bitRate = (rhl.get() + 7);
-            int32_t     br = atoi(c_bitRate); // Found bitrate tag, read the bitrate in Kbit
-            br = br * 1000;
-            setBitrate(br);
-            sprintf(m_chbuf.get(), "%lu", (long unsigned int)getBitRate());
-            if(audio_bitrate) audio_bitrate(m_chbuf.get());
+            ps_ptr<char>c_bitRate; c_bitRate.assign(rhl.get() + 7);
+            c_bitRate.trim();
+            c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
+            setBitrate(c_bitRate.to_uint64());
+            AUDIO_INFO("icy-bitrate: %s", c_bitRate.get());
+            if(audio_bitrate) audio_bitrate(c_bitRate.get());
         }
 
         else if(rhl.starts_with_icase("icy-metaint:")) {
@@ -4961,7 +4961,6 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
 
-    m_chbuf.alloc(m_chbufSize, "m_chbuf");
     m_outBuff.alloc(m_outbuffSize * sizeof(int16_t), "m_outbuff");
     m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t), "m_samplesBuff48K");
 
