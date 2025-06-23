@@ -187,8 +187,8 @@ Audio::Audio(uint8_t i2sPort) {
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num  = 8;                      // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = 1024;                   // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_desc_num  = 32;                     // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = 512;                    // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
@@ -2856,58 +2856,71 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
     // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
 
-    if(!m_lastHost.valid()) {log_e("m_lastHost is NULL"); return {};} // guard
-    static uint64_t xMedSeq = 0;
-    static boolean  f_mediaSeq_found = false;
-    boolean         f_EXTINF_found = false;
-    char            llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
-    if(m_f_firstM3U8call) {
-        m_f_firstM3U8call = false;
-        xMedSeq = 0;
-        f_mediaSeq_found = false;
+    if(!m_lastHost.valid())      {log_e("m_lastHost is NULL");     return {};} // guard
+
+    uint8_t lines = m_playlistContent.size();
+    bool    f_haveRedirection = false;
+
+    if(lines){
+        bool addNextLine = false;
+        vector_clear_and_shrink(m_linesWithSeqNrAndURL);
+        vector_clear_and_shrink(m_linesWithEXTINF);
+        for(uint8_t i = 0; i < lines; i++) {
+            //  log_w("pl%i = %s", i, m_playlistContent[i].get());
+            if(startsWith(m_playlistContent[i].get(), "#EXT-X-STREAM-INF:")) { f_haveRedirection = true; log_e("we have a redirection");}
+            if(addNextLine) {
+                addNextLine = false;
+                // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
+                m_linesWithSeqNrAndURL.emplace_back().clone_from(m_playlistContent[i]);
+            }
+            if(startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
+                m_linesWithEXTINF.emplace_back().clone_from(m_playlistContent[i]);
+                addNextLine = true;
+            }
+        }
     }
 
-    uint8_t     lines = m_playlistContent.size();
-    bool        f_begin = false;
+    for(int i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {log_w("%s", m_linesWithSeqNrAndURL[i].get());}
+    for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {showstreamtitle(m_linesWithEXTINF[i].get()); log_w("%s", m_linesWithEXTINF[i].get());}
+
+    if(f_haveRedirection) {
+        ps_ptr<char> ret = m3u8redirection(&m_m3u8Codec);
+        m_lastM3U8host.assign(ret.get());
+        vector_clear_and_shrink(m_playlistContent);
+        return {};
+    }
+
+    if(m_f_firstM3U8call) {
+        m_f_firstM3U8call = false;
+        pplM3U8.xMedSeq = 0;
+        pplM3U8.f_mediaSeq_found = false;
+    }
+
+    if(!pplM3U8.f_mediaSeq_found) {pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &pplM3U8.xMedSeq); log_e("found %lli", pplM3U8.xMedSeq);}
+    if(m_codec == CODEC_NONE) {m_codec = CODEC_AAC; if(m_m3u8Codec == CODEC_MP3) m_codec = CODEC_MP3;}  // if we have no redirection
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+    boolean         f_EXTINF_found = false;
+    char            llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
+
+
 
     if(lines) {
         for(uint16_t i = 0; i < lines; i++) {
-            if(strlen(m_playlistContent[i].get()) == 0) continue; // empty line
-            if(startsWith(m_playlistContent[i].get(), "#EXTM3U")) {
-                f_begin = true;
-                continue;
-            } // what we expected
-            if(!f_begin) continue;
 
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-STREAM-INF:")) {
-                uint8_t codec = CODEC_NONE;
-                ps_ptr<char> ret = m3u8redirection(&codec);
-                if(ret.valid()) {
-                    m_m3u8Codec = codec; // can be AAC or MP3
-                    m_lastM3U8host.assign(ret.get());
-                    vector_clear_and_shrink(m_playlistContent);
-                    return {};
-                }
-            }
-            if(m_codec == CODEC_NONE) {m_codec = CODEC_AAC; if(m_m3u8Codec == CODEC_MP3) m_codec = CODEC_MP3;}  // if we have no redirection
 
-            // "#EXT-X-DISCONTINUITY-SEQUENCE: // not used, 0: seek for continuity numbers, is sometimes not set
-            // "#EXT-X-MEDIA-SEQUENCE:"        // not used, is unreliable
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-VERSION:")) continue;
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-ALLOW-CACHE:")) continue;
-            if(startsWith(m_playlistContent[i].get(), "##")) continue;
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-INDEPENDENT-SEGMENTS")) continue;
-            if(startsWith(m_playlistContent[i].get(), "#EXT-X-PROGRAM-DATE-TIME:")) continue;
 
-            if(!f_mediaSeq_found) {
-                xMedSeq = m3u8_findMediaSeqInURL();
-    log_e("found %lli", xMedSeq);
-                if(xMedSeq == UINT64_MAX) {
+
+            if(!pplM3U8.f_mediaSeq_found) {
+   //             xMedSeq = m3u8_findMediaSeqInURL();
+   // log_e("found %lli", xMedSeq);
+                if(pplM3U8.xMedSeq == UINT64_MAX) {
                     log_e("X MEDIA SEQUENCE NUMBER not found");
                     stopSong();
                     return {};
                 }
-                else f_mediaSeq_found = true;
+                else pplM3U8.f_mediaSeq_found = true;
             }
             if(startsWith(m_playlistContent[i].get(), "#EXTINF")) {
                 f_EXTINF_found = true;
@@ -2952,18 +2965,18 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 }
                 else { tmp.append(m_playlistContent[i].get()); }
 
-                if(f_mediaSeq_found) {
-                    lltoa(xMedSeq, llasc, 10);
+                if(pplM3U8.f_mediaSeq_found) {
+                    lltoa(pplM3U8.xMedSeq, llasc, 10);
                     if(indexOf(tmp.get(), llasc) > 0) {
                         m_playlistURL.insert(m_playlistURL.begin(), std:: move(tmp));
-                        xMedSeq++;
+                        pplM3U8.xMedSeq++;
                     }
                     else{
-                        lltoa(xMedSeq + 1, llasc, 10);
+                        lltoa(pplM3U8.xMedSeq + 1, llasc, 10);
                         if(indexOf(tmp.get(), llasc) > 0) {
                             m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                            log_w("mediaseq %llu skipped", xMedSeq);
-                            xMedSeq+= 2;
+                            log_w("mediaseq %llu skipped", pplM3U8.xMedSeq);
+                            pplM3U8.xMedSeq+= 2;
                         }
                     }
                 }
@@ -3007,15 +3020,16 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     }
     else {
         if(f_EXTINF_found) {
-            if(f_mediaSeq_found) {
+            if(pplM3U8.f_mediaSeq_found) {
                 if(m_playlistContent.size() == 0) return {};
-                uint64_t mediaSeq = m3u8_findMediaSeqInURL();
+log_e("");
+                uint64_t mediaSeq = 0;//m3u8_findMediaSeqInURL();
                 if(mediaSeq == 0 || mediaSeq == UINT64_MAX) {
                     log_e("xMediaSequence not found");
                     connecttohost(m_lastHost.get());
                 }
-                if(mediaSeq < xMedSeq) {
-                    uint64_t diff = xMedSeq - mediaSeq;
+                if(mediaSeq < pplM3U8.xMedSeq) {
+                    uint64_t diff = pplM3U8.xMedSeq - mediaSeq;
                     if(diff < 10) { ; }
                     else {
                         if(m_playlistContent.size() > 0) {
@@ -3039,8 +3053,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                     }
                 }
                 else {
-                    if(mediaSeq != UINT64_MAX) { log_e("err, %u packets lost from %u, to %u", mediaSeq - xMedSeq, xMedSeq, mediaSeq); }
-                    xMedSeq = mediaSeq;
+                    if(mediaSeq != UINT64_MAX) { log_e("err, %u packets lost from %u, to %u", mediaSeq - pplM3U8.xMedSeq, pplM3U8.xMedSeq, mediaSeq); }
+                    pplM3U8.xMedSeq = mediaSeq;
                 }
             } // f_medSeq_found
         }
@@ -3140,58 +3154,9 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     return result; // it's a redirection, a new m3u8 playlist
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint64_t Audio::m3u8_findMediaSeqInURL() { // We have no clue what the media sequence is
-/*
-myList:     #EXTM3U
-            #EXT-X-VERSION:3
-            #EXT-X-TARGETDURATION:4
-            #EXT-X-MEDIA-SEQUENCE:227213779
-            #EXT-X-DISCONTINUITY-SEQUENCE:0
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"
-            media-ur748eh1d_b192000_227213779.aac
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"
-            media-ur748eh1d_b192000_227213780.aac
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"
-            media-ur748eh1d_b192000_227213781.aac
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"
-            media-ur748eh1d_b192000_227213782.aac
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"
-            media-ur748eh1d_b192000_227213783.aac
-            #EXTINF:3.008,
-            #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"
-            media-ur748eh1d_b192000_227213784.aac
+bool Audio::m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNr, uint64_t* mediaSeqNr) { // We have no clue what the media sequence is
 
-result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100954"media-ur748eh1d_b192000_227213779.aac
-            linesWithSeqNr[1] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316100957"media-ur748eh1d_b192000_227213780.aac
-            linesWithSeqNr[2] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101000"media-ur748eh1d_b192000_227213781.aac
-            linesWithSeqNr[3] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101003"media-ur748eh1d_b192000_227213782.aac
-            linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
-            linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
-
- 
-    std::vector<ps_ptr<char>> linesWithSeqNr;
-    bool addNextLine = false;
-    int idx = -1;
-    for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
-    //  log_w("pl%i = %s", i, m_playlistContent[i].get());
-        if(!startsWith(m_playlistContent[i].get(), "#EXTINF:") && addNextLine) {
-            // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
-            linesWithSeqNr[idx].assign(linesWithSeqNr[idx].get());
-            linesWithSeqNr[idx].append(m_playlistContent[i].get());
-        }
-        if(startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
-            idx++;
-            linesWithSeqNr.emplace_back().clone_from(m_playlistContent[i]);
-            addNextLine = true;
-        }
-    }
-
-    // example:
+    // example: linesWithSeqNr
     // p:,<p:,<10.032,media_w630738364_405061.mp3
     // p:,<p:,<9.952,media_w630738364_405062.mp3
     // p:,<p:,<10.031,media_w630738364_405063.mp3
@@ -3201,11 +3166,6 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
     //         log_w("linesWithSeqNr[%i] = %s", i, linesWithSeqNr[i].get());
     //     }
 
-    // There must be three valid lines with a sequencer.Then the integers are sought for each line.For the example, these are:
-    // numbers[0] 10 32 630738364 405061
-    // numbers[1] 9 952 630738364 405062
-    // numbers[2] 10 31 630738364 405063
-    // then the absolute value is formed (-234 is also possible if there is a hyphen) and it is searched for three consecutive numbers
     uint16_t pos;
     std::array<std::vector<int64_t>, 3>numbers;
     for(int i = 0; i < 3; i++){
@@ -3221,18 +3181,25 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
             }
         }
     }
-    idx = 0;
-    uint64_t res = UINT64_MAX;
+
+    // There must be three valid lines with a sequencer.Then the integers are sought for each line.For the example, these are:
+    // numbers[0] 10 32 630738364 405061
+    // numbers[1] 9 952 630738364 405062
+    // numbers[2] 10 31 630738364 405063
+    // then the absolute value is formed (-234 is also possible if there is a hyphen) and it is searched for three consecutive numbers
+
+    
+    uint16_t idx = 0;
     while(idx < numbers[0].size()){
         // log_w("%lli, %lli, %lli", abs(numbers[0][idx]), abs(numbers[1][idx]), abs(numbers[2][idx]));
         if(abs(numbers[0][idx]) + 1 == abs(numbers[1][idx]) && abs(numbers[1][idx]) + 1 == abs(numbers[2][idx])){
-            res = abs(numbers[0][idx]);
+            *mediaSeqNr = abs(numbers[0][idx]);
+            return true;
         }
         idx++;
     }
-    return res;
+    return false;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::STfromEXTINF(char* str) {
     // the result is copied in chbuf!!

@@ -197,7 +197,7 @@ private:
     const char*     parsePlaylist_ASX();
     ps_ptr<char>    parsePlaylist_M3U8();
     ps_ptr<char>    m3u8redirection(uint8_t* codec);
-    uint64_t        m3u8_findMediaSeqInURL();
+    bool            m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNrAndURL, uint64_t* mediaSeqNr);
     bool            STfromEXTINF(char* str);
     void            showCodecParams();
     int             findNextSync(uint8_t* data, size_t len);
@@ -401,6 +401,7 @@ private:
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     void vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec){
+        for(int i = 0; i< vec.size(); i++) vec[i].reset();
         vec.clear();            // unique_ptr takes care of free()
         vec.shrink_to_fit();    // put back memory
     }
@@ -546,8 +547,10 @@ private:
 
 #pragma GCC diagnostic pop
 
-    std::vector<ps_ptr<char>> m_playlistContent;  // m3u8 playlist buffer
-    std::vector<ps_ptr<char>> m_playlistURL;      // m3u8 streamURLs buffer
+    std::vector<ps_ptr<char>> m_playlistContent;        // m3u8 playlist buffer from responseHeader
+    std::vector<ps_ptr<char>> m_playlistURL;            // m3u8 streamURLs buffer
+    std::vector<ps_ptr<char>> m_linesWithSeqNrAndURL;   // extract from m_playlistContent, contains URL and MediaSequenceNumber
+    std::vector<ps_ptr<char>> m_linesWithEXTINF;        // extract from m_playlistContent, contains length and metadata
     std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;
@@ -607,6 +610,11 @@ private:
     } pwsHLS_t;
     pwsHLS_t pwsHLS;
 
+    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
+        uint64_t     xMedSeq;
+        bool         f_mediaSeq_found;
+    } pplM3u8_t;
+    pplM3u8_t pplM3U8;
 
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
