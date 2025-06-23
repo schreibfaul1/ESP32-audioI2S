@@ -1036,12 +1036,12 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "TRCK")) id3tag.appendf("Track: %s", value, "id3tag");
     if(!strcmp(tag, "TSSE")) id3tag.appendf("SettingsForEncoding: %s", value, "id3tag");
     if(!strcmp(tag, "TRDA")) id3tag.appendf("RecordingDates: %s", value, "id3tag");
-    if(!m_f_m3u8data)
     if(!strcmp(tag, "TXXX")) id3tag.appendf("UserDefinedText: %s", value, "id3tag");
     if(!strcmp(tag, "TYER")) id3tag.appendf("Year: %s", value, "id3tag");
     if(!strcmp(tag, "USER")) id3tag.appendf("TermsOfUse: %s", value, "id3tag");
     if(!strcmp(tag, "USLT")) id3tag.appendf("Lyrics: %s", value, "id3tag");
     if(!strcmp(tag, "WOAR")) id3tag.appendf("OfficialArtistWebpage: %s", value, "id3tag");
+    if(!strcmp(tag, "WXXX")) id3tag.appendf("User defined URL link frame: %s", value, "id3tag");
     if(!strcmp(tag, "XDOR")) id3tag.appendf("OriginalReleaseTime: %s", value, "id3tag");
 
     if(!id3tag.valid()){log_w("tag not found: %s", tag); return;}
@@ -2901,6 +2901,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
             if(!f_mediaSeq_found) {
                 xMedSeq = m3u8_findMediaSeqInURL();
+    log_e("found %lli", xMedSeq);
                 if(xMedSeq == UINT64_MAX) {
                     log_e("X MEDIA SEQUENCE NUMBER not found");
                     stopSong();
@@ -3009,7 +3010,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
             if(f_mediaSeq_found) {
                 if(m_playlistContent.size() == 0) return {};
                 uint64_t mediaSeq = m3u8_findMediaSeqInURL();
-                if(xMedSeq == 0 || xMedSeq == UINT64_MAX) {
+                if(mediaSeq == 0 || mediaSeq == UINT64_MAX) {
                     log_e("xMediaSequence not found");
                     connecttohost(m_lastHost.get());
                 }
@@ -3172,10 +3173,10 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
             linesWithSeqNr[4] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101006"media-ur748eh1d_b192000_227213783.aac
             linesWithSeqNr[5] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20250316101009"media-ur748eh1d_b192000_227213784.aac */
 
+ 
     std::vector<ps_ptr<char>> linesWithSeqNr;
     bool addNextLine = false;
     int idx = -1;
-
     for(uint16_t i = 0; i < m_playlistContent.size(); i++) {
     //  log_w("pl%i = %s", i, m_playlistContent[i].get());
         if(!startsWith(m_playlistContent[i].get(), "#EXTINF:") && addNextLine) {
@@ -3190,53 +3191,46 @@ result:     linesWithSeqNr[0] = #EXTINF:3.008,#MY-USER-CHUNK-DATA-1:ON-TEXT-DATA
         }
     }
 
-    // for (uint16_t i = 0; i < linesWithSeqNr.size(); i++) {
-    //     log_w("linesWithSeqNr[%i] = %s", i, linesWithSeqNr[i]);
-    // }
+    // example:
+    // p:,<p:,<10.032,media_w630738364_405061.mp3
+    // p:,<p:,<9.952,media_w630738364_405062.mp3
+    // p:,<p:,<10.031,media_w630738364_405063.mp3
 
-    if(linesWithSeqNr.size() < 2) {
-        log_e("not enough lines with \"#EXTINF:\" found");
-        return UINT64_MAX;
-    }
+    if(linesWithSeqNr.size() < 3) return false;
+    //     for (uint16_t i = 0; i < linesWithSeqNr.size(); i++) {
+    //         log_w("linesWithSeqNr[%i] = %s", i, linesWithSeqNr[i].get());
+    //     }
 
-    // Look for differences from right:                                                    ∨
-    // http://lampsifmlive.mdc.akamaized.net/strmLampsi/userLampsi/l_50551_3318804060_229668.aac
-    // http://lampsifmlive.mdc.akamaized.net/strmLampsi/userLampsi/l_50551_3318810050_229669.aac
-    // go back to first digit:                                                        ∧
-
-    int16_t len = strlen(linesWithSeqNr[0].get()) - 1;
-    int16_t qm = indexOf(linesWithSeqNr[0].get(), "?", 0);
-    if(qm > 0) len = qm; // If we find a question mark, look to the left of it
-
-    char*    pEnd;
-    uint64_t MediaSeq = 0;
-    char     llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
-
-    for(int16_t pos = len; pos >= 0; pos--) {
-        if(isdigit(linesWithSeqNr[0][pos])) {
-
-            while(isdigit(linesWithSeqNr[0][pos])) pos--;
-            pos++;
-            uint64_t a, b, c;
-            a = strtoull(linesWithSeqNr[0].get() + pos, &pEnd, 10);
-            b = a + 1;
-            c = b + 1;
-            lltoa(b, llasc, 10);
-            int16_t idx_b = indexOf(linesWithSeqNr[1].get(), llasc, pos - 1);
-            if(idx_b < 1) break;
-            while(idx_b > 0 && linesWithSeqNr[1][idx_b - 1] == '0') {idx_b--;} // Jump at the beginning of the leading zeros, if any
-            lltoa(c, llasc, 10);
-            int16_t idx_c = indexOf(linesWithSeqNr[2].get(), llasc, pos - 1);
-            if(idx_c < 1) break;
-            while(idx_c > 0 && linesWithSeqNr[2][idx_c - 1] == '0') {idx_c--;} // Jump at the beginning of the leading zeros, if any
-            if(idx_b > 0 && idx_c > 0 && idx_b - pos < 3 && idx_c - pos < 3) { // idx_b and idx_c must be positive and near pos
-                MediaSeq = a;
-                AUDIO_INFO("media sequence number: %llu", MediaSeq);
-                break;
+    // There must be three valid lines with a sequencer.Then the integers are sought for each line.For the example, these are:
+    // numbers[0] 10 32 630738364 405061
+    // numbers[1] 9 952 630738364 405062
+    // numbers[2] 10 31 630738364 405063
+    // then the absolute value is formed (-234 is also possible if there is a hyphen) and it is searched for three consecutive numbers
+    uint16_t pos;
+    std::array<std::vector<int64_t>, 3>numbers;
+    for(int i = 0; i < 3; i++){
+        pos = 0;
+        for(pos = 0; pos < linesWithSeqNr[i].strlen(); pos++){
+            if(isdigit(linesWithSeqNr[i][pos])){
+                numbers[i].push_back(strtoull(linesWithSeqNr[i].get() + pos, nullptr, 10));
+                // log_w("%lli", strtoull(linesWithSeqNr[i].get() + pos, nullptr, 10));
+                while(pos < linesWithSeqNr[i].strlen()){ // skip to next number or line end
+                    pos++;
+                    if(!isdigit(linesWithSeqNr[i][pos])) break;
+                }
             }
         }
     }
-    return MediaSeq;
+    idx = 0;
+    uint64_t res = UINT64_MAX;
+    while(idx < numbers[0].size()){
+        // log_w("%lli, %lli, %lli", abs(numbers[0][idx]), abs(numbers[1][idx]), abs(numbers[2][idx]));
+        if(abs(numbers[0][idx]) + 1 == abs(numbers[1][idx]) && abs(numbers[1][idx]) + 1 == abs(numbers[2][idx])){
+            res = abs(numbers[0][idx]);
+        }
+        idx++;
+    }
+    return res;
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
