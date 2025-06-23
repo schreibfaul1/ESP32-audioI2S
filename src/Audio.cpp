@@ -822,6 +822,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
 
     if(!path) {AUDIO_INFO("file path is not set"); goto exit;}  // guard
     c_path.copy_from(path); // copy from path
+    c_path.trim();
     dotPos = c_path.last_index_of('.');
     if(dotPos == -1) {AUDIO_INFO("No file extension found"); goto exit;}  // guard
     setDefaults(); // free buffers an set defaults

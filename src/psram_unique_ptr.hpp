@@ -178,7 +178,7 @@ public:
     // buf.get()[2] = 4.5;
     // printf("%f\n", buf.get()[2]);
 
-    void copy_from(const T* src, std::size_t count, const char* name = nullptr) {
+    void copy_from(const T* src, std::size_t count, const char* name = nullptr) { // for binary data
         std::size_t bytes = count * sizeof(T);
         alloc(bytes, name);
         if (mem && src) {
@@ -186,13 +186,20 @@ public:
         }
     }
 
-    void copy_from(const T* src, const char* name = nullptr) {
+    void copy_from_cstr(const char* src, const char* name = nullptr) { // for strings
+        if (!src) return;
+        std::size_t len = std::strlen(src);
+        copy_from(src, len + 1, name);  // +1 für '\0'
+    }
+
+    void copy_from(const T* src, const char* name = nullptr) {  // for strings
         if(src == nullptr){log_e("arg. is null"); return;}
-        std::size_t count = std::strlen(src);
+        std::size_t count = std::strlen(src) + 1;
         std::size_t bytes = count * sizeof(T);
         alloc(bytes, name);
         if (mem && src) {
             std::memcpy(mem.get(), src, bytes);
+            mem.get()[count] = '\0';
         }
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
