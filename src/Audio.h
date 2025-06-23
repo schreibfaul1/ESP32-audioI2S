@@ -522,7 +522,7 @@ private:
         int pids[4];
     } pid_array;
 
-    File                  audiofile;
+    File                  m_audiofile;
 #ifndef ETHERNET_IF
     WiFiClient            client;
     WiFiClientSecure      clientsecure;
