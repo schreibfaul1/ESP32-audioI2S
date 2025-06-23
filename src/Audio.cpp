@@ -2860,6 +2860,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     uint8_t lines = m_playlistContent.size();
     bool    f_haveRedirection = false;
+    char    llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
 
     if(lines){
         bool addNextLine = false;
@@ -2881,7 +2882,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     }
 
     for(int i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {log_w("%s", m_linesWithSeqNrAndURL[i].get());}
-    for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {showstreamtitle(m_linesWithEXTINF[i].get()); log_w("%s", m_linesWithEXTINF[i].get());}
+    for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {log_w("%s", m_linesWithEXTINF[i].get()); showstreamtitle(m_linesWithEXTINF[i].get()); }
 
     if(f_haveRedirection) {
         ps_ptr<char> ret = m3u8redirection(&m_m3u8Codec);
@@ -2902,35 +2903,18 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
 
     boolean         f_EXTINF_found = false;
-    char            llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
-
-
 
     if(lines) {
-        for(uint16_t i = 0; i < lines; i++) {
+        for(uint16_t i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {
 
-
-
-
-            if(!pplM3U8.f_mediaSeq_found) {
-   //             xMedSeq = m3u8_findMediaSeqInURL();
-   // log_e("found %lli", xMedSeq);
-                if(pplM3U8.xMedSeq == UINT64_MAX) {
-                    log_e("X MEDIA SEQUENCE NUMBER not found");
-                    stopSong();
-                    return {};
-                }
-                else pplM3U8.f_mediaSeq_found = true;
-            }
-            if(startsWith(m_playlistContent[i].get(), "#EXTINF")) {
+            {
                 f_EXTINF_found = true;
-                if(STfromEXTINF(m_playlistContent[i].get())) { showstreamtitle(m_chbuf.get()); }
-                i++;
-                if(startsWith(m_playlistContent[i].get(), "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
+
+                if(startsWith(m_linesWithSeqNrAndURL[i].get(), "#")) i++;   // #MY-USER-CHUNK-DATA-1:ON-TEXT-DATA="20....
                 if(i == lines) continue; // and exit for()
 
                 ps_ptr<char> tmp;
-                if(!startsWith(m_playlistContent[i].get(), "http")) {
+                if(!startsWith(m_linesWithSeqNrAndURL[i].get(), "http")) {
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                         //  chunklist:  http://station.com/aaa/bbb/ddd.aac
@@ -2943,15 +2927,15 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         tmp.clone_from(m_lastHost, "tmp");
                     }
 
-                    if(m_playlistContent[i][0] != '/'){
+                    if(m_linesWithSeqNrAndURL[i][0] != '/'){
 
                         //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
-                        //  chunklist:  ddd.aac                              // m_playlistContent[i]
-                        //  result:     http://station.com/aaa/bbb/ddd.aac   // m_playlistContent[i]
+                        //  chunklist:  ddd.aac                              // m_linesWithSeqNrAndURL[i]
+                        //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithSeqNrAndURL[i]
 
                         int idx = tmp.last_index_of('/');
                         tmp[idx  + 1] = '\0';
-                        tmp.append(m_playlistContent[i].get());
+                        tmp.append(m_linesWithSeqNrAndURL[i].get());
                     }
                     else{
 
@@ -2960,10 +2944,10 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                         //  result:     http://station.com/aaa/bbb/ddd.aac
                         int idx = tmp.index_of('/', 8);
                         tmp[idx] = '\0';
-                        tmp.append(m_playlistContent[i].get());
+                        tmp.append(m_linesWithSeqNrAndURL[i].get());
                     }
                 }
-                else { tmp.append(m_playlistContent[i].get()); }
+                else { tmp.append(m_linesWithSeqNrAndURL[i].get()); }
 
                 if(pplM3U8.f_mediaSeq_found) {
                     lltoa(pplM3U8.xMedSeq, llasc, 10);
@@ -3199,43 +3183,6 @@ bool Audio::m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNr, uin
         idx++;
     }
     return false;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::STfromEXTINF(char* str) {
-    // the result is copied in chbuf!!
-    // extraxt StreamTitle from m3u #EXTINF line to icy-format
-    // orig: #EXTINF:10,title="text="TitleName",artist="ArtistName"
-    // conv: StreamTitle=TitleName - ArtistName
-    // orig: #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
-    // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
-
-    int t1, t2, t3, n0 = 0, n1 = 0, n2 = 0;
-
-    t1 = indexOf(str, "title", 0);
-    if(t1 > 0) {
-        strcpy(m_chbuf.get(), "StreamTitle=");
-        n0 = 12;
-        t2 = t1 + 7; // title="
-        t3 = indexOf(str, "\"", t2);
-        while(str[t3 - 1] == '\\') { t3 = indexOf(str, "\"", t3 + 1); }
-        if(t2 < 0 || t2 > t3) return false;
-        n1 = t3 - t2;
-        strncpy(m_chbuf.get() + n0, str + t2, n1);
-        m_chbuf[n0 + n1] = '\0';
-    }
-    t1 = indexOf(str, "artist", 0);
-    if(t1 > 0) {
-        strcpy(m_chbuf.get() + n0 + n1, " - ");
-        n1 += 3;
-        t2 = indexOf(str, "=\"", t1);
-        t2 += 2;
-        t3 = indexOf(str, "\"", t2);
-        if(t2 < 0 || t2 > t3) return false;
-        n2 = t3 - t2;
-        strncpy(m_chbuf.get() + n0 + n1, str + t2, n2);
-        m_chbuf[n0 + n1 + n2] = '\0';
-    }
-    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {
@@ -4372,6 +4319,7 @@ void Audio::showstreamtitle(char* ml) {
 
     idx1 = indexOf(ml, "StreamTitle=", 0);        // Streamtitle found
     if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0); // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
+    if(idx1 < 0) idx1 = indexOf(ml, "title:", 0); // Title found (e.g. #EXTINF:10,title="The Dan Patrick Show (M-F 9a-12p ET)",artist="zc1401"
 
     if(idx1 >= 0) {
         if(indexOf(ml, "xml version=", 7) > 0) {
@@ -4451,6 +4399,55 @@ void Audio::showstreamtitle(char* ml) {
             }
             if(audio_showstreamtitle) audio_showstreamtitle(sTit.get() + pos);
         }
+    }
+    if(startsWith(ml, "#EXTINF")){
+        // extraxt StreamTitle from m3u #EXTINF line to icy-format
+        // orig: #EXTINF:10,title="text="TitleName",artist="ArtistName"
+        // conv: StreamTitle=TitleName - ArtistName
+        // orig: #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
+        // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
+        ps_ptr<char>title = {};
+        ps_ptr<char>artist = {};
+        ps_ptr<char>streamtitle = {};
+        idx1 = indexOf(ml, "title=\"");
+        idx2 = indexOf(ml, "artist=\"");
+        if(idx1 > 0){
+            int titleStart = idx1 + 7;
+            int idx3 = indexOf(ml, "\"", titleStart);
+            if(idx3 > titleStart){
+                int titleLength = idx3 - titleStart;
+                title.assign(ml + titleStart, titleLength);
+                if(strcmp(title.get(), "text=\"") == 0){
+                    titleStart += 6;
+                    idx3 = indexOf(ml, "\"", titleStart);
+                    if(idx3 > titleStart){
+                        int titleLength = idx3 - titleStart;
+                        title.assign(ml + titleStart, titleLength);
+                    }
+                }
+            }
+        }
+        if(idx2 > 0){
+            int artistStart = idx2 + 8;
+            int idx3 = indexOf(ml, "\"", artistStart);
+            if(idx3 > artistStart){
+                int artistLength = idx3 - artistStart;
+                artist.assign(ml + artistStart, artistLength);
+                if(strcmp(artist.get(), " ") == 0) artist.reset();
+            }
+        }
+        if(title.valid() && artist.valid()){
+            streamtitle.assign(title.get());
+            streamtitle.append(" - ");
+            streamtitle.append(artist.get());
+        }
+        else if(title.valid()){
+            streamtitle.assign(title.get());
+        }
+        else if(artist.valid()){
+            streamtitle.assign(artist.get());
+        }
+        if(audio_showstreamtitle && streamtitle.valid()) audio_showstreamtitle(streamtitle.get());
     }
 
     idx1 = indexOf(ml, "StreamUrl=", 0);

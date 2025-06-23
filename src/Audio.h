@@ -198,7 +198,6 @@ private:
     ps_ptr<char>    parsePlaylist_M3U8();
     ps_ptr<char>    m3u8redirection(uint8_t* codec);
     bool            m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNrAndURL, uint64_t* mediaSeqNr);
-    bool            STfromEXTINF(char* str);
     void            showCodecParams();
     int             findNextSync(uint8_t* data, size_t len);
     int             sendBytes(uint8_t* data, size_t len);
