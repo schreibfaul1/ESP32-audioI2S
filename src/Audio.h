@@ -178,7 +178,6 @@ public:
 private:
     // ------- PRIVATE MEMBERS ----------------------------------------
 
-    void            UTF8toASCII(char* str);
     void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void            htmlToUTF8(char* str);
     void            setDefaults(); // free buffers and set defaults

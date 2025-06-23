@@ -482,7 +482,6 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
@@ -525,12 +524,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     c_host.assign(host); // make a copy
     h_host = urlencode(c_host.get(), true);
-    trim(h_host.get());  // remove leading and trailing spaces
-    lenHost = strlen(h_host.get());
+    h_host.trim();  // remove leading and trailing spaces
+    lenHost = h_host.strlen();
 
-    if(!startsWith(h_host.get(), "http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
+    if(!h_host.starts_with("http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
 
-    if(startsWith(h_host.get(), "https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
+    if(h_host.starts_with("https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
     else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
@@ -643,12 +642,12 @@ bool Audio::httpPrint(const char* host) {
     uint16_t port = 80;     // port number
 
     // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = indexOf(h_host.get(), "/", 0);
+    pos_slash = h_host.index_of("/", 0);
     pos_colon = h_host.index_of(":", 0);
     if(pos_colon > 0 && h_host.size() > pos_colon){
         if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
     }
-    pos_ampersand = indexOf(h_host.get(), "&", 0);
+    pos_ampersand = h_host.index_of("&", 0);
 
     ps_ptr<char> hostwoext; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
     ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
@@ -668,20 +667,17 @@ bool Audio::httpPrint(const char* host) {
         port = atoi(h_host.get() + pos_colon + 1); // Get portnumber as integer
         hostwoext[pos_colon] = '\0';         // Host without portnumber
     }
-
-    char rqh[strlen(h_host.get()) + 330]; // http request header
-    rqh[0] = '\0';
-
-    strcat(rqh, "GET ");
-    strcat(rqh, extension.get());
-    strcat(rqh, " HTTP/1.1\r\n");
-    strcat(rqh, "Host: ");
-    strcat(rqh, hostwoext.get());
-    strcat(rqh, "\r\n");
-    strcat(rqh, "Accept: */*\r\n");
-    strcat(rqh, "User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
-    strcat(rqh, "Accept-Encoding: identity;q=1,*;q=0\r\n");
-    strcat(rqh, "Connection: keep-alive\r\n\r\n");
+    ps_ptr<char>rqh;
+    rqh.assign("GET ");
+    rqh.append(extension.get());
+    rqh.append(" HTTP/1.1\r\n");
+    rqh.append("Host: ");
+    rqh.append(hostwoext.get());
+    rqh.append("\r\n");
+    rqh.append("Accept: */*\r\n");
+    rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+    rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
+    rqh.append("Connection: keep-alive\r\n\r\n");
 
     AUDIO_INFO("next URL: \"%s\"", host);
 
@@ -695,20 +691,20 @@ bool Audio::httpPrint(const char* host) {
             return false;
         }
     }
-    _client->print(rqh);
+    _client->print(rqh.get());
 
-    if(     endsWith(extension.get(), ".mp3"))       m_expectedCodec  = CODEC_MP3;
-    else if(endsWith(extension.get(), ".aac"))       m_expectedCodec  = CODEC_AAC;
-    else if(endsWith(extension.get(), ".wav"))       m_expectedCodec  = CODEC_WAV;
-    else if(endsWith(extension.get(), ".m4a"))       m_expectedCodec  = CODEC_M4A;
-    else if(endsWith(extension.get(), ".flac"))      m_expectedCodec  = CODEC_FLAC;
-    else                                       m_expectedCodec  = CODEC_NONE;
+    if(     extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
+    else if(extension.ends_with_icase(".aac"))       m_expectedCodec  = CODEC_AAC;
+    else if(extension.ends_with_icase(".wav"))       m_expectedCodec  = CODEC_WAV;
+    else if(extension.ends_with_icase(".m4a"))       m_expectedCodec  = CODEC_M4A;
+    else if(extension.ends_with_icase(".flac"))      m_expectedCodec  = CODEC_FLAC;
+    else                                             m_expectedCodec  = CODEC_NONE;
 
-    if(     endsWith(extension.get(), ".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    else if(endsWith(extension.get(), ".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    else if(indexOf( extension.get(), ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
-    else if(endsWith(extension.get(), ".pls"))       m_expectedPlsFmt = FORMAT_PLS;
-    else                                       m_expectedPlsFmt = FORMAT_NONE;
+    if(     extension.ends_with_icase(".asx"))       m_expectedPlsFmt = FORMAT_ASX;
+    else if(extension.ends_with_icase(".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
+    else if(extension.index_of_icase( ".m3u8") >= 0) m_expectedPlsFmt = FORMAT_M3U8;
+    else if(extension.ends_with_icase(".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+    else                                             m_expectedPlsFmt = FORMAT_NONE;
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
@@ -813,42 +809,6 @@ log_e("%s", rqh);
 
     return true;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// clang-format off
-void Audio::UTF8toASCII(char* str) {
-
-    const uint8_t ascii[60] = {
-    //129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148  // UTF8(C3)
-    //                Ä    Å    Æ    Ç         É                                       Ñ                  // CHAR
-      000, 000, 000, 142, 143, 146, 128, 000, 144, 000, 000, 000, 000, 000, 000, 000, 165, 000, 000, 000, // ASCII
-    //149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168
-    //      Ö                             Ü              ß    à                   ä    å    æ         è
-      000, 153, 000, 000, 000, 000, 000, 154, 000, 000, 225, 133, 000, 000, 000, 132, 134, 145, 000, 138,
-    //169, 170, 171, 172. 173. 174. 175, 176, 177, 179, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188
-    //      ê    ë    ì         î    ï         ñ    ò         ô         ö              ù         û    ü
-      000, 136, 137, 141, 000, 140, 139, 000, 164, 149, 000, 147, 000, 148, 000, 000, 151, 000, 150, 129};
-
-    uint16_t i = 0, j = 0, s = 0;
-    bool     f_C3_seen = false;
-
-    while(str[i] != 0) {    // convert UTF8 to ASCII
-        if(str[i] == 195) { // C3
-            i++;
-            f_C3_seen = true;
-            continue;
-        }
-        str[j] = str[i];
-        if(str[j] > 128 && str[j] < 189 && f_C3_seen == true) {
-            s = ascii[str[j] - 129];
-            if(s != 0) str[j] = s; // found a related ASCII sign
-            f_C3_seen = false;
-        }
-        i++;
-        j++;
-    }
-    str[j] = 0;
-}
-// clang-format on
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartPos) {
 
