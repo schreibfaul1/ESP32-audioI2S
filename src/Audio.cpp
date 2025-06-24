@@ -2506,12 +2506,11 @@ void Audio::loop() {
             case AUDIO_LOCALFILE:
                 processLocalFile(); break;
             case HTTP_RESPONSE_HEADER:
-                static uint8_t count = 0;
                 if(!parseHttpResponseHeader()) {
-                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; connecttohost(m_lastHost.get());}
+                    if(m_f_timeout && lVar.count < 3) {m_f_timeout = false; lVar.count++; connecttohost(m_lastHost.get());}
                 }
                 else{
-                    count = 0;
+                    lVar.count = 0;
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
@@ -2542,7 +2541,9 @@ void Audio::loop() {
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
-                if(!host.valid()) lVar.no_host_cnt++; else {lVar.no_host_cnt = 0; lVar.no_host_timer = millis();}
+                if(!host.valid()) lVar.no_host_cnt++;
+                else {lVar.no_host_cnt = 0; lVar.no_host_timer = millis();}
+
                 if(lVar.no_host_cnt == 2){lVar.no_host_timer = millis() + 2000;} // no new url? wait 2 seconds
                 if(host.valid()) { // host contains the next playlist URL
                     httpPrint(host.get());
