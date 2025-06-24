@@ -2405,18 +2405,16 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 void IRAM_ATTR Audio::playChunk() {
     if(m_validSamples == 0) return; // nothing to do
 
-
     plCh.validSamples = 0;
     plCh.samples48K =0; // samples in 48kHz
     plCh.count = 0;
     plCh.i2s_bytesConsumed = 0;
     plCh.sample[0] = 0;
     plCh.sample[1] = 0;
-    plCh.s2;
+    plCh.s2 = 0;
     plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
     plCh.err = ESP_OK;
     plCh.i = 0;
-
 
     if(plCh.count > 0) goto i2swrite;
 
@@ -2530,25 +2528,22 @@ void Audio::loop() {
     }
     else { // m3u8 datastream only
         ps_ptr<char> host;
-        static uint8_t no_host_cnt = 0;
-        static uint32_t no_host_timer = millis();
-        if(no_host_timer > millis()) {return;}
+        if(lVar.no_host_timer > millis()) {return;}
         switch(m_dataMode) {
             case HTTP_RESPONSE_HEADER:
-                static uint8_t count = 0;
                 if(!parseHttpResponseHeader()) {
-                    if(m_f_timeout && count < 3) {m_f_timeout = false; count++; m_f_reset_m3u8Codec = false; connecttohost(m_lastHost.get());}
+                    if(m_f_timeout && lVar.count < 3) {m_f_timeout = false; lVar.count++; m_f_reset_m3u8Codec = false; connecttohost(m_lastHost.get());}
                 }
                 else{
-                    count = 0;
+                    lVar.count = 0;
                     m_f_firstCall  = true;
                 }
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
-                if(!host.valid()) no_host_cnt++; else {no_host_cnt = 0; no_host_timer = millis();}
-                if(no_host_cnt == 2){no_host_timer = millis() + 2000;} // no new url? wait 2 seconds
+                if(!host.valid()) lVar.no_host_cnt++; else {lVar.no_host_cnt = 0; lVar.no_host_timer = millis();}
+                if(lVar.no_host_cnt == 2){lVar.no_host_timer = millis() + 2000;} // no new url? wait 2 seconds
                 if(host.valid()) { // host contains the next playlist URL
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;

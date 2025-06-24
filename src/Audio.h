@@ -637,6 +637,12 @@ private:
     } plCh_t;
     plCh_t plCh;
 
+    typedef struct _lVar{ // used in loop
+        uint8_t     no_host_cnt;
+        uint32_t    no_host_timer;
+        uint8_t     count;
+    } lVar_t;
+    lVar_t lVar;
 
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
