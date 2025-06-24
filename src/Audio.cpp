@@ -2379,8 +2379,6 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
                 );
             };
 
-
-
             int16_t outLeft = static_cast<int16_t>(
                 catmullRom(t, xm1_l, x0_l, x1_l, x2_l)
             );
@@ -3044,49 +3042,47 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     if (cS == 0)            *codec = CODEC_MP3;
     else if (cS < 100)      *codec = CODEC_AAC;
 
-    choosenLine++; // next line is the redirection url
+
 
     if(cS == 100) {                             // "mp4a.xx.xx" not found
         *codec = CODEC_AAC;                     // assume AAC
         for(uint16_t i = 0; i < plcSize; i++) { // we have no codeString, looking for "http"
-            if(startsWith(m_playlistContent[i].get(), "http")) choosenLine = i;
+            if(m_playlistContent[i].index_of("#EXT-X-STREAM-INF") >= 0){
+                choosenLine = i;
+            }
         }
     }
 
-    const char* line = m_playlistContent[choosenLine].get();
-    ps_ptr<char> result;
+    choosenLine++; // next line is the redirection url
 
-    if(!startsWith(line, "http")) {
+    ps_ptr<char> result = {};
+    ps_ptr<char>line; line.clone_from(m_playlistContent[choosenLine]);
 
-        // http://livees.com/prog_index.m3u8 and prog_index48347.aac -->
-        // http://livees.com/prog_index48347.aac http://livees.com/prog_index.m3u8 and chunklist022.m3u8 -->
-        // http://livees.com/chunklist022.m3u8
-
-        size_t len = strlen(m_lastHost.get()) + strlen(line) + 1;
-        result.alloc(len, "result");
-        strcpy(result.get(), m_lastHost.get());
-        int idx1 = lastIndexOf(result.get(), "/");
-        strcpy(result.get() + idx1 + 1, line);
-    } else {
-        size_t len = strlen(line) + 1;
-        result.alloc(len, "result");
-        strcpy(result.get(), line);
-    }
-
-    if(startsWith(line, "../")){
+    if(line.starts_with("../")){
         // ../../2093120-b/RISMI/stream01/streamPlaylist.m3u8
-        char* base = result.get();
-        int idx1 = lastIndexOf(base, "/");
-        base[idx1] = '\0';
-
-        while (startsWith(line, "../")) {
-            memmove((void*)line, line + 3, strlen(line + 3) + 1);
-            idx1 = lastIndexOf(base, "/");
-            base[idx1] = '\0';
+        while (line.starts_with("../")){
+            line.remove_prefix("../");
         }
+        result.clone_from(m_lastHost);
+        int idx = result.last_index_of('/');
+        if(idx > 0) result.truncate_at((size_t)idx + 1);
+        result.append(line.get());
+    }
+    else if(!line.starts_with_icase("http")) {
 
-        strcat(base, "/");
-        strcat(base, line);
+        // http://arcast.com.ar:1935/radio/radionar.stream/playlist.m3u8               m_lastHost
+        // chunklist_w789468022.m3u8                                                   line
+        // http://arcast.com.ar:1935/radio/radionar.stream/chunklist_w789468022.m3u8   --> result
+
+        result.clone_from(m_lastHost);
+        int pos = m_lastHost.last_index_of('/');
+        if(pos > 0){
+            result.truncate_at((size_t)pos + 1);
+            result.append(line.get());
+        }
+    }
+    else {
+        result.clone_from(line);
     }
 
     return result; // it's a redirection, a new m3u8 playlist
