@@ -483,33 +483,99 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
+    if (!host) return {};
+
+    ps_ptr<hwoe_t> result;
+    result.alloc();
+
+    const char* p = host;
+
+    // 🔐 1. SSL check
+    if (strncmp(p, "https://", 8) == 0) {
+        result->ssl = true;
+        p += 8;
+    } else if (strncmp(p, "http://", 7) == 0) {
+        result->ssl = false;
+        p += 7;
+    } else {  // No valid scheme -> error or acceptance http
+        result->ssl = false;
+    }
+
+    // ❓ 2. extract host (from p to ':' or '/' or '?')
+    const char* host_start = p;
+    const char* port_sep = strchr(p, ':');
+    const char* path_sep = strchr(p, '/');
+    const char* query_sep = strchr(p, '?');
+
+    const char* host_end = p + strlen(p);  // default: end of string
+    if (port_sep && port_sep < host_end) host_end = port_sep;
+    if (path_sep && path_sep < host_end) host_end = path_sep;
+    if (query_sep && query_sep < host_end) host_end = query_sep;
+
+    result->hwoe.copy_from(host_start, host_end - host_start);
+
+    // ❓ 3. extract port
+    result->port = result->ssl ? 443 : 80; // default
+    if (port_sep && (!path_sep || port_sep < path_sep)) {
+        result->port = atoi(port_sep + 1);
+    }
+
+    // ❓ 4. extract extension (path)
+    if (path_sep) {
+        path_sep++;
+        const char* end = query_sep ? query_sep : p + strlen(p);
+        result->extension.copy_from(path_sep, end - path_sep);
+    }
+
+    // ❓ 5. extract query string
+    if (query_sep) {
+        result->query_string.assign(query_sep);
+    }
+
+    return result;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
+    if(!host) { AUDIO_INFO("Hostaddress is empty");     stopSong(); return false;}
+    if (strlen(host) > 2048) { AUDIO_INFO("Hostaddress is too long");  stopSong(); return false;} // max length in Chrome DevTools
+
     bool     res           = false; // return value
-    uint16_t lenHost       = 0;     // length of hostname
     uint16_t port          = 0;     // port number
     uint16_t authLen       = 0;     // length of authorization
-    int16_t  pos_slash     = 0;     // position of "/" in hostname
-    int16_t  pos_colon     = 0;     // position of ":" in hostname
-    int16_t  pos_ampersand = 0;     // position of "&" in hostname
     uint32_t timestamp     = 0;     // timeout surveillance
-    uint16_t hostwoext_begin = 0;
 
-    ps_ptr<char> c_host; // copy of host
-    ps_ptr<char> h_host;
-    ps_ptr<char> rqh; // request header
-    ps_ptr<char> toEncode;
-
-//    https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
-//        |   |                                     |    |                              |
-//        |   |                                     |    |                              |             (query string)
-//    ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+    ps_ptr<char> c_host;       // copy of host
+    ps_ptr<char> u_host;       // urlencoded host
+    ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> extension;    // extension
+    ps_ptr<char> query_string; // parameter
+    ps_ptr<char> rqh;          // request header
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
+
+    c_host.copy_from(host);
+    c_host.trim();
+    u_host = urlencode(c_host.get(), true);
+    auto dismantledHost = dismantle_host(c_host.get());
+
+//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
+//      |   |                                     |    |                              |
+//      |   |                                     |    |                              |             (query string)
+//  ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+
+    m_f_ssl = dismantledHost->ssl;
+    hwoe.clone_from(dismantledHost->hwoe);
+    port = dismantledHost->port;
+    extension.clone_from(dismantledHost->extension);
+    query_string.clone_from(dismantledHost->query_string);
+    extension.append(query_string.get());
 
     // optional basic authorization
     if(user && pwd) authLen = strlen(user) + strlen(pwd);
     ps_ptr <char>authorization;
+    ps_ptr<char> toEncode;
     authorization.alloc(base64_encode_expected_len(authLen + 1) + 1, "authorization");
     authorization.clear();
     if(authLen > 0) {
@@ -519,43 +585,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         b64encode((const char*)toEncode.get(), toEncode.strlen(), authorization.get());
     }
 
-    if (host == NULL)              { AUDIO_INFO("Hostaddress is empty");     stopSong(); goto exit;}
-    if (strlen(host) > 2048)       { AUDIO_INFO("Hostaddress is too long");  stopSong(); goto exit;} // max length in Chrome DevTools
-
-    c_host.assign(host); // make a copy
-    h_host = urlencode(c_host.get(), true);
-    h_host.trim();  // remove leading and trailing spaces
-    lenHost = h_host.strlen();
-
-    if(!h_host.starts_with("http")) { AUDIO_INFO("Hostaddress is not valid"); stopSong(); goto exit;}
-
-    if(h_host.starts_with("https")) {m_f_ssl = true;  hostwoext_begin = 8; port = 443;}
-    else                            {m_f_ssl = false; hostwoext_begin = 7; port = 80;}
-
-    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash     = h_host.index_of('/', 10); // position of "/" in hostname
-    pos_colon     = h_host.index_of(':', 10); // position of ":" in hostname
-    pos_ampersand = h_host.index_of('&', 10); // position of "&" in hostname
-
-    if(pos_colon > 0 && h_host.size() > pos_colon){
-        if(isalpha(c_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows)
-    }
-
-    if(pos_slash > 0) h_host[pos_slash] = '\0';
-    if((pos_colon > 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(c_host.get() + pos_colon + 1);   // Get portnumber as integer
-        h_host[pos_colon] = '\0';
-    }
     setDefaults();
-    rqh.alloc(lenHost + authorization.strlen() + 330, "rqh"); // http request header
-    if(rqh.valid()) rqh.clear();
-    else {AUDIO_INFO("out of memory"); stopSong(); goto exit;}
-
                        rqh.assign("GET /");
-    if(pos_slash > 0){ rqh.append(h_host.get() + pos_slash + 1);}
+    if(hwoe.valid()) { rqh.append(extension.get());}
                        rqh.append(" HTTP/1.1\r\n");
                        rqh.append("Host: ");
-                       rqh.append(h_host.get() + hostwoext_begin);
+                       rqh.append(hwoe.get());
                        rqh.append("\r\n");
                        rqh.append("Icy-MetaData:1\r\n");
                        rqh.append("Icy-MetaData:2\r\n");
@@ -573,13 +608,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     timestamp = millis();
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
 
-    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", h_host.get() + hostwoext_begin, port, h_host.get() + pos_slash + 1);
-    res = _client->connect(h_host.get() + hostwoext_begin, port);
+    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", hwoe.get(), port, extension.get());
+    res = _client->connect(hwoe.get(), port);
 
-    if(pos_slash > 0) h_host[pos_slash] = '/';
-    if(pos_colon > 0) h_host[pos_colon] = ':';
-
-    m_expectedCodec = CODEC_NONE;
+     m_expectedCodec = CODEC_NONE;
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
@@ -588,19 +620,19 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
         _client->print(rqh.get());
-        if(h_host.ends_with_icase( ".mp3" ))      m_expectedCodec  = CODEC_MP3;
-        if(h_host.ends_with_icase( ".aac" ))      m_expectedCodec  = CODEC_AAC;
-        if(h_host.ends_with_icase( ".wav" ))      m_expectedCodec  = CODEC_WAV;
-        if(h_host.ends_with_icase( ".m4a" ))      m_expectedCodec  = CODEC_M4A;
-        if(h_host.ends_with_icase( ".ogg" ))      m_expectedCodec  = CODEC_OGG;
-        if(h_host.ends_with_icase( ".flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(h_host.ends_with_icase( "-flac"))      m_expectedCodec  = CODEC_FLAC;
-        if(h_host.ends_with_icase( ".opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(h_host.ends_with_icase( "/opus"))      m_expectedCodec  = CODEC_OPUS;
-        if(h_host.ends_with_icase( ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
-        if(h_host.ends_with_icase( ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
-        if(h_host.ends_with_icase( ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
-        if(h_host.contains(".m3u8"))             {m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost.get());}
+        if(extension.ends_with_icase( ".mp3" ))      m_expectedCodec  = CODEC_MP3;
+        if(extension.ends_with_icase( ".aac" ))      m_expectedCodec  = CODEC_AAC;
+        if(extension.ends_with_icase( ".wav" ))      m_expectedCodec  = CODEC_WAV;
+        if(extension.ends_with_icase( ".m4a" ))      m_expectedCodec  = CODEC_M4A;
+        if(extension.ends_with_icase( ".ogg" ))      m_expectedCodec  = CODEC_OGG;
+        if(extension.ends_with_icase( ".flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(extension.ends_with_icase( "-flac"))      m_expectedCodec  = CODEC_FLAC;
+        if(extension.ends_with_icase( ".opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(extension.ends_with_icase( "/opus"))      m_expectedCodec  = CODEC_OPUS;
+        if(extension.ends_with_icase( ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
+        if(extension.ends_with_icase( ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
+        if(extension.ends_with_icase( ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
+        if(extension.contains(".m3u8"))             {m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost.get());}
 
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
@@ -614,7 +646,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(audio_icyurl) audio_icyurl("");
     }
 
-exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
@@ -3836,7 +3867,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             vTaskDelay(5);
             continue;
         }
-
         if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];
@@ -3900,7 +3930,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 ps_ptr<char> fn;
                 fn.assign(rhl.get() + idx + 9); // Position directly after "filename="
                 fn.replace("\"", ""); // remove '\"' around filename if present
-                fn.replace("\'", ""); // remove '\'' around filename if present
                 AUDIO_INFO("Filename is %s", fn.get());
             }
         }

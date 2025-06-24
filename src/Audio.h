@@ -125,6 +125,14 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
+typedef struct _hwoe{
+    bool ssl;
+    ps_ptr<char> hwoe;  // host without extension
+    uint16_t     port;
+    ps_ptr<char> extension;
+    ps_ptr<char> query_string;
+} hwoe_t;
+
 class Audio : private AudioBuffer{
 
     AudioBuffer InBuff; // instance of input buffer
@@ -133,6 +141,7 @@ public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
+    ps_ptr<hwoe_t>dismantle_host(const char* host);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);

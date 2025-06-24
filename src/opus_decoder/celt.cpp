@@ -665,7 +665,7 @@ bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
     s_celtDec.alloc(omd, "CELTDecoder");
     if (s_celtDec.valid()) {
-        log_w("Allocated %zu bytes", s_celtDec.size());
+        // log_w("Allocated %zu bytes", s_celtDec.size());
         s_celtDec.clear();  // mem zero
         return true;
     }

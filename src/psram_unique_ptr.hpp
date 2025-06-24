@@ -34,13 +34,16 @@ inline int strncasecmp_local(const char* s1, const char* s2, std::size_t n) {
 template <typename T>
 
 class ps_ptr {
-    // std::unique_ptr<void, PsramDeleter> mem;
+private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t allocated_size = 0;
     static inline T dummy{}; // For invalid accesses
+    T* ptr = nullptr;  // new
 
 public:
     ps_ptr() = default;
+    ~ps_ptr() { delete ptr; }  //new
+ //   void reset() { delete ptr; ptr = nullptr; }
 
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
@@ -52,11 +55,6 @@ public:
     ps_ptr(const ps_ptr&) = delete;
     ps_ptr& operator=(const ps_ptr&) = delete;
 
-    //~ps_ptr() {
-    //    if(mem) {
-    //        log_v("Freeing %zu bytes", allocated_size);
-    //    }
-    //}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Prototypes:
 
@@ -81,10 +79,24 @@ public:
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
         }
     }
-    // Within the class ps_ptr<T>
-    void alloc() {
-        alloc(sizeof(T));
+
+    void alloc(const char* name = nullptr) { // alloc for structures
+        reset();  // Make sure that previous memory is released
+        mem.reset(new T());  // <-- Constructor is called!
+        allocated_size = sizeof(T);
     }
+
+    // void alloc(const char* name = nullptr) {
+    //     reset();
+    //     void* raw = ps_malloc(sizeof(T));
+    //     if (raw) {
+    //         mem.reset(new (raw) T()); // Platzierter Konstruktoraufruf
+    //         allocated_size = sizeof(T);
+    //     } else {
+    //         printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
+    //     }
+    // }
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
@@ -178,11 +190,12 @@ public:
     // buf.get()[2] = 4.5;
     // printf("%f\n", buf.get()[2]);
 
-    void copy_from(const T* src, std::size_t count, const char* name = nullptr) { // for binary data
-        std::size_t bytes = count * sizeof(T);
+    void copy_from(const T* src, std::size_t count, const char* name = nullptr) {
+        std::size_t bytes = (count + 1) * sizeof(T);  // +1 For zero terminator
         alloc(bytes, name);
         if (mem && src) {
-            std::memcpy(mem.get(), src, bytes);
+            std::memcpy(mem.get(), src, count * sizeof(T));
+            mem.get()[count] = '\0';  // Zero
         }
     }
 
@@ -972,6 +985,7 @@ public:
                 break;
             }
         }
+        *write = '\0';  // Make sure that there is always a zero terminator
 
         this->copy_from(result.get(), result.strlen());
         return true;
