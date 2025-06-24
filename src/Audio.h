@@ -626,8 +626,8 @@ private:
 
     typedef struct _plCh{ // used in playChunk
         int32_t     validSamples;
-        int32_t     samples48K;
-        uint32_t    count;
+        int32_t     samples48K = 0;
+        uint32_t    count = 0;
         size_t      i2s_bytesConsumed;
         int16_t*    sample[2];
         int16_t*    s2;
@@ -713,7 +713,6 @@ private:
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
     bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
-    bool            m_f_firstChunk = false;         // InitSequence for playChunk;
     bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
