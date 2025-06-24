@@ -563,32 +563,32 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    ps_ptr<int16_t> m_outBuff;        // Interleaved L/R
-    ps_ptr<int16_t> m_samplesBuff48K; // Interleaved L/R
-    ps_ptr<char>    m_ibuff;          // used in log_info()
-    ps_ptr<char>    m_lastHost;       // Store the last URL to a webstream
-    ps_ptr<char>    m_lastM3U8host;
-    ps_ptr<char>    m_speechtxt;      // stores tts text
-    ps_ptr<char>    m_streamTitle;    // stores the last StreamTitle
+    ps_ptr<int16_t>  m_outBuff;        // Interleaved L/R
+    ps_ptr<int16_t>  m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<char>     m_ibuff;          // used in log_info()
+    ps_ptr<char>     m_lastHost;       // Store the last URL to a webstream
+    ps_ptr<char>     m_lastM3U8host;
+    ps_ptr<char>     m_speechtxt;      // stores tts text
+    ps_ptr<char>     m_streamTitle;    // stores the last StreamTitle
     typedef struct _ID3Hdr{ // used only in readID3header()
-        size_t      id3Size;
-        size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-        size_t      remainingHeaderBytes;
-        size_t      universal_tmp;
-        uint8_t     ID3version;
-        int         ehsz;
-        char        tag[5];
-        char        frameid[5];
-        size_t      framesize;
-        bool        compressed;
-        size_t      APIC_size[3];
-        uint32_t    APIC_pos[3];
-        bool        SYLT_seen;
-        size_t      SYLT_size;
-        uint32_t    SYLT_pos;
-        uint8_t     numID3Header;
-        uint16_t    iBuffSize;
-        ps_ptr<char>iBuff;
+        size_t       id3Size;
+        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t       remainingHeaderBytes;
+        size_t       universal_tmp;
+        uint8_t      ID3version;
+        int          ehsz;
+        char         tag[5];
+        char         frameid[5];
+        size_t       framesize;
+        bool         compressed;
+        size_t       APIC_size[3];
+        uint32_t     APIC_pos[3];
+        bool         SYLT_seen;
+        size_t       SYLT_size;
+        uint32_t     SYLT_pos;
+        uint8_t      numID3Header;
+        uint16_t     iBuffSize;
+        ps_ptr<char> iBuff;
     } ID3Hdr_t;
     ID3Hdr_t ID3Hdr;
 
@@ -614,17 +614,28 @@ private:
 
 
     typedef struct _m4aHdr{ // used in read_M4A_Header
-        size_t headerSize;
-        size_t retvalue;
-        size_t atomsize;
-        size_t audioDataPos;
-        size_t cnt;
-        uint32_t picPos;
-        uint32_t picLen;
+        size_t      headerSize;
+        size_t      retvalue;
+        size_t      atomsize;
+        size_t      audioDataPos;
+        size_t      cnt;
+        uint32_t    picPos;
+        uint32_t    picLen;
     } m4aHdr_t;
     m4aHdr_t m4aHdr;
 
-
+    typedef struct _plCh{ // used in playChunk
+        int32_t     validSamples;
+        int32_t     samples48K;
+        uint32_t    count;
+        size_t      i2s_bytesConsumed;
+        int16_t*    sample[2];
+        int16_t*    s2;
+        int         sampleSize;
+        esp_err_t   err;
+        int         i;
+    } plCh_t;
+    plCh_t plCh;
 
 
     filter_t        m_filter[3];                    // digital filters

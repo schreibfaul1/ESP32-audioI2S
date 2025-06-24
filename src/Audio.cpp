@@ -2276,9 +2276,8 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::stopSong() {
     m_f_lockInBuffer = true; // wait for the decoding to finish
-        static uint8_t maxWait = 0;
+        uint8_t maxWait = 0;
         while(m_f_audioTaskIsDecoding) {vTaskDelay(1); maxWait++; if(maxWait > 100) break;} // in case of error wait max 100ms
-        maxWait = 0;
         uint32_t pos = 0;
         if(m_f_running) {
             m_f_running = false;
@@ -2406,17 +2405,20 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 void IRAM_ATTR Audio::playChunk() {
     if(m_validSamples == 0) return; // nothing to do
 
-    int32_t validSamples = 0;
-    static int32_t samples48K = 0; // samples in 48kHz
-    static uint32_t count = 0;
-    size_t i2s_bytesConsumed = 0;
-    int16_t* sample[2] = {0};
-    int16_t* s2;
-    int sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
-    esp_err_t err = ESP_OK;
-    int i= 0;
 
-    if(count > 0) goto i2swrite;
+    plCh.validSamples = 0;
+    plCh.samples48K =0; // samples in 48kHz
+    plCh.count = 0;
+    plCh.i2s_bytesConsumed = 0;
+    plCh.sample[0] = 0;
+    plCh.sample[1] = 0;
+    plCh.s2;
+    plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
+    plCh.err = ESP_OK;
+    plCh.i = 0;
+
+
+    if(plCh.count > 0) goto i2swrite;
 
     if(getChannels() == 1){
         for (int i = m_validSamples - 1; i >= 0; --i) {
@@ -2427,54 +2429,54 @@ void IRAM_ATTR Audio::playChunk() {
     //    m_validSamples *= 2;
     }
 
-    validSamples = m_validSamples;
+    plCh.validSamples = m_validSamples;
 
-    while(validSamples) {
-        *sample = m_outBuff.get() + i;
-        computeVUlevel(*sample);
+    while(plCh.validSamples) {
+        *plCh.sample = m_outBuff.get() + plCh.i;
+        computeVUlevel(*plCh.sample);
 
         //---------- Filterchain, can commented out if not used-------------
         {
             if(m_corr > 1) {
-                s2 = *sample;
-                s2[LEFTCHANNEL] /= m_corr;
-                s2[RIGHTCHANNEL] /= m_corr;
+                plCh.s2 = *plCh.sample;
+                plCh.s2[LEFTCHANNEL] /= m_corr;
+                plCh.s2[RIGHTCHANNEL] /= m_corr;
             }
-            IIR_filterChain0(*sample);
-            IIR_filterChain1(*sample);
-            IIR_filterChain2(*sample);
+            IIR_filterChain0(*plCh.sample);
+            IIR_filterChain1(*plCh.sample);
+            IIR_filterChain2(*plCh.sample);
         }
         //------------------------------------------------------------------
         if(m_f_forceMono && m_channels == 2){
-            int32_t xy = ((*sample)[RIGHTCHANNEL] + (*sample)[LEFTCHANNEL]) / 2;
-            (*sample)[RIGHTCHANNEL] = (int16_t)xy;
-            (*sample)[LEFTCHANNEL]  = (int16_t)xy;
+            int32_t xy = ((*plCh.sample)[RIGHTCHANNEL] + (*plCh.sample)[LEFTCHANNEL]) / 2;
+            (*plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
+            (*plCh.sample)[LEFTCHANNEL]  = (int16_t)xy;
         }
-        Gain(*sample);
-        i += 2;
-        validSamples -= 1;
+        Gain(*plCh.sample);
+        plCh.i += 2;
+        plCh.validSamples -= 1;
     }
     //------------------------------------------------------------------------------------------
-    samples48K = resampleTo48kStereo(m_outBuff.get(), m_validSamples);
+    plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_validSamples);
 
     if(audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)m_samplesBuff48K.get(), samples48K, &continueI2S); // 48KHz stereo 16bps
+        audio_process_i2s((int16_t*)m_samplesBuff48K.get(), plCh.samples48K, &continueI2S); // 48KHz stereo 16bps
         if(!continueI2S) {
-            samples48K = 0;
-            count = 0;
+            plCh.samples48K = 0;
+            plCh.count = 0;
             return;
         }
     }
 
 i2swrite:
 
-    err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K.get() + count, samples48K * sampleSize, &i2s_bytesConsumed, 50);
-    if( ! (err == ESP_OK || err == ESP_ERR_TIMEOUT)) goto exit;
-    samples48K -= i2s_bytesConsumed / sampleSize;
-    count += i2s_bytesConsumed / 2;
-    if(samples48K <= 0) { m_validSamples = 0; count = 0; }
+    plCh.err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K.get() + plCh.count, plCh.samples48K * plCh.sampleSize, &plCh.i2s_bytesConsumed, 50);
+    if( ! (plCh.err == ESP_OK || plCh.err == ESP_ERR_TIMEOUT)) goto exit;
+    plCh.samples48K -= plCh.i2s_bytesConsumed / plCh.sampleSize;
+    plCh.count += plCh.i2s_bytesConsumed / 2;
+    if(plCh.samples48K <= 0) { m_validSamples = 0; plCh.count = 0; }
 
 // ---- statistics, bytes written to I2S (every 10s)
     // static int cnt = 0;
@@ -2491,11 +2493,11 @@ i2swrite:
 
     return;
 exit:
-    if     (err == ESP_OK) return;
-    else if(err == ESP_ERR_INVALID_ARG)   log_e("NULL pointer or this handle is not tx handle");
-    else if(err == ESP_ERR_TIMEOUT)       log_e("Writing timeout, no writing event received from ISR within ticks_to_wait");
-    else if(err == ESP_ERR_INVALID_STATE) log_e("I2S is not ready to write");
-    else log_e("i2s err %i", err);
+    if     (plCh.err == ESP_OK) return;
+    else if(plCh.err == ESP_ERR_INVALID_ARG)   log_e("NULL pointer or this handle is not tx handle");
+    else if(plCh.err == ESP_ERR_TIMEOUT)       log_e("Writing timeout, no writing event received from ISR within ticks_to_wait");
+    else if(plCh.err == ESP_ERR_INVALID_STATE) log_e("I2S is not ready to write");
+    else log_e("i2s err %i", plCh.err);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::loop() {
