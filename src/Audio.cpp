@@ -295,6 +295,7 @@ void Audio::setDefaults() {
     m_f_firstCurTimeCall = true; // InitSequence for computeAudioTime
     m_f_firstM3U8call = true;    // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;    // InitSequence for playAudioData
+    m_f_firstChunk = true;       // InitSequence for playChunk
 //    m_f_running = false;       // already done in stopSong
     m_f_unsync = false;   // set within ID3 tag but not used
     m_f_exthdr = false;   // ID3 extended header
@@ -1961,7 +1962,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m4aHdr.cnt = 0;
         m4aHdr.picPos = 0;
         m4aHdr.picLen = 0;
-        m4aHdr.cnt = 0;
         m_controlCounter = M4A_FTYP;
         return 0;
     }
@@ -2405,9 +2405,13 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 void IRAM_ATTR Audio::playChunk() {
     if(m_validSamples == 0) return; // nothing to do
 
+    if(m_f_firstChunk){
+        m_f_firstChunk = false;
+        plCh.samples48K =0; // samples in 48kHz
+        plCh.count = 0;
+    }
+
     plCh.validSamples = 0;
-    plCh.samples48K =0; // samples in 48kHz
-    plCh.count = 0;
     plCh.i2s_bytesConsumed = 0;
     plCh.sample[0] = 0;
     plCh.sample[1] = 0;
