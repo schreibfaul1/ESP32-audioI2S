@@ -612,6 +612,21 @@ private:
     } pplM3u8_t;
     pplM3u8_t pplM3U8;
 
+
+    typedef struct _m4aHdr{ // used in read_M4A_Header
+        size_t headerSize;
+        size_t retvalue;
+        size_t atomsize;
+        size_t audioDataPos;
+        size_t cnt;
+        uint32_t picPos;
+        uint32_t picLen;
+    } m4aHdr_t;
+    m4aHdr_t m4aHdr;
+
+
+
+
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     int             m_LFcount = 0;                  // Detection of end of header
