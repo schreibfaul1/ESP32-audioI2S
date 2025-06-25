@@ -484,10 +484,10 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
+ps_struct_ptr<hwoe_t>Audio::dismantle_host(const char* host){
     if (!host) return {};
 
-    ps_ptr<hwoe_t> result;
+    ps_struct_ptr<hwoe_t> result;
     result.alloc();
 
     const char* p = host;
@@ -571,11 +571,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(dismantledHost->hwoe.valid()) hwoe.clone_from(dismantledHost->hwoe);
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
-
-dismantledHost->hwoe.reset();
-dismantledHost->extension.reset();
-dismantledHost->query_string.reset();
-dismantledHost.reset();
 
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}
@@ -692,11 +687,6 @@ bool Audio::httpPrint(const char* host) {
     if(dismantledHost->hwoe.valid()) hwoe.clone_from(dismantledHost->hwoe);
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
-
-dismantledHost->hwoe.reset();
-dismantledHost->extension.reset();
-dismantledHost->query_string.reset();
-dismantledHost.reset();
 
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}

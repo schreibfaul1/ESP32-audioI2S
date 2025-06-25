@@ -44,9 +44,9 @@ public:
 //    ~ps_ptr() = default;
     ~ps_ptr() {
         if (mem) {
-        //    log_w("Destructor called: Freeing %d bytes at %p", allocated_size * sizeof(T), mem.get());
+            // log_w("Destructor called: Freeing %d bytes at %p", allocated_size * sizeof(T), mem.get());
         } else {
-            ; // log_w("Destructor called: No memory to free.");
+            // log_w("Destructor called: No memory to free.");
         }
     }
 
@@ -96,10 +96,16 @@ public:
         }
     }
 
-    void alloc(const char* name = nullptr) { // alloc for structures
-        reset();  // Make sure that previous memory is released
-        mem.reset(new T());  // <-- Constructor is called!
-        allocated_size = sizeof(T);
+    void alloc(const char* name = nullptr) { // alloc for single objects/structures
+        reset();  // Freigabe des zuvor gehaltenen Speichers
+        void* raw_mem = ps_malloc(sizeof(T)); // Allokiert im PSRAM
+        if (raw_mem) {
+            mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
+            allocated_size = sizeof(T);
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
+            allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+        }
     }
 
     // void alloc(const char* name = nullptr) {
@@ -1225,8 +1231,30 @@ public:
         reset();
     }
 
+    // Explicitly define the Move constructor
+    ps_struct_ptr(ps_struct_ptr&& other) noexcept
+        : inner(std::move(other.inner)) { // move the 'inner' ps_ptr-Member
+        // Optional: A logging entry could be here to pursue relocation processes
+        // log_w("ps_struct_ptr Move Constructor called for type %s", typeid(T).name());
+    }
+
+    // Explicitly define the Move Assignment operator
+    ps_struct_ptr& operator=(ps_struct_ptr&& other) noexcept {
+        if (this != &other) { // Prevent self -allocation
+            // Optional: A logging entry could be here
+            // log_w("ps_struct_ptr Move Assignment called for type %s", typeid(T).name());
+            inner = std::move(other.inner); // move the 'inner' ps_ptr-Member
+        }
+        return *this;
+    }
+
+    // Explicitly delete copy constructor and copying assignment operator
+    // This is good practice to force the "Move-Only" semantics
+    ps_struct_ptr(const ps_struct_ptr&) = delete;
+    ps_struct_ptr& operator=(const ps_struct_ptr&) = delete;
+
 protected:
-    // Wird über Makro PS_STRUCT_FREE_MEMBERS spezialisiert
+    // Specializes via macro ps_struct_free_memembers
     inline void free_all_ptr_members() {}
 };
 
@@ -1238,8 +1266,10 @@ protected:
 #define PS_STRUCT_FREE_MEMBERS(TYPE, ...) \
     template <> \
     inline void ps_struct_ptr<TYPE>::free_all_ptr_members() { \
-        auto ptr = get(); \
-        free_fields(__VA_ARGS__); \
+        auto ptr = this->get(); /* 'ptr' ist hier ein Pointer auf die Struktur TYPE */ \
+        if (ptr) { /* Sicherheitsprüfung, um sicherzustellen, dass ptr gültig ist */ \
+            __VA_ARGS__ \
+        } \
     }
 
 inline void free_field(char*& field) {
