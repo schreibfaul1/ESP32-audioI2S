@@ -212,7 +212,6 @@ public:
         alloc(bytes, name);
         if (mem && src) {
             std::memcpy(mem.get(), src, bytes);
-            mem.get()[count] = '\0';
         }
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -225,14 +224,14 @@ public:
     // printf("%s\n", copy.get());  // → Hello World
 
     void clone_from(const ps_ptr<T>& other, const char* name = nullptr) {
-        if (!other.valid()) {
+        if (!other.valid() || other.size() == 0) {
             reset();
             return;
         }
 
         std::size_t sz = other.size();
         alloc(sz, name);
-        if (mem) {
+        if (mem && sz > 0){
             std::memcpy(mem.get(), other.get(), sz);
         }
     }

@@ -488,6 +488,9 @@ ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
 
     ps_ptr<hwoe_t> result;
     result.alloc();
+    result->hwoe.assign("");   // empty init with 1 byte
+    result->extension.assign("");
+    result->query_string.assign("");
 
     const char* p = host;
 
@@ -509,10 +512,9 @@ ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
     const char* query_sep = strchr(p, '?');
 
     const char* host_end = p + strlen(p);  // default: end of string
-    if (port_sep && port_sep < host_end) host_end = port_sep;
-    if (path_sep && path_sep < host_end) host_end = path_sep;
+    if (port_sep  && port_sep  < host_end) host_end = port_sep;
+    if (path_sep  && path_sep  < host_end) host_end = path_sep;
     if (query_sep && query_sep < host_end) host_end = query_sep;
-
     result->hwoe.copy_from(host_start, host_end - host_start);
 
     // ❓ 3. extract port
@@ -523,9 +525,9 @@ ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
 
     // ❓ 4. extract extension (path)
     if (path_sep) {
-        path_sep++;
-        const char* end = query_sep ? query_sep : p + strlen(p);
-        result->extension.copy_from(path_sep, end - path_sep);
+        const char* path_start = path_sep + 1;
+        const char* path_end = query_sep ? query_sep : host + strlen(host);
+        result->extension.copy_from(path_start, path_end - path_start);
     }
 
     // ❓ 5. extract query string
@@ -570,6 +572,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     port = dismantledHost->port;
     extension.clone_from(dismantledHost->extension);
     query_string.clone_from(dismantledHost->query_string);
+
     extension.append(query_string.get());
 
     // optional basic authorization
@@ -611,7 +614,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", hwoe.get(), port, extension.get());
     res = _client->connect(hwoe.get(), port);
 
-     m_expectedCodec = CODEC_NONE;
+    m_expectedCodec = CODEC_NONE;
     m_expectedPlsFmt = FORMAT_NONE;
 
     if(res) {
