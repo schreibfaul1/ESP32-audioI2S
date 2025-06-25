@@ -38,17 +38,33 @@ private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t allocated_size = 0;
     static inline T dummy{}; // For invalid accesses
-    T* ptr = nullptr;  // new
 
 public:
     ps_ptr() = default;
-    ~ps_ptr() { delete ptr; }  //new
- //   void reset() { delete ptr; ptr = nullptr; }
+//    ~ps_ptr() = default;
+    ~ps_ptr() {
+        if (mem) {
+        //    log_w("Destructor called: Freeing %d bytes at %p", allocated_size * sizeof(T), mem.get());
+        } else {
+            ; // log_w("Destructor called: No memory to free.");
+        }
+    }
 
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
         allocated_size = other.allocated_size;
         other.allocated_size = 0;
+    }
+
+    // NEU: Move-Assignment-Operator
+    ps_ptr& operator=(ps_ptr&& other) noexcept {
+        if (this != &other) { // Sicherstellen, dass keine Selbstzuweisung stattfindet
+            mem = std::move(other.mem);
+            allocated_size = other.allocated_size;
+            other.allocated_size = 0;
+            // log_w("Move Assignment called: Moved %d bytes from %p to %p", allocated_size * sizeof(T), other.mem.get(), mem.get());
+        }
+        return *this;
     }
 
     // Optional: Explicitly prohibit copy constructor (helpful in troubleshooting)
@@ -857,32 +873,6 @@ public:
         if (mem.get() != raw_ptr) {
             mem.reset(raw_ptr);
             allocated_size = 0; // (raw_ptr != nullptr) ? /* Berechne Größe hier */ : 0;
-        }
-        return *this;
-    }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  R E L E A S E   📌📌📌
-    T* release() {
-        T* ptr = get();        // aktuellen Zeiger sichern
-        mem.release();         // unique_ptr gibt den Zeiger frei und setzt sich auf nullptr
-        allocated_size = 0;    // optional: Größe zurücksetzen
-        return ptr;
-    }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌   M O V E    📌📌📌
-
-    // ps_ptr<int32_t> a;
-    // ps_ptr<int32_t> b;
-    //
-    // b.alloc(128);// allocate mem
-    //
-    // // Move semantics (no copy of the content!)
-    // a = std::move(b);  // 👉 Call your Move Assignment operator
-    ps_ptr& operator=(ps_ptr&& other) noexcept {
-        if (this != &other) {
-            mem = std::move(other.mem);
-            allocated_size = other.allocated_size;
-            other.allocated_size = 0;
         }
         return *this;
     }

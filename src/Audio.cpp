@@ -35,6 +35,7 @@ void AUDIO_INFO(const char* fmt, Args&&... args) {
     if (!dst) return;  // Or error treatment
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
     if(audio_info) audio_info(result.get());
+    result.reset();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -571,10 +572,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
 
-    dismantledHost->hwoe.reset();
-    dismantledHost->extension.reset();
-    dismantledHost->query_string.reset();
-    dismantledHost.reset();
+dismantledHost->hwoe.reset();
+dismantledHost->extension.reset();
+dismantledHost->query_string.reset();
+dismantledHost.reset();
 
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}
@@ -692,10 +693,10 @@ bool Audio::httpPrint(const char* host) {
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
 
-    dismantledHost->hwoe.reset();
-    dismantledHost->extension.reset();
-    dismantledHost->query_string.reset();
-    dismantledHost.reset();
+dismantledHost->hwoe.reset();
+dismantledHost->extension.reset();
+dismantledHost->query_string.reset();
+dismantledHost.reset();
 
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}
