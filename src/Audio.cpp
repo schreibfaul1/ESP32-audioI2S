@@ -571,6 +571,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
 
+    dismantledHost->hwoe.reset();
+    dismantledHost->extension.reset();
+    dismantledHost->query_string.reset();
+    dismantledHost.reset();
+
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}
     if(!hwoe.valid()) hwoe.assign("");
@@ -686,6 +691,11 @@ bool Audio::httpPrint(const char* host) {
     if(dismantledHost->hwoe.valid()) hwoe.clone_from(dismantledHost->hwoe);
     if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
     if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
+
+    dismantledHost->hwoe.reset();
+    dismantledHost->extension.reset();
+    dismantledHost->query_string.reset();
+    dismantledHost.reset();
 
     if(extension.valid()) path.assign(extension.get());
     if(query_string.valid()){path.append("?"); path.append(query_string.get());}
