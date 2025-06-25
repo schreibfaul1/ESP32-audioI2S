@@ -488,9 +488,6 @@ ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
 
     ps_ptr<hwoe_t> result;
     result.alloc();
-    result->hwoe.assign("");   // empty init with 1 byte
-    result->extension.assign("");
-    result->query_string.assign("");
 
     const char* p = host;
 
@@ -532,7 +529,7 @@ ps_ptr<hwoe_t>Audio::dismantle_host(const char* host){
 
     // ❓ 5. extract query string
     if (query_sep) {
-        result->query_string.assign(query_sep);
+        result->query_string.assign(query_sep + 1);
     }
 
     return result;
@@ -549,31 +546,38 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint32_t timestamp     = 0;     // timeout surveillance
 
     ps_ptr<char> c_host;       // copy of host
-    ps_ptr<char> u_host;       // urlencoded host
     ps_ptr<char> hwoe;         // host without extension
     ps_ptr<char> extension;    // extension
     ps_ptr<char> query_string; // parameter
+    ps_ptr<char> path;         // extension + '?' + parameter
     ps_ptr<char> rqh;          // request header
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
     c_host.copy_from(host);
     c_host.trim();
-    u_host = urlencode(c_host.get(), true);
     auto dismantledHost = dismantle_host(c_host.get());
 
-//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;&user=ps-charivariwb;&pwd=ps-charivariwb-------
+//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
 //      |   |                                     |    |                              |
 //      |   |                                     |    |                              |             (query string)
 //  ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+//                                                     |
+//                                                     |<-----------------------------path------------------------------------>......
 
     m_f_ssl = dismantledHost->ssl;
-    hwoe.clone_from(dismantledHost->hwoe);
     port = dismantledHost->port;
-    extension.clone_from(dismantledHost->extension);
-    query_string.clone_from(dismantledHost->query_string);
+    if(dismantledHost->hwoe.valid()) hwoe.clone_from(dismantledHost->hwoe);
+    if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
+    if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
 
-    extension.append(query_string.get());
+    if(extension.valid()) path.assign(extension.get());
+    if(query_string.valid()){path.append("?"); path.append(query_string.get());}
+    if(!hwoe.valid()) hwoe.assign("");
+    if(!extension.valid()) extension.assign("");
+    if(!path.valid()) path.assign("");
+
+    path = urlencode(path.get(), true);
 
     // optional basic authorization
     if(user && pwd) authLen = strlen(user) + strlen(pwd);
@@ -590,7 +594,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     setDefaults();
                        rqh.assign("GET /");
-    if(hwoe.valid()) { rqh.append(extension.get());}
+                       rqh.append(path.get());
                        rqh.append(" HTTP/1.1\r\n");
                        rqh.append("Host: ");
                        rqh.append(hwoe.get());
@@ -611,7 +615,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     timestamp = millis();
     _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
 
-    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", hwoe.get(), port, extension.get());
+    AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", hwoe.get(), port, path.get());
     res = _client->connect(hwoe.get(), port);
 
     m_expectedCodec = CODEC_NONE;
@@ -648,7 +652,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(audio_icydescription) audio_icydescription("");
         if(audio_icyurl) audio_icyurl("");
     }
-
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
@@ -656,75 +659,70 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 bool Audio::httpPrint(const char* host) {
     // user and pwd for authentification only, can be empty
     if(!m_f_running) return false;
-    if(host == NULL) {
-        AUDIO_INFO("Hostaddress is empty");
-        stopSong();
-        return false;
-    }
+    if(host == NULL) {AUDIO_INFO("Hostaddress is empty"); stopSong(); return false;}
 
-    ps_ptr<char> h_host; // copy of l_host without http:// or https://
+    uint16_t port = 0;         // port number
+    ps_ptr<char> c_host;       // copy of host
+    ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> extension;    // extension
+    ps_ptr<char> query_string; // parameter
+     ps_ptr<char> path;        // extension + '?' + parameter
+    ps_ptr<char> rqh;          // request header
+    ps_ptr<char> last_hwoe;    // m_lastM3U8host without extension
 
-    if(startsWith(host, "https")) m_f_ssl = true;
-    else m_f_ssl = false;
+    c_host.copy_from(host);
+    c_host.trim();
+    auto dismantledHost = dismantle_host(c_host.get());
 
-    if(m_f_ssl) h_host.append(host + 8);
-    else        h_host.append(host + 7);
+//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
+//      |   |                                     |    |                              |
+//      |   |                                     |    |                              |             (query string)
+//  ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+//                                                     |
+//                                                     |<-----------------------------path------------------------------------------->
 
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
+    m_f_ssl = dismantledHost->ssl;
+    port = dismantledHost->port;
+    if(dismantledHost->hwoe.valid()) hwoe.clone_from(dismantledHost->hwoe);
+    if(dismantledHost->extension.valid()) extension.clone_from(dismantledHost->extension);
+    if(dismantledHost->query_string.valid()) query_string.clone_from(dismantledHost->query_string);
 
-    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = h_host.index_of("/", 0);
-    pos_colon = h_host.index_of(":", 0);
-    if(pos_colon > 0 && h_host.size() > pos_colon){
-        if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    }
-    pos_ampersand = h_host.index_of("&", 0);
+    if(extension.valid()) path.assign(extension.get());
+    if(query_string.valid()){path.append("?"); path.append(query_string.get());}
+    if(!hwoe.valid()) hwoe.assign("");
+    if(!extension.valid()) extension.assign("");
+    if(!path.valid()) path.assign("");
 
-    ps_ptr<char> hostwoext; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    path = urlencode(path.get(), true);
 
-    if(pos_slash > 1) {
-        hostwoext.alloc(pos_slash + 1, "hostwoext");
-        memcpy(hostwoext.get(), h_host.get(), pos_slash);
-        hostwoext[pos_slash] = '\0';
-        extension = urlencode(h_host.get() + pos_slash, true);
-    }
-    else { // url has no extension
-        hostwoext.append(h_host.get());
-        extension.append("/");
-    }
+    // if(!m_lastM3U8host.valid()) m_lastM3U8host.assign("");
+    // auto dismantledLastHost = dismantle_host(m_lastM3U8host.get());
+    // last_hwoe.clone_from(dismantledLastHost->hwoe);
 
-    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(h_host.get() + pos_colon + 1); // Get portnumber as integer
-        hostwoext[pos_colon] = '\0';         // Host without portnumber
-    }
-    ps_ptr<char>rqh;
-    rqh.assign("GET ");
-    rqh.append(extension.get());
+    rqh.assign("GET /");
+    rqh.append(path.get());
     rqh.append(" HTTP/1.1\r\n");
     rqh.append("Host: ");
-    rqh.append(hostwoext.get());
+    rqh.append(hwoe.get());
     rqh.append("\r\n");
     rqh.append("Accept: */*\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
 
-    AUDIO_INFO("next URL: \"%s\"", host);
+    AUDIO_INFO("next URL: \"%s\"", c_host.get());
 
     if(!_client->connected()) {
          if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
          else        { _client = static_cast<WiFiClient*>(&client); }
         AUDIO_INFO("The host has disconnected, reconnecting");
-        if(!_client->connect(hostwoext.get(), port)) {
+        if(!_client->connect(hwoe.get(), port)) {
             log_e("connection lost");
             stopSong();
             return false;
         }
     }
+
     _client->print(rqh.get());
 
     if(     extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
