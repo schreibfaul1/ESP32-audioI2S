@@ -188,7 +188,7 @@ Audio::Audio(uint8_t i2sPort) {
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num  = 32;                     // number of DMA buffer
+    m_i2s_chan_cfg.dma_desc_num  = 16;                     // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 512;                    // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);

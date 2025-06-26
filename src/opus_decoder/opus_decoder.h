@@ -50,6 +50,8 @@ typedef struct _ofp3 { // opus_FramePacking_Code
     int32_t     spf = 0;   // samples per frame
     int32_t     paddingLength = 0;
     uint16_t    c1fs = 0;
+    uint16_t    vfs[48];   // variable frame size
+    uint32_t    idx;
 } ofp3;
 
 typedef struct _odp3 {
