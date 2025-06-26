@@ -125,6 +125,15 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
+typedef struct _hwoe{
+    bool ssl;
+    ps_ptr<char> hwoe;  // host without extension
+    uint16_t     port;
+    ps_ptr<char> extension;
+    ps_ptr<char> query_string;
+} hwoe_t;
+PS_STRUCT_FREE_MEMBERS(hwoe_t, ptr->hwoe.reset(); ptr->extension.reset(); ptr->query_string.reset();)
+
 class Audio : private AudioBuffer{
 
     AudioBuffer InBuff; // instance of input buffer
@@ -133,6 +142,7 @@ public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
+    ps_struct_ptr<hwoe_t>dismantle_host(const char* host);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);
@@ -178,7 +188,6 @@ public:
 private:
     // ------- PRIVATE MEMBERS ----------------------------------------
 
-    void            UTF8toASCII(char* str);
     void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void            htmlToUTF8(char* str);
     void            setDefaults(); // free buffers and set defaults
@@ -197,8 +206,7 @@ private:
     const char*     parsePlaylist_ASX();
     ps_ptr<char>    parsePlaylist_M3U8();
     ps_ptr<char>    m3u8redirection(uint8_t* codec);
-    uint64_t        m3u8_findMediaSeqInURL();
-    bool            STfromEXTINF(char* str);
+    bool            m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNrAndURL, uint64_t* mediaSeqNr);
     void            showCodecParams();
     int             findNextSync(uint8_t* data, size_t len);
     int             sendBytes(uint8_t* data, size_t len);
@@ -308,7 +316,7 @@ private:
     }
 
     int indexOf (const char* base, const char* str, int startIndex = 0) {
-    //fb
+    //fbi
         const char *p = base;
         for (; startIndex > 0; startIndex--)
             if (*p++ == '\0') return -1;
@@ -401,6 +409,7 @@ private:
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     void vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec){
+        for(int i = 0; i< vec.size(); i++) vec[i].reset();
         vec.clear();            // unique_ptr takes care of free()
         vec.shrink_to_fit();    // put back memory
     }
@@ -523,7 +532,7 @@ private:
         int pids[4];
     } pid_array;
 
-    File                  audiofile;
+    File                  m_audiofile;
 #ifndef ETHERNET_IF
     WiFiClient            client;
     WiFiClientSecure      clientsecure;
@@ -546,8 +555,10 @@ private:
 
 #pragma GCC diagnostic pop
 
-    std::vector<ps_ptr<char>> m_playlistContent;  // m3u8 playlist buffer
-    std::vector<ps_ptr<char>> m_playlistURL;      // m3u8 streamURLs buffer
+    std::vector<ps_ptr<char>> m_playlistContent;        // m3u8 playlist buffer from responseHeader
+    std::vector<ps_ptr<char>> m_playlistURL;            // m3u8 streamURLs buffer
+    std::vector<ps_ptr<char>> m_linesWithSeqNrAndURL;   // extract from m_playlistContent, contains URL and MediaSequenceNumber
+    std::vector<ps_ptr<char>> m_linesWithEXTINF;        // extract from m_playlistContent, contains length and metadata
     std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;
@@ -558,38 +569,42 @@ private:
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
-    const size_t    m_chbufSize          = 8192;
-
 
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    ps_ptr<int16_t> m_outBuff;        // Interleaved L/R
-    ps_ptr<int16_t> m_samplesBuff48K; // Interleaved L/R
-    ps_ptr<char>    m_chbuf;          // universal buffer
-    ps_ptr<char>    m_ibuff;          // used in log_info()
-    ps_ptr<char>    m_lastHost;       // Store the last URL to a webstream
-    ps_ptr<char>    m_lastM3U8host;
-    ps_ptr<char>    m_speechtxt;      // stores tts text
+    ps_ptr<int16_t>  m_outBuff;        // Interleaved L/R
+    ps_ptr<int16_t>  m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<char>     m_ibuff;          // used in log_info()
+    ps_ptr<char>     m_lastHost;       // Store the last URL to a webstream
+    ps_ptr<char>     m_lastM3U8host;
+    ps_ptr<char>     m_speechtxt;      // stores tts text
+    ps_ptr<char>     m_streamTitle;    // stores the last StreamTitle
     typedef struct _ID3Hdr{ // used only in readID3header()
-        size_t      id3Size;
-        size_t      totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-        size_t      remainingHeaderBytes;
-        size_t      universal_tmp;
-        uint8_t     ID3version;
-        int         ehsz;
-        char        tag[5];
-        char        frameid[5];
-        size_t      framesize;
-        bool        compressed;
-        size_t      APIC_size[3];
-        uint32_t    APIC_pos[3];
-        bool        SYLT_seen;
-        size_t      SYLT_size;
-        uint32_t    SYLT_pos;
-        uint8_t     numID3Header;
-        uint16_t    iBuffSize;
-        ps_ptr<char>iBuff;
+        size_t       id3Size;
+        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t       remainingHeaderBytes;
+        size_t       universal_tmp;
+        uint8_t      ID3version;
+        int          ehsz;
+        char         tag[5];
+        char         frameid[5];
+        char         lang[5];
+        size_t       framesize;
+        bool         compressed;
+        size_t       APIC_size[3];
+        uint32_t     APIC_pos[3];
+        bool         SYLT_seen;
+        size_t       SYLT_size;
+        uint32_t     SYLT_pos;
+        uint8_t      numID3Header;
+        uint16_t     iBuffSize;
+        uint8_t      contentDescriptorTerminator_0;
+        uint8_t      contentDescriptorTerminator_1;
+        uint8_t      textStringTerminator_0;
+        uint8_t      textStringTerminator_1;
+        bool         byteOrderMark;
+        ps_ptr<char> iBuff;
     } ID3Hdr_t;
     ID3Hdr_t ID3Hdr;
 
@@ -607,6 +622,43 @@ private:
     } pwsHLS_t;
     pwsHLS_t pwsHLS;
 
+    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
+        uint64_t     xMedSeq;
+        bool         f_mediaSeq_found;
+    } pplM3u8_t;
+    pplM3u8_t pplM3U8;
+
+
+    typedef struct _m4aHdr{ // used in read_M4A_Header
+        size_t      headerSize;
+        size_t      retvalue;
+        size_t      atomsize;
+        size_t      audioDataPos;
+        size_t      cnt;
+        uint32_t    picPos;
+        uint32_t    picLen;
+    } m4aHdr_t;
+    m4aHdr_t m4aHdr;
+
+    typedef struct _plCh{ // used in playChunk
+        int32_t     validSamples;
+        int32_t     samples48K = 0;
+        uint32_t    count = 0;
+        size_t      i2s_bytesConsumed;
+        int16_t*    sample[2];
+        int16_t*    s2;
+        int         sampleSize;
+        esp_err_t   err;
+        int         i;
+    } plCh_t;
+    plCh_t plCh;
+
+    typedef struct _lVar{ // used in loop
+        uint8_t     no_host_cnt;
+        uint32_t    no_host_timer;
+        uint8_t     count;
+    } lVar_t;
+    lVar_t lVar;
 
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff

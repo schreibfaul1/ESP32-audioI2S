@@ -34,13 +34,21 @@ inline int strncasecmp_local(const char* s1, const char* s2, std::size_t n) {
 template <typename T>
 
 class ps_ptr {
-    // std::unique_ptr<void, PsramDeleter> mem;
+private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t allocated_size = 0;
     static inline T dummy{}; // For invalid accesses
 
 public:
     ps_ptr() = default;
+//    ~ps_ptr() = default;
+    ~ps_ptr() {
+        if (mem) {
+            // log_w("Destructor called: Freeing %d bytes at %p", allocated_size * sizeof(T), mem.get());
+        } else {
+            // log_w("Destructor called: No memory to free.");
+        }
+    }
 
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
@@ -48,16 +56,21 @@ public:
         other.allocated_size = 0;
     }
 
+    // NEU: Move-Assignment-Operator
+    ps_ptr& operator=(ps_ptr&& other) noexcept {
+        if (this != &other) { // Sicherstellen, dass keine Selbstzuweisung stattfindet
+            mem = std::move(other.mem);
+            allocated_size = other.allocated_size;
+            other.allocated_size = 0;
+            // log_w("Move Assignment called: Moved %d bytes from %p to %p", allocated_size * sizeof(T), other.mem.get(), mem.get());
+        }
+        return *this;
+    }
+
     // Optional: Explicitly prohibit copy constructor (helpful in troubleshooting)
     ps_ptr(const ps_ptr&) = delete;
     ps_ptr& operator=(const ps_ptr&) = delete;
 
-
-    //~ps_ptr() {
-    //    if(mem) {
-    //        log_v("Freeing %zu bytes", allocated_size);
-    //    }
-    //}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Prototypes:
 
@@ -82,10 +95,30 @@ public:
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
         }
     }
-    // Within the class ps_ptr<T>
-    void alloc() {
-        alloc(sizeof(T));
+
+    void alloc(const char* name = nullptr) { // alloc for single objects/structures
+        reset();  // Freigabe des zuvor gehaltenen Speichers
+        void* raw_mem = ps_malloc(sizeof(T)); // Allokiert im PSRAM
+        if (raw_mem) {
+            mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
+            allocated_size = sizeof(T);
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
+            allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+        }
     }
+
+    // void alloc(const char* name = nullptr) {
+    //     reset();
+    //     void* raw = ps_malloc(sizeof(T));
+    //     if (raw) {
+    //         mem.reset(new (raw) T()); // Platzierter Konstruktoraufruf
+    //         allocated_size = sizeof(T);
+    //     } else {
+    //         printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
+    //     }
+    // }
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
@@ -180,6 +213,23 @@ public:
     // printf("%f\n", buf.get()[2]);
 
     void copy_from(const T* src, std::size_t count, const char* name = nullptr) {
+        std::size_t bytes = (count + 1) * sizeof(T);  // +1 For zero terminator
+        alloc(bytes, name);
+        if (mem && src) {
+            std::memcpy(mem.get(), src, count * sizeof(T));
+            mem.get()[count] = '\0';  // Zero
+        }
+    }
+
+    void copy_from_cstr(const char* src, const char* name = nullptr) { // for strings
+        if (!src) return;
+        std::size_t len = std::strlen(src);
+        copy_from(src, len + 1, name);  // +1 für '\0'
+    }
+
+    void copy_from(const T* src, const char* name = nullptr) {  // for strings
+        if(src == nullptr){log_e("arg. is null"); return;}
+        std::size_t count = std::strlen(src) + 1;
         std::size_t bytes = count * sizeof(T);
         alloc(bytes, name);
         if (mem && src) {
@@ -196,14 +246,14 @@ public:
     // printf("%s\n", copy.get());  // → Hello World
 
     void clone_from(const ps_ptr<T>& other, const char* name = nullptr) {
-        if (!other.valid()) {
+        if (!other.valid() || other.size() == 0) {
             reset();
             return;
         }
 
         std::size_t sz = other.size();
         alloc(sz, name);
-        if (mem) {
+        if (mem && sz > 0){
             std::memcpy(mem.get(), other.get(), sz);
         }
     }
@@ -415,6 +465,20 @@ public:
 
         va_end(args);
     }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  E Q U A L S   📌📌📌
+    // my_ps_ptr t1, t2;
+    // t1.assign("Hallo");
+    // t2.assign("Hallo");
+    //
+    // if (t1.equals(t2)) {
+    //    👍 is equal
+    // }
+    bool equals(const ps_ptr<T>& other) const {
+        if (!this->get() || !other.get()) return false;
+        return strcmp(this->get(), other.get()) == 0;
+    }
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F   📌📌📌
 
@@ -682,6 +746,55 @@ public:
         return count;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  U T F 8 _ V A L I D   📌📌📌
+
+    // if (utf8_valid("Beyoncé – Déjà Vu")) {
+    //     printf("Gültiges UTF-8\n");
+    // } else {
+    //     printf("Ungültige UTF-8-Sequenz!\n");
+    // }
+
+    bool utf8_valid(const char* s) {
+        if (!s) return false;
+
+        const unsigned char* bytes = reinterpret_cast<const unsigned char*>(s);
+        while (*bytes) {
+            if (*bytes <= 0x7F) {
+                // 1-byte ASCII
+                bytes++;
+            } else if ((*bytes >> 5) == 0x6) {
+                // 2-byte sequence: 110xxxxx 10xxxxxx
+                if ((bytes[1] & 0xC0) != 0x80) return false;
+                if (*bytes < 0xC2) return false; // overlong encoding
+                bytes += 2;
+            } else if ((*bytes >> 4) == 0xE) {
+                // 3-byte sequence: 1110xxxx 10xxxxxx 10xxxxxx
+                if ((bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80) return false;
+
+                unsigned char first = *bytes;
+                if (first == 0xE0 && bytes[1] < 0xA0) return false; // overlong
+                if (first == 0xED && bytes[1] >= 0xA0) return false; // UTF-16 surrogate
+
+                bytes += 3;
+            } else if ((*bytes >> 3) == 0x1E) {
+                // 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                if ((bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80 || (bytes[3] & 0xC0) != 0x80) return false;
+
+                unsigned char first = *bytes;
+                if (first > 0xF4) return false; // > U+10FFFF
+                if (first == 0xF0 && bytes[1] < 0x90) return false; // overlong
+                if (first == 0xF4 && bytes[1] >= 0x90) return false; // out of range
+
+                bytes += 4;
+            } else {
+                // Invalid first byte
+                return false;
+            }
+        }
+
+        return true;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  G E T   📌📌📌
     T* get() const { return static_cast<T*>(mem.get()); }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -766,32 +879,6 @@ public:
         if (mem.get() != raw_ptr) {
             mem.reset(raw_ptr);
             allocated_size = 0; // (raw_ptr != nullptr) ? /* Berechne Größe hier */ : 0;
-        }
-        return *this;
-    }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  R E L E A S E   📌📌📌
-    T* release() {
-        T* ptr = get();        // aktuellen Zeiger sichern
-        mem.release();         // unique_ptr gibt den Zeiger frei und setzt sich auf nullptr
-        allocated_size = 0;    // optional: Größe zurücksetzen
-        return ptr;
-    }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌   M O V E    📌📌📌
-
-    // ps_ptr<int32_t> a;
-    // ps_ptr<int32_t> b;
-    //
-    // b.alloc(128);// allocate mem
-    //
-    // // Move semantics (no copy of the content!)
-    // a = std::move(b);  // 👉 Call your Move Assignment operator
-    ps_ptr& operator=(ps_ptr&& other) noexcept {
-        if (this != &other) {
-            mem = std::move(other.mem);
-            allocated_size = other.allocated_size;
-            other.allocated_size = 0;
         }
         return *this;
     }
@@ -942,6 +1029,7 @@ public:
                 break;
             }
         }
+        *write = '\0';  // Make sure that there is always a zero terminator
 
         this->copy_from(result.get(), result.strlen());
         return true;
@@ -976,6 +1064,74 @@ public:
             std::size_t new_len = end - start + 1;
             std::memmove(str, start, new_len + 1);
         }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T R U N C A T E _ A T   📌📌📌
+
+    // ps_ptr<char>t;
+    // t.assign("Hello, World");
+    // t.truncate_at(',');  --> "Hello"
+
+    // ps_ptr<char>t;
+    // t.assign("Hello, World");
+    // t.truncate_at('5');  --> "Hello"
+
+    void truncate_at(char ch) {
+        if (!valid()) return;
+        char* str = get();
+        char* pos = strchr(str, ch);
+        if (pos) *pos = '\0';
+    }
+
+    void truncate_at(std::size_t pos) {
+        if (!valid()) return;
+        char* str = get();
+        std::size_t len = std::strlen(str);
+        if (pos < len) str[pos] = '\0';
+        else log_e("truncate pos %i out of length %i", pos, len);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E M O V E _ P R E F I X   📌📌📌
+    // ps_ptr<char> t;
+    // t.assign("../../2093120-b/RISMI/stream01/streamPlaylist.m3u8");
+    // t.remove_prefix("../../");  // Result: "2093120-b/RISMI/stream01/streamPlaylist.m3u8"
+
+    void remove_prefix(const char* prefix) {
+        if (!valid() || !prefix) return;
+
+        std::size_t prefix_len = std::strlen(prefix);
+        if (std::strncmp(get(), prefix, prefix_len) == 0) {
+            char* str = get();
+            std::size_t len = std::strlen(str);
+            std::memmove(str, str + prefix_len, len - prefix_len + 1); // inkl. '\0'
+        }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E M O V E _ B E F O R E   📌📌📌
+    // t.assign("../../2093120-b/RISMI/stream01/streamPlaylist.m3u8");
+    // t.remove_before('/');  // removed until the first '/'
+    // Result: "../2093120-b/RISMI/stream01/streamPlaylist.m3u8"
+
+    void remove_before(char ch, bool includeChar = true) {
+        if (!valid()) return;
+
+        char* str = get();
+        char* pos = strchr(str, ch);
+        if (pos) {
+            if (!includeChar) ++pos;  // wenn nicht inklusive: das Zeichen behalten
+            std::size_t remaining = std::strlen(pos);
+            std::memmove(str, pos, remaining + 1); // inkl. '\0'
+        }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C O N T A I N S  📌📌📌
+
+    // if (t.contains("xyz")) {
+    // "xyz" occurs in t
+    // }
+
+    bool contains(const char* substr) const {
+        return substr && this->valid() && std::strstr(this->get(), substr);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C L E A R   📌📌📌
@@ -1075,8 +1231,30 @@ public:
         reset();
     }
 
+    // Explicitly define the Move constructor
+    ps_struct_ptr(ps_struct_ptr&& other) noexcept
+        : inner(std::move(other.inner)) { // move the 'inner' ps_ptr-Member
+        // Optional: A logging entry could be here to pursue relocation processes
+        // log_w("ps_struct_ptr Move Constructor called for type %s", typeid(T).name());
+    }
+
+    // Explicitly define the Move Assignment operator
+    ps_struct_ptr& operator=(ps_struct_ptr&& other) noexcept {
+        if (this != &other) { // Prevent self -allocation
+            // Optional: A logging entry could be here
+            // log_w("ps_struct_ptr Move Assignment called for type %s", typeid(T).name());
+            inner = std::move(other.inner); // move the 'inner' ps_ptr-Member
+        }
+        return *this;
+    }
+
+    // Explicitly delete copy constructor and copying assignment operator
+    // This is good practice to force the "Move-Only" semantics
+    ps_struct_ptr(const ps_struct_ptr&) = delete;
+    ps_struct_ptr& operator=(const ps_struct_ptr&) = delete;
+
 protected:
-    // Wird über Makro PS_STRUCT_FREE_MEMBERS spezialisiert
+    // Specializes via macro ps_struct_free_memembers
     inline void free_all_ptr_members() {}
 };
 
@@ -1088,8 +1266,10 @@ protected:
 #define PS_STRUCT_FREE_MEMBERS(TYPE, ...) \
     template <> \
     inline void ps_struct_ptr<TYPE>::free_all_ptr_members() { \
-        auto ptr = get(); \
-        free_fields(__VA_ARGS__); \
+        auto ptr = this->get(); /* 'ptr' ist hier ein Pointer auf die Struktur TYPE */ \
+        if (ptr) { /* Sicherheitsprüfung, um sicherzustellen, dass ptr gültig ist */ \
+            __VA_ARGS__ \
+        } \
     }
 
 inline void free_field(char*& field) {
