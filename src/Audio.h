@@ -589,6 +589,7 @@ private:
         int          ehsz;
         char         tag[5];
         char         frameid[5];
+        char         lang[5];
         size_t       framesize;
         bool         compressed;
         size_t       APIC_size[3];
@@ -598,6 +599,11 @@ private:
         uint32_t     SYLT_pos;
         uint8_t      numID3Header;
         uint16_t     iBuffSize;
+        uint8_t      contentDescriptorTerminator_0;
+        uint8_t      contentDescriptorTerminator_1;
+        uint8_t      textStringTerminator_0;
+        uint8_t      textStringTerminator_1;
+        bool         byteOrderMark;
         ps_ptr<char> iBuff;
     } ID3Hdr_t;
     ID3Hdr_t ID3Hdr;

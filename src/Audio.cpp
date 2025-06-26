@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2d                                                                                                                                ";
-/*  Updated on: Jun 22.2025
+    Version 3.3.2e                                                                                                                                ";
+/*  Updated on: Jun 26.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1632,7 +1632,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         ID3Hdr.SYLT_pos = 0;
         ID3Hdr.numID3Header = 0;
         ID3Hdr.iBuffSize = 4096;
-        ID3Hdr.iBuff.alloc(ID3Hdr.iBuffSize, "iBuff");
+        ID3Hdr.iBuff.alloc(ID3Hdr.iBuffSize + 10, "iBuff");
         memset(ID3Hdr.tag, 0, sizeof(ID3Hdr.tag));
         memset(ID3Hdr.APIC_size, 0, sizeof(ID3Hdr.APIC_size));
         memset(ID3Hdr.APIC_pos, 0, sizeof(ID3Hdr.APIC_pos));
@@ -1739,11 +1739,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             ID3Hdr.framesize = bigEndian(data, 4); // << 8
         }
         ID3Hdr.remainingHeaderBytes -= 4;
-        uint8_t flag = *(data + 4); // skip 1st flag
-        (void)flag;
+        uint8_t frameFlag_0 = *(data + 4);
+        uint8_t frameFlag_1 = *(data + 5);
+        (void)frameFlag_0;
         ID3Hdr.remainingHeaderBytes--;
-        ID3Hdr.compressed = (*(data + 5)) & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
-                                           // size' appended to the frame header.
+        ID3Hdr.compressed = frameFlag_1 & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
         ID3Hdr.remainingHeaderBytes--;
         uint32_t decompsize = 0;
         if(ID3Hdr.compressed) {
@@ -1757,7 +1757,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         return 6;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_controlCounter == 5) { // If the frame is larger than 512 bytes, skip the rest
+    if(m_controlCounter == 5) { // If the frame is larger than ID3Hdr.framesize, skip the rest
         if(ID3Hdr.framesize > len) {
             ID3Hdr.framesize -= len;
             ID3Hdr.remainingHeaderBytes -= len;
@@ -1772,7 +1772,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 6) { // Read the value
         m_controlCounter = 5;   // only read 256 bytes
-        uint8_t encodingByte = *(data + 0);  // ID3v2 Text-Encoding-Byte
+        uint8_t textEncodingByte = *(data + 0);  // ID3v2 Text-Encoding-Byte
         // $00 – ISO-8859-1 (LATIN-1, Identical to ASCII for values smaller than 0x80).
         // $01 – UCS-2 encoded Unicode with BOM (Byte Order Mark), in ID3v2.2 and ID3v2.3.
         // $02 – UTF-16BE encoded Unicode without BOM (Byte Order Mark) , in ID3v2.4.
@@ -1796,32 +1796,67 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             }
             return 0;
         }
+
+        if( // proprietary not standard information
+            startsWith(ID3Hdr.tag, "PRIV")) {
+                ;//log_e("PRIV");
+                return 0;
+        }
+
+
+
         if(ID3Hdr.framesize == 0) return 0;
 
-        size_t fs = ID3Hdr.framesize;
-        if(fs >= m_ibuffSize - 1) fs = m_ibuffSize - 1;
-        uint16_t dataLength = fs - 1;
-        for(int i = 0; i < dataLength; i++) { ID3Hdr.iBuff[i] = *(data + i + 1);} // without encodingByte
-        ID3Hdr.iBuff[dataLength] = 0;
+        size_t fs = ID3Hdr.framesize; // fs = size of the frame data field as read from header
+        size_t bytesToCopy = fs;
+
+        if (bytesToCopy >= ID3Hdr.iBuffSize) { // <= oder >= hier ist wichtig!
+            bytesToCopy = ID3Hdr.iBuffSize - 1; // Sicherstellen, dass ein Null-Terminator passt
+        }
+        size_t textDataLength = 0;
+        if (bytesToCopy > 0) { // Nur wenn überhaupt Daten da sind, die wir kürzen können
+            textDataLength = bytesToCopy - 1; // Dies ist die Anzahl der zu kopierenden TEXT-Bytes
+        }
+        for(int i = 0; i < textDataLength; i++) {
+            ID3Hdr.iBuff[i] = *(data + i + 1); // Überspringt das erste Byte (Encoding)
+        }
+        ID3Hdr.iBuff[textDataLength] = 0;
         ID3Hdr.framesize -= fs;
         ID3Hdr.remainingHeaderBytes -= fs;
-        ID3Hdr.iBuff[fs] = 0;
+        uint16_t dataLength = fs - 1;
 
-        if(encodingByte == 0){  // latin
+        if(textEncodingByte == 0){  // latin
             latinToUTF8(ID3Hdr.iBuff, false);
             showID3Tag(ID3Hdr.tag, ID3Hdr.iBuff.get());
         }
 
-        if(encodingByte == 1  && dataLength > 1) { // UTF16 with BOM
-            bool big_endian = static_cast<unsigned char>(ID3Hdr.iBuff[0]) == 0xFE && static_cast<unsigned char>(ID3Hdr.iBuff[1]) == 0xFF;
-
-            uint8_t data_start = 2; // skip the BOM (2 bytes)
+        if(textEncodingByte == 1  && dataLength > 1) { // UTF16 with BOM
+            int8_t data_start = 0;
+            if(startsWith(ID3Hdr.tag, "COMM")){ // language code
+                ID3Hdr.lang[0] = ID3Hdr.iBuff[0];
+                ID3Hdr.lang[1] = ID3Hdr.iBuff[1];
+                ID3Hdr.lang[2] = ID3Hdr.iBuff[2];
+                ID3Hdr.lang[3] = '\0';
+                data_start += 3;
+                // log_w("language code: %s", ID3Hdr.lang);
+                ID3Hdr.byteOrderMark = static_cast<unsigned char>(ID3Hdr.iBuff[data_start]) == 0xFE && static_cast<unsigned char>(ID3Hdr.iBuff[data_start]) == 0xFF;
+                data_start += 2;
+                ID3Hdr.contentDescriptorTerminator_0 = ID3Hdr.iBuff[data_start];
+                ID3Hdr.contentDescriptorTerminator_1 = ID3Hdr.iBuff[data_start + 1];
+                ID3Hdr.textStringTerminator_0        = ID3Hdr.iBuff[data_start + 2];
+                ID3Hdr.textStringTerminator_1        = ID3Hdr.iBuff[data_start + 3];
+                data_start += 4;
+            }
+            else{
+                ID3Hdr.byteOrderMark = static_cast<unsigned char>(ID3Hdr.iBuff[data_start]) == 0xFE && static_cast<unsigned char>(ID3Hdr.iBuff[data_start]) == 0xFF;
+                data_start += 2;
+            }
 
             std::u16string utf16_string;
             for (size_t i = data_start; i < dataLength; i += 2) {
                 char16_t wchar;
-                if(big_endian)  wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]);
-                else            wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i]);
+                if(ID3Hdr.byteOrderMark)  wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]);
+                else                      wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i]);
                 utf16_string.push_back(wchar);
             }
 
@@ -1829,7 +1864,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             showID3Tag(ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
         }
 
-        if(encodingByte == 2 && dataLength > 1) { // UTF16BE
+        if(textEncodingByte == 2 && dataLength > 1) { // UTF16BE
+
             std::u16string utf16_string;
             for (size_t i = 0; i < dataLength; i += 2) {
                 char16_t  wchar = (static_cast<unsigned char>(ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(ID3Hdr.iBuff[i + 1]);
@@ -1840,7 +1876,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             showID3Tag(ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
         }
 
-        if(encodingByte == 3) { // utf8
+        if(textEncodingByte == 3) { // utf8
             showID3Tag(ID3Hdr.tag, ID3Hdr.iBuff.get());
         }
         return fs;
