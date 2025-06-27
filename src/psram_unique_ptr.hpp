@@ -221,12 +221,6 @@ public:
         }
     }
 
-    void copy_from_cstr(const char* src, const char* name = nullptr) { // for strings
-        if (!src) return;
-        std::size_t len = std::strlen(src);
-        copy_from(src, len + 1, name);  // +1 für '\0'
-    }
-
     void copy_from(const T* src, const char* name = nullptr) {  // for strings
         if(src == nullptr){log_e("arg. is null"); return;}
         std::size_t count = std::strlen(src) + 1;
