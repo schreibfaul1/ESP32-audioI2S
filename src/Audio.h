@@ -565,7 +565,7 @@ private:
     const size_t    m_frameSizeMP3       = 1600;
     const size_t    m_frameSizeAAC       = 1600;
     const size_t    m_frameSizeFLAC      = 4096 * 6; // 24576
-    const size_t    m_frameSizeOPUS      = 1024;
+    const size_t    m_frameSizeOPUS      = 2048;
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
@@ -577,6 +577,7 @@ private:
     ps_ptr<int16_t>  m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>     m_ibuff;          // used in log_info()
     ps_ptr<char>     m_lastHost;       // Store the last URL to a webstream
+    ps_ptr<char>     m_currentHost;    // can be changed by redirection or playlist
     ps_ptr<char>     m_lastM3U8host;
     ps_ptr<char>     m_speechtxt;      // stores tts text
     ps_ptr<char>     m_streamTitle;    // stores the last StreamTitle

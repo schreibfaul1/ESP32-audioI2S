@@ -705,18 +705,14 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
 
 */
     int32_t ret = 0;
- //   int32_t remainingBytes = 0;
     int32_t current_payload_offset = 0; // Offset from inbuf start where the current frame data begins
-    static uint16_t spf = 0;
-    static uint16_t bytesConsumed = 0;
-s_ofp3.idx = 0;
+    s_ofp3.idx = 0;
+
     if (s_ofp3.firstCall) {
     //    log_w("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X ",
     //          inbuf[0], inbuf[1], inbuf[2], inbuf[3], inbuf[4], inbuf[5], inbuf[6], inbuf[7], inbuf[8], inbuf[9]);
 
         // Reset all relevant state for a new packet
-        spf = 0;
-        bytesConsumed =0;
         s_ofp3.firstCall = false;
         s_ofp3.paddingLength = 0;
         s_ofp3.v = false;

@@ -624,7 +624,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if(res) {
         uint32_t dt = millis() - timestamp;
-        m_lastHost.assign(c_host.get());
         AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
         _client->print(rqh.get());
@@ -640,8 +639,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if(extension.ends_with_icase( ".asx" ))      m_expectedPlsFmt = FORMAT_ASX;
         if(extension.ends_with_icase( ".m3u" ))      m_expectedPlsFmt = FORMAT_M3U;
         if(extension.ends_with_icase( ".pls" ))      m_expectedPlsFmt = FORMAT_PLS;
-        if(extension.contains(".m3u8"))             {m_expectedPlsFmt = FORMAT_M3U8; if(audio_lasthost) audio_lasthost(m_lastHost.get());}
+        if(extension.contains(".m3u8"))              m_expectedPlsFmt = FORMAT_M3U8;
 
+        m_currentHost.clone_from(c_host);
+        m_lastHost.clone_from(c_host);
+        if(audio_lasthost) audio_lasthost(m_lastHost.get());
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
     }
@@ -667,9 +669,9 @@ bool Audio::httpPrint(const char* host) {
     ps_ptr<char> hwoe;         // host without extension
     ps_ptr<char> extension;    // extension
     ps_ptr<char> query_string; // parameter
-     ps_ptr<char> path;        // extension + '?' + parameter
+    ps_ptr<char> path;        // extension + '?' + parameter
     ps_ptr<char> rqh;          // request header
-    ps_ptr<char> last_hwoe;    // m_lastM3U8host without extension
+    ps_ptr<char> cur_hwoe;    // m_lastM3U8host without extension
 
     c_host.copy_from(host);
     c_host.trim();
@@ -696,9 +698,18 @@ bool Audio::httpPrint(const char* host) {
 
     path = urlencode(path.get(), true);
 
-    // if(!m_lastM3U8host.valid()) m_lastM3U8host.assign("");
-    // auto dismantledLastHost = dismantle_host(m_lastM3U8host.get());
-    // last_hwoe.clone_from(dismantledLastHost->hwoe);
+    if(!m_currentHost.valid()) m_currentHost.assign("");
+    auto dismantledLastHost = dismantle_host(m_currentHost.get());
+    cur_hwoe.clone_from(dismantledLastHost->hwoe);
+
+    bool f_equal = true;
+    if(hwoe.equals(cur_hwoe)){
+        log_e("equal");
+    }
+    else{
+        log_e("not equal");
+        f_equal = false;
+    }
 
     rqh.assign("GET /");
     rqh.append(path.get());
@@ -706,6 +717,8 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("Host: ");
     rqh.append(hwoe.get());
     rqh.append("\r\n");
+    rqh.append("Icy-MetaData:1\r\n");
+    rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Accept: */*\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
@@ -713,7 +726,7 @@ bool Audio::httpPrint(const char* host) {
 
     AUDIO_INFO("next URL: \"%s\"", c_host.get());
 
-    if(!_client->connected()) {
+    if(!_client->connected() || f_equal == false) {
          if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
          else        { _client = static_cast<WiFiClient*>(&client); }
         AUDIO_INFO("The host has disconnected, reconnecting");
@@ -723,7 +736,7 @@ bool Audio::httpPrint(const char* host) {
             return false;
         }
     }
-
+    m_currentHost.clone_from(c_host);
     _client->print(rqh.get());
 
     if(     extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
@@ -2582,13 +2595,13 @@ void Audio::loop() {
                 break;
             case AUDIO_PLAYLISTINIT: readPlayListData(); break;
             case AUDIO_PLAYLISTDATA:
-                if(m_playlistFormat == FORMAT_M3U) connecttohost(parsePlaylist_M3U());
-                if(m_playlistFormat == FORMAT_PLS) connecttohost(parsePlaylist_PLS());
-                if(m_playlistFormat == FORMAT_ASX) connecttohost(parsePlaylist_ASX());
+                if(m_playlistFormat == FORMAT_M3U) httpPrint(parsePlaylist_M3U());
+                if(m_playlistFormat == FORMAT_PLS) httpPrint(parsePlaylist_PLS());
+                if(m_playlistFormat == FORMAT_ASX) httpPrint(parsePlaylist_ASX());
                 break;
             case AUDIO_DATA:
                 if(m_streamType == ST_WEBSTREAM) processWebStream();
-                if(m_streamType == ST_WEBFILE) processWebFile();
+                if(m_streamType == ST_WEBFILE)   processWebFile();
                 break;
         }
     }
@@ -3847,8 +3860,8 @@ exit:
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
     if(m_dataMode != HTTP_RESPONSE_HEADER) return false;
-    if(!m_lastHost.valid()) {log_e("m_lastHost is empty"); return false;}
-
+    if(!m_currentHost.valid()) {log_e("m_currentHost is empty"); return false;}
+log_e("hier1");
     uint32_t ctime = millis();
     uint32_t timeout = 4500; // ms
 
@@ -3933,10 +3946,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             int pos = rhl.index_of_icase("http", 0);
             if(pos >= 0) {
                 const char* c_host = (rhl.get() + pos);
-                if(strcmp(c_host, m_lastHost.get()) != 0) { // prevent a loop
+                if(!m_currentHost.equals(c_host)) { // prevent a loop
                     int pos_slash = indexOf(c_host, "/", 9);
                     if(pos_slash > 9) {
-                        if(!strncmp(c_host, m_lastHost.get(), pos_slash)) {
+                        if(!strncmp(c_host, m_currentHost.get(), pos_slash)) {
                             AUDIO_INFO("redirect to new extension at existing host \"%s\"", c_host);
                             if(m_playlistFormat == FORMAT_M3U8) {
                                 m_lastHost.assign(c_host);
@@ -3952,6 +3965,9 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                     connecttohost(c_host);
                     return true;
                 }
+            }
+            else{
+                log_w("unknown redirection: %s", rhl.c_get());
             }
         }
 
@@ -4086,15 +4102,13 @@ lastToDo:
         if(!(m_codec == CODEC_OGG)){
             if(!initializeDecoder(m_codec)) return false;
         }
-        // { log_i("Switch to DATA, metaint is %d", m_metaint); }
-        if(m_playlistFormat != FORMAT_M3U8 && audio_lasthost) audio_lasthost(m_lastHost.get());
     }
     else if(m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // log_i("now parse playlist");
     }
     else {
-        AUDIO_INFO("unknown content found at: %s", m_lastHost.get());
+        AUDIO_INFO("unknown content found at: %s", m_currentHost.c_get());
         goto exit;
     }
     return true;
