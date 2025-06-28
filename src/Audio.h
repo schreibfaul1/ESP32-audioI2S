@@ -125,24 +125,121 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
-typedef struct _hwoe{
-    bool ssl;
-    ps_ptr<char> hwoe;  // host without extension
-    uint16_t     port;
-    ps_ptr<char> extension;
-    ps_ptr<char> query_string;
-} hwoe_t;
-PS_STRUCT_FREE_MEMBERS(hwoe_t, ptr->hwoe.reset(); ptr->extension.reset(); ptr->query_string.reset();)
-
 class Audio : private AudioBuffer{
 
     AudioBuffer InBuff; // instance of input buffer
+
+private:
+    typedef struct _ID3Hdr{ // used only in readID3header()
+        size_t       id3Size;
+        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t       remainingHeaderBytes;
+        size_t       universal_tmp;
+        uint8_t      ID3version;
+        int          ehsz;
+        char         tag[5];
+        char         frameid[5];
+        char         lang[5];
+        size_t       framesize;
+        bool         compressed;
+        size_t       APIC_size[3];
+        uint32_t     APIC_pos[3];
+        bool         SYLT_seen;
+        size_t       SYLT_size;
+        uint32_t     SYLT_pos;
+        uint8_t      numID3Header;
+        uint16_t     iBuffSize;
+        uint8_t      contentDescriptorTerminator_0;
+        uint8_t      contentDescriptorTerminator_1;
+        uint8_t      textStringTerminator_0;
+        uint8_t      textStringTerminator_1;
+        bool         byteOrderMark;
+        ps_ptr<char> iBuff;
+    } ID3Hdr_t;
+    ID3Hdr_t m_ID3Hdr;
+
+    typedef struct _pwsHLS{  // used in processWebStreamHLS()
+        uint16_t     maxFrameSize;
+        uint16_t     ID3BuffSize;
+        uint32_t     availableBytes;
+        bool         firstBytes;
+        bool         f_chunkFinished;
+        uint32_t     byteCounter;
+        size_t       chunkSize;
+        uint16_t     ID3WritePtr;
+        uint16_t     ID3ReadPtr;
+        ps_ptr<uint8_t>ID3Buff;
+    } pwsHLS_t;
+    pwsHLS_t m_pwsHLS;
+
+    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
+        uint64_t     xMedSeq;
+        bool         f_mediaSeq_found;
+    } pplM3u8_t;
+    pplM3u8_t m_pplM3U8;
+
+
+    typedef struct _m4aHdr{ // used in read_M4A_Header
+        size_t      headerSize;
+        size_t      retvalue;
+        size_t      atomsize;
+        size_t      audioDataPos;
+        size_t      cnt;
+        uint32_t    picPos;
+        uint32_t    picLen;
+    } m4aHdr_t;
+    m4aHdr_t m_m4aHdr;
+
+    typedef struct _plCh{ // used in playChunk
+        int32_t     validSamples;
+        int32_t     samples48K = 0;
+        uint32_t    count = 0;
+        size_t      i2s_bytesConsumed;
+        int16_t*    sample[2];
+        int16_t*    s2;
+        int         sampleSize;
+        esp_err_t   err;
+        int         i;
+    } plCh_t;
+    plCh_t m_plCh;
+
+    typedef struct _lVar{ // used in loop
+        uint8_t     no_host_cnt;
+        uint32_t    no_host_timer;
+        uint8_t     count;
+    } lVar_t;
+    lVar_t m_lVar;
+
+    typedef struct _hwoe{ // used in dismantle_host
+        bool ssl;
+        ps_ptr<char> hwoe;  // host without extension
+        uint16_t     port;
+        ps_ptr<char> extension;
+        ps_ptr<char> query_string;
+    } hwoe_t;
+
+    typedef struct _prlf{ // used in processLocalFile
+        uint32_t  ctime;
+        uint32_t  newFilePos;
+        uint32_t  byteCounter;
+        bool      audioHeaderFound;
+        uint32_t  timeout;
+        uint32_t  maxFrameSize;
+        uint32_t  availableBytes;
+        int32_t   bytesAddedToBuffer;
+        int32_t   offset;
+    } prlf_t;
+    prlf_t m_prlf;
+
+
+
+
 
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
-    ps_struct_ptr<hwoe_t>dismantle_host(const char* host);
+    hwoe_t dismantle_host(const char* host);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);
@@ -581,85 +678,7 @@ private:
     ps_ptr<char>     m_lastM3U8host;
     ps_ptr<char>     m_speechtxt;      // stores tts text
     ps_ptr<char>     m_streamTitle;    // stores the last StreamTitle
-    typedef struct _ID3Hdr{ // used only in readID3header()
-        size_t       id3Size;
-        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-        size_t       remainingHeaderBytes;
-        size_t       universal_tmp;
-        uint8_t      ID3version;
-        int          ehsz;
-        char         tag[5];
-        char         frameid[5];
-        char         lang[5];
-        size_t       framesize;
-        bool         compressed;
-        size_t       APIC_size[3];
-        uint32_t     APIC_pos[3];
-        bool         SYLT_seen;
-        size_t       SYLT_size;
-        uint32_t     SYLT_pos;
-        uint8_t      numID3Header;
-        uint16_t     iBuffSize;
-        uint8_t      contentDescriptorTerminator_0;
-        uint8_t      contentDescriptorTerminator_1;
-        uint8_t      textStringTerminator_0;
-        uint8_t      textStringTerminator_1;
-        bool         byteOrderMark;
-        ps_ptr<char> iBuff;
-    } ID3Hdr_t;
-    ID3Hdr_t ID3Hdr;
 
-    typedef struct _pwsHLS{  // used in processWebStreamHLS()
-        uint16_t     maxFrameSize;
-        uint16_t     ID3BuffSize;
-        uint32_t     availableBytes;
-        bool         firstBytes;
-        bool         f_chunkFinished;
-        uint32_t     byteCounter;
-        size_t       chunkSize;
-        uint16_t     ID3WritePtr;
-        uint16_t     ID3ReadPtr;
-        ps_ptr<uint8_t>ID3Buff;
-    } pwsHLS_t;
-    pwsHLS_t pwsHLS;
-
-    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
-        uint64_t     xMedSeq;
-        bool         f_mediaSeq_found;
-    } pplM3u8_t;
-    pplM3u8_t pplM3U8;
-
-
-    typedef struct _m4aHdr{ // used in read_M4A_Header
-        size_t      headerSize;
-        size_t      retvalue;
-        size_t      atomsize;
-        size_t      audioDataPos;
-        size_t      cnt;
-        uint32_t    picPos;
-        uint32_t    picLen;
-    } m4aHdr_t;
-    m4aHdr_t m4aHdr;
-
-    typedef struct _plCh{ // used in playChunk
-        int32_t     validSamples;
-        int32_t     samples48K = 0;
-        uint32_t    count = 0;
-        size_t      i2s_bytesConsumed;
-        int16_t*    sample[2];
-        int16_t*    s2;
-        int         sampleSize;
-        esp_err_t   err;
-        int         i;
-    } plCh_t;
-    plCh_t plCh;
-
-    typedef struct _lVar{ // used in loop
-        uint8_t     no_host_cnt;
-        uint32_t    no_host_timer;
-        uint8_t     count;
-    } lVar_t;
-    lVar_t lVar;
 
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
