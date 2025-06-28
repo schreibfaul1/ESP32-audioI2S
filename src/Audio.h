@@ -178,7 +178,6 @@ private:
     } pplM3u8_t;
     pplM3u8_t m_pplM3U8;
 
-
     typedef struct _m4aHdr{ // used in read_M4A_Header
         size_t      headerSize;
         size_t      retvalue;
@@ -269,7 +268,7 @@ private:
         int pidOfAAC = 0;
         uint8_t fillData = 0;
     } tspp_t;
-    tspp_t tspp;
+    tspp_t m_tspp;
 
     typedef struct _pwst{ // used in processWebStream
         uint16_t  maxFrameSize;
@@ -278,7 +277,7 @@ private:
         uint32_t  availableBytes;
         bool      f_clientIsConnected;
     } pwst_t;
-    pwst_t pwst;
+    pwst_t m_pwst;
 
     typedef struct _pwf{
         uint32_t maxFrameSize;
@@ -288,7 +287,17 @@ private:
         bool     f_waitingForPayload = false;
         bool     f_clientIsConnected;
     } pwf_t;
-    pwf_t pwf;
+    pwf_t m_pwf;
+
+    typedef struct  _pad{ // used in playAudioData
+        uint8_t  count = 0;
+        size_t   oldAudioDataSize = 0;
+        bool     lastFrames = false;
+        int32_t  bytesToDecode;
+        int16_t  bytesDecoded;
+    } pad_t;
+    pad_t m_pad;
+
 
 
 public:

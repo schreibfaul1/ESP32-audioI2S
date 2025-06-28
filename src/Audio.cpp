@@ -3364,78 +3364,78 @@ exit:
 void Audio::processWebStream() {
     if(m_dataMode != AUDIO_DATA) return; // guard
 
-    pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
-    pwst.availableBytes = 0; // available from stream
-    pwst.f_clientIsConnected = _client->connected();
+    m_pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
+    m_pwst.availableBytes = 0; // available from stream
+    m_pwst.f_clientIsConnected = _client->connected();
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
-        pwst.chunkSize = 0;
+        m_pwst.chunkSize = 0;
         m_metacount = m_metaint;
-        pwst.f_skipCRLF = false;
+        m_pwst.f_skipCRLF = false;
         m_f_allDataReceived = false;
         readMetadata(0, true);
     }
-    if(pwst.f_clientIsConnected) pwst.availableBytes = _client->available(); // available from stream
+    if(m_pwst.f_clientIsConnected) m_pwst.availableBytes = _client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_chunked && pwst.availableBytes > 0) {
+    if(m_f_chunked && m_pwst.availableBytes > 0) {
         uint8_t readedBytes = 0;
-        if(!pwst.chunkSize){
-            if(pwst.f_skipCRLF){
+        if(!m_pwst.chunkSize){
+            if(m_pwst.f_skipCRLF){
                 if(_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
                     return;
                 }
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
-                pwst.f_skipCRLF = false;
+                m_pwst.f_skipCRLF = false;
             }
             if(_client->available()){
-                pwst.chunkSize = readChunkSize(&readedBytes);
-                if(pwst.chunkSize > 0) {
-                    pwst.f_skipCRLF = true; // skip next CRLF
+                m_pwst.chunkSize = readChunkSize(&readedBytes);
+                if(m_pwst.chunkSize > 0) {
+                    m_pwst.f_skipCRLF = true; // skip next CRLF
                 }
                 // log_w("chunk size: %d", chunkSize);
             }
         }
-        pwst.availableBytes = min(pwst.availableBytes, pwst.chunkSize);
+        m_pwst.availableBytes = min(m_pwst.availableBytes, m_pwst.chunkSize);
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_metadata && pwst.availableBytes) {
+    if(m_f_metadata && m_pwst.availableBytes) {
         if(m_metacount == 0) {
-            int metaLen = readMetadata(pwst.availableBytes);
-            pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
+            int metaLen = readMetadata(m_pwst.availableBytes);
+            m_pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
             return;
         }
-        pwst.availableBytes = min(pwst.availableBytes, m_metacount);
+        m_pwst.availableBytes = min(m_pwst.availableBytes, m_metacount);
     }
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
-        if(!m_f_allDataReceived) if(streamDetection(pwst.availableBytes)) return;
-        if(!pwst.f_clientIsConnected) {if(m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed (OpenAi)
+        if(!m_f_allDataReceived) if(streamDetection(m_pwst.availableBytes)) return;
+        if(!m_pwst.f_clientIsConnected) {if(m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed (OpenAi)
     }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(pwst.availableBytes) {
-        pwst.availableBytes = min(pwst.availableBytes, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), pwst.availableBytes);
+    if(m_pwst.availableBytes) {
+        m_pwst.availableBytes = min(m_pwst.availableBytes, (uint32_t)InBuff.writeSpace());
+        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), m_pwst.availableBytes);
         if(bytesAddedToBuffer > 0) {
 
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
-            if(m_f_chunked) pwst.chunkSize -= bytesAddedToBuffer;
+            if(m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() > pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
+    if(InBuff.bufferFilled() > m_pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), pwst.maxFrameSize);
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), m_pwst.maxFrameSize);
             if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec;}
@@ -3453,17 +3453,17 @@ void Audio::processWebStream() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
     if(!m_lastHost.valid()) {AUDIO_ERROR("m_lastHost is empty"); return;}  // guard
-    pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every mp3/aac frame is not bigger
-    pwf.f_clientIsConnected = _client;                  // if _client is Nullptr, we are not connected
+    m_pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every mp3/aac frame is not bigger
+    m_pwf.f_clientIsConnected = _client;                  // if _client is Nullptr, we are not connected
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
-        pwf.f_waitingForPayload = true;
+        m_pwf.f_waitingForPayload = true;
         m_t0 = millis();
-        pwf.byteCounter = 0;
-        pwf.chunkSize = 0;
-        pwf.audioDataCount = 0;
+        m_pwf.byteCounter = 0;
+        m_pwf.chunkSize = 0;
+        m_pwf.audioDataCount = 0;
         m_f_stream = false;
         m_audioDataSize = m_contentlength;
         m_webFilePos = 0;
@@ -3473,13 +3473,13 @@ void Audio::processWebFile() {
 
     uint32_t availableBytes = 0;
 
-    if(pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
+    if(m_pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
     else AUDIO_ERROR("client not connected");
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(pwf.f_waitingForPayload){
+    if(m_pwf.f_waitingForPayload){
         if(availableBytes == 0){
             if(m_t0 + 3000 < millis()) {
-                pwf.f_waitingForPayload = false;
+                m_pwf.f_waitingForPayload = false;
                 AUDIO_ERROR("no payload received, timeout");
                 stopSong();
                 m_f_running = false;
@@ -3487,15 +3487,15 @@ void Audio::processWebFile() {
             return;
         }
         else {
-            pwf.f_waitingForPayload = false;
+            m_pwf.f_waitingForPayload = false;
         }
     }
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(m_f_chunked && m_contentlength == pwf.byteCounter) {
-            if(pwf.chunkSize > 0){
+        if(m_f_chunked && m_contentlength == m_pwf.byteCounter) {
+            if(m_pwf.chunkSize > 0){
                 if(_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
                     return;
@@ -3503,35 +3503,35 @@ void Audio::processWebFile() {
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
             }
-            pwf.chunkSize = readChunkSize(&readedBytes);
-            if(pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
+            m_pwf.chunkSize = readChunkSize(&readedBytes);
+            if(m_pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
             // log_w("chunk size: %d", chunkSize);
-            m_contentlength += pwf.chunkSize;
-            m_audioDataSize += pwf.chunkSize;
+            m_contentlength += m_pwf.chunkSize;
+            m_audioDataSize += m_pwf.chunkSize;
         }
-        availableBytes = min(availableBytes, m_contentlength - pwf.byteCounter);
+        availableBytes = min(availableBytes, m_contentlength - m_pwf.byteCounter);
     }
-    if(!m_f_chunked && pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
-    if(!pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
+    if(!m_f_chunked && m_pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
+    if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
     // log_w("byteCounter %u >= m_audioDataSize %u, m_f_allDataReceived % i", byteCounter, m_contentlength, m_f_allDataReceived);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int32_t bytesAddedToBuffer = 0;
-    if(pwf.f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    if(m_pwf.f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
-        pwf.byteCounter += bytesAddedToBuffer;
+        m_pwf.byteCounter += bytesAddedToBuffer;
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
-        if(m_controlCounter == 100) pwf.audioDataCount += bytesAddedToBuffer;
+        if(m_controlCounter == 100) m_pwf.audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if(m_controlCounter != 100) {
-        if(InBuff.bufferFilled() > pwf.maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
+        if(InBuff.bufferFilled() > m_pwf.maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
@@ -3539,7 +3539,7 @@ void Audio::processWebFile() {
     }
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-        uint8_t codec = determineOggCodec(InBuff.getReadPtr(), pwf.maxFrameSize);
+        uint8_t codec = determineOggCodec(InBuff.getReadPtr(), m_pwf.maxFrameSize);
         if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = codec; return;}
         else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = codec; return;}
         else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
@@ -3805,19 +3805,17 @@ void Audio::playAudioData() {
     if(m_dataMode == AUDIO_LOCALFILE && m_resumeFilePos != -1){    return;} // guard, m_resumeFilePos is set (-1 is default)
     if(m_validSamples) {playChunk();                               return;} // guard, play samples first
     //--------------------------------------------------------------------------------
-    static uint8_t count = 0;
-    static size_t oldAudioDataSize = 0;
-    static bool   lastFrames = false;
-    int32_t       bytesToDecode = InBuff.bufferFilled();
-    int16_t       bytesDecoded = 0;
+    m_pad.count = 0;
+    m_pad.bytesToDecode = InBuff.bufferFilled();
+    m_pad.bytesDecoded = 0;
 
     if(m_f_firstPlayCall) {
         m_f_firstPlayCall = false;
-        count = 0;
-        oldAudioDataSize = 0;
+        m_pad.count = 0;
+        m_pad.oldAudioDataSize = 0;
         m_sumBytesDecoded = 0;
         m_bytesNotDecoded = 0;
-        lastFrames = false;
+        m_pad.lastFrames = false;
         m_f_eof = false;
     }
     //--------------------------------------------------------------------------------
@@ -3826,46 +3824,46 @@ void Audio::playAudioData() {
 
     if((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) && m_playlistFormat != FORMAT_M3U8)  { // local file or webfile but not m3u8 file
         if(!m_audioDataSize) goto exit; // no data to decode if filesize is 0
-        if(m_audioDataSize != oldAudioDataSize) { // Special case: Metadata in ogg files are recognized by the decoder,
+        if(m_audioDataSize != m_pad.oldAudioDataSize) { // Special case: Metadata in ogg files are recognized by the decoder,
             if(m_f_ogg)m_sumBytesDecoded = 0;     // after which m_audioDataStart and m_audioDataSize are updated.
             if(m_f_ogg)m_bytesNotDecoded = 0;
-            oldAudioDataSize = m_audioDataSize;
+            m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
+        m_pad.bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
 
-        if(bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
-            lastFrames = true;
+        if(m_pad.bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
+            m_pad.lastFrames = true;
         }
         if(m_sumBytesDecoded > 0){
             if(m_sumBytesDecoded >= m_audioDataSize) {m_f_eof = true; goto exit;} // file end reached
-            if(bytesToDecode <= 0)                   {m_f_eof = true; goto exit;} // file end reached
+            if(m_pad.bytesToDecode <= 0)                   {m_f_eof = true; goto exit;} // file end reached
         }
     }
-    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {lastFrames = true;}}
+    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}}
 
-    bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), bytesToDecode);
+    m_pad.bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), m_pad.bytesToDecode);
 
-    if(lastFrames){
-        bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
+    if(m_pad.lastFrames){
+        m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
     }
     else{
-        if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) bytesDecoded = sendBytes(InBuff.getReadPtr(), bytesToDecode);
-        else bytesDecoded = 0; // Inbuff not filled enough
+        if(InBuff.bufferFilled() >= InBuff.getMaxBlockSize()) m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
+        else m_pad.bytesDecoded = 0; // Inbuff not filled enough
     }
 
-    if(bytesDecoded <= 0) {
-        if(lastFrames) {m_f_eof = true; goto exit;} // end of file reached
-        count++;
+    if(m_pad.bytesDecoded <= 0) {
+        if(m_pad.lastFrames) {m_f_eof = true; goto exit;} // end of file reached
+        m_pad.count++;
         vTaskDelay(50); // wait for data
-        if(count == 10) {if(m_f_allDataReceived) m_f_eof = true;}  // maybe slow stream
+        if(m_pad.count == 10) {if(m_f_allDataReceived) m_f_eof = true;}  // maybe slow stream
         goto exit; // syncword at pos0
     }
-    count = 0;
+    m_pad.count = 0;
 
-    if(bytesDecoded > 0) {
-        InBuff.bytesWasRead(bytesDecoded);
-        if(m_controlCounter == 100) m_sumBytesDecoded += bytesDecoded;
+    if(m_pad.bytesDecoded > 0) {
+        InBuff.bytesWasRead(m_pad.bytesDecoded);
+        if(m_controlCounter == 100) m_sumBytesDecoded += m_pad.bytesDecoded;
         // log_w("m_audioDataSize: %d, m_sumBytesDecoded: %d, diff: %d", m_audioDataSize, m_sumBytesDecoded, m_audioDataSize - m_sumBytesDecoded);
         if(m_codec == CODEC_MP3 && m_audioDataSize - m_sumBytesDecoded == 128){
             m_f_ID3v1TagFound = true; m_f_eof = true;
@@ -5616,9 +5614,9 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     if(packet == NULL) {
         if(log) log_w("parseTS reset");
-        for(int i = 0; i < PID_ARRAY_LEN; i++) tspp.pids[i] = 0;
-        tspp.PES_DataLength = 0;
-        tspp.pidOfAAC = 0;
+        for(int i = 0; i < PID_ARRAY_LEN; i++) m_tspp.pids[i] = 0;
+        m_tspp.PES_DataLength = 0;
+        m_tspp.pidOfAAC = 0;
         return true;
     }
 
@@ -5675,8 +5673,8 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     if(PID == 0) {
         // Program Association Table (PAT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(log) log_w("PAT");
-        tspp.pidNumber = 0;
-        tspp.pidOfAAC = 0;
+        m_tspp.pidNumber = 0;
+        m_tspp.pidOfAAC = 0;
 
         int startOfProgramNums = 8;
         int lengthOfPATValue = 4;
@@ -5689,14 +5687,14 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
             program_number = ((packet[PLS + i] & 0xFF) << 8) | (packet[PLS + i + 1] & 0xFF);
             program_map_PID = ((packet[PLS + i + 2] & 0x1F) << 8) | (packet[PLS + i + 3] & 0xFF);
             if(log) log_w("Program Num: 0x%04X(%d) PMT PID: 0x%04X(%d)", program_number, program_number, program_map_PID, program_map_PID);
-            tspp.pids[indexOfPids++] = program_map_PID;
+            m_tspp.pids[indexOfPids++] = program_map_PID;
         }
-        tspp.pidNumber = indexOfPids;
+        m_tspp.pidNumber = indexOfPids;
         *packetStart = 0;
         *packetLength = 0;
         return true;
     }
-    else if(PID == tspp.pidOfAAC) {
+    else if(PID == m_tspp.pidOfAAC) {
         if(log) log_w("AAC");
         uint8_t posOfPacketStart = 4;
         if(AFL >= 0) {
@@ -5704,13 +5702,13 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
             if(log) log_w("posOfPacketStart: %d", posOfPacketStart);
         }
         // Packetized Elementary Stream (PES) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if(log) log_w("PES_DataLength %i", tspp.PES_DataLength);
-        if(tspp.PES_DataLength > 0) {
-            *packetStart = posOfPacketStart + tspp.fillData;
-            *packetLength = TS_PACKET_SIZE - posOfPacketStart - tspp.fillData;
+        if(log) log_w("PES_DataLength %i", m_tspp.PES_DataLength);
+        if(m_tspp.PES_DataLength > 0) {
+            *packetStart = posOfPacketStart + m_tspp.fillData;
+            *packetLength = TS_PACKET_SIZE - posOfPacketStart - m_tspp.fillData;
             if(log) log_w("packetlength %i", *packetLength);
-            tspp.fillData = 0;
-            tspp.PES_DataLength -= (*packetLength);
+            m_tspp.fillData = 0;
+            m_tspp.PES_DataLength -= (*packetLength);
             return true;
         }
         else {
@@ -5747,23 +5745,23 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 uint8_t PES_HeaderDataLength = packet[posOfPacketStart + 8] & 0xFF;
                 if(log) log_w("PES_headerDataLength %d", PES_HeaderDataLength);
 
-                tspp.PES_DataLength = PES_PacketLength;
+                m_tspp.PES_DataLength = PES_PacketLength;
                 int startOfData = PES_HeaderDataLength + 9;
                 if(posOfPacketStart + startOfData >= 188) { // only fillers in packet
                     if(log) log_w("posOfPacketStart + startOfData %i", posOfPacketStart + startOfData);
                     *packetStart = 0;
                     *packetLength = 0;
-                    tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
-                    tspp.fillData = (posOfPacketStart + startOfData) - 188;
-                    if(log) log_w("fillData %i", tspp.fillData);
+                    m_tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
+                    m_tspp.fillData = (posOfPacketStart + startOfData) - 188;
+                    if(log) log_w("fillData %i", m_tspp.fillData);
                     return true;
                 }
                 if(log) log_w("First AAC data byte: %02X", packet[posOfPacketStart + startOfData]);
                 if(log) log_w("Second AAC data byte: %02X", packet[posOfPacketStart + startOfData + 1]);
                 *packetStart = posOfPacketStart + startOfData;
                 *packetLength = TS_PACKET_SIZE - posOfPacketStart - startOfData;
-                tspp.PES_DataLength -= (*packetLength);
-                tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
+                m_tspp.PES_DataLength -= (*packetLength);
+                m_tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
                 return true;
             }
             if(firstByte == 0 && secondByte == 0 && thirdByte == 0){
@@ -5777,10 +5775,10 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         AUDIO_ERROR("PES not found");
         return false;
     }
-    else if(tspp.pidNumber) {
+    else if(m_tspp.pidNumber) {
         //  Program Map Table (PMT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        for(int i = 0; i < tspp.pidNumber; i++) {
-            if(PID == tspp.pids[i]) {
+        for(int i = 0; i < m_tspp.pidNumber; i++) {
+            if(PID == m_tspp.pids[i]) {
                 if(log) log_w("PMT");
                 int staticLengthOfPMT = 12;
                 int sectionLength = ((packet[PLS + 1] & 0x0F) << 8) | (packet[PLS + 2] & 0xFF);
@@ -5795,7 +5793,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
                     if(streamType == 0x0F || streamType == 0x11 || streamType == 0x04) {
                         if(log) log_w("AAC PID discover");
-                        tspp.pidOfAAC = elementaryPID;
+                        m_tspp.pidOfAAC = elementaryPID;
                     }
                     int esInfoLength = ((packet[PLS + cursor + 3] & 0x0F) << 8) | (packet[PLS + cursor + 4] & 0xFF);
                     if(log) log_w("ES Info Length: 0x%04X", esInfoLength);
