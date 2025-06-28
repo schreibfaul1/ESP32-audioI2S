@@ -3376,7 +3376,7 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         pwst.f_skipCRLF = false;
         m_f_allDataReceived = false;
-        readMetadata(0, true); // reset all static vars
+        readMetadata(0, true);
     }
     if(pwst.f_clientIsConnected) pwst.availableBytes = _client->available(); // available from stream
 
@@ -3449,26 +3449,21 @@ void Audio::processWebStream() {
         if(audio_eof_stream) audio_eof_stream(m_lastHost.get());
         stopSong();
     }
-
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
     if(!m_lastHost.valid()) {AUDIO_ERROR("m_lastHost is empty"); return;}  // guard
-    const uint32_t  maxFrameSize = InBuff.getMaxBlockSize();        // every mp3/aac frame is not bigger
-    static uint32_t chunkSize;                                      // chunkcount read from stream
-    static size_t   audioDataCount;                                 // counts the decoded audiodata only
-    static uint32_t byteCounter;                                    // count received data
-    static bool     f_waitingForPayload = false;                    // waiting for payload
-    bool            f_clientIsConnected = _client;                  // if _client is Nullptr, we are not connected
+    pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every mp3/aac frame is not bigger
+    pwf.f_clientIsConnected = _client;                  // if _client is Nullptr, we are not connected
 
     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
-        f_waitingForPayload = true;
+        pwf.f_waitingForPayload = true;
         m_t0 = millis();
-        byteCounter = 0;
-        chunkSize = 0;
-        audioDataCount = 0;
+        pwf.byteCounter = 0;
+        pwf.chunkSize = 0;
+        pwf.audioDataCount = 0;
         m_f_stream = false;
         m_audioDataSize = m_contentlength;
         m_webFilePos = 0;
@@ -3478,13 +3473,13 @@ void Audio::processWebFile() {
 
     uint32_t availableBytes = 0;
 
-    if(f_clientIsConnected) availableBytes = _client->available(); // available from stream
+    if(pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
     else AUDIO_ERROR("client not connected");
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(f_waitingForPayload){
+    if(pwf.f_waitingForPayload){
         if(availableBytes == 0){
             if(m_t0 + 3000 < millis()) {
-                f_waitingForPayload = false;
+                pwf.f_waitingForPayload = false;
                 AUDIO_ERROR("no payload received, timeout");
                 stopSong();
                 m_f_running = false;
@@ -3492,15 +3487,15 @@ void Audio::processWebFile() {
             return;
         }
         else {
-            f_waitingForPayload = false;
+            pwf.f_waitingForPayload = false;
         }
     }
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(m_f_chunked && m_contentlength == byteCounter) {
-            if(chunkSize > 0){
+        if(m_f_chunked && m_contentlength == pwf.byteCounter) {
+            if(pwf.chunkSize > 0){
                 if(_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
                     return;
@@ -3508,35 +3503,35 @@ void Audio::processWebFile() {
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
             }
-            chunkSize = readChunkSize(&readedBytes);
-            if(chunkSize == 0) m_f_allDataReceived = true; // last chunk
+            pwf.chunkSize = readChunkSize(&readedBytes);
+            if(pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
             // log_w("chunk size: %d", chunkSize);
-            m_contentlength += chunkSize;
-            m_audioDataSize += chunkSize;
+            m_contentlength += pwf.chunkSize;
+            m_audioDataSize += pwf.chunkSize;
         }
-        availableBytes = min(availableBytes, m_contentlength - byteCounter);
+        availableBytes = min(availableBytes, m_contentlength - pwf.byteCounter);
     }
-    if(!m_f_chunked && byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
-    if(!f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
+    if(!m_f_chunked && pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
+    if(!pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
     // log_w("byteCounter %u >= m_audioDataSize %u, m_f_allDataReceived % i", byteCounter, m_contentlength, m_f_allDataReceived);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int32_t bytesAddedToBuffer = 0;
-    if(f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    if(pwf.f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
-        byteCounter += bytesAddedToBuffer;
+        pwf.byteCounter += bytesAddedToBuffer;
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
-        if(m_controlCounter == 100) audioDataCount += bytesAddedToBuffer;
+        if(m_controlCounter == 100) pwf.audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if(m_controlCounter != 100) {
-        if(InBuff.bufferFilled() > maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
+        if(InBuff.bufferFilled() > pwf.maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
@@ -3544,7 +3539,7 @@ void Audio::processWebFile() {
     }
 
     if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-        uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+        uint8_t codec = determineOggCodec(InBuff.getReadPtr(), pwf.maxFrameSize);
         if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = codec; return;}
         else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = codec; return;}
         else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
