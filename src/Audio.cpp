@@ -3172,7 +3172,7 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
         }
         result.clone_from(m_lastHost);
         int idx = result.last_index_of('/');
-        if(idx > 0) result.truncate_at((size_t)idx + 1);
+        if(idx > 0 && (size_t)idx != result.strlen() - 1) result.truncate_at((size_t)idx + 1);
         result.append(line.get());
     }
     else if(!line.starts_with_icase("http")) {
@@ -5621,20 +5621,11 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     (void)PAYLOAD_SIZE; // suppress [-Wunused-variable]
 
-    typedef struct {
-        int number = 0;
-        int pids[PID_ARRAY_LEN];
-    } pid_array;
-
-    static pid_array pidsOfPMT;
-    static int       PES_DataLength = 0;
-    static int       pidOfAAC = 0;
-
     if(packet == NULL) {
         if(log) log_w("parseTS reset");
-        for(int i = 0; i < PID_ARRAY_LEN; i++) pidsOfPMT.pids[i] = 0;
-        PES_DataLength = 0;
-        pidOfAAC = 0;
+        for(int i = 0; i < PID_ARRAY_LEN; i++) tspp.pids[i] = 0;
+        tspp.PES_DataLength = 0;
+        tspp.pidOfAAC = 0;
         return true;
     }
 
@@ -5691,8 +5682,8 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     if(PID == 0) {
         // Program Association Table (PAT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if(log) log_w("PAT");
-        pidsOfPMT.number = 0;
-        pidOfAAC = 0;
+        tspp.pidNumber = 0;
+        tspp.pidOfAAC = 0;
 
         int startOfProgramNums = 8;
         int lengthOfPATValue = 4;
@@ -5705,15 +5696,14 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
             program_number = ((packet[PLS + i] & 0xFF) << 8) | (packet[PLS + i + 1] & 0xFF);
             program_map_PID = ((packet[PLS + i + 2] & 0x1F) << 8) | (packet[PLS + i + 3] & 0xFF);
             if(log) log_w("Program Num: 0x%04X(%d) PMT PID: 0x%04X(%d)", program_number, program_number, program_map_PID, program_map_PID);
-            pidsOfPMT.pids[indexOfPids++] = program_map_PID;
+            tspp.pids[indexOfPids++] = program_map_PID;
         }
-        pidsOfPMT.number = indexOfPids;
+        tspp.pidNumber = indexOfPids;
         *packetStart = 0;
         *packetLength = 0;
         return true;
     }
-    else if(PID == pidOfAAC) {
-        static uint8_t fillData = 0;
+    else if(PID == tspp.pidOfAAC) {
         if(log) log_w("AAC");
         uint8_t posOfPacketStart = 4;
         if(AFL >= 0) {
@@ -5721,13 +5711,13 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
             if(log) log_w("posOfPacketStart: %d", posOfPacketStart);
         }
         // Packetized Elementary Stream (PES) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if(log) log_w("PES_DataLength %i", PES_DataLength);
-        if(PES_DataLength > 0) {
-            *packetStart = posOfPacketStart + fillData;
-            *packetLength = TS_PACKET_SIZE - posOfPacketStart - fillData;
+        if(log) log_w("PES_DataLength %i", tspp.PES_DataLength);
+        if(tspp.PES_DataLength > 0) {
+            *packetStart = posOfPacketStart + tspp.fillData;
+            *packetLength = TS_PACKET_SIZE - posOfPacketStart - tspp.fillData;
             if(log) log_w("packetlength %i", *packetLength);
-            fillData = 0;
-            PES_DataLength -= (*packetLength);
+            tspp.fillData = 0;
+            tspp.PES_DataLength -= (*packetLength);
             return true;
         }
         else {
@@ -5764,23 +5754,23 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 uint8_t PES_HeaderDataLength = packet[posOfPacketStart + 8] & 0xFF;
                 if(log) log_w("PES_headerDataLength %d", PES_HeaderDataLength);
 
-                PES_DataLength = PES_PacketLength;
+                tspp.PES_DataLength = PES_PacketLength;
                 int startOfData = PES_HeaderDataLength + 9;
                 if(posOfPacketStart + startOfData >= 188) { // only fillers in packet
                     if(log) log_w("posOfPacketStart + startOfData %i", posOfPacketStart + startOfData);
                     *packetStart = 0;
                     *packetLength = 0;
-                    PES_DataLength -= (PES_HeaderDataLength + 3);
-                    fillData = (posOfPacketStart + startOfData) - 188;
-                    if(log) log_w("fillData %i", fillData);
+                    tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
+                    tspp.fillData = (posOfPacketStart + startOfData) - 188;
+                    if(log) log_w("fillData %i", tspp.fillData);
                     return true;
                 }
                 if(log) log_w("First AAC data byte: %02X", packet[posOfPacketStart + startOfData]);
                 if(log) log_w("Second AAC data byte: %02X", packet[posOfPacketStart + startOfData + 1]);
                 *packetStart = posOfPacketStart + startOfData;
                 *packetLength = TS_PACKET_SIZE - posOfPacketStart - startOfData;
-                PES_DataLength -= (*packetLength);
-                PES_DataLength -= (PES_HeaderDataLength + 3);
+                tspp.PES_DataLength -= (*packetLength);
+                tspp.PES_DataLength -= (PES_HeaderDataLength + 3);
                 return true;
             }
             if(firstByte == 0 && secondByte == 0 && thirdByte == 0){
@@ -5794,10 +5784,10 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         AUDIO_ERROR("PES not found");
         return false;
     }
-    else if(pidsOfPMT.number) {
+    else if(tspp.pidNumber) {
         //  Program Map Table (PMT) - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        for(int i = 0; i < pidsOfPMT.number; i++) {
-            if(PID == pidsOfPMT.pids[i]) {
+        for(int i = 0; i < tspp.pidNumber; i++) {
+            if(PID == tspp.pids[i]) {
                 if(log) log_w("PMT");
                 int staticLengthOfPMT = 12;
                 int sectionLength = ((packet[PLS + 1] & 0x0F) << 8) | (packet[PLS + 2] & 0xFF);
@@ -5812,7 +5802,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
                     if(streamType == 0x0F || streamType == 0x11 || streamType == 0x04) {
                         if(log) log_w("AAC PID discover");
-                        pidOfAAC = elementaryPID;
+                        tspp.pidOfAAC = elementaryPID;
                     }
                     int esInfoLength = ((packet[PLS + cursor + 3] & 0x0F) << 8) | (packet[PLS + cursor + 4] & 0xFF);
                     if(log) log_w("ES Info Length: 0x%04X", esInfoLength);

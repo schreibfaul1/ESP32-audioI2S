@@ -259,12 +259,17 @@ private:
         float   inSample2[2];
         float   outSample2[2];
         int16_t iir_out2[2];
-    } _ifCh_t;
-    _ifCh_t m_ifCh;
+    } ifCh_t;
+    ifCh_t m_ifCh;
 
-
-
-
+    typedef struct _tspp{ // used in ts_parsePacket
+        int pidNumber = 0;
+        int pids[4]; // PID_ARRAY_LEN
+        int PES_DataLength = 0;
+        int pidOfAAC = 0;
+        uint8_t fillData = 0;
+    } tspp_t;
+    tspp_t tspp;
 
 
 
