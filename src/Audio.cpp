@@ -3364,80 +3364,78 @@ exit:
 void Audio::processWebStream() {
     if(m_dataMode != AUDIO_DATA) return; // guard
 
-    const uint16_t  maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
-    static uint32_t chunkSize;                               // chunkcount read from stream
-    static bool     f_skipCRLF;
-    uint32_t        availableBytes = 0; // available from stream
-    bool            f_clientIsConnected = _client->connected();
+    pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
+    pwst.availableBytes = 0; // available from stream
+    pwst.f_clientIsConnected = _client->connected();
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
-        chunkSize = 0;
+        pwst.chunkSize = 0;
         m_metacount = m_metaint;
-        f_skipCRLF = false;
+        pwst.f_skipCRLF = false;
         m_f_allDataReceived = false;
         readMetadata(0, true); // reset all static vars
     }
-    if(f_clientIsConnected) availableBytes = _client->available(); // available from stream
+    if(pwst.f_clientIsConnected) pwst.availableBytes = _client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_chunked && availableBytes > 0) {
+    if(m_f_chunked && pwst.availableBytes > 0) {
         uint8_t readedBytes = 0;
-        if(!chunkSize){
-            if(f_skipCRLF){
+        if(!pwst.chunkSize){
+            if(pwst.f_skipCRLF){
                 if(_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
                     return;
                 }
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
                 int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
-                f_skipCRLF = false;
+                pwst.f_skipCRLF = false;
             }
             if(_client->available()){
-                chunkSize = readChunkSize(&readedBytes);
-                if(chunkSize > 0) {
-                    f_skipCRLF = true; // skip next CRLF
+                pwst.chunkSize = readChunkSize(&readedBytes);
+                if(pwst.chunkSize > 0) {
+                    pwst.f_skipCRLF = true; // skip next CRLF
                 }
                 // log_w("chunk size: %d", chunkSize);
             }
         }
-        availableBytes = min(availableBytes, chunkSize);
+        pwst.availableBytes = min(pwst.availableBytes, pwst.chunkSize);
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_metadata && availableBytes) {
+    if(m_f_metadata && pwst.availableBytes) {
         if(m_metacount == 0) {
-            int metaLen = readMetadata(availableBytes);
-            chunkSize -= metaLen; // reduce chunkSize by metadata length
+            int metaLen = readMetadata(pwst.availableBytes);
+            pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
             return;
         }
-        availableBytes = min(availableBytes, m_metacount);
+        pwst.availableBytes = min(pwst.availableBytes, m_metacount);
     }
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
-        if(!m_f_allDataReceived) if(streamDetection(availableBytes)) return;
-        if(!f_clientIsConnected) {if(m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed (OpenAi)
+        if(!m_f_allDataReceived) if(streamDetection(pwst.availableBytes)) return;
+        if(!pwst.f_clientIsConnected) {if(m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;} // connection closed (OpenAi)
     }
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(availableBytes) {
-        availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    if(pwst.availableBytes) {
+        pwst.availableBytes = min(pwst.availableBytes, (uint32_t)InBuff.writeSpace());
+        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), pwst.availableBytes);
         if(bytesAddedToBuffer > 0) {
 
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
-            if(m_f_chunked) chunkSize -= bytesAddedToBuffer;
+            if(m_f_chunked) pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(InBuff.bufferFilled() > maxFrameSize && !m_f_stream) { // waiting for buffer filled
+    if(InBuff.bufferFilled() > pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
         if(m_codec == CODEC_OGG) { // log_i("determine correct codec here");
-            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), maxFrameSize);
+            uint8_t codec = determineOggCodec(InBuff.getReadPtr(), pwst.maxFrameSize);
             if(codec == CODEC_FLAC) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_OPUS) {initializeDecoder(codec); m_codec = codec;}
             if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec;}

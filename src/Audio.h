@@ -271,7 +271,14 @@ private:
     } tspp_t;
     tspp_t tspp;
 
-
+    typedef struct _pwst{ // used in processWebStream
+    uint16_t  maxFrameSize;
+    uint32_t  chunkSize;
+    bool      f_skipCRLF;
+    uint32_t  availableBytes;
+    bool      f_clientIsConnected;
+    } pwst_t;
+    pwst_t pwst;
 
 
 public:
