@@ -249,6 +249,23 @@ private:
     } cVUl_t;
     cVUl_t m_cVUl;
 
+    typedef struct _ifCh{ // used in IIR_filterChain0, 1, 2
+        float   inSample0[2];
+        float   outSample0[2];
+        int16_t iir_out0[2];
+        float   inSample1[2];
+        float   outSample1[2];
+        int16_t iir_out1[2];
+        float   inSample2[2];
+        float   outSample2[2];
+        int16_t iir_out2[2];
+    } _ifCh_t;
+    _ifCh_t m_ifCh;
+
+
+
+
+
 
 
 
