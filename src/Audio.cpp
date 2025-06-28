@@ -4860,67 +4860,59 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
 
     if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
-    static uint64_t sumBytesIn         = 0;
-    static uint64_t sumBytesOut        = 0;
-    static uint32_t sumBitRate         = 0;
-    static uint32_t counter            = 0;
-    static uint32_t timeStamp          = 0;
-    static uint32_t deltaBytesIn       = 0;
-    static uint32_t nominalBitRate     = 0;
-
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
-        sumBytesIn = 0;
-        sumBytesOut = 0;
-        sumBitRate  = 0;
-        counter = 0;
-        timeStamp = millis();
-        deltaBytesIn = 0;
-        nominalBitRate = 0;
+        m_cat.sumBytesIn = 0;
+        m_cat.sumBytesOut = 0;
+        m_cat.sumBitRate  = 0;
+        m_cat.counter = 0;
+        m_cat.timeStamp = millis();
+        m_cat.deltaBytesIn = 0;
+        m_cat.nominalBitRate = 0;
 
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
             m_audioFileDuration = FLACGetAudioFileDuration();
-            nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
-            m_avr_bitrate = nominalBitRate;
+            m_cat.nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
+            m_avr_bitrate = m_cat.nominalBitRate;
         }
         if(m_codec == CODEC_WAV){
-            nominalBitRate = getBitRate();
-            m_avr_bitrate = nominalBitRate;
+            m_cat.nominalBitRate = getBitRate();
+            m_avr_bitrate = m_cat.nominalBitRate;
             m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
             if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
         }
     }
 
-    sumBytesIn   += bytesDecoderIn;
-    deltaBytesIn += bytesDecoderIn;
-    sumBytesOut  += bytesDecoderOut;
+    m_cat.sumBytesIn   += bytesDecoderIn;
+    m_cat.deltaBytesIn += bytesDecoderIn;
+    m_cat.sumBytesOut  += bytesDecoderOut;
 
 
-    if(timeStamp + 500 < millis()){
+    if(m_cat.timeStamp + 500 < millis()){
         uint32_t t       = millis();      // time tracking
-        uint32_t delta_t = t - timeStamp; //    ---"---
-        timeStamp = t;                    //    ---"---
+        uint32_t delta_t = t - m_cat.timeStamp; //    ---"---
+        m_cat.timeStamp = t;                    //    ---"---
 
-        uint32_t bitRate = ((deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
+        uint32_t bitRate = ((m_cat.deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
 
-        sumBitRate += bitRate;
-        counter ++;
-        if(nominalBitRate){
-            m_audioCurrentTime = round(((float)sumBytesIn * 8) / m_avr_bitrate);
+        m_cat.sumBitRate += bitRate;
+        m_cat.counter ++;
+        if(m_cat.nominalBitRate){
+            m_audioCurrentTime = round(((float)m_cat.sumBytesIn * 8) / m_avr_bitrate);
         }
         else{
-            m_avr_bitrate = sumBitRate / counter;
-            m_audioCurrentTime = (sumBytesIn * 8) / m_avr_bitrate;
+            m_avr_bitrate = m_cat.sumBitRate / m_cat.counter;
+            m_audioCurrentTime = (m_cat.sumBytesIn * 8) / m_avr_bitrate;
             m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         }
-        deltaBytesIn = 0;
+        m_cat.deltaBytesIn = 0;
     }
 
     if(m_haveNewFilePos && m_avr_bitrate){
         uint32_t posWhithinAudioBlock =  m_haveNewFilePos;
         uint32_t newTime = posWhithinAudioBlock / (m_avr_bitrate / 8);
         m_audioCurrentTime = newTime;
-        sumBytesIn = posWhithinAudioBlock;
+        m_cat.sumBytesIn = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
     }
 }
@@ -5209,9 +5201,6 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::computeVUlevel(int16_t sample[2]) {
-    static uint8_t sampleArray[2][4][8] = {0};
-    static uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
-    static bool    f_vu = false;
 
     auto avg = [&](uint8_t* sampArr) { // lambda, inner function, compute the average of 8 samples
         uint16_t av = 0;
@@ -5227,47 +5216,47 @@ void Audio::computeVUlevel(int16_t sample[2]) {
         return maxValue;
     };
 
-    if(cnt0 == 64) {
-        cnt0 = 0;
-        cnt1++;
+    if(m_cVUl.cnt0 == 64) {
+        m_cVUl.cnt0 = 0;
+        m_cVUl.cnt1++;
     }
-    if(cnt1 == 8) {
-        cnt1 = 0;
-        cnt2++;
+    if(m_cVUl.cnt1 == 8) {
+        m_cVUl.cnt1 = 0;
+        m_cVUl.cnt2++;
     }
-    if(cnt2 == 8) {
-        cnt2 = 0;
-        cnt3++;
+    if(m_cVUl.cnt2 == 8) {
+        m_cVUl.cnt2 = 0;
+        m_cVUl.cnt3++;
     }
-    if(cnt3 == 8) {
-        cnt3 = 0;
-        cnt4++;
-        f_vu = true;
+    if(m_cVUl.cnt3 == 8) {
+        m_cVUl.cnt3 = 0;
+        m_cVUl.cnt4++;
+        m_cVUl.f_vu = true;
     }
-    if(cnt4 == 8) { cnt4 = 0; }
+    if(m_cVUl.cnt4 == 8) { m_cVUl.cnt4 = 0; }
 
-    if(!cnt0) { // store every 64th sample in the array[0]
-        sampleArray[LEFTCHANNEL][0][cnt1] = abs(sample[LEFTCHANNEL] >> 7);
-        sampleArray[RIGHTCHANNEL][0][cnt1] = abs(sample[RIGHTCHANNEL] >> 7);
+    if(!m_cVUl.cnt0) { // store every 64th sample in the array[0]
+        m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(sample[LEFTCHANNEL] >> 7);
+        m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(sample[RIGHTCHANNEL] >> 7);
     }
-    if(!cnt1) { // store argest from 64 * 8 samples in the array[1]
-        sampleArray[LEFTCHANNEL][1][cnt2] = largest(sampleArray[LEFTCHANNEL][0]);
-        sampleArray[RIGHTCHANNEL][1][cnt2] = largest(sampleArray[RIGHTCHANNEL][0]);
+    if(!m_cVUl.cnt1) { // store argest from 64 * 8 samples in the array[1]
+        m_cVUl.sampleArray[LEFTCHANNEL][1][m_cVUl.cnt2] = largest(m_cVUl.sampleArray[LEFTCHANNEL][0]);
+        m_cVUl.sampleArray[RIGHTCHANNEL][1][m_cVUl.cnt2] = largest(m_cVUl.sampleArray[RIGHTCHANNEL][0]);
     }
-    if(!cnt2) { // store avg from 64 * 8 * 8 samples in the array[2]
-        sampleArray[LEFTCHANNEL][2][cnt3] = largest(sampleArray[LEFTCHANNEL][1]);
-        sampleArray[RIGHTCHANNEL][2][cnt3] = largest(sampleArray[RIGHTCHANNEL][1]);
+    if(!m_cVUl.cnt2) { // store avg from 64 * 8 * 8 samples in the array[2]
+        m_cVUl.sampleArray[LEFTCHANNEL][2][m_cVUl.cnt3] = largest(m_cVUl.sampleArray[LEFTCHANNEL][1]);
+        m_cVUl.sampleArray[RIGHTCHANNEL][2][m_cVUl.cnt3] = largest(m_cVUl.sampleArray[RIGHTCHANNEL][1]);
     }
-    if(!cnt3) { // store avg from 64 * 8 * 8 * 8 samples in the array[3]
-        sampleArray[LEFTCHANNEL][3][cnt4] = avg(sampleArray[LEFTCHANNEL][2]);
-        sampleArray[RIGHTCHANNEL][3][cnt4] = avg(sampleArray[RIGHTCHANNEL][2]);
+    if(!m_cVUl.cnt3) { // store avg from 64 * 8 * 8 * 8 samples in the array[3]
+        m_cVUl.sampleArray[LEFTCHANNEL][3][m_cVUl.cnt4] = avg(m_cVUl.sampleArray[LEFTCHANNEL][2]);
+        m_cVUl.sampleArray[RIGHTCHANNEL][3][m_cVUl.cnt4] = avg(m_cVUl.sampleArray[RIGHTCHANNEL][2]);
     }
-    if(f_vu) {
-        f_vu = false;
-        m_vuLeft = avg(sampleArray[LEFTCHANNEL][3]);
-        m_vuRight = avg(sampleArray[RIGHTCHANNEL][3]);
+    if(m_cVUl.f_vu) {
+        m_cVUl.f_vu = false;
+        m_vuLeft = avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
+        m_vuRight = avg(m_cVUl.sampleArray[RIGHTCHANNEL][3]);
     }
-    cnt1++;
+    m_cVUl.cnt1++;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint16_t Audio::getVUlevel() {

@@ -231,6 +231,23 @@ private:
     } prlf_t;
     prlf_t m_prlf;
 
+    typedef struct _cat { // used in computeAudioTime
+        uint64_t sumBytesIn;
+        uint64_t sumBytesOut;
+        uint32_t sumBitRate;
+        uint32_t counter;
+        uint32_t timeStamp;
+        uint32_t deltaBytesIn;
+        uint32_t nominalBitRate;
+    } cat_t;
+    cat_t m_cat;
+
+    typedef struct _cVUl{ // used in computeVUlevel
+        uint8_t sampleArray[2][4][8] = {0};
+        uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+        bool    f_vu = false;
+    } cVUl_t;
+    cVUl_t m_cVUl;
 
 
 
