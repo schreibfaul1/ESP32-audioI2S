@@ -1458,33 +1458,28 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
-    static size_t   headerSize;
-    static size_t   retvalue = 0;
-    static bool     f_lastMetaBlock = false;
-    static uint32_t picPos = 0;
-    static uint32_t picLen = 0;
 
-    if(retvalue) {
-        if(retvalue > len) { // if returnvalue > bufferfillsize
+    if(m_rflh.retvalue) {
+        if(m_rflh.retvalue > len) { // if returnvalue > bufferfillsize
             if(len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
-            retvalue -= len; // and wait for more bufferdata
+            m_rflh.retvalue -= len; // and wait for more bufferdata
             return len;
         }
         else {
-            size_t tmp = retvalue;
-            retvalue = 0;
+            size_t tmp = m_rflh.retvalue;
+            m_rflh.retvalue = 0;
             return tmp;
         }
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_BEGIN) { // init
-        headerSize = 0;
-        retvalue = 0;
+        m_rflh.headerSize = 0;
+        m_rflh.retvalue = 0;
         m_audioDataStart = 0;
-        picPos = 0;
-        picLen = 0;
-        f_lastMetaBlock = false;
+        m_rflh.picPos = 0;
+        m_rflh.picLen = 0;
+        m_rflh.f_lastMetaBlock = false;
         m_controlCounter = FLAC_MAGIC;
         if(m_dataMode == AUDIO_LOCALFILE) {
             m_contentlength = getFileSize();
@@ -1495,8 +1490,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_MAGIC) {            /* check MAGIC STRING */
         if(specialIndexOf(data, "OggS", 10) == 0) { // is ogg
-            headerSize = 0;
-            retvalue = 0;
+            m_rflh.headerSize = 0;
+            m_rflh.retvalue = 0;
             m_controlCounter = FLAC_OKAY;
             return 0;
         }
@@ -1506,15 +1501,15 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             return -1;
         }
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
-        headerSize = 4;
-        retvalue = 4;
+        m_rflh.headerSize = 4;
+        m_rflh.retvalue = 4;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_MBH) { /* METADATA_BLOCK_HEADER */
         uint8_t blockType = *data;
-        if(!f_lastMetaBlock) {
-            if(blockType & 128) { f_lastMetaBlock = true; }
+        if(!m_rflh.f_lastMetaBlock) {
+            if(blockType & 128) {m_rflh.f_lastMetaBlock = true; }
             blockType &= 127;
             if(blockType == 0) m_controlCounter = FLAC_SINFO;
             if(blockType == 1) m_controlCounter = FLAC_PADDING;
@@ -1523,21 +1518,21 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             if(blockType == 4) m_controlCounter = FLAC_VORBIS;
             if(blockType == 5) m_controlCounter = FLAC_CUESHEET;
             if(blockType == 6) m_controlCounter = FLAC_PICTURE;
-            headerSize += 1;
-            retvalue = 1;
+            m_rflh.headerSize += 1;
+            m_rflh.retvalue = 1;
             return 0;
         }
         m_controlCounter = FLAC_OKAY;
-        m_audioDataStart = headerSize;
+        m_audioDataStart =m_rflh. headerSize;
         m_audioDataSize = m_contentlength - m_audioDataStart;
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
-        if(picLen) {
+        if(m_rflh.picLen) {
             size_t pos = m_audiofile.position();
-            if(audio_id3image) audio_id3image(m_audiofile, picPos, picLen);
+            if(audio_id3image) audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
             m_audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
         }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
-        retvalue = 0;
+        m_rflh.retvalue = 0;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1578,32 +1573,32 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         else { AUDIO_INFO("total samples in stream: N/A"); }
         if(bps != 0 && m_flacTotalSamplesInStream) { AUDIO_INFO("audio file duration: %lu seconds", (long unsigned int)m_flacTotalSamplesInStream / (long unsigned int)m_flacSampleRate); }
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
-        retvalue = l + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = l + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_PADDING) { /* PADDING */
         size_t l = bigEndian(data, 3);
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = l + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_APP) { /* APPLICATION */
         size_t l = bigEndian(data, 3);
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = l + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_SEEK) { /* SEEKTABLE */
         size_t l = bigEndian(data, 3);
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = l + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1634,26 +1629,26 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             if(idx > vendorLength + 3) {AUDIO_ERROR("VORBIS COMMENT section is too long");}
         }
         m_controlCounter = FLAC_MBH;
-        retvalue = vendorLength + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = vendorLength + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_CUESHEET) { /* CUESHEET */
         size_t l = bigEndian(data, 3);
         m_controlCounter = FLAC_MBH;
-        retvalue = l + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = l + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_PICTURE) { /* PICTURE */
-        picLen = bigEndian(data, 3);
-        picPos = headerSize;
+        m_rflh.picLen = bigEndian(data, 3);
+        m_rflh.picPos = m_rflh.headerSize;
         // log_w("FLAC PICTURE, size %i, pos %i", picLen, picPos);
         m_controlCounter = FLAC_MBH;
-        retvalue = picLen + 3;
-        headerSize += retvalue;
+        m_rflh.retvalue = m_rflh.picLen + 3;
+        m_rflh.headerSize += m_rflh.retvalue;
         return 0;
     }
     return 0;

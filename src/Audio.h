@@ -336,6 +336,15 @@ private:
     } rwh_t;
     rwh_t m_rwh;
 
+    typedef struct _rflh { // used in read_FLAC_Header
+        size_t   headerSize;
+        size_t   retvalue = 0;
+        bool     f_lastMetaBlock = false;
+        uint32_t picPos = 0;
+        uint32_t picLen = 0;
+    } rflh_t;
+    rflh_t m_rflh;
+
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
