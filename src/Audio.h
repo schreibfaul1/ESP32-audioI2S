@@ -303,6 +303,7 @@ private:
         bool     f_setDecodeParamsOnce = true;
         uint8_t  channels = 0;
         int      nextSync = 0;
+        uint8_t  isPS = 0;
     } sbyt_t;
     sbyt_t sbyt;
 

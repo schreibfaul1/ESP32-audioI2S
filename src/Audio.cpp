@@ -4652,6 +4652,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     sbyt.nextSync = 0;
 
     if(!m_f_playing) {
+        sbyt.channels = 2; // assume aac stereo
+        sbyt.isPS = 0;
         sbyt.f_setDecodeParamsOnce = true;
         sbyt.nextSync = findNextSync(data, len);
         if(sbyt.nextSync <  0) return len;
@@ -4763,12 +4765,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
                             break;
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
-                            static uint8_t isPS = 0;
-                            if(!isPS && AACGetParametricStereo()){ // only change 0 -> 1
-                                isPS = 1;
+                            if(!sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
+                                sbyt.isPS = 1;
                                 AUDIO_INFO("Parametric Stereo");
                             }
-                            else isPS = AACGetParametricStereo();
+                            else sbyt.isPS = AACGetParametricStereo();
                             break;
         case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
                             break;
