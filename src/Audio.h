@@ -320,11 +320,11 @@ private:
         bool           f_chunkFinished;
         bool           f_nextRound;
         uint32_t       byteCounter;        // count received data
-        uint8_t        ts_packet[188];     // m3u8 transport stream is always 188 bytes long
         uint8_t        ts_packetStart = 0;
         uint8_t        ts_packetLength = 0;
         uint8_t        ts_packetPtr = 0;
         const uint8_t  ts_packetsize = 188;
+        ps_ptr<uint8_t> ts_packet;
         size_t         chunkSize = 0;
     } pwsts_t;
     pwsts_t m_pwsst;

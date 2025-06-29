@@ -3587,6 +3587,7 @@ void Audio::processWebStreamTS() {
         m_pwsst.chunkSize = 0;
         m_t0 = millis();
         m_pwsst.ts_packetPtr = 0;
+        if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "TS Packet"); // first init
     } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -3604,7 +3605,7 @@ nextRound:
         if(m_pwsst.chunkSize) minAvBytes = min3(availableBytes, m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr, m_pwsst.chunkSize - m_pwsst.byteCounter);
         else          minAvBytes = min(availableBytes, (uint32_t)(m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr));
 
-        int res = _client->read(m_pwsst.ts_packet + m_pwsst.ts_packetPtr, minAvBytes);
+        int res = _client->read(m_pwsst.ts_packet.get() + m_pwsst.ts_packetPtr, minAvBytes);
         if(res > 0) {
             m_pwsst.ts_packetPtr += res;
             m_pwsst.byteCounter += res;
@@ -3612,31 +3613,31 @@ nextRound:
             m_pwsst.ts_packetPtr = 0;
             if(m_pwsst.f_firstPacket) { // search for ID3 Header in the first packet
                 m_pwsst.f_firstPacket = false;
-                uint8_t ID3_HeaderSize = process_m3u8_ID3_Header(m_pwsst.ts_packet);
+                uint8_t ID3_HeaderSize = process_m3u8_ID3_Header(m_pwsst.ts_packet.get());
                 if(ID3_HeaderSize > m_pwsst.ts_packetsize) {
                     AUDIO_ERROR("ID3 Header is too big");
                     stopSong();
                     return;
                 }
                 if(ID3_HeaderSize) {
-                    memcpy(m_pwsst.ts_packet, &m_pwsst.ts_packet[ID3_HeaderSize], m_pwsst.ts_packetsize - ID3_HeaderSize);
+                    memcpy(m_pwsst.ts_packet.get(), &m_pwsst.ts_packet.get()[ID3_HeaderSize], m_pwsst.ts_packetsize - ID3_HeaderSize);
                     m_pwsst.ts_packetPtr = m_pwsst.ts_packetsize - ID3_HeaderSize;
                     return;
                 }
             }
-            ts_parsePacket(&m_pwsst.ts_packet[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
+            ts_parsePacket(&m_pwsst.ts_packet.get()[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
 
             if(ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
                 if(ws >= ts_packetLength) {
-                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet + ts_packetStart, ts_packetLength);
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ts_packetLength);
                     InBuff.bytesWritten(ts_packetLength);
                     m_pwsst.f_nextRound = true;
                 }
                 else {
-                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet + ts_packetStart, ws);
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ws);
                     InBuff.bytesWritten(ws);
-                    memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet[ws + ts_packetStart], ts_packetLength - ws);
+                    memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet.get()[ws + ts_packetStart], ts_packetLength - ws);
                     InBuff.bytesWritten(ts_packetLength - ws);
                 }
             }
@@ -3874,11 +3875,12 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
     if(m_dataMode != HTTP_RESPONSE_HEADER) return false;
     if(!m_currentHost.valid()) {AUDIO_ERROR("m_currentHost is empty"); return false;}
+
     uint32_t ctime = millis();
     uint32_t timeout = 4500; // ms
-
     static uint32_t stime;
     static bool     f_time = false;
+
     if(_client->available() == 0) {
         if(!f_time) {
             stime = millis();
@@ -4532,6 +4534,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 
     int         nextSync = 0;
     static uint32_t swnf = 0;
+
     if(m_codec == CODEC_WAV) {
         m_f_playing = true;
         nextSync = 0;
@@ -5977,6 +5980,7 @@ bool Audio::readID3V1Tag() {
 
 boolean Audio::streamDetection(uint32_t bytesAvail) {
     if(!m_lastHost.valid()) {AUDIO_ERROR("m_lastHost is empty"); return false;}
+
     static uint32_t tmr_slow = millis();
     static uint32_t tmr_lost = millis();
     static uint8_t  cnt_slow = 0;
