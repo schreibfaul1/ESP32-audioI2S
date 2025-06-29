@@ -298,14 +298,36 @@ private:
     } pad_t;
     pad_t m_pad;
 
-    typedef struct  _sbyt{ // used in sendBytes
+    typedef struct _sbyt{ // used in sendBytes
         int32_t  bytesLeft;
         bool     f_setDecodeParamsOnce = true;
         uint8_t  channels = 0;
         int      nextSync = 0;
         uint8_t  isPS = 0;
     } sbyt_t;
-    sbyt_t sbyt;
+    sbyt_t m_sbyt;
+
+    typedef struct _rmet{ // used in readMetadata
+        uint16_t pos_ml = 0; // determines the current position in metaline
+        uint16_t metalen = 0;
+        uint16_t res = 0;
+    } rmet_t;
+    rmet_t m_rmet;
+
+    typedef struct _pwsts {                // used in processWebStreamTS
+        uint32_t       availableBytes;     // available bytes in stream
+        bool           f_firstPacket;
+        bool           f_chunkFinished;
+        bool           f_nextRound;
+        uint32_t       byteCounter;        // count received data
+        uint8_t        ts_packet[188];     // m3u8 transport stream is always 188 bytes long
+        uint8_t        ts_packetStart = 0;
+        uint8_t        ts_packetLength = 0;
+        uint8_t        ts_packetPtr = 0;
+        const uint8_t  ts_packetsize = 188;
+        size_t         chunkSize = 0;
+    } pwsts_t;
+    pwsts_t m_pwsst;
 
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);

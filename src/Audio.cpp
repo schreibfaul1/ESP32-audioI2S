@@ -3573,28 +3573,20 @@ void Audio::processWebFile() {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
     uint32_t        availableBytes;     // available bytes in stream
-    static bool     f_firstPacket;
-    static bool     f_chunkFinished;
-    static bool     f_nextRound;
-    static uint32_t byteCounter;        // count received data
-    static uint8_t  ts_packet[188];     // m3u8 transport stream is always 188 bytes long
     uint8_t         ts_packetStart = 0;
     uint8_t         ts_packetLength = 0;
-    static uint8_t  ts_packetPtr = 0;
-    const uint8_t   ts_packetsize = 188;
-    static size_t   chunkSize = 0;
 
     // first call, set some values to default ———————————————————————————————————
     if(m_f_firstCall) {   // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_f_m3u8data = true;
-        f_firstPacket = true;
-        f_chunkFinished = false;
-        f_nextRound = false;
-        byteCounter = 0;
-        chunkSize = 0;
+        m_pwsst.f_firstPacket = true;
+        m_pwsst.f_chunkFinished = false;
+        m_pwsst.f_nextRound = false;
+        m_pwsst.byteCounter = 0;
+        m_pwsst.chunkSize = 0;
         m_t0 = millis();
-        ts_packetPtr = 0;
+        m_pwsst.ts_packetPtr = 0;
     } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -3608,66 +3600,66 @@ nextRound:
         */
         uint8_t readedBytes = 0;
         uint32_t minAvBytes = 0;
-        if(m_f_chunked && chunkSize == byteCounter) {chunkSize += readChunkSize(&readedBytes); goto exit;}
-        if(chunkSize) minAvBytes = min3(availableBytes, ts_packetsize - ts_packetPtr, chunkSize - byteCounter);
-        else          minAvBytes = min(availableBytes, (uint32_t)(ts_packetsize - ts_packetPtr));
+        if(m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {m_pwsst.chunkSize += readChunkSize(&readedBytes); goto exit;}
+        if(m_pwsst.chunkSize) minAvBytes = min3(availableBytes, m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr, m_pwsst.chunkSize - m_pwsst.byteCounter);
+        else          minAvBytes = min(availableBytes, (uint32_t)(m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr));
 
-        int res = _client->read(ts_packet + ts_packetPtr, minAvBytes);
+        int res = _client->read(m_pwsst.ts_packet + m_pwsst.ts_packetPtr, minAvBytes);
         if(res > 0) {
-            ts_packetPtr += res;
-            byteCounter += res;
-            if(ts_packetPtr < ts_packetsize) return; // not enough data yet, the process must be repeated if the packet size (188 bytes) is not reached
-            ts_packetPtr = 0;
-            if(f_firstPacket) { // search for ID3 Header in the first packet
-                f_firstPacket = false;
-                uint8_t ID3_HeaderSize = process_m3u8_ID3_Header(ts_packet);
-                if(ID3_HeaderSize > ts_packetsize) {
+            m_pwsst.ts_packetPtr += res;
+            m_pwsst.byteCounter += res;
+            if(m_pwsst.ts_packetPtr < m_pwsst.ts_packetsize) return; // not enough data yet, the process must be repeated if the packet size (188 bytes) is not reached
+            m_pwsst.ts_packetPtr = 0;
+            if(m_pwsst.f_firstPacket) { // search for ID3 Header in the first packet
+                m_pwsst.f_firstPacket = false;
+                uint8_t ID3_HeaderSize = process_m3u8_ID3_Header(m_pwsst.ts_packet);
+                if(ID3_HeaderSize > m_pwsst.ts_packetsize) {
                     AUDIO_ERROR("ID3 Header is too big");
                     stopSong();
                     return;
                 }
                 if(ID3_HeaderSize) {
-                    memcpy(ts_packet, &ts_packet[ID3_HeaderSize], ts_packetsize - ID3_HeaderSize);
-                    ts_packetPtr = ts_packetsize - ID3_HeaderSize;
+                    memcpy(m_pwsst.ts_packet, &m_pwsst.ts_packet[ID3_HeaderSize], m_pwsst.ts_packetsize - ID3_HeaderSize);
+                    m_pwsst.ts_packetPtr = m_pwsst.ts_packetsize - ID3_HeaderSize;
                     return;
                 }
             }
-            ts_parsePacket(&ts_packet[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
+            ts_parsePacket(&m_pwsst.ts_packet[0], &ts_packetStart, &ts_packetLength); // todo: check for errors
 
             if(ts_packetLength) {
                 size_t ws = InBuff.writeSpace();
                 if(ws >= ts_packetLength) {
-                    memcpy(InBuff.getWritePtr(), ts_packet + ts_packetStart, ts_packetLength);
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet + ts_packetStart, ts_packetLength);
                     InBuff.bytesWritten(ts_packetLength);
-                    f_nextRound = true;
+                    m_pwsst.f_nextRound = true;
                 }
                 else {
-                    memcpy(InBuff.getWritePtr(), ts_packet + ts_packetStart, ws);
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet + ts_packetStart, ws);
                     InBuff.bytesWritten(ws);
-                    memcpy(InBuff.getWritePtr(), &ts_packet[ws + ts_packetStart], ts_packetLength - ws);
+                    memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet[ws + ts_packetStart], ts_packetLength - ws);
                     InBuff.bytesWritten(ts_packetLength - ws);
                 }
             }
-            if (byteCounter == m_contentlength || byteCounter == chunkSize) {
-                f_chunkFinished = true;
-                f_nextRound = false;
-                byteCounter = 0;
+            if (m_pwsst.byteCounter == m_contentlength || m_pwsst.byteCounter == m_pwsst.chunkSize) {
+                m_pwsst.f_chunkFinished = true;
+                m_pwsst.f_nextRound = false;
+                m_pwsst.byteCounter = 0;
                 int av = _client->available();
                 if(av == 7) for(int i = 0; i < av; i++) _client->read(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
             }
-            if(m_contentlength && byteCounter > m_contentlength) {AUDIO_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", byteCounter, m_contentlength); return;}
-            if(chunkSize       && byteCounter > chunkSize)       {AUDIO_ERROR("byteCounter overflow, byteCounter: %d, chunkSize: %d",     byteCounter, chunkSize); return;}
+            if(m_contentlength && m_pwsst.byteCounter > m_contentlength) {AUDIO_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", m_pwsst.byteCounter, m_contentlength); return;}
+            if(m_pwsst.chunkSize       && m_pwsst.byteCounter > m_pwsst.chunkSize)       {AUDIO_ERROR("byteCounter overflow, byteCounter: %d, chunkSize: %d", m_pwsst.byteCounter, m_pwsst.chunkSize); return;}
         }
     }
-    if(f_chunkFinished) {
+    if(m_pwsst.f_chunkFinished) {
         if(m_f_psramFound) {
             if(InBuff.bufferFilled() < 60000) {
-                f_chunkFinished = false;
+                m_pwsst.f_chunkFinished = false;
                 m_f_continue = true;
             }
         }
         else {
-            f_chunkFinished = false;
+            m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
         }
     }
@@ -3686,7 +3678,7 @@ nextRound:
             AUDIO_INFO("buffer filled in %d ms", filltime);
         }
     }
-    if(f_nextRound){goto nextRound;}
+    if(m_pwsst.f_nextRound){goto nextRound;}
 exit:
     return;
 }
@@ -4648,20 +4640,20 @@ void Audio::setDecoderItems() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_running) return 0; // guard
-    sbyt.bytesLeft = 0;
-    sbyt.nextSync = 0;
+    m_sbyt.bytesLeft = 0;
+    m_sbyt.nextSync = 0;
 
     if(!m_f_playing) {
-        sbyt.channels = 2; // assume aac stereo
-        sbyt.isPS = 0;
-        sbyt.f_setDecodeParamsOnce = true;
-        sbyt.nextSync = findNextSync(data, len);
-        if(sbyt.nextSync <  0) return len;
-        if(sbyt.nextSync == 0) { m_f_playing = true; }
-        if(sbyt.nextSync >  0) return sbyt.nextSync;
+        m_sbyt.channels = 2; // assume aac stereo
+        m_sbyt.isPS = 0;
+        m_sbyt.f_setDecodeParamsOnce = true;
+        m_sbyt.nextSync = findNextSync(data, len);
+        if(m_sbyt.nextSync <  0) return len;
+        if(m_sbyt.nextSync == 0) { m_f_playing = true; }
+        if(m_sbyt.nextSync >  0) return m_sbyt.nextSync;
     }
     // m_f_playing is true at this pos
-    sbyt.bytesLeft = len;
+    m_sbyt.bytesLeft = len;
     m_decodeError = 0;
     int bytesDecoded = 0;
 
@@ -4669,13 +4661,13 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_decode_ready) return 0; // find sync first
 
     switch(m_codec) {
-        case CODEC_WAV:    m_decodeError = 0; sbyt.bytesLeft = 0; break;
-        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &sbyt.bytesLeft, m_outBuff.get(), 0); break;
-        case CODEC_AAC:    m_decodeError = AACDecode(   data, &sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_M4A:    m_decodeError = AACDecode(   data, &sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_OPUS:   m_decodeError = OPUSDecode(  data, &sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_WAV:    m_decodeError = 0; m_sbyt.bytesLeft = 0; break;
+        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get(), 0); break;
+        case CODEC_AAC:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_M4A:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_OPUS:   m_decodeError = OPUSDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         default: {
             AUDIO_ERROR("no valid codec found codec = %d", m_codec);
             stopSong();
@@ -4699,19 +4691,19 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if(m_decodeError == ERR_MP3_INVALID_HUFFCODES) {
                 AUDIO_INFO("last mp3 frame is invalid");
                 MP3Decoder_ClearBuffer();
-                return findNextSync(data, sbyt.bytesLeft); // skip last mp3 frame and search for next syncword
+                return findNextSync(data, m_sbyt.bytesLeft); // skip last mp3 frame and search for next syncword
             }
         }
         //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
         //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
         //  This triggers error -21 because the faad2 decoder cannot switch automatically.
         if(m_codec == CODEC_AAC && m_decodeError == -21){ // mono <-> stereo change
-            sbyt.channels = 0;
+            m_sbyt.channels = 0;
             if ((data[0] == 0xFF) || ((data[1] & 0xF0) == 0xF0)){
                 int channel_config = ((data[2] & 0x01) << 2) | ((data[3] & 0xC0) >> 6);
-                if(channel_config != sbyt.channels) {
-                    sbyt.channels = channel_config;
-                    AUDIO_INFO("AAC channel config changed to %d", sbyt.channels);
+                if(channel_config != m_sbyt.channels) {
+                    m_sbyt.channels = channel_config;
+                    AUDIO_INFO("AAC channel config changed to %d", m_sbyt.channels);
                 }
             }
             AACDecoder_FreeBuffers();
@@ -4736,7 +4728,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         return 1; // skip one byte and seek for the next sync word
     }
-    bytesDecoded = len - sbyt.bytesLeft;
+    bytesDecoded = len - m_sbyt.bytesLeft;
 
     if(bytesDecoded == 0 && m_decodeError == 0) { // unlikely framesize
         AUDIO_INFO("framesize is 0, start decoding again");
@@ -4765,11 +4757,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
                             break;
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
-                            if(!sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
-                                sbyt.isPS = 1;
+                            if(!m_sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
+                                m_sbyt.isPS = 1;
                                 AUDIO_INFO("Parametric Stereo");
                             }
-                            else sbyt.isPS = AACGetParametricStereo();
+                            else m_sbyt.isPS = AACGetParametricStereo();
                             break;
         case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
                             break;
@@ -4832,8 +4824,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
     }
-    if(sbyt.f_setDecodeParamsOnce && m_validSamples) {
-        sbyt.f_setDecodeParamsOnce = false;
+    if(m_sbyt.f_setDecodeParamsOnce && m_validSamples) {
+        m_sbyt.f_setDecodeParamsOnce = false;
         setDecoderItems();
         m_PlayingStartTime = millis();
     }
@@ -5815,40 +5807,38 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 //    W E B S T R E A M  -  H E L P   F U N C T I O N S
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
-    static uint16_t pos_ml = 0; // determines the current position in metaline
-    static uint16_t metalen = 0;
-    uint16_t        res = 0;
+    m_rmet.res = 0;
     ps_ptr<char>buff; buff.alloc(4096); buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(first) {
-        pos_ml = 0;
-        metalen = 0;
+        m_rmet.pos_ml = 0; // determines the current position in metaline
+        m_rmet.metalen = 0;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(!maxBytes) return 0; // guard
 
-    if(!metalen) {
+    if(!m_rmet.metalen) {
         int b = _client->read(); // First byte of metadata?
         if (b < 0) {
             AUDIO_INFO("client->read() failed (%d)", b);
             return 0;
         }
-        metalen = b * 16;        // New count for metadata including length byte, max 4096
-        pos_ml = 0;
-        buff[pos_ml] = 0; // Prepare for new line
-        res = 1;
+        m_rmet.metalen = b * 16;        // New count for metadata including length byte, max 4096
+        m_rmet.pos_ml = 0;
+        buff[m_rmet.pos_ml] = 0; // Prepare for new line
+        m_rmet.res = 1;
     }
-    if(!metalen) {
+    if(!m_rmet.metalen) {
         m_metacount = m_metaint;
-        return res;
+        return m_rmet.res;
     } // metalen is 0
-    uint16_t a = _client->readBytes(&buff[pos_ml], min((uint16_t)(metalen - pos_ml), (uint16_t)(maxBytes)));
-    res += a;
-    pos_ml += a;
+    uint16_t a = _client->readBytes(&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metalen - m_rmet.pos_ml), (uint16_t)(maxBytes)));
+    m_rmet.res += a;
+    m_rmet.pos_ml += a;
 
-    if(pos_ml == metalen) {
-        buff[pos_ml] = '\0';
+    if(m_rmet.pos_ml == m_rmet.metalen) {
+        buff[m_rmet.pos_ml] = '\0';
         if(buff.strlen() > 0) { // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
@@ -5863,10 +5853,10 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
             showstreamtitle(buff.get()); // Show artist and title if present in metadata
         }
         m_metacount = m_metaint;
-        metalen = 0;
-        pos_ml = 0;
+        m_rmet.metalen = 0;
+        m_rmet.pos_ml = 0;
     }
-    return res;
+    return m_rmet.res;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::readChunkSize(uint8_t* bytes) {
