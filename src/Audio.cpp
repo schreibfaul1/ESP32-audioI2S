@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2f                                                                                                                                ";
-/*  Updated on: Jun 26.2025
+    Version 3.3.2g                                                                                                                                ";
+/*  Updated on: Jun 29.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -861,6 +861,8 @@ bool Audio::httpRange(const char* host, uint32_t range){
     strcat(rqh, "Host: ");
     strcat(rqh, hostwoext.get());
     strcat(rqh, "\r\n");
+    strcat(rqh, "Icy-MetaData:1\r\n");
+    strcat(rqh, "Icy-MetaData:2\r\n");
     strcat(rqh, "Range: bytes=");
     strcat(rqh, (const char*)ch_range);
     strcat(rqh, "-\r\n");
