@@ -298,7 +298,13 @@ private:
     } pad_t;
     pad_t m_pad;
 
-
+    typedef struct  _sbyt{ // used in sendBytes
+        int32_t  bytesLeft;
+        bool     f_setDecodeParamsOnce = true;
+        uint8_t  channels = 0;
+        int      nextSync = 0;
+    } sbyt_t;
+    sbyt_t sbyt;
 
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);

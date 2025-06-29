@@ -4648,18 +4648,18 @@ void Audio::setDecoderItems() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_running) return 0; // guard
-    int32_t     bytesLeft;
-    static bool f_setDecodeParamsOnce = true;
-    int         nextSync = 0;
+    sbyt.bytesLeft = 0;
+    sbyt.nextSync = 0;
+
     if(!m_f_playing) {
-        f_setDecodeParamsOnce = true;
-        nextSync = findNextSync(data, len);
-        if(nextSync <  0) return len;
-        if(nextSync == 0) { m_f_playing = true; }
-        if(nextSync >  0) return nextSync;
+        sbyt.f_setDecodeParamsOnce = true;
+        sbyt.nextSync = findNextSync(data, len);
+        if(sbyt.nextSync <  0) return len;
+        if(sbyt.nextSync == 0) { m_f_playing = true; }
+        if(sbyt.nextSync >  0) return sbyt.nextSync;
     }
     // m_f_playing is true at this pos
-    bytesLeft = len;
+    sbyt.bytesLeft = len;
     m_decodeError = 0;
     int bytesDecoded = 0;
 
@@ -4667,13 +4667,13 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(!m_f_decode_ready) return 0; // find sync first
 
     switch(m_codec) {
-        case CODEC_WAV:    m_decodeError = 0; bytesLeft = 0; break;
-        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &bytesLeft, m_outBuff.get(), 0); break;
-        case CODEC_AAC:    m_decodeError = AACDecode(   data, &bytesLeft, m_outBuff.get()); break;
-        case CODEC_M4A:    m_decodeError = AACDecode(   data, &bytesLeft, m_outBuff.get()); break;
-        case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &bytesLeft, m_outBuff.get()); break;
-        case CODEC_OPUS:   m_decodeError = OPUSDecode(  data, &bytesLeft, m_outBuff.get()); break;
-        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &bytesLeft, m_outBuff.get()); break;
+        case CODEC_WAV:    m_decodeError = 0; sbyt.bytesLeft = 0; break;
+        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &sbyt.bytesLeft, m_outBuff.get(), 0); break;
+        case CODEC_AAC:    m_decodeError = AACDecode(   data, &sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_M4A:    m_decodeError = AACDecode(   data, &sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_OPUS:   m_decodeError = OPUSDecode(  data, &sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &sbyt.bytesLeft, m_outBuff.get()); break;
         default: {
             AUDIO_ERROR("no valid codec found codec = %d", m_codec);
             stopSong();
@@ -4697,7 +4697,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             if(m_decodeError == ERR_MP3_INVALID_HUFFCODES) {
                 AUDIO_INFO("last mp3 frame is invalid");
                 MP3Decoder_ClearBuffer();
-                return findNextSync(data, bytesLeft); // skip last mp3 frame and search for next syncword
+                return findNextSync(data, sbyt.bytesLeft); // skip last mp3 frame and search for next syncword
             }
         }
         //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
@@ -4734,7 +4734,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         }
         return 1; // skip one byte and seek for the next sync word
     }
-    bytesDecoded = len - bytesLeft;
+    bytesDecoded = len - sbyt.bytesLeft;
 
     if(bytesDecoded == 0 && m_decodeError == 0) { // unlikely framesize
         AUDIO_INFO("framesize is 0, start decoding again");
@@ -4831,8 +4831,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
     }
-    if(f_setDecodeParamsOnce && m_validSamples) {
-        f_setDecodeParamsOnce = false;
+    if(sbyt.f_setDecodeParamsOnce && m_validSamples) {
+        sbyt.f_setDecodeParamsOnce = false;
         setDecoderItems();
         m_PlayingStartTime = millis();
     }
