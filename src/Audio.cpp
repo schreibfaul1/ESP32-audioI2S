@@ -352,6 +352,7 @@ void Audio::setDefaults() {
     m_f_ID3v1TagFound = false;
     m_f_lockInBuffer = false;
     m_f_acceptRanges = false;
+    m_f_connectionClose = false;
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
@@ -642,8 +643,10 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("\r\n");
                        rqh.append("Icy-MetaData:1\r\n");
                        rqh.append("Icy-MetaData:2\r\n");
+                       rqh.append("Pragma: no-cache\r\n");
+                       rqh.append("Cache-Control: no-cache\r\n");
                        rqh.append("Accept:*/*\r\n");
-                       rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+                       rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko) Mozilla/5.0 (X11; Linux x86_64)\r\n");
     if(authLen > 0) {  rqh.append("Authorization: Basic ");
                        rqh.append(authorization.get());
                        rqh.append("\r\n"); }
@@ -3994,7 +3997,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             }
         }
         else if(rhl.starts_with_icase("connection:")) {
-            if(rhl.contains("close")) { ; /* do nothing */ }
+            if(rhl.contains_with_icase("close")) {m_f_connectionClose = true;  AUDIO_ERROR("connection will be closed");} // ends after ogg last Page is set
         }
 
         else if(rhl.starts_with_icase("icy-genre:")) {

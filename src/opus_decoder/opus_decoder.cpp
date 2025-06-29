@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 25.05.2026
+ *  Updated on: 29.06.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -358,6 +358,13 @@ if(!packetLen) {log_e("packetLen = 0"); return 0;}
     s_silk_DecControlStruct->nChannelsAPI = s_opusChannels;
     s_silk_DecControlStruct->nChannelsInternal = s_opusChannels;
     s_silk_DecControlStruct->API_sampleRate = 48000;
+
+
+    if (s_mode == MODE_CELT_ONLY){
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        ec_dec_init((uint8_t *)inbuf, packetLen);
+        return celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+    }
 
     if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
 
