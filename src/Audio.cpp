@@ -1177,7 +1177,7 @@ void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
         uint32_t codepoint;
     } EntityMap;
 
-    static const EntityMap entities[] = {
+    const EntityMap entities[] = {
         {"amp",   0x0026}, // &
         {"lt",    0x003C}, // <
         {"gt",    0x003E}, // >
@@ -1276,7 +1276,6 @@ void Audio::htmlToUTF8(char* str) { // convert HTML to UTF-8
         p++;
     }
 }
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::readAudioHeader(uint32_t bytes) {
     size_t bytesReaded = 0;
@@ -1325,27 +1324,26 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_WAV_Header(uint8_t* data, size_t len) {
-    static size_t   headerSize;
-    static uint32_t cs = 0;
-    static uint8_t  bts = 0;
 
     if(m_controlCounter == 0) {
+        m_rwh.cs = 0;
+        m_rwh.bts = 0;
         m_controlCounter++;
         if((*data != 'R') || (*(data + 1) != 'I') || (*(data + 2) != 'F') || (*(data + 3) != 'F')) {
             AUDIO_INFO("file has no RIFF tag");
-            headerSize = 0;
+            m_rwh.headerSize = 0;
             return -1; // false;
         }
         else {
-            headerSize = 4;
+            m_rwh.headerSize = 4;
             return 4; // ok
         }
     }
 
     if(m_controlCounter == 1) {
         m_controlCounter++;
-        cs = (uint32_t)(*data + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24) - 8);
-        headerSize += 4;
+        m_rwh.cs = (uint32_t)(*data + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24) - 8);
+        m_rwh.headerSize += 4;
         return 4; // ok
     }
 
@@ -1356,7 +1354,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             return -1; // false;
         }
         else {
-            headerSize += 4;
+            m_rwh.headerSize += 4;
             return 4;
         }
     }
@@ -1364,21 +1362,21 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 3) {
         if((*data == 'f') && (*(data + 1) == 'm') && (*(data + 2) == 't')) {
             m_controlCounter++;
-            headerSize += 4;
+            m_rwh.headerSize += 4;
             return 4;
         }
         else {
-            headerSize += 4;
+            m_rwh.headerSize += 4;
             return 4;
         }
     }
 
     if(m_controlCounter == 4) {
         m_controlCounter++;
-        cs = (uint32_t)(*data + (*(data + 1) << 8));
-        if(cs > 40) return -1; // false, something going wrong
-        bts = cs - 16;         // bytes to skip if fmt chunk is >16
-        headerSize += 4;
+        m_rwh.cs = (uint32_t)(*data + (*(data + 1) << 8));
+        if(m_rwh.cs > 40) return -1; // false, something going wrong
+        m_rwh.bts = m_rwh.cs - 16;         // bytes to skip if fmt chunk is >16
+        m_rwh.headerSize += 4;
         return 4;
     }
 
@@ -1418,25 +1416,25 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         setSampleRate(sr);
         setBitrate(nic * sr * bps);
         //    AUDIO_INFO("BitRate: %u", m_bitRate);
-        headerSize += 16;
+        m_rwh.headerSize += 16;
         return 16; // ok
     }
 
     if(m_controlCounter == 6) {
         m_controlCounter++;
-        headerSize += bts;
-        return bts; // skip to data
+        m_rwh.headerSize += m_rwh.bts;
+        return m_rwh.bts; // skip to data
     }
 
     if(m_controlCounter == 7) {
         if((*(data + 0) == 'd') && (*(data + 1) == 'a') && (*(data + 2) == 't') && (*(data + 3) == 'a')) {
             m_controlCounter++;
             //    vTaskDelay(30);
-            headerSize += 4;
+            m_rwh.headerSize += 4;
             return 4;
         }
         else {
-            headerSize++;
+            m_rwh.headerSize++;
             return 1;
         }
     }
@@ -1444,18 +1442,18 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 8) {
         m_controlCounter++;
         size_t cs = *(data + 0) + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24); // read chunkSize
-        headerSize += 4;
+        m_rwh.headerSize += 4;
         if(m_dataMode == AUDIO_LOCALFILE) m_contentlength = getFileSize();
         if(cs) { m_audioDataSize = cs - 44; }
         else { // sometimes there is nothing here
-            if(m_dataMode == AUDIO_LOCALFILE) m_audioDataSize = getFileSize() - headerSize;
-            if(m_streamType == ST_WEBFILE) m_audioDataSize = m_contentlength - headerSize;
+            if(m_dataMode == AUDIO_LOCALFILE) m_audioDataSize = getFileSize() -m_rwh. headerSize;
+            if(m_streamType == ST_WEBFILE) m_audioDataSize = m_contentlength - m_rwh.headerSize;
         }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
-    m_audioDataStart = headerSize;
+    m_audioDataStart = m_rwh.headerSize;
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

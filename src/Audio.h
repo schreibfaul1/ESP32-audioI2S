@@ -329,6 +329,13 @@ private:
     } pwsts_t;
     pwsts_t m_pwsst;
 
+    typedef struct _rwh { // used in read_WAV_Header
+        size_t   headerSize;
+        uint32_t cs = 0;
+        uint8_t  bts = 0;
+    } rwh_t;
+    rwh_t m_rwh;
+
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
