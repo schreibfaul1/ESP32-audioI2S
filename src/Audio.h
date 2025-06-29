@@ -345,6 +345,14 @@ private:
     } rflh_t;
     rflh_t m_rflh;
 
+    typedef struct _phrh{ // used in parseHttpResponseHeader
+        uint32_t ctime;
+        uint32_t timeout;
+        uint32_t stime;
+        bool     f_time = false;
+    } phrh_t;
+    phrh_t m_phrh;
+
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();

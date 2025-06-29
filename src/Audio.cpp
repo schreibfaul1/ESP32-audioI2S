@@ -3869,23 +3869,21 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if(m_dataMode != HTTP_RESPONSE_HEADER) return false;
     if(!m_currentHost.valid()) {AUDIO_ERROR("m_currentHost is empty"); return false;}
 
-    uint32_t ctime = millis();
-    uint32_t timeout = 4500; // ms
-    static uint32_t stime;
-    static bool     f_time = false;
+    m_phrh.ctime = millis();
+    m_phrh.timeout = 4500; // ms
 
     if(_client->available() == 0) {
-        if(!f_time) {
-            stime = millis();
-            f_time = true;
+        if(!m_phrh.f_time) {
+            m_phrh.stime = millis();
+            m_phrh.f_time = true;
         }
-        if((millis() - stime) > timeout) {
+        if((millis() - m_phrh.stime) > m_phrh.timeout) {
             AUDIO_ERROR("timeout");
-            f_time = false;
+            m_phrh.f_time = false;
             return false;
         }
     }
-    f_time = false;
+    m_phrh.f_time = false;
 
     ps_ptr<char>rhl;
     rhl.alloc(1024, "rhl"); // responseHeaderline
@@ -3894,7 +3892,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
     while(true) { // outer while
         uint16_t pos = 0;
-        if((millis() - ctime) > timeout) {
+        if((millis() - m_phrh.ctime) > m_phrh.timeout) {
             AUDIO_ERROR("timeout");
             m_f_timeout = true;
             goto exit;
