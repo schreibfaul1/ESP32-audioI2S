@@ -5972,31 +5972,26 @@ bool Audio::readID3V1Tag() {
 boolean Audio::streamDetection(uint32_t bytesAvail) {
     if(!m_lastHost.valid()) {AUDIO_ERROR("m_lastHost is empty"); return false;}
 
-    static uint32_t tmr_slow = millis();
-    static uint32_t tmr_lost = millis();
-    static uint8_t  cnt_slow = 0;
-    static uint8_t  cnt_lost = 0;
-
     // if within one second the content of the audio buffer falls below the size of an audio frame 100 times,
     // issue a message
-    if(tmr_slow + 1000 < millis()) {
-        tmr_slow = millis();
-        if(cnt_slow > 100) AUDIO_INFO("slow stream, dropouts are possible");
-        cnt_slow = 0;
+    if(m_sdet.tmr_slow + 1000 < millis()) {
+        m_sdet.tmr_slow = millis();
+        if(m_sdet.cnt_slow > 100) AUDIO_INFO("slow stream, dropouts are possible");
+        m_sdet.cnt_slow = 0;
     }
-    if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) cnt_slow++;
+    if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) m_sdet.cnt_slow++;
     if(bytesAvail) {
-        tmr_lost = millis() + 1000;
-        cnt_lost = 0;
+        m_sdet.tmr_lost = millis() + 1000;
+        m_sdet.cnt_lost = 0;
     }
     if(InBuff.bufferFilled() > InBuff.getMaxBlockSize() * 2) return false; // enough data available to play
 
     // if no audio data is received within three seconds, a new connection attempt is started.
-    if(tmr_lost < millis()) {
-        cnt_lost++;
-        tmr_lost = millis() + 1000;
-        if(cnt_lost == 5) { // 5s no data?
-            cnt_lost = 0;
+    if(m_sdet.tmr_lost < millis()) {
+        m_sdet.cnt_lost++;
+        m_sdet.tmr_lost = millis() + 1000;
+        if(m_sdet.cnt_lost == 5) { // 5s no data?
+            m_sdet.cnt_lost = 0;
             AUDIO_INFO("Stream lost -> try new connection");
             m_f_reset_m3u8Codec = false;
             httpPrint(m_lastHost.get());

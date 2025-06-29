@@ -353,6 +353,14 @@ private:
     } phrh_t;
     phrh_t m_phrh;
 
+    typedef struct _sdet{ // used in streamDetection
+        uint32_t tmr_slow = 0;
+        uint32_t tmr_lost = 0;
+        uint8_t  cnt_slow = 0;
+        uint8_t  cnt_lost = 0;
+    }sdet_t;
+    sdet_t m_sdet;
+
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
