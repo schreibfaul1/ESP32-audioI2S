@@ -125,24 +125,253 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
-typedef struct _hwoe{
-    bool ssl;
-    ps_ptr<char> hwoe;  // host without extension
-    uint16_t     port;
-    ps_ptr<char> extension;
-    ps_ptr<char> query_string;
-} hwoe_t;
-PS_STRUCT_FREE_MEMBERS(hwoe_t, ptr->hwoe.reset(); ptr->extension.reset(); ptr->query_string.reset();)
-
 class Audio : private AudioBuffer{
 
     AudioBuffer InBuff; // instance of input buffer
+
+private:
+    typedef struct _ID3Hdr{ // used only in readID3header()
+        size_t       id3Size;
+        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+        size_t       remainingHeaderBytes;
+        size_t       universal_tmp;
+        uint8_t      ID3version;
+        int          ehsz;
+        char         tag[5];
+        char         frameid[5];
+        char         lang[5];
+        size_t       framesize;
+        bool         compressed;
+        size_t       APIC_size[3];
+        uint32_t     APIC_pos[3];
+        bool         SYLT_seen;
+        size_t       SYLT_size;
+        uint32_t     SYLT_pos;
+        uint8_t      numID3Header;
+        uint16_t     iBuffSize;
+        uint8_t      contentDescriptorTerminator_0;
+        uint8_t      contentDescriptorTerminator_1;
+        uint8_t      textStringTerminator_0;
+        uint8_t      textStringTerminator_1;
+        bool         byteOrderMark;
+        ps_ptr<char> iBuff;
+    } ID3Hdr_t;
+    ID3Hdr_t m_ID3Hdr;
+
+    typedef struct _pwsHLS{  // used in processWebStreamHLS()
+        uint16_t     maxFrameSize;
+        uint16_t     ID3BuffSize;
+        uint32_t     availableBytes;
+        bool         firstBytes;
+        bool         f_chunkFinished;
+        uint32_t     byteCounter;
+        size_t       chunkSize;
+        uint16_t     ID3WritePtr;
+        uint16_t     ID3ReadPtr;
+        ps_ptr<uint8_t>ID3Buff;
+    } pwsHLS_t;
+    pwsHLS_t m_pwsHLS;
+
+    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
+        uint64_t     xMedSeq;
+        bool         f_mediaSeq_found;
+    } pplM3u8_t;
+    pplM3u8_t m_pplM3U8;
+
+    typedef struct _m4aHdr{ // used in read_M4A_Header
+        size_t      headerSize;
+        size_t      retvalue;
+        size_t      atomsize;
+        size_t      audioDataPos;
+        size_t      cnt;
+        uint32_t    picPos;
+        uint32_t    picLen;
+    } m4aHdr_t;
+    m4aHdr_t m_m4aHdr;
+
+    typedef struct _plCh{ // used in playChunk
+        int32_t     validSamples;
+        int32_t     samples48K = 0;
+        uint32_t    count = 0;
+        size_t      i2s_bytesConsumed;
+        int16_t*    sample[2];
+        int16_t*    s2;
+        int         sampleSize;
+        esp_err_t   err;
+        int         i;
+    } plCh_t;
+    plCh_t m_plCh;
+
+    typedef struct _lVar{ // used in loop
+        uint8_t     no_host_cnt;
+        uint32_t    no_host_timer;
+        uint8_t     count;
+    } lVar_t;
+    lVar_t m_lVar;
+
+    typedef struct _hwoe{ // used in dismantle_host
+        bool ssl;
+        ps_ptr<char> hwoe;  // host without extension
+        uint16_t     port;
+        ps_ptr<char> extension;
+        ps_ptr<char> query_string;
+    } hwoe_t;
+
+    typedef struct _prlf{ // used in processLocalFile
+        uint32_t  ctime;
+        uint32_t  newFilePos;
+        uint32_t  byteCounter;
+        bool      audioHeaderFound;
+        uint32_t  timeout;
+        uint32_t  maxFrameSize;
+        uint32_t  availableBytes;
+        int32_t   bytesAddedToBuffer;
+        int32_t   offset;
+    } prlf_t;
+    prlf_t m_prlf;
+
+    typedef struct _cat { // used in computeAudioTime
+        uint64_t sumBytesIn;
+        uint64_t sumBytesOut;
+        uint32_t sumBitRate;
+        uint32_t counter;
+        uint32_t timeStamp;
+        uint32_t deltaBytesIn;
+        uint32_t nominalBitRate;
+    } cat_t;
+    cat_t m_cat;
+
+    typedef struct _cVUl{ // used in computeVUlevel
+        uint8_t sampleArray[2][4][8] = {0};
+        uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+        bool    f_vu = false;
+    } cVUl_t;
+    cVUl_t m_cVUl;
+
+    typedef struct _ifCh{ // used in IIR_filterChain0, 1, 2
+        float   inSample0[2];
+        float   outSample0[2];
+        int16_t iir_out0[2];
+        float   inSample1[2];
+        float   outSample1[2];
+        int16_t iir_out1[2];
+        float   inSample2[2];
+        float   outSample2[2];
+        int16_t iir_out2[2];
+    } ifCh_t;
+    ifCh_t m_ifCh;
+
+    typedef struct _tspp{ // used in ts_parsePacket
+        int pidNumber = 0;
+        int pids[4]; // PID_ARRAY_LEN
+        int PES_DataLength = 0;
+        int pidOfAAC = 0;
+        uint8_t fillData = 0;
+    } tspp_t;
+    tspp_t m_tspp;
+
+    typedef struct _pwst{ // used in processWebStream
+        uint16_t  maxFrameSize;
+        uint32_t  chunkSize =0;
+        bool      f_skipCRLF = false;
+        uint32_t  availableBytes;
+        bool      f_clientIsConnected;
+    } pwst_t;
+    pwst_t m_pwst;
+
+    typedef struct _pwf{
+        uint32_t maxFrameSize;
+        uint32_t chunkSize;
+        size_t   audioDataCount;
+        uint32_t byteCounter;
+        bool     f_waitingForPayload = false;
+        bool     f_clientIsConnected;
+    } pwf_t;
+    pwf_t m_pwf;
+
+    typedef struct  _pad{ // used in playAudioData
+        uint8_t  count = 0;
+        size_t   oldAudioDataSize = 0;
+        bool     lastFrames = false;
+        int32_t  bytesToDecode;
+        int16_t  bytesDecoded;
+    } pad_t;
+    pad_t m_pad;
+
+    typedef struct _sbyt{ // used in sendBytes
+        int32_t  bytesLeft;
+        bool     f_setDecodeParamsOnce = true;
+        uint8_t  channels = 0;
+        int      nextSync = 0;
+        uint8_t  isPS = 0;
+    } sbyt_t;
+    sbyt_t m_sbyt;
+
+    typedef struct _rmet{ // used in readMetadata
+        uint16_t pos_ml = 0; // determines the current position in metaline
+        uint16_t metalen = 0;
+        uint16_t res = 0;
+    } rmet_t;
+    rmet_t m_rmet;
+
+    typedef struct _pwsts {                // used in processWebStreamTS
+        uint32_t       availableBytes;     // available bytes in stream
+        bool           f_firstPacket;
+        bool           f_chunkFinished;
+        bool           f_nextRound;
+        uint32_t       byteCounter;        // count received data
+        uint8_t        ts_packetStart = 0;
+        uint8_t        ts_packetLength = 0;
+        uint8_t        ts_packetPtr = 0;
+        const uint8_t  ts_packetsize = 188;
+        ps_ptr<uint8_t> ts_packet;
+        size_t         chunkSize = 0;
+    } pwsts_t;
+    pwsts_t m_pwsst;
+
+    typedef struct _rwh { // used in read_WAV_Header
+        size_t   headerSize;
+        uint32_t cs = 0;
+        uint8_t  bts = 0;
+    } rwh_t;
+    rwh_t m_rwh;
+
+    typedef struct _rflh { // used in read_FLAC_Header
+        size_t   headerSize;
+        size_t   retvalue = 0;
+        bool     f_lastMetaBlock = false;
+        uint32_t picPos = 0;
+        uint32_t picLen = 0;
+    } rflh_t;
+    rflh_t m_rflh;
+
+    typedef struct _phrh{ // used in parseHttpResponseHeader
+        uint32_t ctime;
+        uint32_t timeout;
+        uint32_t stime;
+        bool     f_time = false;
+    } phrh_t;
+    phrh_t m_phrh;
+
+    typedef struct _sdet{ // used in streamDetection
+        uint32_t tmr_slow = 0;
+        uint32_t tmr_lost = 0;
+        uint8_t  cnt_slow = 0;
+        uint8_t  cnt_lost = 0;
+    }sdet_t;
+    sdet_t m_sdet;
+
+    typedef struct _fnsy{ // used in findNextSync
+        int      nextSync = 0;
+        uint32_t swnf = 0;
+    } fnsy_t;
+    fnsy_t m_fnsy;
 
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
-    ps_struct_ptr<hwoe_t>dismantle_host(const char* host);
+    hwoe_t dismantle_host(const char* host);
     bool connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool connecttospeech(const char* speech, const char* lang);
     bool connecttoFS(fs::FS &fs, const char* path, int32_t m_fileStartPos = -1);
@@ -565,7 +794,7 @@ private:
     const size_t    m_frameSizeMP3       = 1600;
     const size_t    m_frameSizeAAC       = 1600;
     const size_t    m_frameSizeFLAC      = 4096 * 6; // 24576
-    const size_t    m_frameSizeOPUS      = 1024;
+    const size_t    m_frameSizeOPUS      = 2048;
     const size_t    m_frameSizeVORBIS    = 4096 * 2;
     const size_t    m_outbuffSize        = 4096 * 2;
     const size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
@@ -577,88 +806,11 @@ private:
     ps_ptr<int16_t>  m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>     m_ibuff;          // used in log_info()
     ps_ptr<char>     m_lastHost;       // Store the last URL to a webstream
+    ps_ptr<char>     m_currentHost;    // can be changed by redirection or playlist
     ps_ptr<char>     m_lastM3U8host;
     ps_ptr<char>     m_speechtxt;      // stores tts text
     ps_ptr<char>     m_streamTitle;    // stores the last StreamTitle
-    typedef struct _ID3Hdr{ // used only in readID3header()
-        size_t       id3Size;
-        size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-        size_t       remainingHeaderBytes;
-        size_t       universal_tmp;
-        uint8_t      ID3version;
-        int          ehsz;
-        char         tag[5];
-        char         frameid[5];
-        char         lang[5];
-        size_t       framesize;
-        bool         compressed;
-        size_t       APIC_size[3];
-        uint32_t     APIC_pos[3];
-        bool         SYLT_seen;
-        size_t       SYLT_size;
-        uint32_t     SYLT_pos;
-        uint8_t      numID3Header;
-        uint16_t     iBuffSize;
-        uint8_t      contentDescriptorTerminator_0;
-        uint8_t      contentDescriptorTerminator_1;
-        uint8_t      textStringTerminator_0;
-        uint8_t      textStringTerminator_1;
-        bool         byteOrderMark;
-        ps_ptr<char> iBuff;
-    } ID3Hdr_t;
-    ID3Hdr_t ID3Hdr;
 
-    typedef struct _pwsHLS{  // used in processWebStreamHLS()
-        uint16_t     maxFrameSize;
-        uint16_t     ID3BuffSize;
-        uint32_t     availableBytes;
-        bool         firstBytes;
-        bool         f_chunkFinished;
-        uint32_t     byteCounter;
-        size_t       chunkSize;
-        uint16_t     ID3WritePtr;
-        uint16_t     ID3ReadPtr;
-        ps_ptr<uint8_t>ID3Buff;
-    } pwsHLS_t;
-    pwsHLS_t pwsHLS;
-
-    typedef struct _pplM3U8{ // used in parsePlaylist_M3U8
-        uint64_t     xMedSeq;
-        bool         f_mediaSeq_found;
-    } pplM3u8_t;
-    pplM3u8_t pplM3U8;
-
-
-    typedef struct _m4aHdr{ // used in read_M4A_Header
-        size_t      headerSize;
-        size_t      retvalue;
-        size_t      atomsize;
-        size_t      audioDataPos;
-        size_t      cnt;
-        uint32_t    picPos;
-        uint32_t    picLen;
-    } m4aHdr_t;
-    m4aHdr_t m4aHdr;
-
-    typedef struct _plCh{ // used in playChunk
-        int32_t     validSamples;
-        int32_t     samples48K = 0;
-        uint32_t    count = 0;
-        size_t      i2s_bytesConsumed;
-        int16_t*    sample[2];
-        int16_t*    s2;
-        int         sampleSize;
-        esp_err_t   err;
-        int         i;
-    } plCh_t;
-    plCh_t plCh;
-
-    typedef struct _lVar{ // used in loop
-        uint8_t     no_host_cnt;
-        uint32_t    no_host_timer;
-        uint8_t     count;
-    } lVar_t;
-    lVar_t lVar;
 
     filter_t        m_filter[3];                    // digital filters
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
@@ -755,7 +907,7 @@ private:
     bool            m_f_audioTaskIsDecoding = false;
     bool            m_f_acceptRanges = false;
     bool            m_f_reset_m3u8Codec = true;     // reset codec for m3u8 stream
-    uint8_t         m_f_channelEnabled = 3;         //
+    bool            m_f_connectionClose = false;    // set in parseHttpResponseHeader
     uint32_t        m_audioFileDuration = 0;
     float           m_audioCurrentTime = 0;
     float           m_resampleError = 0.0f;

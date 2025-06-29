@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 25.05.2026
+ *  Updated on: 29.06.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -359,6 +359,13 @@ if(!packetLen) {log_e("packetLen = 0"); return 0;}
     s_silk_DecControlStruct->nChannelsInternal = s_opusChannels;
     s_silk_DecControlStruct->API_sampleRate = 48000;
 
+
+    if (s_mode == MODE_CELT_ONLY){
+        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        ec_dec_init((uint8_t *)inbuf, packetLen);
+        return celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+    }
+
     if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
 
     ec_dec_init(inbuf, packetLen);
@@ -705,18 +712,14 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
 
 */
     int32_t ret = 0;
- //   int32_t remainingBytes = 0;
     int32_t current_payload_offset = 0; // Offset from inbuf start where the current frame data begins
-    static uint16_t spf = 0;
-    static uint16_t bytesConsumed = 0;
-s_ofp3.idx = 0;
+    s_ofp3.idx = 0;
+
     if (s_ofp3.firstCall) {
     //    log_w("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X ",
     //          inbuf[0], inbuf[1], inbuf[2], inbuf[3], inbuf[4], inbuf[5], inbuf[6], inbuf[7], inbuf[8], inbuf[9]);
 
         // Reset all relevant state for a new packet
-        spf = 0;
-        bytesConsumed =0;
         s_ofp3.firstCall = false;
         s_ofp3.paddingLength = 0;
         s_ofp3.v = false;
