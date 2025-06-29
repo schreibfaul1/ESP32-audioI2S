@@ -4704,12 +4704,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
         //  This triggers error -21 because the faad2 decoder cannot switch automatically.
         if(m_codec == CODEC_AAC && m_decodeError == -21){ // mono <-> stereo change
-            static uint8_t channels = 0;
+            sbyt.channels = 0;
             if ((data[0] == 0xFF) || ((data[1] & 0xF0) == 0xF0)){
                 int channel_config = ((data[2] & 0x01) << 2) | ((data[3] & 0xC0) >> 6);
-                if(channel_config != channels) {
-                    channels = channel_config;
-                    AUDIO_INFO("AAC channel config changed to %d", channels);
+                if(channel_config != sbyt.channels) {
+                    sbyt.channels = channel_config;
+                    AUDIO_INFO("AAC channel config changed to %d", sbyt.channels);
                 }
             }
             AACDecoder_FreeBuffers();
