@@ -4523,56 +4523,56 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     //         > 0 is the offset to the next sync word
     //         -1 the sync word was not found within the block with the length len
 
-    int         nextSync = 0;
-    static uint32_t swnf = 0;
+    m_fnsy.nextSync = 0;
+
 
     if(m_codec == CODEC_WAV) {
         m_f_playing = true;
-        nextSync = 0;
+        m_fnsy.nextSync = 0;
     }
     if(m_codec == CODEC_MP3) {
-        nextSync = MP3FindSyncWord(data, len);
-        if(nextSync == -1) return len; // syncword not found, search next block
+        m_fnsy.nextSync = MP3FindSyncWord(data, len);
+        if(m_fnsy.nextSync == -1) return len; // syncword not found, search next block
     }
-    if(m_codec == CODEC_AAC) { nextSync = AACFindSyncWord(data, len); }
+    if(m_codec == CODEC_AAC) { m_fnsy.nextSync = AACFindSyncWord(data, len); }
     if(m_codec == CODEC_M4A) {
         if(!m_M4A_chConfig)m_M4A_chConfig = 2; // guard
         if(!m_M4A_sampleRate)m_M4A_sampleRate = 44100;
         if(!m_M4A_objectType)m_M4A_objectType = 2;
         AACSetRawBlockParams(m_M4A_chConfig, m_M4A_sampleRate, m_M4A_objectType);
         m_f_playing = true;
-        nextSync = 0;
+        m_fnsy.nextSync = 0;
     }
     if(m_codec == CODEC_FLAC) {
-        nextSync = FLACFindSyncWord(data, len);
-        if(nextSync == -1) return len; // OggS not found, search next block
+        m_fnsy.nextSync = FLACFindSyncWord(data, len);
+        if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_codec == CODEC_OPUS) {
-        nextSync = OPUSFindSyncWord(data, len);
-        if(nextSync == -1) return len; // OggS not found, search next block
+        m_fnsy.nextSync = OPUSFindSyncWord(data, len);
+        if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_codec == CODEC_VORBIS) {
-        nextSync = VORBISFindSyncWord(data, len);
-        if(nextSync == -1) return len; // OggS not found, search next block
+        m_fnsy.nextSync = VORBISFindSyncWord(data, len);
+        if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
-    if(nextSync == -1) {
-        if(swnf == 0) AUDIO_INFO("syncword not found");
+    if(m_fnsy.nextSync == -1) {
+        if(m_fnsy.swnf == 0) AUDIO_INFO("syncword not found");
         else {
-            swnf++; // syncword not found counter, can be multimediadata
+            m_fnsy.swnf++; // syncword not found counter, can be multimediadata
         }
     }
-    if(nextSync == 0) {
-        if(swnf){
-            AUDIO_INFO("syncword not found %lu times", (long unsigned int)swnf);
-            swnf = 0;
+    if(m_fnsy.nextSync == 0) {
+        if(m_fnsy.swnf){
+            AUDIO_INFO("syncword not found %lu times", (long unsigned int)m_fnsy.swnf);
+            m_fnsy.swnf = 0;
         }
         else {
             AUDIO_INFO("syncword found at pos 0");
             m_f_decode_ready = true;
         }
     }
-    if(nextSync > 0) { AUDIO_INFO("syncword found at pos %i", nextSync); }
-    return nextSync;
+    if(m_fnsy.nextSync > 0) { AUDIO_INFO("syncword found at pos %i", m_fnsy.nextSync); }
+    return m_fnsy.nextSync;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDecoderItems() {

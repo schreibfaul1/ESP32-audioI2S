@@ -361,6 +361,12 @@ private:
     }sdet_t;
     sdet_t m_sdet;
 
+    typedef struct _fnsy{ // used in findNextSync
+        int      nextSync = 0;
+        uint32_t swnf = 0;
+    } fnsy_t;
+    fnsy_t m_fnsy;
+
 public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
