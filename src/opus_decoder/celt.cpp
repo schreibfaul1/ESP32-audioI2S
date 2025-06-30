@@ -38,11 +38,6 @@ band_ctx_t     s_band_ctx;
 ec_ctx_t      *s_ec_ptr;
 ec_ctx_t       s_ec;
 
-
-
-
-
-
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
 const uint32_t CELT_SET_START_BAND_REQUEST      = 10010;

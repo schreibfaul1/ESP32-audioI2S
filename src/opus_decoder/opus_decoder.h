@@ -6,9 +6,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <vector>
+#include "../psram_unique_ptr.hpp"
 using namespace std;
 
-enum : int8_t  {OPUS_END = 120,
+enum : int16_t {OPUS_END = 120,
                 OPUS_CONTINUE = 110,
                 OPUS_PARSE_OGG_DONE = 100,
                 ERR_OPUS_NONE = 0,
@@ -33,7 +34,11 @@ enum : int8_t  {OPUS_END = 120,
                 ERR_OPUS_CELT_SET_CHANNELS = -25,
                 ERR_OPUS_CELT_END_BAND = -26,
                 ERR_OPUS_CELT_START_BAND = -27,
-                ERR_CELT_OPUS_INTERNAL_ERROR = -28};
+                ERR_CELT_OPUS_INTERNAL_ERROR = -28,
+                ERR_SILK_DEC_INVALID_SAMPLING_FREQUENCY = -200,  /* Output samplfreq lower than intern. decoded sampling freq */
+                ERR_SILK_DEC_PAYLOAD_TOO_LARGE          = -201,  /* Payload size exceeded the maximum allowed 1024 bytes */
+                ERR_SILK_DEC_PAYLOAD_ERROR              = -202,  /* Payload has bit errors */
+                ERR_SILK_DEC_INVALID_FRAME_SIZE         = -203}; /* Payload has bit errors */
 
 enum {MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001,  MODE_CELT_ONLY = 1002};
 typedef struct _ofp2 {
@@ -76,7 +81,7 @@ uint8_t          OPUSGetBitsPerSample();
 uint32_t         OPUSGetBitRate();
 uint16_t         OPUSGetOutputSamps();
 uint32_t         OPUSGetAudioDataStart();
-char*            OPUSgetStreamTitle();
+const char*      OPUSgetStreamTitle();
 uint16_t         OPUSgetMode();
 vector<uint32_t> OPUSgetMetadataBlockPicture();
 int32_t          OPUSFindSyncWord(unsigned char* buf, int32_t nBytes);

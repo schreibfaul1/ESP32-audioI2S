@@ -4736,7 +4736,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return 1;
     }
     // status: bytesDecoded > 0 and m_decodeError >= 0
-    char* st = NULL;
+    const char* st = NULL;
     std::vector<uint32_t> vec;
     switch(m_codec) {
         case CODEC_WAV:     if(getBitsPerSample() == 16){
