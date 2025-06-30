@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2g                                                                                                                                ";
-/*  Updated on: Jun 29.2025
+    Version 3.3.2h                                                                                                                                ";
+/*  Updated on: Jun 30.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -22,6 +22,16 @@
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "psram_unique_ptr.hpp"
 
+#define ANSI_ESC_RESET          "\033[0m"
+#define ANSI_ESC_BLACK          "\033[30m"
+#define ANSI_ESC_RED            "\033[31m"
+#define ANSI_ESC_GREEN          "\033[32m"
+#define ANSI_ESC_YELLOW         "\033[33m"
+#define ANSI_ESC_BLUE           "\033[34m"
+#define ANSI_ESC_MAGENTA        "\033[35m"
+#define ANSI_ESC_CYAN           "\033[36m"
+#define ANSI_ESC_WHITE          "\033[37m"
+
 template <typename... Args>
 void AUDIO_INFO(const char* fmt, Args&&... args) {
     ps_ptr<char> result;
@@ -37,7 +47,7 @@ void AUDIO_INFO(const char* fmt, Args&&... args) {
     if(audio_info) audio_info(result.get());
     result.reset();
 }
-#define ANSI_ESC_RED "\033[31m"
+
 template <typename... Args>
 void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... args) {
     ps_ptr<char> result;
@@ -59,13 +69,13 @@ void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... arg
 
     // build a final string with file/line prefix
     ps_ptr<char> final;
-    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s", file.c_get(), line, dst);
+    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
     final.alloc(total_len + 1, "final");
     char* dest = final.get();
     if (!dest) return;  // Or error treatment
     if(audio_info){
-        std::snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s", file.c_get(), line, dst);
+        std::snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         audio_info(final.get());
     }
     else{
@@ -3999,7 +4009,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             }
         }
         else if(rhl.starts_with_icase("connection:")) {
-            if(rhl.contains_with_icase("close")) {m_f_connectionClose = true;  AUDIO_ERROR("connection will be closed");} // ends after ogg last Page is set
+            if(rhl.contains_with_icase("close")) {m_f_connectionClose = true; /* AUDIO_ERROR("connection will be closed"); */} // ends after ogg last Page is set
         }
 
         else if(rhl.starts_with_icase("icy-genre:")) {
