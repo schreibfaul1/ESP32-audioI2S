@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 30.06.2025
+ *  Updated on: 01.07.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -339,7 +339,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if(!packetLen) {log_e("packetLen = 0"); return 0;}
     int i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
-    uint8_t payloadSize_ms = 20;
+    uint8_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);  /* The SILK PLC cannot produce frames of less than 10 ms */
     int decoded_samples = 0;
     int32_t silk_frame_size;
     uint8_t start_band = 17;
@@ -356,7 +356,6 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
 
     if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
 
-
     if (s_mode == MODE_CELT_ONLY){
         if(s_prev_mode != s_mode){
             celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
@@ -371,10 +370,8 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
 
     if (s_mode == MODE_SILK_ONLY) {
         if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
-        payloadSize_ms = max(10, 1000 * audiosize / 48000);  /* The SILK PLC cannot produce frames of less than 10 ms */
-
         decoded_samples = 0;
-        ec_dec_init((uint8_t *)inbuf, packetLen);
+        ec_dec_init((uint8_t *)inbuf, samplesPerFrame);
         silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
         do {  /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
