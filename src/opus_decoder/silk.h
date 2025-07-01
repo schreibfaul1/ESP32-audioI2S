@@ -404,10 +404,10 @@ POSSIBILITY OF SUCH DAMAGE.
 /* Error messages */
 #define SILK_NO_ERROR                                0
 /* Decoder error messages */
-#define SILK_DEC_INVALID_SAMPLING_FREQUENCY         -200 /* Output samplfreq lower than intern. decoded sampling freq */
-#define SILK_DEC_PAYLOAD_TOO_LARGE                  -201 /* Payload size exceeded the maximum allowed 1024 bytes */
-#define SILK_DEC_PAYLOAD_ERROR                      -202 /* Payload has bit errors */
-#define SILK_DEC_INVALID_FRAME_SIZE                 -203 /* Payload has bit errors */
+#define ERR_OPUS_SILK_DEC_INVALID_SAMPLING_FREQUENCY         -40 /* Output samplfreq lower than intern. decoded sampling freq */
+#define ERR_OPUS_SILK_DEC_PAYLOAD_TOO_LARGE                  -41 /* Payload size exceeded the maximum allowed 1024 bytes */
+#define ERR_OPUS_SILK_DEC_PAYLOAD_ERROR                      -42 /* Payload has bit errors */
+#define ERR_OPUS_SILK_DEC_INVALID_FRAME_SIZE                 -43 /* Payload has bit errors */
 
 #define silk_encoder_state_Fxx      silk_encoder_state_FIX
 #define silk_encode_do_VAD_Fxx      silk_encode_do_VAD_FIX

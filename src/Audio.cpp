@@ -4957,28 +4957,7 @@ void Audio::printDecodeError(int r) {
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_OPUS) {
-        switch(r) {
-            case ERR_OPUS_NONE: e = "NONE"; break;
-            case ERR_OPUS_CHANNELS_OUT_OF_RANGE: e = "UNKNOWN CHANNEL ASSIGNMENT"; break;
-            case ERR_OPUS_INVALID_SAMPLERATE: e = "SAMPLERATE IS NOT 48000Hz"; break;
-            case ERR_OPUS_EXTRA_CHANNELS_UNSUPPORTED: e = "EXTRA CHANNELS UNSUPPORTED"; break;
-            case ERR_OPUS_SILK_MODE_UNSUPPORTED: e = "SILK MODE UNSUPPORTED"; break;
-            case ERR_OPUS_HYBRID_MODE_UNSUPPORTED: e = "HYBRID MODE UNSUPPORTED"; break;
-            case ERR_OPUS_NARROW_BAND_UNSUPPORTED: e = "NARROW_BAND_UNSUPPORTED"; break;
-            case ERR_OPUS_WIDE_BAND_UNSUPPORTED: e = "WIDE_BAND_UNSUPPORTED"; break;
-            case ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED: e = "SUPER_WIDE_BAND_UNSUPPORTED"; break;
-            case ERR_OPUS_CELT_BAD_ARG: e = "CELT_DECODER_BAD_ARG"; break;
-            case ERR_OPUS_CELT_INTERNAL_ERROR: e = "CELT DECODER INTERNAL ERROR"; break;
-            case ERR_OPUS_CELT_UNIMPLEMENTED: e = "CELT DECODER UNIMPLEMENTED ARG"; break;
-            case ERR_OPUS_CELT_ALLOC_FAIL: e = "CELT DECODER INIT ALLOC FAIL"; break;
-            case ERR_OPUS_CELT_UNKNOWN_REQUEST: e = "CELT_UNKNOWN_REQUEST FAIL"; break;
-            case ERR_OPUS_CELT_GET_MODE_REQUEST: e = "CELT_GET_MODE_REQUEST FAIL"; break;
-            case ERR_OPUS_CELT_CLEAR_REQUEST: e = "CELT_CLEAR_REAUEST_FAIL"; break;
-            case ERR_OPUS_CELT_SET_CHANNELS: e = "CELT_SET_CHANNELS_FAIL"; break;
-            case ERR_OPUS_CELT_END_BAND: e = "CELT_END_BAND_REQUEST_FAIL"; break;
-            case ERR_CELT_OPUS_INTERNAL_ERROR: e = "CELT_INTERNAL_ERROR"; break;
-            default: e = "ERR_UNKNOWN";
-        }
+        e = OPUSGetErrorMessage(r);
         AUDIO_INFO("OPUS decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_VORBIS) {
