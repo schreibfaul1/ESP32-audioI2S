@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2h                                                                                                                                ";
-/*  Updated on: Jun 30.2025
+    Version 3.3.2i                                                                                                                                ";
+/*  Updated on: Jul 01.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -656,7 +656,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Pragma: no-cache\r\n");
                        rqh.append("Cache-Control: no-cache\r\n");
                        rqh.append("Accept:*/*\r\n");
-                       rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko) Mozilla/5.0 (X11; Linux x86_64)\r\n");
+                       rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     if(authLen > 0) {  rqh.append("Authorization: Basic ");
                        rqh.append(authorization.get());
                        rqh.append("\r\n"); }
@@ -3934,7 +3934,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 log_w("responseHeaderline overflow");
             }
         } // inner while
-
         if(!pos) {
             vTaskDelay(5);
             continue;
