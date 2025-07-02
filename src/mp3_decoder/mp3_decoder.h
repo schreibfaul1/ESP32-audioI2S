@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Arduino.h"
+#include "../psram_unique_ptr.hpp"
 #include "assert.h"
 
 static const uint8_t  m_HUFF_PAIRTABS          =32;
@@ -16,21 +17,23 @@ static const uint8_t  m_MAX_NCHAN              =2;     // max channels
 static const uint16_t m_MAX_NSAMP              =576;   // max samples per channel, per granule
 
 enum {
-    ERR_MP3_NONE =                  0,
-    ERR_MP3_INDATA_UNDERFLOW =     -1,
-    ERR_MP3_MAINDATA_UNDERFLOW =   -2,
-    ERR_MP3_FREE_BITRATE_SYNC =    -3,
-    ERR_MP3_OUT_OF_MEMORY =        -4,
-    ERR_MP3_NULL_POINTER =         -5,
-    ERR_MP3_INVALID_FRAMEHEADER =  -6,
-    ERR_MP3_INVALID_SIDEINFO =     -7,
-    ERR_MP3_INVALID_SCALEFACT =    -8,
-    ERR_MP3_INVALID_HUFFCODES =    -9,
-    ERR_MP3_INVALID_DEQUANTIZE =   -10,
-    ERR_MP3_INVALID_IMDCT =        -11,
-    ERR_MP3_INVALID_SUBBAND =      -12,
+    MP3_NONE =                      0,
+    MP3_ERR =                      -1,
+    MP3_STOP =                     -100,
+    // ERR_MP3_INDATA_UNDERFLOW =     -1,
+    // ERR_MP3_MAINDATA_UNDERFLOW =   -2,
+    // ERR_MP3_FREE_BITRATE_SYNC =    -3,
+    // ERR_MP3_OUT_OF_MEMORY =        -4,
+    // ERR_MP3_NULL_POINTER =         -5,
+    // ERR_MP3_INVALID_FRAMEHEADER =  -6,
+    // ERR_MP3_INVALID_SIDEINFO =     -7,
+    // ERR_MP3_INVALID_SCALEFACT =    -8,
+    // ERR_MP3_INVALID_HUFFCODES =    -9,
+    // ERR_MP3_INVALID_DEQUANTIZE =   -10,
+    // ERR_MP3_INVALID_IMDCT =        -11,
+    // ERR_MP3_INVALID_SUBBAND =      -12,
 
-    ERR_UNKNOWN =                  -9999
+    // ERR_UNKNOWN =                  -9999
 };
 
 typedef struct MP3FrameInfo {
@@ -197,7 +200,27 @@ typedef struct MP3DecInfo {
     int32_t part23Length[m_MAX_NGRAN][m_MAX_NCHAN];
 } MP3DecInfo_t;
 
+const uint16_t mpeg1_layer3_bitrates[16] = {                              // Bitraten-Lookup tables (example for MPEG1 Layer III)
+    0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0   // Attention: These tables must be complete and correct!
+};                                                                        // Index 0 is invalid, index 15 is invalid.
 
+// SamplingFrequenz-Lookup tables(Beispiel für MPEG1, MPEG2, MPEG2.5)
+const uint16_t sampling_rates[3][4] = {
+    {44100, 48000, 32000, 0}, // MPEG1
+    {22050, 24000, 16000, 0}, // MPEG2
+    {11025, 12000, 8000, 0}   // MPEG2.5
+};
+
+typedef struct {
+    uint8_t  mpeg_version; // 0=MPEG2.5, 1=reserved, 2=MPEG2, 3=MPEG1
+    uint8_t  layer;        // 0=reserved, 1=Layer III, 2=Layer II, 3=Layer I
+    bool     crc_protected;
+    uint8_t  bitrate_idx;
+    uint8_t  sample_rate_idx;
+    bool     padding;
+    uint8_t  channel_mode;
+    uint32_t frame_length; // In Bytes
+} Mp3FrameHeader;
 
 
 /* format = Q31
@@ -514,3 +537,68 @@ inline uint64_t MADD64(uint64_t sum64, int32_t x, int32_t y) {sum64 += (uint64_t
 inline uint64_t xSAR64(uint64_t x, int32_t n){return x >> n;}
 inline int32_t FASTABS(int32_t x){ return __builtin_abs(x);} //xtensa has a fast abs instruction //fb
 #define CLZ(x) __builtin_clz(x) //fb
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  L O G G I N G   📌📌📌
+
+template <typename... Args>
+void MP3_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+    extern __attribute__((weak)) void audio_info(const char*);
+    #define ANSI_ESC_RESET          "\033[0m"
+    #define ANSI_ESC_BLACK          "\033[30m"
+    #define ANSI_ESC_RED            "\033[31m"
+    #define ANSI_ESC_GREEN          "\033[32m"
+    #define ANSI_ESC_YELLOW         "\033[33m"
+    #define ANSI_ESC_BLUE           "\033[34m"
+    #define ANSI_ESC_MAGENTA        "\033[35m"
+    #define ANSI_ESC_CYAN           "\033[36m"
+    #define ANSI_ESC_WHITE          "\033[37m"
+
+    ps_ptr<char> result;
+    ps_ptr<char> file;
+
+    file.copy_from(path);
+    while(file.contains("/")){
+        file.remove_before('/', false);
+    }
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1, "result");
+    char* dst = result.get();
+    if (!dst) return;
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+
+    // build a final string with file/line prefix
+    ps_ptr<char> final;
+    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    if (total_len <= 0) return;
+    final.alloc(total_len + 1, "final");
+    char* dest = final.get();
+    if (!dest) return;  // Or error treatment
+    if(audio_info){
+        if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_BLUE " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        audio_info(final.get());
+    }
+    else{
+        std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+        if     (level == 1) log_e("%s", final.c_get());
+        else if(level == 2) log_w("%s", final.c_get());
+        else if(level == 3) log_i("%s", final.c_get());
+        else                log_d("%s", final.c_get());
+    }
+    final.reset();
+    result.reset();
+}
+
+// Macro for comfortable calls
+#define MP3_ERROR(fmt, ...) MP3_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_WARN(fmt, ...)  MP3_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_INFO(fmt, ...)  MP3_ERROR_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+

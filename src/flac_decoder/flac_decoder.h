@@ -29,10 +29,11 @@ enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
 enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                 FLAC_DECODE_FRAMES_LOOP = 100,
-                OGG_SYNC_FOUND = +2,
+                FLAC_OGG_SYNC_FOUND = +2,
                 GIVE_NEXT_LOOP = +1,
                 FLAC_NONE = 0,
                 FLAC_ERR = -1,
+                FLAC_STOP = -100,
 };
 
 typedef struct FLACMetadataBlock_t{
@@ -178,10 +179,10 @@ char*            flac_x_ps_strndup(const char* str, uint16_t n);
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
+extern __attribute__((weak)) void audio_info(const char*);
 
 template <typename... Args>
 void FLAC_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-    extern __attribute__((weak)) void audio_info(const char*);
     #define ANSI_ESC_RESET          "\033[0m"
     #define ANSI_ESC_BLACK          "\033[30m"
     #define ANSI_ESC_RED            "\033[31m"

@@ -400,7 +400,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
             case 2:
                 bt = application;
                 FLAC_ERROR("Flac unimplemented block type: %i", blockType);
-                FLAC_ERR;
+                return FLAC_ERR;
                 break;
             case 3:
                 bt = seekTable;
@@ -770,7 +770,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     if(FLAC_specialIndexOf(inbuf, "OggS", *bytesLeft) == 0){ // async? => new sync is OggS => reset and decode (not page 0 or 1)
         FLACDecoderReset();
         s_flacPageNr = 2;
-        return OGG_SYNC_FOUND;
+        return FLAC_OGG_SYNC_FOUND;
     }
     readUint(14 + 1, bytesLeft); // synccode + reserved bit
     FLACFrameHeader->blockingStrategy = readUint(1, bytesLeft);
@@ -783,7 +783,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
         if(FLACFrameHeader->chanAsgn == 1) FLACMetadataBlock->numChannels = 2;
         if(FLACFrameHeader->chanAsgn > 7)  FLACMetadataBlock->numChannels = 2;
     }
-    if(FLACMetadataBlock->numChannels < 1) FLAC_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels); return FLAC_ERR;
+    if(FLACMetadataBlock->numChannels < 1) {FLAC_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels); return FLAC_STOP;}
         if(!FLACMetadataBlock->bitsPerSample){
         if(FLACFrameHeader->sampleSizeCode == 1) FLACMetadataBlock->bitsPerSample =  8;
         if(FLACFrameHeader->sampleSizeCode == 2) FLACMetadataBlock->bitsPerSample = 12;
@@ -791,8 +791,8 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
         if(FLACFrameHeader->sampleSizeCode == 5) FLACMetadataBlock->bitsPerSample = 20;
         if(FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
     }
-    if(FLACMetadataBlock->bitsPerSample > 16) {FLAC_ERROR("Flac, bits per sample > 16, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_ERR;}
-    if(FLACMetadataBlock->bitsPerSample < 8 ) {FLAC_ERROR("Flac, bits per sample <8, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_ERR;}
+    if(FLACMetadataBlock->bitsPerSample > 16) {FLAC_ERROR("Flac, bits per sample > 16, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_STOP;}
+    if(FLACMetadataBlock->bitsPerSample < 8 ) {FLAC_ERROR("Flac, bits per sample <8, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_STOP;}
     if(!FLACMetadataBlock->sampleRate){
         if(FLACFrameHeader->sampleRateCode == 1)  FLACMetadataBlock->sampleRate =  88200;
         if(FLACFrameHeader->sampleRateCode == 2)  FLACMetadataBlock->sampleRate = 176400;
