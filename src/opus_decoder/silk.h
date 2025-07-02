@@ -29,9 +29,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <Arduino.h>
 
 #include "celt.h"
+#include "opus_decoder.h"
 #include <memory>
-
-
 
 
 #define SILK_MAX_FRAMES_PER_PACKET 3
@@ -401,14 +400,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define USE_silk_resampler_private_IIR_FIR          (2)
 #define USE_silk_resampler_private_down_FIR         (3)
 
-/* Error messages */
 #define SILK_NO_ERROR                                0
-/* Decoder error messages */
-#define ERR_OPUS_SILK_DEC_INVALID_SAMPLING_FREQUENCY         -40 /* Output samplfreq lower than intern. decoded sampling freq */
-#define ERR_OPUS_SILK_DEC_PAYLOAD_TOO_LARGE                  -41 /* Payload size exceeded the maximum allowed 1024 bytes */
-#define ERR_OPUS_SILK_DEC_PAYLOAD_ERROR                      -42 /* Payload has bit errors */
-#define ERR_OPUS_SILK_DEC_INVALID_FRAME_SIZE                 -43 /* Payload has bit errors */
-
 #define silk_encoder_state_Fxx      silk_encoder_state_FIX
 #define silk_encode_do_VAD_Fxx      silk_encode_do_VAD_FIX
 #define silk_encode_frame_Fxx       silk_encode_frame_FIX

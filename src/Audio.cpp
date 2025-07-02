@@ -4726,12 +4726,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
         }
         if(m_codec == CODEC_OPUS) {
-            if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
+            // if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
+            // if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
+            // if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
+            // if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
+            // if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
+            // if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
             return 0;
         }
         return 1; // skip one byte and seek for the next sync word
@@ -4957,8 +4957,7 @@ void Audio::printDecodeError(int r) {
         AUDIO_INFO("FLAC decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_OPUS) {
-        e = OPUSGetErrorMessage(r);
-        AUDIO_INFO("OPUS decode error %d : %s", r, e);
+      ;
     }
     if(m_codec == CODEC_VORBIS) {
         switch(r) {

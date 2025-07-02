@@ -1544,11 +1544,13 @@ int32_t silk_Decode(                                   /* O    Returns error cod
                 s_channel_state[n].nFramesPerPacket = 3;
                 s_channel_state[n].nb_subfr = 4;
             } else {
-                return ERR_OPUS_SILK_DEC_INVALID_FRAME_SIZE;
+                OPUS_ERROR("Opus SILK: invalid frame size");
+                return OPUS_ERR;
             }
             fs_kHz_dec = (s_silk_internalSampleRate >> 10) + 1;
             if (fs_kHz_dec != 8 && fs_kHz_dec != 12 && fs_kHz_dec != 16) {
-                return ERR_OPUS_SILK_DEC_INVALID_SAMPLING_FREQUENCY;
+                OPUS_ERROR("Opus SILK, invalid sampling frequency: %i", fs_kHz_dec);
+                return OPUS_ERR;
             }
             ret += silk_decoder_set_fs(n, fs_kHz_dec, s_silk_DecControlStruct->API_sampleRate);
         }
@@ -1565,7 +1567,8 @@ int32_t silk_Decode(                                   /* O    Returns error cod
     s_silk_decoder->nChannelsInternal = s_silk_DecControlStruct->nChannelsInternal;
 
     if (s_silk_DecControlStruct->API_sampleRate > (int32_t)MAX_API_FS_KHZ * 1000 || s_silk_DecControlStruct->API_sampleRate < 8000) {
-        ret = ERR_OPUS_SILK_DEC_INVALID_SAMPLING_FREQUENCY;
+        OPUS_ERROR("Opus SILK, invalid sampling rate: %i", s_silk_DecControlStruct->API_sampleRate);
+        ret = OPUS_ERR;
 
         return (ret);
     }
