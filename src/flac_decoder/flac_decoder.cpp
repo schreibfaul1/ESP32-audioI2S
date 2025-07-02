@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Mar 29,2025
+ * Updated on: Jul 02,2025
  *
  * Author: Wolle
  *
@@ -267,7 +267,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
 
     s_f_flacParseOgg = false;
     int32_t idx = FLAC_specialIndexOf(inbuf, "OggS", 6);
-    if(idx != 0) return ERR_FLAC_DECODER_ASYNC;
+    if(idx != 0){FLAC_ERROR("Flac decoder asyncron, \"OggS\" not found"); return FLAC_ERR;}
 
     uint8_t  version            = *(inbuf +  4); (void) version;
     uint8_t  headerType         = *(inbuf +  5); (void) headerType;
@@ -322,7 +322,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
 
     *bytesLeft -= headerSize;
     s_flacCurrentFilePos += headerSize;
-    return ERR_FLAC_NONE; // no error
+    return FLAC_NONE; // no error
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -347,8 +347,8 @@ int32_t parseFlacFirstPacket(uint8_t *inbuf, int16_t nBytes){ // 4.2.2. Identifi
         ret = idx + 4;
     }
     else {
-        log_e("FLAC signature not found");
-        ret = ERR_FLAC_DECODER_ASYNC;
+        FLAC_ERROR("Flac signature \"fLaC\" not found");
+        ret = FLAC_ERR;
     }
     return ret;
 }
@@ -395,25 +395,25 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
             case 1:
                 bt = padding;
             //  log_e("padding");
-                return ERR_FLAC_NONE;
+                return FLAC_NONE;
                 break;
             case 2:
                 bt = application;
-                log_e("application");
-                return ERR_FLAC_UNIMPLEMENTED;
+                FLAC_ERROR("Flac unimplemented block type: %i", blockType);
+                FLAC_ERR;
                 break;
             case 3:
                 bt = seekTable;
-                log_e("seekTable");
-                return ERR_FLAC_UNIMPLEMENTED;
+                FLAC_ERROR("Flac unimplemented seek table: %i", seekTable);
+                return FLAC_ERR;
                 break;
             case 4:
                 bt = vorbisComment;
                 break;
             case 5:
                 bt = cueSheet;
-                log_e("cueSheet");
-                return ERR_FLAC_UNIMPLEMENTED;
+                FLAC_ERROR("Flac unimplemented cue sheet: %i", cueSheet);
+                return FLAC_ERR;
                 break;
             case 6:
                 bt = picture;
@@ -435,7 +435,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 FLACMetadataBlock->minblocksize = minBlocksize;
                 FLACMetadataBlock->maxblocksize = maxBlocksize;
 
-                if(maxBlocksize > s_maxBlocksize){log_e("s_blocksize is too big"); return ERR_FLAC_BLOCKSIZE_TOO_BIG;}
+                if(maxBlocksize > s_maxBlocksize){FLAC_ERROR("s_blocksize is too big: %i bytes, max block size: %i", maxBlocksize, s_maxBlocksize); return FLAC_ERR;}
 
                 minFrameSize  = *(inbuf + pos + 4) << 16;
                 minFrameSize += *(inbuf + pos + 5) << 8;
@@ -630,12 +630,12 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
             *bytesLeft -= diff;
             return ret;
         }
-        if(s_nBytes < 0){return ERR_FLAC_DECODER_ASYNC;}
+        if(s_nBytes < 0){FLAC_ERROR("Flac decoder asynchron"); return FLAC_ERR;}
 
         if(s_f_flacParseOgg == true){
             s_f_flacParseOgg = false;
             ret = FLACparseOGG(inbuf, bytesLeft);
-            if(ret == ERR_FLAC_NONE) return FLAC_PARSE_OGG_DONE; // ok
+            if(ret == FLAC_NONE) return FLAC_PARSE_OGG_DONE; // ok
             else return ret;  // error
         }
         //-------------------------------------------------------
@@ -763,7 +763,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
 //    s_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
 //    log_i("s_flacCompressionRatio % f", s_flacCompressionRatio);
     s_flacStatus = DECODE_FRAME;
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
@@ -783,16 +783,16 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
         if(FLACFrameHeader->chanAsgn == 1) FLACMetadataBlock->numChannels = 2;
         if(FLACFrameHeader->chanAsgn > 7)  FLACMetadataBlock->numChannels = 2;
     }
-    if(FLACMetadataBlock->numChannels < 1) return ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT;
-    if(!FLACMetadataBlock->bitsPerSample){
+    if(FLACMetadataBlock->numChannels < 1) FLAC_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels); return FLAC_ERR;
+        if(!FLACMetadataBlock->bitsPerSample){
         if(FLACFrameHeader->sampleSizeCode == 1) FLACMetadataBlock->bitsPerSample =  8;
         if(FLACFrameHeader->sampleSizeCode == 2) FLACMetadataBlock->bitsPerSample = 12;
         if(FLACFrameHeader->sampleSizeCode == 4) FLACMetadataBlock->bitsPerSample = 16;
         if(FLACFrameHeader->sampleSizeCode == 5) FLACMetadataBlock->bitsPerSample = 20;
         if(FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
     }
-    if(FLACMetadataBlock->bitsPerSample > 16) return ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG;
-    if(FLACMetadataBlock->bitsPerSample < 8 ) return ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN;
+    if(FLACMetadataBlock->bitsPerSample > 16) {FLAC_ERROR("Flac, bits per sample > 16, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_ERR;}
+    if(FLACMetadataBlock->bitsPerSample < 8 ) {FLAC_ERROR("Flac, bits per sample <8, bps: %i", FLACMetadataBlock->bitsPerSample); return FLAC_ERR;}
     if(!FLACMetadataBlock->sampleRate){
         if(FLACFrameHeader->sampleRateCode == 1)  FLACMetadataBlock->sampleRate =  88200;
         if(FLACFrameHeader->sampleRateCode == 2)  FLACMetadataBlock->sampleRate = 176400;
@@ -829,11 +829,12 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
         s_numOfOutSamples = 256 << (FLACFrameHeader->blockSizeCode - 8);
     else{
-        return ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED;
+        FLAC_ERROR("Flac, reserved blocksize unsupported, block size code: %i", FLACFrameHeader->blockSizeCode);
+        return FLAC_ERR;
     }
     if(s_numOfOutSamples > MAX_OUTBUFFSIZE){
-        log_e("Error: blockSizeOut too big ,%i bytes", s_numOfOutSamples);
-        return ERR_FLAC_BLOCKSIZE_TOO_BIG;
+        FLAC_ERROR("Flac, blockSizeOut too big ,%i bytes", s_numOfOutSamples);
+        return FLAC_ERR;
     }
     if(FLACFrameHeader->sampleRateCode == 12)
         readUint(8, bytesLeft);
@@ -842,7 +843,7 @@ int8_t flacDecodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
     }
     readUint(8, bytesLeft);
     s_flacStatus = DECODE_SUBFRAMES;
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FLACGetOutputSamps(){
@@ -914,15 +915,15 @@ int8_t decodeSubframes(int32_t* bytesLeft){
             }
         }
         else {
-            log_e("unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
-            return ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT;
+            FLAC_ERROR("Flac, unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
+            return FLAC_ERR;
         }
     }
     else{
-        log_e("Reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
-        return ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT;
+        FLAC_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
+        return FLAC_ERR;
     }
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
@@ -963,14 +964,15 @@ int8_t decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
         if(ret) return ret;
     }
     else{
-        return ERR_FLAC_RESERVED_SUB_TYPE;
+        FLAC_ERROR("Flac unimplemented reserved subtype: %i", type);
+        return FLAC_ERR;
     }
     if(shift>0){
         for (int32_t i = 0; i < s_numOfOutSamples; i++){
             s_samplesBuffer[ch][i] <<= shift;
         }
     }
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {     // SUBFRAME_FIXED
@@ -986,9 +988,9 @@ int8_t decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uin
     if(predOrder == 2){coefs.push_back(2); coefs.push_back(-1);}
     if(predOrder == 3){coefs.push_back(3); coefs.push_back(-3); coefs.push_back(1);}
     if(predOrder == 4){coefs.push_back(4); coefs.push_back(-6); coefs.push_back(4); coefs.push_back(-1);}
-    if(predOrder > 4) return ERR_FLAC_PREORDER_TOO_BIG; // Error: preorder > 4"
+    if(predOrder > 4) {FLAC_ERROR("Flac preorder too big: %i", predOrder); return FLAC_ERR;} // Error: preorder > 4"
     restoreLinearPrediction(ch, 0);
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDepth, uint8_t ch, int32_t* bytesLeft){
@@ -1006,7 +1008,7 @@ int8_t decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDept
     ret = decodeResiduals(lpcOrder, ch, bytesLeft);
     if(ret) return ret;
     restoreLinearPrediction(ch, shift);
-    return ERR_FLAC_NONE;
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
@@ -1015,14 +1017,15 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
                                                                   // 00 : partitioned Rice coding with 4-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE follows
                                                                   // 01 : partitioned Rice coding with 5-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE2 follows
                                                                   // 10-11 : reserved
-    if (method >= 2) {return ERR_FLAC_RESERVED_RESIDUAL_CODING;}
+    if (method >= 2) {FLAC_ERROR("Flac reserved residual coding, method: %i", method); return FLAC_ERR;}
     uint8_t paramBits = method == 0 ? 4 : 5;                      // RESIDUAL_CODING_METHOD_PARTITIONED_RICE || RESIDUAL_CODING_METHOD_PARTITIONED_RICE2
     int32_t escapeParam = ( method == 0 ? 0xF : 0x1F);
     int32_t partitionOrder = readUint(4, bytesLeft);                  // Partition order
     int32_t numPartitions = 1 << partitionOrder;                      // There will be 2^order partitions.
 
     if (s_numOfOutSamples % numPartitions != 0){
-        return ERR_FLAC_WRONG_RICE_PARTITION_NR;                  //Error: Block size not divisible by number of Rice partitions
+        FLAC_ERROR("Flac, wrong rice partition number");
+        return FLAC_ERR;                  //Error: Block size not divisible by number of Rice partitions
     }
     int32_t partitionSize = s_numOfOutSamples / numPartitions;
 
@@ -1045,8 +1048,8 @@ int8_t decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
             }
         }
     }
-    if(s_f_bitReaderError) return ERR_FLAC_BITREADER_UNDERFLOW;
-    return ERR_FLAC_NONE;
+    if(s_f_bitReaderError) {FLAC_ERROR("Flac bitreader underflow"); return FLAC_ERR;}
+    return FLAC_NONE;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void restoreLinearPrediction(uint8_t ch, uint8_t shift) {

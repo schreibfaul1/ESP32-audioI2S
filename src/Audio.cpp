@@ -4936,25 +4936,7 @@ void Audio::printDecodeError(int r) {
         AUDIO_INFO("AAC decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_FLAC) {
-        switch(r) {
-            case ERR_FLAC_NONE: e = "NONE"; break;
-            case ERR_FLAC_BLOCKSIZE_TOO_BIG: e = "BLOCKSIZE TOO BIG"; break;
-            case ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED: e = "Reserved Blocksize unsupported"; break;
-            case ERR_FLAC_SYNC_CODE_NOT_FOUND: e = "SYNC CODE NOT FOUND"; break;
-            case ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT: e = "UNKNOWN CHANNEL ASSIGNMENT"; break;
-            case ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT: e = "RESERVED CHANNEL ASSIGNMENT"; break;
-            case ERR_FLAC_RESERVED_SUB_TYPE: e = "RESERVED SUB TYPE"; break;
-            case ERR_FLAC_PREORDER_TOO_BIG: e = "PREORDER TOO BIG"; break;
-            case ERR_FLAC_RESERVED_RESIDUAL_CODING: e = "RESERVED RESIDUAL CODING"; break;
-            case ERR_FLAC_WRONG_RICE_PARTITION_NR: e = "WRONG RICE PARTITION NR"; break;
-            case ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG: e = "BITS PER SAMPLE > 16"; break;
-            case ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN: e = "BITS PER SAMPLE UNKNOWN"; break;
-            case ERR_FLAC_DECODER_ASYNC: e = "DECODER ASYNCHRON"; break;
-            case ERR_FLAC_BITREADER_UNDERFLOW: e = "BITREADER ERROR"; break;
-            case ERR_FLAC_OUTBUFFER_TOO_SMALL: e = "OUTBUFFER TOO SMALL"; break;
-            default: e = "ERR_UNKNOWN";
-        }
-        AUDIO_INFO("FLAC decode error %d : %s", r, e);
+      ;
     }
     if(m_codec == CODEC_OPUS) {
       ;
