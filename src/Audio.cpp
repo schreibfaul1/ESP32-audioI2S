@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2i                                                                                                                                ";
-/*  Updated on: Jul 01.2025
+    Version 3.3.2j                                                                                                                                ";
+/*  Updated on: Jul 03.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4699,17 +4699,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             return 0;
         }
         if(m_codec == CODEC_FLAC) {
-        //    if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
-        //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
+             ;
         }
         if(m_codec == CODEC_OPUS) {
-            // if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
-            // if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
-            // if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
-            // if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
-            // if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
-            // if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
-            return 0;
+            ;
         }
         printDecodeError(m_decodeError);
         m_f_playing = false; // seek for new syncword
@@ -4893,23 +4886,6 @@ void Audio::printDecodeError(int r) {
 
     if(m_codec == CODEC_MP3) {
             ;
-        // switch(r) {
-        //     case ERR_MP3_NONE: e = "NONE"; break;
-        //     case ERR_MP3_INDATA_UNDERFLOW: e = "INDATA_UNDERFLOW"; break;
-        //     case ERR_MP3_MAINDATA_UNDERFLOW: e = "MAINDATA_UNDERFLOW"; break;
-        //     case ERR_MP3_FREE_BITRATE_SYNC: e = "FREE_BITRATE_SYNC"; break;
-        //     case ERR_MP3_OUT_OF_MEMORY: e = "OUT_OF_MEMORY"; break;
-        //     case ERR_MP3_NULL_POINTER: e = "NULL_POINTER"; break;
-        //     case ERR_MP3_INVALID_FRAMEHEADER: e = "INVALID_FRAMEHEADER"; break;
-        //     case ERR_MP3_INVALID_SIDEINFO: e = "INVALID_SIDEINFO"; break;
-        //     case ERR_MP3_INVALID_SCALEFACT: e = "INVALID_SCALEFACT"; break;
-        //     case ERR_MP3_INVALID_HUFFCODES: e = "INVALID_HUFFCODES"; break;
-        //     case ERR_MP3_INVALID_DEQUANTIZE: e = "INVALID_DEQUANTIZE"; break;
-        //     case ERR_MP3_INVALID_IMDCT: e = "INVALID_IMDCT"; break;
-        //     case ERR_MP3_INVALID_SUBBAND: e = "INVALID_SUBBAND"; break;
-        //     default: e = "ERR_UNKNOWN";
-        // }
-        // AUDIO_INFO("MP3 decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         e = AACGetErrorMessage(abs(r));
