@@ -91,7 +91,7 @@ void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... arg
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
-    if(maxBlockSize) m_resBuffSizeRAM = maxBlockSize;
+    if(maxBlockSize) m_resBuffSize = maxBlockSize;
     if(maxBlockSize) m_maxBlockSize = maxBlockSize;
 }
 
@@ -103,19 +103,17 @@ AudioBuffer::~AudioBuffer() {
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
 void AudioBuffer::setBufsize(size_t mbs) {
-    m_buffSizePSRAM = m_buffSizeRAM = m_buffSize = mbs;
+    if(mbs < 2 * m_resBuffSize) AUDIO_ERROR("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
+    m_buffSize = mbs;
     return;
 }
 
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    if(m_buffSizePSRAM > 0) { // PSRAM found, AudioBuffer will be allocated in PSRAM
-        m_f_psram = true;
-        m_buffSize = m_buffSizePSRAM;
-        m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
-        m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
-    }
+    m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
+    m_buffSize = m_buffSize - m_resBuffSize;
+
     if(!m_buffer) return 0;
     m_f_init = true;
     resetBuffer();
@@ -287,7 +285,7 @@ void Audio::initInBuff() {
     if(!InBuff.isInitialized()) {
         size_t size = InBuff.init();
         if(size > 0) {
-            AUDIO_INFO("PSRAM %sfound, inputBufferSize: %u bytes", InBuff.havePSRAM() ? "" : "not ", size - 1);
+            AUDIO_INFO("inputBufferSize: %u bytes", size - 1);
         }
     }
     changeMaxBlockSize(1600); // default size mp3 or aac
@@ -3660,13 +3658,7 @@ nextRound:
         }
     }
     if(m_pwsst.f_chunkFinished) {
-        if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 60000) {
-                m_pwsst.f_chunkFinished = false;
-                m_f_continue = true;
-            }
-        }
-        else {
+        if(InBuff.bufferFilled() < 60000) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -3773,13 +3765,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if(m_pwsHLS.f_chunkFinished) {
-        if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {
-                m_pwsHLS.f_chunkFinished = false;
-                m_f_continue = true;
-            }
-        }
-        else {
+        if(InBuff.bufferFilled() < 50000) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }

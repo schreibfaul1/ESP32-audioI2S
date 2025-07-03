@@ -98,17 +98,13 @@ public:
     uint32_t getWritePos();                     // write position relative to the beginning
     uint32_t getReadPos();                      // read position relative to the beginning
     void     resetBuffer();                     // restore defaults
-    bool     havePSRAM() { return m_f_psram; };
 
 protected:
-    size_t            m_buffSizePSRAM    = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
-    size_t            m_buffSizeRAM      = 1600 * 10;
-    size_t            m_buffSize         = 0;
+    size_t            m_buffSize         = UINT16_MAX * 10;   // most webstreams limit the advance to 100...300Kbytes
     size_t            m_freeSpace        = 0;
     size_t            m_writeSpace       = 0;
     size_t            m_dataLength       = 0;
-    size_t            m_resBuffSizeRAM   = 4096;     // reserved buffspace, >= one wav  frame
-    size_t            m_resBuffSizePSRAM = 4096 * 6; // reserved buffspace, >= one flac frame
+    size_t            m_resBuffSize      = 4096 * 6; // reserved buffspace, >= one flac frame
     size_t            m_maxBlockSize     = 1600;
     uint8_t*          m_buffer           = NULL;
     uint8_t*          m_writePtr         = NULL;
@@ -116,7 +112,6 @@ protected:
     uint8_t*          m_endPtr           = NULL;
     bool              m_f_init           = false;
     bool              m_f_isEmpty        = true;
-    bool              m_f_psram          = false;    // PSRAM is available (and used...)
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -506,7 +501,6 @@ private:
         }
     }
 
-
     void trim(char *str) {
         char *start = str;  // keep the original pointer
         char *end;
@@ -791,7 +785,7 @@ private:
     std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;
-    const size_t    m_frameSizeMP3       = 1600;
+    const size_t    m_frameSizeMP3       = 1600 * 2;
     const size_t    m_frameSizeAAC       = 1600;
     const size_t    m_frameSizeFLAC      = 4096 * 6; // 24576
     const size_t    m_frameSizeOPUS      = 2048;

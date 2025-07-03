@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 27.05.2025
+ *  Updated on: 02.07.2025
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1486,6 +1486,10 @@ void MP3ClearBadFrame(int16_t *outbuf) {
  **********************************************************************************************************************/
 int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t useSize){
 
+    // int pos = MP3FindSyncWord(inbuf, *bytesLeft);
+    // if(pos > 0){*bytesLeft -= pos; MP3_INFO("skip %i bytes", pos); return MP3_NONE; }
+    // if(pos < 0){MP3_INFO("skip %i max bytes", *bytesLeft);  *bytesLeft = 0; return MP3_NONE; }
+
     int32_t offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int32_t prevBitOffset, sfBlockBits, huffBlockBits;
     uint8_t *mainPtr;
@@ -1795,6 +1799,7 @@ void MP3Decoder_FreeBuffers()
  *                necessarily all linBits outputs for x,y > 15)
  **********************************************************************************************************************/
 // no improvement with section=data
+
 int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t bitsLeft, uint8_t *buf, int32_t bitOffset){
    int32_t i, x, y;
    int32_t cachedBits, padBits, len, startBits, linBits, maxBits, minBits;
@@ -1854,8 +1859,9 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                 bitsLeft -= 16;
             } else {
                 /* last time through, pad cache with zeros and drain cache */
-                if (cachedBits + bitsLeft <= 0)
+                if (cachedBits + bitsLeft <= 0){
                     return -1;
+                }
                 if (bitsLeft > 0)
                     cache |= (uint32_t) (*buf++) << (24 - cachedBits);
                 if (bitsLeft > 8)
@@ -1883,8 +1889,6 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                     cachedBits--;
                 }
 
-
-
                 y=(int32_t)( (((uint16_t)(cw)) >>  8) & 0x000f);
                 if (y) {
                     (y) |= ((cache) & 0x80000000);
@@ -1893,8 +1897,10 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                 }
 
                 /* ran out of bits - should never have consumed padBits */
-                if (cachedBits < padBits)
-                    return -1;
+                if (cachedBits < padBits){
+                    break; // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                //    return -1;
+                }
 
                 *xy++ = x;
                 *xy++ = y;
@@ -1916,8 +1922,9 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                 bitsLeft -= 16;
             } else {
                 /* last time through, pad cache with zeros and drain cache */
-                if (cachedBits + bitsLeft <= 0)
+                if (cachedBits + bitsLeft <= 0){
                     return -1;
+                }
                 if (bitsLeft > 0)
                     cache |= (uint32_t) (*buf++) << (24 - cachedBits);
                 if (bitsLeft > 8)
@@ -1974,7 +1981,8 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                 if (y == 15 && tabType == loopLinbits) {
                     minBits = linBits + 1;
                     if (cachedBits + bitsLeft < minBits)
-                        return -1;
+                        break; // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                        // return -1;
                     while (cachedBits < minBits) {
                         cache |= (uint32_t) (*buf++) << (24 - cachedBits);
                         cachedBits += 8;
@@ -1996,8 +2004,10 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
                 }
 
                 /* ran out of bits - should never have consumed padBits */
-                if (cachedBits < padBits)
-                    return -1;
+                if (cachedBits < padBits){
+                    break; // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                    // return -1;
+                }
 
                 *xy++ = x;
                 *xy++ = y;
@@ -2155,8 +2165,9 @@ int32_t DecodeHuffman(uint8_t *buf, int32_t *bitOffset, int32_t huffBlockBits, i
     sis = &m_SideInfoSub[gr][ch];
     //hi = (HuffmanInfo_t*) (m_MP3DecInfo->HuffmanInfoPS);
 
-    if (huffBlockBits < 0)
+    if (huffBlockBits < 0){
         return -1;
+    }
 
     /* figure out region boundaries (the first 2*bigVals coefficients divided into 3 regions) */
     if (sis->winSwitchFlag && sis->blockType == 2) {
@@ -2192,9 +2203,9 @@ int32_t DecodeHuffman(uint8_t *buf, int32_t *bitOffset, int32_t huffBlockBits, i
         bitsUsed = DecodeHuffmanPairs(m_HuffmanInfo->huffDecBuf[ch] + rEnd[i],
                 rEnd[i + 1] - rEnd[i], sis->tableSelect[i], bitsLeft, buf,
                 *bitOffset);
-        if (bitsUsed < 0 || bitsUsed > bitsLeft) /* error - overran end of bitstream */
+        if (bitsUsed < 0 || bitsUsed > bitsLeft){ /* error - overran end of bitstream */
             return -1;
-
+        }
         /* update bitstream position */
         buf += (bitsUsed + *bitOffset) >> 3;
         *bitOffset = (bitsUsed + *bitOffset) & 0x07;
