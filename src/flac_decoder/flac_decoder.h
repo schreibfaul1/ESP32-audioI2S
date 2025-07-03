@@ -172,10 +172,6 @@ int8_t           decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t 
 int8_t           decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft);
 void             restoreLinearPrediction(uint8_t ch, uint8_t shift);
 int32_t          FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
-char*            flac_x_ps_malloc(uint16_t len);
-char*            flac_x_ps_calloc(uint16_t len, uint8_t size);
-char*            flac_x_ps_strdup(const char* str);
-char*            flac_x_ps_strndup(const char* str, uint16_t n);
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
@@ -220,21 +216,28 @@ void FLAC_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt,
     if(audio_info){
         if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_MAGENTA " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         audio_info(final.get());
     }
     else{
         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
         if     (level == 1) log_e("%s", final.c_get());
         else if(level == 2) log_w("%s", final.c_get());
-        else                log_i("%s", final.c_get());
+        else if(level == 3) log_i("%s", final.c_get());
+        else if(level == 4) log_d("%s", final.c_get());
+        else                log_v("%s", final.c_get());
     }
     final.reset();
     result.reset();
 }
 
 // Macro for comfortable calls
-#define FLAC_ERROR(fmt, ...) FLAC_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define FLAC_WARN(fmt, ...)  FLAC_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_ERROR(fmt, ...)   FLAC_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_WARN(fmt, ...)    FLAC_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_INFO(fmt, ...)    FLAC_ERROR_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_DEBUG(fmt, ...)   FLAC_ERROR_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_VERBOSE(fmt, ...) FLAC_ERROR_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

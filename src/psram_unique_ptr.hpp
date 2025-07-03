@@ -50,6 +50,10 @@ public:
         }
     }
 
+    explicit operator bool() const {
+        return mem.get() != nullptr; // Or just 'return (bool) mem;'if unique_ptr :: operator bool () is used
+    }
+
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
         allocated_size = other.allocated_size;
@@ -88,8 +92,12 @@ public:
 
     void alloc(std::size_t size, const char* name = nullptr) {
         size = (size + 15) & ~15; // Align to 16 bytes
-        // mem.reset(ps_malloc(size));
-        mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Wichtig!
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Important!
+        }
+        else{
+            mem.reset(static_cast<T*>(malloc(size)));  // <--- Important!
+        }
         allocated_size = size;
         if (!mem) {
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
@@ -98,7 +106,13 @@ public:
 
     void alloc(const char* name = nullptr) { // alloc for single objects/structures
         reset();  // Freigabe des zuvor gehaltenen Speichers
-        void* raw_mem = ps_malloc(sizeof(T)); // Allokiert im PSRAM
+        void* raw_mem = nullptr;
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            raw_mem = ps_malloc(sizeof(T)); // allocated im PSRAM
+        }
+        else{
+            raw_mem = malloc(sizeof(T)); // allocated im RAM
+        }
         if (raw_mem) {
             mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
             allocated_size = sizeof(T);
@@ -107,24 +121,61 @@ public:
             allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
         }
     }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C A L L O C    📌📌📌
+    /**
+     * @brief Allocates and zeroes out memory for an array of elements.
+     * Chooses between PSRAM (if available) and DRAM.
+     * @param num_elements The number of elements to allocate space for.
+     * @param name Optional name for OOM messages.
+     */
+    void calloc(std::size_t num_elements, const char* name = nullptr) {
+        size_t total_size = num_elements * sizeof(T);
+        total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
-    // void alloc(const char* name = nullptr) {
-    //     reset();
-    //     void* raw = ps_malloc(sizeof(T));
-    //     if (raw) {
-    //         mem.reset(new (raw) T()); // Platzierter Konstruktoraufruf
-    //         allocated_size = sizeof(T);
-    //     } else {
-    //         printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
-    //     }
-    // }
+        reset(); // Release of the previously held memory
 
+        void* raw_mem = nullptr;
+
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            raw_mem = ps_malloc(total_size);
+        }
+        else {
+            raw_mem = malloc(total_size);
+        }
+
+        if (raw_mem) {
+            // Initialize memory with zeros how Calloc () does it
+            memset(raw_mem, 0, total_size);
+
+            // Connect the allocated memory to the Unique_PTR
+            mem.reset(static_cast<T*>(raw_mem));
+            allocated_size = total_size;
+        } else {
+            // Error treatment for storage allocation
+            printf("OOM: failed to calloc %zu bytes for %s\n", total_size, name ? name : "unnamed");
+            allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+        }
+    }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
     void alloc_array(std::size_t count, const char* name = nullptr) {
         alloc(sizeof(T) * count, name);
         clear();
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  Z E R O _ M E M  📌📌📌
+    /**
+     * @brief Sets the allocated memory block to all zeroes.
+     * Only operates if memory is currently allocated.
+     */
+    void zero_mem() {
+        if (mem) { // Check whether memory is assigned (use the new operator bool ())
+            // Use allocated_aize to zero the actual size of the assigned block.
+            // This is important because alloc() can also be called up with a specific size.
+            memset(mem.get(), 0, allocated_size);
+        }
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E A L L O C  📌📌📌
@@ -134,7 +185,13 @@ public:
     // printf("%s\n", test.get());
 
     void realloc(size_t new_size, const char* name = nullptr) {
-        void* new_mem = ps_malloc(new_size);
+        void* new_mem = nullptr;
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            new_mem = ps_malloc(new_size);
+        }
+        else{
+            new_mem = malloc(new_size);
+        }
         if (!new_mem) {
             printf("OOM: failed to realloc %zu bytes for %s\n", new_size, name ? name : "unnamed");
             return;
@@ -286,9 +343,12 @@ public:
         // Alten Speicher übernehmen
         char* old_data = static_cast<char*>(mem.release());
 
-        // Neu allokieren
-        // mem.reset(ps_malloc(new_len));
-        mem.reset(static_cast<T*>(ps_malloc(new_len)));  // <--- Wichtig!
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            mem.reset(static_cast<T*>(ps_malloc(new_len)));  // <--- Important!
+        }
+        else{
+            mem.reset(static_cast<T*>(malloc(new_len)));
+        }
         if (!mem) {
             printf("OOM: append() failed for %zu bytes\n", new_len);
             return;
@@ -321,7 +381,12 @@ public:
 
         char* old_data = static_cast<char*>(mem.release());
 
-        mem.reset(static_cast<T*>(ps_malloc(new_len)));
+        if (psramFound()) { // Check at the runtime whether PSRAM is available
+            mem.reset(static_cast<T*>(ps_malloc(new_len)));
+        }
+        else{
+            mem.reset(static_cast<T*>(malloc(new_len)));
+        }
         if (!mem) {
             printf("OOM: append(len) failed for %zu bytes\n", new_len);
             return;
@@ -1240,7 +1305,14 @@ public:
         }
         if (text) {
             std::size_t len = strlen(text) + 1;
-            char* p = static_cast<char*>(ps_malloc(len));
+
+            char* p = nullptr;
+            if (psramFound()) { // Check at the runtime whether PSRAM is available
+                p = static_cast<char*>(ps_malloc(len));
+            }
+            else{
+                p = static_cast<char*>(malloc(len));
+            }
             if (p) {
                 memcpy(p, text, len);
                 *field = p;

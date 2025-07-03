@@ -13,8 +13,8 @@
 #include "vector"
 using namespace std;
 
-FLACFrameHeader_t*   FLACFrameHeader;
-FLACMetadataBlock_t* FLACMetadataBlock;
+ps_ptr<FLACFrameHeader_t> FLACFrameHeader;
+ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
 
 vector<uint32_t> s_flacSegmTableVec;
 vector<int32_t>  coefs;
@@ -39,15 +39,15 @@ uint8_t          s_flacBitBufferLen = 0;
 bool             s_f_flacParseOgg = false;
 bool             s_f_bitReaderError = false;
 uint8_t          s_flac_pageSegments = 0;
-char*            s_flacStreamTitle = NULL;
-char*            s_flacVendorString = NULL;
+ps_ptr<char>     s_flacStreamTitle = {};
+ps_ptr<char>     s_flacVendorString = {};
 bool             s_f_flacNewStreamtitle = false;
 bool             s_f_flacFirstCall = true;
 bool             s_f_oggWrapper = false;
 bool             s_f_lastMetaDataBlock = false;
 bool             s_f_flacNewMetadataBlockPicture = false;
 uint8_t          s_flacPageNr = 0;
-int32_t**        s_samplesBuffer = NULL;
+std::vector<ps_ptr<int32_t>> s_samplesBuffer;
 uint16_t         s_maxBlocksize = MAX_BLOCKSIZE;
 int32_t          s_nBytes = 0;
 
@@ -55,39 +55,18 @@ int32_t          s_nBytes = 0;
 //          FLAC INI SECTION
 //----------------------------------------------------------------------------------------------------------------------
 
-// prefer PSRAM
-#define __malloc_heap_psram(size) \
-    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
-
 bool FLACDecoder_AllocateBuffers(void){
 
-    if(!FLACFrameHeader)    {FLACFrameHeader    = (FLACFrameHeader_t*)    __malloc_heap_psram(sizeof(FLACFrameHeader_t));}
-    if(!FLACMetadataBlock)  {FLACMetadataBlock  = (FLACMetadataBlock_t*)  __malloc_heap_psram(sizeof(FLACMetadataBlock_t));}
-    if(!s_flacStreamTitle)  {s_flacStreamTitle  = (char*)                 __malloc_heap_psram(256);}
+    FLACFrameHeader.alloc();
+    FLACMetadataBlock.alloc();
 
-    if(!FLACFrameHeader || !FLACMetadataBlock || !s_flacStreamTitle){
-        log_e("not enough memory to allocate flacdecoder buffers");
-        return false;
-    }
-
-    if(psramFound()){
-        s_samplesBuffer = (int32_t**)ps_malloc(MAX_CHANNELS * sizeof(int32_t*));
-        for (int32_t i = 0; i < MAX_CHANNELS; i++){
-            s_samplesBuffer[i] = (int32_t*)ps_malloc(s_maxBlocksize * sizeof(int32_t));
-            if(!s_samplesBuffer[i]){
-                log_e("not enough memory to allocate flacdecoder buffers");
-                return false;
-            }
-        }
-    }
-    else  {
-        s_samplesBuffer = (int32_t**)malloc(MAX_CHANNELS * sizeof(int32_t*));
-        for (int32_t i = 0; i < MAX_CHANNELS; i++){
-            s_samplesBuffer[i] = (int32_t*)malloc(s_maxBlocksize * sizeof(int32_t));
-            if(!s_samplesBuffer[i]){
-                log_e("not enough memory to allocate flacdecoder buffers");
-                return false;
-            }
+    s_samplesBuffer.resize(MAX_CHANNELS);
+    for (int32_t i = 0; i < MAX_CHANNELS; i++){
+        s_samplesBuffer[i].alloc(s_maxBlocksize  * sizeof(int32_t));
+        if(!s_samplesBuffer[i]){ // ps_ptr<T> sollte operator bool() überladen
+            FLAC_ERROR("not enough memory to allocate flacdecoder buffers");
+            s_samplesBuffer.clear(); // Vektor leeren und alle ps_ptr Objekte zerstören
+            return false;
         }
     }
 
@@ -98,13 +77,11 @@ bool FLACDecoder_AllocateBuffers(void){
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_ClearBuffer(){
-    memset(FLACFrameHeader,   0, sizeof(FLACFrameHeader_t));
-    memset(FLACMetadataBlock, 0, sizeof(FLACMetadataBlock_t));
+    FLACFrameHeader.zero_mem();
+    FLACMetadataBlock.zero_mem();
 
-    if(s_samplesBuffer) {
-        for (int32_t i = 0; i < MAX_CHANNELS; i++){
-            memset(s_samplesBuffer[i], 0, s_maxBlocksize * sizeof(int32_t));
-        }
+    for (int32_t i = 0; i < MAX_CHANNELS; i++){
+        s_samplesBuffer[i].zero_mem();
     }
 
     s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
@@ -113,17 +90,12 @@ void FLACDecoder_ClearBuffer(){
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FLACDecoder_FreeBuffers(){
-    if(FLACFrameHeader)    {free(FLACFrameHeader);    FLACFrameHeader    = NULL;}
-    if(FLACMetadataBlock)  {free(FLACMetadataBlock);  FLACMetadataBlock  = NULL;}
-    if(s_flacStreamTitle)  {free(s_flacStreamTitle);  s_flacStreamTitle  = NULL;}
-    if(s_flacVendorString) {free(s_flacVendorString); s_flacVendorString = NULL;}
+    FLACFrameHeader.reset();
+    FLACMetadataBlock.reset();
+    s_flacStreamTitle.reset();
+    s_flacVendorString.reset();
 
-    if(s_samplesBuffer){
-        for (int32_t i = 0; i < MAX_CHANNELS; i++){
-            if(s_samplesBuffer[i]){free(s_samplesBuffer[i]);}
-        }
-        free(s_samplesBuffer); s_samplesBuffer = NULL;
-    }
+    s_samplesBuffer.clear(); s_samplesBuffer.shrink_to_fit();
     coefs.clear(); coefs.shrink_to_fit();
     s_flacSegmTableVec.clear(); s_flacSegmTableVec.shrink_to_fit();
     s_flacBlockPicItem.clear(); s_flacBlockPicItem.shrink_to_fit();
@@ -258,7 +230,7 @@ boolean FLACFindMagicWord(unsigned char* buf, int32_t nBytes){
 char* FLACgetStreamTitle(){
     if(s_f_flacNewStreamtitle){
         s_f_flacNewStreamtitle = false;
-        return s_flacStreamTitle;
+        return s_flacStreamTitle.get();
     }
     return NULL;
 }
@@ -371,7 +343,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
     uint8_t  mdBlockHeader = 0;
     uint8_t  blockType = 0;
     uint8_t  bt = 0;
-    char*    vb[8] = {0}; // vorbis comment
+    std::vector<ps_ptr<char>> vb(8); // vorbis comment
 
     enum {streamInfo, padding, application, seekTable, vorbisComment, cueSheet, picture};
 
@@ -483,12 +455,11 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 vendorLength += *(inbuf + pos + 1) <<  8;
                 vendorLength += *(inbuf + pos + 0);
                 if(vendorLength > 1024){
-                    log_e("vendorLength > 1024 bytes");
+                    FLAC_INFO("vendorLength > 1024 bytes");
                 }
-                if(s_flacVendorString) {free(s_flacVendorString); s_flacVendorString = NULL;}
-                s_flacVendorString = (char*) flac_x_ps_calloc(vendorLength + 1, sizeof(char));
-                memcpy(s_flacVendorString, inbuf + pos + 4, vendorLength);
-                //log_i("%s", s_flacVendorString);
+                s_flacVendorString.alloc(vendorLength + 1); s_flacVendorString.clear();
+                s_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength, "s_flacVendorString");
+                // FLAC_VERBOSE("Vendor: %s", s_flacVendorString.c_get());
 
                 pos += 4 + vendorLength;
                 userCommentListLength  = *(inbuf + pos + 3) << 24;
@@ -505,35 +476,35 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                     commemtStringLength += *(inbuf + pos + 0);
 
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "title", 6) == 0)){
-                        vb[0] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
-                        //log_w("TITLE: %s", vb[0]);
+                        vb[0].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        // FLAC_VERBOSE("TITLE: %s", vb[0].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)){
-                        vb[1] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
-                        //log_w("ARTIST: %s", vb[1]);
+                        vb[1].assign((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
+                        // FLAC_VERBOSE("ARTIST: %s", vb[1].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)){
-                        vb[2] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
-                        //log_w("GENRE: %s", vb[2]);
+                        vb[2].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        FLAC_VERBOSE("GENRE: %s", vb[2].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "album", 6) == 0)){
-                        vb[3] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
-                        //log_w("ALBUM: %s", vb[3]);
+                        vb[3].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        FLAC_VERBOSE("ALBUM: %s", vb[3].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)){
-                        vb[4] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
-                        //log_w("COMMENT: %s", vb[4]);
+                        vb[4].assign((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
+                        FLAC_VERBOSE("COMMENT: %s", vb[4].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "date", 5) == 0)){
-                        vb[5] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
-                        //log_w("DATE: %s", vb[5]);
+                        vb[5].assign((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
+                        FLAC_VERBOSE("DATE: %s", vb[5].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)){
-                        vb[6] = flac_x_ps_strndup((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
-                        //log_w("TRACKNUMBER: %s", vb[6]);
+                        vb[6].assign((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
+                        FLAC_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
                     }
                     if((FLAC_specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (FLAC_specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)){
-                        //log_w("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
+                        FLAC_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
                         s_flacBlockPicLen = commemtStringLength - 23;
                         s_flacBlockPicPos = s_flacCurrentFilePos + pos + 4 + 23;
                         s_flacBlockPicLenUntilFrameEnd = nBytes - (pos + 23);
@@ -550,27 +521,22 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                         }
                     }
                     pos += 4 + commemtStringLength;
-                    //log_i("nBytes %i, pos %i, commemtStringLength %i", nBytes, pos, commemtStringLength);
+                    // FLAC_VERBOSE("nBytes %i, pos %i, commemtStringLength %i", nBytes, pos, commemtStringLength);
                 }
-                memset(s_flacStreamTitle, 0, 256);
-                if(vb[1] && vb[0]){ // artist and title
-                    strcpy(s_flacStreamTitle, vb[1]);
-                    strcat(s_flacStreamTitle, " - ");
-                    strcat(s_flacStreamTitle, vb[0]);
+                if(vb[1].valid() && vb[0].valid()){ // artist and title
+                    s_flacStreamTitle.assign(vb[1].c_get());
+                    s_flacStreamTitle.append(" - ");
+                    s_flacStreamTitle.append(vb[0].c_get());
                     s_f_flacNewStreamtitle = true;
                 }
-                else if(vb[1]){
-                    strcpy(s_flacStreamTitle, vb[1]);
+                else if(vb[1].valid()){
+                    s_flacStreamTitle.assign(vb[1].c_get());
                     s_f_flacNewStreamtitle = true;
                 }
-                else if(vb[0]){
-                    strcpy(s_flacStreamTitle, vb[0]);
+                else if(vb[0].valid()){
+                    s_flacStreamTitle.assign(vb[0].c_get());
                     s_f_flacNewStreamtitle = true;
                 }
-                for(int32_t i = 0; i < 8; i++){
-                    if(vb[i]){free(vb[i]); vb[i] = NULL;}
-                }
-
                 if(!s_flacBlockPicLen && s_flacSegmTableVec.size() == 1) s_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                 if(ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
@@ -1077,35 +1043,5 @@ int32_t FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, boo
         if (result >= 0) break;
     }
     return result;
-}
-//----------------------------------------------------------------------------------------------------------------------
-char* flac_x_ps_malloc(uint16_t len) {
-    char* ps_str = NULL;
-    if(psramFound()){ps_str = (char*) ps_malloc(len);}
-    else            {ps_str = (char*)    malloc(len);}
-    return ps_str;
-}
-//----------------------------------------------------------------------------------------------------------------------
-char* flac_x_ps_calloc(uint16_t len, uint8_t size) {
-    char* ps_str = NULL;
-    if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
-    else            {ps_str = (char*)    calloc(len, size);}
-    return ps_str;
-}
-//----------------------------------------------------------------------------------------------------------------------
-char* flac_x_ps_strdup(const char* str) {
-    char* ps_str = NULL;
-    if(psramFound()) { ps_str = (char*)ps_calloc(strlen(str) + 1, sizeof(char)); }
-    else { ps_str = (char*)calloc(strlen(str) + 1,  sizeof(char)); }
-    strcpy(ps_str, str);
-    return ps_str;
-}
-//----------------------------------------------------------------------------------------------------------------------
-char* flac_x_ps_strndup(const char* str, uint16_t n) {
-    char* ps_str = NULL;
-    if(psramFound()) { ps_str = (char*)ps_calloc(n + 1, sizeof(char)); }
-    else { ps_str = (char*)calloc(n + 1,  sizeof(char)); }
-    strncpy(ps_str, str, n);
-    return ps_str;
 }
 //----------------------------------------------------------------------------------------------------------------------
