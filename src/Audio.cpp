@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2i                                                                                                                                ";
-/*  Updated on: Jul 01.2025
+    Version 3.3.2j                                                                                                                                ";
+/*  Updated on: Jul 03.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -91,7 +91,7 @@ void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... arg
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
-    if(maxBlockSize) m_resBuffSizeRAM = maxBlockSize;
+    if(maxBlockSize) m_resBuffSize = maxBlockSize;
     if(maxBlockSize) m_maxBlockSize = maxBlockSize;
 }
 
@@ -103,19 +103,17 @@ AudioBuffer::~AudioBuffer() {
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
 void AudioBuffer::setBufsize(size_t mbs) {
-    m_buffSizePSRAM = m_buffSizeRAM = m_buffSize = mbs;
+    if(mbs < 2 * m_resBuffSize) AUDIO_ERROR("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
+    m_buffSize = mbs;
     return;
 }
 
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    if(m_buffSizePSRAM > 0) { // PSRAM found, AudioBuffer will be allocated in PSRAM
-        m_f_psram = true;
-        m_buffSize = m_buffSizePSRAM;
-        m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
-        m_buffSize = m_buffSizePSRAM - m_resBuffSizePSRAM;
-    }
+    m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
+    m_buffSize = m_buffSize - m_resBuffSize;
+
     if(!m_buffer) return 0;
     m_f_init = true;
     resetBuffer();
@@ -287,7 +285,7 @@ void Audio::initInBuff() {
     if(!InBuff.isInitialized()) {
         size_t size = InBuff.init();
         if(size > 0) {
-            AUDIO_INFO("PSRAM %sfound, inputBufferSize: %u bytes", InBuff.havePSRAM() ? "" : "not ", size - 1);
+            AUDIO_INFO("inputBufferSize: %u bytes", size - 1);
         }
     }
     changeMaxBlockSize(1600); // default size mp3 or aac
@@ -3433,7 +3431,6 @@ void Audio::processWebStream() {
         m_pwst.availableBytes = min(m_pwst.availableBytes, (uint32_t)InBuff.writeSpace());
         int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), m_pwst.availableBytes);
         if(bytesAddedToBuffer > 0) {
-
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
             if(m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
@@ -3661,13 +3658,7 @@ nextRound:
         }
     }
     if(m_pwsst.f_chunkFinished) {
-        if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 60000) {
-                m_pwsst.f_chunkFinished = false;
-                m_f_continue = true;
-            }
-        }
-        else {
+        if(InBuff.bufferFilled() < 60000) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -3774,13 +3765,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if(m_pwsHLS.f_chunkFinished) {
-        if(m_f_psramFound) {
-            if(InBuff.bufferFilled() < 50000) {
-                m_pwsHLS.f_chunkFinished = false;
-                m_f_continue = true;
-            }
-        }
-        else {
+        if(InBuff.bufferFilled() < 50000) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -4539,7 +4524,6 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 
     m_fnsy.nextSync = 0;
 
-
     if(m_codec == CODEC_WAV) {
         m_f_playing = true;
         m_fnsy.nextSync = 0;
@@ -4547,6 +4531,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     if(m_codec == CODEC_MP3) {
         m_fnsy.nextSync = MP3FindSyncWord(data, len);
         if(m_fnsy.nextSync == -1) return len; // syncword not found, search next block
+        MP3Decoder_ClearBuffer();
     }
     if(m_codec == CODEC_AAC) { m_fnsy.nextSync = AACFindSyncWord(data, len); }
     if(m_codec == CODEC_M4A) {
@@ -4656,7 +4641,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         m_sbyt.isPS = 0;
         m_sbyt.f_setDecodeParamsOnce = true;
         m_sbyt.nextSync = findNextSync(data, len);
-        if(m_sbyt.nextSync <  0) return len;
+        if(m_sbyt.nextSync <  0) return len; // no syncword found
         if(m_sbyt.nextSync == 0) { m_f_playing = true; }
         if(m_sbyt.nextSync >  0) return m_sbyt.nextSync;
     }
@@ -4681,31 +4666,26 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             stopSong();
         }
     }
+    bytesDecoded = len - m_sbyt.bytesLeft;
 
     // m_decodeError - possible values are:
     //                   0: okay, no error
     //                 100: the decoder needs more data
     //                 < 0: there has been an error
+    //                -100: serious error, stop song
 
     if(m_decodeError < 0) { // Error, skip the frame...
-        if((m_codec == CODEC_MP3) && (m_f_chunked == true)){ // http://bestof80s.stream.laut.fm/best_of_80s
-            // AUDIO_ERROR("%02X %02X %02X %02X %02X %02X %02X %02X %02X", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
-            if(specialIndexOf(data, "ID3", 4) == 0){
-                uint16_t  id3Size = bigEndian(data + 6, 4, 7);
-                id3Size += 10;
-                AUDIO_INFO("ID3 tag found, skip %i bytes", id3Size);
-                return id3Size; // skip ID3 tag
-            }
-            if(m_decodeError == ERR_MP3_INVALID_HUFFCODES) {
-                AUDIO_INFO("last mp3 frame is invalid");
-                MP3Decoder_ClearBuffer();
-                return findNextSync(data, m_sbyt.bytesLeft); // skip last mp3 frame and search for next syncword
-            }
+        // AUDIO_ERROR("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X '%c%c%c%c%c%c%c%c%c%c'",
+        //        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9]);
+        if(m_decodeError == -100){stopSong(); return bytesDecoded;} // serious error, e.g. decoder could not be initialized
+        if((m_codec == CODEC_MP3) && (m_f_chunked == true)){
+            ;
         }
-        //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
-        //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
-        //  This triggers error -21 because the faad2 decoder cannot switch automatically.
+
         if(m_codec == CODEC_AAC && m_decodeError == -21){ // mono <-> stereo change
+            //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
+            //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
+            //  This triggers error -21 because the faad2 decoder cannot switch automatically.
             m_sbyt.channels = 0;
             if ((data[0] == 0xFF) || ((data[1] & 0xF0) == 0xF0)){
                 int channel_config = ((data[2] & 0x01) << 2) | ((data[3] & 0xC0) >> 6);
@@ -4718,25 +4698,17 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             AACDecoder_AllocateBuffers();
             return 0;
         }
-
-        printDecodeError(m_decodeError);
-        m_f_playing = false; // seek for new syncword
         if(m_codec == CODEC_FLAC) {
-        //    if(m_decodeError == ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG) stopSong();
-        //    if(m_decodeError == ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT) stopSong();
+             ;
         }
         if(m_codec == CODEC_OPUS) {
-            if(m_decodeError == ERR_OPUS_HYBRID_MODE_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_SILK_MODE_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_NARROW_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_WIDE_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_SUPER_WIDE_BAND_UNSUPPORTED) stopSong();
-            if(m_decodeError == ERR_OPUS_INVALID_SAMPLERATE) stopSong();
-            return 0;
+            ;
         }
-        return 1; // skip one byte and seek for the next sync word
+        printDecodeError(m_decodeError);
+        m_f_playing = false; // seek for new syncword
+        if(bytesDecoded == 0) return 1; // skip one byte and seek for the next sync word
+        return bytesDecoded;
     }
-    bytesDecoded = len - m_sbyt.bytesLeft;
 
     if(bytesDecoded == 0 && m_decodeError == 0) { // unlikely framesize
         AUDIO_INFO("framesize is 0, start decoding again");
@@ -4913,67 +4885,21 @@ void Audio::printDecodeError(int r) {
     const char* e;
 
     if(m_codec == CODEC_MP3) {
-        switch(r) {
-            case ERR_MP3_NONE: e = "NONE"; break;
-            case ERR_MP3_INDATA_UNDERFLOW: e = "INDATA_UNDERFLOW"; break;
-            case ERR_MP3_MAINDATA_UNDERFLOW: e = "MAINDATA_UNDERFLOW"; break;
-            case ERR_MP3_FREE_BITRATE_SYNC: e = "FREE_BITRATE_SYNC"; break;
-            case ERR_MP3_OUT_OF_MEMORY: e = "OUT_OF_MEMORY"; break;
-            case ERR_MP3_NULL_POINTER: e = "NULL_POINTER"; break;
-            case ERR_MP3_INVALID_FRAMEHEADER: e = "INVALID_FRAMEHEADER"; break;
-            case ERR_MP3_INVALID_SIDEINFO: e = "INVALID_SIDEINFO"; break;
-            case ERR_MP3_INVALID_SCALEFACT: e = "INVALID_SCALEFACT"; break;
-            case ERR_MP3_INVALID_HUFFCODES: e = "INVALID_HUFFCODES"; break;
-            case ERR_MP3_INVALID_DEQUANTIZE: e = "INVALID_DEQUANTIZE"; break;
-            case ERR_MP3_INVALID_IMDCT: e = "INVALID_IMDCT"; break;
-            case ERR_MP3_INVALID_SUBBAND: e = "INVALID_SUBBAND"; break;
-            default: e = "ERR_UNKNOWN";
-        }
-        AUDIO_INFO("MP3 decode error %d : %s", r, e);
+            ;
     }
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         e = AACGetErrorMessage(abs(r));
         AUDIO_INFO("AAC decode error %d : %s", r, e);
     }
     if(m_codec == CODEC_FLAC) {
-        switch(r) {
-            case ERR_FLAC_NONE: e = "NONE"; break;
-            case ERR_FLAC_BLOCKSIZE_TOO_BIG: e = "BLOCKSIZE TOO BIG"; break;
-            case ERR_FLAC_RESERVED_BLOCKSIZE_UNSUPPORTED: e = "Reserved Blocksize unsupported"; break;
-            case ERR_FLAC_SYNC_CODE_NOT_FOUND: e = "SYNC CODE NOT FOUND"; break;
-            case ERR_FLAC_UNKNOWN_CHANNEL_ASSIGNMENT: e = "UNKNOWN CHANNEL ASSIGNMENT"; break;
-            case ERR_FLAC_RESERVED_CHANNEL_ASSIGNMENT: e = "RESERVED CHANNEL ASSIGNMENT"; break;
-            case ERR_FLAC_RESERVED_SUB_TYPE: e = "RESERVED SUB TYPE"; break;
-            case ERR_FLAC_PREORDER_TOO_BIG: e = "PREORDER TOO BIG"; break;
-            case ERR_FLAC_RESERVED_RESIDUAL_CODING: e = "RESERVED RESIDUAL CODING"; break;
-            case ERR_FLAC_WRONG_RICE_PARTITION_NR: e = "WRONG RICE PARTITION NR"; break;
-            case ERR_FLAC_BITS_PER_SAMPLE_TOO_BIG: e = "BITS PER SAMPLE > 16"; break;
-            case ERR_FLAC_BITS_PER_SAMPLE_UNKNOWN: e = "BITS PER SAMPLE UNKNOWN"; break;
-            case ERR_FLAC_DECODER_ASYNC: e = "DECODER ASYNCHRON"; break;
-            case ERR_FLAC_BITREADER_UNDERFLOW: e = "BITREADER ERROR"; break;
-            case ERR_FLAC_OUTBUFFER_TOO_SMALL: e = "OUTBUFFER TOO SMALL"; break;
-            default: e = "ERR_UNKNOWN";
-        }
-        AUDIO_INFO("FLAC decode error %d : %s", r, e);
+      ;
     }
     if(m_codec == CODEC_OPUS) {
-        e = OPUSGetErrorMessage(r);
-        AUDIO_INFO("OPUS decode error %d : %s", r, e);
+      ;
     }
     if(m_codec == CODEC_VORBIS) {
-        switch(r) {
-            case ERR_VORBIS_NONE: e = "NONE"; break;
-            case ERR_VORBIS_CHANNELS_OUT_OF_RANGE: e = "CHANNELS OUT OF RANGE"; break;
-            case ERR_VORBIS_INVALID_SAMPLERATE: e = "INVALID SAMPLERATE"; break;
-            case ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED: e = "EXTRA CHANNELS UNSUPPORTED"; break;
-            case ERR_VORBIS_DECODER_ASYNC: e = "DECODER ASYNC"; break;
-            case ERR_VORBIS_OGG_SYNC_NOT_FOUND: e = "SYNC NOT FOUND"; break;
-            case ERR_VORBIS_BAD_HEADER: e = "BAD HEADER"; break;
-            case ERR_VORBIS_NOT_AUDIO: e = "NOT AUDIO"; break;
-            case ERR_VORBIS_BAD_PACKET: e = "BAD PACKET"; break;
-            default: e = "ERR_UNKNOWN";
-        }
-        AUDIO_INFO("VORBIS decode error %d : %s", r, e);
+        ;
+
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5334,11 +5260,6 @@ uint32_t Audio::inBufferFree() {
 uint32_t Audio::inBufferSize() {
     // current audio input buffer size in bytes
     return InBuff.getBufsize();
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::setBufferSize(size_t mbs) {
-    // set audio input buffer size in bytes
-    return InBuff.setBufsize(mbs);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***
