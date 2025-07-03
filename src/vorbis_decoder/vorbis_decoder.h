@@ -56,15 +56,16 @@ using namespace std;
 
 enum : int8_t  {VORBIS_CONTINUE = 110,
                 VORBIS_PARSE_OGG_DONE = 100,
-                ERR_VORBIS_NONE = 0,
-                ERR_VORBIS_CHANNELS_OUT_OF_RANGE = -1,
-                ERR_VORBIS_INVALID_SAMPLERATE = -2,
-                ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED = -3,
-                ERR_VORBIS_DECODER_ASYNC = -4,
-                ERR_VORBIS_OGG_SYNC_NOT_FOUND = - 5,
-                ERR_VORBIS_BAD_HEADER = -6,
-                ERR_VORBIS_NOT_AUDIO = -7,
-                ERR_VORBIS_BAD_PACKET = -8
+                VORBIS_NONE = 0,
+                VORBIS_ERR = -1
+                // ERR_VORBIS_CHANNELS_OUT_OF_RANGE = -1,
+                // ERR_VORBIS_INVALID_SAMPLERATE = -2,
+                // ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED = -3,
+                // ERR_VORBIS_DECODER_ASYNC = -4,
+                // ERR_VORBIS_OGG_SYNC_NOT_FOUND = - 5,
+                // ERR_VORBIS_BAD_HEADER = -6,
+                // ERR_VORBIS_NOT_AUDIO = -7,
+                // ERR_VORBIS_BAD_PACKET = -8
             };
 
 typedef struct _codebook{
@@ -306,3 +307,65 @@ int32_t  _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, 
 int32_t  _make_words(char *l, uint16_t n, uint32_t *r, uint8_t quantvals, codebook_t *b, int32_t maptype);
 uint8_t  _book_maptype1_quantvals(codebook_t *b);
 int32_t *_vorbis_window(int32_t left);
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  L O G G I N G   📌📌📌
+extern __attribute__((weak)) void audio_info(const char*);
+
+template <typename... Args>
+void VORBIS_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+    #define ANSI_ESC_RESET          "\033[0m"
+    #define ANSI_ESC_BLACK          "\033[30m"
+    #define ANSI_ESC_RED            "\033[31m"
+    #define ANSI_ESC_GREEN          "\033[32m"
+    #define ANSI_ESC_YELLOW         "\033[33m"
+    #define ANSI_ESC_BLUE           "\033[34m"
+    #define ANSI_ESC_MAGENTA        "\033[35m"
+    #define ANSI_ESC_CYAN           "\033[36m"
+    #define ANSI_ESC_WHITE          "\033[37m"
+
+    ps_ptr<char> result;
+    ps_ptr<char> file;
+
+    file.copy_from(path);
+    while(file.contains("/")){
+        file.remove_before('/', false);
+    }
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1, "result");
+    char* dst = result.get();
+    if (!dst) return;
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+
+    // build a final string with file/line prefix
+    ps_ptr<char> final;
+    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    if (total_len <= 0) return;
+    final.alloc(total_len + 1, "final");
+    char* dest = final.get();
+    if (!dest) return;  // Or error treatment
+    if(audio_info){
+        if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        audio_info(final.get());
+    }
+    else{
+        std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+        if     (level == 1) log_e("%s", final.c_get());
+        else if(level == 2) log_w("%s", final.c_get());
+        else                log_i("%s", final.c_get());
+    }
+    final.reset();
+    result.reset();
+}
+
+// Macro for comfortable calls
+#define VORBIS_ERROR(fmt, ...) VORBIS_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define VORBIS_WARN(fmt, ...)  VORBIS_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+

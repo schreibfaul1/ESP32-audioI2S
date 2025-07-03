@@ -4922,19 +4922,20 @@ void Audio::printDecodeError(int r) {
       ;
     }
     if(m_codec == CODEC_VORBIS) {
-        switch(r) {
-            case ERR_VORBIS_NONE: e = "NONE"; break;
-            case ERR_VORBIS_CHANNELS_OUT_OF_RANGE: e = "CHANNELS OUT OF RANGE"; break;
-            case ERR_VORBIS_INVALID_SAMPLERATE: e = "INVALID SAMPLERATE"; break;
-            case ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED: e = "EXTRA CHANNELS UNSUPPORTED"; break;
-            case ERR_VORBIS_DECODER_ASYNC: e = "DECODER ASYNC"; break;
-            case ERR_VORBIS_OGG_SYNC_NOT_FOUND: e = "SYNC NOT FOUND"; break;
-            case ERR_VORBIS_BAD_HEADER: e = "BAD HEADER"; break;
-            case ERR_VORBIS_NOT_AUDIO: e = "NOT AUDIO"; break;
-            case ERR_VORBIS_BAD_PACKET: e = "BAD PACKET"; break;
-            default: e = "ERR_UNKNOWN";
-        }
-        AUDIO_INFO("VORBIS decode error %d : %s", r, e);
+        ;
+        // switch(r) {
+        //     case VORBIS_NONE: e = "NONE"; break;
+        //     case ERR_VORBIS_CHANNELS_OUT_OF_RANGE: e = "CHANNELS OUT OF RANGE"; break;
+        //     case ERR_VORBIS_INVALID_SAMPLERATE: e = "INVALID SAMPLERATE"; break;
+        //     case ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED: e = "EXTRA CHANNELS UNSUPPORTED"; break;
+        //     case ERR_VORBIS_DECODER_ASYNC: e = "DECODER ASYNC"; break;
+        //     case ERR_VORBIS_OGG_SYNC_NOT_FOUND: e = "SYNC NOT FOUND"; break;
+        //     case ERR_VORBIS_BAD_HEADER: e = "BAD HEADER"; break;
+        //     case ERR_VORBIS_NOT_AUDIO: e = "NOT AUDIO"; break;
+        //     case ERR_VORBIS_BAD_PACKET: e = "BAD PACKET"; break;
+        //     default: e = "ERR_UNKNOWN";
+        // }
+        // AUDIO_INFO("VORBIS decode error %d : %s", r, e);
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
