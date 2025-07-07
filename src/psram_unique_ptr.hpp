@@ -1388,3 +1388,334 @@ template <typename... Args>
 inline void free_fields(Args&... fields) {
     (free_field(fields), ...);
 }
+
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌   2 D  A R R A Y   📌📌📌
+//
+// 2D Array in PSRAM with Bounds-Check, log_e and reset()
+//
+// Beispielaufruf:
+// ps_array2d<int32_t> s_samples; // Standardkonstruktor
+// s_samples.alloc(2, 1152);      // Speicher allozieren für [2][1152]
+//
+// int ch = 0; // Beispiel: Kanal 0
+//
+// // Deklaration von pcm1 als Zeiger auf das erste Element der Zeile (ähnlich wie bei samples[ch])
+// int32_t* pcm1;
+//
+// // Zuweisung:
+// pcm1 = s_samples.get_raw_row_ptr(ch);
+//
+// // Du kannst jetzt 'pcm1' verwenden, als wäre es ein int32_t-Array der Größe 1152
+// pcm1[0] = 42;
+// pcm1[1151] = 99;
+//
+// s_samples.reset(); // Speicher manuell freigeben
+//
+
+template <typename T>
+class ps_array2d
+{
+public:
+    // Standardkonstruktor: Initialisiert die Dimensionen auf 0.
+    ps_array2d() : m_dim1(0), m_dim2(0) {}
+
+    // Ursprünglicher Konstruktor: Alloziert Speicher direkt bei der Erstellung.
+    ps_array2d(size_t dim1, size_t dim2)
+        : m_dim1(dim1), m_dim2(dim2)
+    {
+        alloc_internal(dim1, dim2);
+    }
+
+    // Neue alloc-Methode: Ermöglicht die spätere Allokation des Speichers.
+    bool alloc(size_t dim1, size_t dim2) {
+        reset();
+        m_dim1 = dim1;
+        m_dim2 = dim2;
+        return alloc_internal(dim1, dim2);
+    }
+
+    // Überladung für `alloc` ohne Dimensionen, wenn die Dimensionen bereits gesetzt sind
+    bool alloc() {
+        if (m_dim1 == 0 || m_dim2 == 0) {
+            log_e("ps_array2d::alloc() called without dimensions or dimensions are zero.");
+            return false;
+        }
+        reset();
+        return alloc_internal(m_dim1, m_dim2);
+    }
+
+    // Klammer-Operator für den Zugriff auf einzelne Elemente (Bounds-Check inklusive)
+    T &operator()(size_t i, size_t j)
+    {
+        if (!m_data.valid()) {
+            log_e("ps_array2d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return m_dummy;
+        }
+        if (i >= m_dim1 || j >= m_dim2) {
+            log_e("ps_array2d out-of-bounds: (%u,%u) but dims=(%u,%u) [line %d]",
+                  (unsigned)i, (unsigned)j, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
+            return m_dummy;
+        }
+        return m_data[i * m_dim2 + j];
+    }
+
+    const T &operator()(size_t i, size_t j) const
+    {
+        if (!m_data.valid()) {
+            log_e("ps_array2d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return m_dummy;
+        }
+        if (i >= m_dim1 || j >= m_dim2) {
+            log_e("ps_array2d out-of-bounds: (%u,%u) but dims=(%u,%u) [line %d]",
+                  (unsigned)i, (unsigned)j, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
+            return m_dummy;
+        }
+        return m_data[i * m_dim2 + j];
+    }
+
+    // NEUE METHODE: Gibt einen rohen Zeiger (T*) auf den Beginn einer spezifischen Zeile (row_index) zurück.
+    // Dies ist ideal für deinen Fall 'pcm1 = samples[ch];'
+    T* get_raw_row_ptr(size_t row_index) {
+        if (!m_data.valid()) {
+            log_e("ps_array2d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (row_index >= m_dim1) {
+            log_e("ps_array2d::get_raw_row_ptr: row_index %u out-of-bounds (%u). [line %d]",
+                  (unsigned)row_index, (unsigned)m_dim1, __LINE__);
+            return nullptr;
+        }
+        return m_data.get() + row_index * m_dim2;
+    }
+
+    const T* get_raw_row_ptr(size_t row_index) const {
+        if (!m_data.valid()) {
+            log_e("ps_array2d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (row_index >= m_dim1) {
+            log_e("ps_array2d::get_raw_row_ptr: row_index %u out-of-bounds (%u). [line %d]",
+                  (unsigned)row_index, (unsigned)m_dim1, __LINE__);
+            return nullptr;
+        }
+        return m_data.get() + row_index * m_dim2;
+    }
+
+    // Gibt true zurück, wenn der Speicher erfolgreich alloziiert wurde
+    bool is_allocated() const { return m_data.valid(); }
+
+    size_t dim1() const { return m_dim1; }
+    size_t dim2() const { return m_dim2; }
+
+    // Manuelle Freigabe des Speichers
+    void reset() {
+        m_data.reset();
+        m_dim1 = 0;
+        m_dim2 = 0;
+    }
+
+private:
+    size_t m_dim1, m_dim2;
+    ps_ptr<T> m_data; // Verwaltet den linearen Speicherblock
+    static inline T m_dummy{};  // statischer Dummy-Wert
+
+    // Private Hilfsmethode für die eigentliche Allokationslogik
+    bool alloc_internal(size_t dim1, size_t dim2) {
+        if (dim1 == 0 || dim2 == 0) {
+            log_e("ps_array2d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
+            return false;
+        }
+        size_t total_elements = dim1 * dim2;
+        m_data.calloc(total_elements, "ps_array2d_data");
+        if (!m_data.valid()) {
+            log_e("ps_array2d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
+            m_dim1 = 0; m_dim2 = 0;
+            return false;
+        }
+        return true;
+    }
+};
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// psram_unique_ptr.hpp (Auszug mit ps_array3d)
+//
+// 📌📌📌   3 D  A R R A Y   📌📌📌
+//
+// 3D Array in PSRAM with Bounds-Check, log_e and reset()
+//
+// Beispielaufruf:
+// ps_array3d<int32_t> s_sbsample;
+// s_sbsample.alloc(2, 36, 32);
+//
+// int ch = 0; // Beispiel für die erste Dimension
+// int gr = 0; // Beispiel für den Gruppen-Index
+//
+// // Deklaration des C-Stil-Zeigers auf ein 1D-Array [32]
+// int32_t (*sample)[32];
+//
+// // Zuweisung mithilfe der neuen Methode get_raw_row_ptr und dem passenden reinterpret_cast
+// sample = reinterpret_cast<int32_t(*)[32]>(s_sbsample.get_raw_row_ptr(ch, 18 * gr));
+//
+// // Jetzt kannst du 'sample' verwenden:
+// (*sample)[0] = 10;
+//
+// s_sbsample.reset();
+//
+
+
+template <typename T>
+class ps_array3d{
+public:
+    // Standardkonstruktor
+    ps_array3d() : m_dim1(0), m_dim2(0), m_dim3(0) {}
+
+    // Ursprünglicher Konstruktor
+    ps_array3d(size_t dim1, size_t dim2, size_t dim3)
+        : m_dim1(dim1), m_dim2(dim2), m_dim3(dim3)
+    {
+        alloc_internal(dim1, dim2, dim3);
+    }
+
+    // alloc-Methode
+    bool alloc(size_t dim1, size_t dim2, size_t dim3) {
+        reset();
+        m_dim1 = dim1;
+        m_dim2 = dim2;
+        m_dim3 = dim3;
+        return alloc_internal(dim1, dim2, dim3);
+    }
+
+    // Überladung für `alloc` ohne Dimensionen
+    bool alloc() {
+        if (m_dim1 == 0 || m_dim2 == 0 || m_dim3 == 0) {
+            log_e("ps_array3d::alloc() called without dimensions or dimensions are zero.");
+            return false;
+        }
+        reset();
+        return alloc_internal(m_dim1, m_dim2, m_dim3);
+    }
+
+    // Klammer-Operator für den Zugriff auf einzelne Elemente
+    T &operator()(size_t i, size_t j, size_t k)
+    {
+        if (!m_data.valid()) {
+            log_e("ps_array3d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return m_dummy;
+        }
+        if (i >= m_dim1 || j >= m_dim2 || k >= m_dim3) {
+            log_e("ps_array3d out-of-bounds: (%u,%u,%u) but dims=(%u,%u,%u) [line %d]",
+                  (unsigned)i, (unsigned)j, (unsigned)k,
+                  (unsigned)m_dim1, (unsigned)m_dim2, (unsigned)m_dim3, __LINE__);
+            return m_dummy;
+        }
+        return m_data[i * (m_dim2 * m_dim3) + j * m_dim3 + k];
+    }
+
+    const T &operator()(size_t i, size_t j, size_t k) const
+    {
+        if (!m_data.valid()) {
+            log_e("ps_array3d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return m_dummy;
+        }
+        if (i >= m_dim1 || j >= m_dim2 || k >= m_dim3) {
+            log_e("ps_array3d out-of-bounds: (%u,%u,%u) but dims=(%u,%u,%u) [line %d]",
+                  (unsigned)i, (unsigned)j, (unsigned)k,
+                  (unsigned)m_dim1, (unsigned)m_dim2, (unsigned)m_dim3, __LINE__);
+            return m_dummy;
+        }
+        return m_data[i * (m_dim2 * m_dim3) + j * m_dim3 + k];
+    }
+
+    // Methode zum Abrufen eines rohen Zeigers auf den Beginn eines 2D-Slices.
+    T* get_raw_slice_ptr(size_t i) {
+        if (!m_data.valid()) {
+            log_e("ps_array3d::get_raw_slice_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (i >= m_dim1) {
+            log_e("ps_array3d::get_raw_slice_ptr: dim1 index %u out-of-bounds (%u). [line %d]", (unsigned)i, (unsigned)m_dim1, __LINE__);
+            return nullptr;
+        }
+        return m_data.get() + i * (m_dim2 * m_dim3);
+    }
+
+    const T* get_raw_slice_ptr(size_t i) const {
+        if (!m_data.valid()) {
+            log_e("ps_array3d::get_raw_slice_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (i >= m_dim1) {
+            log_e("ps_array3d::get_raw_slice_ptr: dim1 index %u out-of-bounds (%u). [line %d]", (unsigned)i, (unsigned)m_dim1, __LINE__);
+            return nullptr;
+        }
+        return m_data.get() + i * (m_dim2 * m_dim3);
+    }
+
+    // NEUE METHODE: Gibt einen rohen Zeiger (T*) auf den Beginn einer spezifischen Zeile (dim2_idx)
+    // innerhalb eines spezifischen Slices (dim1_idx) zurück.
+    T* get_raw_row_ptr(size_t dim1_idx, size_t dim2_idx) {
+        if (!m_data.valid()) {
+            log_e("ps_array3d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (dim1_idx >= m_dim1 || dim2_idx >= m_dim2) {
+            log_e("ps_array3d::get_raw_row_ptr: Indices (%u,%u) out-of-bounds for dims=(%u,%u) [line %d]",
+                  (unsigned)dim1_idx, (unsigned)dim2_idx, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
+            return nullptr;
+        }
+        // Berechne den Offset für die spezifische Zeile im linearen Speicher
+        return m_data.get() + (dim1_idx * (m_dim2 * m_dim3)) + (dim2_idx * m_dim3);
+    }
+
+    const T* get_raw_row_ptr(size_t dim1_idx, size_t dim2_idx) const {
+        if (!m_data.valid()) {
+            log_e("ps_array3d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
+            return nullptr;
+        }
+        if (dim1_idx >= m_dim1 || dim2_idx >= m_dim2) {
+            log_e("ps_array3d::get_raw_row_ptr: Indices (%u,%u) out-of-bounds for dims=(%u,%u) [line %d]",
+                  (unsigned)dim1_idx, (unsigned)dim2_idx, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
+            return nullptr;
+        }
+        return m_data.get() + (dim1_idx * (m_dim2 * m_dim3)) + (dim2_idx * m_dim3);
+    }
+
+
+    // Gibt true zurück, wenn der Speicher erfolgreich alloziiert wurde
+    bool is_allocated() const { return m_data.valid(); }
+
+    size_t dim1() const { return m_dim1; }
+    size_t dim2() const { return m_dim2; }
+    size_t dim3() const { return m_dim3; }
+
+    // Manuelle Freigabe des Speichers
+    void reset() {
+        m_data.reset();
+        m_dim1 = 0;
+        m_dim2 = 0;
+        m_dim3 = 0;
+    }
+
+private:
+    size_t m_dim1, m_dim2, m_dim3;
+    ps_ptr<T> m_data; // Verwaltet den linearen Speicherblock
+    static inline T m_dummy{}; // Dummy-Wert für Fehlerfälle
+
+    // Private Hilfsmethode für die eigentliche Allokationslogik
+    bool alloc_internal(size_t dim1, size_t dim2, size_t dim3) {
+        if (dim1 == 0 || dim2 == 0 || dim3 == 0) {
+            log_e("ps_array3d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
+            return false;
+        }
+        size_t total_elements = dim1 * dim2 * dim3;
+        m_data.calloc(total_elements, "ps_array3d_data");
+        if (!m_data.valid()) {
+            log_e("ps_array3d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
+            m_dim1 = 0; m_dim2 = 0; m_dim3 = 0;
+            return false;
+        }
+        return true;
+    }
+};
