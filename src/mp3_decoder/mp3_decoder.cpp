@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 02.07.2025
+ *  Updated on: 07.07.2025
  */
 #include "mp3_decoder.h"
 /* clip to range [-2^n, 2^n - 1] */
@@ -1186,6 +1186,20 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
     //   return (byte >> (8 - start_bit - num_bits)) & ((1 << num_bits) - 1);
     // };
 
+    // Define bitrate tables for MPEG1 Layer II and MPEG2/2.5 Layer II
+    // These tables are examples and need to be complete based on the MPEG standard
+    const uint16_t mpeg1_layer2_bitrates[] = {
+        0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0
+    };
+    const uint16_t mpeg2_layer2_bitrates[] = {
+        0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
+    };
+    const uint16_t mpeg2_layer3_bitrates[] = {
+        0, // "Free format" oder ungültig
+        8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,
+        0 // Ungültig
+    };
+
     // Funktion zum Parsen des Headers und Überprüfen der Gültigkeit
     auto parseMp3Header = [&](const uint8_t* header_data, Mp3FrameHeader* header_info) {
         // Byte 0: Syncword H (bereits geprüft)
@@ -1213,10 +1227,10 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
             log_d("Reserved Layer\n");
             return false;
         }
-        if (header_info->layer != 1) { // only Layer III für MP3
-            // This is a mistake for pure MP3 (MPEG Layer 3).
-            // If you want to support other layers, you have to adjust it.
-            log_d("Not Layer III\n");
+        // Modified part: Support for Layer II and Layer III
+        if (header_info->layer != 1 && header_info->layer != 2) { // Allow Layer II (2) and Layer III (1)
+            printf("\n"); for(int i = 0; i<10; i++) printf("0x%02x ", header_data[i]); printf("\n"); // Use header_data instead of buf
+            log_d("Not Layer II or III\n");
             return false;
         }
 
@@ -1235,27 +1249,52 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
 
         // Mapping from MPEG version to sampling rate table
         uint8_t sr_table_idx;
-        if (header_info->mpeg_version == 3) sr_table_idx = 0; // MPEG 1
-        else if (header_info->mpeg_version == 2) sr_table_idx = 1; // MPEG 2
-        else sr_table_idx = 2; // MPEG 2.5 (da mpeg_version == 0)
+        if (header_info->mpeg_version == 3) sr_table_idx = 0; // MPEG 1 (0b11)
+        else if (header_info->mpeg_version == 2) sr_table_idx = 1; // MPEG 2 (0b10)
+        else sr_table_idx = 2; // MPEG 2.5 (da mpeg_version == 0) - Although Google TTS is likely MPEG 2.0
 
         sample_rate_hz = sampling_rates[sr_table_idx][header_info->sample_rate_idx];
 
-        // Bitraten-Mapping (Beispiel für MPEG1 Layer III)
-        if (header_info->mpeg_version == 3 && header_info->layer == 1) { // MPEG1 Layer III
-            bitrate_kbps = mpeg1_layer3_bitrates[header_info->bitrate_idx];
+        // Bitraten-Mapping für verschiedene MPEG-Versionen und Layer
+        if (header_info->mpeg_version == 3) { // MPEG 1
+            if (header_info->layer == 1) { // Layer III
+                bitrate_kbps = mpeg1_layer3_bitrates[header_info->bitrate_idx];
+            } else if (header_info->layer == 2) { // Layer II
+                bitrate_kbps = mpeg1_layer2_bitrates[header_info->bitrate_idx];
+            }
+        } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG 2 or MPEG 2.5
+            if (header_info->layer == 1) { // Layer III
+                bitrate_kbps = mpeg2_layer3_bitrates[header_info->bitrate_idx]; // Assuming mpeg2_layer3_bitrates exists
+            } else if (header_info->layer == 2) { // Layer II
+                bitrate_kbps = mpeg2_layer2_bitrates[header_info->bitrate_idx];
+            }
         }
-        // Add more Else-IF blocks for other MPEG versions/layers, if necessary
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
             log_d("Could not determine valid bitrate or sample rate\n");
             return false;
         }
 
-        // Calculate frame length (example for Layer III)
-        // FrameSize = 144 * BitRate / SampleRate + Padding (in Bytes)
-        // BitRate in kbit/s, SampleRate in Hz
-        header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
+        // Calculate frame length based on layer
+        // FrameSize = (1152 * BitRate / SampleRate) + Padding (for Layer III)
+        // FrameSize = (144 * BitRate / SampleRate) + Padding (for Layer I)
+        // FrameSize = (576 * BitRate / SampleRate) + Padding (for Layer II, MPEG 2.0/2.5)
+        // Note: For MPEG 1 Layer II, it's (1152 * BitRate / SampleRate) + Padding
+        // Need to be careful with the constant depending on MPEG version and layer
+        if (header_info->layer == 1) { // Layer III
+            header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz; // Assuming MPEG1 Layer III
+            if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG2/2.5 Layer III
+                header_info->frame_length = (72 * bitrate_kbps * 1000) / sample_rate_hz; // Correct constant for MPEG2/2.5 Layer III
+            }
+        } else if (header_info->layer == 2) { // Layer II
+            if (header_info->mpeg_version == 3) { // MPEG 1 Layer II
+                header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
+            } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG 2/2.5 Layer II
+                header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
+            }
+        }
+
+
         if (header_info->padding) {
             header_info->frame_length += 1; // Füge 1 Byte für Padding hinzu
         }
