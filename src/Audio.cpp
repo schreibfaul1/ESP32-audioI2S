@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2j                                                                                                                                ";
-/*  Updated on: Jul 03.2025
+    Version 3.3.2k                                                                                                                                ";
+/*  Updated on: Jul 08.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -73,14 +73,14 @@ void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... arg
     if (total_len <= 0) return;
     final.alloc(total_len + 1, "final");
     char* dest = final.get();
-    if (!dest) return;  // Or error treatment
+    if (!dest) return;  // or error treatment
     if(audio_info){
         std::snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         audio_info(final.get());
     }
     else{
-        std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-        log_e("%s", final.c_get());
+         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+         log_e("%s", final.c_get());
     }
     final.reset();
     result.reset();

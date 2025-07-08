@@ -26,6 +26,9 @@
 #include "Arduino.h"
 #include <vector>
 #include "../psram_unique_ptr.hpp"
+
+extern __attribute__((weak)) void audio_info(const char*);
+
 using namespace std;
 #define VI_FLOORB       2
 #define VIF_POSIT      63

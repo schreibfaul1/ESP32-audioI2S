@@ -8,6 +8,8 @@
 #include <vector>
 #include "../psram_unique_ptr.hpp"
 
+extern __attribute__((weak)) void audio_info(const char*);
+
 typedef struct _ofp2 {
     uint16_t firstFrameLength;
     uint16_t secondFrameLength;
