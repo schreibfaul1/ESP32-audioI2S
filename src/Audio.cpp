@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2k                                                                                                                                ";
-/*  Updated on: Jul 08.2025
+    Version 3.3.2l                                                                                                                                ";
+/*  Updated on: Jul 09.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4655,7 +4655,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     switch(m_codec) {
         case CODEC_WAV:    m_decodeError = 0; m_sbyt.bytesLeft = 0; break;
-        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get(), 0); break;
+        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_AAC:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_M4A:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
@@ -6222,77 +6222,22 @@ int32_t Audio::flac_correctResumeFilePos() {
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::mp3_correctResumeFilePos() {
 
-    // The SncronWord sequence 0xFF 0xF? can be part of valid audio data. Therefore, it cannot be ensured that the next 0xFFF is really the beginning
-    // of a new MP3 frame. Therefore, the following byte is parsed. If the bitrate and sample rate match the one currently being played,
-    // the beginning of a new MP3 frame is likely.
-
-    const int16_t bitrateTab[3][3][15] PROGMEM = { {
-        /* MPEG-1 */
-        { 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448 }, /* Layer 1 */
-        { 0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384 }, /* Layer 2 */
-        { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320 }, /* Layer 3 */
-        }, {
-        /* MPEG-2 */
-        { 0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256 }, /* Layer 1 */
-        { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 }, /* Layer 2 */
-        { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 }, /* Layer 3 */
-        }, {
-        /* MPEG-2.5 */
-        { 0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256 }, /* Layer 1 */
-        { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 }, /* Layer 2 */
-        { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 }, /* Layer 3 */
-    }, };
-
-    auto find_sync_word = [&](uint8_t* pos, uint32_t av) -> int {
-        int steps = 0;
-        while(av--) {
-            char c = pos[steps];
-            steps++;
-            if(c == 0xFF) { // First byte of sync word found
-                char nextByte = pos[steps];
-                steps++;
-                if((nextByte & 0xF0) == 0xF0) { // Check for the second part of sync word
-                    return steps - 2;           // Sync word found, return the number of steps
-                }
-            }
-        }
-        return -1; // Return -1 if sync word is not found
-    };
-
-    uint8_t        syncH, syncL, frame0;
     int32_t        steps = 0;
-    const uint8_t* pos = InBuff.getReadPtr();
-    uint8_t*       readPtr = InBuff.getReadPtr();
+    int32_t        sumSteps = 0;
+    uint8_t*       pos = InBuff.getReadPtr();
     size_t         av = InBuff.getMaxAvailableBytes();
-
 
     if(av < InBuff.getMaxBlockSize()) return -1; // guard
 
     while(true) {
-        steps = find_sync_word(readPtr, av);
+        steps = MP3FindSyncWord(pos, av);
+        if(steps == 0)break;
         if(steps == -1) return -1;
-        readPtr += steps;
-        syncH  = *(readPtr    ); (void)syncH; // readPtr[0];
-        syncL  = *(readPtr + 1);
-        frame0 = *(readPtr + 2);
-        if((frame0 & 0b11110000) == 0b11110000){readPtr++; /* log_w("wrong bitrate index");                 */ continue;}
-        if((frame0 & 0b00001100) == 0b00001100){readPtr++; /* log_w("wrong sampling rate frequency index"); */ continue;}
-        int32_t  verIdx = (syncL >> 3) & 0x03;
-        uint8_t  mpegVers = (verIdx == 0 ? MPEG25 : ((verIdx & 0x01) ? MPEG1 : MPEG2));
-        uint8_t  brIdx = (frame0 >> 4) & 0x0f;
-        uint8_t  srIdx = (frame0 >> 2) & 0x03;
-        uint8_t  layer = 4 - ((syncL >> 1) & 0x03);
-        if(srIdx == 3 || layer == 4 || brIdx == 15) {readPtr++; continue;}
-        if(brIdx){
-            uint32_t bitrate = ((int32_t) bitrateTab[mpegVers][layer - 1][brIdx]) * 1000;
-            uint32_t samplerate = samplerateTab[mpegVers][srIdx];
-            // log_w("syncH 0x%02X, syncL 0x%02X bitrate %i, samplerate %i", syncH, syncL, bitrate, samplerate);
-            if(MP3GetBitrate() == bitrate && getSampleRate() == samplerate) break;
-        }
-        readPtr++;
+        pos += steps;
+        sumSteps += steps;
     }
     // log_w("found sync word at %i  sync1 = 0x%02X, sync2 = 0x%02X", readPtr - pos, *readPtr, *(readPtr + 1));
-    return readPtr - pos; // return the position of the first byte of the frame
+    return sumSteps; // return the position of the first byte of the frame
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
