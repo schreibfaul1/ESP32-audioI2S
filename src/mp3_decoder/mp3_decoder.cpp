@@ -1540,8 +1540,7 @@ void MP3GetLastFrameInfo() {
         m_MP3FrameInfo->nChans=m_MP3DecInfo->nChans;
         m_MP3FrameInfo->samprate=m_MP3DecInfo->samprate;
         m_MP3FrameInfo->bitsPerSample=16;
-        m_MP3FrameInfo->outputSamps=m_MP3DecInfo->nChans
-                * (int32_t) samplesPerFrameTab[m_MPEGVersion][m_MP3DecInfo->layer-1];
+        m_MP3FrameInfo->outputSamps = (int32_t) samplesPerFrameTab[m_MPEGVersion][m_MP3DecInfo->layer-1];
         m_MP3FrameInfo->layer=m_MP3DecInfo->layer;
         m_MP3FrameInfo->version=m_MPEGVersion;
     }

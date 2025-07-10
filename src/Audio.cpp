@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2l                                                                                                                                ";
+    Version 3.3.2m                                                                                                                                ";
 /*  Updated on: Jul 09.2025
 
     Author: Wolle (schreibfaul1)
@@ -4734,7 +4734,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 m_validSamples = len;
                             }
                             break;
-        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps() / getChannels();
+        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
                             break;
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
                             if(!m_sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
