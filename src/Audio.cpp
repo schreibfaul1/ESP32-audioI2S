@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2n                                                                                                                                ";
+    Version 3.3.2o                                                                                                                                ";
 /*  Updated on: Jul 10.2025
 
     Author: Wolle (schreibfaul1)
@@ -512,6 +512,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     if (res) {
         uint32_t dt = millis() - t;
         m_lastHost.assign(host.get());
+        m_currentHost.clone_from(host);
         AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
     }
@@ -525,6 +526,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         if (response_format == "opus") m_expectedCodec  = CODEC_OPUS;
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
         if (response_format == "flac") m_expectedCodec  = CODEC_FLAC;
+
         m_dataMode = HTTP_RESPONSE_HEADER;
         m_f_tts = true;
     } else {
