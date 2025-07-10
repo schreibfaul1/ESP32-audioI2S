@@ -1,4 +1,4 @@
-#32 bit ES9038
+# 32 bit ES9038
 
 For those who have a board with a 32bit DAC
 [DJ202](https://github.com/dj202) sent us a solution:
