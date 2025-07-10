@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2m                                                                                                                                ";
-/*  Updated on: Jul 09.2025
+    Version 3.3.2n                                                                                                                                ";
+/*  Updated on: Jul 10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3360,8 +3360,8 @@ exit:
         m_codec = CODEC_NONE;
 
         if(afn.valid()) {
-            if(audio_eof_mp3) audio_eof_mp3(afn.get());
-            AUDIO_INFO("End of file \"%s\"", afn.get());
+            if(audio_eof_mp3) audio_eof_mp3(afn.c_get());
+            AUDIO_INFO("End of file \"%s\"", afn.c_get());
         }
         return;
     }
@@ -3450,8 +3450,8 @@ void Audio::processWebStream() {
     }
 
     if(m_f_eof) {
-        AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.get());
-        if(audio_eof_stream) audio_eof_stream(m_lastHost.get());
+        AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
+        if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
         stopSong();
     }
 }
@@ -3564,12 +3564,12 @@ void Audio::processWebFile() {
 
         stopSong();
         if(m_f_tts) {
-            AUDIO_INFO("End of speech \"%s\"", m_speechtxt.get());
-            if(audio_eof_speech) audio_eof_speech(m_speechtxt.get());
+            AUDIO_INFO("End of speech \"%s\"", m_speechtxt.c_get());
+            if(audio_eof_speech) audio_eof_speech(m_speechtxt.c_get());
         }
         else {
-            AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.get());
-            if(audio_eof_stream) audio_eof_stream(m_lastHost.get());
+            AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
+            if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
         }
         return;
     }
