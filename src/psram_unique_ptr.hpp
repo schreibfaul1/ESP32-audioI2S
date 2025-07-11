@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <type_traits>
 
+#ifndef PS_PTR_CLASS
+#define PS_PTR_CLASS 1
+
 /** Auxiliary functions for using Unique Pointers in ESP32 PSRAM **/
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -595,6 +598,47 @@ public:
         // Formatierter Teil wird angehängt
         vsnprintf(static_cast<char*>(mem.get()) + old_len, new_len - old_len, fmt, args);
         va_end(args);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A P P E N D F _ V A  📌📌📌
+
+    // void vPrint(const char* fmt, ...) {
+    //     ps_ptr<char> myLog;
+    //     va_list args;
+    //     va_start(args, fmt);
+    //     myLog.appendf_va(fmt, args);  // <-
+    //     va_end(args);
+    //     printf(myLog.c_get());
+    // }
+    // vPrint("Hallo %i", 19);
+
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void appendf_va(const char* fmt, va_list args) {
+        if (!fmt) return;
+        // Formatlänge bestimmen (benötigt Kopie von args!)
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int add_len = vsnprintf(nullptr, 0, fmt, args_copy);
+        va_end(args_copy);
+        if (add_len < 0) return;
+        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
+        std::size_t new_len = old_len + static_cast<std::size_t>(add_len) + 1;
+        // Speicher neu reservieren
+        char* old_data = static_cast<char*>(mem.release());
+        reset(); alloc(new_len);
+        if (!mem) {
+            printf("OOM: appendf_va() failed for %zu bytes\n", new_len);
+            if (old_data) free(old_data);
+            return;
+        }
+        // Vorherigen Inhalt kopieren
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
+        // Formatierung schreiben
+        vsnprintf(static_cast<char*>(mem.get()) + old_len, new_len - old_len, fmt, args);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F   📌📌📌
@@ -1719,3 +1763,5 @@ private:
         return true;
     }
 };
+
+#endif
