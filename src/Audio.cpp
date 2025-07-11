@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2o                                                                                                                                ";
-/*  Updated on: Jul 10.2025
+    Version 3.3.2p                                                                                                                                ";
+/*  Updated on: Jul 11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -483,6 +483,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 
     String post_body = "{"
         "\"model\": \"" + model + "\"," +
+        "\"stream\": true," +       // add
         "\"input\": \"" + input_clean + "\"," +
         "\"instructions\": \"" + instructions_clean + "\"," +
         "\"voice\": \"" + voice + "\"," +
@@ -491,14 +492,16 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     "}";
 
     String http_request =
-        "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
+    //  "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
+        "POST " + String(path) + " HTTP/1.1\r\n"
         + "Host: " + host.get() + "\r\n"
         + "Authorization: Bearer " + api_key + "\r\n"
         + "Accept-Encoding: identity;q=1,*;q=0\r\n"
         + "User-Agent: nArija/1.0\r\n"
         + "Content-Type: application/json; charset=utf-8\r\n"
         + "Content-Length: " + post_body.length() + "\r\n"
-        + "Connection: close\r\n" + "\r\n"
+    //  + "Connection: close\r\n" + "\r\n"
+        + "\r\n"
         + post_body + "\r\n"
     ;
 
@@ -3394,7 +3397,7 @@ void Audio::processWebStream() {
         if(!m_pwst.chunkSize){
             if(m_pwst.f_skipCRLF){
                 if(_client->available() < 2) { // avoid getting out of sync
-                    AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
+                    if(!m_f_tts) AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
                     return;
                 }
                 int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
