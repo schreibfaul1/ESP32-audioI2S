@@ -402,7 +402,7 @@ public:
     uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
     uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
     uint32_t inBufferSize();   // returns the size of the inputbuffer in bytes
-    void setBufferSize(size_t mbs); // sets the size of the inputbuffer in bytes
+    void setBufsize(size_t mbs); // sets the size of the inputbuffer in bytes
     void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void setI2SCommFMT_LSB(bool commFMT);
     int getCodec() {return m_codec;}
