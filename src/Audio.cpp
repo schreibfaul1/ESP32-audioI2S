@@ -102,17 +102,20 @@ AudioBuffer::~AudioBuffer() {
 
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
-void AudioBuffer::setBufsize(size_t mbs) {
-    if(mbs < 2 * m_resBuffSize) AUDIO_ERROR("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
+bool AudioBuffer::setBufsize(size_t mbs) {
+    if(mbs < 2 * m_resBuffSize) {
+        AUDIO_ERROR("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
+        return false;
+    }
     m_buffSize = mbs;
-    return;
+    if(!init()) return false;
+    return true;
 }
 
 size_t AudioBuffer::init() {
     if(m_buffer) free(m_buffer);
     m_buffer = NULL;
-    m_buffer = (uint8_t*)ps_calloc(m_buffSize, sizeof(uint8_t));
-    m_buffSize = m_buffSize - m_resBuffSize;
+    m_buffer = (uint8_t*)ps_malloc(m_buffSize + m_resBuffSize);
 
     if(!m_buffer) return 0;
     m_f_init = true;
@@ -288,7 +291,7 @@ void Audio::initInBuff() {
             AUDIO_INFO("inputBufferSize: %u bytes", size - 1);
         }
     }
-    changeMaxBlockSize(1600); // default size mp3 or aac
+    InBuff.changeMaxBlockSize(1600); // default size mp3 or aac
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5262,9 +5265,18 @@ uint32_t Audio::inBufferFree() {
     return InBuff.freeSpace();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::inBufferSize() {
+uint32_t Audio::getInBufferSize() {
     // current audio input buffer size in bytes
     return InBuff.getBufsize();
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::setInBufferSize(size_t mbs){
+    size_t oldBuffSize = InBuff.getBufsize();
+    stopSong();
+    bool res = InBuff.setBufsize(mbs);
+    if(res == false) InBuff.setBufsize(oldBuffSize);
+    InBuff.init();
+    return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***

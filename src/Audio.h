@@ -84,7 +84,7 @@ public:
     size_t   init();                            // set default values
     bool     isInitialized() { return m_f_init; };
     int32_t  getBufsize();
-    void     setBufsize(size_t mbs);            // default is m_buffSizePSRAM for psram, and m_buffSizeRAM without psram
+    bool     setBufsize(size_t mbs);            // default is m_buffSizePSRAM for psram, and m_buffSizeRAM without psram
     void     changeMaxBlockSize(uint16_t mbs);  // is default 1600 for mp3 and aac, set 16384 for FLAC
     uint16_t getMaxBlockSize();                 // returns maxBlockSize
     size_t   freeSpace();                       // number of free bytes to overwrite
@@ -120,7 +120,7 @@ static StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 static StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
 extern char audioI2SVers[];
 
-class Audio : private AudioBuffer{
+class Audio{
 
     AudioBuffer InBuff; // instance of input buffer
 
@@ -399,17 +399,17 @@ public:
     uint32_t getTotalPlayingTime();
     uint16_t getVUlevel();
 
-    uint32_t inBufferFilled(); // returns the number of stored bytes in the inputbuffer
-    uint32_t inBufferFree();   // returns the number of free bytes in the inputbuffer
-    uint32_t inBufferSize();   // returns the size of the inputbuffer in bytes
-    void setBufsize(size_t mbs); // sets the size of the inputbuffer in bytes
-    void setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
-    void setI2SCommFMT_LSB(bool commFMT);
-    int getCodec() {return m_codec;}
-    const char *getCodecname() {return codecname[m_codec];}
-    const char *getVersion() {return audioI2SVers;}
+    uint32_t    inBufferFilled();            // returns the number of stored bytes in the inputbuffer
+    uint32_t    inBufferFree();              // returns the number of free bytes in the inputbuffer
+    uint32_t    getInBufferSize();           // returns the size of the inputbuffer in bytes
+    bool        setInBufferSize(size_t mbs); // sets the size of the inputbuffer in bytes
+    void        setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
+    void        setI2SCommFMT_LSB(bool commFMT);
+    int         getCodec() { return m_codec; }
+    const char* getCodecname() { return codecname[m_codec]; }
+    const char* getVersion() { return audioI2SVers; }
 
-private:
+  private:
     // ------- PRIVATE MEMBERS ----------------------------------------
 
     void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
