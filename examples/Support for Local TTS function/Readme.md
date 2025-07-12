@@ -68,6 +68,7 @@ bool Audio::connect_local_tts(const String& host, int port, const String& path,
 And this can be used with a simple Python Server running locally :
 ```py
 from flask import Flask, request, send_file, jsonify, after_this_request
+from flask_cors import CORS
 import pyttsx3
 import uuid
 import os
@@ -76,6 +77,7 @@ import asyncio
 import edge_tts
 
 app = Flask(__name__)
+CORS(app)
 
 # Load available pyttsx3 voices
 engine = pyttsx3.init()
@@ -199,3 +201,121 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 
 ```
+Installation instructions for the Python TTS Server:
+Create an empty folder
+Create an empty file in this folder and call it tts_ws.py
+Add the python script into this file
+Open a terminal in this folder
+Create a new virtual environment
+`python3 -m venv venv`
+`source venv/bin/activate`
+It looks like this:
+![new Folder](image.png)
+then:
+`pip install pyttsx3`
+`pip install flask`
+`pip install flask_cors`
+`pip install gTTS`
+`pip install edge_tts`
+And then start the server:  `python3 tts_ws.py`
+![start ws](image-1.png)
+
+If necessary, adjust the firewall
+
+A web interface for testing:
+````html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>TTS Webinterface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: auto;
+            padding: 2em;
+        }
+        label, select, input, textarea, button {
+            display: block;
+            width: 100%;
+            margin-bottom: 1em;
+        }
+        audio {
+            width: 100%;
+            margin-top: 1em;
+        }
+    </style>
+</head>
+<body>
+    <h2>Text-to-Speech Webinterface</h2>
+    
+    <label for="text">Text:</label>
+    <textarea id="text" rows="4" placeholder="Gib den Text ein..."></textarea>
+
+    <label for="method">TTS-Methode:</label>
+    <select id="method">
+        <option value="tts">pyttsx3 (offline)</option>
+        <option value="gtts">gTTS (Google)</option>
+        <option value="edge_tts">Edge TTS (Microsoft Neural)</option>
+    </select>
+
+    <label for="voice">Stimme (optional):</label>
+    <input id="voice" placeholder="z. B. de-DE-KatjaNeural">
+
+    <label for="rate">Sprechgeschwindigkeit (optional):</label>
+    <input id="rate" placeholder="z. B. 150 oder 0%">
+
+    <label for="pitch">Tonhöhe (nur Edge, optional):</label>
+    <input id="pitch" placeholder="z. B. +10%">
+
+    <button onclick="sendTTS()">Senden & Abspielen</button>
+
+    <audio id="audio" controls></audio>
+
+    <script>
+        async function sendTTS() {
+            const text = document.getElementById("text").value;
+            const method = document.getElementById("method").value;
+            const voice = document.getElementById("voice").value;
+            const rate = document.getElementById("rate").value;
+            const pitch = document.getElementById("pitch").value;
+
+            const url = `http://192.168.178.20:5000/${method}`;
+
+            const data = { text };
+            if (voice) data.voice = voice;
+            if (rate)  data.rate = method === "edge_tts" ? rate + "%" : parseInt(rate);
+            if (pitch && method === "edge_tts") data.pitch = pitch;
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    alert("Fehler: " + error.error);
+                    return;
+                }
+
+                const blob = await response.blob();
+                const audioURL = URL.createObjectURL(blob);
+
+                const audio = document.getElementById("audio");
+                audio.src = audioURL;
+                audio.play();
+
+            } catch (err) {
+                alert("Verbindungsfehler: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
+
+````
+
+![web interface](image-2.png)
