@@ -210,7 +210,9 @@ Create a new virtual environment
 `python3 -m venv venv`
 `source venv/bin/activate`
 It looks like this:
+
 ![new Folder](image.png)
+
 then:
 `pip install pyttsx3`
 `pip install flask`
@@ -218,6 +220,7 @@ then:
 `pip install gTTS`
 `pip install edge_tts`
 And then start the server:  `python3 tts_ws.py`
+
 ![start ws](image-1.png)
 
 If necessary, adjust the firewall
