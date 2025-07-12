@@ -5274,7 +5274,10 @@ bool Audio::setInBufferSize(size_t mbs){
     size_t oldBuffSize = InBuff.getBufsize();
     stopSong();
     bool res = InBuff.setBufsize(mbs);
-    if(res == false) InBuff.setBufsize(oldBuffSize);
+    if(res == false){
+        AUDIO_ERROR("%i bytes is not possible, back to %i bytes", mbs, oldBuffSize);
+        InBuff.setBufsize(oldBuffSize);
+    }
     InBuff.init();
     return res;
 }
