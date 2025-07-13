@@ -6,6 +6,19 @@
 #include "../mp3_decoder.h"
 #include <vector>
 
+static const char* mpeg_version_table[] = {
+    "MPEG-1",    // MAD_MPEG_1 = 0
+    "MPEG-2",    // MAD_MPEG_2 = 1
+    "MPEG-2.5"   // MAD_MPEG_25 = 2
+};
+
+static const char* layer_table[] = {
+    "Unknown",   // 0 (reserviert)
+    "Layer I",   // MAD_LAYER_I = 1
+    "Layer II",  // MAD_LAYER_II = 2
+    "Layer III"  // MAD_LAYER_III = 3
+};
+
 
 bool allocateBuffers();
 void clearBuffers();
@@ -83,7 +96,7 @@ uint16_t mad_xing_bitrate();
 uint32_t mad_xing_tota_bytes();
 uint32_t mad_xing_duration_seconds();
 uint32_t mad_xing_total_frames();
-int8_t mad_get_version();
-int8_t  mad_get_layer();
+const char* mad_get_mpeg_version();
+const char* mad_get_layer();
 
 int32_t (*const decoder_table[3])(mad_stream_t*, mad_frame_t*) = {mad_layer_I, mad_layer_II, mad_layer_III};

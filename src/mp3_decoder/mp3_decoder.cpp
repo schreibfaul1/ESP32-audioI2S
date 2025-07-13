@@ -20,15 +20,15 @@ void MP3Decoder_ClearBuffer(){
     clearBuffers();
 }
 
-uint32_t MP3GetOutputSamps(){return mad_get_output_samps();}
-void MP3Decoder_FreeBuffers(){freeBuffers(); s_isInit = false;};
-int32_t MP3GetSampRate(){return mad_get_sample_rate();}
-int32_t MP3GetChannels(){return mad_get_channels();}
-uint8_t MP3GetBitsPerSample(){return 16;}
-bool MP3Decoder_IsInit(){return s_isInit;}
-int8_t MP3GetVersion(){return mad_get_version();}
-int8_t  MP3GetLayer(){return mad_get_layer();}
-uint32_t MP3GetBitrate(){if(mad_xing_bitrate()) return mad_xing_bitrate(); else return mad_get_bitrate();}
+uint32_t    MP3GetOutputSamps(){return mad_get_output_samps();}
+void        MP3Decoder_FreeBuffers(){freeBuffers(); s_isInit = false;};
+int32_t     MP3GetSampRate(){return mad_get_sample_rate();}
+int32_t     MP3GetChannels(){return mad_get_channels();}
+uint8_t     MP3GetBitsPerSample(){return 16;}
+bool        MP3Decoder_IsInit(){return s_isInit;}
+const char* MP3GetMPEGVersion(){return mad_get_mpeg_version();}
+const char* MP3GetLayer(){return mad_get_layer();}
+uint32_t    MP3GetBitrate(){if(mad_xing_bitrate()) return mad_xing_bitrate(); else return mad_get_bitrate();}
 
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -53,8 +53,8 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         log_w("samplerate: %i", MP3GetSampRate());
         log_w("channels: %i", MP3GetChannels());
         log_w("bitRate: %i", MP3GetBitrate());
-        log_w("mpeg_version: %i", MP3GetVersion());
-        log_w("layer: %i", MP3GetLayer());
+        log_w("mpeg_version: %s", MP3GetMPEGVersion());
+        log_w("layer: %s", MP3GetLayer());
         log_w("bits_per_sample: %i", MP3GetBitsPerSample());
     }
     if(s_xing_items){

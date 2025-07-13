@@ -3153,119 +3153,88 @@ uint16_t mad_get_output_samps(){
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
+    // Synchronwort-Konstanten
+    const uint8_t SYNCWORDH = 0xFF;
+    const uint8_t SYNCWORDL = 0xF0; // Strengere Maske, prüft auch Layer-Bits
 
-    // Auxiliary function for extracting bits, byte 'value', 'start_bit' is that bit from the left (0-7), 'num_bits' is the number of bits
-    // auto extract_bits = [&](uint8_t byte, uint8_t start_bit, uint8_t num_bits) {
-    //   return (byte >> (8 - start_bit - num_bits)) & ((1 << num_bits) - 1);
-    // };
-    const uint8_t  SYNCWORDH = 0xff;
-    const uint8_t  SYNCWORDL = 0xe0;
-
+    // Struktur für MP3-Frame-Header
     typedef struct {
-        uint8_t  mpeg_version; // 0=MPEG2.5, 1=reserved, 2=MPEG2, 3=MPEG1
-        uint8_t  layer;        // 0=reserved, 1=Layer III, 2=Layer II, 3=Layer I
+        uint8_t  mpeg_bits; // Rohbits 12-13: 3=MPEG1, 2=MPEG2, 0=MPEG2.5, 1=reserviert
+        uint8_t  layer;     // 0=reserviert, 1=Layer III, 2=Layer II, 3=Layer I
         bool     crc_protected;
         uint8_t  bitrate_idx;
         uint8_t  sample_rate_idx;
         bool     padding;
         uint8_t  channel_mode;
         uint32_t frame_length; // In Bytes
-        uint16_t sample_rate_hz; // Die tatsächliche Abtastrate in Hz
-        uint16_t bitrate_kbps;   // Die tatsächliche Bitrate in kbps
+        uint16_t sample_rate_hz; // Tatsächliche Abtastrate in Hz
+        uint16_t bitrate_kbps;   // Tatsächliche Bitrate in kbps
         uint16_t samples_per_frame;
     } Mp3FrameHeader;
 
-    // SamplingFrequenz-Lookup tables(Beispiel für MPEG1, MPEG2, MPEG2.5)
+    // Sampling-Frequenz-Tabellen
     const uint16_t sampling_rates[3][4] = {
         {44100, 48000, 32000, 0}, // MPEG1
         {22050, 24000, 16000, 0}, // MPEG2
         {11025, 12000, 8000, 0}   // MPEG2.5
     };
 
-    typedef enum {          /* map to 0,1,2 to make table indexing easier */
-        MPEG1 =  0,
-        MPEG2 =  1,
-        MPEG25 = 2
-    } MPEGVersion_t;
-
+    // Bitraten-Tabellen
     const uint16_t mpeg1_layer1_bitrates[16] = {
         0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0
     };
-
-    const uint16_t mpeg1_layer3_bitrates[16] = {                              // Bitraten-Lookup tables (example for MPEG1 Layer III)
-        0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0   // Attention: These tables must be complete and correct!
-    };
-    // Define bitrate tables for MPEG1 Layer II and MPEG2/2.5 Layer II
-    // These tables are examples and need to be complete based on the MPEG standard
-    const uint16_t mpeg1_layer2_bitrates[] = {
+    const uint16_t mpeg1_layer2_bitrates[16] = {
         0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0
     };
-    const uint16_t mpeg2_layer2_bitrates[] = {
+    const uint16_t mpeg1_layer3_bitrates[16] = {
+        0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0
+    };
+    const uint16_t mpeg2_layer1_bitrates[16] = {
+        0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 192, 224, 256, 320, 0
+    };
+    const uint16_t mpeg2_layer2_bitrates[16] = {
         0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
     };
-    const uint16_t mpeg2_layer3_bitrates[] = {
-        0, // "Free format" oder ungültig
-        8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,
-        0 // Ungültig
+    const uint16_t mpeg2_layer3_bitrates[16] = {
+        0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
     };
 
     // Funktion zum Parsen des Headers und Überprüfen der Gültigkeit
     auto parseMp3Header = [&](const uint8_t* header_data, Mp3FrameHeader* header_info) {
-        // Byte 0: Syncword H (bereits geprüft)
-        // Byte 1: Syncword L, MPEG Version, Layer
-        // Byte 2: Bitrate, Sampling Frequency, Padding, Private
-        // Byte 3: Channel Mode, Mode Extension, Copyright, Original, Emphasis
-
-        // Syncword has already been checked, here we start with the other bits
-        header_info->mpeg_version = (header_data[1] >> 3) & 0b11; // Bits 12, 13 (A, B)
-        header_info->layer        = (header_data[1] >> 1) & 0b11; // Bits 14, 15 (C, D)
-        header_info->crc_protected = !((header_data[1] >> 0) & 0b1); // Bit 16 (Schutzbit)
-
-        header_info->bitrate_idx   = (header_data[2] >> 4) & 0b1111; // Bits 17-20
+        header_info->mpeg_bits = (header_data[1] >> 3) & 0b11; // Bits 12, 13
+        header_info->layer = (header_data[1] >> 1) & 0b11; // Bits 14, 15
+        header_info->crc_protected = !((header_data[1] >> 0) & 0b1); // Bit 16
+        header_info->bitrate_idx = (header_data[2] >> 4) & 0b1111; // Bits 17-20
         header_info->sample_rate_idx = (header_data[2] >> 2) & 0b11; // Bits 21-22
-        header_info->padding       = (header_data[2] >> 1) & 0b1;    // Bit 23
-
-        header_info->channel_mode  = (header_data[3] >> 6) & 0b11; // Bits 24-25
+        header_info->padding = (header_data[2] >> 1) & 0b1; // Bit 23
+        header_info->channel_mode = (header_data[3] >> 6) & 0b11; // Bits 24-25
 
         // Gültigkeitsprüfungen
-        if (header_info->mpeg_version == 1) { // Reserved
-            log_d("Reserved MPEG version\n");
+        if (header_info->mpeg_bits == 1) {
+            log_d("Reserved MPEG version: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
-        if (header_info->layer == 0) { // Reserved
-            log_d("Reserved Layer\n");
+        if (header_info->layer == 0) {
+            log_d("Reserved Layer: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
-        // Modified part: Support for Layer II and Layer III
-        if (header_info->layer != 1 && header_info->layer != 2 && header_info->layer != 3 ) { // Allow Layer I (3) Layer II (2) and Layer III (1)
-            printf("\n"); for(int32_t i = 0; i<10; i++) printf("0x%02x ", header_data[i]); printf("\n"); // Use header_data instead of buf
-            log_d("Not Layer I or II or III\n");
+        if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) {
+            log_d("Invalid bitrate index: %d", header_info->bitrate_idx);
             return false;
         }
-
-        if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) { // Invalid bit rate
-            log_d("Invalid bitrate index\n");
-            return false;
-        }
-        if (header_info->sample_rate_idx == 3) { // Invalid sampling frequency
-            log_d("Invalid sampling rate index\n");
+        if (header_info->sample_rate_idx == 3) {
+            log_d("Invalid sample rate index: %d", header_info->sample_rate_idx);
             return false;
         }
 
-        // Determine the actual bit rate and sampling frequency
+        // Bestimme Bitrate und Sampling-Rate
         uint16_t bitrate_kbps = 0;
         uint16_t sample_rate_hz = 0;
-
-        // Mapping from MPEG version to sampling rate table
-        uint8_t sr_table_idx;
-        if (header_info->mpeg_version == 3) sr_table_idx = 0; // MPEG 1 (0b11)
-        else if (header_info->mpeg_version == 2) sr_table_idx = 1; // MPEG 2 (0b10)
-        else sr_table_idx = 2; // MPEG 2.5 (da mpeg_version == 0) - Although Google TTS is likely MPEG 2.0
-
+        uint8_t sr_table_idx = (header_info->mpeg_bits == 3) ? 0 : (header_info->mpeg_bits == 2) ? 1 : 2;
         sample_rate_hz = sampling_rates[sr_table_idx][header_info->sample_rate_idx];
 
-        // Bitraten-Mapping für verschiedene MPEG-Versionen und Layer
-        if (header_info->mpeg_version == 3) { // MPEG 1
+        // Bitraten-Mapping
+        if (header_info->mpeg_bits == 3) { // MPEG-1
             if (header_info->layer == 1) { // Layer III
                 bitrate_kbps = mpeg1_layer3_bitrates[header_info->bitrate_idx];
             } else if (header_info->layer == 2) { // Layer II
@@ -3273,95 +3242,73 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
             } else if (header_info->layer == 3) { // Layer I
                 bitrate_kbps = mpeg1_layer1_bitrates[header_info->bitrate_idx];
             }
-        } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG 2 or MPEG 2.5
+        } else if (header_info->mpeg_bits == 2 || header_info->mpeg_bits == 0) { // MPEG-2/2.5
             if (header_info->layer == 1) { // Layer III
                 bitrate_kbps = mpeg2_layer3_bitrates[header_info->bitrate_idx];
             } else if (header_info->layer == 2) { // Layer II
                 bitrate_kbps = mpeg2_layer2_bitrates[header_info->bitrate_idx];
+            } else if (header_info->layer == 3) { // Layer I
+                bitrate_kbps = mpeg2_layer1_bitrates[header_info->bitrate_idx];
             }
-            // If you also want to support MPEG 2/2.5 Layer I, you'd add another else if here
-            // e.g., else if (header_info->layer == 3) { bitrate_kbps = mpeg2_layer1_bitrates[header_info->bitrate_idx]; }
         }
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
-            log_d("Could not determine valid bitrate or sample rate\n");
+            log_d("Invalid bitrate or sample rate: bitrate=%d, sample_rate=%d", bitrate_kbps, sample_rate_hz);
             return false;
         }
 
-        // Calculate frame length based on layer
-        // FrameSize = (1152 * BitRate / SampleRate) + Padding (for Layer III)
-        // FrameSize = (144 * BitRate / SampleRate) + Padding (for Layer I)
-        // FrameSize = (576 * BitRate / SampleRate) + Padding (for Layer II, MPEG 2.0/2.5)
-        // Note: For MPEG 1 Layer II, it's (1152 * BitRate / SampleRate) + Padding
-        // Need to be careful with the constant depending on MPEG version and layer
+        // Frame-Länge berechnen
         if (header_info->layer == 1) { // Layer III
-            header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz; // Assuming MPEG1 Layer III
-            if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG2/2.5 Layer III
-                header_info->frame_length = (72 * bitrate_kbps * 1000) / sample_rate_hz; // Correct constant for MPEG2/2.5 Layer III
+            if (header_info->mpeg_bits == 3) { // MPEG-1
+                header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
+            } else { // MPEG-2/2.5
+                header_info->frame_length = (72 * bitrate_kbps * 1000) / sample_rate_hz;
             }
         } else if (header_info->layer == 2) { // Layer II
-            if (header_info->mpeg_version == 3) { // MPEG 1 Layer II
-                header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
-            } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG 2/2.5 Layer II
-                header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
-            }
+            header_info->frame_length = (144 * bitrate_kbps * 1000) / sample_rate_hz;
         } else if (header_info->layer == 3) { // Layer I
-            // For Layer I, the formula is (Bitrate * 12 / SampleRate) + Padding (in Bytes)
-            // Note: Bitrate is in kbps, so multiply by 1000 to get bps
-            if (header_info->mpeg_version == 3) { // MPEG 1 Layer I
-                header_info->frame_length = (bitrate_kbps * 1000 / 8 * 12) / sample_rate_hz; // Correct
-            } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG 2/2.5 Layer I (if supported)
-                // You'd add the specific calculation for MPEG2/2.5 Layer I here
-                // For MPEG 2/2.5 Layer I, samples per frame is 576, so the constant is 6
-                header_info->frame_length = (bitrate_kbps * 1000 / 8 * 6) / sample_rate_hz; // Hypothetical, verify constant
-            }
+            header_info->frame_length = (12 * bitrate_kbps * 1000) / sample_rate_hz;
         }
 
         if (header_info->padding) {
-            header_info->frame_length += 1; // Füge 1 Byte für Padding hinzu
+            header_info->frame_length += (header_info->layer == 3) ? 4 : 1; // Layer I: 4 Bytes, andere: 1 Byte
         }
 
         if (header_info->frame_length == 0) {
-            log_d("Calculated frame length is zero\n");
+            log_d("Calculated frame length is zero");
             return false;
         }
-        header_info->sample_rate_hz = sample_rate_hz;
-        header_info->bitrate_kbps = bitrate_kbps;
 
-        // Determine samples_per_frame based on the version and layer
-        if (header_info->mpeg_version == 3) {                         // MPEG-1
-            if (header_info->layer == 1 || header_info->layer == 2) { // Layer III oder Layer II
+        // Samples pro Frame
+        if (header_info->mpeg_bits == 3) { // MPEG-1
+            if (header_info->layer == 1 || header_info->layer == 2) { // Layer III oder II
                 header_info->samples_per_frame = 1152;
             } else if (header_info->layer == 3) { // Layer I
                 header_info->samples_per_frame = 384;
-            } else {
-                header_info->samples_per_frame = 0; // Should be caught by previous checks
-                return false;
             }
-        } else if (header_info->mpeg_version == 2 || header_info->mpeg_version == 0) { // MPEG-2 oder MPEG-2.5
-            if (header_info->layer == 1) {                                             // Layer III
+        } else if (header_info->mpeg_bits == 2 || header_info->mpeg_bits == 0) { // MPEG-2/2.5
+            if (header_info->layer == 1) { // Layer III
                 header_info->samples_per_frame = 576;
-            } else if (header_info->layer == 2) {      // Layer II
+            } else if (header_info->layer == 2) { // Layer II
                 header_info->samples_per_frame = 1152;
-            } else if (header_info->layer == 3) {      // Layer I
-                header_info->samples_per_frame = 576; // Correct for MPEG-2/2.5 Layer I
-            } else {
-                header_info->samples_per_frame = 0; // Should be caught by previous checks
-                return false;
+            } else if (header_info->layer == 3) { // Layer I
+                header_info->samples_per_frame = 384;
             }
-        } else { // header_info->mpeg_version == 1 (Reserved)
-            header_info->samples_per_frame = 0;
+        } else {
+            log_d("Invalid MPEG bits for samples_per_frame: %d", header_info->mpeg_bits);
             return false;
         }
-        return true; // Header ist gültig
+
+        header_info->sample_rate_hz = sample_rate_hz;
+        header_info->bitrate_kbps = bitrate_kbps;
+        return true;
     };
 
-    const uint8_t mp3FHsize = 4; // frame header size
+    const uint8_t mp3FHsize = 4; // Frame-Header-Größe
 
-    // Lambda for the fast syncword search
+    // Lambda für Synchronwort-Suche
     auto findSync = [&](uint8_t* search_buf, uint16_t offset, uint16_t len) {
         for (int32_t i = 0; i < len - 1; i++) {
-            // Prüfe auf die 11 oder 12 Sync-Bits
             if ((search_buf[i + offset] == SYNCWORDH) &&
                 ((search_buf[i + offset + 1] & SYNCWORDL) == SYNCWORDL)) {
                 return i;
@@ -3372,65 +3319,58 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
 
     int32_t current_pos = 0;
 
-    while (nBytes >= mp3FHsize) { // Make sure that there are enough bytes for a header
+    while (nBytes >= mp3FHsize) {
         int32_t sync_offset = findSync(buf, current_pos, nBytes);
-
         if (sync_offset == -1) {
-            log_d("No syncword found in remaining buffer\n");
-            return -1; // No more syncword found
+            log_d("No syncword found in remaining buffer");
+            return -1;
         }
 
         current_pos += sync_offset;
-        nBytes      -= sync_offset;
+        nBytes -= sync_offset;
 
         if (nBytes < mp3FHsize) {
-            log_d("Not enough bytes for a full header after syncword\n");
-            return -1; // Not enough data for a full header
+            log_d("Not enough bytes for a full header after syncword");
+            return -1;
         }
 
         Mp3FrameHeader header;
         if (parseMp3Header(&buf[current_pos], &header)) {
-            // This is where the crucial step comes: Check the next frame
             if (current_pos + header.frame_length + mp3FHsize <= current_pos + nBytes) {
-                // Check whether there is a syncword at the expected next frame start and a valid header is (optional but very robust)
                 Mp3FrameHeader next_header;
-                if (((buf[current_pos + header.frame_length] == SYNCWORDH) && ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL)) &&
-                                        parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    log_d("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
+                if ((buf[current_pos + header.frame_length] == SYNCWORDH) &&
+                    ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL) &&
+                    parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
+                    log_d("Found reliable MP3 frame at pos: %d, length: %lu, mpeg_bits: %d, layer: %d",
+                          current_pos, header.frame_length, header.mpeg_bits, header.layer);
 
-                    s_samplerate   = header.sample_rate_hz; // (angenommen in der Struktur vorhanden)
-                    s_bitrate      = header.bitrate_kbps;   // (angenommen in der Struktur vorhanden)
-                    s_mpeg_version = header.mpeg_version;
-                    s_layer        = header.layer;
+                    // libmad-kompatible Zuordnung
+                    s_mpeg_version = (header.mpeg_bits == 3) ? 0 : (header.mpeg_bits == 2) ? 1 : 2; // MPEG-1=0, MPEG-2=1, MPEG-2.5=2
+                    s_layer = (header.layer == 3) ? 1 : (header.layer == 2) ? 2 : 3; // Layer I=1, Layer II=2, Layer III=3
+                    s_samplerate = header.sample_rate_hz;
+                    s_bitrate = header.bitrate_kbps;
                     s_channel_mode = header.channel_mode;
                     s_samples_per_frame = header.samples_per_frame;
+                    s_channels = (header.channel_mode == 0b11) ? 1 : 2;
 
-                    // // Für s_channels (1 für Mono, 2 für Stereo)
-                    if (header.channel_mode == 0b11) { // 0b11 ist Mono
-                         s_channels = 1;
-                    } else { // Alle anderen Modi (Stereo, Joint Stereo, Dual Channel) sind 2 Kanäle
-                        s_channels = 2;
-                    }
                     return current_pos;
                 } else {
-                    log_d("Header valid, but next frame does not validate. False positive. Moving on.\n");
+                    log_d("Header valid, but next frame invalid at pos %d: 0x%02X 0x%02X",
+                          current_pos + header.frame_length, buf[current_pos + header.frame_length], buf[current_pos + header.frame_length + 1]);
                 }
             } else {
-                log_d("Header valid, but not enough data for next frame check. Possibly end of stream or false positive.\n");
-                // If not enough data for the next frame, it could still be the right one.
-                // This is a compromise.If in doubt, continue to search or return the current one.
-                // For robustness: search.
+                log_d("Header valid, but not enough data for next frame check at pos %d", current_pos);
             }
         } else {
-            log_d("Found syncword but header is invalid. Moving to next possible syncword.\n");
+            log_d("Invalid header at pos %d: 0x%02X 0x%02X 0x%02X 0x%02X",
+                  current_pos, buf[current_pos], buf[current_pos + 1], buf[current_pos + 2], buf[current_pos + 3]);
         }
 
-        // If the current header was invalid or the next frame did not validate the current "SyncWord" and continue to search
-        current_pos += 1; // go a byte on and look for the Syncword again
-        nBytes      -= 1;
+        current_pos += 1;
+        nBytes -= 1;
     }
 
-    return -1; // no valid MP3 frame found
+    return -1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
@@ -3542,11 +3482,13 @@ uint32_t mad_xing_total_frames(){
     return s_xing_total_frames;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t mad_get_version(){
-    return s_mpeg_version;
+const char* mad_get_mpeg_version(){
+    const char* mpeg_version_str = mpeg_version_table[s_mpeg_version];
+    return mpeg_version_str;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t  mad_get_layer(){
-    return s_layer;
+const char* mad_get_layer(){
+    const char* layer_str = layer_table[s_layer];
+    return layer_str;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

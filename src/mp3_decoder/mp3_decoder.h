@@ -14,11 +14,7 @@ extern ps_ptr<mad_frame_t> frame;
 extern ps_ptr<mad_synth_t> synth;
 
 
-typedef enum {          /* map to 0,1,2 to make table indexing easier */
-    MPEG1 =  0,
-    MPEG2 =  1,
-    MPEG25 = 2
-} MPEGVersion_t;
+
 
 bool     MP3Decoder_AllocateBuffers();
 void     MP3Decoder_FreeBuffers();
@@ -29,8 +25,8 @@ int32_t  MP3GetSampRate();
 int32_t  MP3GetChannels();
 uint8_t  MP3GetBitsPerSample();
 bool     MP3Decoder_IsInit();
-int8_t   MP3GetVersion();
-int8_t   MP3GetLayer();
+const char* MP3GetMPEGVersion();
+const char* MP3GetLayer();
 uint32_t MP3GetBitrate();
 int32_t  MP3FindSyncWord(uint8_t* buf, int32_t nBytes);
 bool     MP3ParseXingHeader(uint8_t* buf, int32_t nBytes);
