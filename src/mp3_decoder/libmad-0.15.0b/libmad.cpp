@@ -2679,13 +2679,13 @@ enum mad_error III_decode(struct mad_bitptr* ptr, mad_frame_t* frame, struct sid
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     struct mad_header* header = &frame->header;
-    uint32_t       nch, priv_bitlen, next_md_begin = 0;
-    uint32_t       si_len, data_bitlen, md_len;
-    uint32_t       frame_space, frame_used, frame_free;
+    uint32_t           nch, priv_bitlen, next_md_begin = 0;
+    uint32_t           si_len, data_bitlen, md_len;
+    uint32_t           frame_space, frame_used, frame_free;
     struct mad_bitptr  ptr;
     struct sideinfo    si;
     enum mad_error     error;
-    int32_t                result = 0;
+    int32_t            result = 0;
     /* allocate Layer III dynamic structures */
     if (!s_main_data.valid()) {
         s_main_data.alloc(MAD_BUFFER_MDLEN);

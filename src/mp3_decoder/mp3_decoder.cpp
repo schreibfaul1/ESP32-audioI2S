@@ -45,6 +45,7 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         s_first_call = false;
     }
     int32_t res = mad_decode(data, bytesLeft, outSamples);
+    vTaskDelay(1);
     if(res != 0) {log_e("res: %i", res); return res;}
     if(s_stream_items){
         s_stream_items = false;
