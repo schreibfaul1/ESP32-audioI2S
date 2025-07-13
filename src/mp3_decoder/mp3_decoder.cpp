@@ -45,6 +45,7 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         s_first_call = false;
     }
     int32_t res = mad_decode(data, bytesLeft, outSamples);
+    if(stream->error == MAD_ERROR_CONTINUE) {/*log_e("BufLen %i", res);*/ return res;} // need more data
     vTaskDelay(1);
     if(res != 0) {log_e("res: %i", res); return res;}
     if(s_stream_items){

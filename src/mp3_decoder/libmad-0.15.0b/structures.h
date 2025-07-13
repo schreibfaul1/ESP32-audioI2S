@@ -113,6 +113,7 @@ enum mad_error {
     MAD_ERROR_BUFLEN = 0x0001,         /* input buffer too small (or EOF) */
     MAD_ERROR_BUFPTR = 0x0002,         /* invalid (null) buffer pointer */
     MAD_ERROR_NOMEM = 0x0031,          /* not enough memory */
+    MAD_ERROR_CONTINUE = 0x0062,       // need more data (100 decimal)
     MAD_ERROR_LOSTSYNC = 0x0101,       /* lost synchronization */
     MAD_ERROR_BADLAYER = 0x0102,       /* reserved header layer value */
     MAD_ERROR_BADBITRATE = 0x0103,     /* forbidden bitrate value */

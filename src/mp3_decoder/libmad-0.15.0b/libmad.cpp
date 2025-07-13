@@ -2686,6 +2686,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     struct sideinfo    si;
     enum mad_error     error;
     int32_t            result = 0;
+
     /* allocate Layer III dynamic structures */
     if (!s_main_data.valid()) {
         s_main_data.alloc(MAD_BUFFER_MDLEN);
@@ -2704,6 +2705,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
         }
     }
     nch = MAD_NCHANNELS(header);
+
     si_len = (header->flags & MAD_FLAG_LSF_EXT) ? (nch == 1 ? 9 : 17) : (nch == 1 ? 17 : 32);
     /* check frame sanity */
     if (stream->next_frame - mad_bit_nextbyte(&stream->ptr) < (int32_t)si_len) {
@@ -2754,9 +2756,9 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     } else {
         if (si.main_data_begin > stream->md_len) {
             if (result == 0) {
-                MP3_ERROR("bad main_data_begin pointer");
-                stream->error = MAD_ERROR_BADDATAPTR;
-                result = -1;
+                // MP3_ERROR("need more data");
+                stream->error = MAD_ERROR_CONTINUE;   // need more data
+                result = 100;
             }
         } else {
             mad_bit_init(&ptr, s_main_data.get() + stream->md_len - si.main_data_begin);
@@ -3023,8 +3025,9 @@ sync:
     }
     /* calculate beginning of next frame */
     pad_slot = (header->flags & MAD_FLAG_PADDING) ? 1 : 0;
-    if (header->layer == MAD_LAYER_I)
+    if (header->layer == MAD_LAYER_I){
         N = ((12 * header->bitrate / header->samplerate) + pad_slot) * 4;
+    }
     else {
         uint32_t slots_per_frame;
         slots_per_frame = (header->layer == MAD_LAYER_III && (header->flags & MAD_FLAG_LSF_EXT)) ? 72 : 144;
@@ -3058,12 +3061,13 @@ int32_t mad_frame_decode(mad_frame_t* frame, mad_stream_t* stream) { // decode a
     frame->options = stream->options;
     /* header() */
     /* error_check() */
-    if (!(frame->header.flags & MAD_FLAG_INCOMPLETE) && mad_header_decode(&frame->header, stream) == -1) goto fail;
+    if (!(frame->header.flags & MAD_FLAG_INCOMPLETE) && mad_header_decode(&frame->header, stream) == -1){
+        goto fail;
+    }
     /* audio_data() */
     frame->header.flags &= ~MAD_FLAG_INCOMPLETE;
     if (decoder_table[frame->header.layer - 1](stream, frame) == -1) {
         if (!MAD_RECOVERABLE(stream->error)) stream->next_frame = stream->this_frame;
-
         goto fail;
     }
     /* ancillary_data() */
