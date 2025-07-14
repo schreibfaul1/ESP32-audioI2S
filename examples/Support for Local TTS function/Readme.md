@@ -11,17 +11,11 @@ bool Audio::connect_local_tts(const String& host, int port, const String& path,
                              const String& text, const String& voice_id,
                               const String& lang, const String& endpoint) {
 
-    if (text.isEmpty()) {
-        AUDIO_INFO("TTS text is empty");
-        stopSong();
-        return false;
-    }
-
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
     setDefaults();
     m_f_ssl = false;
     m_f_tts = true;
-    m_speechtxt.assign(text.c_str());
+    m_speechtxt.assign(text.c_str()); // need in the audio_info event
 
     String body = "{";
     body += "\"text\":\"" + text + "\"";
@@ -39,6 +33,7 @@ bool Audio::connect_local_tts(const String& host, int port, const String& path,
     req += body;
 
     _client = static_cast<WiFiClient*>(&client);
+
     AUDIO_INFO("Connecting to local TTS server %s:%d", host.c_str(), port);
 
     if (!_client->connect(host.c_str(), port)) {
@@ -52,6 +47,7 @@ bool Audio::connect_local_tts(const String& host, int port, const String& path,
     m_f_running = true;
     m_dataMode = HTTP_RESPONSE_HEADER;
     m_lastHost.assign(host.c_str());
+    m_currentHost.assign(host.c_str()); // required else an error will show up (m_currentHost is empty).
 
     if (endpoint == "gtts" || endpoint == "edge_tts") {
         m_expectedCodec = CODEC_MP3;
@@ -62,8 +58,12 @@ bool Audio::connect_local_tts(const String& host, int port, const String& path,
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
-
 ```
+Also there may be a need to increase the timeout otherwise error like below will pop on slow servers
+
+info        Audio.cpp:3956: timeout
+[530903][I][NetworkClient.cpp:265] connect(): select returned due to timeout 3000 ms for fd 48
+
 
 And this can be used with a simple Python Server running locally :
 ```py
