@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2p                                                                                                                                ";
+    Version 3.3.2q                                                                                                                                ";
 /*  Updated on: Jul 11.2025
 
     Author: Wolle (schreibfaul1)
@@ -44,7 +44,8 @@ void AUDIO_INFO(const char* fmt, Args&&... args) {
     char* dst = result.get();
     if (!dst) return;  // Or error treatment
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-    if(audio_info) audio_info(result.get());
+    result.append(ANSI_ESC_RESET);
+    if(audio_info) audio_info(result.c_get());
     result.reset();
 }
 
@@ -4588,7 +4589,7 @@ void Audio::setDecoderItems() {
         setSampleRate(MP3GetSampRate());
         setBitsPerSample(MP3GetBitsPerSample());
         setBitrate(MP3GetBitrate());
-        AUDIO_INFO("MPEG-%s, Layer %s",(MP3GetVersion()==0) ? "2.5" : (MP3GetVersion()==2) ? "2" : "1", (MP3GetLayer()==1) ? "III" : (MP3GetLayer()==2) ? "II" : "I");
+        AUDIO_INFO("%s %s", MP3GetMPEGVersion(), MP3GetLayer());
     }
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         setChannels(AACGetChannels());

@@ -1550,8 +1550,16 @@ int32_t MP3GetChannels(){return m_MP3FrameInfo->nChans;}
 int32_t MP3GetBitsPerSample(){return m_MP3FrameInfo->bitsPerSample;}
 int32_t MP3GetBitrate(){return m_MP3FrameInfo->bitrate;}
 int32_t MP3GetOutputSamps(){return m_MP3FrameInfo->outputSamps;}
-int32_t MP3GetLayer(){return m_MP3FrameInfo->layer;}     // 0: Reserviert, 1: Layer III, 2: Layer II, 3: Layer I
-int32_t MP3GetVersion(){return m_MP3FrameInfo->version;} // 0: MPEG-2.5, 1: Reserviert, 2: MPEG-2 (ISO/IEC 13818-3), 3: MPEG-1 (ISO/IEC 11172-3)
+
+const char* MP3GetLayer(){
+    const char* layer_str = layer_table[m_MP3FrameInfo->layer];  // 0: Reserviert, 1: Layer III, 2: Layer II, 3: Layer I
+    return layer_str;
+}
+
+const char* MP3GetMPEGVersion(){
+    const char* mpeg_version_str = mpeg_version_table[m_MP3FrameInfo->version]; // 0: MPEG-2.5, 1: Reserviert, 2: MPEG-2 (ISO/IEC 13818-3), 3: MPEG-1 (ISO/IEC 11172-3)
+    return mpeg_version_str;
+}
 /***********************************************************************************************************************
  * Function:    MP3GetNextFrameInfo
  *
@@ -4264,3 +4272,4 @@ int MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len) {
 
     return main_data_begin_val;
 }
+

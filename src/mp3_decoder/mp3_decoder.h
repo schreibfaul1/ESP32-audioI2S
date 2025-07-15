@@ -22,20 +22,6 @@ enum {
     MP3_NONE =                      0,
     MP3_ERR =                      -1,
     MP3_STOP =                     -100,
-    // ERR_MP3_INDATA_UNDERFLOW =     -1,
-    // ERR_MP3_MAINDATA_UNDERFLOW =   -2,
-    // ERR_MP3_FREE_BITRATE_SYNC =    -3,
-    // ERR_MP3_OUT_OF_MEMORY =        -4,
-    // ERR_MP3_NULL_POINTER =         -5,
-    // ERR_MP3_INVALID_FRAMEHEADER =  -6,
-    // ERR_MP3_INVALID_SIDEINFO =     -7,
-    // ERR_MP3_INVALID_SCALEFACT =    -8,
-    // ERR_MP3_INVALID_HUFFCODES =    -9,
-    // ERR_MP3_INVALID_DEQUANTIZE =   -10,
-    // ERR_MP3_INVALID_IMDCT =        -11,
-    // ERR_MP3_INVALID_SUBBAND =      -12,
-
-    // ERR_UNKNOWN =                  -9999
 };
 
 typedef struct MP3FrameInfo {
@@ -479,6 +465,20 @@ const uint32_t csa[8][2] PROGMEM = {
  *   see PolyphaseStereo() and PolyphaseMono()
  */
 
+static const char* mpeg_version_table[] = {
+    "MPEG-2.5",  // 0
+    "reserved",  // 1
+    "MPEG-2",    // 2
+    "MPEG-1"     // 3
+};
+
+static const char* layer_table[] = {
+    "Unknown",   // 0
+    "Layer I",   // 1
+    "Layer II",  // 2
+    "Layer III"  // 3
+};
+
 // prototypes
 bool     MP3Decoder_AllocateBuffers(void);
 bool     MP3Decoder_IsInit();
@@ -492,8 +492,8 @@ int32_t  MP3GetChannels();
 int32_t  MP3GetBitsPerSample();
 int32_t  MP3GetBitrate();
 int32_t  MP3GetOutputSamps();
-int32_t  MP3GetLayer();
-int32_t  MP3GetVersion();
+const char* MP3GetLayer();
+const char* MP3GetMPEGVersion();
 
 //internally used
 int  MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len);
