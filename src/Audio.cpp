@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2q                                                                                                                                ";
-/*  Updated on: Jul 11.2025
+    Version 3.3.2r                                                                                                                                ";
+/*  Updated on: Jul 18.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1003,6 +1003,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     m_f_tts = true;
     m_dataMode = HTTP_RESPONSE_HEADER;
     m_lastHost.assign(host);
+    m_currentHost.copy_from(host);
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
