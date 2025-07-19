@@ -281,14 +281,70 @@ public:
         }
     }
 
-    void copy_from(const T* src, const char* name = nullptr) {  // for strings
-        if(src == nullptr){log_e("arg. is null"); return;}
+    size_t copy_from(const T* src, const char* name = nullptr) {  // for strings
+        if(src == nullptr){log_e("arg. is null"); return 0;}
         std::size_t count = std::strlen(src) + 1;
         std::size_t bytes = count * sizeof(T);
         alloc(bytes, name);
         if (mem && src) {
             std::memcpy(mem.get(), src, bytes);
         }
+        return bytes;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C O P Y _ F R O M _ U T F 1 6   📌📌📌
+    // copies all characters up to the terminator "\0\0" and converted into UTF-8
+    // source: 0x00, 0x4C, 0x00, 0x69, 0x00, 0x74, 0x00, 0x74, 0x00, 0x6C, 0x00, 0x65, 0x00, 0x20, 0x00, 0x4C, 0x00, 0x6F, 0x00, 0x6E, 0x00, 0x64, 0x00, 0x6F, 0x00, 0x6E, 0x00, 0x20, 0x00, 0x47, 0x00,
+    //         0x69, 0x00, 0x72, 0x00, 0x6C, 0x00, 0x00
+    // is UTF-16LE and will converted to: "Little London Girl"
+    // UTF-16LE and UTF-16BE is often found in ID3 header
+
+    size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const char* name = nullptr) {
+        if (!src) { log_e("arg. is null"); return 0; }
+        std::vector<char> out;
+        size_t i = 0;
+
+        if(is_big_endian == false){ // maybe we have a BOM
+            if (src[i] == 0xFF && src[i + 1] == 0xFE) {
+                is_big_endian = false; // UTF-16 Little Endian
+                i += 2;  // skip byte order mark + \0\0
+            } else if (src[i] == 0xFE && src[i + 1] == 0xFF) {
+                is_big_endian = true;  // UTF-16 Big Endian
+                i += 2;  // skip byte order mark + \0\0
+            } else {
+                // BOM is missing or invalid
+            }
+        }
+
+        while (true) {
+            uint16_t ch;
+            if (is_big_endian) {
+                ch = (src[i] << 8) | src[i + 1];
+            } else {
+                ch = (src[i + 1] << 8) | src[i];
+            }
+            i += 2;
+            if (ch == 0x0000) break;  // null-terminiert
+
+            // UTF-16 → UTF-8
+            if (ch < 0x80) {
+                out.push_back(static_cast<char>(ch));
+            } else if (ch < 0x800) {
+                out.push_back(0xC0 | (ch >> 6));
+                out.push_back(0x80 | (ch & 0x3F));
+            } else {
+                out.push_back(0xE0 | (ch >> 12));
+                out.push_back(0x80 | ((ch >> 6) & 0x3F));
+                out.push_back(0x80 | (ch & 0x3F));
+            }
+        }
+        out.push_back('\0');
+
+        // save
+        std::size_t bytes = out.size();
+        alloc(bytes, name);
+        std::memcpy(mem.get(), out.data(), bytes);
+        return i;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C L O N E _ F R O M  📌📌📌
@@ -490,42 +546,6 @@ public:
         if (suffix_len > str_len) return false;
 
         return strncasecmp_local(str + str_len - suffix_len, suffix, suffix_len) == 0;
-    }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  F O R M A T   📌📌📌
-
-    // ps_ptr<char> greeting;
-    // greeting.format("Value: %d, Text: %s", 42, "Hello"); // sprintf
-    // printf("%s\n", greeting.get());  // → Wert: 42, Text: Hello
-
-    template <typename U = T>
-    requires std::is_same_v<U, char>
-    void format(const char* fmt, ...) {
-        if (!fmt) return;
-
-        va_list args;
-        va_start(args, fmt);
-
-        // Erstmal herausfinden, wie groß der Formatstring ist
-        va_list args_copy;
-        va_copy(args_copy, args);
-        int len = vsnprintf(nullptr, 0, fmt, args_copy);
-        va_end(args_copy);
-
-        if (len < 0) {
-            va_end(args);
-            return;
-        }
-
-        // +1 für null-Terminator
-        std::size_t buf_size = static_cast<std::size_t>(len) + 1;
-        alloc(buf_size, "formatted_string");
-
-        if (mem) {
-            vsnprintf(static_cast<char*>(mem.get()), buf_size, fmt, args);
-        }
-
-        va_end(args);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  E Q U A L S   📌📌📌
@@ -1142,6 +1162,26 @@ public:
         return result;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E M O V E _ C H A R S   📌📌📌
+
+    // ps_ptr<char> txt;
+    // txt.copy_from("[00:12.45]", "time");
+    // txt.remove_chars("[]:.");   // → 001245
+
+    void remove_chars(const char* chars) {
+        if (!valid() || !chars) return;
+        char* dst = get();
+        char* src = get();
+
+        while (*src) {
+            if (!std::strchr(chars, *src)) {
+                *dst++ = *src;
+            }
+            ++src;
+        }
+        *dst = '\0';
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E P L A C E   📌📌📌
 
     // ps_ptr<char> path;
@@ -1150,48 +1190,31 @@ public:
     // result: "/user/music/file.tmp"
 
     bool replace(const char* from, const char* to) {
-        if (!valid() || !from || !to || !*from) return false;
+        if (!valid() || !from || !*from || !to) return false;
 
         const char* src = get();
         std::size_t fromLen = std::strlen(from);
         std::size_t toLen = std::strlen(to);
 
-        // Count how often `from' occurs
-        std::size_t count = 0;
-        const char* p = src;
-        while ((p = std::strstr(p, from)) != nullptr) {
-            count++;
-            p += fromLen;
-        }
+        if (fromLen == 0) return false;  // Nichts zu ersetzen
 
-        if (count == 0) return false;
-
-        // Calculate length
-        std::size_t newLen = std::strlen(src) + (toLen - fromLen) * count + 1;
-        ps_ptr<char> result;
-        result.alloc(newLen);
-        if (!result.valid()) return false;
-
-        // Substitute
+        std::vector<char> result;
         const char* read = src;
-        char* write = result.get();
+
         while (*read) {
-            const char* pos = std::strstr(read, from);
-            if (pos) {
-                std::size_t bytes = pos - read;
-                std::memcpy(write, read, bytes);
-                write += bytes;
-                std::memcpy(write, to, toLen);
-                write += toLen;
-                read = pos + fromLen;
+            if (std::strncmp(read, from, fromLen) == 0) {
+                // Match gefunden
+                result.insert(result.end(), to, to + toLen);
+                read += fromLen;
             } else {
-                std::strcpy(write, read);
-                break;
+                result.push_back(*read++);
             }
         }
-        *write = '\0';  // Make sure that there is always a zero terminator
 
-        this->copy_from(result.get(), result.strlen());
+        result.push_back('\0');
+
+        // Kopiere Ergebnis zurück
+        this->copy_from(result.data(), result.size() - 1);
         return true;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

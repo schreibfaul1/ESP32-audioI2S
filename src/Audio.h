@@ -35,7 +35,7 @@ extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
 extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
-extern __attribute__((weak)) void audio_id3lyrics(File& file, const size_t pos, const size_t size); //ID3 metadata lyrics
+extern __attribute__((weak)) void audio_id3lyrics(const char* text); //ID3 metadata lyrics
 extern __attribute__((weak)) void audio_eof_mp3(const char*); //end of mp3 file
 extern __attribute__((weak)) void audio_showstreamtitle(const char*);
 extern __attribute__((weak)) void audio_showstation(const char*);
@@ -125,6 +125,15 @@ class Audio{
     AudioBuffer InBuff; // instance of input buffer
 
 private:
+    typedef struct _SYLT{
+        bool         seen;
+        size_t       size;
+        uint32_t     pos;
+        char         lang[5];
+        uint8_t      text_encoding;
+        uint8_t      time_stamp_format;
+        uint8_t      content_type;
+    } sylt_t;
     typedef struct _ID3Hdr{ // used only in readID3header()
         size_t       id3Size;
         size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
@@ -139,9 +148,7 @@ private:
         bool         compressed;
         size_t       APIC_size[3];
         uint32_t     APIC_pos[3];
-        bool         SYLT_seen;
-        size_t       SYLT_size;
-        uint32_t     SYLT_pos;
+        sylt_t       SYLT;
         uint8_t      numID3Header;
         uint16_t     iBuffSize;
         uint8_t      contentDescriptorTerminator_0;
@@ -233,6 +240,7 @@ private:
         uint32_t timeStamp;
         uint32_t deltaBytesIn;
         uint32_t nominalBitRate;
+        uint16_t syltIdx;
     } cat_t;
     cat_t m_cat;
 
@@ -594,6 +602,14 @@ public:
         return result;
     }
 
+    int find_utf16_null_terminator(const uint8_t* buf, int start, int max) {
+        for (int i = start; i + 1 < max; i += 2) {
+            if (buf[i] == 0x00 && buf[i + 1] == 0x00)
+                return i; // Index to the first zero-byte
+        }
+        return -1; // not found
+    }
+
     int32_t min3(int32_t a, int32_t b, int32_t c){
         uint32_t min_val = a;
         if (b < min_val) min_val = b;
@@ -782,6 +798,8 @@ private:
     std::vector<ps_ptr<char>> m_playlistURL;            // m3u8 streamURLs buffer
     std::vector<ps_ptr<char>> m_linesWithSeqNrAndURL;   // extract from m_playlistContent, contains URL and MediaSequenceNumber
     std::vector<ps_ptr<char>> m_linesWithEXTINF;        // extract from m_playlistContent, contains length and metadata
+    std::vector<ps_ptr<char>> m_syltLines;              // SYLT line table
+    std::vector<uint32_t>     m_syltTimeStamp;          // SYLT time table
     std::vector<uint32_t>     m_hashQueue;
 
     const size_t    m_frameSizeWav       = 4096;

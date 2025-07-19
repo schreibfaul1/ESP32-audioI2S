@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.3.2r                                                                                                                                ";
-/*  Updated on: Jul 18.2025
+    Version 3.3.2s                                                                                                                                ";
+/*  Updated on: Jul 19.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -328,6 +328,8 @@ void Audio::setDefaults() {
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
+    vector_clear_and_shrink(m_syltLines);
+    m_syltTimeStamp.clear();
     m_hashQueue.clear();
     m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
@@ -1626,7 +1628,19 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_VORBIS) { /* VORBIS COMMENT */ // field names
+
+        auto parse_flac_timestamp = [&](const char* s){
+            if (!s || *s != '[') return -1;
+            int mm = 0, ss = 0, hh = 0;
+            if (sscanf(s, "[%d:%d.%d]", &mm, &ss, &hh) == 3) {
+                return mm * 60000 + ss * 1000 + hh * 10;
+            }
+            return -1;
+        };
+
         ps_ptr<char>vendorString = {};
+        ps_ptr<char>commentString = {};
+        ps_ptr<char>lyricsBuffer = {};
         size_t vendorLength = bigEndian(data, 3);
         size_t idx = 0;
         data += 3; idx += 3;
@@ -1645,11 +1659,45 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             size_t commentLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
             data += 4; idx += 4;
             if(commentLength) { // guard
-                vendorString.assign((const char*)data , commentLength, "vendorString");
-                if(audio_id3data) audio_id3data(vendorString.get());
+                commentString.assign((const char*)data , commentLength, "commentString");
+                if(commentString.starts_with("LYRICS=")) lyricsBuffer.clone_from(commentString);
+                else if(audio_id3data) audio_id3data(commentString.get());
             }
             data += commentLength; idx += commentLength;
             if(idx > vendorLength + 3) {AUDIO_ERROR("VORBIS COMMENT section is too long");}
+
+        }
+        ps_ptr<char> tmp;
+        ps_ptr<char> timestamp;
+        timestamp.alloc(12);
+        if(lyricsBuffer.valid()){
+            m_ID3Hdr.SYLT.seen = true;
+            lyricsBuffer.remove_prefix("LYRICS=");
+            idx = 0;
+            while(idx < lyricsBuffer.size()){
+                int pos = lyricsBuffer.index_of('\n', idx);
+                if(pos == - 1) break;
+                int len = pos - idx + 1;
+                tmp.copy_from(lyricsBuffer.get() + idx, len);
+                idx += len;
+                if(tmp.ends_with("\n")) tmp.truncate_at('\n');
+                // tmp content e.g.: [00:27.07]Jetzt kommt die Zeit
+                //                   [00:28.84]Auf die ihr euch freut
+                timestamp.copy_from(tmp.get(), 10);
+
+                int ms = parse_flac_timestamp(timestamp.c_get());
+
+                // timestamp.remove_chars("[]:.");
+                // timestamp.append("0"); // to ms 0028840
+                tmp.remove_before(10, true);
+                if(tmp.strlen() > 0){
+                    m_syltLines.push_back(std::move(tmp));
+                    m_syltTimeStamp.push_back(ms);
+                }
+            }
+            for(int i = 0; i < m_syltLines.size(); i++){
+                AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            }
         }
         m_controlCounter = FLAC_MBH;
         m_rflh.retvalue = vendorLength + 3;
@@ -1691,9 +1739,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.ehsz = 0;
         m_ID3Hdr.framesize = 0;
         m_ID3Hdr.compressed = false;
-        m_ID3Hdr.SYLT_seen = false;
-        m_ID3Hdr.SYLT_size = 0;
-        m_ID3Hdr.SYLT_pos = 0;
+        m_ID3Hdr.SYLT.seen = false;
+        m_ID3Hdr.SYLT.size = 0;
+        m_ID3Hdr.SYLT.pos = 0;
         m_ID3Hdr.numID3Header = 0;
         m_ID3Hdr.iBuffSize = 4096;
         m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10, "iBuff");
@@ -1708,7 +1756,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
         }
 
-        m_ID3Hdr.SYLT_seen = false;
+        m_ID3Hdr.SYLT.seen = false;
         m_ID3Hdr.remainingHeaderBytes = 0;
         m_ID3Hdr.ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
@@ -1852,11 +1900,69 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
 
         if( // any lyrics embedded in file, passing it to external function
-            startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "TXXX") || startsWith(m_ID3Hdr.tag, "USLT")) {
+            startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) {
             if(m_dataMode == AUDIO_LOCALFILE) {
-                m_ID3Hdr.SYLT_seen = true;
-                m_ID3Hdr.SYLT_pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT_size = m_ID3Hdr.framesize;
+
+                ps_ptr<char> tmp;
+                ps_ptr<char> content_descriptor;
+                ps_ptr<char> syltBuff;
+                bool isBigEndian = true;
+                size_t len = 0;
+                int idx = 0;
+
+                m_ID3Hdr.SYLT.seen = true;
+                m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
+                m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
+
+                syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
+                uint32_t pos = m_audiofile.position();
+                m_audiofile.seek(m_ID3Hdr.SYLT.pos);
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                m_audiofile.seek(pos);
+                m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
+                if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
+                if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
+                char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
+                memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
+                AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
+                m_ID3Hdr.SYLT.content_type =       syltBuff[5];
+
+                idx = 6;
+
+                if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
+                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
+                }
+                else{ // utf-16
+                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
+                }
+                if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+                idx += len;
+
+                while (idx < m_ID3Hdr.SYLT.size) {
+                        // UTF-16LE, UTF-16BE
+                    if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
+                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
+                    } else {
+                        // ISO-8859-1 / UTF-8
+                        idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
+                    }
+                    if (tmp.starts_with("\n")) tmp.remove_before(1);
+                    m_syltLines.push_back(std::move(tmp));
+
+                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
+
+                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                    m_syltTimeStamp.push_back(timestamp);
+
+                    idx += 4;
+                }
+                for(int i = 0; i < m_syltLines.size(); i++){
+                    AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+                }
             }
             return 0;
         }
@@ -1985,10 +2091,64 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         else if(startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if(m_dataMode == AUDIO_LOCALFILE) {
-                m_ID3Hdr.SYLT_seen = true; // #460
-                m_ID3Hdr.SYLT_pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT_size = m_ID3Hdr.universal_tmp;
-                // log_i("Attached lyrics seen at pos %d length %d", SYLT_pos, SYLT_size);
+
+                ps_ptr<char> tmp;
+                ps_ptr<char> content_descriptor;
+                ps_ptr<char> syltBuff;
+                bool isBigEndian = true;
+                size_t len = 0;
+                int idx = 0;
+
+                m_ID3Hdr.SYLT.seen = true; // #460
+                m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
+                m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
+
+                syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
+                uint32_t pos = m_audiofile.position();
+                m_audiofile.seek(m_ID3Hdr.SYLT.pos);
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                m_audiofile.seek(pos);
+                uint8_t text_encoding = syltBuff[0];
+                memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
+                AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+                m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
+                m_ID3Hdr.SYLT.content_type =       syltBuff[5];
+
+                idx = 6;
+
+                if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
+                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
+                }
+                else{ // utf-16
+                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
+                }
+                if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+                idx += len;
+
+                while (idx < m_ID3Hdr.SYLT.size) {
+                        // UTF-16LE, UTF-16BE
+                    if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
+                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
+                    } else {
+                        // ISO-8859-1 / UTF-8
+                        idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
+                    }
+                    if (tmp.starts_with("\n")) tmp.remove_before(1);
+                    m_syltLines.push_back(std::move(tmp));
+
+                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
+
+                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                    m_syltTimeStamp.push_back(timestamp);
+
+                    idx += 4;
+                }
+                // for(int i = 0; i < m_syltLines.size(); i++){
+                //     AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+                // }
             }
         }
         else { showID3Tag(m_ID3Hdr.tag, value);}
@@ -2030,11 +2190,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             if(m_ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
                 size_t pos = m_audiofile.position();
                 audio_id3image(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
-                m_audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
-            }
-            if(m_ID3Hdr.SYLT_seen && audio_id3lyrics) {
-                size_t pos = m_audiofile.position();
-                audio_id3lyrics(m_audiofile, m_ID3Hdr.SYLT_pos, m_ID3Hdr.SYLT_size);
                 m_audiofile.seek(pos); // the filepointer could have been changed by the user, set it back
             }
             m_ID3Hdr.numID3Header = 0;
@@ -4834,6 +4989,8 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
 
     if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
+    float audioCurrentTime;
+
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
         m_cat.sumBytesIn = 0;
@@ -4843,6 +5000,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         m_cat.timeStamp = millis();
         m_cat.deltaBytesIn = 0;
         m_cat.nominalBitRate = 0;
+        m_cat.syltIdx = 0;
 
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
             m_audioFileDuration = FLACGetAudioFileDuration();
@@ -4862,7 +5020,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
     m_cat.sumBytesOut  += bytesDecoderOut;
 
 
-    if(m_cat.timeStamp + 500 < millis()){
+    if(m_cat.timeStamp + 50 < millis()){
         uint32_t t       = millis();      // time tracking
         uint32_t delta_t = t - m_cat.timeStamp; //    ---"---
         m_cat.timeStamp = t;                    //    ---"---
@@ -4872,22 +5030,40 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         m_cat.sumBitRate += bitRate;
         m_cat.counter ++;
         if(m_cat.nominalBitRate){
-            m_audioCurrentTime = round(((float)m_cat.sumBytesIn * 8) / m_avr_bitrate);
+            audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_avr_bitrate;
         }
         else{
             m_avr_bitrate = m_cat.sumBitRate / m_cat.counter;
-            m_audioCurrentTime = (m_cat.sumBytesIn * 8) / m_avr_bitrate;
+            audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_avr_bitrate;
             m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_avr_bitrate));
         }
         m_cat.deltaBytesIn = 0;
+        m_audioCurrentTime = round(audioCurrentTime);
     }
 
     if(m_haveNewFilePos && m_avr_bitrate){
         uint32_t posWhithinAudioBlock =  m_haveNewFilePos;
-        uint32_t newTime = posWhithinAudioBlock / (m_avr_bitrate / 8);
-        m_audioCurrentTime = newTime;
+        float newTime = (float)posWhithinAudioBlock / (m_avr_bitrate / 8);
+        m_audioCurrentTime = round(newTime);
         m_cat.sumBytesIn = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
+        m_cat.syltIdx = 0;
+        if(m_ID3Hdr.SYLT.seen){
+            while(m_cat.syltIdx < m_syltLines.size()){
+                if(newTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
+                m_cat.syltIdx++;
+            }
+        }
+    }
+
+    if(m_ID3Hdr.SYLT.seen){
+        //  log_i("%f", audioCurrentTime * 1000); // ms
+        if(m_cat.syltIdx >= m_syltLines.size()) return;
+        if(audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]){
+        //  AUDIO_INFO(ANSI_ESC_CYAN "%s", m_syltLines[m_cat.syltIdx].c_get());
+            if(audio_id3lyrics) audio_id3lyrics(m_syltLines[m_cat.syltIdx].c_get());
+            m_cat.syltIdx++;
+        }
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
