@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0                                                                                                                                ";
+    Version 3.4.0a                                                                                                                                ";
 /*  Updated on: Jul 20.2025
 
     Author: Wolle (schreibfaul1)
@@ -4899,7 +4899,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 m_validSamples = len;
                             }
                             break;
-        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
+        case CODEC_MP3:     if(m_decodeError == MAD_ERROR_CONTINUE) return bytesDecoded; // nothing to play, mybe eof
+                            m_validSamples = MP3GetOutputSamps();
                             break;
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
                             if(!m_sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
