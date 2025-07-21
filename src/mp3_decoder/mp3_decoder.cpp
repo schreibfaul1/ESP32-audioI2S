@@ -39,6 +39,7 @@ bool        MP3Decoder_IsInit(){return s_isInit;}
 const char* MP3GetMPEGVersion(){return mad_get_mpeg_version();}
 const char* MP3GetLayer(){return mad_get_layer();}
 uint32_t    MP3GetBitrate(){if(mad_xing_bitrate()) return mad_xing_bitrate(); else return mad_get_bitrate();}
+uint32_t    MP3GetAudioFileDuration(){return mad_xing_duration_seconds();}
 
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -48,7 +49,7 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         if(res != 0) {MP3_ERROR("res: %i", res); return res;}
         s_stream_items = true;
 
-        bool xing = MP3ParseXingHeader(data, *bytesLeft);
+        bool xing = mad_parse_xing_header(data, *bytesLeft);
         if(xing){
             s_xing_items = true;
         }
@@ -81,9 +82,3 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes){
     return mad_find_syncword(buf, nBytes);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool MP3ParseXingHeader(uint8_t *buf, int32_t nBytes){
-    return mad_parse_xing_header(buf, nBytes);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-

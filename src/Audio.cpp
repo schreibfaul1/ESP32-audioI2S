@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0a                                                                                                                                ";
-/*  Updated on: Jul 20.2025
+    Version 3.4.0b                                                                                                                                ";
+/*  Updated on: Jul 21.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5013,6 +5013,13 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
             m_avr_bitrate = m_cat.nominalBitRate;
             m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
             if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
+        }
+        if(m_codec == CODEC_MP3){
+            if(MP3GetAudioFileDuration() > 0){ // XING header present?
+                m_audioFileDuration = MP3GetAudioFileDuration();
+                m_cat.nominalBitRate  = MP3GetBitrate();
+                m_avr_bitrate = m_cat.nominalBitRate;
+            }
         }
     }
 

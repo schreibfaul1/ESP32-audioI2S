@@ -13,23 +13,20 @@ extern ps_ptr<mad_stream_t>stream;
 extern ps_ptr<mad_frame_t> frame;
 extern ps_ptr<mad_synth_t> synth;
 
-
-
-
-bool     MP3Decoder_AllocateBuffers();
-void     MP3Decoder_FreeBuffers();
-void     MP3Decoder_ClearBuffer();
-int32_t  MP3Decode(uint8_t* data, int32_t* bytesLeft, int16_t* outSamples);
-uint32_t MP3GetOutputSamps();
-int32_t  MP3GetSampRate();
-int32_t  MP3GetChannels();
-uint8_t  MP3GetBitsPerSample();
-bool     MP3Decoder_IsInit();
+bool        MP3Decoder_AllocateBuffers();
+void        MP3Decoder_FreeBuffers();
+void        MP3Decoder_ClearBuffer();
+int32_t     MP3Decode(uint8_t* data, int32_t* bytesLeft, int16_t* outSamples);
+uint32_t    MP3GetOutputSamps();
+int32_t     MP3GetSampRate();
+int32_t     MP3GetChannels();
+uint8_t     MP3GetBitsPerSample();
+bool        MP3Decoder_IsInit();
 const char* MP3GetMPEGVersion();
 const char* MP3GetLayer();
-uint32_t MP3GetBitrate();
-int32_t  MP3FindSyncWord(uint8_t* buf, int32_t nBytes);
-bool     MP3ParseXingHeader(uint8_t* buf, int32_t nBytes);
+uint32_t    MP3GetBitrate();
+uint32_t    MP3GetAudioFileDuration();
+int32_t     MP3FindSyncWord(uint8_t* buf, int32_t nBytes);
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
