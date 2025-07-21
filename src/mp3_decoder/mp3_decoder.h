@@ -30,10 +30,10 @@ int32_t     MP3FindSyncWord(uint8_t* buf, int32_t nBytes);
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
+extern __attribute__((weak)) void audio_info(const char*);
 
 template <typename... Args>
 void MP3_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-    extern __attribute__((weak)) void audio_info(const char*);
     #define ANSI_ESC_RESET          "\033[0m"
     #define ANSI_ESC_BLACK          "\033[30m"
     #define ANSI_ESC_RED            "\033[31m"
@@ -90,7 +90,8 @@ void MP3_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Ar
 }
 
 // Macro for comfortable calls
-#define MP3_ERROR(fmt, ...) MP3_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define MP3_WARN(fmt, ...)  MP3_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define MP3_INFO(fmt, ...)  MP3_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define MP3_DEBUG(fmt, ...) MP3_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_ERROR(fmt, ...)   MP3_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_WARN(fmt, ...)    MP3_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_INFO(fmt, ...)    MP3_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_DEBUG(fmt, ...)   MP3_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_VERBOSE(fmt, ...) MP3_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)

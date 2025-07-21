@@ -46,7 +46,7 @@ uint32_t    MP3GetAudioFileDuration(){return mad_xing_duration_seconds();}
 int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
     if(s_first_call){
         int32_t res = MP3FindSyncWord(data, *bytesLeft);
-        if(res != 0) {MP3_ERROR("res: %i", res); return res;}
+        if(res != 0) {MP3_LOG_ERROR("res: %i", res); return res;}
         s_stream_items = true;
 
         bool xing = mad_parse_xing_header(data, *bytesLeft);
@@ -56,9 +56,9 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         s_first_call = false;
     }
     int32_t res = mad_decode(data, bytesLeft, outSamples);
-    if(stream->error == MAD_ERROR_CONTINUE) {/*MP3_ERROR("BufLen %i", res);*/ return res;} // need more data
+    if(stream->error == MAD_ERROR_CONTINUE) {/*MP3_LOG_ERROR("BufLen %i", res);*/ return res;} // need more data
     vTaskDelay(1);
-    if(res != 0) {MP3_ERROR("res: %i", res); return res;}
+    if(res != 0) {MP3_LOG_ERROR("res: %i", res); return res;}
     if(s_stream_items){
         s_stream_items = false;
         // log_w("samplerate: %i", MP3GetSampRate());

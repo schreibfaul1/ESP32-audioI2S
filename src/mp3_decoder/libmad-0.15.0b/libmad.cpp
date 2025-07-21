@@ -211,7 +211,7 @@ int32_t mad_layer_I(mad_stream_t* stream, mad_frame_t* frame) { // decode a sing
     if (header->flags & MAD_FLAG_PROTECTION) {
         header->crc_check = mad_bit_crc(stream->ptr, 4 * (bound * nch + (32 - bound)), header->crc_check);
         if (header->crc_check != header->crc_target && !(frame->options & MAD_OPTION_IGNORECRC)) {
-            MP3_ERROR("CRC check failed");
+            MP3_LOG_ERROR("CRC check failed");
             stream->error = MAD_ERROR_BADCRC;
             return -1;
         }
@@ -221,7 +221,7 @@ int32_t mad_layer_I(mad_stream_t* stream, mad_frame_t* frame) { // decode a sing
         for (ch = 0; ch < nch; ++ch) {
             nb = mad_bit_read(&stream->ptr, 4);
             if (nb == 15) {
-                MP3_ERROR("forbidden bit allocation value");
+                MP3_LOG_ERROR("forbidden bit allocation value");
                 stream->error = MAD_ERROR_BADBITALLOC;
                 return -1;
             }
@@ -231,7 +231,7 @@ int32_t mad_layer_I(mad_stream_t* stream, mad_frame_t* frame) { // decode a sing
     for (sb = bound; sb < 32; ++sb) {
         nb = mad_bit_read(&stream->ptr, 4);
         if (nb == 15) {
-            MP3_ERROR("forbidden bit allocation value");
+            MP3_LOG_ERROR("forbidden bit allocation value");
             stream->error = MAD_ERROR_BADBITALLOC;
             return -1;
         }
@@ -249,7 +249,7 @@ int32_t mad_layer_I(mad_stream_t* stream, mad_frame_t* frame) { // decode a sing
                  * so we only reject it if OPT_STRICT is defined.
                  */
                 if (scalefactor[ch][sb] == 63) {
-                    MP3_ERROR("bad scalefactor index");
+                    MP3_LOG_ERROR("bad scalefactor index");
                     stream->error = MAD_ERROR_BADSCALEFACTOR;
                     return -1;
                 }
@@ -357,7 +357,7 @@ int32_t mad_layer_II(mad_stream_t* stream, mad_frame_t* frame) { // decode a sin
     if (header->flags & MAD_FLAG_PROTECTION) {
         header->crc_check = mad_bit_crc(start, mad_bit_length(&start, &stream->ptr), header->crc_check);
         if (header->crc_check != header->crc_target && !(frame->options & MAD_OPTION_IGNORECRC)) {
-            MP3_ERROR("CRC check failed");
+            MP3_LOG_ERROR("CRC check failed");
             stream->error = MAD_ERROR_BADCRC;
             return -1;
         }
@@ -383,7 +383,7 @@ int32_t mad_layer_II(mad_stream_t* stream, mad_frame_t* frame) { // decode a sin
                  * so we only reject it if OPT_STRICT is defined.
                  */
                 if (scalefactor(ch, sb, 0) == 63 || scalefactor(ch, sb, 1) == 63 || scalefactor(ch, sb, 2) == 63) {
-                    MP3_ERROR("bad scalefactor index");
+                    MP3_LOG_ERROR("bad scalefactor index");
                     stream->error = MAD_ERROR_BADSCALEFACTOR;
                     return -1;
                 }
@@ -1440,7 +1440,7 @@ enum mad_error III_sideinfo(struct mad_bitptr* ptr, uint32_t nch, int32_t lsf, s
             channel->scalefac_compress = mad_bit_read(ptr, lsf ? 9 : 4);
             *data_bitlen += channel->part2_3_length;
             if (channel->big_values > 288 && result == 0){
-                MP3_ERROR("bad big_values count");
+                MP3_LOG_ERROR("bad big_values count");
                 result = MAD_ERROR_BADBIGVALUES;
             }
             channel->flags = 0;
@@ -1448,11 +1448,11 @@ enum mad_error III_sideinfo(struct mad_bitptr* ptr, uint32_t nch, int32_t lsf, s
             if (mad_bit_read(ptr, 1)) {
                 channel->block_type = mad_bit_read(ptr, 2);
                 if (channel->block_type == 0 && result == 0){
-                    MP3_ERROR("reserved block_type");
+                    MP3_LOG_ERROR("reserved block_type");
                     result = MAD_ERROR_BADBLOCKTYPE;
                 }
                 if (!lsf && channel->block_type == 2 && si->scfsi[ch] && result == 0){
-                    MP3_ERROR("bad scalefactor selection info");
+                    MP3_LOG_ERROR("bad scalefactor selection info");
                     result = MAD_ERROR_BADSCFSI;
                 }
                 channel->region0_count = 7;
@@ -1670,7 +1670,7 @@ enum mad_error III_huffdecode(struct mad_bitptr* ptr, int32_t xr[576], struct ch
 
     bits_left = (signed)channel->part2_3_length - (signed)part2_length;
     if (bits_left < 0){
-        MP3_ERROR("bad audio data length");
+        MP3_LOG_ERROR("bad audio data length");
         return MAD_ERROR_BADPART3LEN;
     }
     III_exponents(channel, sfbwidth, exponents);
@@ -1696,7 +1696,7 @@ enum mad_error III_huffdecode(struct mad_bitptr* ptr, int32_t xr[576], struct ch
         linbits = entry->linbits;
         startbits = entry->startbits;
         if (table == 0){
-            MP3_ERROR("bad Huffman table select");
+            MP3_LOG_ERROR("bad Huffman table select");
             return MAD_ERROR_BADHUFFTABLE;
         }
         expptr = &exponents[0];
@@ -1721,7 +1721,7 @@ enum mad_error III_huffdecode(struct mad_bitptr* ptr, int32_t xr[576], struct ch
                     linbits = entry->linbits;
                     startbits = entry->startbits;
                     if (table == 0){
-                        MP3_ERROR("bad Huffman table select");
+                        MP3_LOG_ERROR("bad Huffman table select");
                         return MAD_ERROR_BADHUFFTABLE;
                     }
                 }
@@ -1830,7 +1830,7 @@ enum mad_error III_huffdecode(struct mad_bitptr* ptr, int32_t xr[576], struct ch
         }
     }
     if (cachesz + bits_left < 0){
-        MP3_ERROR("Huffman data overrun");
+        MP3_LOG_ERROR("Huffman data overrun");
         return MAD_ERROR_BADHUFFDATA; /* big_values overrun */
     }
     /* count1 */
@@ -1949,7 +1949,7 @@ enum mad_error III_stereo(int32_t xr[2][576], struct granule const* granule, str
     modes.alloc(39 * sizeof(int16_t)); // Allokiert 39 int16_t im PSRAM
 
     if (!modes.valid()) {
-        MP3_ERROR("incompatible block_type for JS");
+        MP3_LOG_ERROR("incompatible block_type for JS");
         return MAD_ERROR_BADSTEREO;
     }
     uint8_t *sfb = (uint8_t *)sfbwidth_param;
@@ -1958,7 +1958,7 @@ enum mad_error III_stereo(int32_t xr[2][576], struct granule const* granule, str
     uint32_t l, n, i;
 
     if (granule->ch[0].block_type != granule->ch[1].block_type || (granule->ch[0].flags & mixed_block_flag) != (granule->ch[1].flags & mixed_block_flag)){
-        MP3_ERROR("incompatible block_type for JS");
+        MP3_LOG_ERROR("incompatible block_type for JS");
         return MAD_ERROR_BADSTEREO;
     }
 
@@ -2694,7 +2694,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     if (!s_main_data.valid()) {
         s_main_data.alloc(MAD_BUFFER_MDLEN);
         if (!s_main_data.valid()) {
-            MP3_ERROR("not enough memory");
+            MP3_LOG_ERROR("not enough memory");
             stream->error = MAD_ERROR_NOMEM;
             return -1;
         }
@@ -2702,7 +2702,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     if (!s_overlap.is_allocated()) {
         s_overlap.alloc(2, 32, 18);
         if (!s_overlap.is_allocated()) {
-            MP3_ERROR("not enough memory");
+            MP3_LOG_ERROR("not enough memory");
             stream->error = MAD_ERROR_NOMEM;
             return -1;
         }
@@ -2712,7 +2712,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     si_len = (header->flags & MAD_FLAG_LSF_EXT) ? (nch == 1 ? 9 : 17) : (nch == 1 ? 17 : 32);
     /* check frame sanity */
     if (stream->next_frame - mad_bit_nextbyte(&stream->ptr) < (int32_t)si_len) {
-        MP3_ERROR("bad frame length");
+        MP3_LOG_ERROR("bad frame length");
         stream->error = MAD_ERROR_BADFRAMELEN;
         stream->md_len = 0;
         return -1;
@@ -2721,7 +2721,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     if (header->flags & MAD_FLAG_PROTECTION) {
         header->crc_check = mad_bit_crc(stream->ptr, si_len * CHAR_BIT, header->crc_check);
         if (header->crc_check != header->crc_target && !(frame->options & MAD_OPTION_IGNORECRC)) {
-            MP3_ERROR("CRC check failed");
+            MP3_LOG_ERROR("CRC check failed");
             stream->error = MAD_ERROR_BADCRC;
             result = -1;
         }
@@ -2759,7 +2759,7 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
     } else {
         if (si.main_data_begin > stream->md_len) {
             if (result == 0) {
-                // MP3_ERROR("need more data");
+                // MP3_LOG_ERROR("need more data");
                 stream->error = MAD_ERROR_CONTINUE;   // need more data
                 result = 100;
             }
@@ -2854,14 +2854,14 @@ int32_t decode_header(struct mad_header* header, mad_stream_t* stream) { // read
     if (mad_bit_read(&stream->ptr, 1) == 0)
         header->flags |= MAD_FLAG_LSF_EXT;
     else if (header->flags & MAD_FLAG_MPEG_2_5_EXT) {
-        MP3_ERROR("lost synchronization");
+        MP3_LOG_ERROR("lost synchronization");
         stream->error = MAD_ERROR_LOSTSYNC;
         return -1;
     }
     /* layer */
     header->layer = (mad_layer)( 4 - mad_bit_read(&stream->ptr, 2));
     if (header->layer == 4) {
-        MP3_ERROR("reserved header layer value");
+        MP3_LOG_ERROR("reserved header layer value");
         stream->error = MAD_ERROR_BADLAYER;
         return -1;
     }
@@ -2873,7 +2873,7 @@ int32_t decode_header(struct mad_header* header, mad_stream_t* stream) { // read
     /* bitrate_index */
     index = mad_bit_read(&stream->ptr, 4);
     if (index == 15) {
-        MP3_ERROR("forbidden bitrate value");
+        MP3_LOG_ERROR("forbidden bitrate value");
         stream->error = MAD_ERROR_BADBITRATE;
         return -1;
     }
@@ -2885,7 +2885,7 @@ int32_t decode_header(struct mad_header* header, mad_stream_t* stream) { // read
     index = mad_bit_read(&stream->ptr, 2);
 
     if (index == 3) {
-        MP3_ERROR("reserved sample frequency value");
+        MP3_LOG_ERROR("reserved sample frequency value");
         stream->error = MAD_ERROR_BADSAMPLERATE;
         return -1;
     }
@@ -2916,7 +2916,7 @@ int32_t decode_header(struct mad_header* header, mad_stream_t* stream) { // read
      * to the decoder proper, we allow it unless OPT_STRICT is defined.
      */
     if (header->emphasis == MAD_EMPHASIS_RESERVED) {
-        MP3_ERROR("reserved emphasis value");
+        MP3_LOG_ERROR("reserved emphasis value");
         stream->error = MAD_ERROR_BADEMPHASIS;
         return -1;
     }
@@ -2955,7 +2955,7 @@ int32_t free_bitrate(mad_stream_t* stream, struct mad_header const* header) { //
     }
     stream->ptr = keep_ptr;
     if (rate < 8 || (header->layer == MAD_LAYER_III && rate > 640)) {
-        MP3_ERROR("lost synchronization");
+        MP3_LOG_ERROR("lost synchronization");
         stream->error = MAD_ERROR_LOSTSYNC;
         return -1;
     }
@@ -2969,7 +2969,7 @@ int32_t mad_header_decode(struct mad_header* header, mad_stream_t* stream) { // 
     ptr = stream->next_frame;
     end = stream->bufend;
     if (ptr == 0) {
-        MP3_ERROR("invalid (null) buffer pointer");
+        MP3_LOG_ERROR("invalid (null) buffer pointer");
         stream->error = MAD_ERROR_BUFPTR;
         goto fail;
     }
@@ -2979,7 +2979,7 @@ int32_t mad_header_decode(struct mad_header* header, mad_stream_t* stream) { // 
         if (end - ptr < stream->skiplen) {
             stream->skiplen -= end - ptr;
             stream->next_frame = end;
-            MP3_ERROR("input buffer too small (or EOF)");
+            MP3_LOG_ERROR("input buffer too small (or EOF)");
             stream->error = MAD_ERROR_BUFLEN;
             goto fail;
         }
@@ -2992,14 +2992,14 @@ sync:
     if (stream->sync) {
         if (end - ptr < MAD_BUFFER_GUARD) {
             stream->next_frame = ptr;
-            MP3_ERROR("input buffer too small (or EOF)");
+            MP3_LOG_ERROR("input buffer too small (or EOF)");
             stream->error = MAD_ERROR_BUFLEN;
             goto fail;
         } else if (!(ptr[0] == 0xff && (ptr[1] & 0xe0) == 0xe0)) {
             /* mark point where frame sync word was expected */
             stream->this_frame = ptr;
             stream->next_frame = ptr + 1;
-            MP3_ERROR("lost synchronization");
+            MP3_LOG_ERROR("lost synchronization");
             stream->error = MAD_ERROR_LOSTSYNC;
             goto fail;
         }
@@ -3007,7 +3007,7 @@ sync:
         mad_bit_init(&stream->ptr, ptr);
         if (mad_stream_sync(stream) == -1) {
             if (end - stream->next_frame >= MAD_BUFFER_GUARD) stream->next_frame = end - MAD_BUFFER_GUARD;
-            MP3_ERROR("input buffer too small (or EOF)");
+            MP3_LOG_ERROR("input buffer too small (or EOF)");
             stream->error = MAD_ERROR_BUFLEN;
             goto fail;
         }
@@ -3044,7 +3044,7 @@ sync:
             stream->error = MAD_ERROR_CONTINUE;
             return MAD_ERROR_CONTINUE;
         }
-        MP3_ERROR("input buffer too small (or EOF)");
+        MP3_LOG_ERROR("input buffer too small (or EOF)");
         return 0;
         stream->error = MAD_ERROR_BUFLEN;
         goto fail;
@@ -3223,19 +3223,19 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
 
         // Gültigkeitsprüfungen
         if (header_info->mpeg_bits == 1) {
-            MP3_DEBUG("Reserved MPEG version: 0x%02X 0x%02X", header_data[0], header_data[1]);
+            MP3_LOG_DEBUG("Reserved MPEG version: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
         if (header_info->layer == 0) {
-            MP3_DEBUG("Reserved Layer: 0x%02X 0x%02X", header_data[0], header_data[1]);
+            MP3_LOG_DEBUG("Reserved Layer: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
         if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) {
-            MP3_DEBUG("Invalid bitrate index: %d", header_info->bitrate_idx);
+            MP3_LOG_DEBUG("Invalid bitrate index: %d", header_info->bitrate_idx);
             return false;
         }
         if (header_info->sample_rate_idx == 3) {
-            MP3_DEBUG("Invalid sample rate index: %d", header_info->sample_rate_idx);
+            MP3_LOG_DEBUG("Invalid sample rate index: %d", header_info->sample_rate_idx);
             return false;
         }
 
@@ -3265,7 +3265,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         }
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
-            MP3_DEBUG("Invalid bitrate or sample rate: bitrate=%d, sample_rate=%d", bitrate_kbps, sample_rate_hz);
+            MP3_LOG_DEBUG("Invalid bitrate or sample rate: bitrate=%d, sample_rate=%d", bitrate_kbps, sample_rate_hz);
             return false;
         }
 
@@ -3287,7 +3287,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         }
 
         if (header_info->frame_length == 0) {
-            MP3_DEBUG("Calculated frame length is zero");
+            MP3_LOG_DEBUG("Calculated frame length is zero");
             return false;
         }
 
@@ -3307,7 +3307,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
                 header_info->samples_per_frame = 384;
             }
         } else {
-            MP3_DEBUG("Invalid MPEG bits for samples_per_frame: %d", header_info->mpeg_bits);
+            MP3_LOG_DEBUG("Invalid MPEG bits for samples_per_frame: %d", header_info->mpeg_bits);
             return false;
         }
 
@@ -3334,7 +3334,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
     while (nBytes >= mp3FHsize) {
         int32_t sync_offset = findSync(buf, current_pos, nBytes);
         if (sync_offset == -1) {
-            MP3_DEBUG("No syncword found in remaining buffer");
+            MP3_LOG_DEBUG("No syncword found in remaining buffer");
             return -1;
         }
 
@@ -3342,7 +3342,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         nBytes -= sync_offset;
 
         if (nBytes < mp3FHsize) {
-            MP3_DEBUG("Not enough bytes for a full header after syncword");
+            MP3_LOG_DEBUG("Not enough bytes for a full header after syncword");
             return -1;
         }
 
@@ -3353,7 +3353,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
                 if ((buf[current_pos + header.frame_length] == SYNCWORDH) &&
                     ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL) &&
                     parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    MP3_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu, mpeg_bits: %d, layer: %d",
+                    MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu, mpeg_bits: %d, layer: %d",
                           current_pos, header.frame_length, header.mpeg_bits, header.layer);
 
                     // libmad-kompatible Zuordnung
@@ -3367,14 +3367,14 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
 
                     return current_pos;
                 } else {
-                    MP3_DEBUG("Header valid, but next frame invalid at pos %d: 0x%02X 0x%02X",
+                    MP3_LOG_DEBUG("Header valid, but next frame invalid at pos %d: 0x%02X 0x%02X",
                           current_pos + header.frame_length, buf[current_pos + header.frame_length], buf[current_pos + header.frame_length + 1]);
                 }
             } else {
-                MP3_DEBUG("Header valid, but not enough data for next frame check at pos %d", current_pos);
+                MP3_LOG_DEBUG("Header valid, but not enough data for next frame check at pos %d", current_pos);
             }
         } else {
-            MP3_DEBUG("Invalid header at pos %d: 0x%02X 0x%02X 0x%02X 0x%02X",
+            MP3_LOG_DEBUG("Invalid header at pos %d: 0x%02X 0x%02X 0x%02X 0x%02X",
                   current_pos, buf[current_pos], buf[current_pos + 1], buf[current_pos + 2], buf[current_pos + 3]);
         }
 
@@ -3419,7 +3419,7 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
     if (memcmp(buf + xing_offset, "Xing", 4) == 0 ||
         memcmp(buf + xing_offset, "Info", 4) == 0) {
 
-        //MP3_DEBUG("Xing/Info-Header found!");
+        //MP3_LOG_DEBUG("Xing/Info-Header found!");
 
         // read the flags (big-endian)
         xing_info.flags = (uint32_t)buf[xing_offset + 4] << 24 |
@@ -3435,7 +3435,7 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
                                      (uint32_t)buf[current_read_offset + 1] << 16 |
                                      (uint32_t)buf[current_read_offset + 2] << 8  |
                                      (uint32_t)buf[current_read_offset + 3];
-            // MP3_DEBUG("total frames: %lu", xing_info.total_frames);
+            // MP3_LOG_DEBUG("total frames: %lu", xing_info.total_frames);
             s_xing_total_frames = xing_info.total_frames;
             current_read_offset += 4;
         }
@@ -3445,33 +3445,33 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
                                     (uint32_t)buf[current_read_offset + 1] << 16 |
                                     (uint32_t)buf[current_read_offset + 2] << 8  |
                                     (uint32_t)buf[current_read_offset + 3];
-            // MP3_DEBUG("total bytes: %lu", xing_info.total_bytes);
+            // MP3_LOG_DEBUG("total bytes: %lu", xing_info.total_bytes);
             s_xing_total_bytes = xing_info.total_bytes;
             current_read_offset += 4;
         }
 
         if (xing_info.flags & 0x0004) { // FLG_TOC
             memcpy(xing_info.toc, buf + current_read_offset, 100);
-            // MP3_DEBUG("TOC present.");
+            // MP3_LOG_DEBUG("TOC present.");
             current_read_offset += 100;
         }
 
         if (xing_info.flags & 0x0008) { // FLG_VBR_SCALE
             xing_info.vbr_scale = buf[current_read_offset];
-            // MP3_DEBUG("VBR Scale: %d", xing_info.vbr_scale);
+            // MP3_LOG_DEBUG("VBR Scale: %d", xing_info.vbr_scale);
             current_read_offset += 1;
         }
 
         // optional: Calculate the duration
         if (xing_info.total_frames > 0 && s_samplerate > 0) {
             float duration_seconds = (float)xing_info.total_frames * s_samples_per_frame / s_samplerate;
-            // MP3_DEBUG("estimated duration: %.2f seconds", duration_seconds);
+            // MP3_LOG_DEBUG("estimated duration: %.2f seconds", duration_seconds);
             s_xing_duration_seconds = duration_seconds;
             s_xing_bitrate = (xing_info.total_bytes * 8) / duration_seconds; // bit/s
         }
 
     } else {
-        // MP3_DEBUG("No Xing/info header found.");
+        // MP3_LOG_DEBUG("No Xing/info header found.");
         return false;
     }
     return true;
