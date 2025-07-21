@@ -6,20 +6,6 @@
 #include "../mp3_decoder.h"
 #include <vector>
 
-static const char* mpeg_version_table[] = {
-    "MPEG-1",    // MAD_MPEG_1 = 0
-    "MPEG-2",    // MAD_MPEG_2 = 1
-    "MPEG-2.5"   // MAD_MPEG_25 = 2
-};
-
-static const char* layer_table[] = {
-    "Unknown",   // 0 (reserviert)
-    "Layer I",   // MAD_LAYER_I = 1
-    "Layer II",  // MAD_LAYER_II = 2
-    "Layer III"  // MAD_LAYER_III = 3
-};
-
-
 bool allocateBuffers();
 void clearBuffers();
 void freeBuffers();

@@ -449,6 +449,7 @@ char const* mad_stream_errorstr(mad_stream_t const* stream) { // return a string
         case MAD_ERROR_BADHUFFTABLE: return "bad Huffman table select";
         case MAD_ERROR_BADHUFFDATA: return "Huffman data overrun";
         case MAD_ERROR_BADSTEREO: return "incompatible block_type for JS";
+        case MAD_ERROR_CONTINUE: return "no error, needs more data";
     }
     return 0;
 }
@@ -3494,11 +3495,26 @@ uint32_t mad_xing_total_frames(){
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* mad_get_mpeg_version(){
+
+    static const char* mpeg_version_table[] = {
+        "MPEG-1",    // MAD_MPEG_1 = 0
+        "MPEG-2",    // MAD_MPEG_2 = 1
+        "MPEG-2.5"   // MAD_MPEG_25 = 2
+    };
+
     const char* mpeg_version_str = mpeg_version_table[s_mpeg_version];
     return mpeg_version_str;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* mad_get_layer(){
+
+    const char* layer_table[] = {
+        "Unknown",   // 0 (reserviert)
+        "Layer I",   // MAD_LAYER_I = 1
+        "Layer II",  // MAD_LAYER_II = 2
+        "Layer III"  // MAD_LAYER_III = 3
+    };
+
     const char* layer_str = layer_table[s_layer];
     return layer_str;
 }

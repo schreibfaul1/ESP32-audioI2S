@@ -2111,7 +2111,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                     bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
                 m_audiofile.seek(pos);
-                uint8_t text_encoding = syltBuff[0];
+                m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
                 AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", m_ID3Hdr.SYLT.text_encoding == 0 ? "ASCII" : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8" : "?", m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
@@ -5067,7 +5067,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
     if(m_ID3Hdr.SYLT.seen){
         //  log_i("%f", audioCurrentTime * 1000); // ms
         if(m_cat.syltIdx >= m_syltLines.size()) return;
-        if(audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]){
+        if(m_audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]){
         //  AUDIO_INFO(ANSI_ESC_CYAN "%s", m_syltLines[m_cat.syltIdx].c_get());
             if(audio_id3lyrics) audio_id3lyrics(m_syltLines[m_cat.syltIdx].c_get());
             m_cat.syltIdx++;
