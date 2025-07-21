@@ -27,13 +27,13 @@ uint32_t s_nsamples = 0;
 uint32_t s_samplerate = 0;
 uint8_t  s_channels   = 0;  // 1 Mono, 2 Stereo
 uint16_t s_samples_per_frame = 0;
-uint16_t s_bitrate = 0;
+uint32_t s_bitrate = 0;
 uint8_t  s_mpeg_version = 0;
 uint8_t  s_layer = 0;
 uint8_t  s_channel_mode = 0;
 uint8_t  s_underflow_cnt = 0;
 
-uint16_t s_xing_bitrate = 0;
+uint32_t s_xing_bitrate = 0;
 uint32_t s_xing_total_bytes = 0;
 uint32_t s_xing_duration_seconds = 0;
 uint32_t s_xing_total_frames = 0;
@@ -3127,7 +3127,7 @@ uint32_t mad_get_sample_rate(){
     return synth->samplerate;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint16_t mad_get_bitrate(){
+uint32_t mad_get_bitrate(){
     return s_bitrate;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3222,19 +3222,19 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
 
         // Gültigkeitsprüfungen
         if (header_info->mpeg_bits == 1) {
-            log_d("Reserved MPEG version: 0x%02X 0x%02X", header_data[0], header_data[1]);
+            MP3_DEBUG("Reserved MPEG version: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
         if (header_info->layer == 0) {
-            log_d("Reserved Layer: 0x%02X 0x%02X", header_data[0], header_data[1]);
+            MP3_DEBUG("Reserved Layer: 0x%02X 0x%02X", header_data[0], header_data[1]);
             return false;
         }
         if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) {
-            log_d("Invalid bitrate index: %d", header_info->bitrate_idx);
+            MP3_DEBUG("Invalid bitrate index: %d", header_info->bitrate_idx);
             return false;
         }
         if (header_info->sample_rate_idx == 3) {
-            log_d("Invalid sample rate index: %d", header_info->sample_rate_idx);
+            MP3_DEBUG("Invalid sample rate index: %d", header_info->sample_rate_idx);
             return false;
         }
 
@@ -3264,7 +3264,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         }
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
-            log_d("Invalid bitrate or sample rate: bitrate=%d, sample_rate=%d", bitrate_kbps, sample_rate_hz);
+            MP3_DEBUG("Invalid bitrate or sample rate: bitrate=%d, sample_rate=%d", bitrate_kbps, sample_rate_hz);
             return false;
         }
 
@@ -3286,7 +3286,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         }
 
         if (header_info->frame_length == 0) {
-            log_d("Calculated frame length is zero");
+            MP3_DEBUG("Calculated frame length is zero");
             return false;
         }
 
@@ -3306,7 +3306,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
                 header_info->samples_per_frame = 384;
             }
         } else {
-            log_d("Invalid MPEG bits for samples_per_frame: %d", header_info->mpeg_bits);
+            MP3_DEBUG("Invalid MPEG bits for samples_per_frame: %d", header_info->mpeg_bits);
             return false;
         }
 
@@ -3333,7 +3333,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
     while (nBytes >= mp3FHsize) {
         int32_t sync_offset = findSync(buf, current_pos, nBytes);
         if (sync_offset == -1) {
-            log_d("No syncword found in remaining buffer");
+            MP3_DEBUG("No syncword found in remaining buffer");
             return -1;
         }
 
@@ -3341,7 +3341,7 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
         nBytes -= sync_offset;
 
         if (nBytes < mp3FHsize) {
-            log_d("Not enough bytes for a full header after syncword");
+            MP3_DEBUG("Not enough bytes for a full header after syncword");
             return -1;
         }
 
@@ -3352,28 +3352,28 @@ int32_t mad_find_syncword(uint8_t *buf, int32_t nBytes) {
                 if ((buf[current_pos + header.frame_length] == SYNCWORDH) &&
                     ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL) &&
                     parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    log_d("Found reliable MP3 frame at pos: %d, length: %lu, mpeg_bits: %d, layer: %d",
+                    MP3_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu, mpeg_bits: %d, layer: %d",
                           current_pos, header.frame_length, header.mpeg_bits, header.layer);
 
                     // libmad-kompatible Zuordnung
                     s_mpeg_version = (header.mpeg_bits == 3) ? 0 : (header.mpeg_bits == 2) ? 1 : 2; // MPEG-1=0, MPEG-2=1, MPEG-2.5=2
                     s_layer = (header.layer == 3) ? 1 : (header.layer == 2) ? 2 : 3; // Layer I=1, Layer II=2, Layer III=3
                     s_samplerate = header.sample_rate_hz;
-                    s_bitrate = header.bitrate_kbps;
+                    s_bitrate = header.bitrate_kbps * 1000; // bit/s
                     s_channel_mode = header.channel_mode;
                     s_samples_per_frame = header.samples_per_frame;
                     s_channels = (header.channel_mode == 0b11) ? 1 : 2;
 
                     return current_pos;
                 } else {
-                    log_d("Header valid, but next frame invalid at pos %d: 0x%02X 0x%02X",
+                    MP3_DEBUG("Header valid, but next frame invalid at pos %d: 0x%02X 0x%02X",
                           current_pos + header.frame_length, buf[current_pos + header.frame_length], buf[current_pos + header.frame_length + 1]);
                 }
             } else {
-                log_d("Header valid, but not enough data for next frame check at pos %d", current_pos);
+                MP3_DEBUG("Header valid, but not enough data for next frame check at pos %d", current_pos);
             }
         } else {
-            log_d("Invalid header at pos %d: 0x%02X 0x%02X 0x%02X 0x%02X",
+            MP3_DEBUG("Invalid header at pos %d: 0x%02X 0x%02X 0x%02X 0x%02X",
                   current_pos, buf[current_pos], buf[current_pos + 1], buf[current_pos + 2], buf[current_pos + 3]);
         }
 
@@ -3390,16 +3390,16 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
     // If no MP3 frame is recognized, the return is -1
 
     typedef struct {
-        bool found = 0;          // True, wenn der Header gefunden wurde
-        bool is_xing = 0;        // True, wenn es ein Xing-Header ist (VBR)
+        bool found = 0;            // true when the header was found
+        bool is_xing = 0;          // true when it is an Xing header (VBR)
         uint32_t flags = 0;
         uint32_t total_frames = 0;
         uint32_t total_bytes = 0;
-        uint8_t toc[100] = {0};    // Optional, wenn TOC Flag gesetzt
-        uint8_t vbr_scale = 0;   // Optional, wenn VBR Scale Flag gesetzt
+        uint8_t toc[100] = {0};    // optional, when TOC flag is set
+        uint8_t vbr_scale = 0;     // optional, when VBR scale flag set
     } xing_header_t;
 
-    xing_header_t xing_info;  // Struktur initialisieren
+    xing_header_t xing_info;  // initialize structure
 
     size_t xing_offset;
     if (s_channels == 1) { // Mono
@@ -3410,31 +3410,31 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
     }
     else return false;
 
-    if (nBytes < xing_offset + 4) { // Mindestens Platz für "Xing" oder "Info" Signatur
-        // Frame zu klein, kein Xing/Info-Header erwartet
+    if (nBytes < xing_offset + 4) { // min space for "Xing" oder "Info" signature
+        // Frame too small, no Xing/info header expected
         return false;
     }
 
     if (memcmp(buf + xing_offset, "Xing", 4) == 0 ||
         memcmp(buf + xing_offset, "Info", 4) == 0) {
 
-        //log_w("Xing/Info-Header found!");
+        //MP3_DEBUG("Xing/Info-Header found!");
 
-        // Lese die Flags (big-endian)
+        // read the flags (big-endian)
         xing_info.flags = (uint32_t)buf[xing_offset + 4] << 24 |
                           (uint32_t)buf[xing_offset + 5] << 16 |
                           (uint32_t)buf[xing_offset + 6] << 8  |
                           (uint32_t)buf[xing_offset + 7];
 
-        size_t current_read_offset = xing_offset + 8; // Nach Flags
+        size_t current_read_offset = xing_offset + 8;
 
-        // Prüfen und lesen der Daten basierend auf den Flags
+        // checking and reading the data based on the flags
         if (xing_info.flags & 0x0001) { // FLG_FRAMES
             xing_info.total_frames = (uint32_t)buf[current_read_offset] << 24 |
                                      (uint32_t)buf[current_read_offset + 1] << 16 |
                                      (uint32_t)buf[current_read_offset + 2] << 8  |
                                      (uint32_t)buf[current_read_offset + 3];
-            // log_w("total frames: %lu", xing_info.total_frames);
+            // MP3_DEBUG("total frames: %lu", xing_info.total_frames);
             s_xing_total_frames = xing_info.total_frames;
             current_read_offset += 4;
         }
@@ -3444,40 +3444,40 @@ bool mad_parse_xing_header(uint8_t *buf, int32_t nBytes) {
                                     (uint32_t)buf[current_read_offset + 1] << 16 |
                                     (uint32_t)buf[current_read_offset + 2] << 8  |
                                     (uint32_t)buf[current_read_offset + 3];
-            // log_w("total bytes: %lu", xing_info.total_bytes);
+            // MP3_DEBUG("total bytes: %lu", xing_info.total_bytes);
             s_xing_total_bytes = xing_info.total_bytes;
             current_read_offset += 4;
         }
 
         if (xing_info.flags & 0x0004) { // FLG_TOC
             memcpy(xing_info.toc, buf + current_read_offset, 100);
-            // log_w("TOC present.");
+            // MP3_DEBUG("TOC present.");
             current_read_offset += 100;
         }
 
         if (xing_info.flags & 0x0008) { // FLG_VBR_SCALE
             xing_info.vbr_scale = buf[current_read_offset];
-            // log_w("VBR Scale: %d", xing_info.vbr_scale);
+            // MP3_DEBUG("VBR Scale: %d", xing_info.vbr_scale);
             current_read_offset += 1;
         }
 
-        // Optional: Berechne die Dauer
+        // optional: Calculate the duration
         if (xing_info.total_frames > 0 && s_samplerate > 0) {
             float duration_seconds = (float)xing_info.total_frames * s_samples_per_frame / s_samplerate;
-            // log_w("estimated duration: %.2f seconds", duration_seconds);
+            // MP3_DEBUG("estimated duration: %.2f seconds", duration_seconds);
             s_xing_duration_seconds = duration_seconds;
-            s_xing_bitrate = (xing_info.total_bytes / duration_seconds) * 8;
+            s_xing_bitrate = (xing_info.total_bytes * 8) / duration_seconds; // bit/s
         }
 
     } else {
-        // log_w("No Xing/info header found.");
+        // MP3_DEBUG("No Xing/info header found.");
         return false;
     }
     return true;
 }
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint16_t mad_xing_bitrate(){
+uint32_t mad_xing_bitrate(){
     return s_xing_bitrate;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

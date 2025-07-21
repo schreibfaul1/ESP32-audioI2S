@@ -1,3 +1,13 @@
+/*
+ *  mp3_decoder.cpp
+ *  libmad decoder v0.15.0b
+ *  ESP32 impl. needs PSRAM
+ *
+ *  Created on: 04.07.2025
+ *  Updated on: 21.07.2025
+ */
+
+
 #include "mp3_decoder.h"
 
 const int32_t* leftChannel;  // internal variable for the PCM outBuff
