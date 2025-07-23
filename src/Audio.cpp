@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0e                                                                                                                                ";
+    Version 3.4.0f                                                                                                                                ";
 /*  Updated on: Jul 23.2025
 
     Author: Wolle (schreibfaul1)
@@ -4662,13 +4662,29 @@ void Audio::showstreamtitle(char* ml) {
     if(streamTitle.valid()){
         if(!m_streamTitle.valid()){
             m_streamTitle.clone_from(streamTitle); // first init
-            if(audio_showstreamtitle) audio_showstreamtitle(streamTitle.get());
         }
         if(!m_streamTitle.equals(streamTitle)){
-            if(audio_showstreamtitle) audio_showstreamtitle(streamTitle.get());
             m_streamTitle.clone_from(streamTitle);
         }
     }
+
+    if(!m_streamTitle.valid()) return;
+
+    if(m_streamTitle.starts_with("{\"")){ // maybe a json string
+        // "{\"status\":0,\"error\":{\"info\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\",\"code\":201},\"result\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\"}\n0";
+        ps_ptr<char> jsonIn;
+        jsonIn.clone_from(m_streamTitle);
+        jsonIn.truncate_at('\n'); // can be '{"status":1,"message":"Ok","result":"Ok","errorCode":0}\n0'
+        if(!jsonIn.isJson()) return;
+        int idx = jsonIn.index_of_icase("\"result\"");
+        if(idx < 0) return;
+        jsonIn.remove_before(idx + 10); // remove "result":
+        jsonIn.truncate_at('"'); // remove after '"'    Ok","result":"Ok","errorCode":0} --> OK
+        // log_i("jsonIn: %s", jsonIn.c_get());
+        m_streamTitle.unicodeToUTF8(jsonIn.c_get());
+    }
+
+    if(audio_showstreamtitle) audio_showstreamtitle(m_streamTitle.c_get());
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::showCodecParams() {
