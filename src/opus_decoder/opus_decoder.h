@@ -65,7 +65,7 @@ int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, boo
 
 
 enum : int8_t { OPUS_END = 120,
-                OPUS_CONTINUE = 110,
+                OPUS_CONTINUE = 10,
                 OPUS_PARSE_OGG_DONE = 100,
                 OPUS_NONE = 0,
                 OPUS_ERR = -1

@@ -441,10 +441,11 @@ public:
     bool            m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNrAndURL, uint64_t* mediaSeqNr);
     void            showCodecParams();
     int             findNextSync(uint8_t* data, size_t len);
+    uint32_t        decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded);
+    uint32_t        decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded);
     int             sendBytes(uint8_t* data, size_t len);
     void            setDecoderItems();
     void            computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
-    void            printDecodeError(int r);
     void            showID3Tag(const char* tag, const char* val);
     size_t          readAudioHeader(uint32_t bytes);
     int             read_WAV_Header(uint8_t* data, size_t len);
@@ -862,7 +863,6 @@ private:
     int16_t         m_validSamples = {0};           // #144
     int16_t         m_curSample{0};
     uint16_t        m_dataMode{0};                  // Statemaschine
-    int16_t         m_decodeError = 0;              // Stores the return value of the decoder
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
     uint16_t        m_timeout_ms_ssl = 2700;

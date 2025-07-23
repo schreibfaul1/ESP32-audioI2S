@@ -1523,40 +1523,38 @@ inline void free_fields(Args&... fields) {
 //
 // 2D Array in PSRAM with Bounds-Check, log_e and reset()
 //
-// Beispielaufruf:
-// ps_array2d<int32_t> s_samples; // Standardkonstruktor
-// s_samples.alloc(2, 1152);      // Speicher allozieren für [2][1152]
+// ps_array2d<int32_t> s_samples; // standard constructor
+// s_samples.alloc(2, 1152);      // mem alloc for [2][1152]
 //
-// int ch = 0; // Beispiel: Kanal 0
+// int ch = 0; // exanole: channel 0
 //
-// // Deklaration von pcm1 als Zeiger auf das erste Element der Zeile (ähnlich wie bei samples[ch])
+// declaration of PCM1 as a pointer on the first element of the line (similar to samples [CH])
 // int32_t* pcm1;
 //
-// // Zuweisung:
 // pcm1 = s_samples.get_raw_row_ptr(ch);
 //
-// // Du kannst jetzt 'pcm1' verwenden, als wäre es ein int32_t-Array der Größe 1152
+// use 'pcm1' now, as if it were an int32_t array of size 1152
 // pcm1[0] = 42;
 // pcm1[1151] = 99;
 //
-// s_samples.reset(); // Speicher manuell freigeben
+// s_samples.reset();
 //
 
 template <typename T>
 class ps_array2d
 {
 public:
-    // Standardkonstruktor: Initialisiert die Dimensionen auf 0.
+    // standard constructor
     ps_array2d() : m_dim1(0), m_dim2(0) {}
 
-    // Ursprünglicher Konstruktor: Alloziert Speicher direkt bei der Erstellung.
+    // original constructor
     ps_array2d(size_t dim1, size_t dim2)
         : m_dim1(dim1), m_dim2(dim2)
     {
         alloc_internal(dim1, dim2);
     }
 
-    // Neue alloc-Methode: Ermöglicht die spätere Allokation des Speichers.
+    // alloc-method
     bool alloc(size_t dim1, size_t dim2) {
         reset();
         m_dim1 = dim1;
@@ -1564,7 +1562,7 @@ public:
         return alloc_internal(dim1, dim2);
     }
 
-    // Überladung für `alloc` ohne Dimensionen, wenn die Dimensionen bereits gesetzt sind
+    // overload for `alloc` without dimensions if the dimensions are already set
     bool alloc() {
         if (m_dim1 == 0 || m_dim2 == 0) {
             log_e("ps_array2d::alloc() called without dimensions or dimensions are zero.");
@@ -1585,7 +1583,7 @@ public:
         std::memset(m_data.get(), 0, total_elements * sizeof(T));
     }
 
-    // Klammer-Operator für den Zugriff auf einzelne Elemente (Bounds-Check inklusive)
+    // brace operator for access to individual elements (Bounds check included)
     T &operator()(size_t i, size_t j)
     {
         if (!m_data.valid()) {
@@ -1614,8 +1612,7 @@ public:
         return m_data[i * m_dim2 + j];
     }
 
-    // NEUE METHODE: Gibt einen rohen Zeiger (T*) auf den Beginn einer spezifischen Zeile (row_index) zurück.
-    // Dies ist ideal für deinen Fall 'pcm1 = samples[ch];'
+    // gives a raw pointer  (T*) to the beginning of a specific line (row_index) back.
     T* get_raw_row_ptr(size_t row_index) {
         if (!m_data.valid()) {
             log_e("ps_array2d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
@@ -1642,13 +1639,13 @@ public:
         return m_data.get() + row_index * m_dim2;
     }
 
-    // Gibt true zurück, wenn der Speicher erfolgreich alloziiert wurde
+    // gives back true when the memory has been successfully allocated
     bool is_allocated() const { return m_data.valid(); }
 
     size_t dim1() const { return m_dim1; }
     size_t dim2() const { return m_dim2; }
 
-    // Manuelle Freigabe des Speichers
+    // manual release of the memory
     void reset() {
         m_data.reset();
         m_dim1 = 0;
@@ -1657,10 +1654,10 @@ public:
 
 private:
     size_t m_dim1, m_dim2;
-    ps_ptr<T> m_data; // Verwaltet den linearen Speicherblock
-    static inline T m_dummy{};  // statischer Dummy-Wert
+    ps_ptr<T> m_data; // manages the linear memory block
+    static inline T m_dummy{};  // dummy-value for errors
 
-    // Private Hilfsmethode für die eigentliche Allokationslogik
+    // private auxiliary method for the actual allocation logic
     bool alloc_internal(size_t dim1, size_t dim2) {
         if (dim1 == 0 || dim2 == 0) {
             log_e("ps_array2d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
@@ -1684,20 +1681,19 @@ private:
 //
 // 3D Array in PSRAM with Bounds-Check, log_e and reset()
 //
-// Beispielaufruf:
 // ps_array3d<int32_t> s_sbsample;
 // s_sbsample.alloc(2, 36, 32);
 //
-// int ch = 0; // Beispiel für die erste Dimension
-// int gr = 0; // Beispiel für den Gruppen-Index
+// int ch = 0; // example of the first dimension
+// int gr = 0; // example of the group index
 //
-// // Deklaration des C-Stil-Zeigers auf ein 1D-Array [32]
+// C- pointer to a 1D-Array [32]
 // int32_t (*sample)[32];
 //
-// // Zuweisung mithilfe der neuen Methode get_raw_row_ptr und dem passenden reinterpret_cast
+// // allocation using the new method get_raw_row_ptr and the appropriate reinterpret_cast
 // sample = reinterpret_cast<int32_t(*)[32]>(s_sbsample.get_raw_row_ptr(ch, 18 * gr));
 //
-// // Jetzt kannst du 'sample' verwenden:
+// // use 'sample' now:
 // (*sample)[0] = 10;
 //
 // s_sbsample.reset();
@@ -1707,17 +1703,17 @@ private:
 template <typename T>
 class ps_array3d{
 public:
-    // Standardkonstruktor
+    // standard constructor
     ps_array3d() : m_dim1(0), m_dim2(0), m_dim3(0) {}
 
-    // Ursprünglicher Konstruktor
+    // original constructor
     ps_array3d(size_t dim1, size_t dim2, size_t dim3)
         : m_dim1(dim1), m_dim2(dim2), m_dim3(dim3)
     {
         alloc_internal(dim1, dim2, dim3);
     }
 
-    // alloc-Methode
+    // alloc-method
     bool alloc(size_t dim1, size_t dim2, size_t dim3) {
         reset();
         m_dim1 = dim1;
@@ -1726,7 +1722,7 @@ public:
         return alloc_internal(dim1, dim2, dim3);
     }
 
-    // Überladung für `alloc` ohne Dimensionen
+    // overload for `alloc` without dimensions
     bool alloc() {
         if (m_dim1 == 0 || m_dim2 == 0 || m_dim3 == 0) {
             log_e("ps_array3d::alloc() called without dimensions or dimensions are zero.");
@@ -1738,16 +1734,16 @@ public:
 
     void clear(){
         if (!is_allocated()) {
-            // Nichts zu tun, wenn kein Speicher zugewiesen ist
+            // nothing to do if there is no memory assigned
             return;
         }
-        // Berechne die Gesamtanzahl der Elemente
+        // calculate the total number of elements
         const size_t total_elements = m_dim1 * m_dim2 * m_dim3;
         // Setze den gesamten Speicherblock auf null
         std::memset(m_data.get(), 0, total_elements * sizeof(T));
     }
 
-    // Klammer-Operator für den Zugriff auf einzelne Elemente
+    // brace operator for access to individual elements
     T &operator()(size_t i, size_t j, size_t k)
     {
         if (!m_data.valid()) {
@@ -1778,7 +1774,7 @@ public:
         return m_data[i * (m_dim2 * m_dim3) + j * m_dim3 + k];
     }
 
-    // Methode zum Abrufen eines rohen Zeigers auf den Beginn eines 2D-Slices.
+    // method for retrieving a raw pointer at the beginning of a 2D slice.
     T* get_raw_slice_ptr(size_t i) {
         if (!m_data.valid()) {
             log_e("ps_array3d::get_raw_slice_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
@@ -1803,8 +1799,8 @@ public:
         return m_data.get() + i * (m_dim2 * m_dim3);
     }
 
-    // NEUE METHODE: Gibt einen rohen Zeiger (T*) auf den Beginn einer spezifischen Zeile (dim2_idx)
-    // innerhalb eines spezifischen Slices (dim1_idx) zurück.
+    // gives a raw pointer (T*) to the beginning of a specific line (dim2_idx) back.
+    // return within a specific slice (DIM1_IDX).
     T* get_raw_row_ptr(size_t dim1_idx, size_t dim2_idx) {
         if (!m_data.valid()) {
             log_e("ps_array3d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
@@ -1815,7 +1811,7 @@ public:
                   (unsigned)dim1_idx, (unsigned)dim2_idx, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
             return nullptr;
         }
-        // Berechne den Offset für die spezifische Zeile im linearen Speicher
+        // calculate the offset for the specific line in the linear memory
         return m_data.get() + (dim1_idx * (m_dim2 * m_dim3)) + (dim2_idx * m_dim3);
     }
 
@@ -1833,14 +1829,14 @@ public:
     }
 
 
-    // Gibt true zurück, wenn der Speicher erfolgreich alloziiert wurde
+    // gives back true when the memory has been successfully allocated
     bool is_allocated() const { return m_data.valid(); }
 
     size_t dim1() const { return m_dim1; }
     size_t dim2() const { return m_dim2; }
     size_t dim3() const { return m_dim3; }
 
-    // Manuelle Freigabe des Speichers
+    // manual release of the memory
     void reset() {
         m_data.reset();
         m_dim1 = 0;
@@ -1850,10 +1846,10 @@ public:
 
 private:
     size_t m_dim1, m_dim2, m_dim3;
-    ps_ptr<T> m_data; // Verwaltet den linearen Speicherblock
-    static inline T m_dummy{}; // Dummy-Wert für Fehlerfälle
+    ps_ptr<T> m_data; // manages the linear memory block
+    static inline T m_dummy{}; // dummy-value for errors
 
-    // Private Hilfsmethode für die eigentliche Allokationslogik
+    // private auxiliary method for the actual allocation logic
     bool alloc_internal(size_t dim1, size_t dim2, size_t dim3) {
         if (dim1 == 0 || dim2 == 0 || dim3 == 0) {
             log_e("ps_array3d: Cannot allocate with zero dimensions. [line %d]", __LINE__);

@@ -4,7 +4,7 @@
  *  ESP32 impl. needs PSRAM
  *
  *  Created on: 04.07.2025
- *  Updated on: 21.07.2025
+ *  Updated on: 23.07.2025
  */
 
 
@@ -32,7 +32,7 @@ void MP3Decoder_ClearBuffer(){
 
 uint32_t    MP3GetOutputSamps(){return mad_get_output_samps();}
 void        MP3Decoder_FreeBuffers(){freeBuffers(); s_isInit = false;};
-int32_t     MP3GetSampRate(){return mad_get_sample_rate();}
+int32_t     MP3GetSampRate(){if(mad_get_channels() == 2) return mad_get_sample_rate(); else return mad_get_sample_rate() * 2;}
 int32_t     MP3GetChannels(){return mad_get_channels();}
 uint8_t     MP3GetBitsPerSample(){return 16;}
 bool        MP3Decoder_IsInit(){return s_isInit;}

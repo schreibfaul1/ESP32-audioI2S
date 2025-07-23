@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0d                                                                                                                                ";
-/*  Updated on: Jul 22.2025
+    Version 3.4.0e                                                                                                                                ";
+/*  Updated on: Jul 23.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4811,58 +4811,10 @@ void Audio::setDecoderItems() {
     showCodecParams();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int Audio::sendBytes(uint8_t* data, size_t len) {
-    if(!m_f_running) return 0; // guard
-    m_sbyt.bytesLeft = 0;
-    m_sbyt.nextSync = 0;
-
-    if(!m_f_playing) {
-        m_sbyt.channels = 2; // assume aac stereo
-        m_sbyt.isPS = 0;
-        m_sbyt.f_setDecodeParamsOnce = true;
-        m_sbyt.nextSync = findNextSync(data, len);
-        if(m_sbyt.nextSync <  0) return len; // no syncword found
-        if(m_sbyt.nextSync == 0) { m_f_playing = true; }
-        if(m_sbyt.nextSync >  0) return m_sbyt.nextSync;
-    }
-    // m_f_playing is true at this pos
-    m_sbyt.bytesLeft = len;
-    m_decodeError = 0;
-    int bytesDecoded = 0;
-
-    if(m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
-    if(!m_f_decode_ready) return 0; // find sync first
-
-    switch(m_codec) {
-        case CODEC_WAV:    m_decodeError = 0; m_sbyt.bytesLeft = 0; break;
-        case CODEC_MP3:    m_decodeError = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_AAC:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_M4A:    m_decodeError = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_FLAC:   m_decodeError = FLACDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_OPUS:   m_decodeError = OPUSDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_VORBIS: m_decodeError = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        default: {
-            AUDIO_LOG_ERROR("no valid codec found codec = %d", m_codec);
-            stopSong();
-        }
-    }
-    bytesDecoded = len - m_sbyt.bytesLeft;
-
-    // m_decodeError - possible values are:
-    //                   0: okay, no error
-    //                 100: the decoder needs more data
-    //                 < 0: there has been an error
-    //                -100: serious error, stop song
-
-    if(m_decodeError < 0) { // Error, skip the frame...
-        // AUDIO_LOG_ERROR("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X '%c%c%c%c%c%c%c%c%c%c'",
-        //        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9], data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9]);
-        if(m_decodeError == -100){stopSong(); return bytesDecoded;} // serious error, e.g. decoder could not be initialized
-        if((m_codec == CODEC_MP3) && (m_f_chunked == true)){
-            ;
-        }
-
-        if(m_codec == CODEC_AAC && m_decodeError == -21){ // mono <-> stereo change
+uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded){
+        // for(int i = 0; i < 10; i++){printf("0x%02X ", data[i]);} printf("\n");
+        if(res == -100){stopSong(); return bytesDecoded;} // serious error, e.g. decoder could not be initialized
+        if(m_codec == CODEC_AAC && res == -21){ // mono <-> stereo change
             //  According to the specification, the channel configuration is transferred in the first ADTS header and no longer changes in the entire
             //  stream. Some streams send short mono blocks in a stereo stream. e.g. http://mp3.ffh.de/ffhchannels/soundtrack.aac
             //  This triggers error -21 because the faad2 decoder cannot switch automatically.
@@ -4878,25 +4830,73 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
             AACDecoder_AllocateBuffers();
             return 0;
         }
-        if(m_codec == CODEC_FLAC) {
-             ;
-        }
-        if(m_codec == CODEC_OPUS) {
-            ;
-        }
-        printDecodeError(m_decodeError);
         m_f_playing = false; // seek for new syncword
         if(bytesDecoded == 0) return 1; // skip one byte and seek for the next sync word
         return bytesDecoded;
-    }
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded){
+    if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
+    if(m_codec == CODEC_FLAC){  if(res == FLAC_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_OPUS){  if(res == OPUS_PARSE_OGG_DONE)   return bytesDecoded;  // nothing to play
+                                if(res == OPUS_END)              return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_VORBIS){if(res == VORBIS_PARSE_OGG_DONE) return bytesDecoded;} // nothing to play
+    return 0;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+int Audio::sendBytes(uint8_t* data, size_t len) {
+    if(!m_f_running) return 0; // guard
+    m_sbyt.bytesLeft = 0;
+    m_sbyt.nextSync = 0;
 
-    if(bytesDecoded == 0 && m_decodeError == 0) { // unlikely framesize
+    if(!m_f_playing) {
+        m_sbyt.channels = 2; // assume aac stereo
+        m_sbyt.isPS = 0;
+        m_sbyt.f_setDecodeParamsOnce = true;
+        m_sbyt.nextSync = findNextSync(data, len);
+        if(m_sbyt.nextSync <  0) return len; // no syncword found
+        if(m_sbyt.nextSync == 0) { m_f_playing = true; }
+        if(m_sbyt.nextSync >  0) return m_sbyt.nextSync;
+    }
+    // m_f_playing is true at this pos
+    int res = 0;
+    m_sbyt.bytesLeft = len;
+    int bytesDecoded = 0;
+
+    if(m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
+    if(!m_f_decode_ready) return 0; // find sync first
+
+    switch(m_codec) {
+        case CODEC_WAV:    res = 0; m_sbyt.bytesLeft = 0; break;
+        case CODEC_MP3:    res = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_AAC:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_M4A:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_FLAC:   res = FLACDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_OPUS:   res = OPUSDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_VORBIS: res = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        default: {
+            AUDIO_LOG_ERROR("no valid codec found codec = %d", m_codec);
+            stopSong();
+        }
+    }
+    bytesDecoded = len - m_sbyt.bytesLeft;
+
+    // res - possible values are:
+    //          0: okay, no error
+    //        >= 100: the decoder needs more data
+    //        < 0: there has been an error
+    //       -100: serious error, stop song
+
+    if(res <  0){ return decodeError(res, data, bytesDecoded);} // Error, skip the frame...
+    if(res > 99){ return decodeContinue(res, data, bytesDecoded);} // decoder needs more data...
+
+    if(bytesDecoded == 0 && res == 0) { // unlikely framesize
         AUDIO_INFO("framesize is 0, start decoding again");
         m_f_playing = false; // seek for new syncword
         // we're here because there was a wrong sync word so skip one byte and seek for the next
         return 1;
     }
-    // status: bytesDecoded > 0 and m_decodeError >= 0
+    // status: bytesDecoded > 0 and res >= 0
     const char* st = NULL;
     std::vector<uint32_t> vec;
     switch(m_codec) {
@@ -4914,8 +4914,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 m_validSamples = len;
                             }
                             break;
-        case CODEC_MP3:     if(m_decodeError == MAD_ERROR_CONTINUE) return bytesDecoded; // nothing to play, mybe eof
-                            m_validSamples = MP3GetOutputSamps();
+        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
                             break;
         case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
                             if(!m_sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
@@ -4926,8 +4925,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             break;
         case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
                             break;
-        case CODEC_FLAC:    if(m_decodeError == FLAC_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-                            m_validSamples = FLACGetOutputSamps() / getChannels();
+        case CODEC_FLAC:    m_validSamples = FLACGetOutputSamps() / getChannels();
                             st = FLACgetStreamTitle();
                             if(st) {
                                 AUDIO_INFO(st);
@@ -4942,9 +4940,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 if(audio_oggimage) audio_oggimage(m_audiofile, vec);
                             }
                             break;
-        case CODEC_OPUS:    if(m_decodeError == OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-                            if(m_decodeError == OPUS_END)            return bytesDecoded; // nothing to play
-                            m_validSamples = OPUSGetOutputSamps();
+        case CODEC_OPUS:    m_validSamples = OPUSGetOutputSamps();
                             st = OPUSgetStreamTitle();
                             if(st){
                                 AUDIO_INFO(st);
@@ -4968,8 +4964,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
 
-        case CODEC_VORBIS:  if(m_decodeError == VORBIS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
-                            m_validSamples = VORBISGetOutputSamps();
+        case CODEC_VORBIS:  m_validSamples = VORBISGetOutputSamps();
                             st = VORBISgetStreamTitle();
                             if(st) {
                                 AUDIO_INFO(st);
@@ -5087,28 +5082,6 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
             if(audio_id3lyrics) audio_id3lyrics(m_syltLines[m_cat.syltIdx].c_get());
             m_cat.syltIdx++;
         }
-    }
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::printDecodeError(int r) {
-    const char* e;
-
-    if(m_codec == CODEC_MP3) {
-            ;
-    }
-    if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
-        e = AACGetErrorMessage(abs(r));
-        AUDIO_INFO("AAC decode error %d : %s", r, e);
-    }
-    if(m_codec == CODEC_FLAC) {
-      ;
-    }
-    if(m_codec == CODEC_OPUS) {
-      ;
-    }
-    if(m_codec == CODEC_VORBIS) {
-        ;
-
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
