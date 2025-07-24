@@ -112,6 +112,7 @@ enum mad_error {
     MAD_ERROR_NONE = 0x0000,           /* no error */
     MAD_ERROR_BUFLEN = 0x0001,         /* input buffer too small (or EOF) */
     MAD_ERROR_BUFPTR = 0x0002,         /* invalid (null) buffer pointer */
+    MAD_ERROR_BADVALUE = 0x0003,
     MAD_ERROR_NOMEM = 0x0031,          /* not enough memory */
     MAD_ERROR_CONTINUE = 0x0064,       // need more data (100 decimal)
     MAD_ERROR_LOSTSYNC = 0x0101,       /* lost synchronization */

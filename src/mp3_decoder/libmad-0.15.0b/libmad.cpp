@@ -32,7 +32,7 @@ uint8_t  s_mpeg_version = 0;
 uint8_t  s_layer = 0;
 uint8_t  s_channel_mode = 0;
 uint8_t  s_underflow_cnt = 0;
-
+const uint8_t* s_bitptrBufend;
 uint32_t s_xing_bitrate = 0;
 uint32_t s_xing_total_bytes = 0;
 uint32_t s_xing_duration_seconds = 0;
@@ -70,12 +70,20 @@ bool allocateBuffers(){
     stream.alloc();
     frame.alloc();
     synth.alloc();
-    s_filter = (FilterType*)ps_malloc(sizeof(FilterType));
-    if (!s_filter) { printf("PSRAM allocation failed!\n"); }
-    s_samplesBuff.alloc(2, 1152);
+#ifdef CONFIG_IDF_TARGET_ESP32
+    s_filter = (FilterType*)malloc(sizeof(FilterType));       // use SRAM, PSRAM ist too slow
+    if (!s_filter) { printf("SRAM allocation failed!\n"); }
+    s_samplesBuff.alloc(2, 1152, "s_samplesBuff", false);
 
-    s_main_data.alloc(MAD_BUFFER_MDLEN);
-    s_sbsample.alloc(2, 36, 32); /* synthesis subband filter samples */
+    s_main_data.alloc(MAD_BUFFER_MDLEN, "s_main_data", false);
+    s_sbsample.alloc(2, 36, 32, "s_sbsample", false); /* synthesis subband filter samples */
+#else
+    s_filter = (FilterType*)ps_malloc(sizeof(FilterType));       // use PSRAM
+    if (!s_filter) { printf("PSRAM allocation failed!\n"); }
+    s_samplesBuff.alloc(2, 1152, "s_samplesBuff", true);
+    s_main_data.alloc(MAD_BUFFER_MDLEN, "s_main_data", true);
+    s_sbsample.alloc(2, 36, 32, "s_sbsample", true); /* synthesis subband filter samples */
+#endif
     mad_stream_init(stream.get());
     mad_frame_init(frame.get());
     mad_synth_init(synth.get());
@@ -153,6 +161,58 @@ uint32_t mad_bit_read(struct mad_bitptr* bitptr, uint32_t len) { // 	read an arb
     return value;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef __XTENSA__
+uint16_t mad_bit_crc(struct mad_bitptr bitptr, uint32_t len, uint16_t init) {
+    uint32_t crc = init;
+
+    // Verarbeite 32-Bit-Blöcke
+    while (len >= 32 && bitptr.byte + 4 <= s_bitptrBufend) {
+        uint32_t data;
+        asm volatile (
+            "l32i %0, %1, 0" // Lade 32-Bit-Wort
+            : "=r" (data)
+            : "r" (bitptr.byte)
+        );
+        bitptr.byte += 4;
+        len -= 32;
+
+        // Byteweise CRC-Berechnung mit Xtensa-Optimierung
+        for (int i = 0; i < 4; i++) {
+            uint32_t byte = (data >> (24 - i * 8)) & 0xff;
+            uint32_t index;
+            asm volatile (
+                "xor %0, %1, %2" // XOR von crc >> 8 und byte
+                : "=r" (index)
+                : "r" (crc >> 8), "r" (byte)
+            );
+            crc = (crc << 8) ^ crc_table[index & 0xff];
+        }
+    }
+
+    // Verbleibende Bytes
+    while (len >= 8 && bitptr.byte < s_bitptrBufend) {
+        uint32_t byte = mad_bit_read(&bitptr, 8); // Nutzt optimierte mad_bit_read
+        uint32_t index;
+        asm volatile (
+            "xor %0, %1, %2"
+            : "=r" (index)
+            : "r" (crc >> 8), "r" (byte)
+        );
+        crc = (crc << 8) ^ crc_table[index & 0xff];
+        len -= 8;
+    }
+
+    // Verbleibende Bits
+    while (len-- && bitptr.byte < s_bitptrBufend) {
+        uint32_t msb = mad_bit_read(&bitptr, 1); // Nutzt optimierte mad_bit_read
+        msb ^= (crc >> 15);
+        crc <<= 1;
+        if (msb & 1) crc ^= CRC_POLY;
+    }
+
+    return crc & 0xffff;
+}
+#else  // ESP32P4
 uint16_t mad_bit_crc(struct mad_bitptr bitptr, uint32_t len, uint16_t init) { //  DESCRIPTION:	compute CRC-check word
     uint32_t crc;
     for (crc = init; len >= 32; len -= 32) {
@@ -180,6 +240,7 @@ uint16_t mad_bit_crc(struct mad_bitptr bitptr, uint32_t len, uint16_t init) { //
     }
     return crc & 0xffff;
 }
+#endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t I_sample(struct mad_bitptr* ptr, uint32_t nb) { // decode one requantized Layer I sample from a bitstream
     int32_t sample;
@@ -431,6 +492,7 @@ char const* mad_stream_errorstr(mad_stream_t const* stream) { // return a string
         case MAD_ERROR_NONE: return "no error";
         case MAD_ERROR_BUFLEN: return "input buffer too small (or EOF)";
         case MAD_ERROR_BUFPTR: return "invalid (null) buffer pointer";
+        case MAD_ERROR_BADVALUE: return "wrong value";
         case MAD_ERROR_NOMEM: return "not enough memory";
         case MAD_ERROR_LOSTSYNC: return "lost synchronization";
         case MAD_ERROR_BADLAYER: return "reserved header layer value";
@@ -474,6 +536,7 @@ void mad_stream_buffer(mad_stream_t* stream, uint8_t const* buffer, uint32_t len
     stream->this_frame = buffer;
     stream->next_frame = buffer;
     stream->sync = 1;
+    s_bitptrBufend = buffer + length;
     mad_bit_init(&stream->ptr, buffer);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2700,7 +2763,11 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
         }
     }
     if (!s_overlap.is_allocated()) {
-        s_overlap.alloc(2, 32, 18);
+#ifdef CONFIG_IDF_TARGET_ESP32
+        s_overlap.alloc(2, 32, 18, "s_overlap", false);
+#else
+        s_overlap.alloc(2, 32, 18, "s_overlap", true); // absolutely
+#endif
         if (!s_overlap.is_allocated()) {
             MP3_LOG_ERROR("not enough memory");
             stream->error = MAD_ERROR_NOMEM;
@@ -2806,13 +2873,21 @@ int32_t mad_layer_III(mad_stream_t* stream, mad_frame_t* frame) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 signed short mad_fixed_to_short(int32_t sample) {
-    // clamp
+#ifdef __XTENSA__
+    int32_t clamped;
+    asm volatile (
+        "clamps %0, %1, 15" // Clamps sample auf [-32768, 32767]
+        : "=a" (clamped)
+        : "a" (sample >> (MAD_F_FRACBITS + 1 - 16))
+    );
+    return (signed short)clamped;
+#else
     if (sample >= MAD_F_ONE)
         sample = MAD_F_ONE - 1;
     else if (sample < -MAD_F_ONE)
         sample = -MAD_F_ONE;
-    // 28 Bit Fixed Point calculate down to 16 bit
     return (signed short)(sample >> (MAD_F_FRACBITS + 1 - 16));
+#endif
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void mad_header_init(struct mad_header* header) {
@@ -2842,6 +2917,7 @@ void mad_frame_finish(mad_frame_t* frame) {// deallocate any dynamic memory asso
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t decode_header(struct mad_header* header, mad_stream_t* stream) { // read header data and following CRC word
+
     uint32_t index;
     header->flags = 0;
     header->private_bits = 0;
@@ -3107,13 +3183,23 @@ void mad_frame_mute(mad_frame_t* frame) { // zero all subband values so the fram
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t mad_fill_outbuff(int16_t *outSamples){
-        int32_t* leftChannel;  // internal variable for the PCM outBuff
-        int32_t* rightChannel;
-        leftChannel  = *reinterpret_cast<int32_t(*)[1152]>(s_samplesBuff.get_raw_row_ptr(0));
-        rightChannel = (s_mad_channels == 2) ? *reinterpret_cast<int32_t(*)[1152]>(s_samplesBuff.get_raw_row_ptr(1)) : *reinterpret_cast<int32_t(*)[1152]>(s_samplesBuff.get_raw_row_ptr(0));
+int32_t mad_fill_outbuff(int16_t *outSamples) {
+    int32_t* leftChannel = *reinterpret_cast<int32_t(*)[1152]>(s_samplesBuff.get_raw_row_ptr(0));
+    int32_t* rightChannel = (s_mad_channels == 2) ? *reinterpret_cast<int32_t(*)[1152]>(s_samplesBuff.get_raw_row_ptr(1)) : leftChannel;
 
-    for (uint32_t i = 0; i < s_mad_out_samples; i++) { // change PCM samples into 16-bit and write in target buffer
+    uint32_t i = 0;
+    for (; i + 4 <= s_mad_out_samples; i += 4) {
+        // Verarbeite 4 Samples auf einmal
+        outSamples[2*i + 0] = mad_fixed_to_short(leftChannel[i]);
+        outSamples[2*i + 1] = mad_fixed_to_short(rightChannel[i]);
+        outSamples[2*i + 2] = mad_fixed_to_short(leftChannel[i + 1]);
+        outSamples[2*i + 3] = mad_fixed_to_short(rightChannel[i + 1]);
+        outSamples[2*i + 4] = mad_fixed_to_short(leftChannel[i + 2]);
+        outSamples[2*i + 5] = mad_fixed_to_short(rightChannel[i + 2]);
+        outSamples[2*i + 6] = mad_fixed_to_short(leftChannel[i + 3]);
+        outSamples[2*i + 7] = mad_fixed_to_short(rightChannel[i + 3]);
+    }
+    for (; i < s_mad_out_samples; i++) {
         outSamples[2*i + 0] = mad_fixed_to_short(leftChannel[i]);
         outSamples[2*i + 1] = mad_fixed_to_short(rightChannel[i]);
     }

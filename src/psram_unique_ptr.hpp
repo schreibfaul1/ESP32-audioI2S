@@ -93,9 +93,9 @@ public:
     //     test.clear(); // memset "0"
     // }
 
-    void alloc(std::size_t size, const char* name = nullptr) {
+    void alloc(std::size_t size, const char* name = nullptr, bool usePSRAM = true) {
         size = (size + 15) & ~15; // Align to 16 bytes
-        if (psramFound()) { // Check at the runtime whether PSRAM is available
+        if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
             mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Important!
         }
         else{
@@ -132,7 +132,7 @@ public:
      * @param num_elements The number of elements to allocate space for.
      * @param name Optional name for OOM messages.
      */
-    void calloc(std::size_t num_elements, const char* name = nullptr) {
+    void calloc(std::size_t num_elements, const char* name = nullptr, bool usePSRAM = true) {
         size_t total_size = num_elements * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
@@ -140,7 +140,7 @@ public:
 
         void* raw_mem = nullptr;
 
-        if (psramFound()) { // Check at the runtime whether PSRAM is available
+        if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
             raw_mem = ps_malloc(total_size);
         }
         else {
@@ -1664,11 +1664,11 @@ public:
     }
 
     // alloc-method
-    bool alloc(size_t dim1, size_t dim2) {
+    bool alloc(size_t dim1, size_t dim2, const char* name = nullptr, bool usePSRAM = true) {
         reset();
         m_dim1 = dim1;
         m_dim2 = dim2;
-        return alloc_internal(dim1, dim2);
+        return alloc_internal(dim1, dim2, name, usePSRAM);
     }
 
     // overload for `alloc` without dimensions if the dimensions are already set
@@ -1767,13 +1767,13 @@ private:
     static inline T m_dummy{};  // dummy-value for errors
 
     // private auxiliary method for the actual allocation logic
-    bool alloc_internal(size_t dim1, size_t dim2) {
+    bool alloc_internal(size_t dim1, size_t dim2, const char* name = nullptr, bool usePSRAM = true) {
         if (dim1 == 0 || dim2 == 0) {
             log_e("ps_array2d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
             return false;
         }
         size_t total_elements = dim1 * dim2;
-        m_data.calloc(total_elements, "ps_array2d_data");
+        m_data.calloc(total_elements, name, usePSRAM);
         if (!m_data.valid()) {
             log_e("ps_array2d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
             m_dim1 = 0; m_dim2 = 0;
@@ -1823,12 +1823,12 @@ public:
     }
 
     // alloc-method
-    bool alloc(size_t dim1, size_t dim2, size_t dim3) {
+    bool alloc(size_t dim1, size_t dim2, size_t dim3, const char* name = nullptr, bool usePSRAM = true) {
         reset();
         m_dim1 = dim1;
         m_dim2 = dim2;
         m_dim3 = dim3;
-        return alloc_internal(dim1, dim2, dim3);
+        return alloc_internal(dim1, dim2, dim3, name, usePSRAM);
     }
 
     // overload for `alloc` without dimensions
@@ -1959,13 +1959,13 @@ private:
     static inline T m_dummy{}; // dummy-value for errors
 
     // private auxiliary method for the actual allocation logic
-    bool alloc_internal(size_t dim1, size_t dim2, size_t dim3) {
+    bool alloc_internal(size_t dim1, size_t dim2, size_t dim3, const char* name = nullptr, bool usePSRAM = true) {
         if (dim1 == 0 || dim2 == 0 || dim3 == 0) {
             log_e("ps_array3d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
             return false;
         }
         size_t total_elements = dim1 * dim2 * dim3;
-        m_data.calloc(total_elements, "ps_array3d_data");
+        m_data.calloc(total_elements, name, usePSRAM);
         if (!m_data.valid()) {
             log_e("ps_array3d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
             m_dim1 = 0; m_dim2 = 0; m_dim3 = 0;

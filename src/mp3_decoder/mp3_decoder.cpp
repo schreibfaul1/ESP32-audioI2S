@@ -4,7 +4,7 @@
  *  ESP32 impl. needs PSRAM
  *
  *  Created on: 04.07.2025
- *  Updated on: 23.07.2025
+ *  Updated on: 24.07.2025
  */
 
 
@@ -41,9 +41,12 @@ const char* MP3GetLayer(){return mad_get_layer();}
 uint32_t    MP3GetBitrate(){if(mad_xing_bitrate()) return mad_xing_bitrate(); else return mad_get_bitrate();}
 uint32_t    MP3GetAudioFileDuration(){return mad_xing_duration_seconds();}
 
-
+uint16_t cnt = 0;
+uint64_t av = 0;
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
+    int64_t start_time = esp_timer_get_time(); // Startzeit in Mikrosekunden
+
     if(s_first_call){
         int32_t res = MP3FindSyncWord(data, *bytesLeft);
         if(res != 0) {MP3_LOG_ERROR("res: %i", res); return res;}
@@ -56,9 +59,18 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         s_first_call = false;
     }
     int32_t res = mad_decode(data, bytesLeft, outSamples);
+
+    int64_t end_time = esp_timer_get_time(); // average decode time
+    av += (end_time - start_time);
+    cnt++;
+    if(cnt >= 1000){
+        cnt = 0;
+        log_i("av us %lli", av);
+        av = 0;
+    }
+
     if(stream->error == MAD_ERROR_CONTINUE) {/*MP3_LOG_ERROR("BufLen %i", res);*/ return res;} // need more data
-    vTaskDelay(1);
-    if(res != 0) {MP3_LOG_ERROR("res: %i", res); return res;}
+    if(res != 0) {/* MP3_LOG_ERROR("res: %i", res); */ return res;}
     if(s_stream_items){
         s_stream_items = false;
         // log_w("samplerate: %i", MP3GetSampRate());
@@ -75,6 +87,8 @@ int32_t MP3Decode(uint8_t *data, int32_t *bytesLeft, int16_t *outSamples){
         // log_w("xing_audiosize: %i bytes", mad_xing_tota_bytes());
         // log_w("xing_total_mp3_frames: %i ", mad_xing_total_frames());
     }
+
+
     return res;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
