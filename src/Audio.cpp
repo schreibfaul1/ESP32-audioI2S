@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0f                                                                                                                                ";
-/*  Updated on: Jul 23.2025
+    Version 3.4.0g                                                                                                                                ";
+/*  Updated on: Jul 24.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4852,7 +4852,7 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded){
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded){
-    if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
+    // if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
     if(m_codec == CODEC_FLAC){  if(res == FLAC_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
     if(m_codec == CODEC_OPUS){  if(res == OPUS_PARSE_OGG_DONE)   return bytesDecoded;  // nothing to play
                                 if(res == OPUS_END)              return bytesDecoded;} // nothing to play
@@ -5041,11 +5041,11 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
             if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
         }
         if(m_codec == CODEC_MP3){
-            if(MP3GetAudioFileDuration() > 0){ // XING header present?
-                m_audioFileDuration = MP3GetAudioFileDuration();
-                m_cat.nominalBitRate  = MP3GetBitrate();
-                m_avr_bitrate = m_cat.nominalBitRate;
-            }
+            // if(MP3GetAudioFileDuration() > 0){ // XING header present?
+            //     m_audioFileDuration = MP3GetAudioFileDuration();
+            //     m_cat.nominalBitRate  = MP3GetBitrate();
+            //     m_avr_bitrate = m_cat.nominalBitRate;
+            // }
         }
     }
 
