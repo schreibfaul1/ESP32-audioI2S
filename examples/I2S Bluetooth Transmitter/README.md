@@ -15,7 +15,7 @@ The BT transmitter is the slave and is connected in this way, the DAC serves as 
 
 The ESP32-A2DP library is used by P. Schatzmann, https://github.com/pschatzmann/ESP32-A2DP.git
 
-As the I2S output of the audioI2S library not always outputs 44.1KHz, it is scaled internally to 44.1KHz for compatibility.
+As the I2S output of the audioI2S library not always outputs 44.1KHz, it is scaled internally to 44.1KHz for compatibility. 8000Hz, 22050Hz, 44100Hz and 48000Hz are possible.
 This is necessary because the ESP32 BT library expects this sample rate. This means that old BT devices can also be used.
 It doesn't matter what sample rate the audio source has.
 

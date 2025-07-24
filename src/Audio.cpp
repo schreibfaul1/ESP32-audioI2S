@@ -2706,6 +2706,7 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void IRAM_ATTR Audio::playChunk() {
     if(m_validSamples == 0) return; // nothing to do
+    int16_t* outBuff_ptr = nullptr;
 
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
@@ -2755,14 +2756,27 @@ void IRAM_ATTR Audio::playChunk() {
         m_plCh.validSamples -= 1;
     }
     //------------------------------------------------------------------------------------------
+#ifdef SR_48K
     m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_validSamples);
+    m_validSamples = m_plCh.samples48K;
+    outBuff_ptr = m_samplesBuff48K.get();
+
+    if(m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000){
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+        i2s_channel_disable(m_i2s_tx_handle);
+        i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+        i2s_channel_enable(m_i2s_tx_handle);
+    };
+#else
+    outBuff_ptr = m_outBuff.get();
+#endif
 
     if(audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)m_samplesBuff48K.get(), m_plCh.samples48K, &continueI2S); // 48KHz stereo 16bps
+        audio_process_i2s((int16_t*)outBuff_ptr, m_validSamples, &continueI2S); // 48KHz stereo 16bps
         if(!continueI2S) {
-            m_plCh.samples48K = 0;
+            m_validSamples = 0;
             m_plCh.count = 0;
             return;
         }
@@ -2770,11 +2784,11 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
 
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, (int16_t*)m_samplesBuff48K.get() + m_plCh.count, m_plCh.samples48K * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, outBuff_ptr + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
     if( ! (m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
-    m_plCh.samples48K -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
+    m_validSamples -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
     m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
-    if(m_plCh.samples48K <= 0) { m_validSamples = 0; m_plCh.count = 0; }
+    if(m_validSamples <= 0) { m_validSamples = 0; m_plCh.count = 0; }
 
 // ---- statistics, bytes written to I2S (every 10s)
     // static int cnt = 0;
@@ -5242,6 +5256,11 @@ bool Audio::setSampleRate(uint32_t sampRate) {
     }
     m_sampleRate = sampRate;
     m_resampleRatio = (float)m_sampleRate / 48000.0f;
+
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    i2s_channel_disable(m_i2s_tx_handle);
+    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+    i2s_channel_enable(m_i2s_tx_handle);
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

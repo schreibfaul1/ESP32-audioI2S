@@ -3,6 +3,11 @@
  *
  */
 
+
+// #define SR_48K
+
+
+
 #pragma once
 #pragma GCC optimize ("Ofast")
 #include "esp_arduino_version.h"
