@@ -14,6 +14,7 @@ public:
     static constexpr size_t FIFO_SIZE_BYTES = 16384; // Muss Vielfaches von 4 sein (Stereo, 16 Bit)
     static constexpr size_t I2S_BLOCK_SIZE = 512;    // DMA Blockgröße
 
+
     AudioResampleBuffer()
         :fifoWrite(0), fifoRead(0), m_resampleCursor(0.0f) {
         memset(fifo, 0, sizeof(fifo));
@@ -21,6 +22,17 @@ public:
     }
     void setChannelHandle(i2s_chan_handle_t i2sHandle){
         m_i2s = i2sHandle;
+    }
+
+    // Set the input samplerates (updated by the LRCK monitoring)
+    void setInputSamplerate(uint32_t samplerate) {
+        if (samplerate == 8000 || samplerate == 22050 || samplerate == 44100 || samplerate == 48000) {
+            m_sampleRate = samplerate;
+            ESP_LOGI("ResampleBuffer", "Input samplerate set to %u Hz", samplerate);
+        } else {
+            ESP_LOGW("ResampleBuffer", "Invalid samplerate %u Hz, defaulting to 44100 Hz", samplerate);
+            m_sampleRate = 44100;
+        }
     }
 
     // Muss zyklisch aufgerufen werden (z. B. aus Task)
@@ -60,6 +72,7 @@ private:
     uint8_t fifo[FIFO_SIZE_BYTES];
     size_t fifoWrite;
     size_t fifoRead;
+    float m_sampleRate = 44100.0f;
 
     float m_resampleCursor;
     int16_t m_inputHistory[6]; // 3 Stereo-Samples
@@ -88,7 +101,7 @@ private:
 
     // Catmull-Rom Spline Resampling von 48 kHz auf 44,1 kHz
     size_t resampleTo441Stereo(const int16_t* input, size_t inputSamples, int16_t* output) {
-        float ratio = 48000.0f / 44100.0f;
+        float ratio = m_sampleRate / 44100.0f;
         float cursor = m_resampleCursor;
 
         size_t extendedSamples = inputSamples + 3;
