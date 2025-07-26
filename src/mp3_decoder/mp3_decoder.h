@@ -466,10 +466,10 @@ const uint32_t csa[8][2] PROGMEM = {
  */
 
 static const char* mpeg_version_table[] = {
-    "MPEG-2.5",  // 0
-    "reserved",  // 1
-    "MPEG-2",    // 2
-    "MPEG-1"     // 3
+    "MPEG-1",      // 0
+    "MPEG-2",      // 1
+    "MPEG-2.5",    // 2
+    "MPEG-INVALID" // 3
 };
 
 static const char* layer_table[] = {
