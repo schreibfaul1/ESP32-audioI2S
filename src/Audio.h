@@ -353,13 +353,21 @@ private:
     } rflh_t;
     rflh_t m_rflh;
 
-    typedef struct _phrh{ // used in parseHttpResponseHeader
+    typedef struct _phreh{ // used in parseHttpResponseHeader
         uint32_t ctime;
         uint32_t timeout;
         uint32_t stime;
         bool     f_time = false;
-    } phrh_t;
-    phrh_t m_phrh;
+    } phreh_t;
+    phreh_t m_phreh;
+
+    typedef struct _phrah{ // used in parseHttpRangeHeader
+        uint32_t ctime;
+        uint32_t timeout;
+        uint32_t stime;
+        bool     f_time = false;
+    } phrah_t;
+    phrah_t m_phrah;
 
     typedef struct _sdet{ // used in streamDetection
         uint32_t tmr_slow = 0;
@@ -470,6 +478,7 @@ public:
     void            showstreamtitle(char* ml);
     bool            parseContentType(char* ct);
     bool            parseHttpResponseHeader();
+    bool            parseHttpRangeHeader();
     bool            initializeDecoder(uint8_t codec);
     esp_err_t       I2Sstart();
     esp_err_t       I2Sstop();
@@ -752,7 +761,7 @@ private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4}; // playlist formats
-    enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
+    enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, HTTP_RANGE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE,
                  AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER,  AUDIO_PLAYLISTDATA};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH =2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5,
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
