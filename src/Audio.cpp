@@ -1957,7 +1957,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                     }
                     m_audiofile.seek(pos);
                 }
-                syltBuff.hex_dump(10);
+            //    syltBuff.hex_dump(10);
 
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
                 if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
