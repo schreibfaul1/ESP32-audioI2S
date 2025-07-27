@@ -836,101 +836,75 @@ bool Audio::httpPrint(const char* host) {
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::httpRange(const char* host, uint32_t range){
+bool Audio::httpRange(uint32_t range){
 
     if(!m_f_running) return false;
-    if(host == NULL) {
-        AUDIO_INFO("Hostaddress is empty");
-        stopSong();
-        return false;
+
+    uint16_t port = 0;         // port number
+    ps_ptr<char> c_host;       // copy of host
+    ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> extension;    // extension
+    ps_ptr<char> query_string; // parameter
+    ps_ptr<char> path;         // extension + '?' + parameter
+    ps_ptr<char> rqh;          // request header
+    ps_ptr<char> cur_hwoe;     // m_currenthost without extension
+
+    c_host.clone_from(m_currentHost);
+    c_host.trim();
+    auto dismantledHost = dismantle_host(c_host.get());
+
+//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
+//      |   |                                     |    |                              |
+//      |   |                                     |    |                              |             (query string)
+//  ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+//                                                     |
+//                                                     |<-----------------------------path------------------------------------------->
+
+    m_f_ssl = dismantledHost.ssl;
+    port = dismantledHost.port;
+    if(dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
+    if(dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
+    if(dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
+
+    if(extension.valid()) path.assign(extension.get());
+    if(query_string.valid()){path.append("?"); path.append(query_string.get());}
+    if(!hwoe.valid()) hwoe.assign("");
+    if(!extension.valid()) extension.assign("");
+    if(!path.valid()) path.assign("");
+
+    path = urlencode(path.get(), true);
+
+    if(!m_currentHost.valid()) m_currentHost.assign("");
+    auto dismantledLastHost = dismantle_host(m_currentHost.get());
+    cur_hwoe.clone_from(dismantledLastHost.hwoe);
+
+    rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
+    rqh.appendf("Host: %s\r\n", hwoe.get());
+    rqh.append("Accept: */*\r\n");
+    rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
+    rqh.append("Cache-Control: no-cache\r\n");
+    rqh.append("Connection: keep-alive\r\n");
+    rqh.appendf("Range: bytes=%i-\r\n",range);
+    rqh.appendf("Referer: %s\r\n", m_currentHost.c_get());
+    rqh.append("Sec-GPC: 1\r\n");
+    rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
+
+    if(!_client->connected()) {
+        AUDIO_LOG_INFO("Verbindung geschlossen, stelle neu her");
+        _client->stop(); // Schließe alte Verbindung
+        if (!_client->connect(hwoe.get(), port)) {
+            AUDIO_LOG_ERROR("Verbindung fehlgeschlagen");
+            return false;
+        }
     }
-    ps_ptr<char>c_host;
-    c_host.copy_from(host);
-    ps_ptr<char> h_host; // copy of host without http:// or https://
 
-    if(startsWith(host, "https")) m_f_ssl = true;
-    else m_f_ssl = false;
+    AUDIO_LOG_INFO("av %i", _client->available());
+    AUDIO_LOG_INFO("rqh \n%s", rqh.get());
 
-    if(m_f_ssl) h_host.assign(host + 8);
-    else        h_host.assign(host + 7);
+    _client->print(rqh.get());
 
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
-
-    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = h_host.index_of( "/", 0);
-    pos_colon = h_host.index_of( ":", 0);
-    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = h_host.index_of( "&", 0);
-
-    ps_ptr<char> hostwoext; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
-
-    if(pos_slash > 1) {
-        hostwoext.alloc(pos_slash + 1, "hostwoext");
-        memcpy(hostwoext.get(), h_host.get(), pos_slash);
-        hostwoext[pos_slash] = '\0';
-        extension = urlencode(h_host.get() + pos_slash, true);
-    }
-    else { // url has no extension
-        hostwoext.append(h_host.get());
-        extension.append("/");
-    }
-
-    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(h_host.get() + pos_colon + 1); // Get portnumber as integer
-        hostwoext[pos_colon] = '\0';         // Host without portnumber
-    }
-
-    char rqh[strlen(h_host.get()) + strlen(host) + 300]; // http request header
-    rqh[0] = '\0';
-    char ch_range[12];
-    ltoa(range, ch_range, 10);
-    AUDIO_INFO("skip to position: %li", (long int)range);
-    strcat(rqh, "GET ");
-    strcat(rqh, extension.c_get());
-    strcat(rqh, " HTTP/1.1\r\n");
-    strcat(rqh, "Host: ");
-    strcat(rqh, hostwoext.c_get());
-    strcat(rqh, "\r\n");
-    strcat(rqh, "Icy-MetaData:1\r\n");
-    strcat(rqh, "Icy-MetaData:2\r\n");
-    strcat(rqh, "Range: bytes=");
-    strcat(rqh, (const char*)ch_range);
-    strcat(rqh, "-\r\n");
-    strcat(rqh, "Referer: ");
-    strcat(rqh, host);
-    strcat(rqh, "\r\n");
-    strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
-    strcat(rqh, "Connection: keep-alive\r\n\r\n");
-
-    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
-    else        { _client = static_cast<WiFiClient*>(&client); }
-    // AUDIO_INFO("The host has disconnected, reconnecting");
-
-    if(!_client->connect(hostwoext.get(), port)) {
-        AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
-        stopSong();
-        return false;
-    }
-;
-    _client->print(rqh);
-
-    if(extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
-    if(extension.ends_with_icase(".aac"))       m_expectedCodec  = CODEC_AAC;
-    if(extension.ends_with_icase(".wav"))       m_expectedCodec  = CODEC_WAV;
-    if(extension.ends_with_icase(".m4a"))       m_expectedCodec  = CODEC_M4A;
-    if(extension.ends_with_icase(".flac"))      m_expectedCodec  = CODEC_FLAC;
-    if(extension.ends_with_icase(".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    if(extension.ends_with_icase(".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    if(extension.contains(".m3u8"))             m_expectedPlsFmt = FORMAT_M3U8;
-    if(extension.ends_with_icase(".pls"))       m_expectedPlsFmt = FORMAT_PLS;
-
-    m_dataMode = HTTP_RANGE_HEADER; // Handle header
+    m_dataMode = HTTP_RANGE_HEADER;
     m_streamType = ST_WEBFILE;
-    m_f_chunked = false;
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2019,18 +1993,20 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t pos = m_pwf.byteCounter;
             //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
                 bool res;
-                res = httpRange(m_currentHost.c_get(), m_ID3Hdr.SYLT.pos);
+                res = httpRange(m_ID3Hdr.SYLT.pos);
                 if(!res) AUDIO_LOG_ERROR("http range request was not successful");
+                if(res == false) return 0;
                 res = parseHttpRangeHeader();
                 if(!res) AUDIO_LOG_ERROR("http range response was not successful");
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
                     bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
-                res = httpRange(m_currentHost.c_get(), pos);
+                res = httpRange(pos);
                 if(!res) AUDIO_LOG_ERROR("http range request was not successful");
                 res = parseHttpRangeHeader();
                 if(!res) AUDIO_LOG_ERROR("http range response was not successful");
+            //    return 0;
             }
             if(m_dataMode == AUDIO_LOCALFILE){
                 uint32_t pos = m_audiofile.position();

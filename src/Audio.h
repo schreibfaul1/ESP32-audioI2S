@@ -438,7 +438,7 @@ public:
     void            setDefaults(); // free buffers and set defaults
     void            initInBuff();
     bool            httpPrint(const char* host);
-    bool            httpRange(const char* host, uint32_t range);
+    bool            httpRange(uint32_t range);
     void            processLocalFile();
     void            processWebStream();
     void            processWebFile();
