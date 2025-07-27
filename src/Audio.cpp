@@ -1914,93 +1914,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
-        if( // any lyrics embedded in file, passing it to external function
-            startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) {
-            if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
-                ps_ptr<char> tmp;
-                ps_ptr<char> content_descriptor;
-                ps_ptr<char> syltBuff;
-                bool isBigEndian = true;
-                size_t len = 0;
-                int idx = 0;
-
-                m_ID3Hdr.SYLT.seen = true;
-                m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-
-                syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
-
-                if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
-                    uint32_t pos = m_pwf.byteCounter;
-                //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                    bool res;
-                    res = httpRange(m_currentHost.c_get(), m_ID3Hdr.SYLT.pos);
-                    if(!res) AUDIO_LOG_ERROR("http range request was not successful");
-                    res = parseHttpRangeHeader();
-                    if(!res) AUDIO_LOG_ERROR("http range response was not successful");
-                    uint16_t bytesWritten = 0;
-                    while(bytesWritten < m_ID3Hdr.SYLT.size){
-                        bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
-                    }
-                    res = httpRange(m_currentHost.c_get(), pos);
-                    if(!res) AUDIO_LOG_ERROR("http range request was not successful");
-                    res = parseHttpRangeHeader();
-                    if(!res) AUDIO_LOG_ERROR("http range response was not successful");
-                }
-                if(m_dataMode == AUDIO_LOCALFILE){
-                    uint32_t pos = m_audiofile.position();
-                //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                    m_audiofile.seek(m_ID3Hdr.SYLT.pos);
-                    uint16_t bytesWritten = 0;
-                    while(bytesWritten < m_ID3Hdr.SYLT.size){
-                        bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
-                    }
-                    m_audiofile.seek(pos);
-                }
-            //    syltBuff.hex_dump(10);
-
-                m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
-                if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
-                if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
-                char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
-                memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
-                AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
-                m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
-                m_ID3Hdr.SYLT.content_type =       syltBuff[5];
-
-                idx = 6;
-
-                if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
-                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
-                }
-                else{ // utf-16
-                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
-                }
-                if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
-                idx += len;
-
-                while (idx < m_ID3Hdr.SYLT.size) {
-                        // UTF-16LE, UTF-16BE
-                    if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
-                    } else {
-                        // ISO-8859-1 / UTF-8
-                        idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
-                    }
-                    if (tmp.starts_with("\n")) tmp.remove_before(1);
-                    m_syltLines.push_back(std::move(tmp));
-
-                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-
-                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                    m_syltTimeStamp.push_back(timestamp);
-
-                    idx += 4;
-                }
-                for(int i = 0; i < m_syltLines.size(); i++){
-                    AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
-                }
-            }
+        if(startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) { // any lyrics embedded in file, passing it to external function
+            m_controlCounter = 7;
             return 0;
         }
 
@@ -2086,6 +2001,91 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         return fs;
     }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_controlCounter == 7) { // SYLT
+        m_controlCounter = 5;
+        if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
+            ps_ptr<char> tmp;
+            ps_ptr<char> content_descriptor;
+            ps_ptr<char> syltBuff;
+            bool isBigEndian = true;
+            size_t len = 0;
+            int idx = 0;
+            m_ID3Hdr.SYLT.seen = true;
+            m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
+            syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
+            if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
+                uint32_t pos = m_pwf.byteCounter;
+            //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
+                bool res;
+                res = httpRange(m_currentHost.c_get(), m_ID3Hdr.SYLT.pos);
+                if(!res) AUDIO_LOG_ERROR("http range request was not successful");
+                res = parseHttpRangeHeader();
+                if(!res) AUDIO_LOG_ERROR("http range response was not successful");
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                res = httpRange(m_currentHost.c_get(), pos);
+                if(!res) AUDIO_LOG_ERROR("http range request was not successful");
+                res = parseHttpRangeHeader();
+                if(!res) AUDIO_LOG_ERROR("http range response was not successful");
+            }
+            if(m_dataMode == AUDIO_LOCALFILE){
+                uint32_t pos = m_audiofile.position();
+            //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
+                m_audiofile.seek(m_ID3Hdr.SYLT.pos);
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                m_audiofile.seek(pos);
+            }
+        //    syltBuff.hex_dump(10);
+            m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
+            if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
+            if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
+            char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
+            memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
+            AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+            m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
+            m_ID3Hdr.SYLT.content_type =       syltBuff[5];
+            idx = 6;
+            if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
+                len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
+            }
+            else{ // utf-16
+                len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
+            }
+            if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+            idx += len;
+            while (idx < m_ID3Hdr.SYLT.size) {
+                    // UTF-16LE, UTF-16BE
+                if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
+                    idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
+                } else {
+                    // ISO-8859-1 / UTF-8
+                    idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
+                }
+                if (tmp.starts_with("\n")) tmp.remove_before(1);
+                m_syltLines.push_back(std::move(tmp));
+                if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
+                uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                m_syltTimeStamp.push_back(timestamp);
+                idx += 4;
+            }
+            for(int i = 0; i < m_syltLines.size(); i++){
+                AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            }
+        }
+        return 0;
+    }
+
+
+
+
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // --- section V2.2 only , greater Vers above ----
