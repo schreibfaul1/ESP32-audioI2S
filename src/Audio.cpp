@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0h                                                                                                                                ";
-/*  Updated on: Jul 26.2025
+    Version 3.4.0i                                                                                                                                ";
+/*  Updated on: Jul 28.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -791,7 +791,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("\r\n");
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Icy-MetaData:2\r\n");
-    rqh.append("Accept: */*\r\n");
+    rqh.append("Accept:*/*\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
@@ -799,7 +799,7 @@ bool Audio::httpPrint(const char* host) {
     AUDIO_INFO("next URL: \"%s\"", c_host.get());
 
     if(f_equal == false){
-        _client->stop();
+        if(_client->connected()) _client->stop();
     }
     if(!_client->connected() ) {
          if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
@@ -836,7 +836,7 @@ bool Audio::httpPrint(const char* host) {
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::httpRange(uint32_t range){
+bool Audio::httpRange(uint32_t seek, uint32_t length){
 
     if(!m_f_running) return false;
 
@@ -848,6 +848,7 @@ bool Audio::httpRange(uint32_t range){
     ps_ptr<char> path;         // extension + '?' + parameter
     ps_ptr<char> rqh;          // request header
     ps_ptr<char> cur_hwoe;     // m_currenthost without extension
+    ps_ptr<char> range;        // e.g. "Range: bytes=124-"
 
     c_host.clone_from(m_currentHost);
     c_host.trim();
@@ -878,30 +879,33 @@ bool Audio::httpRange(uint32_t range){
     auto dismantledLastHost = dismantle_host(m_currentHost.get());
     cur_hwoe.clone_from(dismantledLastHost.hwoe);
 
+    if(length == UINT32_MAX) range.assignf("Range: bytes=%li-\r\n",seek);
+    else                     range.assignf("Range: bytes=%li-%li\r\n",seek, length);
+
     rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
     rqh.appendf("Host: %s\r\n", hwoe.get());
     rqh.append("Accept: */*\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Connection: keep-alive\r\n");
-    rqh.appendf("Range: bytes=%i-\r\n",range);
+    rqh.appendf(range.c_get());
     rqh.appendf("Referer: %s\r\n", m_currentHost.c_get());
     rqh.append("Sec-GPC: 1\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
 
-    if(!_client->connected()) {
-        AUDIO_LOG_INFO("Verbindung geschlossen, stelle neu her");
-        _client->stop(); // Schließe alte Verbindung
-        if (!_client->connect(hwoe.get(), port)) {
-            AUDIO_LOG_ERROR("Verbindung fehlgeschlagen");
-            return false;
-        }
+    if(_client->connected()) {_client->stop();}
+    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+    else        { _client = static_cast<WiFiClient*>(&client); }
+
+    if(!_client->connect(hwoe.get(), port)) {
+        AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
+        stopSong();
+        return false;
     }
 
-    AUDIO_LOG_INFO("av %i", _client->available());
-    AUDIO_LOG_INFO("rqh \n%s", rqh.get());
+    // AUDIO_LOG_INFO("rqh \n%s", rqh.get());
 
-    _client->print(rqh.get());
+    _client->print(rqh.c_get());
 
     m_dataMode = HTTP_RANGE_HEADER;
     m_streamType = ST_WEBFILE;
@@ -1988,24 +1992,23 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.seen = true;
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-            syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
+            syltBuff.alloc(m_ID3Hdr.SYLT.size + 1, "syltBuff");
             if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
                 uint32_t pos = m_pwf.byteCounter;
             //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
                 bool res;
-                res = httpRange(m_ID3Hdr.SYLT.pos);
-                if(!res) AUDIO_LOG_ERROR("http range request was not successful");
-                if(res == false) return 0;
+                res = httpRange(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
+                if(res == false){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
                 res = parseHttpRangeHeader();
-                if(!res) AUDIO_LOG_ERROR("http range response was not successful");
+                if(res == false){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
                     bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
                 res = httpRange(pos);
-                if(!res) AUDIO_LOG_ERROR("http range request was not successful");
+                if(!res){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
                 res = parseHttpRangeHeader();
-                if(!res) AUDIO_LOG_ERROR("http range response was not successful");
+                if(!res){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
             //    return 0;
             }
             if(m_dataMode == AUDIO_LOCALFILE){
@@ -4368,7 +4371,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
             vTaskDelay(5);
             continue;
         }
-
+        // AUDIO_LOG_WARN("rh %s", rhl.c_get());
         if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];

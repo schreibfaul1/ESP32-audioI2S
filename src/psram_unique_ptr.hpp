@@ -1242,7 +1242,6 @@ void unicodeToUTF8(const char* src) {
         if (!mem) return;
         std::size_t len = std::strlen(get());
         if (len == 0) return;
-
         ps_ptr<char> temp;
         temp.alloc(len + 1);
         if (!temp.valid()) return;
