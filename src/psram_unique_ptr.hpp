@@ -299,48 +299,133 @@ public:
     // is UTF-16LE and will converted to: "Little London Girl"
     // UTF-16LE and UTF-16BE is often found in ID3 header
 
-    size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const char* name = nullptr) {
-        if (!src) { log_e("arg. is null"); return 0; }
+#include <vector>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
+
+// convert UTF-16 to UTF-8 and stop at zero terminator
+size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const char* name = nullptr) {
+    if (!src) {
+        log_e("arg. is null");
+        return 0;
+    }
+    std::vector<char> out;
+    size_t i = 0;
+
+    // BOM-Handling
+    if (src[i] == 0xFF && src[i + 1] == 0xFE) {
+        is_big_endian = false; // UTF-16LE
+        i += 2;
+    } else if (src[i] == 0xFE && src[i + 1] == 0xFF) {
+        is_big_endian = true;  // UTF-16BE
+        i += 2;
+    }
+
+    while (true) {
+        // Prüfe, ob genug Bytes für ein UTF-16-Zeichen vorhanden sind
+        if (i + 1 >= std::numeric_limits<size_t>::max() || (src[i] == 0x00 && src[i + 1] == 0x00)) {
+            break; // Nullterminator oder Ende des Puffers
+        }
+
+        uint16_t ch;
+        if (is_big_endian) {
+            ch = (src[i] << 8) | src[i + 1];
+        } else {
+            ch = (src[i + 1] << 8) | src[i];
+        }
+        i += 2;
+
+        uint32_t codepoint = ch;
+
+        // Prüfe auf Surrogatenpaare
+        if (ch >= 0xD800 && ch <= 0xDBFF) { // High surrogate
+            if ((i + 1 >= std::numeric_limits<size_t>::max()) || (src[i] == 0x00 && src[i + 1] == 0x00)) {
+                log_e("Invalid surrogate pair: missing low surrogate");
+                break;
+            }
+            uint16_t ch2;
+            if (is_big_endian) {
+                ch2 = (src[i] << 8) | src[i + 1];
+            } else {
+                ch2 = (src[i + 1] << 8) | src[i];
+            }
+            if (ch2 < 0xDC00 || ch2 > 0xDFFF) {
+                log_e("Invalid surrogate pair: invalid low surrogate");
+                break;
+            }
+            i += 2;
+            codepoint = 0x10000 + ((ch - 0xD800) << 10) + (ch2 - 0xDC00);
+        } else if (ch >= 0xDC00 && ch <= 0xDFFF) {
+            log_e("Invalid surrogate pair: unexpected low surrogate");
+            break;
+        }
+
+        // UTF-16 → UTF-8
+        if (codepoint < 0x80) {
+            out.push_back(static_cast<char>(codepoint));
+        } else if (codepoint < 0x800) {
+            out.push_back(0xC0 | (codepoint >> 6));
+            out.push_back(0x80 | (codepoint & 0x3F));
+        } else if (codepoint < 0x10000) {
+            out.push_back(0xE0 | (codepoint >> 12));
+            out.push_back(0x80 | ((codepoint >> 6) & 0x3F));
+            out.push_back(0x80 | (codepoint & 0x3F));
+        } else if (codepoint < 0x110000) {
+            out.push_back(0xF0 | (codepoint >> 18));
+            out.push_back(0x80 | ((codepoint >> 12) & 0x3F));
+            out.push_back(0x80 | ((codepoint >> 6) & 0x3F));
+            out.push_back(0x80 | (codepoint & 0x3F));
+        } else {
+            log_e("Invalid codepoint");
+            break;
+        }
+    }
+
+    // Nullterminator hinzufügen
+    out.push_back('\0');
+
+    // Speicher allozieren und kopieren
+    std::size_t bytes = out.size();
+    alloc(bytes, name);
+    std::memcpy(mem.get(), out.data(), bytes);
+    return i;
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C O P Y _ F R O M _ I S O _ 8 8 5 9 - 1   📌📌📌
+    // convert ISO 8859-1 to UTF-8 and stop at zero terminator
+    // 0x48 0x65 0x6C 0x6C 0x6F 0x20 0xC3 0xA4 0x62 0x63 0x00  -> "Hello äbc"
+
+    size_t copy_from_iso8859_1(const uint8_t* src, const char* name = nullptr) {
+        if (!src) {
+            log_e("arg. is null");
+            return 0;
+        }
         std::vector<char> out;
         size_t i = 0;
 
-        if(is_big_endian == false){ // maybe we have a BOM
-            if (src[i] == 0xFF && src[i + 1] == 0xFE) {
-                is_big_endian = false; // UTF-16 Little Endian
-                i += 2;  // skip byte order mark + \0\0
-            } else if (src[i] == 0xFE && src[i + 1] == 0xFF) {
-                is_big_endian = true;  // UTF-16 Big Endian
-                i += 2;  // skip byte order mark + \0\0
-            } else {
-                // BOM is missing or invalid
-            }
-        }
-
         while (true) {
-            uint16_t ch;
-            if (is_big_endian) {
-                ch = (src[i] << 8) | src[i + 1];
-            } else {
-                ch = (src[i + 1] << 8) | src[i];
+            uint8_t ch = src[i];
+            if (ch == 0x00) {
+                break; // 'Nullterminator'
             }
-            i += 2;
-            if (ch == 0x0000) break;  // null-terminiert
 
-            // UTF-16 → UTF-8
+            // ISO-8859-1 → UTF-8
             if (ch < 0x80) {
-                out.push_back(static_cast<char>(ch));
-            } else if (ch < 0x800) {
+                out.push_back(static_cast<char>(ch)); // Ascii area remains unchanged
+            } else {
+                // chars from 0x80 to 0xff are coded as 2-byte sequences in UTF-8
                 out.push_back(0xC0 | (ch >> 6));
                 out.push_back(0x80 | (ch & 0x3F));
-            } else {
-                out.push_back(0xE0 | (ch >> 12));
-                out.push_back(0x80 | ((ch >> 6) & 0x3F));
-                out.push_back(0x80 | (ch & 0x3F));
             }
+            i++;
         }
+
+        // add zero terminator
         out.push_back('\0');
 
-        // save
+        // allocate and copy memory
         std::size_t bytes = out.size();
         alloc(bytes, name);
         std::memcpy(mem.get(), out.data(), bytes);
@@ -1436,6 +1521,37 @@ void unicodeToUTF8(const char* src) {
         std::size_t remaining = std::strlen(pos);
         std::memmove(str, pos, remaining + 1); // inkl. '\0'
     }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  S H I F T _ L E F T   📌📌📌
+    // Show the contents of the buffer around n bytes to the left and fill the rest with zeros
+    // Consider UTF-16 data and the size of the allocated memory
+
+    void shift_left(int n) {
+        if (!mem || allocated_size == 0) {
+            printf("Error: No allocated memory or invalid buffer\n");
+            return;
+        }
+
+        if (n < 0 || static_cast<std::size_t>(n) > allocated_size) {
+            printf("Error: Invalid shift amount %d, allocated_size=%zu\n", n, allocated_size);
+            return;
+        }
+
+        // if (n % 2 != 0) {
+        //     printf("Warning: Shift amount %d is not even, adjusting to %d for UTF-16 alignment\n", n, n + 1);
+        //     n += 1; // make sure n is even for UTF-16
+        // }
+
+        char* str = mem.get();
+        if (n == 0) return;
+
+        // show the buffer around n bytes to the left
+        std::size_t remaining = allocated_size - n;
+        std::memmove(str, str + n, remaining);
+
+        // fill the rest of the memory with zeros
+        std::memset(str + remaining, 0, n);
+}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C O N T A I N S  📌📌📌
 

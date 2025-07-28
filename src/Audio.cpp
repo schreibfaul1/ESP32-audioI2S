@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0i                                                                                                                                ";
+    Version 3.4.0j                                                                                                                                ";
 /*  Updated on: Jul 28.2025
 
     Author: Wolle (schreibfaul1)
@@ -1877,6 +1877,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 6) { // Read the value
         m_controlCounter = 5;   // only read 256 bytes
+
         uint8_t textEncodingByte = *(data + 0);  // ID3v2 Text-Encoding-Byte
         // $00 – ISO-8859-1 (LATIN-1, Identical to ASCII for values smaller than 0x80).
         // $01 – UCS-2 encoded Unicode with BOM (Byte Order Mark), in ID3v2.2 and ID3v2.3.
@@ -1897,6 +1898,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
+
         if( // proprietary not standard information
             startsWith(m_ID3Hdr.tag, "PRIV")) {
                 ;//AUDIO_LOG_ERROR("PRIV");
@@ -1905,78 +1907,51 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         if(m_ID3Hdr.framesize == 0) return 0;
 
+        ps_ptr<char> tmp;
         size_t fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
         size_t bytesToCopy = fs;
-
-        if (bytesToCopy >= m_ID3Hdr.iBuffSize) { // <= oder >= hier ist wichtig!
-            bytesToCopy = m_ID3Hdr.iBuffSize - 1; // Sicherstellen, dass ein Null-Terminator passt
-        }
         size_t textDataLength = 0;
-        if (bytesToCopy > 0) { // Nur wenn überhaupt Daten da sind, die wir kürzen können
-            textDataLength = bytesToCopy - 1; // Dies ist die Anzahl der zu kopierenden TEXT-Bytes
+
+        if (bytesToCopy >= m_ID3Hdr.iBuffSize) { bytesToCopy = m_ID3Hdr.iBuffSize - 1;} // make sure a zero terminator fits
+        if (bytesToCopy > 0) { textDataLength = bytesToCopy - 1;}                       // Only if there are data that we can shorten
+        for (int i = 0; i < textDataLength; i++) {
+            m_ID3Hdr.iBuff[i] = *(data + i + 1);                                        // Skipped the first byte (Encoding)
         }
-        for(int i = 0; i < textDataLength; i++) {
-            m_ID3Hdr.iBuff[i] = *(data + i + 1); // Überspringt das erste Byte (Encoding)
+
+        if (textEncodingByte == 1 || textEncodingByte == 2) {                           // is UTF-16LE or UTF-16BE
+            m_ID3Hdr.iBuff[textDataLength] = 0;                                         // UTF-16: set double zero terminator
+            m_ID3Hdr.iBuff[textDataLength + 1] = 0;                                     // second '\0' for UTF-16
+        } else {
+            m_ID3Hdr.iBuff[textDataLength] = 0;                                         // only one '\0' for ISO-8859-1 or UTF-8
         }
-        m_ID3Hdr.iBuff[textDataLength] = 0;
+
         m_ID3Hdr.framesize -= fs;
         m_ID3Hdr.remainingHeaderBytes -= fs;
         uint16_t dataLength = fs - 1;
 
-        if(textEncodingByte == 0){  // latin
-            latinToUTF8(m_ID3Hdr.iBuff, false);
-            showID3Tag(m_ID3Hdr.tag, m_ID3Hdr.iBuff.get());
+        if(startsWith(m_ID3Hdr.tag, "COMM")){ // language code
+            m_ID3Hdr.lang[0] = m_ID3Hdr.iBuff[0];
+            m_ID3Hdr.lang[1] = m_ID3Hdr.iBuff[1];
+            m_ID3Hdr.lang[2] = m_ID3Hdr.iBuff[2];
+            m_ID3Hdr.lang[3] = '\0';
+            m_ID3Hdr.iBuff.shift_left(4);
         }
 
-        if(textEncodingByte == 1  && dataLength > 1) { // UTF16 with BOM
-            int8_t data_start = 0;
-            if(startsWith(m_ID3Hdr.tag, "COMM")){ // language code
-                m_ID3Hdr.lang[0] = m_ID3Hdr.iBuff[0];
-                m_ID3Hdr.lang[1] = m_ID3Hdr.iBuff[1];
-                m_ID3Hdr.lang[2] = m_ID3Hdr.iBuff[2];
-                m_ID3Hdr.lang[3] = '\0';
-                data_start += 3;
-                // log_w("language code: %s", m_ID3Hdr.lang);
-                m_ID3Hdr.byteOrderMark = static_cast<unsigned char>(m_ID3Hdr.iBuff[data_start]) == 0xFE && static_cast<unsigned char>(m_ID3Hdr.iBuff[data_start]) == 0xFF;
-                data_start += 2;
-                m_ID3Hdr.contentDescriptorTerminator_0 = m_ID3Hdr.iBuff[data_start];
-                m_ID3Hdr.contentDescriptorTerminator_1 = m_ID3Hdr.iBuff[data_start + 1];
-                m_ID3Hdr.textStringTerminator_0        = m_ID3Hdr.iBuff[data_start + 2];
-                m_ID3Hdr.textStringTerminator_1        = m_ID3Hdr.iBuff[data_start + 3];
-                data_start += 4;
-            }
-            else{
-                m_ID3Hdr.byteOrderMark = static_cast<unsigned char>(m_ID3Hdr.iBuff[data_start]) == 0xFE && static_cast<unsigned char>(m_ID3Hdr.iBuff[data_start]) == 0xFF;
-                data_start += 2;
-            }
+        char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
+        // AUDIO_LOG_INFO("Tag: %s, Length: %i, Format: %s", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
 
-            std::u16string utf16_string;
-            for (size_t i = data_start; i < dataLength; i += 2) {
-                char16_t wchar;
-                if(m_ID3Hdr.byteOrderMark)  wchar = (static_cast<unsigned char>(m_ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(m_ID3Hdr.iBuff[i + 1]);
-                else                      wchar = (static_cast<unsigned char>(m_ID3Hdr.iBuff[i + 1]) << 8) | static_cast<unsigned char>(m_ID3Hdr.iBuff[i]);
-                utf16_string.push_back(wchar);
-            }
-
-            std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-            showID3Tag(m_ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
+        if (textEncodingByte == 0) { // ISO-8859-1
+            tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get(), "tmp");
+        } else if (textEncodingByte == 1 || textEncodingByte == 2) { // UTF-16LE oder UTF-16BE
+            bool isBigEndian = (textEncodingByte == 2);
+            tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get(), isBigEndian, "tmp");
+        } else if (textEncodingByte == 3) { // UTF-8
+            // Direkt kopieren, da keine Konvertierung nötig ist
+            tmp.copy_from(m_ID3Hdr.iBuff.get());
         }
 
-        if(textEncodingByte == 2 && dataLength > 1) { // UTF16BE
+        showID3Tag(m_ID3Hdr.tag, tmp.c_get());
 
-            std::u16string utf16_string;
-            for (size_t i = 0; i < dataLength; i += 2) {
-                char16_t  wchar = (static_cast<unsigned char>(m_ID3Hdr.iBuff[i]) << 8) | static_cast<unsigned char>(m_ID3Hdr.iBuff[i + 1]);
-                utf16_string.push_back(wchar);
-            }
-
-            std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-            showID3Tag(m_ID3Hdr.tag, converter.to_bytes(utf16_string).c_str());
-        }
-
-        if(textEncodingByte == 3) { // utf8
-            showID3Tag(m_ID3Hdr.tag, m_ID3Hdr.iBuff.get());
-        }
         return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2009,7 +1984,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 if(!res){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
                 res = parseHttpRangeHeader();
                 if(!res){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
-            //    return 0;
             }
             if(m_dataMode == AUDIO_LOCALFILE){
                 uint32_t pos = m_audiofile.position();
@@ -2031,22 +2005,17 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
             m_ID3Hdr.SYLT.content_type =       syltBuff[5];
             idx = 6;
-            if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
-                len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
-            }
-            else{ // utf-16
-                len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
-            }
+            if     (m_ID3Hdr.SYLT.text_encoding == 0) len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx), "content_descriptor");         // iso8859_1
+            else if(m_ID3Hdr.SYLT.text_encoding == 3) len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");                      // utf-8
+            else                                      len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
             if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+
             idx += len;
             while (idx < m_ID3Hdr.SYLT.size) {
-                    // UTF-16LE, UTF-16BE
-                if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                    idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
-                } else {
-                    // ISO-8859-1 / UTF-8
-                    idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
-                }
+                if      (m_ID3Hdr.SYLT.text_encoding == 0) idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx, "sylt-text");            // ISO8859_1
+                else if (m_ID3Hdr.SYLT.text_encoding == 3) idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");                         // UTF-8
+                else                                       idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text"); // UTF-16LE, UTF-16BE
+
                 if (tmp.starts_with("\n")) tmp.remove_before(1);
                 m_syltLines.push_back(std::move(tmp));
                 if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
@@ -2061,13 +2030,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         return 0;
     }
 
-
-
-
-
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    // --- section V2.2 only , greater Vers above ----
+    // --- section V2.2 only , higher Vers above ----
     // see https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
     if(m_controlCounter == 10) { // frames in V2.2, 3bytes identifier, 3bytes size descriptor
 
