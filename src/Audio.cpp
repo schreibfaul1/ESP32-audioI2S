@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0h                                                                                                                                ";
-/*  Updated on: Jul 26.2025
+    Version 3.4.0i                                                                                                                                ";
+/*  Updated on: Jul 28.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -791,7 +791,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.append("\r\n");
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Icy-MetaData:2\r\n");
-    rqh.append("Accept: */*\r\n");
+    rqh.append("Accept:*/*\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Connection: keep-alive\r\n\r\n");
@@ -799,7 +799,7 @@ bool Audio::httpPrint(const char* host) {
     AUDIO_INFO("next URL: \"%s\"", c_host.get());
 
     if(f_equal == false){
-        _client->stop();
+        if(_client->connected()) _client->stop();
     }
     if(!_client->connected() ) {
          if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
@@ -836,101 +836,79 @@ bool Audio::httpPrint(const char* host) {
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::httpRange(const char* host, uint32_t range){
+bool Audio::httpRange(uint32_t seek, uint32_t length){
 
     if(!m_f_running) return false;
-    if(host == NULL) {
-        AUDIO_INFO("Hostaddress is empty");
-        stopSong();
-        return false;
-    }
-    ps_ptr<char>c_host;
-    c_host.copy_from(host);
-    ps_ptr<char> h_host; // copy of host without http:// or https://
 
-    if(startsWith(host, "https")) m_f_ssl = true;
-    else m_f_ssl = false;
+    uint16_t port = 0;         // port number
+    ps_ptr<char> c_host;       // copy of host
+    ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> extension;    // extension
+    ps_ptr<char> query_string; // parameter
+    ps_ptr<char> path;         // extension + '?' + parameter
+    ps_ptr<char> rqh;          // request header
+    ps_ptr<char> cur_hwoe;     // m_currenthost without extension
+    ps_ptr<char> range;        // e.g. "Range: bytes=124-"
 
-    if(m_f_ssl) h_host.assign(host + 8);
-    else        h_host.assign(host + 7);
+    c_host.clone_from(m_currentHost);
+    c_host.trim();
+    auto dismantledHost = dismantle_host(c_host.get());
 
-    int16_t  pos_slash;     // position of "/" in hostname
-    int16_t  pos_colon;     // position of ":" in hostname
-    int16_t  pos_ampersand; // position of "&" in hostname
-    uint16_t port = 80;     // port number
+//  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
+//      |   |                                     |    |                              |
+//      |   |                                     |    |                              |             (query string)
+//  ssl?|   |<-----host without extension-------->|port|<----- --extension----------->|<-first parameter->|<-second parameter->.......
+//                                                     |
+//                                                     |<-----------------------------path------------------------------------------->
 
-    // In the URL there may be an extension, like noisefm.ru:8000/play.m3u&t=.m3u
-    pos_slash = h_host.index_of( "/", 0);
-    pos_colon = h_host.index_of( ":", 0);
-    if(isalpha(h_host[pos_colon + 1])) pos_colon = -1; // no portnumber follows
-    pos_ampersand = h_host.index_of( "&", 0);
+    m_f_ssl = dismantledHost.ssl;
+    port = dismantledHost.port;
+    if(dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
+    if(dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
+    if(dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
 
-    ps_ptr<char> hostwoext; // "skonto.ls.lv:8002" in "skonto.ls.lv:8002/mp3"
-    ps_ptr<char> extension; // "/mp3" in "skonto.ls.lv:8002/mp3"
+    if(extension.valid()) path.assign(extension.get());
+    if(query_string.valid()){path.append("?"); path.append(query_string.get());}
+    if(!hwoe.valid()) hwoe.assign("");
+    if(!extension.valid()) extension.assign("");
+    if(!path.valid()) path.assign("");
 
-    if(pos_slash > 1) {
-        hostwoext.alloc(pos_slash + 1, "hostwoext");
-        memcpy(hostwoext.get(), h_host.get(), pos_slash);
-        hostwoext[pos_slash] = '\0';
-        extension = urlencode(h_host.get() + pos_slash, true);
-    }
-    else { // url has no extension
-        hostwoext.append(h_host.get());
-        extension.append("/");
-    }
+    path = urlencode(path.get(), true);
 
-    if((pos_colon >= 0) && ((pos_ampersand == -1) || (pos_ampersand > pos_colon))) {
-        port = atoi(h_host.get() + pos_colon + 1); // Get portnumber as integer
-        hostwoext[pos_colon] = '\0';         // Host without portnumber
-    }
+    if(!m_currentHost.valid()) m_currentHost.assign("");
+    auto dismantledLastHost = dismantle_host(m_currentHost.get());
+    cur_hwoe.clone_from(dismantledLastHost.hwoe);
 
-    char rqh[strlen(h_host.get()) + strlen(host) + 300]; // http request header
-    rqh[0] = '\0';
-    char ch_range[12];
-    ltoa(range, ch_range, 10);
-    AUDIO_INFO("skip to position: %li", (long int)range);
-    strcat(rqh, "GET ");
-    strcat(rqh, extension.c_get());
-    strcat(rqh, " HTTP/1.1\r\n");
-    strcat(rqh, "Host: ");
-    strcat(rqh, hostwoext.c_get());
-    strcat(rqh, "\r\n");
-    strcat(rqh, "Icy-MetaData:1\r\n");
-    strcat(rqh, "Icy-MetaData:2\r\n");
-    strcat(rqh, "Range: bytes=");
-    strcat(rqh, (const char*)ch_range);
-    strcat(rqh, "-\r\n");
-    strcat(rqh, "Referer: ");
-    strcat(rqh, host);
-    strcat(rqh, "\r\n");
-    strcat(rqh, "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36\r\n");
-    strcat(rqh, "Connection: keep-alive\r\n\r\n");
+    if(length == UINT32_MAX) range.assignf("Range: bytes=%li-\r\n",seek);
+    else                     range.assignf("Range: bytes=%li-%li\r\n",seek, length);
 
+    rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
+    rqh.appendf("Host: %s\r\n", hwoe.get());
+    rqh.append("Accept: */*\r\n");
+    rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
+    rqh.append("Cache-Control: no-cache\r\n");
+    rqh.append("Connection: keep-alive\r\n");
+    rqh.appendf(range.c_get());
+    rqh.appendf("Referer: %s\r\n", m_currentHost.c_get());
+    rqh.append("Sec-GPC: 1\r\n");
+    rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
+
+    if(_client->connected()) {_client->stop();}
     if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
     else        { _client = static_cast<WiFiClient*>(&client); }
-    // AUDIO_INFO("The host has disconnected, reconnecting");
 
-    if(!_client->connect(hostwoext.get(), port)) {
+    if(!_client->connect(hwoe.get(), port)) {
         AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
         stopSong();
         return false;
     }
-;
-    _client->print(rqh);
 
-    if(extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
-    if(extension.ends_with_icase(".aac"))       m_expectedCodec  = CODEC_AAC;
-    if(extension.ends_with_icase(".wav"))       m_expectedCodec  = CODEC_WAV;
-    if(extension.ends_with_icase(".m4a"))       m_expectedCodec  = CODEC_M4A;
-    if(extension.ends_with_icase(".flac"))      m_expectedCodec  = CODEC_FLAC;
-    if(extension.ends_with_icase(".asx"))       m_expectedPlsFmt = FORMAT_ASX;
-    if(extension.ends_with_icase(".m3u"))       m_expectedPlsFmt = FORMAT_M3U;
-    if(extension.contains(".m3u8"))             m_expectedPlsFmt = FORMAT_M3U8;
-    if(extension.ends_with_icase(".pls"))       m_expectedPlsFmt = FORMAT_PLS;
+    // AUDIO_LOG_INFO("rqh \n%s", rqh.get());
 
-    m_dataMode = HTTP_RANGE_HEADER; // Handle header
+    _client->print(rqh.c_get());
+
+    m_dataMode = HTTP_RANGE_HEADER;
     m_streamType = ST_WEBFILE;
-    m_f_chunked = false;
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1914,93 +1892,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
-        if( // any lyrics embedded in file, passing it to external function
-            startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) {
-            if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
-                ps_ptr<char> tmp;
-                ps_ptr<char> content_descriptor;
-                ps_ptr<char> syltBuff;
-                bool isBigEndian = true;
-                size_t len = 0;
-                int idx = 0;
-
-                m_ID3Hdr.SYLT.seen = true;
-                m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-
-                syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
-
-                if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
-                    uint32_t pos = m_pwf.byteCounter;
-                //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                    bool res;
-                    res = httpRange(m_currentHost.c_get(), m_ID3Hdr.SYLT.pos);
-                    if(!res) AUDIO_LOG_ERROR("http range request was not successful");
-                    res = parseHttpRangeHeader();
-                    if(!res) AUDIO_LOG_ERROR("http range response was not successful");
-                    uint16_t bytesWritten = 0;
-                    while(bytesWritten < m_ID3Hdr.SYLT.size){
-                        bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
-                    }
-                    res = httpRange(m_currentHost.c_get(), pos);
-                    if(!res) AUDIO_LOG_ERROR("http range request was not successful");
-                    res = parseHttpRangeHeader();
-                    if(!res) AUDIO_LOG_ERROR("http range response was not successful");
-                }
-                if(m_dataMode == AUDIO_LOCALFILE){
-                    uint32_t pos = m_audiofile.position();
-                //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                    m_audiofile.seek(m_ID3Hdr.SYLT.pos);
-                    uint16_t bytesWritten = 0;
-                    while(bytesWritten < m_ID3Hdr.SYLT.size){
-                        bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
-                    }
-                    m_audiofile.seek(pos);
-                }
-            //    syltBuff.hex_dump(10);
-
-                m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
-                if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
-                if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
-                char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
-                memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
-                AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
-                m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
-                m_ID3Hdr.SYLT.content_type =       syltBuff[5];
-
-                idx = 6;
-
-                if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
-                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
-                }
-                else{ // utf-16
-                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
-                }
-                if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
-                idx += len;
-
-                while (idx < m_ID3Hdr.SYLT.size) {
-                        // UTF-16LE, UTF-16BE
-                    if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
-                    } else {
-                        // ISO-8859-1 / UTF-8
-                        idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
-                    }
-                    if (tmp.starts_with("\n")) tmp.remove_before(1);
-                    m_syltLines.push_back(std::move(tmp));
-
-                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-
-                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                    m_syltTimeStamp.push_back(timestamp);
-
-                    idx += 4;
-                }
-                for(int i = 0; i < m_syltLines.size(); i++){
-                    AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
-                }
-            }
+        if(startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) { // any lyrics embedded in file, passing it to external function
+            m_controlCounter = 7;
             return 0;
         }
 
@@ -2086,6 +1979,92 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         return fs;
     }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_controlCounter == 7) { // SYLT
+        m_controlCounter = 5;
+        if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
+            ps_ptr<char> tmp;
+            ps_ptr<char> content_descriptor;
+            ps_ptr<char> syltBuff;
+            bool isBigEndian = true;
+            size_t len = 0;
+            int idx = 0;
+            m_ID3Hdr.SYLT.seen = true;
+            m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
+            syltBuff.alloc(m_ID3Hdr.SYLT.size + 1, "syltBuff");
+            if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
+                uint32_t pos = m_pwf.byteCounter;
+            //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
+                bool res;
+                res = httpRange(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
+                if(res == false){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
+                res = parseHttpRangeHeader();
+                if(res == false){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                res = httpRange(pos);
+                if(!res){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
+                res = parseHttpRangeHeader();
+                if(!res){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
+            //    return 0;
+            }
+            if(m_dataMode == AUDIO_LOCALFILE){
+                uint32_t pos = m_audiofile.position();
+            //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
+                m_audiofile.seek(m_ID3Hdr.SYLT.pos);
+                uint16_t bytesWritten = 0;
+                while(bytesWritten < m_ID3Hdr.SYLT.size){
+                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                }
+                m_audiofile.seek(pos);
+            }
+        //    syltBuff.hex_dump(10);
+            m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
+            if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
+            if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
+            char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
+            memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
+            AUDIO_INFO("Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
+            m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
+            m_ID3Hdr.SYLT.content_type =       syltBuff[5];
+            idx = 6;
+            if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
+                len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
+            }
+            else{ // utf-16
+                len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
+            }
+            if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+            idx += len;
+            while (idx < m_ID3Hdr.SYLT.size) {
+                    // UTF-16LE, UTF-16BE
+                if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
+                    idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
+                } else {
+                    // ISO-8859-1 / UTF-8
+                    idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
+                }
+                if (tmp.starts_with("\n")) tmp.remove_before(1);
+                m_syltLines.push_back(std::move(tmp));
+                if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
+                uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
+                m_syltTimeStamp.push_back(timestamp);
+                idx += 4;
+            }
+            for(int i = 0; i < m_syltLines.size(); i++){
+                AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            }
+        }
+        return 0;
+    }
+
+
+
+
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // --- section V2.2 only , greater Vers above ----
@@ -4392,7 +4371,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
             vTaskDelay(5);
             continue;
         }
-
+        // AUDIO_LOG_WARN("rh %s", rhl.c_get());
         if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];

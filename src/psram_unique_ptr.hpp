@@ -422,6 +422,7 @@ public:
         // Suffix anhängen
         std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, add_len + 1);
         allocated_size = new_len;
+        static_cast<char*>(mem.get())[old_len + add_len] = '\0';
     }
 
     // ps_ptr<char> text1; // like Strcat with automatic new allocation
@@ -1059,7 +1060,7 @@ void unicodeToUTF8(const char* src) {
     while (*ptr) {
         if (ptr[0] == '\\' && ptr[1] == 'u') {
             uint32_t codepoint = 0;
-            if (sscanf(ptr + 2, "%4x", &codepoint) == 1) {
+            if (sscanf(ptr + 2, "%4lx", &codepoint) == 1) {
                 int len = encodeCodepointToUTF8(codepoint, utf8);
                 utf8[len] = 0;
                 this->append(utf8);
@@ -1241,7 +1242,6 @@ void unicodeToUTF8(const char* src) {
         if (!mem) return;
         std::size_t len = std::strlen(get());
         if (len == 0) return;
-
         ps_ptr<char> temp;
         temp.alloc(len + 1);
         if (!temp.valid()) return;
@@ -1502,7 +1502,7 @@ void unicodeToUTF8(const char* src) {
     // 0x65 0x6E 0x67 0x0A 0x00 0x00
     // e    n    g    LF   NUL  NUL
 
-    void hex_dump(uint16_t n = 60) {
+    void hex_dump(uint16_t n = UINT16_MAX) {
         if (!valid()) { printf("hex_dump: invalid buffer\n"); return; }
         if (allocated_size < n) n = allocated_size;
         if (n == 0) {
