@@ -1423,33 +1423,33 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
                 Mp3FrameHeader next_header;
                 if (((buf[current_pos + header.frame_length] == SYNCWORDH) && ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL)) &&
                                         parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
+                    // MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
 
-                    // s_samplerate   = header.sample_rate_hz; // (angenommen in der Struktur vorhanden)
-                    // s_bitRate      = header.bitrate_kbps;   // (angenommen in der Struktur vorhanden)
+                    // s_samplerate   = header.sample_rate_hz; // (suppose in the structure available)
+                    // s_bitRate      = header.bitrate_kbps;   // (suppose in the structure available)
                     // s_mpeg_version = header.mpeg_version;
                     // s_layer        = header.layer;
                     // s_channel_mode = header.channel_mode;
                     // s_samples_per_frame = header.samples_per_frame;
 
-                    // // Für s_channels (1 für Mono, 2 für Stereo)
+                    // // s_channels (1 Mono, 2 Stereo)
                     // if (header.channel_mode == 0b11) { // 0b11 ist Mono
                     //     s_channels = 1;
-                    // } else { // Alle anderen Modi (Stereo, Joint Stereo, Dual Channel) sind 2 Kanäle
+                    // } else { // 2 channels for all other (Stereo, Joint Stereo, Dual Channel)
                     //     s_channels = 2;
                     // }
                     return current_pos;
                 } else {
-                    MP3_LOG_DEBUG("Header valid, but next frame does not validate. False positive. Moving on.\n");
+                    MP3_LOG_DEBUG("Header valid, but next frame does not validate. False positive. Moving on.");
                 }
             } else {
-                MP3_LOG_DEBUG("Header valid, but not enough data for next frame check. Possibly end of stream or false positive.\n");
+                MP3_LOG_DEBUG("Header valid, but not enough data for next frame check. Possibly end of stream or false positive.");
                 // If not enough data for the next frame, it could still be the right one.
                 // This is a compromise.If in doubt, continue to search or return the current one.
                 // For robustness: search.
             }
         } else {
-            MP3_LOG_DEBUG("Found syncword but header is invalid. Moving to next possible syncword.\n");
+            MP3_LOG_DEBUG("Found syncword but header is invalid. Moving to next possible syncword.");
         }
 
         // If the current header was invalid or the next frame did not validate the current "SyncWord" and continue to search

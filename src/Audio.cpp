@@ -1991,7 +1991,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_audiofile.seek(m_ID3Hdr.SYLT.pos);
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
-                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                    bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
                 m_audiofile.seek(pos);
             }
@@ -2087,7 +2087,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_audiofile.seek(m_ID3Hdr.SYLT.pos);
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
-                    bytesWritten += m_audiofile.read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                    bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
                 m_audiofile.seek(pos);
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
@@ -3446,7 +3446,7 @@ void Audio::processLocalFile() {
     }
 
     m_prlf.availableBytes = InBuff.writeSpace();
-    m_prlf.bytesAddedToBuffer = m_audiofile.read(InBuff.getWritePtr(), m_prlf.availableBytes);
+    m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), m_prlf.availableBytes);
     if(m_prlf.bytesAddedToBuffer > 0) {m_prlf.byteCounter += m_prlf.bytesAddedToBuffer; InBuff.bytesWritten(m_prlf.bytesAddedToBuffer);}
     if(m_audioDataSize && m_prlf.byteCounter >= m_audioDataSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
     if(!m_audioDataSize && m_prlf.byteCounter == m_fileSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
@@ -5286,15 +5286,23 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
     int32_t res = -1;
-    if(!buff && !len){
-        res = _client->read();
+
+    if(m_dataMode == AUDIO_LOCALFILE){
+        if(!buff && !len){
+            res = m_audiofile.read();
+        }
+        if(buff){
+            res = m_audiofile.read(buff, len);
+        }
     }
-    if(buff){
-        res = _client->read(buff, len);
+    else{
+        if(!buff && !len){
+            res = _client->read();
+        }
+        if(buff){
+            res = _client->read(buff, len);
+        }
     }
-
-
-
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6220,9 +6228,9 @@ uint32_t Audio::find_m4a_atom(uint32_t fileSize, const char* atomName, uint32_t 
         uint32_t atomStart = m_audiofile.position(); // Position of the current atom
         uint32_t atomSize;
         char atomType[5] = {0};
-        m_audiofile.read((uint8_t*)&atomSize, 4);    // Read the atom size (4 bytes) and the atom type (4 bytes)
-        if(!atomSize) m_audiofile.read((uint8_t*)&atomSize, 4); // skip 4 byte offset field
-        m_audiofile.read((uint8_t*)atomType, 4);
+        audioFileRead((uint8_t*)&atomSize, 4);    // Read the atom size (4 bytes) and the atom type (4 bytes)
+        if(!atomSize) audioFileRead((uint8_t*)&atomSize, 4); // skip 4 byte offset field
+        audioFileRead((uint8_t*)atomType, 4);
 
         atomSize = bswap32(atomSize);              // Convert atom size from big-endian to little-endian
         ///    log_w("%*sAtom '%s' found at position %u with size %u bytes", depth * 2, "", atomType, atomStart, atomSize);
@@ -6230,7 +6238,7 @@ uint32_t Audio::find_m4a_atom(uint32_t fileSize, const char* atomName, uint32_t 
 
         if (atomSize == 1) {                       // If the atom has a size of 1, an 'Extended Size' is used
             uint64_t extendedSize;
-            m_audiofile.read((uint8_t*)&extendedSize, 8);
+            audioFileRead((uint8_t*)&extendedSize, 8);
             extendedSize = bswap64(extendedSize);
         //    log_w("%*sExtended size: %llu bytes\n", depth * 2, "", extendedSize);
             atomSize = (uint32_t)extendedSize;     // Limit to uint32_t for further processing
@@ -6270,10 +6278,10 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
     char buff[4];
     uint32_t len = 0;
     m_audiofile.seek(seekpos);
-    m_audiofile.readBytes(buff, 4);
+    audioFileRead((uint8_t*)buff, 4);
     len = bigEndian((uint8_t*)buff, 4);
     if(!len) {
-        m_audiofile.readBytes(buff, 4); // 4bytes offset filed
+        audioFileRead((uint8_t*)buff, 4); // 4bytes offset filed
         len = bigEndian((uint8_t*)buff, 4) + 16;
     }
     if(len > 1024) len = 1024;
@@ -6284,7 +6292,7 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
     data.clear();
     len -= 4;
     m_audiofile.seek(seekpos);
-    m_audiofile.read(data.get(), len);
+    audioFileRead(data.get(), len);
 
     int offset = 0;
     for(int i = 0; i < 12; i++) {
@@ -6349,10 +6357,10 @@ void Audio::seek_m4a_stsz() {
     auto atomItems = [&](uint32_t startPos) { // lambda, inner function
         char temp[5] = {0};
         m_audiofile.seek(startPos);
-        m_audiofile.readBytes(temp, 4);
+        audioFileRead((uint8_t*)temp, 4);
         atom.size = bigEndian((uint8_t*)temp, 4);
         if(!atom.size) atom.size = 4; // has no data, length is 0
-        m_audiofile.readBytes(atom.name, 4);
+        audioFileRead((uint8_t*)atom.name, 4);
         atom.name[4] = '\0';
         atom.pos = startPos;
         return atom;
@@ -6394,14 +6402,14 @@ void Audio::seek_m4a_stsz() {
     }
     seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
     m_audiofile.seek(seekpos);
-    m_audiofile.readBytes(noe, 4); // number of entries
+    audioFileRead((uint8_t*)noe, 4); // number of entries
     m_stsz_numEntries = bigEndian((uint8_t*)noe, 4);
     // log_i("number of entries in stsz: %d", m_stsz_numEntries);
     m_stsz_position = seekpos + 4;
     if(stsdSize) {
         m_audiofile.seek(stsdPos);
         uint8_t data[128];
-        m_audiofile.readBytes((char*)data, 128);
+        audioFileRead(data, 128);
         int offset = specialIndexOf(data, "mp4a", stsdSize);
         if(offset > 0) {
             int channel = bigEndian(data + offset + 20, 2); // audio parameter must be set before starting
@@ -6444,10 +6452,10 @@ uint32_t Audio::m4a_correctResumeFilePos() {
 
     while(i < m_stsz_numEntries) {
         i++;
-        uu.u8[3] = m_audiofile.read();
-        uu.u8[2] = m_audiofile.read();
-        uu.u8[1] = m_audiofile.read();
-        uu.u8[0] = m_audiofile.read();
+        uu.u8[3] = audioFileRead();
+        uu.u8[2] = audioFileRead();
+        uu.u8[1] = audioFileRead();
+        uu.u8[0] = audioFileRead();
         pos += uu.u32;
         if(pos >= m_resumeFilePos) {found = true; break;}
     }
