@@ -134,10 +134,10 @@ void OPUS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, A
 }
 
 // Macro for comfortable calls
-#define OPUS_LOG_ERROR(fmt, ...) OPUS_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define OPUS_LOG_WARN(fmt, ...)  OPUS_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define OPUS_INFO(fmt, ...)      OPUS_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define OPUS_DEBUG(fmt, ...)     OPUS_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define OPUS_VERBOSE(fmt, ...)   OPUS_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_ERROR(fmt, ...)   OPUS_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_WARN(fmt, ...)    OPUS_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_INFO(fmt, ...)    OPUS_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_DEBUG(fmt, ...)   OPUS_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_VERBOSE(fmt, ...) OPUS_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

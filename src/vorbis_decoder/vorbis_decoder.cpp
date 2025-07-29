@@ -1457,8 +1457,8 @@ uint8_t _book_maptype1_quantvals(codebook_t *b) {
 //---------------------------------------------------------------------------------------------------------------------
 int32_t oggpack_eop() {
     if(s_bitReader.headptr -s_bitReader.data  > s_setupHeaderLength){
-        log_i("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
-        log_i("ogg package 3 overflow");
+        VORBIS_LOG_INFO("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
+        VORBIS_LOG_INFO("ogg package 3 overflow");
          return -1;
     }
     return 0;

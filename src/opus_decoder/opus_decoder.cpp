@@ -903,7 +903,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     // If there's a mismatch, it indicates an issue or just consume the rest.
     *bytesLeft -= s_ofp3.paddingLength; // Consume padding bytes from *bytesLeft for the packet
     if (*bytesLeft < 0) {
-        log_w("Warning: Negative bytesLeft after consuming padding. Remaining: %i", *bytesLeft);
+        OPUS_LOG_WARN("Warning: Negative bytesLeft after consuming padding. Remaining: %i", *bytesLeft);
         *bytesLeft = 0; // Prevent negative
     }
 
