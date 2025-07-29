@@ -436,6 +436,7 @@ public:
     void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void            htmlToUTF8(char* str);
     void            setDefaults(); // free buffers and set defaults
+    int32_t         audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
     void            initInBuff();
     bool            httpPrint(const char* host);
     bool            httpRange(uint32_t range, uint32_t length = UINT32_MAX);
@@ -845,6 +846,7 @@ private:
     uint32_t        m_sampleRate=48000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
+    uint32_t        m_audioFilePosition = 0;        // current position, counts every readed byte
     int             m_readbytes = 0;                // bytes read
     uint32_t        m_metacount = 0;                // counts down bytes between metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()

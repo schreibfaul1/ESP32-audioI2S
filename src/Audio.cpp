@@ -1978,7 +1978,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 if(res == false){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
-                    bytesWritten += _client->read((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
+                    bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
                 }
                 res = httpRange(pos);
                 if(!res){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
@@ -2871,7 +2871,7 @@ bool Audio::readPlayListData() {
         while(true) { // inner while
             uint16_t pos = 0;
             while(_client->available()) { // super inner while :-))
-                pl[pos] = _client->read();
+                pl[pos] = audioFileRead();
                 ctl++;
                 if(pl[pos] == '\n') {
                     pl[pos] = '\0';
@@ -2930,11 +2930,11 @@ bool Audio::readPlayListData() {
         // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
         if(ctl == m_contentlength) {
-            while(_client->available()) _client->read();
+            while(_client->available()) audioFileRead();
             break;
         } // read '\n\n' if exists
         if(ctl == chunksize) {
-            while(_client->available()) _client->read();
+            while(_client->available()) audioFileRead();
             break;
         }
         if(!_client->connected() && _client->available() == 0) break;
@@ -3553,8 +3553,8 @@ void Audio::processWebStream() {
                     if(!m_f_tts) AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
                     return;
                 }
-                int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
-                int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+                int a =audioFileRead(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
+                int b =audioFileRead(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
                 m_pwst.f_skipCRLF = false;
             }
             if(_client->available()){
@@ -3587,7 +3587,7 @@ void Audio::processWebStream() {
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_pwst.availableBytes) {
         m_pwst.availableBytes = min(m_pwst.availableBytes, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), m_pwst.availableBytes);
+        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), m_pwst.availableBytes);
         if(bytesAddedToBuffer > 0) {
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
             if(m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
@@ -3663,8 +3663,8 @@ void Audio::processWebFile() {
                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
                     return;
                 }
-                int a =_client->read(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
-                int b =_client->read(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+                int a =audioFileRead(); if(a != 0x0D) log_w("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
+                int b =audioFileRead(); if(b != 0x0A) log_w("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
             }
             m_pwf.chunkSize = readChunkSize(&readedBytes);
             if(m_pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
@@ -3682,7 +3682,7 @@ void Audio::processWebFile() {
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
     int32_t bytesAddedToBuffer = 0;
-    if(m_pwf.f_clientIsConnected) bytesAddedToBuffer = _client->read(InBuff.getWritePtr(), availableBytes);
+    if(m_pwf.f_clientIsConnected) bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
         m_webFilePos += bytesAddedToBuffer;
         m_pwf.byteCounter += bytesAddedToBuffer;
@@ -3768,7 +3768,7 @@ nextRound:
         if(m_pwsst.chunkSize) minAvBytes = min3(availableBytes, m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr, m_pwsst.chunkSize - m_pwsst.byteCounter);
         else          minAvBytes = min(availableBytes, (uint32_t)(m_pwsst.ts_packetsize - m_pwsst.ts_packetPtr));
 
-        int res = _client->read(m_pwsst.ts_packet.get() + m_pwsst.ts_packetPtr, minAvBytes);
+        int res = audioFileRead(m_pwsst.ts_packet.get() + m_pwsst.ts_packetPtr, minAvBytes);
         if(res > 0) {
             m_pwsst.ts_packetPtr += res;
             m_pwsst.byteCounter += res;
@@ -3809,7 +3809,7 @@ nextRound:
                 m_pwsst.f_nextRound = false;
                 m_pwsst.byteCounter = 0;
                 int av = _client->available();
-                if(av == 7) for(int i = 0; i < av; i++) _client->read(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
+                if(av == 7) for(int i = 0; i < av; i++) audioFileRead(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
             }
             if(m_contentlength && m_pwsst.byteCounter > m_contentlength) {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", m_pwsst.byteCounter, m_contentlength); return;}
             if(m_pwsst.chunkSize       && m_pwsst.byteCounter > m_pwsst.chunkSize)       {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, chunkSize: %d", m_pwsst.byteCounter, m_pwsst.chunkSize); return;}
@@ -3875,7 +3875,7 @@ void Audio::processWebStreamHLS() {
 
         if(m_pwsHLS.firstBytes) {
             if(m_pwsHLS.ID3WritePtr < m_pwsHLS.ID3BuffSize) {
-                m_pwsHLS.ID3WritePtr += _client->readBytes(&m_pwsHLS.ID3Buff[m_pwsHLS.ID3WritePtr], m_pwsHLS.ID3BuffSize - m_pwsHLS.ID3WritePtr);
+                m_pwsHLS.ID3WritePtr += audioFileRead(&m_pwsHLS.ID3Buff[m_pwsHLS.ID3WritePtr], m_pwsHLS.ID3BuffSize - m_pwsHLS.ID3WritePtr);
                 return;
             }
             if(m_controlCounter < 100) {
@@ -3909,9 +3909,9 @@ void Audio::processWebStreamHLS() {
         size_t bytesWasWritten = 0;
         if(InBuff.writeSpace() >= m_pwsHLS.availableBytes) {
         //    if(availableBytes > 1024) availableBytes = 1024; // 1K throttle
-            bytesWasWritten = _client->read(InBuff.getWritePtr(), m_pwsHLS.availableBytes);
+            bytesWasWritten = audioFileRead(InBuff.getWritePtr(), m_pwsHLS.availableBytes);
         }
-        else { bytesWasWritten = _client->read(InBuff.getWritePtr(), InBuff.writeSpace()); }
+        else { bytesWasWritten = audioFileRead(InBuff.getWritePtr(), InBuff.writeSpace()); }
         InBuff.bytesWritten(bytesWasWritten);
 
         m_pwsHLS.byteCounter += bytesWasWritten;
@@ -4056,7 +4056,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             goto exit;
         }
         while(_client->available()) {
-            uint8_t b = _client->read();
+            uint8_t b = audioFileRead();
             if(b == '\n') {
                 if(!pos) { // empty line received, is the last line of this responseHeader
                     if(ct_seen) goto lastToDo;
@@ -4118,7 +4118,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                                 m_f_m3u8data = true;
                             }
                             httpPrint(c_host);
-                            while(_client->available()) _client->read(); // empty client buffer
+                            while(_client->available()) audioFileRead(); // empty client buffer
                             return true;
                         }
                     }
@@ -4223,11 +4223,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if(rhl.starts_with_icase("accept-ranges:")) {
             if(rhl.ends_with_icase("bytes")) m_f_acceptRanges = true;
-            AUDIO_LOG_WARN("%s", rhl.c_get());
+        //    AUDIO_LOG_INFO("%s", rhl.c_get());
         }
 
         else if(rhl.starts_with_icase("content-range:")) {
-            AUDIO_LOG_WARN("%s", rhl.c_get());
+            AUDIO_LOG_INFO("%s", rhl.c_get());
         }
 
         else if(rhl.starts_with_icase("icy-url:")) {
@@ -4312,7 +4312,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
             goto exit;
         }
         while(_client->available()) {
-            uint8_t b = _client->read();
+            uint8_t b = audioFileRead();
             if(b == '\n') {
                 if(!pos) { // empty line received, is the last line of this responseHeader
                     goto lastToDo;
@@ -4729,18 +4729,16 @@ void Audio::showstreamtitle(char* ml) {
                 if(audio_commercial) audio_commercial(sAdv.get() + pos);
             }
         }
+        return;
     }
+    if(!streamTitle.valid()) return;
 
-    if(streamTitle.valid()){
-        if(!m_streamTitle.valid()){
-            m_streamTitle.clone_from(streamTitle); // first init
-        }
-        if(!m_streamTitle.equals(streamTitle)){
-            m_streamTitle.clone_from(streamTitle);
-        }
+    if(!m_streamTitle.equals(streamTitle)){
+        m_streamTitle.clone_from(streamTitle);
     }
-
-    if(!m_streamTitle.valid()) return;
+    else{
+        return; // is equal
+    }
 
     if(m_streamTitle.starts_with("{\"")){ // maybe a json string
         // "{\"status\":0,\"error\":{\"info\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\",\"code\":201},\"result\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\"}\n0";
@@ -5284,6 +5282,20 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     setFilePos(pos);
 
     return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
+    int32_t res = -1;
+    if(!buff && !len){
+        res = _client->read();
+    }
+    if(buff){
+        res = _client->read(buff, len);
+    }
+
+
+
+    return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
@@ -6014,7 +6026,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     if(!maxBytes) return 0; // guard
 
     if(!m_rmet.metalen) {
-        int b = _client->read(); // First byte of metadata?
+        int b = audioFileRead(); // First byte of metadata?
         if (b < 0) {
             AUDIO_INFO("client->read() failed (%d)", b);
             return 0;
@@ -6028,7 +6040,7 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
         m_metacount = m_metaint;
         return m_rmet.res;
     } // metalen is 0
-    uint16_t a = _client->readBytes(&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metalen - m_rmet.pos_ml), (uint16_t)(maxBytes)));
+    uint16_t a = audioFileRead((uint8_t*)&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metalen - m_rmet.pos_ml), (uint16_t)(maxBytes)));
     m_rmet.res += a;
     m_rmet.pos_ml += a;
 
@@ -6070,7 +6082,7 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
             return 0;
         }
         if(!_client->available()) continue; // no data available yet
-        b = _client->read();
+        b = audioFileRead();
         if (b < 0) continue; // -1 = no data
 
         byteCounter++;
@@ -6094,7 +6106,7 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
         uint8_t idx = 0;
         ctime = millis();
         while (idx < 2 && (millis() - ctime) < timeout) {
-            int ch = _client->read();
+            int ch = audioFileRead();
             if (ch < 0) continue;
             crlf[idx++] = static_cast<uint8_t>(ch);
         }
