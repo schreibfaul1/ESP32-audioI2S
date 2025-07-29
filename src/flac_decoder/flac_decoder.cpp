@@ -144,7 +144,7 @@ uint32_t readUint(uint8_t nBits, int32_t *bytesLeft){
         uint8_t temp = *(s_flacInptr + s_rIndex);
         s_rIndex++;
         (*bytesLeft)--;
-        if(*bytesLeft < 0) { log_e("error in bitreader"); s_f_bitReaderError = true; break;}
+        if(*bytesLeft < 0) { FLAC_LOG_ERROR("error in bitreader"); s_f_bitReaderError = true; break;}
         s_flac_bitBuffer = (s_flac_bitBuffer << 8) | temp;
         s_flacBitBufferLen += 8;
     }
@@ -219,9 +219,9 @@ boolean FLACFindMagicWord(unsigned char* buf, int32_t nBytes){
         uint32_t lomd = (buf[idx + 2] << 16) + (buf[idx + 3] << 8) + buf[idx + 4]; // Length of metadata to follow
 
         (void)lmdbf; (void)bt; (void)lomd;
-        // log_i("Last-metadata-block flag: %d", lmdbf);
-        // log_i("block type: %d", bt);
-        // log_i("Length (in bytes) of metadata to follow: %d", lomd);
+        // FLAC_LOG_INFO("Last-metadata-block flag: %d", lmdbf);
+        // FLAC_LOG_INFO("block type: %d", bt);
+        // FLAC_LOG_INFO("Length (in bytes) of metadata to follow: %d", lomd);
         return true;
     }
     return false;
@@ -278,7 +278,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
         }
         s_flacSegmTableVec.insert(s_flacSegmTableVec.begin(), n);
     }
-    // for(int32_t i = 0; i< s_flacSegmTableVec.size(); i++){log_w("%i", s_flacSegmTableVec[i]);}
+    // for(int32_t i = 0; i< s_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("%i", s_flacSegmTableVec[i]);}
 
     bool     continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool     firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
@@ -286,7 +286,7 @@ int32_t FLACparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
 
     (void)continuedPage; (void)lastPage;
 
-    // log_w("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
+    // FLAC_LOG_INFO("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
 
     if(firstPage) s_flacPageNr = 0;
 
@@ -314,7 +314,7 @@ int32_t parseFlacFirstPacket(uint8_t *inbuf, int16_t nBytes){ // 4.2.2. Identifi
 
     int32_t ret = 0;
     int32_t idx = FLAC_specialIndexOf(inbuf, "fLaC", nBytes);
-    //log_i("idx %i, nBytes %i", idx, nBytes);
+    //FLAC_LOG_INFO("idx %i, nBytes %i", idx, nBytes);
     if(idx >= 0){ // FLAC signature found
         ret = idx + 4;
     }
@@ -350,12 +350,12 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
 
     while(true){
         mdBlockHeader         = *(inbuf + pos);
-        s_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; //log_w("lastMdBlockFlag %i", s_f_lastMetaDataBlock);
-        blockType             = mdBlockHeader & 0b01111111; //log_w("blockType %i", blockType);
+        s_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; // FLAC_LOG_INFO("lastMdBlockFlag %i", s_f_lastMetaDataBlock);
+        blockType             = mdBlockHeader & 0b01111111; // FLAC_LOG_INFO("blockType %i", blockType);
 
         blockLength        = *(inbuf + pos + 1) << 16;
         blockLength       += *(inbuf + pos + 2) << 8;
-        blockLength       += *(inbuf + pos + 3); //log_w("blockLength %i", blockLength);
+        blockLength       += *(inbuf + pos + 3); // FLAC_LOG_INFO("blockLength %i", blockLength);
 
         nBytes -= 4;
         pos += 4;
@@ -366,7 +366,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 break;
             case 1:
                 bt = padding;
-            //  log_e("padding");
+            //  FLAC_LOG_ERROR("padding");
                 return FLAC_NONE;
                 break;
             case 2:
@@ -402,8 +402,8 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 minBlocksize += *(inbuf + pos + 1);
                 maxBlocksize += *(inbuf + pos + 2) << 8;
                 maxBlocksize += *(inbuf + pos + 3);
-                //log_i("minBlocksize %i", minBlocksize);
-                //log_i("maxBlocksize %i", maxBlocksize);
+                //FLAC_LOG_INFO("minBlocksize %i", minBlocksize);
+                //FLAC_LOG_INFO("maxBlocksize %i", maxBlocksize);
                 FLACMetadataBlock->minblocksize = minBlocksize;
                 FLACMetadataBlock->maxblocksize = maxBlocksize;
 
@@ -415,35 +415,35 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 maxFrameSize  = *(inbuf + pos + 7) << 16;
                 maxFrameSize += *(inbuf + pos + 8) << 8;
                 maxFrameSize += *(inbuf + pos + 9);
-                //log_i("minFrameSize %i", minFrameSize);
-                //log_i("maxFrameSize %i", maxFrameSize);
+                //FLAC_LOG_INFO("minFrameSize %i", minFrameSize);
+                //FLAC_LOG_INFO("maxFrameSize %i", maxFrameSize);
                 FLACMetadataBlock->minframesize = minFrameSize;
                 FLACMetadataBlock->maxframesize = maxFrameSize;
 
                 sampleRate   =  *(inbuf + pos + 10) << 12;
                 sampleRate  +=  *(inbuf + pos + 11) << 4;
                 sampleRate  += (*(inbuf + pos + 12) & 0xF0) >> 4;
-                //log_i("sampleRate %i", sampleRate);
+                //FLAC_LOG_INFO("sampleRate %i", sampleRate);
                 FLACMetadataBlock->sampleRate = sampleRate;
 
                 nrOfChannels = ((*(inbuf + pos + 12) & 0x0E) >> 1) + 1;
-                //log_i("nrOfChannels %i", nrOfChannels);
+                //FLAC_LOG_INFO("nrOfChannels %i", nrOfChannels);
                 FLACMetadataBlock->numChannels = nrOfChannels;
 
                 bitsPerSample  =  (*(inbuf + pos + 12) & 0x01) << 5;
                 bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
                 FLACMetadataBlock->bitsPerSample = bitsPerSample;
-                //log_i("bitsPerSample %i", bitsPerSample);
+                //FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
 
                 totalSamplesInStream  = (uint64_t)(*(inbuf + pos + 17) & 0x0F) << 32;
                 totalSamplesInStream += (*(inbuf + pos + 14)) << 24;
                 totalSamplesInStream += (*(inbuf + pos + 14)) << 16;
                 totalSamplesInStream += (*(inbuf + pos + 15)) << 8;
                 totalSamplesInStream += (*(inbuf + pos + 16));
-                //log_i("totalSamplesInStream %lli", totalSamplesInStream);
+                //FLAC_LOG_INFO("totalSamplesInStream %lli", totalSamplesInStream);
                 FLACMetadataBlock->totalSamples = totalSamplesInStream;
 
-                //log_i("nBytes %i, blockLength %i", nBytes, blockLength);
+                //FLAC_LOG_INFO("nBytes %i, blockLength %i", nBytes, blockLength);
                 pos += blockLength;
                 nBytes -= blockLength;
                 if(ret == FLAC_PARSE_OGG_DONE) return ret;
@@ -510,8 +510,8 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                         s_flacBlockPicLenUntilFrameEnd = nBytes - (pos + 23);
                         if(s_flacBlockPicLen < s_flacBlockPicLenUntilFrameEnd) s_flacBlockPicLenUntilFrameEnd = s_flacBlockPicLen;
                         s_flacRemainBlockPicLen = s_flacBlockPicLen - s_flacBlockPicLenUntilFrameEnd;
-                        //log_i("s_flacBlockPicPos %i, s_flacBlockPicLen %i", s_flacBlockPicPos, s_flacBlockPicLen);
-                        //log_i("s_flacBlockPicLenUntilFrameEnd %i, s_flacRemainBlockPicLen %i", s_flacBlockPicLenUntilFrameEnd, s_flacRemainBlockPicLen);
+                        //FLAC_LOG_INFO("s_flacBlockPicPos %i, s_flacBlockPicLen %i", s_flacBlockPicPos, s_flacBlockPicLen);
+                        //FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd %i, s_flacRemainBlockPicLen %i", s_flacBlockPicLenUntilFrameEnd, s_flacRemainBlockPicLen);
                         if(s_flacRemainBlockPicLen <= 0) s_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                         if(s_flacBlockPicLen){
                             s_flacBlockPicItem.clear();
@@ -605,7 +605,7 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
             else return ret;  // error
         }
         //-------------------------------------------------------
-        if(!s_flacSegmTableVec.size()) log_e("size is 0");
+        if(!s_flacSegmTableVec.size()) FLAC_LOG_ERROR("size is 0");
         segmLen = s_flacSegmTableVec.back();
         s_flacSegmTableVec.pop_back();
         if(!s_flacSegmTableVec.size()) s_f_flacParseOgg = true;
@@ -613,10 +613,10 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
 
         if(s_flacRemainBlockPicLen <= 0 && !s_f_flacNewMetadataBlockPicture) {
             if(s_flacBlockPicItem.size() > 0) { // get blockpic data
-                // log_i("---------------------------------------------------------------------------");
-                // log_i("metadata blockpic found at pos %i, size %i bytes", s_flacBlockPicPos, s_flacBlockPicLen);
-                // for(int32_t i = 0; i < s_flacBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_flacBlockPicItem[i], s_flacBlockPicItem[i + 1]); }
-                // log_i("---------------------------------------------------------------------------");
+                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
+                // FLAC_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", s_flacBlockPicPos, s_flacBlockPicLen);
+                // for(int32_t i = 0; i < s_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, s_flacBlockPicItem[i], s_flacBlockPicItem[i + 1]); }
+                // FLAC_LOG_INFO("---------------------------------------------------------------------------");
                 s_f_flacNewMetadataBlockPicture = true;
             }
         }
@@ -642,7 +642,7 @@ int8_t FLACDecode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){ //  MAIN
             case 1:
                 if(s_flacRemainBlockPicLen > 0){
                     s_flacRemainBlockPicLen -= segmLen;
-                    //log_i("s_flacCurrentFilePos %i, len %i, s_flacRemainBlockPicLen %i", s_flacCurrentFilePos, segmLen, s_flacRemainBlockPicLen);
+                    //FLAC_LOG_INFO("s_flacCurrentFilePos %i, len %i, s_flacRemainBlockPicLen %i", s_flacCurrentFilePos, segmLen, s_flacRemainBlockPicLen);
                     s_flacBlockPicItem.push_back(s_flacCurrentFilePos);
                     s_flacBlockPicItem.push_back(segmLen);
                     if(s_flacRemainBlockPicLen <= 0){s_flacPageNr = 2;}
@@ -716,10 +716,10 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
             sbl = 0;
             s_flacBitrate = FLACMetadataBlock->sampleRate * FLACMetadataBlock->bitsPerSample * FLACMetadataBlock->numChannels;
             s_flacBitrate /= s_flacCompressionRatio;
-      //      log_e("s_flacBitrate %i, s_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", s_flacBitrate, s_flacCompressionRatio, FLACMetadataBlock->sampleRate);
+      //      FLAC_LOG_INFO("s_flacBitrate %i, s_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", s_flacBitrate, s_flacCompressionRatio, FLACMetadataBlock->sampleRate);
         }
         if(s_offset != s_numOfOutSamples) return GIVE_NEXT_LOOP;
-        if(s_offset > s_numOfOutSamples) { log_e("offset has a wrong value"); }
+        if(s_offset > s_numOfOutSamples) { FLAC_LOG_ERROR("offset has a wrong value"); }
         s_offset = 0;
     }
 
@@ -727,7 +727,7 @@ int8_t FLACDecodeNative(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
     readUint(16, bytesLeft);
 
 //    s_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
-//    log_i("s_flacCompressionRatio % f", s_flacCompressionRatio);
+//    FLAC_LOG_INFO("s_flacCompressionRatio % f", s_flacCompressionRatio);
     s_flacStatus = DECODE_FRAME;
     return FLAC_NONE;
 }

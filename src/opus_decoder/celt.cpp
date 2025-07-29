@@ -660,11 +660,11 @@ bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
     s_celtDec.alloc(omd, "CELTDecoder");
     if (s_celtDec.valid()) {
-        // log_w("Allocated %zu bytes", s_celtDec.size());
+        // OPUS_LOG_INFO("Allocated %zu bytes", s_celtDec.size());
         s_celtDec.clear();  // mem zero
         return true;
     }
-    log_e("oom for %i bytes", omd);
+    OPUS_LOG_ERROR("oom for %i bytes", omd);
     return false;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -584,7 +584,8 @@ void MP3_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
         if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         else if(level == 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_BLUE " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
         audio_info(final.get());
     }
     else{
@@ -592,15 +593,18 @@ void MP3_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
         if     (level == 1) log_e("%s", final.c_get());
         else if(level == 2) log_w("%s", final.c_get());
         else if(level == 3) log_i("%s", final.c_get());
-        else                log_d("%s", final.c_get());
+        else if(level == 4) log_d("%s", final.c_get());
+        else                log_v("%s", final.c_get());
     }
     final.reset();
     result.reset();
 }
 
 // Macro for comfortable calls
-#define MP3_ERROR(fmt, ...) MP3_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define MP3_WARN(fmt, ...)  MP3_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define MP3_INFO(fmt, ...)  MP3_ERROR_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_ERROR(fmt, ...)   MP3_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_WARN(fmt, ...)    MP3_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_INFO(fmt, ...)    MP3_ERROR_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_DEBUG(fmt, ...)   MP3_ERROR_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define MP3_LOG_VERBOSE(fmt, ...) MP3_ERROR_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
