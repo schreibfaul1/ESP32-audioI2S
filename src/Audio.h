@@ -437,6 +437,8 @@ public:
     void            htmlToUTF8(char* str);
     void            setDefaults(); // free buffers and set defaults
     int32_t         audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
+    int32_t         audiofileSeek(uint32_t position, size_t len = 0);
+    size_t          audiofilePosition();
     void            initInBuff();
     bool            httpPrint(const char* host);
     bool            httpRange(uint32_t range, uint32_t length = UINT32_MAX);
