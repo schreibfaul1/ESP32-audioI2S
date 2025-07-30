@@ -1968,27 +1968,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
             syltBuff.alloc(m_ID3Hdr.SYLT.size + 1, "syltBuff");
-            if(m_streamType == ST_WEBFILE && m_f_acceptRanges){
-                uint32_t pos = m_pwf.byteCounter;
+            if((m_streamType == ST_WEBFILE && m_f_acceptRanges) || (m_dataMode == AUDIO_LOCALFILE)){
+                uint32_t pos = m_audioFilePosition;
             //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                bool res;
-                res = httpRange(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
-                if(res == false){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
-                res = parseHttpRangeHeader();
-                if(res == false){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
-                uint16_t bytesWritten = 0;
-                while(bytesWritten < m_ID3Hdr.SYLT.size){
-                    bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
-                }
-                res = httpRange(pos);
-                if(!res){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
-                res = parseHttpRangeHeader();
-                if(!res){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
-            }
-            if(m_dataMode == AUDIO_LOCALFILE){
-                uint32_t pos = m_audiofile.position();
-            //    log_w("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                audiofileSeek(m_ID3Hdr.SYLT.pos);
+                audiofileSeek(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
                     bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size);
@@ -5247,9 +5230,10 @@ uint32_t Audio::getAudioCurrentTime() { // return current time in seconds
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayPosition(uint16_t sec) {
-    if(!m_f_psramFound) {               log_w("PSRAM must be activated"); return false;} // guard
-    if(m_dataMode != AUDIO_LOCALFILE /* && m_streamType == ST_WEBFILE */) return false;  // guard
-    if(!m_avr_bitrate)                                                    return false;  // guard
+
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)) return false;  // guard
+    if(!m_avr_bitrate) return false;  // guard
+
     //if(m_codec == CODEC_OPUS) return false;   // not impl. yet
     //if(m_codec == CODEC_VORBIS) return false; // not impl. yet
     // Jump to an absolute position in time within an audio file
@@ -5290,6 +5274,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
+    // This method standardized reading files, regardless of the source (local or web) and the correct number of the bytes read must be determined.
     int32_t res = -1;
 
     if(m_dataMode == AUDIO_LOCALFILE){
@@ -5334,25 +5319,30 @@ int32_t Audio::audiofileSeek(uint32_t position, size_t len){
             m_audioFilePosition = m_audiofile.position();
             return position;
         }
-
     }
     else{
-
+        if(m_f_acceptRanges){
+            bool r;
+            if(len == 0) len = UINT32_MAX;
+            r = httpRange(position, len);
+            if(res == false){AUDIO_LOG_ERROR("http range request was not successful"); return 0;}
+            r = parseHttpRangeHeader();
+            if(r == false){AUDIO_LOG_ERROR("http range response was not successful"); return 0;}
+            m_audioFilePosition = position;
+            return position;
+        }
     }
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 size_t Audio::audiofilePosition(){
-
-
-
-    return 0;
+    return m_audioFilePosition;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
     if(!m_f_psramFound) {               log_w("PSRAM must be activated"); return false;} // guard
     if(m_dataMode != AUDIO_LOCALFILE /* && m_streamType == ST_WEBFILE */) return false;  // guard
-    if(m_dataMode == AUDIO_LOCALFILE && !m_audiofile)                       return false;  // guard
+    if(m_dataMode == AUDIO_LOCALFILE && !m_audiofile)                     return false;  // guard
     if(m_codec == CODEC_AAC)                                              return false;  // guard, not impl. yet
 
     uint32_t startAB = m_audioDataStart;                 // audioblock begin
