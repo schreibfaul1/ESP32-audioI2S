@@ -3614,7 +3614,7 @@ void Audio::processWebFile() {
     if(m_f_allDataReceived == true) {goto all_data_received;}
 
     if(m_pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
-    else AUDIO_LOG_ERROR("client not connected");
+    // else AUDIO_LOG_ERROR("client not connected");
 
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_pwf.f_waitingForPayload){
@@ -3656,17 +3656,6 @@ void Audio::processWebFile() {
     if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true; goto all_data_received;} // connection closed
     // AUDIO_LOG_INFO("byteCounter %u >= m_audioDataSize %u, byteCounter, m_pwf.nextChunkCount);
 
-    if(m_pwf.newFilePos) { // we have a new file position
-        if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
-        m_pwf.offset = correctResumeFilePos();
-        if(m_pwf.offset == -1) goto exit;
-        m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
-        m_sumBytesDecoded = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
-        m_pwf.newFilePos = 0;
-        m_resumeFilePos = -1;
-        InBuff.bytesWasRead(m_pwf.offset);
-    }
-
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
@@ -3677,6 +3666,17 @@ void Audio::processWebFile() {
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) m_pwf.audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
+    }
+
+    if(m_pwf.newFilePos) { // we have a new file position
+        if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
+        m_pwf.offset = correctResumeFilePos();
+        if(m_pwf.offset == -1) goto exit;
+        m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
+        m_sumBytesDecoded = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
+        m_pwf.newFilePos = 0;
+        m_resumeFilePos = -1;
+        InBuff.bytesWasRead(m_pwf.offset);
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -5215,14 +5215,14 @@ bool Audio::setAudioPlayPosition(uint16_t sec) {
     if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)) return false;  // guard
     if(!m_avr_bitrate) return false;  // guard
 
-    //if(m_codec == CODEC_OPUS) return false;   // not impl. yet
-    //if(m_codec == CODEC_VORBIS) return false; // not impl. yet
+    // if(m_codec == CODEC_OPUS) return false;   // not impl. yet
+    // if(m_codec == CODEC_VORBIS) return false; // not impl. yet
     // Jump to an absolute position in time within an audio file
     // e.g. setAudioPlayPosition(300) sets the pointer at pos 5 min
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
     uint32_t filepos = m_audioDataStart + (m_avr_bitrate * sec / 8);
     if(m_dataMode == AUDIO_LOCALFILE) return setFilePos(filepos);
-//    if(m_streamType == ST_WEBFILE) return httpRange(m_lastHost, filepos);
+    // if(m_streamType == ST_WEBFILE) return httpRange(m_lastHost, filepos);
     return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5240,7 +5240,7 @@ uint32_t Audio::getTotalPlayingTime() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
-AUDIO_LOG_WARN("%i", sec);
+    // AUDIO_INFO("time offset %li sec", sec);
     if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){ AUDIO_LOG_WARN("%s","not a file");                 return false;}  // guard
     if((m_dataMode == AUDIO_LOCALFILE) && !m_audiofile){                 AUDIO_LOG_WARN("%s","local file not accessibble"); return false;}  // guard
     if((m_streamType == ST_WEBFILE) && !m_f_acceptRanges){               AUDIO_LOG_WARN("%s","server don't accept ranges"); return false;}  // guard
