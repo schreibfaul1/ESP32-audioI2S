@@ -109,7 +109,7 @@ void OPUS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, A
     ps_ptr<char> final;
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
-    final.alloc(total_len + 1, "final");
+    final.calloc(total_len + 1, "final");
     final.clear();
     char* dest = final.get();
     if (!dest) return;  // Or error treatment

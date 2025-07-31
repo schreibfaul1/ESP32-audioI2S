@@ -680,7 +680,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Pragma: no-cache\r\n");
                        rqh.append("Cache-Control: no-cache\r\n");
                        rqh.append("Range: bytes=0-\r\n");
-                       rqh.append("Accept:*/*\r\n");
+                       rqh.append("Accept: */*\r\n");
                        rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     if(authLen > 0) {  rqh.append("Authorization: Basic ");
                        rqh.append(authorization.get());
@@ -3414,15 +3414,18 @@ void Audio::processLocalFile() {
         return;
     }
 
-    if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) { // we have a resume file position
+    if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) {  // we have a resume file position
+
         if(!m_prlf.audioHeaderFound){AUDIO_LOG_WARN("timeOffset not possible"); m_resumeFilePos = -1; return;}
-        if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {goto exit;}
 
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             InBuff.resetBuffer();
         m_f_lockInBuffer = false;
+
+        if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {goto exit;}
+
         m_prlf.newFilePos = m_resumeFilePos;
         audioFileSeek(m_prlf.newFilePos);
         m_f_allDataReceived = false;
@@ -5260,17 +5263,20 @@ uint32_t Audio::getTotalPlayingTime() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
-    if(!m_f_psramFound) {               AUDIO_LOG_WARN("PSRAM must be activated"); return false;} // guard
-    if(m_dataMode != AUDIO_LOCALFILE /* && m_streamType == ST_WEBFILE */) return false;  // guard
-    if(m_dataMode == AUDIO_LOCALFILE && !m_audiofile)                       return false;  // guard
-    if(!m_avr_bitrate)                                                    return false;  // guard
-    if(m_codec == CODEC_AAC) return false; // not impl. yet
+AUDIO_LOG_WARN("%i", sec);
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){ AUDIO_LOG_WARN("%s","not a file");                 return false;}  // guard
+    if((m_dataMode == AUDIO_LOCALFILE) && !m_audiofile){                 AUDIO_LOG_WARN("%s","local file not accessibble"); return false;}  // guard
+    if((m_streamType == ST_WEBFILE) && !m_f_acceptRanges){               AUDIO_LOG_WARN("%s","server don't accept ranges"); return false;}  // guard
+    if(!m_avr_bitrate){                                                  AUDIO_LOG_WARN("%s","unknown bitrate");            return false;}  // guard
+    if(!m_f_stream){                                                     AUDIO_LOG_WARN("%s","strean is not ready");        return false;}  // guard
+    if(m_codec == CODEC_AAC){                                            AUDIO_LOG_WARN("%s","aac not impl yet");           return false;}
+log_w("%i", sec);
     uint32_t oneSec = m_avr_bitrate / 8;                 // bytes decoded in one sec
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
     int32_t pos = getFilePos() - inBufferFilled();
     pos += offset;
     setFilePos(pos);
-
+log_w("%i", pos);
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5337,23 +5343,22 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len){
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setFilePos(uint32_t pos) {
-    if(!m_f_psramFound) {               AUDIO_LOG_WARN("PSRAM must be activated"); return false;} // guard
-    if(m_dataMode != AUDIO_LOCALFILE /* && m_streamType == ST_WEBFILE */) return false;  // guard
-    if(m_dataMode == AUDIO_LOCALFILE && !m_audiofile)                     return false;  // guard
-    if(m_codec == CODEC_AAC)                                              return false;  // guard, not impl. yet
+
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){ AUDIO_LOG_WARN("%s","not a file");                 return false;}  // guard
+    if((m_dataMode == AUDIO_LOCALFILE) && !m_audiofile){                 AUDIO_LOG_WARN("%s","local file not accessibble"); return false;}  // guard
+    if((m_streamType == ST_WEBFILE) && !m_f_acceptRanges){               AUDIO_LOG_WARN("%s","server don't accept ranges"); return false;}  // guard
+    if(!m_avr_bitrate){                                                  AUDIO_LOG_WARN("%s","unknown bitrate");            return false;}  // guard
+    if(!m_f_stream){                                                     AUDIO_LOG_WARN("%s","strean is not ready");        return false;}  // guard
+    if(m_codec == CODEC_AAC){                                            AUDIO_LOG_WARN("%s","aac not impl yet");           return false;}
 
     uint32_t startAB = m_audioDataStart;                 // audioblock begin
     uint32_t endAB = m_audioDataStart + m_audioDataSize; // audioblock end
     if(pos < (int32_t)startAB) {pos = startAB;}
     if(pos >= (int32_t)endAB)  {pos = endAB;}
 
-
     m_validSamples = 0;
-    if(m_dataMode == AUDIO_LOCALFILE /* || m_streamType == ST_WEBFILE */) {
-        m_resumeFilePos = pos;  // used in processLocalFile()
-        return true;
-    }
-    return false;
+    m_resumeFilePos = pos;  // used in processLocalFile()
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setSampleRate(uint32_t sampRate) {
