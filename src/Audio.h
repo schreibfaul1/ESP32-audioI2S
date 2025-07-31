@@ -487,7 +487,7 @@ private:
     void         IIR_filterChain0(int16_t iir_in[2], bool clear = false);
     void         IIR_filterChain1(int16_t iir_in[2], bool clear = false);
     void         IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-    uint32_t     streamavail() { return _client ? _client->available() : 0; }
+    uint32_t     streamavail() { return m_client ? m_client->available() : 0; }
     void         IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool         ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint32_t     find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
@@ -794,11 +794,11 @@ private:
 #ifndef ETHERNET_IF
     WiFiClient            client;
     WiFiClientSecure      clientsecure;
-    WiFiClient*           _client = nullptr;
+    WiFiClient*           m_client = nullptr;
 #else
     NetworkClient	      client;
     NetworkClientSecure	  clientsecure;
-    NetworkClient*       _client = nullptr;
+    NetworkClient*       m_client = nullptr;
 #endif
     SemaphoreHandle_t     mutex_playAudioData;
     SemaphoreHandle_t     mutex_audioTask;

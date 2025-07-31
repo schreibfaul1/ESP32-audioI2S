@@ -349,7 +349,7 @@ void Audio::setDefaults() {
     m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
     clientsecure.stop();
-    _client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
+    m_client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     m_lastM3U8host.reset();
 
@@ -528,11 +528,11 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 
     bool res = true;
     int port = 443;
-    _client = static_cast<WiFiClient*>(&clientsecure);
+    m_client = static_cast<WiFiClient*>(&clientsecure);
 
     uint32_t t = millis();
     AUDIO_INFO("Connect to: \"%s\"", host.get());
-    res = _client->connect(host.get(), port, m_timeout_ms_ssl);
+    res = m_client->connect(host.get(), port, m_timeout_ms_ssl);
     if (res) {
         uint32_t dt = millis() - t;
         m_lastHost.assign(host.get());
@@ -545,7 +545,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     m_expectedPlsFmt = FORMAT_NONE;
 
     if (res) {
-        _client->print(http_request);
+        m_client->print(http_request);
         if (response_format == "mp3") m_expectedCodec  = CODEC_MP3;
         if (response_format == "opus") m_expectedCodec  = CODEC_OPUS;
         if (response_format == "aac") m_expectedCodec  = CODEC_AAC;
@@ -688,14 +688,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
                        rqh.append("Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
-    else        { _client = static_cast<WiFiClient*>(&client); }
+    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure);}
+    else        { m_client = static_cast<WiFiClient*>(&client); }
 
     timestamp = millis();
-    _client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
+    m_client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
 
     AUDIO_INFO("connect to: \"%s\" on port %d path \"/%s\"", hwoe.get(), port, path.get());
-    res = _client->connect(hwoe.get(), port);
+    res = m_client->connect(hwoe.get(), port);
 
     m_expectedCodec = CODEC_NONE;
     m_expectedPlsFmt = FORMAT_NONE;
@@ -704,7 +704,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         uint32_t dt = millis() - timestamp;
         AUDIO_INFO("%s has been established in %lu ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
         m_f_running = true;
-        _client->print(rqh.get());
+        m_client->print(rqh.get());
         if(extension.ends_with_icase( ".mp3" ))      m_expectedCodec  = CODEC_MP3;
         if(extension.ends_with_icase( ".aac" ))      m_expectedCodec  = CODEC_AAC;
         if(extension.ends_with_icase( ".wav" ))      m_expectedCodec  = CODEC_WAV;
@@ -800,21 +800,21 @@ bool Audio::httpPrint(const char* host) {
     AUDIO_INFO("next URL: \"%s\"", c_host.get());
 
     if(f_equal == false){
-        if(_client->connected()) _client->stop();
+        if(m_client->connected()) m_client->stop();
     }
-    if(!_client->connected() ) {
-         if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
-         else        { _client = static_cast<WiFiClient*>(&client); }
+    if(!m_client->connected() ) {
+         if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+         else        { m_client = static_cast<WiFiClient*>(&client); }
         if(f_equal) AUDIO_INFO("The host has disconnected, reconnecting");
 
-        if(!_client->connect(hwoe.get(), port)) {
+        if(!m_client->connect(hwoe.get(), port)) {
             AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
             stopSong();
             return false;
         }
     }
     m_currentHost.clone_from(c_host);
-    _client->print(rqh.get());
+    m_client->print(rqh.get());
 
     if(     extension.ends_with_icase(".mp3"))       m_expectedCodec  = CODEC_MP3;
     else if(extension.ends_with_icase(".aac"))       m_expectedCodec  = CODEC_AAC;
@@ -894,11 +894,11 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     rqh.append("Sec-GPC: 1\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
 
-    if(_client->connected()) {_client->stop();}
-    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
-    else        { _client = static_cast<WiFiClient*>(&client); }
+    if(m_client->connected()) {m_client->stop();}
+    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+    else        { m_client = static_cast<WiFiClient*>(&client); }
 
-    if(!_client->connect(hwoe.get(), port)) {
+    if(!m_client->connect(hwoe.get(), port)) {
         AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
         stopSong();
         return false;
@@ -906,7 +906,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
 
     // AUDIO_LOG_INFO("rqh \n%s", rqh.get());
 
-    _client->print(rqh.c_get());
+    m_client->print(rqh.c_get());
 
     m_dataMode = HTTP_RANGE_HEADER;
     m_streamType = ST_WEBFILE;
@@ -985,14 +985,14 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     req.append("Accept: text/html\r\n");
     req.append("Connection: close\r\n\r\n");
 
-    _client = static_cast<WiFiClient*>(&client);
+    m_client = static_cast<WiFiClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
-    if(!_client->connect(host, 80)) {
+    if(!m_client->connect(host, 80)) {
         AUDIO_LOG_ERROR("Connection failed");
         xSemaphoreGiveRecursive(mutex_playAudioData);
         return false;
     }
-    _client->print(req.get());
+    m_client->print(req.get());
 
     m_f_running = true;
     m_f_ssl = false;
@@ -1069,14 +1069,19 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "SYLT")) id3tag.appendf("SynLyrics: %s", value, "id3tag");
     if(!strcmp(tag, "TALB")) id3tag.appendf("Album: %s", value, "id3tag");
     if(!strcmp(tag, "TBPM")) id3tag.appendf("BeatsPerMinute: %s", value, "id3tag");
+    if(!strcmp(tag, "TCAT")) id3tag.appendf("PodcastCategory: %s", value, "id3tag");
     if(!strcmp(tag, "TCMP")) id3tag.appendf("Compilation: %s", value, "id3tag");
     if(!strcmp(tag, "TCOM")) id3tag.appendf("Composer: %s", value, "id3tag");
     if(!strcmp(tag, "TCON")) id3tag.appendf("ContentType: %s", value, "id3tag");
     if(!strcmp(tag, "TCOP")) id3tag.appendf("Copyright: %s", value, "id3tag");
     if(!strcmp(tag, "TDAT")) id3tag.appendf("Date: %s", value, "id3tag");
+    if(!strcmp(tag, "TDES")) id3tag.appendf("PodcastDescription: %s", value, "id3tag");
     if(!strcmp(tag, "TDOR")) id3tag.appendf("Original Release Year: %s", value, "id3tag");
     if(!strcmp(tag, "TDRC")) id3tag.appendf("Publication date: %s", value, "id3tag");
+    if(!strcmp(tag, "TDRL")) id3tag.appendf("ReleaseTime: %s", value, "id3tag");
+    if(!strcmp(tag, "TENC")) id3tag.appendf("Encoded by: %s", value, "id3tag");
     if(!strcmp(tag, "TEXT")) id3tag.appendf("Lyricist: %s", value, "id3tag");
+    if(!strcmp(tag, "TGID")) id3tag.appendf("PodcastID: %s", value, "id3tag");
     if(!strcmp(tag, "TIME")) id3tag.appendf("Time: %s", value, "id3tag");
     if(!strcmp(tag, "TIT1")) id3tag.appendf("Grouping: %s", value, "id3tag");
     if(!strcmp(tag, "TIT2")) id3tag.appendf("Title: %s", value, "id3tag");
@@ -1086,6 +1091,7 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "TMED")) id3tag.appendf("Media: %s", value, "id3tag");
     if(!strcmp(tag, "TOAL")) id3tag.appendf("OriginalAlbum: %s", value, "id3tag");
     if(!strcmp(tag, "TOPE")) id3tag.appendf("OriginalArtist: %s", value, "id3tag");
+    if(!strcmp(tag, "TOLY")) id3tag.appendf("OriginalLyricist: %s", value, "id3tag");
     if(!strcmp(tag, "TORY")) id3tag.appendf("OriginalReleaseYear: %s", value, "id3tag");
     if(!strcmp(tag, "TPE1")) id3tag.appendf("Artist: %s", value, "id3tag");
     if(!strcmp(tag, "TPE2")) id3tag.appendf("Band: %s", value, "id3tag");
@@ -1094,17 +1100,28 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if(!strcmp(tag, "TPOS")) id3tag.appendf("PartOfSet: %s", value, "id3tag");
     if(!strcmp(tag, "TPUB")) id3tag.appendf("Publisher: %s", value, "id3tag");
     if(!strcmp(tag, "TRCK")) id3tag.appendf("Track: %s", value, "id3tag");
+    if(!strcmp(tag, "TRSN")) id3tag.appendf("InternetRadioStationName: %s", value, "id3tag");
     if(!strcmp(tag, "TSSE")) id3tag.appendf("SettingsForEncoding: %s", value, "id3tag");
     if(!strcmp(tag, "TRDA")) id3tag.appendf("RecordingDates: %s", value, "id3tag");
+    if(!strcmp(tag, "TSO2")) id3tag.appendf("AlbumArtistSortOrder: %s", value, "id3tag");
+    if(!strcmp(tag, "TSOA")) id3tag.appendf("AlbumSortOrder: %s", value, "id3tag");
+    if(!strcmp(tag, "TSOP")) id3tag.appendf("PerformerSortOrder: %s", value, "id3tag");
+    if(!strcmp(tag, "TSOC")) id3tag.appendf("ComposerSortOrder: %s", value, "id3tag");
+    if(!strcmp(tag, "TSOT")) id3tag.appendf("TitleSortOrder: %s", value, "id3tag");
     if(!strcmp(tag, "TXXX")) id3tag.appendf("UserDefinedText: %s", value, "id3tag");
     if(!strcmp(tag, "TYER")) id3tag.appendf("Year: %s", value, "id3tag");
     if(!strcmp(tag, "USER")) id3tag.appendf("TermsOfUse: %s", value, "id3tag");
     if(!strcmp(tag, "USLT")) id3tag.appendf("Lyrics: %s", value, "id3tag");
+    if(!strcmp(tag, "WCOM")) id3tag.appendf("Commercial URL: %s", value, "id3tag");
+    if(!strcmp(tag, "WFED")) id3tag.appendf("Podcast URL: %s", value, "id3tag");
+    if(!strcmp(tag, "WOAF")) id3tag.appendf("File URL: %s", value, "id3tag");
     if(!strcmp(tag, "WOAR")) id3tag.appendf("OfficialArtistWebpage: %s", value, "id3tag");
+    if(!strcmp(tag, "WOAS")) id3tag.appendf("Source URL: %s", value, "id3tag");
+    if(!strcmp(tag, "WORS")) id3tag.appendf("InternetRadioStationURL: %s", value, "id3tag");
     if(!strcmp(tag, "WXXX")) id3tag.appendf("User defined URL link frame: %s", value, "id3tag");
     if(!strcmp(tag, "XDOR")) id3tag.appendf("OriginalReleaseTime: %s", value, "id3tag");
 
-    if(!id3tag.valid()){AUDIO_LOG_WARN("tag not found: %s", tag); return;}
+    if(!id3tag.valid()){AUDIO_LOG_WARN("unknown tag: %s", tag); return;}
     latinToUTF8(id3tag);
     if(id3tag.contains("?xml")) {
         showstreamtitle(id3tag.get());
@@ -1744,18 +1761,14 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         memset(m_ID3Hdr.APIC_pos, 0, sizeof(m_ID3Hdr.APIC_pos));
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
 
-        if(m_dataMode == AUDIO_LOCALFILE) {
-            m_ID3Hdr.ID3version = 0;
-            m_contentlength = getFileSize();
-            AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
-        }
+        AUDIO_INFO("File-Size: %lu", getFileSize());
 
         m_ID3Hdr.SYLT.seen = false;
         m_ID3Hdr.remainingHeaderBytes = 0;
         m_ID3Hdr.ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
             if(!m_f_m3u8data) {AUDIO_INFO("file has no ID3 tag, skip metadata");}
-            m_audioDataSize = m_contentlength;
+            m_audioDataSize = getFileSize();;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             return -1; // error, no ID3 signature found
         }
@@ -2148,7 +2161,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         else {
             m_controlCounter = 100; // ok
-            m_audioDataSize = m_contentlength - m_audioDataStart;
+            m_audioDataSize = getFileSize() - m_audioDataStart;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             if(m_ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
                 size_t pos = m_audioFilePosition;
@@ -2534,7 +2547,7 @@ uint32_t Audio::stopSong() {
             if(m_dataMode == AUDIO_LOCALFILE) {
                 pos = m_audioFilePosition - inBufferFilled();
             }
-            if(_client->connected()) _client->stop();
+            if(m_client->connected()) m_client->stop();
         }
         if(m_audiofile) {
             // added this before putting 'm_f_localfile = false' in stopSong(); shoulf never occur....
@@ -2832,14 +2845,12 @@ void Audio::loop() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readPlayListData() {
     if(m_dataMode != AUDIO_PLAYLISTINIT) return false;
-    if(_client->available() == 0) return false;
+    if(m_client->available() == 0) return false;
 
     uint32_t chunksize = 0;
     uint8_t  readedBytes = 0;
     if(m_f_chunked) chunksize = readChunkSize(&readedBytes);
 
-    // reads the content of the playlist and stores it in the vector m_contentlength
-    // m_contentlength is a table of pointers to the lines
     ps_ptr<char>pl;
     uint32_t ctl = 0;
     int      lines = 0;
@@ -2854,7 +2865,7 @@ bool Audio::readPlayListData() {
 
         while(true) { // inner while
             uint16_t pos = 0;
-            while(_client->available()) { // super inner while :-))
+            while(m_client->available()) { // super inner while :-))
                 pl[pos] = audioFileRead();
                 ctl++;
                 if(pl[pos] == '\n') {
@@ -2914,14 +2925,14 @@ bool Audio::readPlayListData() {
         // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
         if(ctl == m_contentlength) {
-            while(_client->available()) audioFileRead();
+            while(m_client->available()) audioFileRead();
             break;
         } // read '\n\n' if exists
         if(ctl == chunksize) {
-            while(_client->available()) audioFileRead();
+            while(m_client->available()) audioFileRead();
             break;
         }
-        if(!_client->connected() && _client->available() == 0) break;
+        if(!m_client->connected() && m_client->available() == 0) break;
 
     } // outer while
     lines = m_playlistContent.size();
@@ -3428,8 +3439,8 @@ void Audio::processLocalFile() {
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
         m_prlf.offset = correctResumeFilePos();
         if(m_prlf.offset == -1) goto exit;
-        m_haveNewFilePos  = m_prlf.newFilePos + m_prlf.offset - m_audioDataStart;
-        m_sumBytesDecoded = m_prlf.newFilePos + m_prlf.offset - m_audioDataStart;
+        m_haveNewFilePos  = m_prlf.newFilePos;
+        m_sumBytesDecoded = m_prlf.newFilePos;
         m_prlf.newFilePos = 0;
         m_resumeFilePos = -1;
         InBuff.bytesWasRead(m_prlf.offset);
@@ -3495,7 +3506,7 @@ void Audio::processWebStream() {
 
     m_pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     m_pwst.availableBytes = 0; // available from stream
-    m_pwst.f_clientIsConnected = _client->connected();
+    m_pwst.f_clientIsConnected = m_client->connected();
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -3508,14 +3519,14 @@ void Audio::processWebStream() {
         readMetadata(0, true);
         m_audioFilePosition = 0;
     }
-    if(m_pwst.f_clientIsConnected) m_pwst.availableBytes = _client->available(); // available from stream
+    if(m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
 
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && m_pwst.availableBytes > 0) {
         uint8_t readedBytes = 0;
         if(!m_pwst.chunkSize){
             if(m_pwst.f_skipCRLF){
-                if(_client->available() < 2) { // avoid getting out of sync
+                if(m_client->available() < 2) { // avoid getting out of sync
                     if(!m_f_tts) AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
                     return;
                 }
@@ -3523,7 +3534,7 @@ void Audio::processWebStream() {
                 int b =audioFileRead(); if(b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
                 m_pwst.f_skipCRLF = false;
             }
-            if(_client->available()){
+            if(m_client->available()){
                 m_pwst.chunkSize = readChunkSize(&readedBytes);
                 if(m_pwst.chunkSize > 0) {
                     m_pwst.f_skipCRLF = true; // skip next CRLF
@@ -3583,7 +3594,7 @@ void Audio::processWebStream() {
 void Audio::processWebFile() {
     if(!m_lastHost.valid()) {AUDIO_LOG_ERROR("m_lastHost is empty"); return;}  // guard
     m_pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every frame is not bigger
-    m_pwf.f_clientIsConnected = _client->connected();     // we are not connected
+    m_pwf.f_clientIsConnected = m_client->connected();     // we are not connected
     int32_t bytesAddedToBuffer = 0;
     uint32_t availableBytes = 0;
 
@@ -3608,12 +3619,13 @@ void Audio::processWebFile() {
     if(m_resumeFilePos >= 0 && m_pwf.newFilePos == 0) {  // we have a resume file position
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if(m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
+        m_pwf.byteCounter = m_pwf.newFilePos;
         return;
     }
 
     if(m_f_allDataReceived == true) {goto all_data_received;}
 
-    if(m_pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
+    if(m_pwf.f_clientIsConnected) availableBytes = m_client->available(); // available from stream
     // else AUDIO_LOG_ERROR("client not connected");
 
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3637,7 +3649,7 @@ void Audio::processWebFile() {
         uint8_t readedBytes = 0;
         if(m_f_chunked && m_pwf.nextChunkCount == m_pwf.byteCounter) {
             if(m_pwf.chunkSize > 0){
-                if(_client->available() < 2) { // avoid getting out of sync
+                if(m_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
                     return;
                 }
@@ -3652,7 +3664,7 @@ void Audio::processWebFile() {
         }
         availableBytes = min(availableBytes, m_pwf.nextChunkCount - m_pwf.byteCounter);
     }
-    if(!m_f_chunked && m_pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true; goto all_data_received;}
+    if(!m_f_chunked && m_pwf.byteCounter >= getFileSize()) {m_f_allDataReceived = true; goto all_data_received;}
     if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true; goto all_data_received;} // connection closed
     // AUDIO_LOG_INFO("byteCounter %u >= m_audioDataSize %u, byteCounter, m_pwf.nextChunkCount);
 
@@ -3672,12 +3684,14 @@ void Audio::processWebFile() {
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
         m_pwf.offset = correctResumeFilePos();
         if(m_pwf.offset == -1) goto exit;
-        m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
-        m_sumBytesDecoded = m_pwf.newFilePos + m_pwf.offset - m_audioDataStart;
+        m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - bytesAddedToBuffer;
+        m_sumBytesDecoded = m_pwf.newFilePos + m_pwf.offset - bytesAddedToBuffer;
         m_pwf.newFilePos = 0;
         m_resumeFilePos = -1;
         InBuff.bytesWasRead(m_pwf.offset);
     }
+
+
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3746,7 +3760,7 @@ void Audio::processWebStreamTS() {
     if(m_dataMode != AUDIO_DATA) return; // guard
 
 nextRound:
-    availableBytes = _client->available();
+    availableBytes = m_client->available();
     if(availableBytes) {
         /* If the m3u8 stream uses 'chunked data transfer' no content length is supplied. Then the chunk size determines the audio data to be processed.
            However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
@@ -3798,7 +3812,7 @@ nextRound:
                 m_pwsst.f_chunkFinished = true;
                 m_pwsst.f_nextRound = false;
                 m_pwsst.byteCounter = 0;
-                int av = _client->available();
+                int av = m_client->available();
                 if(av == 7) for(int i = 0; i < av; i++) audioFileRead(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
             }
             if(m_contentlength && m_pwsst.byteCounter > m_contentlength) {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", m_pwsst.byteCounter, m_contentlength); return;}
@@ -3855,7 +3869,7 @@ void Audio::processWebStreamHLS() {
 
     if(m_dataMode != AUDIO_DATA) return; // guard
 
-    m_pwsHLS.availableBytes = _client->available();
+    m_pwsHLS.availableBytes = m_client->available();
     if(m_pwsHLS.availableBytes) { // an ID3 header could come here
         uint8_t readedBytes = 0;
 
@@ -3960,19 +3974,20 @@ void Audio::playAudioData() {
     if((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) && m_playlistFormat != FORMAT_M3U8)  { // local file or webfile but not m3u8 file
         if(!m_audioDataSize) goto exit; // no data to decode if filesize is 0
         if(m_audioDataSize != m_pad.oldAudioDataSize) { // Special case: Metadata in ogg files are recognized by the decoder,
-            if(m_f_ogg)m_sumBytesDecoded = 0;     // after which m_audioDataStart and m_audioDataSize are updated.
+            if(m_f_ogg)m_sumBytesDecoded = 0;           // after which m_audioDataStart and m_audioDataSize are updated.
             if(m_f_ogg)m_bytesNotDecoded = 0;
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = m_audioDataSize - m_sumBytesDecoded;
+        m_pad.bytesToDecode = getFileSize() - m_sumBytesDecoded;
 
         if(m_pad.bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
             m_pad.lastFrames = true;
         }
+
         if(m_sumBytesDecoded > 0){
-            if(m_sumBytesDecoded >= m_audioDataSize) {m_f_eof = true; goto exit;} // file end reached
-            if(m_pad.bytesToDecode <= 0)                   {m_f_eof = true; goto exit;} // file end reached
+            if(m_sumBytesDecoded >= getFileSize()) {m_f_eof = true; goto exit;} // file end reached
+            if(m_pad.bytesToDecode <= 0)           {m_f_eof = true; goto exit;} // file end reached
         }
     }
     else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}}
@@ -4021,7 +4036,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     m_phreh.ctime = millis();
     m_phreh.timeout = 4500; // ms
 
-    if(_client->available() == 0) {
+    if(m_client->available() == 0) {
         if(!m_phreh.f_time) {
             m_phreh.stime = millis();
             m_phreh.f_time = true;
@@ -4046,12 +4061,12 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             m_f_timeout = true;
             goto exit;
         }
-        while(_client->available()) {
+        while(m_client->available()) {
             uint8_t b = audioFileRead();
             if(b == '\n') {
                 if(!pos) { // empty line received, is the last line of this responseHeader
                     if(ct_seen) goto lastToDo;
-                    else {if(!_client->available())  goto exit;}
+                    else {if(!m_client->available())  goto exit;}
                 }
                 break;
             }
@@ -4109,7 +4124,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                                 m_f_m3u8data = true;
                             }
                             httpPrint(c_host);
-                            while(_client->available()) audioFileRead(); // empty client buffer
+                            while(m_client->available()) audioFileRead(); // empty client buffer
                             return true;
                         }
                     }
@@ -4280,7 +4295,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
     m_phrah.ctime = millis();
     m_phrah.timeout = 4500; // ms
 
-    if(_client->available() == 0) {
+    if(m_client->available() == 0) {
         if(!m_phrah.f_time) {
             m_phrah.stime = millis();
             m_phrah.f_time = true;
@@ -4302,7 +4317,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
             m_f_timeout = true;
             goto exit;
         }
-        while(_client->available()) {
+        while(m_client->available()) {
             uint8_t b = audioFileRead();
             if(b == '\n') {
                 if(!pos) { // empty line received, is the last line of this responseHeader
@@ -5137,7 +5152,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
     }
 
     if(m_haveNewFilePos && m_avr_bitrate){
-        uint32_t posWhithinAudioBlock =  m_haveNewFilePos;
+        uint32_t posWhithinAudioBlock =  m_haveNewFilePos - m_audioDataStart;
         float newTime = (float)posWhithinAudioBlock / (m_avr_bitrate / 8);
         m_audioCurrentTime = round(newTime);
         m_cat.sumBytesIn = posWhithinAudioBlock;
@@ -5271,11 +5286,11 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
     }
     else{
         if(!buff && !len){
-            res = _client->read();
+            res = m_client->read();
             if(res >= 0) m_audioFilePosition ++;
         }
         if(buff){
-            res = _client->read(buff, len);
+            res = m_client->read(buff, len);
             if(res >= 0) m_audioFilePosition += res;
         }
     }
@@ -6099,7 +6114,7 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
             stopSong();
             return 0;
         }
-        if(!_client->available()) continue; // no data available yet
+        if(!m_client->available()) continue; // no data available yet
         b = audioFileRead();
         if (b < 0) continue; // -1 = no data
 
