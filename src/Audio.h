@@ -293,6 +293,7 @@ private:
         uint32_t  chunkSize;
         size_t    audioDataCount;
         uint32_t  byteCounter;
+        uint32_t  nextChunkCount;
         bool      f_waitingForPayload = false;
         bool      f_clientIsConnected;
         int32_t   offset;

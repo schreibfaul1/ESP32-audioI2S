@@ -3583,8 +3583,8 @@ void Audio::processWebStream() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebFile() {
     if(!m_lastHost.valid()) {AUDIO_LOG_ERROR("m_lastHost is empty"); return;}  // guard
-    m_pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every mp3/aac frame is not bigger
-    m_pwf.f_clientIsConnected = _client;                  // if _client is Nullptr, we are not connected
+    m_pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every frame is not bigger
+    m_pwf.f_clientIsConnected = _client->connected();     // we are not connected
     int32_t bytesAddedToBuffer = 0;
     uint32_t availableBytes = 0;
 
@@ -3599,12 +3599,13 @@ void Audio::processWebFile() {
         m_pwf.byteCounter = 0;
         m_pwf.chunkSize = 0;
         m_pwf.audioDataCount = 0;
-        m_audioDataSize = m_contentlength;
+        m_audioDataSize = getFileSize();
         m_webFilePos = 0;
         m_controlCounter = 0;
         m_f_allDataReceived = false;
         m_audioFilePosition = 0;
     }
+    if(m_f_allDataReceived == true) goto all_data_received;
 
     if(m_resumeFilePos >= 0 && m_pwf.newFilePos == 0) {  // we have a resume file position
 
@@ -3648,7 +3649,7 @@ void Audio::processWebFile() {
     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_chunked && availableBytes) {
         uint8_t readedBytes = 0;
-        if(m_f_chunked && m_contentlength == m_pwf.byteCounter) {
+        if(m_f_chunked && m_pwf.nextChunkCount == m_pwf.byteCounter) {
             if(m_pwf.chunkSize > 0){
                 if(_client->available() < 2) { // avoid getting out of sync
                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
@@ -3659,15 +3660,15 @@ void Audio::processWebFile() {
             }
             m_pwf.chunkSize = readChunkSize(&readedBytes);
             if(m_pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
-            // AUDIO_LOG_INFO("chunk size: %d", chunkSize);
-            m_contentlength += m_pwf.chunkSize;
+            AUDIO_LOG_INFO("chunk size: %d", m_pwf.chunkSize);
+            m_pwf.nextChunkCount += m_pwf.chunkSize;
             m_audioDataSize += m_pwf.chunkSize;
         }
-        availableBytes = min(availableBytes, m_contentlength - m_pwf.byteCounter);
+        availableBytes = min(availableBytes, m_pwf.nextChunkCount - m_pwf.byteCounter);
     }
-    if(!m_f_chunked && m_pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true;}
-    if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true;} // connection closed
-    // AUDIO_LOG_INFO("byteCounter %u >= m_audioDataSize %u, m_f_allDataReceived % i", byteCounter, m_contentlength, m_f_allDataReceived);
+    if(!m_f_chunked && m_pwf.byteCounter >= m_audioDataSize) {m_f_allDataReceived = true; goto all_data_received;}
+    if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true; goto all_data_received;} // connection closed
+    // AUDIO_LOG_INFO("byteCounter %u >= m_audioDataSize %u, byteCounter, m_pwf.nextChunkCount);
 
     if(m_pwf.newFilePos) { // we have a new file position
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return;
@@ -3703,7 +3704,7 @@ void Audio::processWebFile() {
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if(m_controlCounter != 100) {
-        if(InBuff.bufferFilled() > m_pwf.maxFrameSize || (m_contentlength && (InBuff.bufferFilled() == m_contentlength))) { // at least one complete frame or the file is smaller
+        if(InBuff.bufferFilled() > m_pwf.maxFrameSize || (m_pwf.nextChunkCount && (InBuff.bufferFilled() == m_pwf.nextChunkCount))) { // at least one complete frame or the file is smaller
             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
         }
@@ -3725,7 +3726,7 @@ void Audio::processWebFile() {
         AUDIO_INFO("Webfile: stream ready, buffer filled in %d ms", filltime);
         return;
     }
-
+all_data_received:
     // end of webfile reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if(m_f_ID3v1TagFound) readID3V1Tag();
