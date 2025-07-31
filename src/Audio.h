@@ -288,7 +288,7 @@ private:
 
     typedef struct _pwf{ // used in processWebFile
         uint32_t  maxFrameSize;
-        uint32_t  newFilePos;
+        int32_t   newFilePos;
         bool      audioHeaderFound;
         uint32_t  chunkSize;
         size_t    audioDataCount;
@@ -907,7 +907,6 @@ private:
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
     uint32_t        m_sumBytesDecoded = 0;          // used for streaming
-    uint32_t        m_webFilePos = 0;               // same as audiofile.position() for SD files
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header

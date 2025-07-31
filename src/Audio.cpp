@@ -3600,7 +3600,6 @@ void Audio::processWebFile() {
         m_pwf.audioDataCount = 0;
         m_pwf.nextChunkCount = 0;
         m_audioDataSize = getFileSize();
-        m_webFilePos = 0;
         m_controlCounter = 0;
         m_f_allDataReceived = false;
         m_audioFilePosition = 0;
@@ -3674,7 +3673,6 @@ void Audio::processWebFile() {
     bytesAddedToBuffer = 0;
     if(m_pwf.f_clientIsConnected) bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), availableBytes);
     if(bytesAddedToBuffer > 0) {
-        m_webFilePos += bytesAddedToBuffer;
         m_pwf.byteCounter += bytesAddedToBuffer;
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) m_pwf.audioDataCount += bytesAddedToBuffer;
@@ -5206,7 +5204,7 @@ uint32_t Audio::getFilePos() {
         return m_audiofile.position();
     }
     if(m_streamType == ST_WEBFILE){
-        return m_webFilePos;
+        return m_audioFilePosition;
     }
     return 0;
 }
