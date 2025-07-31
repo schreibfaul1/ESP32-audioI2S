@@ -1546,7 +1546,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_audioDataSize = m_contentlength - m_audioDataStart;
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         if(m_rflh.picLen) {
-            size_t pos = m_audiofile.position();
+            size_t pos = getFilePos();
             if(audio_id3image) audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
@@ -1971,7 +1971,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             syltBuff.alloc(m_ID3Hdr.SYLT.size + 1, "syltBuff");
             if((m_streamType == ST_WEBFILE && m_f_acceptRanges) || (m_dataMode == AUDIO_LOCALFILE)){
                 uint32_t pos = m_audioFilePosition;
-            //    AUDIO_LOG_INFO("m_audiofile.position() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
+            //    AUDIO_LOG_INFO("getFilePos() %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
                 audioFileSeek(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
@@ -2067,7 +2067,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
 
                 syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
-                uint32_t pos = m_audiofile.position();
+                uint32_t pos = getFilePos();
                 audioFileSeek(m_ID3Hdr.SYLT.pos);
                 uint16_t bytesWritten = 0;
                 while(bytesWritten < m_ID3Hdr.SYLT.size){
@@ -2151,7 +2151,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_audioDataSize = m_contentlength - m_audioDataStart;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
             if(m_ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
-                size_t pos = m_audiofile.position();
+                size_t pos = getFilePos();
                 audio_id3image(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
                 audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
             }
@@ -2464,7 +2464,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
         }
         if(m_m4aHdr.picLen) {
-            size_t pos = m_audiofile.position();
+            size_t pos = getFilePos();
             audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
@@ -3409,7 +3409,6 @@ void Audio::processLocalFile() {
         m_f_allDataReceived = false;
         m_prlf.timeout = 8000; // ms
         m_audioFilePosition = 0;
-        return;
     }
 
     if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) {  // we have a resume file position
@@ -3607,16 +3606,17 @@ void Audio::processWebFile() {
         m_audioFilePosition = 0;
     }
 
-    if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) {  // we have a resume file position
-        m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
-        if(m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
+    if(m_resumeFilePos >= 0 && m_pwf.newFilePos == 0) {  // we have a resume file position
+        m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
+        if(m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         return;
     }
 
-    if(m_f_allDataReceived == true) goto all_data_received;
+    if(m_f_allDataReceived == true) {goto all_data_received;}
 
     if(m_pwf.f_clientIsConnected) availableBytes = _client->available(); // available from stream
     else AUDIO_LOG_ERROR("client not connected");
+
     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_pwf.f_waitingForPayload){
         if(availableBytes == 0){
@@ -5271,13 +5271,11 @@ AUDIO_LOG_WARN("%i", sec);
     if(!m_avr_bitrate){                                                  AUDIO_LOG_WARN("%s","unknown bitrate");            return false;}  // guard
     if(!m_f_stream){                                                     AUDIO_LOG_WARN("%s","strean is not ready");        return false;}  // guard
     if(m_codec == CODEC_AAC){                                            AUDIO_LOG_WARN("%s","aac not impl yet");           return false;}
-log_w("%li", sec);
     uint32_t oneSec = m_avr_bitrate / 8;                 // bytes decoded in one sec
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
     int32_t pos = getFilePos() - inBufferFilled();
     pos += offset;
     setFilePos(pos);
-log_w("%li", pos);
     return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6236,8 +6234,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
         if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {return - 1;}
 
-        m_prlf.newFilePos = m_resumeFilePos;
-        int res = audioFileSeek(m_prlf.newFilePos);
+        int res = audioFileSeek(m_resumeFilePos);
         m_f_allDataReceived = false;
         return res;
 }
@@ -6276,8 +6273,8 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::find_m4a_atom(uint32_t fileSize, const char* atomName, uint32_t depth) {
 
-    while (m_audiofile.position() < fileSize) {
-        uint32_t atomStart = m_audiofile.position(); // Position of the current atom
+    while (getFilePos() < fileSize) {
+        uint32_t atomStart = getFilePos(); // Position of the current atom
         uint32_t atomSize;
         char atomType[5] = {0};
         audioFileRead((uint8_t*)&atomSize, 4);    // Read the atom size (4 bytes) and the atom type (4 bytes)
@@ -6498,7 +6495,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     tu uu;
 
     uint32_t i = 0, pos = m_audioDataStart;
-    uint32_t filePtr = m_audiofile.position();
+    uint32_t filePtr = getFilePos();
     bool found = false;
     audioFileSeek(m_stsz_position);
 
@@ -6602,7 +6599,7 @@ int32_t Audio::mp3_correctResumeFilePos() {
 int32_t Audio::correctResumeFilePos() {
     int32_t offset = -1;
     if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
-    if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; m_prlf.offset++; if(m_resumeFilePos >= m_fileSize) goto exit;}}  // must divisible by four
+    if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_fileSize) goto exit;}}  // must divisible by four
     if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
     if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; FLACDecoderReset();}
     if(m_codec == CODEC_M4A)   {offset = m4a_correctResumeFilePos();  if(offset == -1) goto exit;}
