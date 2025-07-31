@@ -5198,17 +5198,6 @@ uint32_t Audio::getFileSize() { // returns the size of webfile or local file
     return m_audiofile.size();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::getAudioDataStartPos() {
-    if(m_dataMode == AUDIO_LOCALFILE){
-        if(!m_audiofile) return 0;
-        return m_audioDataStart;
-    }
-    if(m_streamType == ST_WEBFILE){
-        return m_audioDataStart;
-    }
-    return 0;
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioFileDuration() {
     if(!m_avr_bitrate)                                      return 0;
     if(m_playlistFormat == FORMAT_M3U8)                     return 0;

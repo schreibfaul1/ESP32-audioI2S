@@ -410,8 +410,6 @@ public:
     uint8_t getVolume();
     uint8_t maxVolume();
     uint8_t getI2sPort();
-
-    uint32_t getAudioDataStartPos();
     uint32_t getFileSize();
     uint32_t getSampleRate();
     uint8_t  getBitsPerSample();
