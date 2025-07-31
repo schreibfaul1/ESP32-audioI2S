@@ -226,8 +226,7 @@ private:
 
     typedef struct _prlf{ // used in processLocalFile
         uint32_t  ctime;
-        uint32_t  newFilePos;
-        uint32_t  byteCounter;
+        int32_t   newFilePos;
         bool      audioHeaderFound;
         uint32_t  timeout;
         uint32_t  maxFrameSize;
@@ -287,13 +286,16 @@ private:
     } pwst_t;
     pwst_t m_pwst;
 
-    typedef struct _pwf{
-        uint32_t maxFrameSize;
-        uint32_t chunkSize;
-        size_t   audioDataCount;
-        uint32_t byteCounter;
-        bool     f_waitingForPayload = false;
-        bool     f_clientIsConnected;
+    typedef struct _pwf{ // used in processWebFile
+        uint32_t  maxFrameSize;
+        uint32_t  newFilePos;
+        bool      audioHeaderFound;
+        uint32_t  chunkSize;
+        size_t    audioDataCount;
+        uint32_t  byteCounter;
+        bool      f_waitingForPayload = false;
+        bool      f_clientIsConnected;
+        int32_t   offset;
     } pwf_t;
     pwf_t m_pwf;
 
@@ -504,10 +506,11 @@ public:
     void            audioTask();
     void            performAudioTask();
 
-    //+++ W E B S T R E A M  -  H E L P   F U N C T I O N S +++
+    //+++ H E L P   F U N C T I O N S +++
     uint16_t readMetadata(uint16_t b, bool first = false);
     size_t   readChunkSize(uint8_t* bytes);
     bool     readID3V1Tag();
+    int32_t  newInBuffStart(int32_t m_resumeFilePos);
     boolean  streamDetection(uint32_t bytesAvail);
     void     seek_m4a_stsz();
     void     seek_m4a_ilst();
@@ -515,6 +518,7 @@ public:
     uint32_t ogg_correctResumeFilePos();
     int32_t  flac_correctResumeFilePos();
     int32_t  mp3_correctResumeFilePos();
+    int32_t  correctResumeFilePos();
     uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
 
     //++++ implement several function with respect to the index of string ++++
