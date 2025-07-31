@@ -413,7 +413,6 @@ public:
 
     uint32_t getAudioDataStartPos();
     uint32_t getFileSize();
-    uint32_t getFilePos();
     uint32_t getSampleRate();
     uint8_t  getBitsPerSample();
     uint8_t  getChannels();
