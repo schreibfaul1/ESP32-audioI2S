@@ -397,7 +397,6 @@ void Audio::setDefaults() {
     m_bitRate = 0;         // Bitrate still unknown
     m_bytesNotConsumed = 0; // counts all not decodable bytes
     m_chunkcount = 0;      // for chunked streams
-    m_contentlength = 0;   // If Content-Length is known, count it
     m_curSample = 0;
     m_metaint = 0;        // No metaint yet
     m_LFcount = 0;        // For end of header detection
@@ -830,7 +829,6 @@ bool Audio::httpPrint(const char* host) {
 
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
-    m_contentlength = 0;
     m_f_chunked = false;
 
     return true;
@@ -1478,11 +1476,9 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         m_controlCounter++;
         size_t cs = *(data + 0) + (*(data + 1) << 8) + (*(data + 2) << 16) + (*(data + 3) << 24); // read chunkSize
         m_rwh.headerSize += 4;
-        if(m_dataMode == AUDIO_LOCALFILE) m_contentlength = getFileSize();
         if(cs) { m_audioDataSize = cs - 44; }
         else { // sometimes there is nothing here
-            if(m_dataMode == AUDIO_LOCALFILE) m_audioDataSize = getFileSize() -m_rwh. headerSize;
-            if(m_streamType == ST_WEBFILE) m_audioDataSize = m_contentlength - m_rwh.headerSize;
+            m_audioDataSize = getFileSize() -m_rwh. headerSize;
         }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
         return 4;
@@ -1516,10 +1512,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_rflh.picLen = 0;
         m_rflh.f_lastMetaBlock = false;
         m_controlCounter = FLAC_MAGIC;
-        if(m_dataMode == AUDIO_LOCALFILE) {
-            m_contentlength = getFileSize();
-            AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
-        }
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1559,7 +1551,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         }
         m_controlCounter = FLAC_OKAY;
         m_audioDataStart =m_rflh. headerSize;
-        m_audioDataSize = m_contentlength - m_audioDataStart;
+        m_audioDataSize = getFileSize() - m_audioDataStart;
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         if(m_rflh.picLen) {
             size_t pos = m_audioFilePosition;
@@ -2470,11 +2462,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
     if(m_controlCounter == M4A_AMRDY) { // almost ready
         m_audioDataStart = m_m4aHdr.headerSize;
-        if(m_dataMode == AUDIO_LOCALFILE) {
-            m_contentlength = m_m4aHdr.headerSize + m_audioDataSize; // after this mdat atom there may be other atoms
-            if(extLen) m_contentlength -= 16;
-            AUDIO_INFO("Content-Length: %lu", (long unsigned int)m_contentlength);
-        }
         if(m_m4aHdr.picLen) {
             size_t pos = m_audioFilePosition;
             audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
@@ -2889,13 +2876,13 @@ bool Audio::readPlayListData() {
                     pl[pos] = '\0';
                     break;
                 }
-                if(ctl == m_contentlength) {
+                if(ctl == getFileSize()) {
                     pl[pos] = '\0';
                     break;
                 }
             }
             if(ctl == chunksize) break;
-            if(ctl == m_contentlength) break;
+            if(ctl == getFileSize()) break;
             if(pos) {
                 pl[pos] = '\0';
                 break;
@@ -2923,7 +2910,7 @@ bool Audio::readPlayListData() {
         // 1. The http response header returns a value for contentLength -> read chars until contentLength is reached
         // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
-        if(ctl == m_contentlength) {
+        if(ctl == getFileSize()) {
             while(m_client->available()) audioFileRead();
             break;
         } // read '\n\n' if exists
@@ -3803,14 +3790,14 @@ nextRound:
                     InBuff.bytesWritten(ts_packetLength - ws);
                 }
             }
-            if (m_pwsst.byteCounter == m_contentlength || m_pwsst.byteCounter == m_pwsst.chunkSize) {
+            if (m_pwsst.byteCounter == getFileSize() || m_pwsst.byteCounter == m_pwsst.chunkSize) {
                 m_pwsst.f_chunkFinished = true;
                 m_pwsst.f_nextRound = false;
                 m_pwsst.byteCounter = 0;
                 int av = m_client->available();
                 if(av == 7) for(int i = 0; i < av; i++) audioFileRead(); // waste last chunksize: 0x0D 0x0A 0x30 0x0D 0x0A 0x0D 0x0A (==0, end of chunked data transfer)
             }
-            if(m_contentlength && m_pwsst.byteCounter > m_contentlength) {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", m_pwsst.byteCounter, m_contentlength); return;}
+            if(getFileSize() && m_pwsst.byteCounter > getFileSize()) {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, contentlength: %d", m_pwsst.byteCounter, getFileSize()); return;}
             if(m_pwsst.chunkSize       && m_pwsst.byteCounter > m_pwsst.chunkSize)       {AUDIO_LOG_ERROR("byteCounter overflow, byteCounter: %d, chunkSize: %d", m_pwsst.byteCounter, m_pwsst.chunkSize); return;}
         }
     }
@@ -3916,7 +3903,7 @@ void Audio::processWebStreamHLS() {
 
         m_pwsHLS.byteCounter += bytesWasWritten;
 
-        if(m_pwsHLS.byteCounter == m_contentlength || m_pwsHLS.byteCounter == m_pwsHLS.chunkSize) {
+        if(m_pwsHLS.byteCounter == getFileSize() || m_pwsHLS.byteCounter == m_pwsHLS.chunkSize) {
             m_pwsHLS.f_chunkFinished = true;
             m_pwsHLS.byteCounter = 0;
         }
@@ -4197,8 +4184,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(rhl.starts_with_icase("content-length:")) {
             const char* c_cl = (rhl.get() + 15);
             int32_t     i_cl = atoi(c_cl);
-            m_contentlength = i_cl;
-            // AUDIO_INFO("content-length: %lu", (long unsigned int)m_contentlength);
+            m_audioFileSize = i_cl;
+            // AUDIO_INFO("content-length: %lu", (long unsigned int)getFileSize());
         }
 
         else if(rhl.starts_with_icase("icy-description:")) {
@@ -4252,7 +4239,7 @@ exit: // termination condition
 
 lastToDo:
     m_streamType = ST_WEBSTREAM;
-    if(m_contentlength > 0)          m_streamType = ST_WEBFILE;
+    if(m_audioFileSize > 0)          m_streamType = ST_WEBFILE;
     if(m_f_chunked)                  m_streamType = ST_WEBFILE; // Stream comes from a fileserver, metadata have webstreams
     if(m_f_chunked && m_f_metadata)  m_streamType = ST_WEBSTREAM;
 
@@ -5200,7 +5187,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getFileSize() { // returns the size of webfile or local file
     if(!m_audiofile) {
-        if (m_contentlength > 0) { return m_contentlength;}
+        if (m_audioFileSize > 0) { return m_audioFileSize;}
         return 0;
     }
     return m_audiofile.size();
@@ -5209,8 +5196,7 @@ uint32_t Audio::getFileSize() { // returns the size of webfile or local file
 uint32_t Audio::getAudioFileDuration() {
     if(!m_avr_bitrate)                                      return 0;
     if(m_playlistFormat == FORMAT_M3U8)                     return 0;
-    if(m_dataMode == AUDIO_LOCALFILE) {if(!m_audioDataSize) return 0;}
-    if(m_streamType == ST_WEBFILE)    {if(!m_contentlength) return 0;}
+    if(!m_audioDataSize)                                    return 0;
     return m_audioFileDuration;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

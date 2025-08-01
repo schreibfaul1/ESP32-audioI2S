@@ -849,6 +849,7 @@ private:
     uint32_t        m_sampleRate=48000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
+    uint32_t        m_audioFileSize = 0;            // local and web files
     uint32_t        m_audioFilePosition = 0;        // current position, counts every readed byte
     int             m_readbytes = 0;                // bytes read
     uint32_t        m_metacount = 0;                // counts down bytes between metadata
@@ -894,7 +895,6 @@ private:
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
-    uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
     uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
