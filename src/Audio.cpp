@@ -393,6 +393,7 @@ void Audio::setDefaults() {
     m_audioFileDuration = 0;
     m_audioDataStart = 0;
     m_audioDataSize = 0;
+    m_audioFileSize = 0;
     m_avr_bitrate = 0;     // the same as m_bitrate if CBR, median if VBR
     m_bitRate = 0;         // Bitrate still unknown
     m_bytesNotConsumed = 0; // counts all not decodable bytes
@@ -4357,8 +4358,6 @@ return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::initializeDecoder(uint8_t codec) {
-    uint32_t gfH = 0;
-    uint32_t hWM = 0;
     switch(codec) {
         case CODEC_MP3:
             if(!MP3Decoder_IsInit()){
@@ -4366,9 +4365,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     AUDIO_INFO("The MP3Decoder could not be initialized");
                     goto exit;
                 }
-                gfH = ESP.getFreeHeap();
-                hWM = uxTaskGetStackHighWaterMark(NULL);
-                AUDIO_INFO("MP3Decoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+                AUDIO_INFO("MP3Decoder has been initialized");
                 InBuff.changeMaxBlockSize(m_frameSizeMP3);
             }
             break;
@@ -4378,9 +4375,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     AUDIO_INFO("The AACDecoder could not be initialized");
                     goto exit;
                 }
-                gfH = ESP.getFreeHeap();
-                hWM = uxTaskGetStackHighWaterMark(NULL);
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+                AUDIO_INFO("AACDecoder has been initialized");
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -4390,9 +4385,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     AUDIO_INFO("The AACDecoder could not be initialized");
                     goto exit;
                 }
-                gfH = ESP.getFreeHeap();
-                hWM = uxTaskGetStackHighWaterMark(NULL);
-                AUDIO_INFO("AACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+                AUDIO_INFO("AACDecoder has been initialized");
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -4405,19 +4398,15 @@ bool Audio::initializeDecoder(uint8_t codec) {
                 AUDIO_INFO("The FLACDecoder could not be initialized");
                 goto exit;
             }
-            gfH = ESP.getFreeHeap();
-            hWM = uxTaskGetStackHighWaterMark(NULL);
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
-            AUDIO_INFO("FLACDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+            AUDIO_INFO("FLACDecoder has been initialized");
             break;
         case CODEC_OPUS:
             if(!OPUSDecoder_AllocateBuffers()) {
                 AUDIO_INFO("The OPUSDecoder could not be initialized");
                 goto exit;
             }
-            gfH = ESP.getFreeHeap();
-            hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("OPUSDecoder has been initialized, free Heap: %lu bytes , free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+            AUDIO_INFO("OPUSDecoder has been initialized");
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
@@ -4429,9 +4418,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                 AUDIO_INFO("The VORBISDecoder could not be initialized");
                 goto exit;
             }
-            gfH = ESP.getFreeHeap();
-            hWM = uxTaskGetStackHighWaterMark(NULL);
-            AUDIO_INFO("VORBISDecoder has been initialized, free Heap: %lu bytes,  free stack %lu DWORDs", (long unsigned int)gfH, (long unsigned int)hWM);
+            AUDIO_INFO("VORBISDecoder has been initialized");
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
         case CODEC_WAV: InBuff.changeMaxBlockSize(m_frameSizeWav); break;
