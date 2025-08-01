@@ -2422,18 +2422,18 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                     if(tmp > 254) tmp = 254;
                     memcpy(value, (data + offset), tmp);
                     value[tmp] = '\0';
-                    if(i == 0) id3tag.appendf("Title: %s", value);
-                    if(i == 1) id3tag.appendf("Artist: %s", value);
-                    if(i == 2) id3tag.appendf("Album: %s", value);
-                    if(i == 3) id3tag.appendf("Encoder: %s", value);
-                    if(i == 4) id3tag.appendf("Comment: %s", value);
-                    if(i == 5) id3tag.appendf("Composer: %s", value);
-                    if(i == 6) id3tag.appendf("BPM: %s", value);
-                    if(i == 7) id3tag.appendf("Track Number: %s", value);
-                    if(i == 8) id3tag.appendf("Year: %s", value);
-                    if(i == 9) id3tag.appendf("Compile: %s", value);
-                    if(i == 10)id3tag.appendf("Album Artist: %s", value);
-                    if(i == 11)id3tag.appendf("Types of: %s", value);
+                    if(i == 0) id3tag.assignf("Title: %s", value);
+                    if(i == 1) id3tag.assignf("Artist: %s", value);
+                    if(i == 2) id3tag.assignf("Album: %s", value);
+                    if(i == 3) id3tag.assignf("Encoder: %s", value);
+                    if(i == 4) id3tag.assignf("Comment: %s", value);
+                    if(i == 5) id3tag.assignf("Composer: %s", value);
+                    if(i == 6) id3tag.assignf("BPM: %s", value);
+                    if(i == 7) id3tag.assignf("Track Number: %s", value);
+                    if(i == 8) id3tag.assignf("Year: %s", value);
+                    if(i == 9) id3tag.assignf("Compile: %s", value);
+                    if(i == 10)id3tag.assignf("Album Artist: %s", value);
+                    if(i == 11)id3tag.assignf("Types of: %s", value);
                     if(id3tag.valid()) {
                         if(audio_id3data) audio_id3data(id3tag.get());
                     }
@@ -3409,6 +3409,7 @@ void Audio::processLocalFile() {
         m_prlf.audioHeaderFound = false;
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
+        m_audioFileSize = m_audiofile.size();
         if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
         if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         m_audioDataSize = 0;
@@ -3416,7 +3417,6 @@ void Audio::processLocalFile() {
         m_f_allDataReceived = false;
         m_prlf.timeout = 8000; // ms
         m_audioFilePosition = 0;
-        m_audioFileSize = m_audiofile.size();
     }
 
     if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) {  // we have a resume file position
@@ -6300,7 +6300,7 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
         len = bigEndian((uint8_t*)buff, 4) + 16;
     }
     if(len > 1024) len = 1024;
-    //    AUDIO_LOG_DEBUG("found at pos %i, len %i", seekpos, len);
+    // AUDIO_LOG_DEBUG("found at pos %i, len %i", seekpos, len);
 
     ps_ptr<uint8_t> data;
     data.alloc(len, "data");
@@ -6321,18 +6321,18 @@ void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadat
             memcpy(value, (data.get() + offset), temp);
             value[temp] = '\0';
             ps_ptr<char>chBuf = {};
-            if(i == 0)  chBuf.appendf("Title: %s", value);
-            if(i == 1)  chBuf.appendf("Artist: %s", value);
-            if(i == 2)  chBuf.appendf("Album: %s", value);
-            if(i == 3)  chBuf.appendf("Encoder: %s", value);
-            if(i == 4)  chBuf.appendf("Comment: %s", value);
-            if(i == 5)  chBuf.appendf("Composer: %s", value);
-            if(i == 6)  chBuf.appendf("BPM: %s", value);
-            if(i == 7)  chBuf.appendf("Track Number: %s", value);
-            if(i == 8)  chBuf.appendf("Year: %s", value);
-            if(i == 9)  chBuf.appendf("Compile: %s", value);
-            if(i == 10) chBuf.appendf("Album Artist: %s", value);
-            if(i == 11) chBuf.appendf("Types of: %s", value);
+            if(i == 0)  chBuf.assignf("Title: %s", value);
+            if(i == 1)  chBuf.assignf("Artist: %s", value);
+            if(i == 2)  chBuf.assignf("Album: %s", value);
+            if(i == 3)  chBuf.assignf("Encoder: %s", value);
+            if(i == 4)  chBuf.assignf("Comment: %s", value);
+            if(i == 5)  chBuf.assignf("Composer: %s", value);
+            if(i == 6)  chBuf.assignf("BPM: %s", value);
+            if(i == 7)  chBuf.assignf("Track Number: %s", value);
+            if(i == 8)  chBuf.assignf("Year: %s", value);
+            if(i == 9)  chBuf.assignf("Compile: %s", value);
+            if(i == 10) chBuf.assignf("Album Artist: %s", value);
+            if(i == 11) chBuf.assignf("Types of: %s", value);
             if(chBuf.valid()) {
                 if(audio_id3data) audio_id3data(chBuf.get());
             }
