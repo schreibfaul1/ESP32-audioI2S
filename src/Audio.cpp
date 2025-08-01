@@ -3960,8 +3960,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled();
-        m_pad.bytesToDecode = min(m_pad.bytesToDecode, InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min(m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled(), InBuff.getMaxBlockSize());
 
         if(m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if(m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()){ // last frames to decode
@@ -3976,7 +3975,7 @@ void Audio::playAudioData() {
     }
     else{
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}
-        m_pad.bytesToDecode = InBuff.bufferFilled();
+        m_pad.bytesToDecode = min(InBuff.bufferFilled(), InBuff.getMaxBlockSize());
     }
 
     if(m_pad.lastFrames){
