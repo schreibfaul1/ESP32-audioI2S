@@ -895,7 +895,7 @@ private:
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_contentlength = 0;            // Stores the length if the stream comes from fileserver
-    uint32_t        m_bytesNotDecoded = 0;          // pictures or something else that comes with the stream
+    uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
     uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
     int32_t         m_fileStartPos = -1;            // may be set in connecttoFS()
@@ -903,7 +903,6 @@ private:
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
     uint32_t        m_haveNewFilePos = 0;           // user changed the file position
-    uint32_t        m_sumBytesDecoded = 0;          // used for streaming
     bool            m_f_metadata = false;           // assume stream without metadata
     bool            m_f_unsync = false;             // set within ID3 tag but not used
     bool            m_f_exthdr = false;             // ID3 extended header

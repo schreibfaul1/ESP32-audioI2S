@@ -395,7 +395,7 @@ void Audio::setDefaults() {
     m_audioDataSize = 0;
     m_avr_bitrate = 0;     // the same as m_bitrate if CBR, median if VBR
     m_bitRate = 0;         // Bitrate still unknown
-    m_bytesNotDecoded = 0; // counts all not decodable bytes
+    m_bytesNotConsumed = 0; // counts all not decodable bytes
     m_chunkcount = 0;      // for chunked streams
     m_contentlength = 0;   // If Content-Length is known, count it
     m_curSample = 0;
@@ -410,7 +410,6 @@ void Audio::setDefaults() {
     m_M4A_chConfig = 0;
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
-    m_sumBytesDecoded = 0;
     m_opus_mode = 0;
     m_vuLeft = m_vuRight = 0; // #835
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
@@ -3440,7 +3439,6 @@ void Audio::processLocalFile() {
         m_prlf.offset = correctResumeFilePos();
         if(m_prlf.offset == -1) goto exit;
         m_haveNewFilePos  = m_prlf.newFilePos;
-        m_sumBytesDecoded = m_prlf.newFilePos;
         m_prlf.newFilePos = 0;
         m_resumeFilePos = -1;
         InBuff.bytesWasRead(m_prlf.offset);
@@ -3685,13 +3683,10 @@ void Audio::processWebFile() {
         m_pwf.offset = correctResumeFilePos();
         if(m_pwf.offset == -1) goto exit;
         m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - bytesAddedToBuffer;
-        m_sumBytesDecoded = m_pwf.newFilePos + m_pwf.offset - bytesAddedToBuffer;
         m_pwf.newFilePos = 0;
         m_resumeFilePos = -1;
         InBuff.bytesWasRead(m_pwf.offset);
     }
-
-
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3962,8 +3957,7 @@ void Audio::playAudioData() {
         m_f_firstPlayCall = false;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
-        m_sumBytesDecoded = 0;
-        m_bytesNotDecoded = 0;
+        m_bytesNotConsumed = 0;
         m_pad.lastFrames = false;
         m_f_eof = false;
     }
@@ -3974,25 +3968,28 @@ void Audio::playAudioData() {
     if((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) && m_playlistFormat != FORMAT_M3U8)  { // local file or webfile but not m3u8 file
         if(!m_audioDataSize) goto exit; // no data to decode if filesize is 0
         if(m_audioDataSize != m_pad.oldAudioDataSize) { // Special case: Metadata in ogg files are recognized by the decoder,
-            if(m_f_ogg)m_sumBytesDecoded = 0;           // after which m_audioDataStart and m_audioDataSize are updated.
-            if(m_f_ogg)m_bytesNotDecoded = 0;
+            if(m_f_ogg)m_bytesNotConsumed = 0;
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = getFileSize() - m_sumBytesDecoded;
+        m_pad.bytesToDecode = getFileSize() - m_audioFilePosition + InBuff.bufferFilled();
+        m_pad.bytesToDecode = min(m_pad.bytesToDecode, InBuff.getMaxBlockSize());
 
-        if(m_pad.bytesToDecode < InBuff.getMaxBlockSize() * 2 && m_f_allDataReceived) { // last frames to decode
+        if(getFileSize() - m_audioFilePosition == 0) m_f_allDataReceived = true;
+        if(m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()){ // last frames to decode
             m_pad.lastFrames = true;
         }
+        if(m_pad.bytesToDecode == 0)            {m_f_eof = true; goto exit;} // file end reached
 
-        if(m_sumBytesDecoded > 0){
-            if(m_sumBytesDecoded >= getFileSize()) {m_f_eof = true; goto exit;} // file end reached
-            if(m_pad.bytesToDecode <= 0)           {m_f_eof = true; goto exit;} // file end reached
+        if(m_codec == CODEC_MP3 && m_pad.lastFrames && m_pad.bytesToDecode == 128){
+            m_f_ID3v1TagFound = true; m_f_eof = true;
+            goto exit;
         }
     }
-    else{if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}}
-
-    m_pad.bytesToDecode = min((int32_t)InBuff.getMaxBlockSize(), m_pad.bytesToDecode);
+    else{
+        if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}
+        m_pad.bytesToDecode = InBuff.bufferFilled();
+    }
 
     if(m_pad.lastFrames){
         m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
@@ -4013,11 +4010,7 @@ void Audio::playAudioData() {
 
     if(m_pad.bytesDecoded > 0) {
         InBuff.bytesWasRead(m_pad.bytesDecoded);
-        if(m_controlCounter == 100) m_sumBytesDecoded += m_pad.bytesDecoded;
-        // AUDIO_LOG_INFO("m_audioDataSize: %d, m_sumBytesDecoded: %d, diff: %d", m_audioDataSize, m_sumBytesDecoded, m_audioDataSize - m_sumBytesDecoded);
-        if(m_codec == CODEC_MP3 && m_audioDataSize - m_sumBytesDecoded == 128){
-            m_f_ID3v1TagFound = true; m_f_eof = true;
-        }
+
         if(m_f_allDataReceived && InBuff.bufferFilled() == 0) {
             m_f_eof = true; // end of file reached
         }
