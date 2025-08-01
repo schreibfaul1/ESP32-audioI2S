@@ -1914,9 +1914,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(m_ID3Hdr.framesize == 0) return 0;
 
         ps_ptr<char> tmp;
+        ps_ptr<char> content_descriptor;
         size_t fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
         size_t bytesToCopy = fs;
         size_t textDataLength = 0;
+        uint16_t idx = 0;
 
         if (bytesToCopy >= m_ID3Hdr.iBuffSize) { bytesToCopy = m_ID3Hdr.iBuffSize - 1;} // make sure a zero terminator fits
         if (bytesToCopy > 0) { textDataLength = bytesToCopy - 1;}                       // Only if there are data that we can shorten
@@ -1934,27 +1936,33 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.framesize -= fs;
         m_ID3Hdr.remainingHeaderBytes -= fs;
         uint16_t dataLength = fs - 1;
+        bool isBigEndian = (textEncodingByte == 2);
+
+        char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
 
         if(startsWith(m_ID3Hdr.tag, "COMM")){ // language code
             m_ID3Hdr.lang[0] = m_ID3Hdr.iBuff[0];
             m_ID3Hdr.lang[1] = m_ID3Hdr.iBuff[1];
             m_ID3Hdr.lang[2] = m_ID3Hdr.iBuff[2];
             m_ID3Hdr.lang[3] = '\0';
-            m_ID3Hdr.iBuff.shift_left(4);
+
+            idx = 4;
+            if(textEncodingByte == 1 || textEncodingByte == 2) idx++;
+
+            uint16_t cd_len = 0;
+            if     (textEncodingByte == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), "content_descriptor");         // iso8859_1
+            else if(textEncodingByte == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(m_ID3Hdr.iBuff.get() + idx), "content_descriptor");                      // utf-8
+            else                           cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
+            if(cd_len > 2) AUDIO_INFO("Comment: text encoding; %s, language %s, content_descriptor: %s", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
+
+            idx += cd_len;
         }
 
-        char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
         // AUDIO_LOG_INFO("Tag: %s, Length: %i, Format: %s", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
 
-        if (textEncodingByte == 0) { // ISO-8859-1
-            tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get(), "tmp");
-        } else if (textEncodingByte == 1 || textEncodingByte == 2) { // UTF-16LE oder UTF-16BE
-            bool isBigEndian = (textEncodingByte == 2);
-            tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get(), isBigEndian, "tmp");
-        } else if (textEncodingByte == 3) { // UTF-8
-            // copy directly because no conversion is necessary
-            tmp.copy_from(m_ID3Hdr.iBuff.get());
-        }
+        if      (textEncodingByte == 0)                          {tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, "tmp");} // ISO-8859-1
+        else if (textEncodingByte == 1 || textEncodingByte == 2) {tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian, "tmp");} // UTF-16LE oder UTF-16BE
+        else if (textEncodingByte == 3)                          {tmp.copy_from(m_ID3Hdr.iBuff.get() + idx);} // UTF-8 copy directly because no conversion is necessary
 
         showID3Tag(m_ID3Hdr.tag, tmp.c_get());
 
@@ -1994,12 +2002,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.time_stamp_format =  syltBuff[4];
             m_ID3Hdr.SYLT.content_type =       syltBuff[5];
             idx = 6;
-            if     (m_ID3Hdr.SYLT.text_encoding == 0) len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx), "content_descriptor");         // iso8859_1
-            else if(m_ID3Hdr.SYLT.text_encoding == 3) len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");                      // utf-8
-            else                                      len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
-            if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
+            uint16_t cd_len = 0;
+            if     (m_ID3Hdr.SYLT.text_encoding == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx), "content_descriptor");         // iso8859_1
+            else if(m_ID3Hdr.SYLT.text_encoding == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");                      // utf-8
+            else                                      cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
+            if(cd_len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
 
-            idx += len;
+            idx += cd_len;
             while (idx < m_ID3Hdr.SYLT.size) {
                 if      (m_ID3Hdr.SYLT.text_encoding == 0) idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx, "sylt-text");            // ISO8859_1
                 else if (m_ID3Hdr.SYLT.text_encoding == 3) idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");                         // UTF-8
