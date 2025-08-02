@@ -687,7 +687,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
                        rqh.append("Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure);}
+    if(m_f_ssl) { _client = static_cast<WiFiClient*>(&clientsecure); if (port == 80) port = 443;}
     else        { _client = static_cast<WiFiClient*>(&client); }
 
     timestamp = millis();
