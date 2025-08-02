@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0j                                                                                                                                ";
-/*  Updated on: Jul 28.2025
+    Version 3.4.0k                                                                                                                                ";
+/*  Updated on: Aug 02.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -687,7 +687,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
                        rqh.append("Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure);}
+    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(port == 80) port = 443;}
     else        { m_client = static_cast<WiFiClient*>(&client); }
 
     timestamp = millis();
