@@ -890,7 +890,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
                 return static_cast<int32_t>(i);
             }
         }
-        log_e("index_of: Needle not found within %u bytes", max_length);
+        log_d("index_of: Needle not found within %u bytes", max_length);
         return -1;
     }
 
