@@ -213,7 +213,7 @@ private:
         uint16_t    sample_rate;
         uint8_t     aac_profile;
         bool        progressive; // Progressive (moov before mdat)
-
+        bool        version_flags;
     } m4aHdr_t;
     m4aHdr_t m_m4aHdr;
 
@@ -871,8 +871,8 @@ private:
     uint32_t        m_sampleRate=48000;
     uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
     uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
-    uint32_t        m_audioFileSize = 0;            // local and web files
     uint32_t        m_audioFilePosition = 0;        // current position, counts every readed byte
+    uint32_t        m_audioFileSize = 0;            // local and web files
     int             m_readbytes = 0;                // bytes read
     uint32_t        m_metacount = 0;                // counts down bytes between metadata
     int             m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
@@ -973,7 +973,6 @@ private:
     float           m_filterBuff[3][2][2][2];       // IIR filters memory for Audio DSP
     float           m_corr = 1.0;					// correction factor for level adjustment
     size_t          m_i2s_bytesWritten = 0;         // set in i2s_write() but not used
-    size_t          m_fileSize = 0;                 // size of the file
     uint16_t        m_filterFrequency[2];
     int8_t          m_gain0 = 0;                    // cut or boost filters (EQ)
     int8_t          m_gain1 = 0;
