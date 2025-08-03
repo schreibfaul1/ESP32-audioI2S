@@ -208,6 +208,7 @@ private:
         size_t      offset;
         uint32_t    picPos;
         uint32_t    picLen;
+        uint32_t    ilst_pos;
         uint8_t     channel_count;
         uint8_t     sample_size; // bps
         uint16_t    sample_rate;
