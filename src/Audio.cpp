@@ -3656,9 +3656,12 @@ void Audio::processLocalFile() {
         m_prlf.timeout = 8000; // ms
     }
 
-    if(m_resumeFilePos >= 0 && m_prlf.newFilePos == 0) {  // we have a resume file position
+    if(m_resumeFilePos >= 0 ) {  // we have a resume file position
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if(m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
+        m_haveNewFilePos  = m_prlf.newFilePos;
+        m_resumeFilePos = -1;
+        m_f_allDataReceived = false;
         return;
     }
 
@@ -3668,16 +3671,6 @@ void Audio::processLocalFile() {
     if(m_audioDataSize && m_audioFilePosition >= m_audioDataSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
     if(!m_audioDataSize && m_audioFilePosition == m_audioFileSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
     // AUDIO_LOG_ERROR("m_audioFilePosition %u >= m_audioDataSize %u, m_f_allDataReceived % i", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
-
-    if(m_prlf.newFilePos) {                                          // we have a new file position
-        if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
-        m_prlf.offset = correctResumeFilePos();
-        if(m_prlf.offset == -1) goto exit;
-        m_haveNewFilePos  = m_prlf.newFilePos;
-        m_prlf.newFilePos = 0;
-        m_resumeFilePos = -1;
-        InBuff.bytesWasRead(m_prlf.offset);
-    }
 
     if(!m_f_stream) {
         if(m_codec == CODEC_OGG) { // AUDIO_LOG_ERROR("determine correct codec here");
@@ -3849,10 +3842,15 @@ void Audio::processWebFile() {
         m_audioFilePosition = 0;
     }
 
-    if(m_resumeFilePos >= 0 && m_pwf.newFilePos == 0) {  // we have a resume file position
+    if(m_resumeFilePos >= 0 ) {  // we have a resume file position
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
+        int x = MP3FindSyncWord(InBuff.getReadPtr(), InBuff.getMaxAvailableBytes());
+        log_w("x %i", x);
         if(m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-        m_pwf.byteCounter = m_pwf.newFilePos;
+        m_haveNewFilePos  = m_pwf.newFilePos;
+        m_resumeFilePos = -1;
+        m_pwf.byteCounter = m_pwf.newFilePos + m_audioDataStart;
+        m_pwf.audioDataCount = m_pwf.newFilePos;
         return;
     }
 
@@ -3911,16 +3909,6 @@ void Audio::processWebFile() {
         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
         if(m_controlCounter == 100) m_pwf.audioDataCount += bytesAddedToBuffer;
         InBuff.bytesWritten(bytesAddedToBuffer);
-    }
-
-    if(m_pwf.newFilePos) { // we have a new file position
-        if(InBuff.bufferFilled() < InBuff.getMaxBlockSize()) return; // and the InBuff is filled
-        m_pwf.offset = correctResumeFilePos();
-        if(m_pwf.offset == -1) goto exit;
-        m_haveNewFilePos  = m_pwf.newFilePos + m_pwf.offset - bytesAddedToBuffer;
-        m_pwf.newFilePos = 0;
-        m_resumeFilePos = -1;
-        InBuff.bytesWasRead(m_pwf.offset);
     }
 
     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4180,9 +4168,8 @@ void Audio::processWebStreamHLS() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::playAudioData() {
 
-    if(!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running){return;} // guard, stream not ready or eof reached or InBuff is locked or not running
-    if(m_dataMode == AUDIO_LOCALFILE && m_resumeFilePos != -1){    return;} // guard, m_resumeFilePos is set (-1 is default)
-    if(m_validSamples) {playChunk();                               return;} // guard, play samples first
+    if(!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running){m_validSamples = 0; return;} // guard, stream not ready or eof reached or InBuff is locked or not running
+    if(m_validSamples) {playChunk();                                                   return;} // guard, play samples first
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.bufferFilled();
@@ -5483,6 +5470,7 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
+    if(buff && len == 0) return 0; // nothing to do
     // This method standardized reading files, regardless of the source (local or web) and the correct number of the bytes read must be determined.
     int32_t res = -1;
 
@@ -5497,6 +5485,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
         }
     }
     else{
+        if(len > 16384) len = 16384; // limit
         if(!buff && !len){
             res = m_client->read();
             if(res >= 0) m_audioFilePosition ++;
@@ -6433,16 +6422,40 @@ bool Audio::readID3V1Tag() {
 int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
         if(m_controlCounter != 100){AUDIO_LOG_WARN("timeOffset not possible"); m_resumeFilePos = -1; return -1;}
 
+        if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
+        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {return - 1;}
+        int buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
+
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             InBuff.resetBuffer();
+            int res = audioFileSeek(m_resumeFilePos);
+            m_f_allDataReceived = false;
+
+            uint16_t rd = buffFillSize;
+            while(rd > 0){
+                int r = audioFileRead(InBuff.getReadPtr(), rd);
+                if(r < 0) { /* AUDIO_LOG_ERROR("r < 0");*/ continue;}
+                rd -= r;
+log_w("rd %i, r %i, len %i", rd, r, buffFillSize);
+            }
+            InBuff.bytesWritten(buffFillSize);
+
+            int32_t offset = -1;
+            if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
+            if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
+            if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
+            if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; FLACDecoderReset();}
+            if(m_codec == CODEC_M4A)   {offset = m4a_correctResumeFilePos();  if(offset == -1) goto exit;}
+            if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
+            if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; OPUSDecoder_ClearBuffers();}
+
+
+            InBuff.bytesWasRead(offset);
+exit:
+log_w("offset %i", offset);
+
         m_f_lockInBuffer = false;
-
-        if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {return - 1;}
-
-        int res = audioFileSeek(m_resumeFilePos);
-        m_f_allDataReceived = false;
         return res;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6591,19 +6604,6 @@ int32_t Audio::mp3_correctResumeFilePos() {
     }
     // AUDIO_LOG_INFO("found sync word at %i  sync1 = 0x%02X, sync2 = 0x%02X", readPtr - pos, *readPtr, *(readPtr + 1));
     return sumSteps; // return the position of the first byte of the frame
-}
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t Audio::correctResumeFilePos() {
-    int32_t offset = -1;
-    if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
-    if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
-    if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
-    if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; FLACDecoderReset();}
-    if(m_codec == CODEC_M4A)   {offset = m4a_correctResumeFilePos();  if(offset == -1) goto exit;}
-    if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
-    if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; OPUSDecoder_ClearBuffers();}
-exit:
-    return offset;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::determineOggCodec(uint8_t* data, uint16_t len) {
