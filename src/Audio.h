@@ -200,6 +200,7 @@ private:
         size_t      sizeof_minf;
         size_t      sizeof_stbl;
         size_t      sizeof_stsd;
+        size_t      sizeof_stsz;
         size_t      sizeof_mp4a;
         size_t      sizeof_udta;
         size_t      sizeof_meta;
@@ -213,6 +214,8 @@ private:
         uint8_t     sample_size; // bps
         uint16_t    sample_rate;
         uint8_t     aac_profile;
+        uint32_t    stsz_num_entries;
+        uint32_t    stsz_table_pos;
         bool        progressive; // Progressive (moov before mdat)
         bool        version_flags;
     } m4aHdr_t;
@@ -512,7 +515,6 @@ private:
     uint32_t     streamavail() { return m_client ? m_client->available() : 0; }
     void         IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool         ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
-    uint32_t     find_m4a_atom(uint32_t fileSize, const char* atomType, uint32_t depth = 0);
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -532,8 +534,6 @@ private:
     bool         readID3V1Tag();
     int32_t      newInBuffStart(int32_t m_resumeFilePos);
     boolean      streamDetection(uint32_t bytesAvail);
-    void         seek_m4a_stsz();
-    void         seek_m4a_ilst();
     uint32_t     m4a_correctResumeFilePos();
     uint32_t     ogg_correctResumeFilePos();
     int32_t      flac_correctResumeFilePos();
@@ -793,7 +793,7 @@ private:
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_ESDS = 9, M4A_MDIA = 10, M4A_MINF = 11, M4A_STBL = 12, M4A_STSD = 13, M4A_UDTA = 14,
-                 M4A_META = 15,  M4A_AMRDY = 99, M4A_OKAY = 100};
+                 M4A_STSZ = 15, M4A_META = 16,  M4A_AMRDY = 99, M4A_OKAY = 100};
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
                  CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8, CODEC_VORBIS = 9};
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2};

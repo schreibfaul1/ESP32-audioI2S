@@ -2415,6 +2415,16 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
+        if(atom_name.equals("stsz")){
+            AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
+            uint8_t header_size = 8;
+            m_m4aHdr.sizeof_stsz = atom_size.to_uint32(16) - 8 - header_size;
+            m_m4aHdr.retvalue += 8;
+            m_m4aHdr.headerSize += 8;
+            m_controlCounter = M4A_STSZ;
+            return 0;
+        }
+
         AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
         m_m4aHdr.retvalue += atom_size.to_uint32(16);
         m_m4aHdr.headerSize += atom_size.to_uint32(16);
@@ -2663,7 +2673,18 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         return 0;
     }
-
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_controlCounter == M4A_STSZ){
+        uint8_t version = data[0]; (void)version;
+        uint32_t flags = bigEndian(data + 1, 3); (void)flags;
+        uint32_t sample_size = bigEndian(data + 4, 4); (void)sample_size;
+        uint32_t stsz_num_entries = bigEndian(data + 8, 4);
+        uint32_t stsz_table_pos = m_m4aHdr.headerSize + 12;
+        m_m4aHdr.retvalue += m_m4aHdr.sizeof_stsz + 8;
+        m_m4aHdr.headerSize += m_m4aHdr.sizeof_stsz + 8;
+        m_controlCounter = M4A_STBL;
+        return 0;
+    }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     uint8_t extLen = 0;
     if(m_controlCounter == M4A_MDAT) {            // mdat
@@ -2693,6 +2714,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
+        m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
+        m_stsz_position = m_m4aHdr.stsz_table_pos;
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
     }
@@ -3627,8 +3650,6 @@ void Audio::processLocalFile() {
         m_prlf.ctime = millis();
         m_audioFileSize = m_audiofile.size();
         m_audioFilePosition = 0;
-        if(m_codec == CODEC_M4A) seek_m4a_stsz(); // determine the pos of atom stsz
-        if(m_codec == CODEC_M4A) seek_m4a_ilst(); // looking for metadata
         m_audioDataSize = 0;
         m_audioDataStart = 0;
         m_f_allDataReceived = false;
@@ -6455,217 +6476,6 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         }
     }
     return false;
-}
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::find_m4a_atom(uint32_t fileSize, const char* atomName, uint32_t depth) {
-
-    while (m_audioFilePosition < fileSize) {
-        uint32_t atomStart = m_audioFilePosition; // Position of the current atom
-        uint32_t atomSize;
-        char atomType[5] = {0};
-        audioFileRead((uint8_t*)&atomSize, 4);    // Read the atom size (4 bytes) and the atom type (4 bytes)
-        if(!atomSize) audioFileRead((uint8_t*)&atomSize, 4); // skip 4 byte offset field
-        audioFileRead((uint8_t*)atomType, 4);
-
-        atomSize = bswap32(atomSize);              // Convert atom size from big-endian to little-endian
-        ///    AUDIO_LOG_DEBUG("%*sAtom '%s' found at position %u with size %u bytes", depth * 2, "", atomType, atomStart, atomSize);
-        if (strncmp(atomType, atomName, 4) == 0) return atomStart;
-
-        if (atomSize == 1) {                       // If the atom has a size of 1, an 'Extended Size' is used
-            uint64_t extendedSize;
-            audioFileRead((uint8_t*)&extendedSize, 8);
-            extendedSize = bswap64(extendedSize);
-        //    AUDIO_LOG_DEBUG("%*sExtended size: %llu bytes\n", depth * 2, "", extendedSize);
-            atomSize = (uint32_t)extendedSize;     // Limit to uint32_t for further processing
-        }
-
-        // If the atom is a container, read the atoms contained in it recursively
-        if (strncmp(atomType, "moov", 4) == 0 || strncmp(atomType, "trak", 4) == 0 ||
-            strncmp(atomType, "mdia", 4) == 0 || strncmp(atomType, "minf", 4) == 0 ||
-            strncmp(atomType, "stbl", 4) == 0 || strncmp(atomType, "meta", 4) == 0 ||
-            strncmp(atomType, "udta", 4) == 0 )  {
-            // Go recursively into the atom, read the contents
-            uint32_t pos = find_m4a_atom(atomStart + atomSize,  atomName, depth + 1);
-            if(pos) return pos;
-        } else {
-            audioFileSeek(atomStart + atomSize);    // No container atom, jump to the next atom
-        }
-    }
-    return 0;
-}
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::seek_m4a_ilst() {    // ilist - item list atom, contains the metadata
-    if(!m_audiofile) return; // guard
-    audioFileSeek(0);
-    uint32_t fileSize = m_audiofile.size();
-    const char atomName[] = "ilst";
-    uint32_t atomStart = find_m4a_atom(fileSize, atomName);
-    if(!atomStart) {
-        AUDIO_INFO("ma4 atom ilst not found");
-        audioFileSeek(0);
-        return;
-    }
-
-    uint32_t   seekpos = atomStart;
-    const char info[12][6] = {"nam\0", "ART\0", "alb\0", "too\0", "cmt\0", "wrt\0", "tmpo\0", "trkn\0", "day\0", "cpil\0", "aART\0", "gen\0"};
-
-    seekpos = atomStart;
-    char buff[4];
-    uint32_t len = 0;
-    audioFileSeek(seekpos);
-    audioFileRead((uint8_t*)buff, 4);
-    len = bigEndian((uint8_t*)buff, 4);
-    if(!len) {
-        audioFileRead((uint8_t*)buff, 4); // 4bytes offset filed
-        len = bigEndian((uint8_t*)buff, 4) + 16;
-    }
-    if(len > 1024) len = 1024;
-    // AUDIO_LOG_DEBUG("found at pos %i, len %i", seekpos, len);
-
-    ps_ptr<uint8_t> data;
-    data.alloc(len, "data");
-    data.clear();
-    len -= 4;
-    audioFileSeek(seekpos);
-    audioFileRead(data.get(), len);
-
-    int offset = 0;
-    for(int i = 0; i < 12; i++) {
-        offset = specialIndexOf(data.get(), info[i], len, true); // seek info[] with '\0'
-        if(offset > 0) {
-            offset += 19;
-            if(*(data.get() + offset) == 0) offset++;
-            char   value[256] = {0};
-            size_t temp = strlen((const char*)data.get() + offset);
-            if(temp > 254) temp = 254;
-            memcpy(value, (data.get() + offset), temp);
-            value[temp] = '\0';
-            ps_ptr<char>chBuf = {};
-            if(i == 0)  chBuf.assignf("Title: %s", value);
-            if(i == 1)  chBuf.assignf("Artist: %s", value);
-            if(i == 2)  chBuf.assignf("Album: %s", value);
-            if(i == 3)  chBuf.assignf("Encoder: %s", value);
-            if(i == 4)  chBuf.assignf("Comment: %s", value);
-            if(i == 5)  chBuf.assignf("Composer: %s", value);
-            if(i == 6)  chBuf.assignf("BPM: %s", value);
-            if(i == 7)  chBuf.assignf("Track Number: %s", value);
-            if(i == 8)  chBuf.assignf("Year: %s", value);
-            if(i == 9)  chBuf.assignf("Compile: %s", value);
-            if(i == 10) chBuf.assignf("Album Artist: %s", value);
-            if(i == 11) chBuf.assignf("Types of: %s", value);
-            if(chBuf.valid()) {
-                if(audio_id3data) audio_id3data(chBuf.get());
-            }
-        }
-    }
-    m_f_m4aID3dataAreRead = true;
-    audioFileSeek(0);
-    return;
-}
-//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-void Audio::seek_m4a_stsz() {
-    // stsz says what size each sample is in bytes. This is important for the decoder to be able to start at a chunk,
-    // and then go through each sample by its size. The stsz atom can be behind the audio block. Therefore, searching
-    // for the stsz atom is only applicable to local files.
-
-    /* atom hierarchy (example)_________________________________________________________________________________________
-
-      ftyp -> moov -> trak -> tkhd
-              free    udta    mdia -> mdhd
-              mdat    ilst    mp4a    hdlr
-              mvhd                    minf -> smhd
-                                              dinf
-                                              stbl -> stsd
-                                                      stts
-                                                      stsc
-                                                      stsz -> determine and return the position and number of entries
-                                                      stco
-      __________________________________________________________________________________________________________________*/
-
-    struct m4a_Atom {
-        int  pos;
-        int  size;
-        char name[5] = {0};
-    } atom, at, tmp;
-
-    // c99 has no inner functions, lambdas are only allowed from c11, please don't use ancient compiler
-    auto atomItems = [&](uint32_t startPos) { // lambda, inner function
-        char temp[5] = {0};
-        audioFileSeek(startPos);
-        audioFileRead((uint8_t*)temp, 4);
-        atom.size = bigEndian((uint8_t*)temp, 4);
-        if(!atom.size) atom.size = 4; // has no data, length is 0
-        audioFileRead((uint8_t*)atom.name, 4);
-        atom.name[4] = '\0';
-        atom.pos = startPos;
-        return atom;
-    };
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    uint32_t stsdPos = 0;
-    uint16_t stsdSize = 0;
-    boolean  found = false;
-    uint32_t seekpos = 0;
-    uint32_t filesize = m_audioFileSize;
-    char     name[6][5] = {"moov", "trak", "mdia", "minf", "stbl", "stsz"};
-    char     noe[4] = {0};
-
-    if(!m_audiofile) return; // guard
-
-    at.pos = 0;
-    at.size = filesize;
-    seekpos = 0;
-
-    for(int i = 0; i < 6; i++) {
-        found = false;
-        while(seekpos < at.pos + at.size) {
-            tmp = atomItems(seekpos);
-            seekpos += tmp.size;
-        //  AUDIO_LOG_DEBUG("tmp.name %s, tmp.size %i, seekpos %i", tmp.name, tmp.size, seekpos);
-            if(strcmp(tmp.name, name[i]) == 0) {
-                memcpy((void*)&at, (void*)&tmp, sizeof(tmp));
-                found = true;
-            }
-            // AUDIO_LOG_DEBUG("name %s pos %d, size %d", tmp.name, tmp.pos, tmp.size);
-            if(strcmp(tmp.name, "stsd") == 0) { // in stsd we can found mp4a atom that contains the audioitems
-                stsdPos = tmp.pos;
-                stsdSize = tmp.size;
-            }
-        }
-        if(!found) goto noSuccess;
-        seekpos = at.pos + 8; // 4 bytes size + 4 bytes name
-    }
-    seekpos += 8; // 1 byte version + 3 bytes flags + 4  bytes sample size
-    audioFileSeek(seekpos);
-    audioFileRead((uint8_t*)noe, 4); // number of entries
-    m_stsz_numEntries = bigEndian((uint8_t*)noe, 4);
-    // AUDIO_LOG_DEBUG("number of entries in stsz: %d", m_stsz_numEntries);
-    m_stsz_position = seekpos + 4;
-    if(stsdSize) {
-        audioFileSeek(stsdPos);
-        uint8_t data[128];
-        audioFileRead(data, 128);
-        int offset = specialIndexOf(data, "mp4a", stsdSize);
-        if(offset > 0) {
-            int channel = bigEndian(data + offset + 20, 2); // audio parameter must be set before starting
-            int bps = bigEndian(data + offset + 22, 2);     // the aac decoder. There are RAW blocks only in m4a
-            int srate = bigEndian(data + offset + 26, 4);   //
-            setBitsPerSample(bps);
-            setChannels(channel);
-            setSampleRate(srate);
-            setBitrate(bps * channel * srate);
-            AUDIO_INFO("ch; %i, bps: %i, sr: %i", channel, bps, srate);
-        }
-    }
-    audioFileSeek(0);
-    return;
-
-noSuccess:
-    m_stsz_numEntries = 0;
-    m_stsz_position = 0;
-    AUDIO_LOG_ERROR("m4a atom stsz not found");
-    audioFileSeek(0);
-    return;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::m4a_correctResumeFilePos() {
