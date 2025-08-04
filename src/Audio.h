@@ -257,7 +257,6 @@ private:
         uint32_t  maxFrameSize;
         uint32_t  availableBytes;
         int32_t   bytesAddedToBuffer;
-        int32_t   offset;
     } prlf_t;
     prlf_t m_prlf;
 
@@ -321,7 +320,10 @@ private:
         uint32_t  nextChunkCount;
         bool      f_waitingForPayload = false;
         bool      f_clientIsConnected;
-        int32_t   offset;
+        uint32_t  ctime;
+        uint32_t  timeout;
+        uint32_t  availableBytes;
+        int32_t   bytesAddedToBuffer;
     } pwf_t;
     pwf_t m_pwf;
 
