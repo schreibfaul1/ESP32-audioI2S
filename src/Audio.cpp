@@ -2625,16 +2625,16 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             char ssan[5] = {0}; // sub sub atom name (should be 'data')
             strncpy(san, &sa[4], 4);
             strncpy(ssan, &sa[12],4);
-            uint16_t ssal = bigEndian((uint8_t*)&sa[8], 4); // sub sub atom length
-            uint16_t dty  = bigEndian((uint8_t*)&sa[16], 4); // data type 1-UTF8
+            uint32_t ssal = bigEndian((uint8_t*)&sa[8], 4); // sub sub atom length
+            uint32_t dty  = bigEndian((uint8_t*)&sa[16], 4); // data type 1-UTF8
             sa.clear();
             if(strncmp(ssan, "data", 4) == 0){
                 for(int i = 0; i < tags_count; i++){
                     if(memcmp(san, tags[i].tag, 4) == 0){
                         if     (dty == 0 && strlen(&sa[24]) > 0) id3tag.assignf("%s: %i", tags[i].descr, &sa[24]); // binary
                         else if(dty == 1 && strlen(&sa[24]) > 0) id3tag.assignf("%s: %s", tags[i].descr, &sa[24]); // UTF-8 Text
-                        else if(dty == 0x0D) {m_m4aHdr.picLen = ssal - 16; m_m4aHdr.picPos = pos + 24; AUDIO_LOG_DEBUG("cover jpeg start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);}  // jpeg
-                        else if(dty == 0x0E) {m_m4aHdr.picLen = ssal - 16; m_m4aHdr.picPos = pos + 24; AUDIO_LOG_DEBUG("cover png start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);}   // png
+                        else if(dty == 0x0D) {m_m4aHdr.picLen = as - 24; m_m4aHdr.picPos = pos + 24 - as; AUDIO_LOG_DEBUG("cover jpeg start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);}  // jpeg
+                        else if(dty == 0x0E) {m_m4aHdr.picLen = as - 24; m_m4aHdr.picPos = pos + 24 - as; AUDIO_LOG_DEBUG("cover png start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);}   // png
                         else if(dty == 21){
                             if(memcmp(tags[i].tag, "cpil", 4) == 0) {break;} // Compilation Flag
                             if(memcmp(tags[i].tag, "pgap", 4) == 0) {break;} // Gapless Playback
@@ -2663,53 +2663,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         return 0;
     }
-
-
-        // if(m_m4aHdr.sizeof_ilst > UINT16_MAX){
-        //     if(len < UINT16_MAX) { AUDIO_LOG_DEBUG("wait of buffer filling, buff filled %li bytes", len); return 0;} // wait of buffer filled
-        // }
-        // else if(m_m4aHdr.sizeof_ilst > len ){ AUDIO_LOG_DEBUG("wait of buffer filling, buff filled %li bytes", len); return 0;} // wait of buffer filled
-        // ps_ptr<char>ilst;
-        // ilst.copy_from((char*)data, min(m_m4aHdr.sizeof_ilst, UINT16_MAX));
-
-        // ps_ptr<char>id3tag = {};
-        // for(int i = 0; i < 12; i++) {
-        //     int offset = ilst.special_index_of(info[i], min(m_m4aHdr.sizeof_ilst, UINT16_MAX)); // seek info[] with '\0'
-        //     if(offset > 0) {
-        //         offset += 19;
-        //         if(*(data + offset) == 0) offset++;
-        //         char   value[256] = {0};
-        //         size_t tmp = strlen((const char*)data + offset);
-        //         if(tmp > 254) tmp = 254;
-        //         memcpy(value, (data + offset), tmp);
-        //         value[tmp] = '\0';
-        //         if(i == 0) id3tag.assignf("Title: %s", value);
-        //         if(i == 1) id3tag.assignf("Artist: %s", value);
-        //         if(i == 2) id3tag.assignf("Album: %s", value);
-        //         if(i == 3) id3tag.assignf("Encoder: %s", value);
-        //         if(i == 4) id3tag.assignf("Comment: %s", value);
-        //         if(i == 5) id3tag.assignf("Composer: %s", value);
-        //         if(i == 6) id3tag.assignf("BPM: %s", value);
-        //         if(i == 7) id3tag.assignf("Track Number: %s", value);
-        //         if(i == 8) id3tag.assignf("Year: %s", value);
-        //         if(i == 9) id3tag.assignf("Compile: %s", value);
-        //         if(i == 10)id3tag.assignf("Album Artist: %s", value);
-        //         if(i == 11)id3tag.assignf("Types of: %s", value);
-        //         if(id3tag.valid()) {
-        //             if(audio_id3data) audio_id3data(id3tag.get());
-        //         }
-        //     }
-        // }
-        // int offset = specialIndexOf(data, "covr", len);
-        // if(offset > 0){
-        //     m_m4aHdr.picLen = bigEndian(data + offset + 4, 4) - 4;
-        //     m_m4aHdr.picPos = m_m4aHdr.headerSize + offset + 12;
-        // }
-
-        // m_m4aHdr.retvalue += m_m4aHdr.sizeof_ilst;
-        // m_m4aHdr.headerSize += m_m4aHdr.sizeof_ilst;
-        // m_controlCounter = M4A_META;
-        // return 0;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     uint8_t extLen = 0;
