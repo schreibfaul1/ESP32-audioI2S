@@ -2678,8 +2678,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         uint8_t version = data[0]; (void)version;
         uint32_t flags = bigEndian(data + 1, 3); (void)flags;
         uint32_t sample_size = bigEndian(data + 4, 4); (void)sample_size;
-        uint32_t stsz_num_entries = bigEndian(data + 8, 4);
-        uint32_t stsz_table_pos = m_m4aHdr.headerSize + 12;
+        m_m4aHdr.stsz_num_entries = bigEndian(data + 8, 4);
+        m_m4aHdr.stsz_table_pos = m_m4aHdr.headerSize + 12;
         m_m4aHdr.retvalue += m_m4aHdr.sizeof_stsz + 8;
         m_m4aHdr.headerSize += m_m4aHdr.sizeof_stsz + 8;
         m_controlCounter = M4A_STBL;
@@ -6501,6 +6501,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
         uu.u8[2] = audioFileRead();
         uu.u8[1] = audioFileRead();
         uu.u8[0] = audioFileRead();
+
         pos += uu.u32;
         if(pos >= m_resumeFilePos) {found = true; break;}
     }
