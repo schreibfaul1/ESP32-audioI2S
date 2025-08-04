@@ -6510,24 +6510,28 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
 
         if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
         if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {return - 1;}
-        int buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
+        int32_t buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
 
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
-            InBuff.resetBuffer();
             int res = audioFileSeek(m_resumeFilePos);
             m_f_allDataReceived = false;
-
-            uint16_t rd = buffFillSize;
-            while(rd > 0){
-                int r = audioFileRead(InBuff.getReadPtr(), rd);
-                if(r < 0) { /* AUDIO_LOG_ERROR("r < 0");*/ continue;}
-                rd -= r;
-log_w("rd %i, r %i, len %i", rd, r, buffFillSize);
+            InBuff.resetBuffer();
+            uint16_t remaining = buffFillSize;
+            int32_t  offset = 0;
+            uint32_t timeOut = millis();
+            while (remaining > 0) {
+                int bytesRead = audioFileRead(InBuff.getReadPtr() + offset, remaining);
+                if (bytesRead <= 0) {
+                    if(millis() > timeOut + 2000){AUDIO_LOG_ERROR("timeout, not enough data from host"); buffFillSize = offset; break;}
+                    continue; // ggf. Sleep oder Timeout prüfen, um Endlosschleife zu vermeiden
+                }
+                remaining -= bytesRead;
+                offset += bytesRead;
             }
             InBuff.bytesWritten(buffFillSize);
 
-            int32_t offset = -1;
+            offset = -1;
             if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
             if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
             if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
