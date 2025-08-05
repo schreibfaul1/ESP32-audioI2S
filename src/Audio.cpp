@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.0k                                                                                                                                ";
-/*  Updated on: Aug 02.2025
+    Version 3.4.1                                                                                                                                ";
+/*  Updated on: Aug 05.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6506,20 +6506,30 @@ bool Audio::readID3V1Tag() {
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
-        if(m_controlCounter != 100){AUDIO_LOG_WARN("timeOffset not possible"); m_resumeFilePos = -1; return -1;}
+        uint16_t remaining = 0;
+        int32_t  offset = 0, buffFillSize = 0, res = 0;
+        uint32_t timeOut = 0;
+
+        if(m_controlCounter != 100){AUDIO_LOG_WARN("timeOffset not possible"); m_resumeFilePos = -1; offset = -1; goto exit;}
+        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {   m_resumeFilePos = -1; offset = -1; goto exit;}
+        if(m_codec == CODEC_M4A && ! m_stsz_position){                         m_resumeFilePos = -1; offset = -1; goto exit;}
 
         if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-        if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {return - 1;}
-        int32_t buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
+        buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
 
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
-            int res = audioFileSeek(m_resumeFilePos);
             m_f_allDataReceived = false;
+
+/* process before */
+            if(m_codec == CODEC_M4A) m_resumeFilePos += m4a_correctResumeFilePos(); {if(m_resumeFilePos == -1) goto exit;}
+
+/* skip to position */
+            res = audioFileSeek(m_resumeFilePos);
             InBuff.resetBuffer();
-            uint16_t remaining = buffFillSize;
-            int32_t  offset = 0;
-            uint32_t timeOut = millis();
+            remaining = buffFillSize;
+            offset = 0;
+            timeOut = millis();
             while (remaining > 0) {
                 int bytesRead = audioFileRead(InBuff.getReadPtr() + offset, remaining);
                 if (bytesRead <= 0) {
@@ -6530,22 +6540,24 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
                 offset += bytesRead;
             }
             InBuff.bytesWritten(buffFillSize);
-
-            offset = -1;
+/* process after */
+            offset = 0;
             if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
             if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
             if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
             if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; FLACDecoderReset();}
-            if(m_codec == CODEC_M4A)   {offset = m4a_correctResumeFilePos();  if(offset == -1) goto exit;}
             if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
             if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; OPUSDecoder_ClearBuffers();}
 
 
             InBuff.bytesWasRead(offset);
-exit:
-log_w("offset %i", offset);
+
         m_f_lockInBuffer = false;
-        return res;
+        return res + offset;
+exit:
+        m_f_lockInBuffer = false;
+        stopSong();
+        return offset;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 boolean Audio::streamDetection(uint32_t bytesAvail) {
@@ -6597,19 +6609,32 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     bool found = false;
     audioFileSeek(m_stsz_position);
 
+    auto read_next = [&]() -> int {
+        int r;
+        int cnt = 0;
+        while(true){
+            r = audioFileRead();
+            if(r >= 0) break;
+            vTaskDelay(10);
+            cnt++;
+            if(cnt > 300) {AUDIO_LOG_ERROR("timeout"); break;}
+        }
+        return r;
+    };
+
     while(i < m_stsz_numEntries) {
         i++;
-        uu.u8[3] = audioFileRead();
-        uu.u8[2] = audioFileRead();
-        uu.u8[1] = audioFileRead();
-        uu.u8[0] = audioFileRead();
+        uu.u8[3] = read_next();
+        uu.u8[2] = read_next();
+        uu.u8[1] = read_next();
+        uu.u8[0] = read_next();
 
         pos += uu.u32;
         if(pos >= m_resumeFilePos) {found = true; break;}
     }
     if(!found)  return -1; // not found
 
-    audioFileSeek(filePtr); // restore file pointer
+    // audioFileSeek(filePtr); // restore file pointer
     return pos - m_resumeFilePos; // return the number of bytes to jump
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
