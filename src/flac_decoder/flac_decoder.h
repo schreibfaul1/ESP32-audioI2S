@@ -210,17 +210,17 @@ void FLAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, A
     ps_ptr<char> final;
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
-    final.alloc(total_len + 1, "final");
+    final.calloc(total_len + 1, "final");
     final.clear();
     char* dest = final.get();
     if (!dest) return;  // Or error treatment
     if(audio_info){
-        if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        audio_info(final.get());
+        if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        if(final.strlen()) audio_info(final.get());
     }
     else{
         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);

@@ -1256,26 +1256,26 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
 
         // Gültigkeitsprüfungen
         if (header_info->mpeg_version == 1) { // Reserved
-            log_d("Reserved MPEG version\n");
+            MP3_LOG_DEBUG("Reserved MPEG version\n");
             return false;
         }
         if (header_info->layer == 0) { // Reserved
-            log_d("Reserved Layer\n");
+            MP3_LOG_DEBUG("Reserved Layer\n");
             return false;
         }
         // Modified part: Support for Layer II and Layer III
         if (header_info->layer != 1 && header_info->layer != 2 && header_info->layer != 3 ) { // Allow Layer I (3) Layer II (2) and Layer III (1)
             printf("\n"); for(int i = 0; i<10; i++) printf("0x%02x ", header_data[i]); printf("\n"); // Use header_data instead of buf
-            log_d("Not Layer I or II or III\n");
+            MP3_LOG_DEBUG("Not Layer I or II or III\n");
             return false;
         }
 
         if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) { // Invalid bit rate
-            log_d("Invalid bitrate index\n");
+            MP3_LOG_DEBUG("Invalid bitrate index\n");
             return false;
         }
         if (header_info->sample_rate_idx == 3) { // Invalid sampling frequency
-            log_d("Invalid sampling rate index\n");
+            MP3_LOG_DEBUG("Invalid sampling rate index\n");
             return false;
         }
 
@@ -1311,7 +1311,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
         }
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
-            log_d("Could not determine valid bitrate or sample rate\n");
+            MP3_LOG_DEBUG("Could not determine valid bitrate or sample rate\n");
             return false;
         }
 
@@ -1349,7 +1349,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
         }
 
         if (header_info->frame_length == 0) {
-            log_d("Calculated frame length is zero\n");
+            MP3_LOG_DEBUG("Calculated frame length is zero\n");
             return false;
         }
         header_info->sample_rate_hz = sample_rate_hz;
@@ -1403,7 +1403,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
         int32_t sync_offset = findSync(buf, current_pos, nBytes);
 
         if (sync_offset == -1) {
-            log_d("No syncword found in remaining buffer\n");
+            MP3_LOG_DEBUG("No syncword found in remaining buffer\n");
             return -1; // No more syncword found
         }
 
@@ -1411,7 +1411,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
         nBytes      -= sync_offset;
 
         if (nBytes < mp3FHsize) {
-            log_d("Not enough bytes for a full header after syncword\n");
+            MP3_LOG_DEBUG("Not enough bytes for a full header after syncword\n");
             return -1; // Not enough data for a full header
         }
 
@@ -1423,33 +1423,33 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
                 Mp3FrameHeader next_header;
                 if (((buf[current_pos + header.frame_length] == SYNCWORDH) && ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL)) &&
                                         parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    log_d("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
+                    // MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
 
-                    // s_samplerate   = header.sample_rate_hz; // (angenommen in der Struktur vorhanden)
-                    // s_bitRate      = header.bitrate_kbps;   // (angenommen in der Struktur vorhanden)
+                    // s_samplerate   = header.sample_rate_hz; // (suppose in the structure available)
+                    // s_bitRate      = header.bitrate_kbps;   // (suppose in the structure available)
                     // s_mpeg_version = header.mpeg_version;
                     // s_layer        = header.layer;
                     // s_channel_mode = header.channel_mode;
                     // s_samples_per_frame = header.samples_per_frame;
 
-                    // // Für s_channels (1 für Mono, 2 für Stereo)
+                    // // s_channels (1 Mono, 2 Stereo)
                     // if (header.channel_mode == 0b11) { // 0b11 ist Mono
                     //     s_channels = 1;
-                    // } else { // Alle anderen Modi (Stereo, Joint Stereo, Dual Channel) sind 2 Kanäle
+                    // } else { // 2 channels for all other (Stereo, Joint Stereo, Dual Channel)
                     //     s_channels = 2;
                     // }
                     return current_pos;
                 } else {
-                    log_d("Header valid, but next frame does not validate. False positive. Moving on.\n");
+                    MP3_LOG_DEBUG("Header valid, but next frame does not validate. False positive. Moving on.");
                 }
             } else {
-                log_d("Header valid, but not enough data for next frame check. Possibly end of stream or false positive.\n");
+                MP3_LOG_DEBUG("Header valid, but not enough data for next frame check. Possibly end of stream or false positive.");
                 // If not enough data for the next frame, it could still be the right one.
                 // This is a compromise.If in doubt, continue to search or return the current one.
                 // For robustness: search.
             }
         } else {
-            log_d("Found syncword but header is invalid. Moving to next possible syncword.\n");
+            MP3_LOG_DEBUG("Found syncword but header is invalid. Moving to next possible syncword.");
         }
 
         // If the current header was invalid or the next frame did not validate the current "SyncWord" and continue to search
@@ -1575,7 +1575,7 @@ const char* MP3GetMPEGVersion(){
 int32_t MP3GetNextFrameInfo(uint8_t *buf) {
 
     if (UnpackFrameHeader( buf) == -1 || m_MP3DecInfo->layer != 3){
-        MP3_ERROR("MP3 invalid frameheader");
+        MP3_LOG_ERROR("MP3 invalid frameheader");
         return MP3_ERR;
     }
     MP3GetLastFrameInfo();
@@ -1632,7 +1632,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
     /* unpack frame header */
     fhBytes = UnpackFrameHeader(inbuf);
     if (fhBytes < 0){
-        MP3_ERROR("MP3 invalid frameheader"); /* don't clear outbuf since we don't know size (failed to parse header) */
+        MP3_LOG_ERROR("MP3 invalid frameheader"); /* don't clear outbuf since we don't know size (failed to parse header) */
         return MP3_ERR;
     }
     inbuf += fhBytes;
@@ -1640,7 +1640,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
     siBytes = UnpackSideInfo( inbuf);
     if (siBytes < 0) {
         MP3ClearBadFrame(outbuf);
-        MP3_ERROR("MP3 invalid sideinfo");
+        MP3_LOG_ERROR("MP3 invalid sideinfo");
         return MP3_ERR;
     }
     inbuf += siBytes;
@@ -1655,7 +1655,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
             if(m_MP3DecInfo->freeBitrateSlots < 0){
                 MP3ClearBadFrame(outbuf);
                 m_MP3DecInfo->freeBitrateFlag = 0;
-                MP3_ERROR("MP3, ca'nt find free bitrate slot");
+                MP3_LOG_ERROR("MP3, ca'nt find free bitrate slot");
                 return MP3_ERR;
             }
             freeFrameBytes=m_MP3DecInfo->freeBitrateSlots + fhBytes + siBytes;
@@ -1689,7 +1689,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
         /* out of data - assume last or truncated frame */
         if (m_MP3DecInfo->nSlots > *bytesLeft) {
             MP3ClearBadFrame(outbuf);
-            MP3_ERROR("MP3, indata underflow");
+            MP3_LOG_ERROR("MP3, indata underflow");
             return MP3_ERR;
         }
         /* fill main data buffer with enough new data for this frame */
@@ -1717,7 +1717,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
                 return MP3_NONE;
             }
             MP3ClearBadFrame( outbuf);
-            MP3_ERROR("MP3, maindata underflow");
+            MP3_LOG_ERROR("MP3, maindata underflow");
             return MP3_ERR;
         }
 //    }
@@ -1738,7 +1738,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
 
             if (offset < 0 || mainBits < huffBlockBits) {
                 MP3ClearBadFrame(outbuf);
-                MP3_ERROR("MP3, invalid scalefact");
+                MP3_LOG_ERROR("MP3, invalid scalefact");
                 return MP3_ERR;
             }
             /* decode Huffman code words */
@@ -1746,7 +1746,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
             offset = DecodeHuffman( mainPtr, &bitOffset, huffBlockBits, gr, ch);
             if (offset < 0) {
                 MP3ClearBadFrame( outbuf);
-                MP3_ERROR("MP3, invalid Huffman code words");
+                MP3_LOG_ERROR("MP3, invalid Huffman code words");
                 return MP3_ERR;
             }
             mainPtr += offset;
@@ -1755,7 +1755,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
         /* dequantize coefficients, decode stereo, reorder int16_t blocks */
         if (MP3Dequantize( gr) < 0) {
             MP3ClearBadFrame(outbuf);
-            MP3_ERROR("MP3, invalid dequantize coefficients");
+            MP3_LOG_ERROR("MP3, invalid dequantize coefficients");
             return MP3_ERR;
         }
 
@@ -1763,7 +1763,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
         for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             if (IMDCT( gr, ch) < 0) {
                 MP3ClearBadFrame(outbuf);
-                MP3_ERROR("MP3, invalid inverse MDCT");
+                MP3_LOG_ERROR("MP3, invalid inverse MDCT");
                 return MP3_ERR;
             }
         }
@@ -1772,7 +1772,7 @@ int32_t MP3Decode( uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf){
                 outbuf + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans)
                 < 0) {
             MP3ClearBadFrame(outbuf);
-            MP3_ERROR("MP3, invalid subband");
+            MP3_LOG_ERROR("MP3, invalid subband");
             return MP3_ERR;
         }
     }
@@ -1853,7 +1853,7 @@ bool MP3Decoder_AllocateBuffers(void) {
     if(!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo ||
        !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
         MP3Decoder_FreeBuffers();
-        log_e("not enough memory to allocate mp3decoder buffers");
+        MP3_LOG_ERROR("not enough memory to allocate mp3decoder buffers");
         return false;
     }
     MP3Decoder_ClearBuffer();
@@ -1905,7 +1905,7 @@ void MP3Decoder_FreeBuffers()
     if(m_SubbandInfo)       {free(m_SubbandInfo);     m_SubbandInfo=NULL;}
     if(m_MP3FrameInfo)      {free(m_MP3FrameInfo);    m_MP3FrameInfo=NULL;}
 
-//    log_i("MP3Decoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
+//    MP3_LOG_DEBUG("MP3Decoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
 }
 
 /***********************************************************************************************************************
@@ -1957,10 +1957,10 @@ int32_t DecodeHuffmanPairs(int32_t *xy, int32_t nVals, int32_t tabIdx, int32_t b
 //    assert(tabIdx >= 0);
 //    assert(tabType != invalidTab);
 
-    if((nVals & 0x01)){log_d("assert(!(nVals & 0x01))"); return -1;}
-    if(!(tabIdx < m_HUFF_PAIRTABS)){log_d("assert(tabIdx < m_HUFF_PAIRTABS)"); return -1;}
-    if(!(tabIdx >= 0)){log_d("(tabIdx >= 0)"); return -1;}
-    if(!(tabType != invalidTab)){log_d("(tabType != invalidTab)"); return -1;}
+    if((nVals & 0x01)){MP3_LOG_DEBUG("assert(!(nVals & 0x01))"); return -1;}
+    if(!(tabIdx < m_HUFF_PAIRTABS)){MP3_LOG_DEBUG("assert(tabIdx < m_HUFF_PAIRTABS)"); return -1;}
+    if(!(tabIdx >= 0)){MP3_LOG_DEBUG("(tabIdx >= 0)"); return -1;}
+    if(!(tabType != invalidTab)){MP3_LOG_DEBUG("(tabType != invalidTab)"); return -1;}
 
 
     /* initially fill cache with any partial byte */
@@ -4144,7 +4144,7 @@ void PolyphaseStereo(int16_t *pcm, int32_t *vbuf, const uint32_t *coefBase){
  **********************************************************************************************************************/
 int MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len) {
     if (frame_len < 4) {
-        log_e("Error: Frame data too short for header (need 4 bytes, got %zu).\n", frame_len);
+        MP3_LOG_ERROR("Error: Frame data too short for header (need 4 bytes, got %zu).\n", frame_len);
         return -3; // Frame too short for header
     }
 
@@ -4178,7 +4178,7 @@ int MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len) {
     // MPEG 2.5 Layer III often uses 12 bits (0xfff), other 11 bits (0xffe)
     // simple check: data [0] == 0xff and (data [1] & 0xe0) == 0xe0
     if (! (frame_data[0] == 0xFF && (frame_data[1] & 0xE0) == 0xE0) ) {
-        log_e("Error: Invalid MP3 sync word.\n");
+        MP3_LOG_ERROR("Error: Invalid MP3 sync word.\n");
         return -4;
     }
 
@@ -4205,10 +4205,10 @@ int MP3_AnalyzeFrame(const uint8_t *frame_data, size_t frame_len) {
     uint8_t channel_mode = (header >> 6) & 0x03;
 
     // Debug output(optional)
-    // log_w("MPEG Version ID raw: %u\n", mpeg_version_id);
-    // log_w("Layer Description raw: %u\n", layer_description);
-    // log_w("Protection Bit: %u\n", protection_bit);
-    // log_w("Channel Mode raw: %u\n", channel_mode);
+    // MP3_LOG_DEBUG("MPEG Version ID raw: %u\n", mpeg_version_id);
+    // MP3_LOG_DEBUG("Layer Description raw: %u\n", layer_description);
+    // MP3_LOG_DEBUG("Protection Bit: %u\n", protection_bit);
+    // MP3_LOG_DEBUG("Channel Mode raw: %u\n", channel_mode);
 
 
     // --- 2. Check whether it is Layer III ---

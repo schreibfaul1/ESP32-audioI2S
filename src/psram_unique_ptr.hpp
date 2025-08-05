@@ -666,7 +666,6 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
     requires std::is_same_v<U, char>
     void assignf(const char* fmt, ...) {
         if (!fmt) return;
-
         // Formatierte Länge berechnen
         va_list args;
         va_start(args, fmt);
@@ -694,6 +693,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
         // write formatted text
         vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
         va_end(args);
+        allocated_size = fmt_len;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F   📌📌📌
@@ -857,6 +857,48 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
         if (!found) return -1;
 
         return static_cast<int>(found - str);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  S P E C I A L _ I N D E X _ O F  📌📌📌
+    // Searches for the sequence needle within the buffer managed by ps_ptr<char> (haystack), up to max_length bytes.
+    // Returns the offset of the first occurrence of needle relative to the buffer start, or -1 if not found.
+    // Ignores null bytes in both haystack and needle, making it suitable for binary data searches.
+    // Example:
+    //   ps_ptr<char> haystack; // Contains data, e.g., stsd atom content
+    //   int32_t idx = haystack.index_of("mp4a", 1024); // Search for "mp4a"
+    //   int32_t idx2 = haystack.index_of("\x00\x01\xFF", 3, 1024); // Search for byte sequence
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    int32_t special_index_of(const char* needle, uint32_t needle_length, uint32_t max_length) const {
+        static_assert(std::is_same_v<T, char>, "index_of is only valid for ps_ptr<char>");
+        if (!mem || !get()) {
+            log_e("index_of: No valid buffer data");
+            return -1;
+        }
+        if (!needle || needle_length == 0) {
+            log_e("index_of: Invalid needle (null or empty)");
+            return -1;
+        }
+        if (max_length < needle_length) {
+            log_e("index_of: max_length (%u) too short to find needle of length %u", max_length, needle_length);
+            return -1;
+        }
+        const char* data = get();
+        for (uint32_t i = 0; i <= max_length - needle_length; ++i) {
+            if (std::memcmp(data + i, needle, needle_length) == 0) {
+                // log_i("index_of: Found needle at offset %u", i);
+                return static_cast<int32_t>(i);
+            }
+        }
+        log_d("index_of: Needle not found within %u bytes", max_length);
+        return -1;
+    }
+
+    // Overload for C-string needle (automatically determines needle length, excluding null terminator)
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    int32_t special_index_of(const char* needle, uint32_t max_length) const {
+        return special_index_of(needle, needle ? std::strlen(needle) : 0, max_length);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F _ I C A S E  📌📌📌
@@ -1335,9 +1377,12 @@ void unicodeToUTF8(const char* src) {
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  T O _ U I N T 6 4  📌📌📌
+    // Retrieves the numeric value (uint64_t) from the stored string, parsing it as a number in the specified base (default: 16 for hexadecimal).
+    // Example: If the stored string is "0x12345678", returns 0x12345678.
+    // If the string is empty, null, or invalid, returns 0 and logs an error.
 
     // ps_ptr<char> mediaSeqStr = "227213779";
-    // uint64_t mediaSeq = mediaSeqStr.to_uint64();
+    // uint64_t mediaSeq = mediaSeqStr.to_uint64(10);
     //
     // ps_ptr<char> addr = "0x1A3B";
     // uint64_t val = addr.to_uint64(16);
@@ -1345,15 +1390,107 @@ void unicodeToUTF8(const char* src) {
     template <typename U = T>
     requires std::is_same_v<U, char>
     uint64_t to_uint64(int base = 10) const {
-        if (!mem || !get()) return 0;
-
+        static_assert(std::is_same_v<T, char>, "to_uint64 is only valid for ps_ptr<char>");
+        if (!mem || !get()) {
+            log_e("to_uint64: No valid string data");
+            return 0;
+        }
+        const char* str = get();
         char* end = nullptr;
-        uint64_t result = std::strtoull(get(), &end, base);
-        if (end == get()) {
-            log_e("no numerical value found in %s", get());
+        uint64_t result = std::strtoull(str, &end, base);
+        if (end == str || *end != '\0') {
+            log_e("to_uint64: Invalid numeric value in '%s' for base %d", str, base);
             return 0;
         }
         return result;
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O _ U I N T 3 2  📌📌📌
+    // Retrieves the numeric value (uint32_t) from the stored string, parsing it as a number in the specified base (default: 10 for decimal).
+    // Example: If the stored string is "0x1A3B", returns 0x1A3B (6715) for base 16.
+    // If the string is empty, null, invalid, or exceeds UINT32_MAX (4294967295), returns 0 and logs an error.
+    // Usage:
+    //   ps_ptr<char> size = "227213779"; uint32_t val = size.to_uint32(10); // Returns 227213779
+    //   ps_ptr<char> addr = "0x1A3B"; uint32_t val = addr.to_uint32(16); // Returns 6715
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    uint32_t to_uint32(int base = 10) const {
+        static_assert(std::is_same_v<T, char>, "to_uint32 is only valid for ps_ptr<char>");
+        if (!mem || !get()) {
+            log_e("to_uint32: No valid string data");
+            return 0;
+        }
+        const char* str = get();
+        char* end = nullptr;
+        unsigned long result = std::strtoul(str, &end, base);
+        if (end == str || *end != '\0') {
+            log_e("to_uint32: Invalid numeric value in '%s' for base %d", str, base);
+            return 0;
+        }
+        if (result > UINT32_MAX) {
+            log_e("to_uint32: Value in '%s' exceeds UINT32_MAX (%u) for base %d", str, UINT32_MAX, base);
+            return 0;
+        }
+        return static_cast<uint32_t>(result);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
+
+
+
+
+// 📌📌📌  B I G _ E N D I A N  📌📌📌
+    // Reads up to 8 bytes from a uint8_t array in big-endian order and stores the value as a hexadecimal string (e.g., "0x12345678").
+    // Example: uint8_t data[] = {0x12, 0x34, 0x56, 0x78}; → stores "0x12345678"
+    // If size > 8, only the first 8 bytes are processed. If size = 0 or data = nullptr, stores "0x0".
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void big_endian(const uint8_t* data, uint8_t size) {
+        static_assert(std::is_same_v<T, char>, "big_endian is only valid for ps_ptr<char>");
+        if (!data || size == 0) {
+            log_e("big_endian: Invalid input (data is null or size is 0)");
+            assign("0x0");
+            return;
+        }
+        if (size > 8) {
+            log_e("big_endian: Size %u exceeds 8 bytes, truncating to 8", size);
+            size = 8;
+        }
+        uint64_t result = 0;
+        for (uint8_t i = 0; i < size; ++i) {
+            result = (result << 8) | data[i];
+        }
+        char buffer[19]; // Max: "0x" + 16 chars for uint64_t + null terminator
+        snprintf(buffer, sizeof(buffer), "0x%llx", result);
+        assign(buffer);
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  L I T T L E _ E N D I A N  📌📌📌
+    // Reads up to 8 bytes from a uint8_t array in little-endian order and stores the value as a hexadecimal string (e.g., "0x12345678").
+    // Example: uint8_t data[] = {0x78, 0x56, 0x34, 0x12}; → stores "0x12345678"
+    // If size > 8, only the first 8 bytes are processed. If size = 0 or data = nullptr, stores "0x0".
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void little_endian(const uint8_t* data, uint8_t size) {
+        static_assert(std::is_same_v<T, char>, "little_endian is only valid for ps_ptr<char>");
+        if (!data || size == 0) {
+            log_e("little_endian: Invalid input (data is null or size is 0)");
+            assign("0x0");
+            return;
+        }
+        if (size > 8) {
+            log_e("little_endian: Size %u exceeds 8 bytes, truncating to 8", size);
+            size = 8;
+        }
+        uint64_t result = 0;
+        for (int i = size - 1; i >= 0; --i) {
+            result = (result << 8) | data[i];
+        }
+        char buffer[19]; // Max: "0x" + 16 chars for uint64_t + null terminator
+        snprintf(buffer, sizeof(buffer), "0x%llx", result);
+        assign(buffer);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E M O V E _ C H A R S   📌📌📌

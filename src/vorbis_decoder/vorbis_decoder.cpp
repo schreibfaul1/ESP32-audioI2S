@@ -212,10 +212,10 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         }
         if(s_vorbisRemainBlockPicLen <= 0 && !s_f_vorbisNewMetadataBlockPicture) {
             if(s_vorbisBlockPicItem.size() > 0) { // get blockpic data
-                // log_i("---------------------------------------------------------------------------");
-                // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
-                // log_i("---------------------------------------------------------------------------");
+                // VORBIS_LOG_INFO("---------------------------------------------------------------------------");
+                // VORBIS_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
+                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { VORBIS_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
+                // VORBIS_LOG_INFO("---------------------------------------------------------------------------");
                 s_f_vorbisNewMetadataBlockPicture = true;
             }
         }
@@ -226,7 +226,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         s_vorbisSegmentTableRdPtr = -1; // back to the parking position
         ret = VORBISparseOGG(inbuf, bytesLeft);
         s_f_parseOggDone = true;
-        if(!s_vorbisSegmentTableSize) {/* log_w("OggS without segments?") */; }
+        if(!s_vorbisSegmentTableSize) {/* VORBIS_LOG_WARN("OggS without segments?") */; }
         return ret;
     }
 
@@ -271,7 +271,7 @@ int32_t vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     clearGlobalConfigurations(); // if a new codebook is required, delete the old one
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     if(idx == 1) {
-        // log_i("first packet (identification segmentLength) %i", segmentLength);
+        // VORBIS_LOG_INFO("first packet (identification segmentLength) %i", segmentLength);
         s_identificatonHeaderLength = segmentLength;
         ret = parseVorbisFirstPacket(inbuf, segmentLength);
     }
@@ -321,7 +321,7 @@ int32_t vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     s_oggPage3Len = segmentLength;
     if(idx == 1) {
-        // log_i("third packet (setup segmentLength) %i", segmentLength);
+        // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         s_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
         if(segmentLength == 4080) {
@@ -335,7 +335,7 @@ int32_t vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
             s_oggPage3Len += l;
             s_setupHeaderLength += l;
             bitReader_setData(inbuf, s_oggPage3Len);
-            // log_w("s_oggPage3Len %i", s_oggPage3Len);
+            // VORBIS_LOG_INFO("s_oggPage3Len %i", s_oggPage3Len);
             s_pageNr++;
         }
         ret = parseVorbisCodebook();
@@ -394,7 +394,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     }
     else { // not s_f_parseOggDone
         if(s_vorbisSegmentTableSize || s_f_lastSegmentTable) {
-            // if(s_f_oggLastPage) log_i("last page");
+            // if(s_f_oggLastPage) VORBIS_LOG_INFO("last page");
             bitReader_setData(inbuf, segmentLength);
             ret = vorbis_dsp_synthesis(inbuf, segmentLength, outbuf);
             uint16_t outBuffSize = 2048 * 2;
@@ -550,11 +550,11 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
     pos += 4 + vendorLength;
     s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
 
-    // log_i("vendorLength %x", vendorLength);
-    // log_i("vendorString %s", s_vorbisChbuf);
+    // VORBIS_LOG_INFO("vendorLength %x", vendorLength);
+    // VORBIS_LOG_INFO("vendorString %s", s_vorbisChbuf);
 
     uint8_t nrOfComments = *(inbuf + pos);
-    // log_i("nrOfComments %i", nrOfComments);
+    // VORBIS_LOG_INFO("nrOfComments %i", nrOfComments);
     pos += 4;
     s_vorbisCommentHeaderLength -= 4;
 
@@ -572,7 +572,7 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         uint8_t cl = min((uint32_t)254, commentLength);
         s_vorbisChbuf.assign((char*)(inbuf + pos +  4), cl);
 
-        // log_i("commentLength %i comment %s", commentLength, s_vorbisChbuf);
+        // VORBIS_LOG_INFO("commentLength %i comment %s", commentLength, s_vorbisChbuf);
 
         if(s_vorbisChbuf.starts_with_icase("artist=")){
             artist.assign(s_vorbisChbuf.get() + 7, commentLength - 7);
@@ -773,9 +773,9 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
 
     uint16_t headerSize    = pageSegments + 27;
 
-    // log_i("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
+    // VORBIS_LOG_INFO("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
     if(firstPage || continuedPage || lastPage){
-    // log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
+    // VORBIS_LOG_INFO("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
     }
 
     *bytesLeft -= headerSize;
@@ -796,7 +796,7 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
 uint16_t continuedOggPackets(uint8_t *inbuf){
 
     // skip OggS header to pageSegments
-    // log_w("%c%c%c%c", *(inbuf+0), *(inbuf+1), *(inbuf+2), *(inbuf+3));
+    // VORBIS_LOG_INFO("%c%c%c%c", *(inbuf+0), *(inbuf+1), *(inbuf+2), *(inbuf+3));
     uint16_t segmentLength = 0;
     uint8_t  headerType    = *(inbuf +  5);
     uint8_t  pageSegments  = *(inbuf + 26);        // giving the number of segment entries
@@ -832,10 +832,10 @@ int32_t VORBISFindSyncWord(unsigned char *buf, int32_t nBytes){
     // assume we have a ogg wrapper
     int32_t idx = VORBIS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
-    //    log_i("OggS found at %i", idx);
+    //    VORBIS_LOG_INFO("OggS found at %i", idx);
         return idx;
     }
-    // log_i("find sync");
+    // VORBIS_LOG_INFO("find sync");
     VORBIS_LOG_ERROR("Vorbis, sync 'OggS' not found");
     return VORBIS_ERR;
 }
@@ -1457,8 +1457,8 @@ uint8_t _book_maptype1_quantvals(codebook_t *b) {
 //---------------------------------------------------------------------------------------------------------------------
 int32_t oggpack_eop() {
     if(s_bitReader.headptr -s_bitReader.data  > s_setupHeaderLength){
-        log_i("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
-        log_i("ogg package 3 overflow");
+        VORBIS_LOG_INFO("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
+        VORBIS_LOG_INFO("ogg package 3 overflow");
          return -1;
     }
     return 0;
@@ -1774,7 +1774,7 @@ void vorbis_book_clear(ps_ptr<codebook_t> &v){
     if(v->q_val.valid())       {s += v ->q_val.size(); v ->q_val.reset();}
     s += v.size(); v.reset();
     s_nrOfCodebooks = 0;
-    // log_w("free codebook_t %i bytes", s);
+    // VORBIS_LOG_INFO("free codebook_t %i bytes", s);
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
@@ -2064,7 +2064,7 @@ int32_t *floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value) {
         return (fit_value);
     }
     else{
-        // log_i("err in br");
+        // VORBIS_LOG_ERROR("err in br");
         ;
     }
 eop:
