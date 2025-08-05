@@ -40,7 +40,7 @@ bool             s_f_flacParseOgg = false;
 bool             s_f_bitReaderError = false;
 uint8_t          s_flac_pageSegments = 0;
 ps_ptr<char>     s_flacStreamTitle = {};
-ps_ptr<char>     s_flacVendorString = {};
+ps_ptr<char>     s_flacVendorString("s_flacVendorString");
 bool             s_f_flacNewStreamtitle = false;
 bool             s_f_flacFirstCall = true;
 bool             s_f_oggWrapper = false;
@@ -458,7 +458,7 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                     FLAC_LOG_INFO("vendorLength > 1024 bytes");
                 }
                 s_flacVendorString.alloc(vendorLength + 1); s_flacVendorString.clear();
-                s_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength, "s_flacVendorString");
+                s_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
                 // FLAC_LOG_VERBOSE("Vendor: %s", s_flacVendorString.c_get());
 
                 pos += 4 + vendorLength;

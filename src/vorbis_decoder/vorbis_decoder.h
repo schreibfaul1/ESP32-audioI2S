@@ -327,7 +327,7 @@ void VORBIS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt,
     #define ANSI_ESC_CYAN           "\033[36m"
     #define ANSI_ESC_WHITE          "\033[37m"
 
-    ps_ptr<char> result;
+    ps_ptr<char> result("result");
     ps_ptr<char> file;
 
     file.copy_from(path);
@@ -339,7 +339,7 @@ void VORBIS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt,
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
     if (len <= 0) return;
 
-    result.alloc(len + 1, "result");
+    result.alloc(len + 1);
     char* dst = result.get();
     if (!dst) return;
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);

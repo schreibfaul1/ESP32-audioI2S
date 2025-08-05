@@ -40,16 +40,46 @@ class ps_ptr {
 private:
     std::unique_ptr<T[], PsramDeleter> mem;
     size_t allocated_size = 0;
+    char* name = nullptr; // member for object name
     static inline T dummy{}; // For invalid accesses
 
+    // Auxiliary function for setting the name
+    void set_name(const char* new_name) {
+        if (name) {
+            free(name);
+            name = nullptr;
+        }
+        if (new_name) {
+            std::size_t len = std::strlen(new_name) + 1;
+            if (psramFound()) {
+                name = static_cast<char*>(ps_malloc(len));
+            } else {
+                name = static_cast<char*>(malloc(len));
+            }
+            if (name) {
+                std::memcpy(name, new_name, len);
+            } else {
+                printf("OOM: failed to allocate %zu bytes for name\n", len);
+            }
+        }
+    }
+
 public:
-    ps_ptr() = default;
-//    ~ps_ptr() = default;
-    ~ps_ptr() {
+    ps_ptr() = default; // default constructor
+
+    explicit ps_ptr(const char* name_str) { // named constructor
+        set_name(name_str);
+    }
+
+    ~ps_ptr() { // destructor
         if (mem) {
-            // log_w("Destructor called: Freeing %d bytes at %p", allocated_size * sizeof(T), mem.get());
+            // log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", allocated_size * sizeof(T), mem.get());
         } else {
-            // log_w("Destructor called: No memory to free.");
+            // log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+        }
+        if (name) {
+            free(name);
+            name = nullptr;
         }
     }
 
@@ -60,16 +90,23 @@ public:
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
         mem = std::move(other.mem);
         allocated_size = other.allocated_size;
+        name = other.name;
         other.allocated_size = 0;
+        other.name = nullptr;
     }
 
-    // NEU: Move-Assignment-Operator
+    // Move-Assignment-Operator
     ps_ptr& operator=(ps_ptr&& other) noexcept {
-        if (this != &other) { // Sicherstellen, dass keine Selbstzuweisung stattfindet
+        if (this != &other) {
+            if (name) {
+                free(name);
+                name = nullptr;
+            }
             mem = std::move(other.mem);
             allocated_size = other.allocated_size;
+            name = other.name;
             other.allocated_size = 0;
-            // log_w("Move Assignment called: Moved %d bytes from %p to %p", allocated_size * sizeof(T), other.mem.get(), mem.get());
+            other.name = nullptr;
         }
         return *this;
     }
@@ -87,13 +124,13 @@ public:
     // 📌📌📌  A L L O C  📌📌📌
 
     // ps_ptr <char>test;
-    // test.alloc(100, "test"); // ps_malloc, It is not necessary to specify a name, only for debugging OOM etc.
+    // test.alloc(100");
     // if(test.valid()) {
     //     printf("Größe: %u\n", test.size());
     //     test.clear(); // memset "0"
     // }
 
-    void alloc(std::size_t size, const char* name = nullptr, bool usePSRAM = true) {
+    void alloc(std::size_t size, bool usePSRAM = true) {
         size = (size + 15) & ~15; // Align to 16 bytes
         if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
             mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Important!
@@ -107,7 +144,7 @@ public:
         }
     }
 
-    void alloc(const char* name = nullptr) { // alloc for single objects/structures
+    void alloc() { // alloc for single objects/structures
         reset();  // Freigabe des zuvor gehaltenen Speichers
         void* raw_mem = nullptr;
         if (psramFound()) { // Check at the runtime whether PSRAM is available
@@ -130,9 +167,8 @@ public:
      * @brief Allocates and zeroes out memory for an array of elements.
      * Chooses between PSRAM (if available) and DRAM.
      * @param num_elements The number of elements to allocate space for.
-     * @param name Optional name for OOM messages.
      */
-    void calloc(std::size_t num_elements, const char* name = nullptr, bool usePSRAM = true) {
+    void calloc(std::size_t num_elements, bool usePSRAM = true) {
         size_t total_size = num_elements * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
@@ -163,8 +199,8 @@ public:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
-    void alloc_array(std::size_t count, const char* name = nullptr) {
-        alloc(sizeof(T) * count, name);
+    void alloc_array(std::size_t count) {
+        alloc(sizeof(T) * count);
         clear();
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -183,11 +219,11 @@ public:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E A L L O C  📌📌📌
 
-    // test.realloc(200, "test"); // It is not necessary to specify a name, only for debugging OOM etc.
+    // test.realloc(200);
     // printf("new size:  %i\n", test.size());
     // printf("%s\n", test.get());
 
-    void realloc(size_t new_size, const char* name = nullptr) {
+    void realloc(size_t new_size) {
         void* new_mem = nullptr;
         if (psramFound()) { // Check at the runtime whether PSRAM is available
             new_mem = ps_malloc(new_size);
@@ -217,14 +253,14 @@ public:
     // printf("%s\n", my_str1.get());
 
 
-    void assign(const char* src, const char* name = nullptr) { // Only for T = char: Is similar to strdup (full copy)
+    void assign(const char* src) { // Only for T = char: Is similar to strdup (full copy)
         static_assert(std::is_same_v<T, char>, "assign(const char*) is only valid for ps_ptr<char>");
         if (!src) {
             reset();
             return;
         }
         std::size_t len = std::strlen(src) + 1;
-        alloc(len, name);
+        alloc(len);
         if (mem) {
             std::memcpy(mem.get(), src, len);
         }
@@ -236,7 +272,7 @@ public:
 
 
     // Only for T T = char: similar to strndup (max. n chars)
-    void assign(const char* src, std::size_t max_len, const char* name = nullptr) {
+    void assign(const char* src, std::size_t max_len) {
         static_assert(std::is_same_v<T, char>, "assign(const char*, size_t) is only valid for ps_ptr<char>");
         if (!src) {
             reset();
@@ -244,7 +280,7 @@ public:
         }
         std::size_t actual_len = strnlen(src, max_len);
         std::size_t total = actual_len + 1;
-        alloc(total, name);
+        alloc(total);
         if (mem) {
             std::memcpy(mem.get(), src, actual_len);
             static_cast<char*>(mem.get())[actual_len] = '\0';
@@ -272,20 +308,20 @@ public:
     // buf.get()[2] = 4.5;
     // printf("%f\n", buf.get()[2]);
 
-    void copy_from(const T* src, std::size_t count, const char* name = nullptr) {
+    void copy_from(const T* src, std::size_t count) {
         std::size_t bytes = (count + 1) * sizeof(T);  // +1 For zero terminator
-        alloc(bytes, name);
+        alloc(bytes);
         if (mem && src) {
             std::memcpy(mem.get(), src, count * sizeof(T));
             mem.get()[count] = '\0';  // Zero
         }
     }
 
-    size_t copy_from(const T* src, const char* name = nullptr) {  // for strings
+    size_t copy_from(const T* src) {  // for strings
         if(src == nullptr){log_e("arg. is null"); return 0;}
         std::size_t count = std::strlen(src) + 1;
         std::size_t bytes = count * sizeof(T);
-        alloc(bytes, name);
+        alloc(bytes);
         if (mem && src) {
             std::memcpy(mem.get(), src, bytes);
         }
@@ -305,7 +341,7 @@ public:
 #include <stdexcept>
 
 // convert UTF-16 to UTF-8 and stop at zero terminator
-size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const char* name = nullptr) {
+size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false) {
     if (!src) {
         log_e("arg. is null");
         return 0;
@@ -387,7 +423,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
 
     // Speicher allozieren und kopieren
     std::size_t bytes = out.size();
-    alloc(bytes, name);
+    alloc(bytes);
     std::memcpy(mem.get(), out.data(), bytes);
     return i;
 }
@@ -397,7 +433,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
     // convert ISO 8859-1 to UTF-8 and stop at zero terminator
     // 0x48 0x65 0x6C 0x6C 0x6F 0x20 0xC3 0xA4 0x62 0x63 0x00  -> "Hello äbc"
 
-    size_t copy_from_iso8859_1(const uint8_t* src, const char* name = nullptr) {
+    size_t copy_from_iso8859_1(const uint8_t* src) {
         if (!src) {
             log_e("arg. is null");
             return 0;
@@ -427,7 +463,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
 
         // allocate and copy memory
         std::size_t bytes = out.size();
-        alloc(bytes, name);
+        alloc(bytes);
         std::memcpy(mem.get(), out.data(), bytes);
         return i;
     }
@@ -440,14 +476,14 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false, const cha
     // copy.clone_from(source);
     // printf("%s\n", copy.get());  // → Hello World
 
-    void clone_from(const ps_ptr<T>& other, const char* name = nullptr) {
+    void clone_from(const ps_ptr<T>& other) {
         if (!other.valid() || other.size() == 0) {
             reset();
             return;
         }
 
         std::size_t sz = other.size();
-        alloc(sz, name);
+        alloc(sz);
         if (mem && sz > 0){
             std::memcpy(mem.get(), other.get(), sz);
         }
@@ -1213,6 +1249,15 @@ void unicodeToUTF8(const char* src) {
         } else {
             return fallback;
         }
+    }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  P R I N T    📌📌📌
+    // Prints the stored string to the standard output using printf.
+    // Only valid for ps_ptr<char>. Uses c_get() to safely handle null cases.
+    template <typename U = T>
+    requires std::is_same_v<U, char>
+    void print() const {
+        printf("%s", c_get());
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S E T   📌📌📌

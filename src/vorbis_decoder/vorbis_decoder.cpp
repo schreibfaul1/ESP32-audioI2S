@@ -1591,7 +1591,7 @@ err_out:
 void vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
     uint16_t i, j;
     ps_ptr<uint8_t> B_mem;
-    B_mem.alloc(n * sizeof(uint8_t), "vorbis_temp");
+    B_mem.alloc(n * sizeof(uint8_t));
 
     if (!B_mem.valid()) return;
 

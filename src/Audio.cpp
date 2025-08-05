@@ -30,7 +30,7 @@ void AUDIO_INFO(const char* fmt, Args&&... args) {
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
     if (len <= 0) return;
 
-    result.alloc(len + 1, "result");
+    result.alloc(len + 1);
     result.clear();
     char* dst = result.get();
     if (!dst) return;  // Or error treatment
@@ -65,7 +65,7 @@ void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
     if (len <= 0) return;
 
-    result.alloc(len + 1, "result");
+    result.alloc(len + 1);
     char* dst = result.get();
     if (!dst) return;
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
@@ -74,7 +74,7 @@ void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
     ps_ptr<char> final;
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
-    final.alloc(total_len + 1, "final");
+    final.alloc(total_len + 1);
     final.clear();
     char* dest = final.get();
     if (!dest) return;  // or error treatment
@@ -657,7 +657,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if(user && pwd) authLen = strlen(user) + strlen(pwd);
     ps_ptr <char>authorization;
     ps_ptr<char> toEncode;
-    authorization.alloc(base64_encode_expected_len(authLen + 1) + 1, "authorization");
+    authorization.alloc(base64_encode_expected_len(authLen + 1) + 1);
     authorization.clear();
     if(authLen > 0) {
         toEncode.assign(user);
@@ -1187,7 +1187,7 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
     std::size_t requiredSize = strlen(iso8859_1.get()) * 2 + 1;
 
     if (buff.size() < requiredSize) {
-        buff.realloc(requiredSize, "utf8_conv");
+        buff.realloc(requiredSize);
     }
 
     // coding into UTF-8
@@ -1640,8 +1640,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             return -1;
         };
 
-        ps_ptr<char>vendorString = {};
-        ps_ptr<char>commentString = {};
+        ps_ptr<char>vendorString("vendorString");
+        ps_ptr<char>commentString("commentString");
         ps_ptr<char>lyricsBuffer = {};
         size_t vendorLength = bigEndian(data, 3);
         size_t idx = 0;
@@ -1649,7 +1649,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         size_t vendorStringLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
         if(vendorStringLength) {data += 4; idx += 4;}
         if(vendorStringLength > 495) vendorStringLength = 495; // guard
-        vendorString.assign((const char*)data, vendorStringLength, "vendorString");
+        vendorString.assign((const char*)data, vendorStringLength);
         vendorString.insert("VENDOR_STRING: ", 0);
         if(audio_id3data) audio_id3data(vendorString.get());
         data += vendorStringLength; idx += vendorStringLength;
@@ -1661,7 +1661,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             size_t commentLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
             data += 4; idx += 4;
             if(commentLength) { // guard
-                commentString.assign((const char*)data , commentLength, "commentString");
+                commentString.assign((const char*)data , commentLength);
                 if(commentString.starts_with("LYRICS=")) lyricsBuffer.clone_from(commentString);
                 else if(audio_id3data) audio_id3data(commentString.get());
             }
@@ -1746,7 +1746,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.SYLT.pos = 0;
         m_ID3Hdr.numID3Header = 0;
         m_ID3Hdr.iBuffSize = 4096;
-        m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10, "iBuff");
+        m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10);
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
         memset(m_ID3Hdr.APIC_size, 0, sizeof(m_ID3Hdr.APIC_size));
         memset(m_ID3Hdr.APIC_pos, 0, sizeof(m_ID3Hdr.APIC_pos));
@@ -1949,9 +1949,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             if(textEncodingByte == 1 || textEncodingByte == 2) idx++;
 
             uint16_t cd_len = 0;
-            if     (textEncodingByte == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), "content_descriptor");         // iso8859_1
-            else if(textEncodingByte == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(m_ID3Hdr.iBuff.get() + idx), "content_descriptor");                      // utf-8
-            else                           cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
+            if     (textEncodingByte == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx));         // iso8859_1
+            else if(textEncodingByte == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(m_ID3Hdr.iBuff.get() + idx));                      // utf-8
+            else                           cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(m_ID3Hdr.iBuff.get() + idx), isBigEndian);// utf-16
             if(cd_len > 2) AUDIO_INFO("Comment: text encoding; %s, language %s, content_descriptor: %s", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
 
             idx += cd_len;
@@ -1959,8 +1959,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         // AUDIO_LOG_INFO("Tag: %s, Length: %i, Format: %s", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
 
-        if      (textEncodingByte == 0)                          {tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, "tmp");} // ISO-8859-1
-        else if (textEncodingByte == 1 || textEncodingByte == 2) {tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian, "tmp");} // UTF-16LE oder UTF-16BE
+        if      (textEncodingByte == 0)                          {tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx);} // ISO-8859-1
+        else if (textEncodingByte == 1 || textEncodingByte == 2) {tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian);} // UTF-16LE oder UTF-16BE
         else if (textEncodingByte == 3)                          {tmp.copy_from(m_ID3Hdr.iBuff.get() + idx);} // UTF-8 copy directly because no conversion is necessary
 
         showID3Tag(m_ID3Hdr.tag, tmp.c_get());
@@ -1973,14 +1973,14 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
             ps_ptr<char> tmp;
             ps_ptr<char> content_descriptor;
-            ps_ptr<char> syltBuff;
+            ps_ptr<char> syltBuff("syltBuff");
             bool isBigEndian = true;
             size_t len = 0;
             int idx = 0;
             m_ID3Hdr.SYLT.seen = true;
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-            syltBuff.alloc(m_ID3Hdr.SYLT.size + 1, "syltBuff");
+            syltBuff.alloc(m_ID3Hdr.SYLT.size + 1);
             if((m_streamType == ST_WEBFILE && m_f_acceptRanges) || (m_dataMode == AUDIO_LOCALFILE)){
                 uint32_t pos = m_audioFilePosition;
             //    AUDIO_LOG_INFO("m_audioFilePosition %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
@@ -2002,16 +2002,16 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.SYLT.content_type =       syltBuff[5];
             idx = 6;
             uint16_t cd_len = 0;
-            if     (m_ID3Hdr.SYLT.text_encoding == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx), "content_descriptor");         // iso8859_1
-            else if(m_ID3Hdr.SYLT.text_encoding == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");                      // utf-8
-            else                                      cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");// utf-16
+            if     (m_ID3Hdr.SYLT.text_encoding == 0) cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx));         // iso8859_1
+            else if(m_ID3Hdr.SYLT.text_encoding == 3) cd_len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx));                      // utf-8
+            else                                      cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);// utf-16
             if(cd_len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
 
             idx += cd_len;
             while (idx < m_ID3Hdr.SYLT.size) {
-                if      (m_ID3Hdr.SYLT.text_encoding == 0) idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx, "sylt-text");            // ISO8859_1
-                else if (m_ID3Hdr.SYLT.text_encoding == 3) idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");                         // UTF-8
-                else                                       idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text"); // UTF-16LE, UTF-16BE
+                if      (m_ID3Hdr.SYLT.text_encoding == 0) idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx);            // ISO8859_1
+                else if (m_ID3Hdr.SYLT.text_encoding == 3) idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx);                         // UTF-8
+                else                                       idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // UTF-16LE, UTF-16BE
 
                 if (tmp.starts_with("\n")) tmp.remove_before(1);
                 m_syltLines.push_back(std::move(tmp));
@@ -2070,7 +2070,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
                 ps_ptr<char> tmp;
                 ps_ptr<char> content_descriptor;
-                ps_ptr<char> syltBuff;
+                ps_ptr<char> syltBuff("syltBuff");
                 bool isBigEndian = true;
                 size_t len = 0;
                 int idx = 0;
@@ -2079,7 +2079,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
 
-                syltBuff.alloc(m_ID3Hdr.SYLT.size, "syltBuff");
+                syltBuff.alloc(m_ID3Hdr.SYLT.size);
                 uint32_t pos = m_audioFilePosition;
                 audioFileSeek(m_ID3Hdr.SYLT.pos);
                 uint16_t bytesWritten = 0;
@@ -2096,10 +2096,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 idx = 6;
 
                 if(m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3){ // utf-8
-                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx), "content_descriptor");
+                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx));
                 }
                 else{ // utf-16
-                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "content_descriptor");
+                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
                 }
                 if(len > 2) AUDIO_INFO("Lyrics: content_descriptor: %s", content_descriptor.c_get());
                 idx += len;
@@ -2107,10 +2107,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 while (idx < m_ID3Hdr.SYLT.size) {
                         // UTF-16LE, UTF-16BE
                     if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian, "sylt-text");
+                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
                     } else {
                         // ISO-8859-1 / UTF-8
-                        idx += tmp.copy_from((const char*)syltBuff.get() + idx, "sylt-text");
+                        idx += tmp.copy_from((const char*)syltBuff.get() + idx);
                     }
                     if (tmp.starts_with("\n")) tmp.remove_before(1);
                     m_syltLines.push_back(std::move(tmp));
@@ -2584,6 +2584,15 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == M4A_ILST){
 
+        auto parse_m4a_timestamp = [&](const char* s){
+            if (!s || *s != '[') return -1;
+            int mm = 0, ss = 0, hh = 0;
+            if (sscanf(s, "[%d:%d.%d]", &mm, &ss, &hh) == 3) {
+                return mm * 60000 + ss * 1000 + hh * 10;
+            }
+            return -1;
+        };
+
         struct TagInfo { // Definition of the Taginfo structure for iTunes-style metadata
             const uint8_t tag[4];
             const char* name;
@@ -2614,6 +2623,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
         ps_ptr<char>id3tag = {};
+        ps_ptr<char>lyricsBuffer = {};
         uint32_t pos = m_m4aHdr.headerSize;
         uint32_t consumed = 0;
         while(true){
@@ -2631,16 +2641,17 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             ps_ptr<char>sa; // sub atom
             sa.copy_from((const char*)data + consumed - as, min(as, 1024));
+
             char san [5] = {0}; // aub atom name
             char ssan[5] = {0}; // sub sub atom name (should be 'data')
             strncpy(san, &sa[4], 4);
             strncpy(ssan, &sa[12],4);
             uint32_t ssal = bigEndian((uint8_t*)&sa[8], 4); // sub sub atom length
             uint32_t dty  = bigEndian((uint8_t*)&sa[16], 4); // data type 1-UTF8
-            sa.clear();
             if(strncmp(ssan, "data", 4) == 0){
                 for(int i = 0; i < tags_count; i++){
                     if(memcmp(san, tags[i].tag, 4) == 0){
+                        id3tag.reset();
                         if     (dty == 0 && strlen(&sa[24]) > 0) id3tag.assignf("%s: %i", tags[i].descr, &sa[24]); // binary
                         else if(dty == 1 && strlen(&sa[24]) > 0) id3tag.assignf("%s: %s", tags[i].descr, &sa[24]); // UTF-8 Text
                         else if(dty == 0x0D) {m_m4aHdr.picLen = as - 24; m_m4aHdr.picPos = pos + 24 - as; AUDIO_LOG_DEBUG("cover jpeg start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);}  // jpeg
@@ -2650,12 +2661,14 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                             if(memcmp(tags[i].tag, "pgap", 4) == 0) {break;} // Gapless Playback
                             if(memcmp(tags[i].tag, "rtng", 4) == 0) {break;} // Evaluation
                         }
-                        else break;
+                        if(id3tag.valid()) {if(audio_id3data) audio_id3data(id3tag.get());}
+                        if(strcmp(tags[i].descr, "Songtext") == 0){
+                            lyricsBuffer.copy_from(&sa[24]);
+                        }
                         break;
                     }
                 }
             }
-            if(id3tag.valid()) {if(audio_id3data) audio_id3data(id3tag.get());}
             else  AUDIO_LOG_DEBUG("%s tag not supported", san);
 
             if(consumed > len) {
@@ -2665,6 +2678,40 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             }
 
             if(m_m4aHdr.sizeof_ilst <= m_m4aHdr.ilst_pos){
+
+                ps_ptr<char> tmp;   // last todo if we have lyrics
+                ps_ptr<char> timestamp;
+                timestamp.alloc(12);
+                if(lyricsBuffer.valid()){
+                    m_ID3Hdr.SYLT.seen = true;
+                    lyricsBuffer.remove_prefix("LYRICS=");
+                    idx = 0;
+                    while(idx < lyricsBuffer.size()){
+                        int pos = lyricsBuffer.index_of('\n', idx);
+                        if(pos == - 1) break;
+                        int len = pos - idx + 1;
+                        tmp.copy_from(lyricsBuffer.get() + idx, len);
+                        idx += len;
+                        if(tmp.ends_with("\n")) tmp.truncate_at('\n');
+                        // tmp content e.g.: [00:27.07]Jetzt kommt die Zeit
+                        //                   [00:28.84]Auf die ihr euch freut
+                        timestamp.copy_from(tmp.get(), 10);
+
+                        int ms = parse_m4a_timestamp(timestamp.c_get());
+
+                        // timestamp.remove_chars("[]:.");
+                        // timestamp.append("0"); // to ms 0028840
+                        tmp.remove_before(10, true);
+                        if(tmp.strlen() > 0){
+                            m_syltLines.push_back(std::move(tmp));
+                            m_syltTimeStamp.push_back(ms);
+                        }
+                    }
+                    for(int i = 0; i < m_syltLines.size(); i++){
+                        AUDIO_INFO("%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+                    }
+                }
+
                 m_m4aHdr.retvalue = consumed;
                 m_m4aHdr.headerSize += consumed;
                 m_controlCounter = M4A_META;
@@ -3096,7 +3143,7 @@ bool Audio::readPlayListData() {
 
         uint32_t ctime = millis();
         uint32_t timeout = 2000; // ms
-        pl.alloc(1024,"pl"); pl.clear(); // playlistLine
+        pl.alloc(1024); pl.clear(); // playlistLine
 
         while(true) { // inner while
             uint16_t pos = 0;
@@ -3376,10 +3423,10 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
                 //  result:     http://station.com/aaa/bbb/ddd.aac
 
                 if(m_lastM3U8host.valid()) {
-                    tmp.clone_from(m_lastM3U8host, "tmp");
+                    tmp.clone_from(m_lastM3U8host);
                 }
                 else {
-                    tmp.clone_from(m_lastHost, "tmp");
+                    tmp.clone_from(m_lastHost);
                 }
                 if(m_linesWithSeqNrAndURL[i][0] != '/'){
 
@@ -4058,7 +4105,7 @@ void Audio::processWebStreamTS() {
         m_pwsst.chunkSize = 0;
         m_t0 = millis();
         m_pwsst.ts_packetPtr = 0;
-        if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "TS Packet"); // first init
+        if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize); // first init
     } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -4168,7 +4215,7 @@ void Audio::processWebStreamHLS() {
         m_pwsHLS.chunkSize = 0;
         m_pwsHLS.ID3WritePtr = 0;
         m_pwsHLS.ID3ReadPtr = 0;
-        m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize, "ID3Buff");
+        m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize);
     }
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -4349,8 +4396,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     }
     m_phreh.f_time = false;
 
-    ps_ptr<char>rhl;
-    rhl.alloc(1024, "rhl"); // responseHeaderline
+    ps_ptr<char>rhl("rhl");
+    rhl.alloc(1024); // responseHeaderline
     rhl.clear();
     bool ct_seen = false;
 
@@ -4583,8 +4630,8 @@ lastToDo:
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
 
-    ps_ptr<char>rhl;
-    rhl.alloc(1024, "rhl"); // responseHeaderline
+    ps_ptr<char>rhl("rhl");
+    rhl.alloc(1024); // responseHeaderline
     bool ct_seen = false;
 
     if(m_dataMode != HTTP_RANGE_HEADER){
@@ -5467,8 +5514,8 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
 
-    m_outBuff.alloc(m_outbuffSize * sizeof(int16_t), "m_outbuff");
-    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t), "m_samplesBuff48K");
+    m_outBuff.alloc(m_outbuffSize * sizeof(int16_t));
+    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
 
     esp_err_t result = ESP_OK;
 
