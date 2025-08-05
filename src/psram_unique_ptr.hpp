@@ -1848,54 +1848,184 @@ void unicodeToUTF8(const char* src) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
-    // typedef struct _hwoe{
-    //     bool ssl;
-    //     ps_ptr<char> hwoe;  // host without extension
-    //     uint16_t     port;
-    //     ps_ptr<char>extension[100];
-    //     ps_ptr<char> query_string;
-    // } hwoe_t;
-    // PS_STRUCT_FREE_MEMBERS(hwoe_t,
-    //     ptr->hwoe.reset();
-    //     for(int i = 0; i< 100; i++)ptr->extension[i].reset();
-    //     ptr->query_string.reset();
-    // )
+    //  typedef struct _hwoe{
+    //      bool ssl;
+    //      ps_ptr<char> hwoe;  // host without extension
+    //      uint16_t     port;
+    //      ps_ptr<char>extension[100];
+    //      ps_ptr<char> query_string;
+    //  } hwoe_t;
+    //  PS_STRUCT_FREE_MEMBERS(hwoe_t,
+    //      ptr->hwoe.reset();
+    //      for(int i = 0; i< 100; i++)ptr->extension[i].reset();
+    //      ptr->query_string.reset();
+    //  )
 
-    // ps_struct_ptr<hwoe_t> result;
-    // result.alloc();
-    // result->extension.copy_from(path
-    // .....
+    //  ps_struct_ptr<hwoe_t> result;
+    //  result.alloc();
+    //  result->extension.copy_from(path
+    //  .....
 
 template <typename T>
 class ps_struct_ptr {
-    ps_ptr<T> inner;
+private:
+    std::unique_ptr<T, PsramDeleter> mem;
+    char* name = nullptr; // name member
 
-public:
-    ps_struct_ptr() = default;
-
-    void alloc(const char* name = nullptr) {
-        inner.alloc(sizeof(T), name);
-        if (inner.valid()) inner.clear();
+    // Auxiliary function for setting the name
+    void set_name(const char* new_name) {
+        if (name) {
+            free(name);
+            name = nullptr;
+        }
+        if (new_name) {
+            std::size_t len = std::strlen(new_name) + 1;
+            if (psramFound()) {
+                name = static_cast<char*>(ps_malloc(len));
+            } else {
+                name = static_cast<char*>(malloc(len));
+            }
+            if (name) {
+                std::memcpy(name, new_name, len);
+            } else {
+                printf("OOM: failed to allocate %zu bytes for name\n", len);
+            }
+        }
     }
 
-    T* get() const { return inner.get(); }
-    T* operator->() const { return get(); }
-    T& operator*() const { return *inner; }
+public:
+    ps_struct_ptr() = default; // default constructor
+
+    explicit ps_struct_ptr(const char* name_str) { // named constructor
+        set_name(name_str);
+    }
+
+    ~ps_struct_ptr() {  // destructor
+        if (mem) {
+            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", sizeof(T), mem.get());
+        } else {
+            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+        }
+        if (name) {
+            free(name);
+            name = nullptr;
+        }
+    }
+
+    ps_struct_ptr(ps_struct_ptr&& other) noexcept {  // Move constructor
+        mem = std::move(other.mem);
+        name = other.name;
+        other.name = nullptr;
+    }
+
+    ps_struct_ptr& operator=(ps_struct_ptr&& other) noexcept {  // Move Assignment operator
+        if (this != &other) {
+            if (name) {
+                free(name);
+                name = nullptr;
+            }
+            mem = std::move(other.mem);
+            name = other.name;
+            other.name = nullptr;
+        }
+        return *this;
+    }
+
+    ps_struct_ptr(const ps_struct_ptr&) = delete;
+    ps_struct_ptr& operator=(const ps_struct_ptr&) = delete;
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A L L O C  📌📌📌
+    void alloc(const char* name_str = nullptr) {
+        reset();
+        if (name_str) {
+            set_name(name_str);
+        }
+        void* raw_mem = nullptr;
+        if (psramFound()) {
+            raw_mem = ps_malloc(sizeof(T));
+        } else {
+            raw_mem = malloc(sizeof(T));
+        }
+        if (raw_mem) {
+            mem.reset(new (raw_mem) T());
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C A L L O C  📌📌📌
+    void calloc(const char* name_str = nullptr) {
+        reset();
+        if (name_str) {
+            set_name(name_str);
+        }
+        void* raw_mem = nullptr;
+        if (psramFound()) {
+            raw_mem = ps_calloc(1, sizeof(T));
+        } else {
+            raw_mem = calloc(1, sizeof(T));
+        }
+        if (raw_mem) {
+            mem.reset(static_cast<T*>(raw_mem));
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : (name_str ? name_str : "unnamed"));
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E S E T   📌📌📌
+    void reset() {
+        mem.reset(); // Name is not released, remains up to the destructor
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R ->   📌📌📌
+    T* operator->() {
+        return mem.get();
+    }
+
+    const T* operator->() const {
+        return mem.get();
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R *   📌📌📌
+    T& operator*() {
+        return *mem;
+    }
+
+    const T& operator*() const {
+        return *mem;
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  G E T   📌📌📌
+    T* get() {
+        return mem.get();
+    }
+
+    const T* get() const {
+        return mem.get();
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    inline void free_all_ptr_members(); // prototypes
+    inline void free_field(char*& field);
 
     void set_ptr_field(char** field, const char* text) {
-        if (!valid() || !field) return;
+        if (!mem || !field) return;
         if (*field) {
             free(*field);
             *field = nullptr;
         }
         if (text) {
             std::size_t len = strlen(text) + 1;
-
             char* p = nullptr;
             if (psramFound()) { // Check at the runtime whether PSRAM is available
                 p = static_cast<char*>(ps_malloc(len));
-            }
-            else{
+            } else {
                 p = static_cast<char*>(malloc(len));
             }
             if (p) {
@@ -1905,53 +2035,13 @@ public:
         }
     }
 
-    bool valid() const { return inner.valid(); }
-    std::size_t size() const { return inner.size(); }
-    void clear() { inner.clear(); }
-
-    void reset() {
-        if (inner.valid()) {
-            free_all_ptr_members();
-        }
-        inner.reset();
-    }
-
-    ~ps_struct_ptr() {
-        reset();
-    }
-
-    // Explicitly define the Move constructor
-    ps_struct_ptr(ps_struct_ptr&& other) noexcept
-        : inner(std::move(other.inner)) { // move the 'inner' ps_ptr-Member
-        // Optional: A logging entry could be here to pursue relocation processes
-        // log_w("ps_struct_ptr Move Constructor called for type %s", typeid(T).name());
-    }
-
-    // Explicitly define the Move Assignment operator
-    ps_struct_ptr& operator=(ps_struct_ptr&& other) noexcept {
-        if (this != &other) { // Prevent self -allocation
-            // Optional: A logging entry could be here
-            // log_w("ps_struct_ptr Move Assignment called for type %s", typeid(T).name());
-            inner = std::move(other.inner); // move the 'inner' ps_ptr-Member
-        }
-        return *this;
-    }
-
-    // Explicitly delete copy constructor and copying assignment operator
-    // This is good practice to force the "Move-Only" semantics
-    ps_struct_ptr(const ps_struct_ptr&) = delete;
-    ps_struct_ptr& operator=(const ps_struct_ptr&) = delete;
-
-protected:
-    // Specializes via macro ps_struct_free_memembers
-    inline void free_all_ptr_members() {}
+    bool valid() const { return mem.get() != nullptr; }
+    std::size_t size() const { return sizeof(T); }
+    void clear() { reset(); }
 };
-
-
 
 // ——————————————————————————————————————————————————————————————
 // Macro for the declaration of releasing fields for a structure
-
 #define PS_STRUCT_FREE_MEMBERS(TYPE, ...) \
     template <> \
     inline void ps_struct_ptr<TYPE>::free_all_ptr_members() { \
@@ -1973,7 +2063,6 @@ template <typename... Args>
 inline void free_fields(Args&... fields) {
     (free_field(fields), ...);
 }
-
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌   2 D  A R R A Y   📌📌📌
@@ -1998,138 +2087,173 @@ inline void free_fields(Args&... fields) {
 //
 
 template <typename T>
-class ps_array2d
-{
-public:
-    // standard constructor
-    ps_array2d() : m_dim1(0), m_dim2(0) {}
-
-    // original constructor
-    ps_array2d(size_t dim1, size_t dim2)
-        : m_dim1(dim1), m_dim2(dim2)
-    {
-        alloc_internal(dim1, dim2);
-    }
-
-    // alloc-method
-    bool alloc(size_t dim1, size_t dim2, const char* name = nullptr, bool usePSRAM = true) {
-        reset();
-        m_dim1 = dim1;
-        m_dim2 = dim2;
-        return alloc_internal(dim1, dim2, name, usePSRAM);
-    }
-
-    // overload for `alloc` without dimensions if the dimensions are already set
-    bool alloc() {
-        if (m_dim1 == 0 || m_dim2 == 0) {
-            log_e("ps_array2d::alloc() called without dimensions or dimensions are zero.");
-            return false;
-        }
-        reset();
-        return alloc_internal(m_dim1, m_dim2);
-    }
-
-    void clear() {
-        if (!is_allocated()) {
-            // nothing to do if there is no memory assigned
-            return;
-        }
-        // calculate the total number of elements
-        const size_t total_elements = m_dim1 * m_dim2;
-        // set the entire memory block to zero
-        std::memset(m_data.get(), 0, total_elements * sizeof(T));
-    }
-
-    // brace operator for access to individual elements (Bounds check included)
-    T &operator()(size_t i, size_t j)
-    {
-        if (!m_data.valid()) {
-            log_e("ps_array2d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return m_dummy;
-        }
-        if (i >= m_dim1 || j >= m_dim2) {
-            log_e("ps_array2d out-of-bounds: (%u,%u) but dims=(%u,%u) [line %d]",
-                  (unsigned)i, (unsigned)j, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
-            return m_dummy;
-        }
-        return m_data[i * m_dim2 + j];
-    }
-
-    const T &operator()(size_t i, size_t j) const
-    {
-        if (!m_data.valid()) {
-            log_e("ps_array2d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return m_dummy;
-        }
-        if (i >= m_dim1 || j >= m_dim2) {
-            log_e("ps_array2d out-of-bounds: (%u,%u) but dims=(%u,%u) [line %d]",
-                  (unsigned)i, (unsigned)j, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
-            return m_dummy;
-        }
-        return m_data[i * m_dim2 + j];
-    }
-
-    // gives a raw pointer  (T*) to the beginning of a specific line (row_index) back.
-    T* get_raw_row_ptr(size_t row_index) {
-        if (!m_data.valid()) {
-            log_e("ps_array2d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (row_index >= m_dim1) {
-            log_e("ps_array2d::get_raw_row_ptr: row_index %u out-of-bounds (%u). [line %d]",
-                  (unsigned)row_index, (unsigned)m_dim1, __LINE__);
-            return nullptr;
-        }
-        return m_data.get() + row_index * m_dim2;
-    }
-
-    const T* get_raw_row_ptr(size_t row_index) const {
-        if (!m_data.valid()) {
-            log_e("ps_array2d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (row_index >= m_dim1) {
-            log_e("ps_array2d::get_raw_row_ptr: row_index %u out-of-bounds (%u). [line %d]",
-                  (unsigned)row_index, (unsigned)m_dim1, __LINE__);
-            return nullptr;
-        }
-        return m_data.get() + row_index * m_dim2;
-    }
-
-    // gives back true when the memory has been successfully allocated
-    bool is_allocated() const { return m_data.valid(); }
-
-    size_t dim1() const { return m_dim1; }
-    size_t dim2() const { return m_dim2; }
-
-    // manual release of the memory
-    void reset() {
-        m_data.reset();
-        m_dim1 = 0;
-        m_dim2 = 0;
-    }
-
+class ps_array2d {
 private:
-    size_t m_dim1, m_dim2;
-    ps_ptr<T> m_data; // manages the linear memory block
-    static inline T m_dummy{};  // dummy-value for errors
+    std::unique_ptr<T[], PsramDeleter> mem;
+    size_t rows = 0;
+    size_t cols = 0;
+    char* name = nullptr; // Neues Mitglied für den Objektnamen
 
-    // private auxiliary method for the actual allocation logic
-    bool alloc_internal(size_t dim1, size_t dim2, const char* name = nullptr, bool usePSRAM = true) {
-        if (dim1 == 0 || dim2 == 0) {
-            log_e("ps_array2d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
-            return false;
+    // Hilfsfunktion zum Setzen des Namens
+    void set_name(const char* new_name) {
+        if (name) {
+            free(name);
+            name = nullptr;
         }
-        size_t total_elements = dim1 * dim2;
-        m_data.calloc(total_elements, name, usePSRAM);
-        if (!m_data.valid()) {
-            log_e("ps_array2d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
-            m_dim1 = 0; m_dim2 = 0;
-            return false;
+        if (new_name) {
+            std::size_t len = std::strlen(new_name) + 1;
+            if (psramFound()) {
+                name = static_cast<char*>(ps_malloc(len));
+            } else {
+                name = static_cast<char*>(malloc(len));
+            }
+            if (name) {
+                std::memcpy(name, new_name, len);
+            } else {
+                printf("OOM: failed to allocate %zu bytes for name\n", len);
+            }
         }
-        return true;
     }
+
+public:
+    // Standardkonstruktor
+    ps_array2d() = default;
+
+    // Konstruktor mit Namen
+    explicit ps_array2d(const char* name_str) {
+        set_name(name_str);
+    }
+
+    // Destruktor
+    ~ps_array2d() {
+        if (mem) {
+            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", rows * cols * sizeof(T), mem.get());
+        } else {
+            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+        }
+        if (name) {
+            free(name);
+            name = nullptr;
+        }
+    }
+
+    // Move-Constructor
+    ps_array2d(ps_array2d&& other) noexcept {
+        mem = std::move(other.mem);
+        rows = other.rows;
+        cols = other.cols;
+        name = other.name;
+        other.rows = 0;
+        other.cols = 0;
+        other.name = nullptr;
+    }
+
+    // Move-Assignment-Operator
+    ps_array2d& operator=(ps_array2d&& other) noexcept {
+        if (this != &other) {
+            if (name) {
+                free(name);
+                name = nullptr;
+            }
+            mem = std::move(other.mem);
+            rows = other.rows;
+            cols = other.cols;
+            name = other.name;
+            other.rows = 0;
+            other.cols = 0;
+            other.name = nullptr;
+        }
+        return *this;
+    }
+
+    ps_array2d(const ps_array2d&) = delete;
+    ps_array2d& operator=(const ps_array2d&) = delete;
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A L L O C  📌📌📌
+    void alloc(size_t r, size_t c, const char* alloc_name = nullptr, bool usePSRAM = true) {
+        reset();
+        if (alloc_name) {
+            set_name(alloc_name);
+        }
+        rows = r;
+        cols = c;
+        size_t total_size = rows * cols * sizeof(T);
+        total_size = (total_size + 15) & ~15; // Align to 16 bytes
+        if (psramFound() && usePSRAM) {
+            mem.reset(static_cast<T*>(ps_malloc(total_size)));
+        } else {
+            mem.reset(static_cast<T*>(malloc(total_size)));
+        }
+        if (!mem) {
+            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            rows = 0;
+            cols = 0;
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C A L L O C  📌📌📌
+    void calloc(size_t r, size_t c, const char* alloc_name = nullptr, bool usePSRAM = true) {
+        reset();
+        if (alloc_name) {
+            set_name(alloc_name);
+        }
+        rows = r;
+        cols = c;
+        size_t total_size = rows * cols * sizeof(T);
+        total_size = (total_size + 15) & ~15; // Align to 16 bytes
+        void* raw_mem = nullptr;
+        if (psramFound() && usePSRAM) {
+            raw_mem = ps_calloc(1, total_size);
+        } else {
+            raw_mem = calloc(1, total_size);
+        }
+        if (raw_mem) {
+            mem.reset(static_cast<T*>(raw_mem));
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            rows = 0;
+            cols = 0;
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E S E T   📌📌📌
+    void reset() {
+        mem.reset();
+        rows = 0;
+        cols = 0;
+        // Name is not released, remains up to the destructor
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R []   📌📌📌
+    T* operator[](size_t row) {
+        return mem.get() + row * cols;
+    }
+
+    const T* operator[](size_t row) const {
+        return mem.get() + row * cols;
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  G E T   📌📌📌
+    T* get() {
+        return mem.get();
+    }
+
+    const T* get() const {
+        return mem.get();
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  V A L I D / S I Z E   📌📌📌
+    bool valid() const { return mem.get() != nullptr; }
+    size_t get_rows() const { return rows; }
+    size_t get_cols() const { return cols; }
 };
+
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // psram_unique_ptr.hpp (Auszug mit ps_array3d)
@@ -2158,169 +2282,190 @@ private:
 
 
 template <typename T>
-class ps_array3d{
-public:
-    // standard constructor
-    ps_array3d() : m_dim1(0), m_dim2(0), m_dim3(0) {}
-
-    // original constructor
-    ps_array3d(size_t dim1, size_t dim2, size_t dim3)
-        : m_dim1(dim1), m_dim2(dim2), m_dim3(dim3)
-    {
-        alloc_internal(dim1, dim2, dim3);
-    }
-
-    // alloc-method
-    bool alloc(size_t dim1, size_t dim2, size_t dim3, const char* name = nullptr, bool usePSRAM = true) {
-        reset();
-        m_dim1 = dim1;
-        m_dim2 = dim2;
-        m_dim3 = dim3;
-        return alloc_internal(dim1, dim2, dim3, name, usePSRAM);
-    }
-
-    // overload for `alloc` without dimensions
-    bool alloc() {
-        if (m_dim1 == 0 || m_dim2 == 0 || m_dim3 == 0) {
-            log_e("ps_array3d::alloc() called without dimensions or dimensions are zero.");
-            return false;
-        }
-        reset();
-        return alloc_internal(m_dim1, m_dim2, m_dim3);
-    }
-
-    void clear(){
-        if (!is_allocated()) {
-            // nothing to do if there is no memory assigned
-            return;
-        }
-        // calculate the total number of elements
-        const size_t total_elements = m_dim1 * m_dim2 * m_dim3;
-        // Setze den gesamten Speicherblock auf null
-        std::memset(m_data.get(), 0, total_elements * sizeof(T));
-    }
-
-    // brace operator for access to individual elements
-    T &operator()(size_t i, size_t j, size_t k)
-    {
-        if (!m_data.valid()) {
-            log_e("ps_array3d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return m_dummy;
-        }
-        if (i >= m_dim1 || j >= m_dim2 || k >= m_dim3) {
-            log_e("ps_array3d out-of-bounds: (%u,%u,%u) but dims=(%u,%u,%u) [line %d]",
-                  (unsigned)i, (unsigned)j, (unsigned)k,
-                  (unsigned)m_dim1, (unsigned)m_dim2, (unsigned)m_dim3, __LINE__);
-            return m_dummy;
-        }
-        return m_data[i * (m_dim2 * m_dim3) + j * m_dim3 + k];
-    }
-
-    const T &operator()(size_t i, size_t j, size_t k) const
-    {
-        if (!m_data.valid()) {
-            log_e("ps_array3d: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return m_dummy;
-        }
-        if (i >= m_dim1 || j >= m_dim2 || k >= m_dim3) {
-            log_e("ps_array3d out-of-bounds: (%u,%u,%u) but dims=(%u,%u,%u) [line %d]",
-                  (unsigned)i, (unsigned)j, (unsigned)k,
-                  (unsigned)m_dim1, (unsigned)m_dim2, (unsigned)m_dim3, __LINE__);
-            return m_dummy;
-        }
-        return m_data[i * (m_dim2 * m_dim3) + j * m_dim3 + k];
-    }
-
-    // method for retrieving a raw pointer at the beginning of a 2D slice.
-    T* get_raw_slice_ptr(size_t i) {
-        if (!m_data.valid()) {
-            log_e("ps_array3d::get_raw_slice_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (i >= m_dim1) {
-            log_e("ps_array3d::get_raw_slice_ptr: dim1 index %u out-of-bounds (%u). [line %d]", (unsigned)i, (unsigned)m_dim1, __LINE__);
-            return nullptr;
-        }
-        return m_data.get() + i * (m_dim2 * m_dim3);
-    }
-
-    const T* get_raw_slice_ptr(size_t i) const {
-        if (!m_data.valid()) {
-            log_e("ps_array3d::get_raw_slice_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (i >= m_dim1) {
-            log_e("ps_array3d::get_raw_slice_ptr: dim1 index %u out-of-bounds (%u). [line %d]", (unsigned)i, (unsigned)m_dim1, __LINE__);
-            return nullptr;
-        }
-        return m_data.get() + i * (m_dim2 * m_dim3);
-    }
-
-    // gives a raw pointer (T*) to the beginning of a specific line (dim2_idx) back.
-    // return within a specific slice (DIM1_IDX).
-    T* get_raw_row_ptr(size_t dim1_idx, size_t dim2_idx) {
-        if (!m_data.valid()) {
-            log_e("ps_array3d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (dim1_idx >= m_dim1 || dim2_idx >= m_dim2) {
-            log_e("ps_array3d::get_raw_row_ptr: Indices (%u,%u) out-of-bounds for dims=(%u,%u) [line %d]",
-                  (unsigned)dim1_idx, (unsigned)dim2_idx, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
-            return nullptr;
-        }
-        // calculate the offset for the specific line in the linear memory
-        return m_data.get() + (dim1_idx * (m_dim2 * m_dim3)) + (dim2_idx * m_dim3);
-    }
-
-    const T* get_raw_row_ptr(size_t dim1_idx, size_t dim2_idx) const {
-        if (!m_data.valid()) {
-            log_e("ps_array3d::get_raw_row_ptr: Access on unallocated memory. Call alloc() first. [line %d]", __LINE__);
-            return nullptr;
-        }
-        if (dim1_idx >= m_dim1 || dim2_idx >= m_dim2) {
-            log_e("ps_array3d::get_raw_row_ptr: Indices (%u,%u) out-of-bounds for dims=(%u,%u) [line %d]",
-                  (unsigned)dim1_idx, (unsigned)dim2_idx, (unsigned)m_dim1, (unsigned)m_dim2, __LINE__);
-            return nullptr;
-        }
-        return m_data.get() + (dim1_idx * (m_dim2 * m_dim3)) + (dim2_idx * m_dim3);
-    }
-
-
-    // gives back true when the memory has been successfully allocated
-    bool is_allocated() const { return m_data.valid(); }
-
-    size_t dim1() const { return m_dim1; }
-    size_t dim2() const { return m_dim2; }
-    size_t dim3() const { return m_dim3; }
-
-    // manual release of the memory
-    void reset() {
-        m_data.reset();
-        m_dim1 = 0;
-        m_dim2 = 0;
-        m_dim3 = 0;
-    }
-
+class ps_array3d {
 private:
-    size_t m_dim1, m_dim2, m_dim3;
-    ps_ptr<T> m_data; // manages the linear memory block
-    static inline T m_dummy{}; // dummy-value for errors
+    std::unique_ptr<T[], PsramDeleter> mem;
+    size_t dim1 = 0;
+    size_t dim2 = 0;
+    size_t dim3 = 0;
+    char* name = nullptr; // Neues Mitglied für den Objektnamen
 
-    // private auxiliary method for the actual allocation logic
-    bool alloc_internal(size_t dim1, size_t dim2, size_t dim3, const char* name = nullptr, bool usePSRAM = true) {
-        if (dim1 == 0 || dim2 == 0 || dim3 == 0) {
-            log_e("ps_array3d: Cannot allocate with zero dimensions. [line %d]", __LINE__);
-            return false;
+    // Hilfsfunktion zum Setzen des Namens
+    void set_name(const char* new_name) {
+        if (name) {
+            free(name);
+            name = nullptr;
         }
-        size_t total_elements = dim1 * dim2 * dim3;
-        m_data.calloc(total_elements, name, usePSRAM);
-        if (!m_data.valid()) {
-            log_e("ps_array3d: Memory allocation failed for %u elements. [line %d]", (unsigned)total_elements, __LINE__);
-            m_dim1 = 0; m_dim2 = 0; m_dim3 = 0;
-            return false;
+        if (new_name) {
+            std::size_t len = std::strlen(new_name) + 1;
+            if (psramFound()) {
+                name = static_cast<char*>(ps_malloc(len));
+            } else {
+                name = static_cast<char*>(malloc(len));
+            }
+            if (name) {
+                std::memcpy(name, new_name, len);
+            } else {
+                printf("OOM: failed to allocate %zu bytes for name\n", len);
+            }
         }
-        return true;
     }
-};
 
+public:
+    // Standardkonstruktor
+    ps_array3d() = default;
+
+    // Konstruktor mit Namen
+    explicit ps_array3d(const char* name_str) {
+        set_name(name_str);
+    }
+
+    // Destruktor
+    ~ps_array3d() {
+        if (mem) {
+            log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", dim1 * dim2 * dim3 * sizeof(T), mem.get());
+        } else {
+            log_w("Destructor called for %s: No memory to free.", name ? name : "unnamed");
+        }
+        if (name) {
+            free(name);
+            name = nullptr;
+        }
+    }
+
+    // Move-Konstruktor
+    ps_array3d(ps_array3d&& other) noexcept {
+        mem = std::move(other.mem);
+        dim1 = other.dim1;
+        dim2 = other.dim2;
+        dim3 = other.dim3;
+        name = other.name;
+        other.dim1 = 0;
+        other.dim2 = 0;
+        other.dim3 = 0;
+        other.name = nullptr;
+    }
+
+    // Move-Assignment-Operator
+    ps_array3d& operator=(ps_array3d&& other) noexcept {
+        if (this != &other) {
+            if (name) {
+                free(name);
+                name = nullptr;
+            }
+            mem = std::move(other.mem);
+            dim1 = other.dim1;
+            dim2 = other.dim2;
+            dim3 = other.dim3;
+            name = other.name;
+            other.dim1 = 0;
+            other.dim2 = 0;
+            other.dim3 = 0;
+            other.name = nullptr;
+        }
+        return *this;
+    }
+
+    ps_array3d(const ps_array3d&) = delete;
+    ps_array3d& operator=(const ps_array3d&) = delete;
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  A L L O C  📌📌📌
+    void alloc(size_t d1, size_t d2, size_t d3, const char* alloc_name = nullptr, bool usePSRAM = true) {
+        reset();
+        if (alloc_name) {
+            set_name(alloc_name);
+        }
+        dim1 = d1;
+        dim2 = d2;
+        dim3 = d3;
+        size_t total_size = dim1 * dim2 * dim3 * sizeof(T);
+        total_size = (total_size + 15) & ~15; // Align to 16 bytes
+        if (psramFound() && usePSRAM) {
+            mem.reset(static_cast<T*>(ps_malloc(total_size)));
+        } else {
+            mem.reset(static_cast<T*>(malloc(total_size)));
+        }
+        if (!mem) {
+            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            dim1 = 0;
+            dim2 = 0;
+            dim3 = 0;
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  C A L L O C  📌📌📌
+    void calloc(size_t d1, size_t d2, size_t d3, const char* alloc_name = nullptr, bool usePSRAM = true) {
+        reset();
+        if (alloc_name) {
+            set_name(alloc_name);
+        }
+        dim1 = d1;
+        dim2 = d2;
+        dim3 = d3;
+        size_t total_size = dim1 * dim2 * dim3 * sizeof(T);
+        total_size = (total_size + 15) & ~15; // Align to 16 bytes
+        void* raw_mem = nullptr;
+        if (psramFound() && usePSRAM) {
+            raw_mem = ps_calloc(1, total_size);
+        } else {
+            raw_mem = calloc(1, total_size);
+        }
+        if (raw_mem) {
+            mem.reset(static_cast<T*>(raw_mem));
+        } else {
+            printf("OOM: failed to allocate %zu bytes for %s\n", total_size, name ? name : (alloc_name ? alloc_name : "unnamed"));
+            dim1 = 0;
+            dim2 = 0;
+            dim3 = 0;
+        }
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  R E S E T   📌📌📌
+    void reset() {
+        mem.reset();
+        dim1 = 0;
+        dim2 = 0;
+        dim3 = 0;
+        // Name wird nicht freigegeben, bleibt bis zum Destruktor erhalten
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R []   📌📌📌
+    class Proxy {
+        T* ptr;
+        size_t cols, depth;
+    public:
+        Proxy(T* p, size_t c, size_t d) : ptr(p), cols(c), depth(d) {}
+        T* operator[](size_t col) { return ptr + col * depth; }
+        const T* operator[](size_t col) const { return ptr + col * depth; }
+    };
+
+    Proxy operator[](size_t d1) {
+        return Proxy(mem.get() + d1 * dim2 * dim3, dim2, dim3);
+    }
+
+    const Proxy operator[](size_t d1) const {
+        return Proxy(mem.get() + d1 * dim2 * dim3, dim2, dim3);
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  G E T   📌📌📌
+    T* get() {
+        return mem.get();
+    }
+
+    const T* get() const {
+        return mem.get();
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  V A L I D / S I Z E   📌📌📌
+    bool valid() const { return mem.get() != nullptr; }
+    size_t get_dim1() const { return dim1; }
+    size_t get_dim2() const { return dim2; }
+    size_t get_dim3() const { return dim3; }
+};
 #endif
