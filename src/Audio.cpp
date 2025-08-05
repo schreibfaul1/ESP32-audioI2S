@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1                                                                                                                                ";
+    Version 3.4.1a                                                                                                                               ";
 /*  Updated on: Aug 05.2025
 
     Author: Wolle (schreibfaul1)
@@ -827,6 +827,7 @@ bool Audio::httpPrint(const char* host) {
     else if(extension.ends_with_icase(".pls"))       m_expectedPlsFmt = FORMAT_PLS;
     else                                             m_expectedPlsFmt = FORMAT_NONE;
 
+    m_audioFileSize =0;
     m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
     m_streamType = ST_WEBSTREAM;
     m_f_chunked = false;
@@ -3937,7 +3938,7 @@ exit:
             if(audio_eof_speech) audio_eof_speech(m_speechtxt.c_get());
         }
         else {
-            AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
+            AUDIO_INFO("End of webfile: \"%s\"", m_lastHost.c_get());
             if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
         }
 
@@ -3949,144 +3950,6 @@ exit:
         return;
     }
 }
-
-// void Audio::processWebFile() {
-//     if(!m_lastHost.valid()) {AUDIO_LOG_ERROR("m_lastHost is empty"); return;}  // guard
-//     m_pwf.maxFrameSize = InBuff.getMaxBlockSize();        // every frame is not bigger
-//     m_pwf.f_clientIsConnected = m_client->connected();     // we are not connected
-//     int32_t bytesAddedToBuffer = 0;
-//     uint32_t availableBytes = 0;
-
-//     // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//     if(m_f_firstCall) { // runs only ont time per connection, prepare for start
-//         m_f_firstCall = false;
-//         m_f_stream = false;
-//         m_pwf.audioHeaderFound = false;
-//         m_pwf.newFilePos = 0;
-//         m_pwf.f_waitingForPayload = true;
-//         m_t0 = millis();
-//         m_pwf.byteCounter = 0;
-//         m_pwf.chunkSize = 0;
-//         m_pwf.audioDataCount = 0;
-//         m_pwf.nextChunkCount = 0;
-//         m_audioDataSize = m_audioFileSize;
-//         m_controlCounter = 0;
-//         m_f_allDataReceived = false;
-//         m_audioFilePosition = 0;
-//     }
-
-//     if(m_resumeFilePos >= 0 ) {  // we have a resume file position
-//         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
-//         int x = MP3FindSyncWord(InBuff.getReadPtr(), InBuff.getMaxAvailableBytes());
-//         log_w("x %i", x);
-//         if(m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
-//         m_haveNewFilePos  = m_pwf.newFilePos;
-//         m_resumeFilePos = -1;
-//         m_pwf.byteCounter = m_pwf.newFilePos + m_audioDataStart;
-//         m_pwf.audioDataCount = m_pwf.newFilePos;
-//         return;
-//     }
-
-//     if(m_f_allDataReceived == true) {goto all_data_received;}
-
-//     if(m_pwf.f_clientIsConnected) availableBytes = m_client->available(); // available from stream
-//     // else AUDIO_LOG_ERROR("client not connected");
-
-//     // waiting for payload - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//     if(m_pwf.f_waitingForPayload){
-//         if(availableBytes == 0){
-//             if(m_t0 + 3000 < millis()) {
-//                 m_pwf.f_waitingForPayload = false;
-//                 AUDIO_LOG_ERROR("no payload received, timeout");
-//                 stopSong();
-//                 m_f_running = false;
-//             }
-//             return;
-//         }
-//         else {
-//             m_pwf.f_waitingForPayload = false;
-//         }
-//     }
-
-//     // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//     if(m_f_chunked && availableBytes) {
-//         uint8_t readedBytes = 0;
-//         if(m_f_chunked && m_pwf.nextChunkCount == m_pwf.byteCounter) {
-//             if(m_pwf.chunkSize > 0){
-//                 if(m_client->available() < 2) { // avoid getting out of sync
-//                     AUDIO_INFO("webfile chunked: not enough bytes available for skipCRLF");
-//                     return;
-//                 }
-//                 int a =audioFileRead(); if(a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
-//                 int b =audioFileRead(); if(b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
-//             }
-//             m_pwf.chunkSize = readChunkSize(&readedBytes);
-//             if(m_pwf.chunkSize == 0) m_f_allDataReceived = true; // last chunk
-//             AUDIO_LOG_INFO("chunk size: %d", m_pwf.chunkSize);
-//             m_pwf.nextChunkCount += m_pwf.chunkSize;
-//             m_audioDataSize += m_pwf.chunkSize;
-//         }
-//         availableBytes = min(availableBytes, m_pwf.nextChunkCount - m_pwf.byteCounter);
-//     }
-//     if(!m_f_chunked && m_pwf.byteCounter >= m_audioFileSize) {m_f_allDataReceived = true; goto all_data_received;}
-//     if(!m_pwf.f_clientIsConnected) {if(!m_f_allDataReceived)  m_f_allDataReceived = true; goto all_data_received;} // connection closed
-//     // AUDIO_LOG_INFO("byteCounter %u >= m_audioDataSize %u, byteCounter, m_pwf.nextChunkCount);
-
-//     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//     if(m_f_stream) {if(streamDetection(availableBytes)) return;}
-//     availableBytes = min(availableBytes, (uint32_t)InBuff.writeSpace());
-//     bytesAddedToBuffer = 0;
-//     if(m_pwf.f_clientIsConnected) bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), availableBytes);
-//     if(bytesAddedToBuffer > 0) {
-//         m_pwf.byteCounter += bytesAddedToBuffer;
-//         if(m_f_chunked) m_chunkcount -= bytesAddedToBuffer;
-//         if(m_controlCounter == 100) m_pwf.audioDataCount += bytesAddedToBuffer;
-//         InBuff.bytesWritten(bytesAddedToBuffer);
-//     }
-
-//     // we have a webfile, read the file header first - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//     if(m_controlCounter != 100) {
-//         if(InBuff.bufferFilled() > m_pwf.maxFrameSize || (m_pwf.nextChunkCount && (InBuff.bufferFilled() == m_pwf.nextChunkCount))) { // at least one complete frame or the file is smaller
-//             int32_t bytesRead = readAudioHeader(InBuff.getMaxAvailableBytes());
-//             if(bytesRead > 0) InBuff.bytesWasRead(bytesRead);
-//         }
-//         return;
-//     }
-
-//     if(m_codec == CODEC_OGG) { // AUDIO_LOG_INFO("determine correct codec here");
-//         uint8_t codec = determineOggCodec(InBuff.getReadPtr(), m_pwf.maxFrameSize);
-//         if     (codec == CODEC_FLAC)   {initializeDecoder(codec); m_codec = codec; return;}
-//         else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = codec; return;}
-//         else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = codec; return;}
-//         else {stopSong(); return;}
-//     }
-
-//     if(!m_f_stream && m_controlCounter == 100) {
-//         m_f_stream = true; // ready to play the audio data
-//         if(m_audioDataStart > 0){ m_pwf.audioHeaderFound = true; }
-//         uint16_t filltime = millis() - m_t0;
-//         AUDIO_INFO("Webfile: stream ready, buffer filled in %d ms", filltime);
-//         return;
-//     }
-// all_data_received:
-//     // end of webfile reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//     if(m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
-//         if(m_f_ID3v1TagFound) readID3V1Tag();
-// exit:
-//         stopSong();
-//         if(m_f_tts) {
-//             AUDIO_INFO("End of speech \"%s\"", m_speechtxt.c_get());
-//             if(audio_eof_speech) audio_eof_speech(m_speechtxt.c_get());
-//         }
-//         else {
-//             AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
-//             if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
-//         }
-//         return;
-//     }
-//     return;
-// }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamTS() {
     uint32_t        availableBytes;     // available bytes in stream
