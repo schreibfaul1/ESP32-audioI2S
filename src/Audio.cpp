@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1c                                                                                                                              ";
+    Version 3.4.1d                                                                                                                              ";
 /*  Updated on: Aug 06.2025
 
     Author: Wolle (schreibfaul1)
@@ -24,7 +24,7 @@
 
 template <typename... Args>
 void AUDIO_INFO(const char* fmt, Args&&... args) {
-    ps_ptr<char> result;
+    ps_ptr<char> result(__LINE__);
 
     // First run: determine size
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
@@ -53,8 +53,8 @@ void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
     #define ANSI_ESC_CYAN           "\033[36m"
     #define ANSI_ESC_WHITE          "\033[37m"
 
-    ps_ptr<char> result;
-    ps_ptr<char> file;
+    ps_ptr<char> result(__LINE__);
+    ps_ptr<char> file(__LINE__);
 
     file.copy_from(path);
     while(file.contains("/")){
@@ -71,7 +71,7 @@ void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
 
     // build a final string with file/line prefix
-    ps_ptr<char> final;
+    ps_ptr<char> final(__LINE__);
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
     final.alloc(total_len + 1);
@@ -96,6 +96,7 @@ void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, 
     }
     final.reset();
     result.reset();
+    file.reset();
 }
 
 
@@ -438,7 +439,7 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
 bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
-    ps_ptr<char> host;
+    ps_ptr<char> host(__LINE__);
     host.assign("api.openai.com");
     char path[] = "/v1/audio/speech";
 
@@ -619,12 +620,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint16_t authLen       = 0;     // length of authorization
     uint32_t timestamp     = 0;     // timeout surveillance
 
-    ps_ptr<char> c_host;       // copy of host
-    ps_ptr<char> hwoe;         // host without extension
-    ps_ptr<char> extension;    // extension
-    ps_ptr<char> query_string; // parameter
-    ps_ptr<char> path;         // extension + '?' + parameter
-    ps_ptr<char> rqh;          // request header
+    ps_ptr<char> c_host("c_host_connecttohost");             // copy of host
+    ps_ptr<char> hwoe("hwoe_connecttohost");                 // host without extension
+    ps_ptr<char> extension("extension_connecttohost");       // extension
+    ps_ptr<char> query_string("query_string_connecttohost"); // parameter
+    ps_ptr<char> path("path_connecttohost");                 // extension + '?' + parameter
+    ps_ptr<char> rqh("rqh_connecttohost");                   // request header
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
@@ -3786,33 +3787,21 @@ void Audio::processWebStream() {
         m_f_stream = false;
         m_pwst.chunkSize = 0;
         m_metacount = m_metaint;
-        m_pwst.f_skipCRLF = false;
         m_f_allDataReceived = false;
         readMetadata(0, true);
+        getChunkSize(0, true);
         m_audioFilePosition = 0;
     }
     if(m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
 
-    // chunked data tramsfer - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_chunked && m_pwst.availableBytes > 0) {
-        uint8_t readedBytes = 0;
-        if(!m_pwst.chunkSize){
-            if(m_pwst.f_skipCRLF){
-                if(m_client->available() < 2) { // avoid getting out of sync
-                    if(!m_f_tts) AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
-                    return;
-                }
-                int a =audioFileRead(); if(a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
-                int b =audioFileRead(); if(b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
-                m_pwst.f_skipCRLF = false;
-            }
-            if(m_client->available()){
-                m_pwst.chunkSize = readChunkSize(&readedBytes);
-                if(m_pwst.chunkSize > 0) {
-                    m_pwst.f_skipCRLF = true; // skip next CRLF
-                }
-                // AUDIO_LOG_WARN("chunk size: %ld", m_pwst.chunkSize);
-            }
+
+    // chunked data tramsfer
+    if(m_f_chunked && m_pwst.availableBytes){
+        if(m_pwst.chunkSize == 0) {
+            int chunkLen = getChunkSize(&m_pwst.readedBytes);
+            if(chunkLen < 0) return;
+            if(chunkLen == 0) m_f_allDataReceived = true;
+            m_pwst.chunkSize = chunkLen;
         }
         m_pwst.availableBytes = min(m_pwst.availableBytes, m_pwst.chunkSize);
     }
@@ -3821,7 +3810,7 @@ void Audio::processWebStream() {
     if(m_f_metadata && m_pwst.availableBytes) {
         if(m_metacount == 0) {
             int metaLen = readMetadata(m_pwst.availableBytes);
-            m_pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
+            if(m_f_chunked) m_pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
             return;
         }
         m_pwst.availableBytes = min(m_pwst.availableBytes, m_metacount);
@@ -4474,10 +4463,9 @@ exit: // termination condition
 
 lastToDo:
     m_streamType = ST_WEBSTREAM;
-    if(m_audioFileSize > 0)          m_streamType = ST_WEBFILE;
-    if(m_f_chunked)                  m_streamType = ST_WEBFILE; // without icy this is a webfile (AI response)
+    if(m_audioFileSize > 0)          m_streamType = ST_WEBFILE;  // content length found
     if(m_phreh.f_icy_data)           m_streamType = ST_WEBSTREAM;
-
+    if(m_f_tts)                      m_streamType = ST_WEBSTREAM; // this is from AI or GoogleTTS(AI response)
 
     if(m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
@@ -6337,7 +6325,7 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
 
     // Converted hex number
     chunksize = strtoul(hexSize.c_str(), nullptr, 16);
-    *bytes = byteCounter;
+    *bytes += byteCounter;
 
     if (chunksize == 0) { // Special case: Last chunk recognized (0) => Next read and reject "\ r \ n"
         // Reading to complete "\ r \ n" was received
@@ -6352,6 +6340,32 @@ size_t Audio::readChunkSize(uint8_t* bytes) {
     }
 
     return chunksize;
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first){
+    if(first){
+        m_gchs.f_skipCRLF = false;
+        return 0;
+    }
+    int res = -1;
+    if(m_client->available() < 2) { // avoid getting out of sync
+        if(!m_f_tts) res = 0;
+        else AUDIO_INFO("webstream chunked: not enough bytes available for skipCRLF");
+        return res;
+    }
+    if(m_gchs.f_skipCRLF){
+        int a =audioFileRead(); if(a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a); // skipCR
+        int b =audioFileRead(); if(b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b); // skipLF
+        m_gchs.f_skipCRLF = false;
+        *readedBytes = 2;
+    }
+    res = readChunkSize(readedBytes);
+    if(res > 0) {
+        m_gchs.f_skipCRLF = true; // skip next CRLF
+    }
+        // AUDIO_LOG_WARN("chunk size: %ld", res);
+
+    return res;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readID3V1Tag() {

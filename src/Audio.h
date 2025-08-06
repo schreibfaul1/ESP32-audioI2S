@@ -307,8 +307,15 @@ private:
         bool      f_skipCRLF = false;
         uint32_t  availableBytes;
         bool      f_clientIsConnected;
+        uint8_t   readedBytes;
     } pwst_t;
     pwst_t m_pwst;
+
+    typedef struct _gchs{ // used in getChunkSize
+        bool      f_skipCRLF = false;
+
+    } gchs_t;
+    gchs_t m_gchs;
 
     typedef struct _pwf{ // used in processWebFile
         uint32_t  maxFrameSize;
@@ -533,6 +540,7 @@ private:
 
     //+++ H E L P   F U N C T I O N S +++
     uint16_t     readMetadata(uint16_t b, bool first = false);
+    int32_t      getChunkSize(uint8_t *readedBytes, bool first = false);
     size_t       readChunkSize(uint8_t* bytes);
     bool         readID3V1Tag();
     int32_t      newInBuffStart(int32_t m_resumeFilePos);

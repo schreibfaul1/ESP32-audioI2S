@@ -71,6 +71,13 @@ public:
         set_name(name_str);
     }
 
+    explicit ps_ptr(uint16_t line) { // named constructor
+        char nr[8];
+        ltoa(line, nr, 10);
+        set_name(nr);
+    }
+
+
     ~ps_ptr() { // destructor
         if (mem) {
             // log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", allocated_size * sizeof(T), mem.get());
