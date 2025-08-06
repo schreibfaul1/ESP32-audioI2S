@@ -388,6 +388,7 @@ private:
         uint32_t timeout;
         uint32_t stime;
         bool     f_time = false;
+        bool     f_icy_data = false;
     } phreh_t;
     phreh_t m_phreh;
 

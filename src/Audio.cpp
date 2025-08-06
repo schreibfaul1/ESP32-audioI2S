@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1a                                                                                                                               ";
-/*  Updated on: Aug 05.2025
+    Version 3.4.1b                                                                                                                               ";
+/*  Updated on: Aug 06.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4243,6 +4243,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     if(m_dataMode != HTTP_RESPONSE_HEADER) return false;
     if(!m_currentHost.valid()) {AUDIO_LOG_ERROR("m_currentHost is empty"); return false;}
 
+    memset(&m_phreh, 0, sizeof(m_phreh));
     m_phreh.ctime = millis();
     m_phreh.timeout = 4500; // ms
 
@@ -4308,6 +4309,10 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 if(audio_showstreamtitle) audio_showstreamtitle(rhl.get());
                 goto exit;
             }
+        }
+
+        else if(rhl.starts_with("icy-")){
+            m_phreh.f_icy_data = true; // is webstrean
         }
 
         else if(rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
@@ -4470,8 +4475,8 @@ exit: // termination condition
 lastToDo:
     m_streamType = ST_WEBSTREAM;
     if(m_audioFileSize > 0)          m_streamType = ST_WEBFILE;
-    if(m_f_chunked)                  m_streamType = ST_WEBFILE; // Stream comes from a fileserver, metadata have webstreams
-    if(m_f_chunked && m_f_metadata)  m_streamType = ST_WEBSTREAM;
+    if(m_f_chunked)                  m_streamType = ST_WEBFILE; // without icy this is a webfile (AI response)
+    if(m_phreh.f_icy_data)           m_streamType = ST_WEBSTREAM;
 
 
     if(m_codec != CODEC_NONE) {
