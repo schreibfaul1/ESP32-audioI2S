@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1b                                                                                                                               ";
+    Version 3.4.1c                                                                                                                              ";
 /*  Updated on: Aug 06.2025
 
     Author: Wolle (schreibfaul1)
@@ -4298,6 +4298,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             vTaskDelay(5);
             continue;
         }
+
+        if(rhl.starts_with_icase("icy-")){
+            m_phreh.f_icy_data = true; // is webstrean
+        }
+
         if(rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
             statusCode[0] = rhl[9];
@@ -4310,11 +4315,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 goto exit;
             }
         }
-
-        else if(rhl.starts_with("icy-")){
-            m_phreh.f_icy_data = true; // is webstrean
-        }
-
         else if(rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
             int idx = rhl.index_of(';', 13);
             if(idx > 0) rhl[idx] = '\0';
