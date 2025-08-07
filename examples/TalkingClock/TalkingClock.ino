@@ -58,7 +58,7 @@ void loop(){
     }
 }
 
-void audio_eof_mp3(const char *info){  //end of file
+void audio_eof(const char *info){  //end of file
     //Serial.printf("file :%s\n", info);
     if(timefile>0){
         if(timefile==1){audio.connecttoFS(SD, "/voice_time/080.mp3");     timefile--;}  // stroke

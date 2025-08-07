@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1d                                                                                                                              ";
-/*  Updated on: Aug 06.2025
+    Version 3.4.1e                                                                                                                              ";
+/*  Updated on: Aug 07.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -35,7 +35,7 @@ void AUDIO_INFO(const char* fmt, Args&&... args) {
     char* dst = result.get();
     if (!dst) return;  // Or error treatment
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-    result.append(ANSI_ESC_RESET);
+  //  result.append(ANSI_ESC_RESET);
     if(audio_info) audio_info(result.c_get());
     result.reset();
 }
@@ -656,8 +656,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // optional basic authorization
     if(user && pwd) authLen = strlen(user) + strlen(pwd);
-    ps_ptr <char>authorization;
-    ps_ptr<char> toEncode;
+    ps_ptr <char>authorization("authorization");
+    ps_ptr<char> toEncode("toEncode");
     authorization.alloc(base64_encode_expected_len(authLen + 1) + 1);
     authorization.clear();
     if(authLen > 0) {
@@ -1004,7 +1004,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::showID3Tag(const char* tag, const char* value) {
-    ps_ptr<char>id3tag = {};
+    ps_ptr<char>id3tag("id3tag");
     // V2.2
     if(!strcmp(tag, "CNT")) id3tag.appendf("Play counter: %s", value, "id3tag");
     if(!strcmp(tag, "COM")) id3tag.appendf("Comments: %s", value, "id3tag");
@@ -1182,7 +1182,7 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
         }
         if (isUTF8) return; // is UTF-8, do nothing
     }
-    ps_ptr<char> iso8859_1;
+    ps_ptr<char> iso8859_1("iso8859_1");
     iso8859_1.assign(buff.get());
 
     // Worst-case: all chars are latin1 > 0x7F became 2 Bytes → max length is twice +1
@@ -1644,7 +1644,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 
         ps_ptr<char>vendorString("vendorString");
         ps_ptr<char>commentString("commentString");
-        ps_ptr<char>lyricsBuffer = {};
+        ps_ptr<char>lyricsBuffer("lyricsBuffer");
         size_t vendorLength = bigEndian(data, 3);
         size_t idx = 0;
         data += 3; idx += 3;
@@ -1671,8 +1671,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             if(idx > vendorLength + 3) {AUDIO_LOG_ERROR("VORBIS COMMENT section is too long");}
 
         }
-        ps_ptr<char> tmp;
-        ps_ptr<char> timestamp;
+        ps_ptr<char> tmp(__LINE__);
+        ps_ptr<char> timestamp(__LINE__);
         timestamp.alloc(12);
         if(lyricsBuffer.valid()){
             m_ID3Hdr.SYLT.seen = true;
@@ -1730,7 +1730,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_ID3_Header(uint8_t* data, size_t len) {
-
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 0) { /* read ID3 tag and ID3 header size */
         m_controlCounter++;
@@ -1914,8 +1913,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         if(m_ID3Hdr.framesize == 0) return 0;
 
-        ps_ptr<char> tmp;
-        ps_ptr<char> content_descriptor;
+        ps_ptr<char> tmp(__LINE__);
+        ps_ptr<char> content_descriptor(__LINE__);
         size_t fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
         size_t bytesToCopy = fs;
         size_t textDataLength = 0;
@@ -1973,8 +1972,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == 7) { // SYLT
         m_controlCounter = 5;
         if(m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges))  {
-            ps_ptr<char> tmp;
-            ps_ptr<char> content_descriptor;
+            ps_ptr<char> tmp(__LINE__);
+            ps_ptr<char> content_descriptor(__LINE__);
             ps_ptr<char> syltBuff("syltBuff");
             bool isBigEndian = true;
             size_t len = 0;
@@ -2070,8 +2069,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         else if(startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if(m_dataMode == AUDIO_LOCALFILE) {
 
-                ps_ptr<char> tmp;
-                ps_ptr<char> content_descriptor;
+                ps_ptr<char> tmp(__LINE__);
+                ps_ptr<char> content_descriptor(__LINE__);
                 ps_ptr<char> syltBuff("syltBuff");
                 bool isBigEndian = true;
                 size_t len = 0;
@@ -2183,8 +2182,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
-    ps_ptr<char>atom_name = {};
-    ps_ptr<char>atom_size = {};
+    ps_ptr<char>atom_name("atom_name");
+    ps_ptr<char>atom_size("atom_size");
     uint32_t idx = 0;
 
     // Lambda function for Variant length determination
@@ -2550,7 +2549,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == M4A_ESDS){ // Elementary Stream Descriptor
-        ps_ptr<char> esds_buffer; // read ESDS content in a buffer
+        ps_ptr<char> esds_buffer("esds_buffer"); // read ESDS content in a buffer
         esds_buffer.copy_from((char*)data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
@@ -2561,7 +2560,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             AUDIO_LOG_DEBUG("DecoderSpecificInfo found at offset %d, length: %u", dec_specific_offset, dec_specific_length);
 
             // extract decoderSpecificInfo-data
-            ps_ptr<char> dec_specific_data;
+            ps_ptr<char> dec_specific_data("dec_specific_data");
             dec_specific_data.alloc(dec_specific_length);
             memcpy(dec_specific_data.get(), (uint8_t*)esds_buffer.get() + dec_specific_offset + 5, dec_specific_length);
             m_m4aHdr.aac_profile = (uint8_t)dec_specific_data.get()[0] >> 3;
@@ -2624,8 +2623,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
-        ps_ptr<char>id3tag = {};
-        ps_ptr<char>lyricsBuffer = {};
+        ps_ptr<char>id3tag("id3tag");
+        ps_ptr<char>lyricsBuffer("lyricsBuffer");
         uint32_t pos = m_m4aHdr.headerSize;
         uint32_t consumed = 0;
         while(true){
@@ -2641,7 +2640,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             // 0x00, 0x00, 0x00, 0x1C, 0xA9, 0x64, 0x61, 0x79, 0x00, 0x00, 0x00, 0x14, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x32, 0x30, 0x32, 0x32,
             //     sub atom length   |   ©    d     a     y  |  sub sub atom length  |  d     a     t     a  | data type   1->UTF-8  |   reserved            |  2     0     2     2
 
-            ps_ptr<char>sa; // sub atom
+            ps_ptr<char>sa("sa"); // sub atom
             sa.copy_from((const char*)data + consumed - as, min(as, 1024));
 
             char san [5] = {0}; // aub atom name
@@ -2681,8 +2680,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             if(m_m4aHdr.sizeof_ilst <= m_m4aHdr.ilst_pos){
 
-                ps_ptr<char> tmp;   // last todo if we have lyrics
-                ps_ptr<char> timestamp;
+                ps_ptr<char> tmp(__LINE__);   // last todo if we have lyrics
+                ps_ptr<char> timestamp(__LINE__);
                 timestamp.alloc(12);
                 if(lyricsBuffer.valid()){
                     m_ID3Hdr.SYLT.seen = true;
@@ -3085,7 +3084,7 @@ void Audio::loop() {
         }
     }
     else { // m3u8 datastream only
-        ps_ptr<char> host;
+        ps_ptr<char> host("host");
         if(m_lVar.no_host_timer > millis()) {return;}
         switch(m_dataMode) {
             case HTTP_RESPONSE_HEADER:
@@ -3135,7 +3134,7 @@ bool Audio::readPlayListData() {
     uint8_t  readedBytes = 0;
     if(m_f_chunked) chunksize = readChunkSize(&readedBytes);
 
-    ps_ptr<char>pl;
+    ps_ptr<char>pl("pl");
     uint32_t ctl = 0;
     int      lines = 0;
     // delete all memory in m_playlistContent
@@ -3394,8 +3393,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {/*AUDIO_LOG_INFO("%s", m_linesWithEXTINF[i].get());*/ showstreamtitle(m_linesWithEXTINF[i].get());}
 
     if(f_haveRedirection) {
-        ps_ptr<char> ret = m3u8redirection(&m_m3u8Codec);
-        m_lastM3U8host.assign(ret.get());
+        m_lastM3U8host.clone_from(m3u8redirection(&m_m3u8Codec));
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
@@ -3417,7 +3415,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
             f_EXTINF_found = true;
 
-            ps_ptr<char> tmp;
+            ps_ptr<char> tmp(__LINE__);
             if(!m_linesWithSeqNrAndURL[i].starts_with("http")) {
 
                 //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
@@ -3493,7 +3491,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         vector_clear_and_shrink(m_playlistContent); // clear after reading everything, m_playlistContent.size is now 0
     }
     if(m_playlistURL.size() > 0) {
-        ps_ptr<char>m_playlistBuff;
+        ps_ptr<char>m_playlistBuff("m_playlistBuff");
         if(m_playlistURL[m_playlistURL.size() - 1].valid()) {
             m_playlistBuff.append(m_playlistURL[m_playlistURL.size() - 1].get());
             m_playlistURL.pop_back();
@@ -3605,7 +3603,7 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
 
     choosenLine++; // next line is the redirection url
 
-    ps_ptr<char> result = {};
+    ps_ptr<char> result("result");
     ps_ptr<char>line; line.clone_from(m_playlistContent[choosenLine]);
 
     if(line.starts_with("../")){
@@ -3757,7 +3755,7 @@ void Audio::processLocalFile() {
     if(m_f_eof){ // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
-        ps_ptr<char>afn; // audio file name
+        ps_ptr<char>afn("afn"); // audio file name
         if(m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
         stopSong();
         m_audioCurrentTime = 0;
@@ -3767,7 +3765,7 @@ exit:
         m_codec = CODEC_NONE;
 
         if(afn.valid()) {
-            if(audio_eof_mp3) audio_eof_mp3(afn.c_get());
+            if(audio_eof) audio_eof(afn.c_get());
             AUDIO_INFO("End of file \"%s\"", afn.c_get());
         }
         return;
@@ -3847,7 +3845,7 @@ void Audio::processWebStream() {
 
     if(m_f_eof) {
         AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
-        if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
+        if(audio_eof) audio_eof(m_lastHost.c_get());
         stopSong();
     }
 }
@@ -3922,14 +3920,8 @@ void Audio::processWebFile() {
         if(m_f_ID3v1TagFound) readID3V1Tag();
 exit:
         stopSong();
-        if(m_f_tts) {
-            AUDIO_INFO("End of speech \"%s\"", m_speechtxt.c_get());
-            if(audio_eof_speech) audio_eof_speech(m_speechtxt.c_get());
-        }
-        else {
-            AUDIO_INFO("End of webfile: \"%s\"", m_lastHost.c_get());
-            if(audio_eof_stream) audio_eof_stream(m_lastHost.c_get());
-        }
+        AUDIO_INFO("End of webfile: \"%s\"", m_lastHost.c_get());
+        if(audio_eof) audio_eof(m_lastHost.c_get());
 
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4354,7 +4346,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(rhl.starts_with_icase("content-disposition:")) { // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
             int idx = rhl.index_of_icase("filename=");
             if (idx >= 0)  {
-                ps_ptr<char> fn;
+                ps_ptr<char> fn("fn");
                 fn.assign(rhl.get() + idx + 9); // Position directly after "filename="
                 fn.replace("\"", ""); // remove '\"' around filename if present
                 AUDIO_INFO("Filename is %s", fn.get());
@@ -4369,7 +4361,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-logo:")) {
-            ps_ptr<char> icyLogo;
+            ps_ptr<char> icyLogo("icyLogo");
             icyLogo.assign(rhl.get() + 9); // Get logo URL
             icyLogo.trim();
             if(icyLogo.strlen() > 0){
@@ -4379,7 +4371,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-br:")) {
-            ps_ptr<char>c_bitRate; c_bitRate.assign(rhl.get() + 7);
+            ps_ptr<char>c_bitRate("c_bitRate"); c_bitRate.assign(rhl.get() + 7);
             c_bitRate.trim();
             c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
             setBitrate(c_bitRate.to_uint32(10));
@@ -4396,7 +4388,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if(rhl.starts_with_icase("icy-name:")) {
         //  AUDIO_LOG_INFO("%s", rhl.get());
-            ps_ptr<char> icyName;
+            ps_ptr<char> icyName("icyName");
             icyName.assign(rhl.get() + 9); // Get station name
             icyName.trim();
             if(icyName.strlen() > 0) {
@@ -4783,10 +4775,10 @@ void Audio::showstreamtitle(char* ml) {
     // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
 
     if(!ml) return;
-    ps_ptr<char>title = {};
-    ps_ptr<char>artist = {};
-    ps_ptr<char>streamTitle = {};
-    ps_ptr<char>sUrl = {};
+    ps_ptr<char>title("title");
+    ps_ptr<char>artist("artist");
+    ps_ptr<char>streamTitle("streamTitle");
+    ps_ptr<char>sUrl("sUrl");
 
     htmlToUTF8(ml); // convert to UTF-8
 
@@ -4915,13 +4907,13 @@ void Audio::showstreamtitle(char* ml) {
             idx2 = indexOf(ml, ";", idx1);
             if(idx1 >= 0 && idx2 > idx1) {
                 uint16_t len = idx2 - idx1;
-                ps_ptr<char> sAdv;
+                ps_ptr<char> sAdv("sAdv");
                 sAdv.assign(ml + idx1, len + 1);
                 AUDIO_INFO("%s", sAdv.get());
                 uint8_t pos = 21;                                                 // remove "StreamTitle="
                 if(sAdv[pos] == '\'') pos++;                                      // remove leading  \'
                 if(sAdv[strlen(sAdv.get()) - 1] == '\'') sAdv[strlen(sAdv.get()) - 1] = '\0'; // remove trailing \'
-                if(audio_commercial) audio_commercial(sAdv.get() + pos);
+                AUDIO_INFO(sAdv.get() + pos);
             }
         }
         return;
@@ -4937,7 +4929,7 @@ void Audio::showstreamtitle(char* ml) {
 
     if(m_streamTitle.starts_with("{\"")){ // maybe a json string
         // "{\"status\":0,\"error\":{\"info\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\",\"code\":201},\"result\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438 \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\"}\n0";
-        ps_ptr<char> jsonIn;
+        ps_ptr<char> jsonIn("jsonIn");
         jsonIn.clone_from(m_streamTitle);
         jsonIn.truncate_at('\n'); // can be '{"status":1,"message":"Ok","result":"Ok","errorCode":0}\n0'
         if(!jsonIn.isJson()) return;
@@ -6242,7 +6234,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
     m_rmet.res = 0;
-    ps_ptr<char>buff; buff.alloc(4096); buff.clear(); // is max 256 *16
+    ps_ptr<char>buff(__LINE__); buff.alloc(4096); buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(first) {
         m_rmet.pos_ml = 0; // determines the current position in metaline
@@ -6370,7 +6362,7 @@ int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first){
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readID3V1Tag() {
     if (m_codec != CODEC_MP3) return false;
-    ps_ptr<char>chBuff;
+    ps_ptr<char>chBuff(__LINE__);
     chBuff.alloc(256);
 
     const uint8_t* p = InBuff.getReadPtr();
@@ -6388,7 +6380,7 @@ bool Audio::readID3V1Tag() {
     };
 
     if (InBuff.bufferFilled() == 128 && startsWith((const char*)p, "TAG")) {
-        ps_ptr<char> title, artist, album, year, comment;
+        ps_ptr<char> title("title"), artist("artist"), album("album"), year("year"), comment("comment");
 
         readID3Field(title,   p + 3,     30, "Title: ");
         readID3Field(artist,  p + 33,    30, "Artist: ");
@@ -6418,7 +6410,7 @@ bool Audio::readID3V1Tag() {
     if (InBuff.bufferFilled() == 227 && startsWith((const char*)p, "TAG+")) { // "TAG+" "can exist as an extension, does not overwrite" TAG"
         AUDIO_INFO("ID3 version: 1 - Enhanced TAG");
 
-        ps_ptr<char> title, artist, album, genre;
+        ps_ptr<char> title("title"), artist("artist"), album("album"), genre("genre");
 
         readID3Field(title,  p + 4,     60, "Title: ");
         readID3Field(artist, p + 64,    60, "Artist: ");

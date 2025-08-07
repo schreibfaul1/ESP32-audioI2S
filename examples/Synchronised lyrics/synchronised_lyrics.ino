@@ -40,7 +40,7 @@ void audio_id3data(const char *info){  //id3 metadata
 //    if(strncmp(info, "Year: ", 6) == 0) Serial.println(info + 6);
     Serial.print("id3data     ");Serial.println(info);
 }
-void audio_eof_mp3(const char *info){  //end of file
+void audio_eof(const char *info){  //end of file
     Serial.print("eof_mp3     ");Serial.println(info);
 }
 
