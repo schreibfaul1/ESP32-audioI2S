@@ -108,7 +108,7 @@ protected:
     size_t            m_dataLength       = 0;
     size_t            m_resBuffSize      = 4096 * 6; // reserved buffspace, >= one flac frame
     size_t            m_maxBlockSize     = 1600;
-    uint8_t*          m_buffer           = NULL;
+    ps_ptr<uint8_t>   m_buffer;
     uint8_t*          m_writePtr         = NULL;
     uint8_t*          m_readPtr          = NULL;
     uint8_t*          m_endPtr           = NULL;
@@ -158,7 +158,7 @@ private:
         uint8_t      textStringTerminator_0;
         uint8_t      textStringTerminator_1;
         bool         byteOrderMark;
-        ps_ptr<char> iBuff{"m_ID3Hdr.iBuff"};
+        ps_ptr<char> iBuff;
     } ID3Hdr_t;
     ID3Hdr_t m_ID3Hdr;
 
@@ -172,7 +172,7 @@ private:
         size_t       chunkSize;
         uint16_t     ID3WritePtr;
         uint16_t     ID3ReadPtr;
-        ps_ptr<uint8_t>ID3Buff{"m_pwsHLS.ID3Buff"};
+        ps_ptr<uint8_t>ID3Buff;
     } pwsHLS_t;
     pwsHLS_t m_pwsHLS;
 
@@ -240,10 +240,10 @@ private:
 
     typedef struct _hwoe{ // used in dismantle_host
         bool ssl;
-        ps_ptr<char> hwoe{"howe"};  // host without extension
+        ps_ptr<char> hwoe;  // host without extension
         uint16_t     port;
-        ps_ptr<char> extension{"extension"};
-        ps_ptr<char> query_string{"query_string"};
+        ps_ptr<char> extension;
+        ps_ptr<char> query_string;
     } hwoe_t;
 
     typedef struct _prlf{ // used in processLocalFile
@@ -366,7 +366,7 @@ private:
         uint8_t        ts_packetLength = 0;
         uint8_t        ts_packetPtr = 0;
         const uint8_t  ts_packetsize = 188;
-        ps_ptr<uint8_t> ts_packet{"ts_packet"};
+        ps_ptr<uint8_t> ts_packet;
         size_t         chunkSize = 0;
     } pwsts_t;
     pwsts_t m_pwsst;
@@ -863,14 +863,14 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    ps_ptr<int16_t>  m_outBuff{"m_outBuff"};                // Interleaved L/R
-    ps_ptr<int16_t>  m_samplesBuff48K{"m_samplesBuff48K"};  // Interleaved L/R
-    ps_ptr<char>     m_ibuff{"m_ibuff"};                    // used in log_info()
-    ps_ptr<char>     m_lastHost{"m_lastHost"};              // Store the last URL to a webstream
-    ps_ptr<char>     m_currentHost{"m_currentHost"};        // can be changed by redirection or playlist
-    ps_ptr<char>     m_lastM3U8host{"m_lastM3U8host"};
-    ps_ptr<char>     m_speechtxt{"m_speechtxt"};            // stores tts text
-    ps_ptr<char>     m_streamTitle{"m_streamTitle"};        // stores the last StreamTitle
+    ps_ptr<int16_t>  m_outBuff;                     // Interleaved L/R
+    ps_ptr<int16_t>  m_samplesBuff48K;              // Interleaved L/R
+    ps_ptr<char>     m_ibuff;                       // used in log_info()
+    ps_ptr<char>     m_lastHost;                    // Store the last URL to a webstream
+    ps_ptr<char>     m_currentHost;                 // can be changed by redirection or playlist
+    ps_ptr<char>     m_lastM3U8host;
+    ps_ptr<char>     m_speechtxt;                   // stores tts text
+    ps_ptr<char>     m_streamTitle;                 // stores the last StreamTitle
 
 
     filter_t        m_filter[3];                    // digital filters

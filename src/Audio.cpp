@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1e                                                                                                                              ";
-/*  Updated on: Aug 07.2025
+    Version 3.4.1f                                                                                                                              ";
+/*  Updated on: Aug 08.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -113,8 +113,7 @@ AudioBuffer::AudioBuffer(size_t maxBlockSize) {
 }
 
 AudioBuffer::~AudioBuffer() {
-    if(m_buffer) free(m_buffer);
-    m_buffer = NULL;
+    // m_buffer.reset();
 }
 
 int32_t AudioBuffer::getBufsize() { return m_buffSize; }
@@ -130,11 +129,7 @@ bool AudioBuffer::setBufsize(size_t mbs) {
 }
 
 size_t AudioBuffer::init() {
-    if(m_buffer) free(m_buffer);
-    m_buffer = NULL;
-    m_buffer = (uint8_t*)ps_malloc(m_buffSize + m_resBuffSize);
-
-    if(!m_buffer) return 0;
+    m_buffer.alloc(m_buffSize + m_resBuffSize, "AudioBuffer");
     m_f_init = true;
     resetBuffer();
     return m_buffSize;
@@ -153,7 +148,7 @@ size_t AudioBuffer::freeSpace() {
         else m_freeSpace = 0;
     }
     if(m_readPtr < m_writePtr) {
-        m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer);
+        m_freeSpace = (m_endPtr - m_writePtr) + (m_readPtr - m_buffer.get());
     }
     if(m_readPtr > m_writePtr) {
         m_freeSpace = m_readPtr - m_writePtr;
@@ -184,7 +179,7 @@ size_t AudioBuffer::bufferFilled() {
         m_dataLength = m_writePtr - m_readPtr;
     }
     if(m_readPtr > m_writePtr) {
-        m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer);
+        m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer.get());
     }
     return m_dataLength;
 }
@@ -207,7 +202,7 @@ size_t AudioBuffer::getMaxAvailableBytes() {
 void AudioBuffer::bytesWritten(size_t bw) {
     if(!bw) return;
     m_writePtr += bw;
-    if(m_writePtr == m_endPtr) { m_writePtr = m_buffer; }
+    if(m_writePtr == m_endPtr) { m_writePtr = m_buffer.get(); }
     if(m_writePtr > m_endPtr) AUDIO_LOG_ERROR("AudioBuffer: m_writePtr %i > m_endPtr %i", m_writePtr, m_endPtr);
     m_f_isEmpty = false;
 }
@@ -217,7 +212,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
     m_readPtr += br;
     if(m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
-        m_readPtr = m_buffer + tmp;
+        m_readPtr = m_buffer.get() + tmp;
     }
     if(m_readPtr == m_writePtr) m_f_isEmpty = true;
 }
@@ -227,21 +222,21 @@ uint8_t* AudioBuffer::getWritePtr() { return m_writePtr; }
 uint8_t* AudioBuffer::getReadPtr() {
     int32_t len = m_endPtr - m_readPtr;
     if(len < m_maxBlockSize) {                            // be sure the last frame is completed
-        memcpy(m_endPtr, m_buffer, m_maxBlockSize - (len)); // cpy from m_buffer to m_endPtr with len
+        memcpy(m_endPtr, m_buffer.get(), m_maxBlockSize - (len)); // cpy from m_buffer to m_endPtr with len
     }
     return m_readPtr;
 }
 
 void AudioBuffer::resetBuffer() {
-    m_writePtr = m_buffer;
-    m_readPtr = m_buffer;
-    m_endPtr = m_buffer + m_buffSize;
+    m_writePtr = m_buffer.get();
+    m_readPtr = m_buffer.get();
+    m_endPtr = m_buffer.get() + m_buffSize;
     m_f_isEmpty = true;
 }
 
-uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer; }
+uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer.get(); }
 
-uint32_t AudioBuffer::getReadPos() { return m_readPtr - m_buffer; }
+uint32_t AudioBuffer::getReadPos() { return m_readPtr - m_buffer.get(); }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format off
 Audio::Audio(uint8_t i2sPort) {
@@ -1747,7 +1742,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.SYLT.pos = 0;
         m_ID3Hdr.numID3Header = 0;
         m_ID3Hdr.iBuffSize = 4096;
-        m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10);
+        m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10, "m_ID3Hdr.iBuff");
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
         memset(m_ID3Hdr.APIC_size, 0, sizeof(m_ID3Hdr.APIC_size));
         memset(m_ID3Hdr.APIC_pos, 0, sizeof(m_ID3Hdr.APIC_pos));
@@ -3757,16 +3752,16 @@ void Audio::processLocalFile() {
 exit:
         ps_ptr<char>afn("afn"); // audio file name
         if(m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
-        stopSong();
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
         m_resumeFilePos = -1;
         m_haveNewFilePos = 0;
         m_codec = CODEC_NONE;
+        stopSong();
 
         if(afn.valid()) {
-            if(audio_eof) audio_eof(afn.c_get());
             AUDIO_INFO("End of file \"%s\"", afn.c_get());
+            if(audio_eof) audio_eof(afn.c_get());
         }
         return;
     }
@@ -3949,7 +3944,7 @@ void Audio::processWebStreamTS() {
         m_pwsst.chunkSize = 0;
         m_t0 = millis();
         m_pwsst.ts_packetPtr = 0;
-        if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize); // first init
+        if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
     } //—————————————————————————————————————————————————————————————————————————
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -4059,7 +4054,7 @@ void Audio::processWebStreamHLS() {
         m_pwsHLS.chunkSize = 0;
         m_pwsHLS.ID3WritePtr = 0;
         m_pwsHLS.ID3ReadPtr = 0;
-        m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize);
+        m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize, "m_pwsHLS.ID3Buff");
     }
 
     if(m_dataMode != AUDIO_DATA) return; // guard
@@ -5362,7 +5357,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
 
-    m_outBuff.alloc(m_outbuffSize * sizeof(int16_t));
+    m_outBuff.alloc(m_outbuffSize * sizeof(int16_t), "m_outBuff");
     m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
 
     esp_err_t result = ESP_OK;
@@ -6369,7 +6364,7 @@ bool Audio::readID3V1Tag() {
 
     // Lambda for simplification
     auto readID3Field = [&](ps_ptr<char>& field, const uint8_t* src, size_t len, const char* label = nullptr) {
-        field.alloc(len + 1);
+        field.alloc(len + 1, "field");
         memcpy(field.get(), src, len);
         field[len] = '\0';
         latinToUTF8(field);

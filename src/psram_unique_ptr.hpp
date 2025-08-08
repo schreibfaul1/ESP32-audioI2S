@@ -137,7 +137,7 @@ public:
     //     test.clear(); // memset "0"
     // }
 
-    void alloc(std::size_t size, bool usePSRAM = true) {
+    void alloc(std::size_t size, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size = (size + 15) & ~15; // Align to 16 bytes
         if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
             mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Important!
@@ -146,12 +146,13 @@ public:
             mem.reset(static_cast<T*>(malloc(size)));  // <--- Important!
         }
         allocated_size = size;
+        set_name(alloc_name);
         if (!mem) {
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
         }
     }
 
-    void alloc() { // alloc for single objects/structures
+    void alloc(const char* alloc_name = nullptr) { // alloc for single objects/structures
         reset();  // Freigabe des zuvor gehaltenen Speichers
         void* raw_mem = nullptr;
         if (psramFound()) { // Check at the runtime whether PSRAM is available
@@ -160,6 +161,7 @@ public:
         else{
             raw_mem = malloc(sizeof(T)); // allocated im RAM
         }
+        set_name(alloc_name);
         if (raw_mem) {
             mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
             allocated_size = sizeof(T);
@@ -175,12 +177,12 @@ public:
      * Chooses between PSRAM (if available) and DRAM.
      * @param num_elements The number of elements to allocate space for.
      */
-    void calloc(std::size_t num_elements, bool usePSRAM = true) {
+    void calloc(std::size_t num_elements, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size_t total_size = num_elements * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
         reset(); // Release of the previously held memory
-
+        set_name(alloc_name);
         void* raw_mem = nullptr;
 
         if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
@@ -206,7 +208,8 @@ public:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
-    void alloc_array(std::size_t count) {
+    void alloc_array(std::size_t count, const char* alloc_name = nullptr) {
+        set_name(alloc_name);
         alloc(sizeof(T) * count);
         clear();
     }
