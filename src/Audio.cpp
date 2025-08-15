@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1f                                                                                                                              ";
-/*  Updated on: Aug 08.2025
+    Version 3.4.1g                                                                                                                              ";
+/*  Updated on: Aug 15.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3486,6 +3486,71 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
     }
     return host;
 }
+
+
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+uint16_t Audio::accomplish_m3u8_url() {
+
+    for(uint16_t i = 0; i < m_linesWithURL.size(); i++) {
+
+        ps_ptr<char> tmp(__LINE__);
+
+        if(!m_linesWithURL[i].starts_with("http")) {     //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                                                                 //  chunklist:  http://station.com/aaa/bbb/ddd.aac
+                                                                 //  result:     http://station.com/aaa/bbb/ddd.aac
+            if(m_lastM3U8host.valid()) {tmp.clone_from(m_lastM3U8host);}
+            else {                      tmp.clone_from(m_lastHost);}
+
+            if(m_linesWithURL[i][0] != '/'){             //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
+                                                                 //  chunklist:  ddd.aac                              // m_linesWithURL[i]
+                                                                 //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithURL[i]
+                int idx = tmp.last_index_of('/');
+                tmp[idx  + 1] = '\0';
+                tmp.append(m_linesWithURL[i].get());
+                m_linesWithURL[i].clone_from(tmp);
+                continue;
+            }
+            else{                                                //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
+                                                                 //  chunklist:  /aaa/bbb/ddd.aac
+                                                                 //  result:     http://station.com/aaa/bbb/ddd.aac
+                int idx = tmp.index_of('/', 8);
+                tmp[idx] = '\0';
+                tmp.append(m_linesWithURL[i].get());
+                m_linesWithURL[i].clone_from(tmp);
+                continue;
+            }
+        }
+        else { /* nothing todo*/
+            continue;
+        }
+    }
+    for(uint16_t i = 0; i < m_linesWithURL.size(); i++) m_linesWithURL[i].println();
+    return 0;
+}
+//-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+int16_t Audio::prepare_first_m3u8_url(ps_ptr<char>& playlistBuff){
+    // in m_lineswithURL, searches for the first new URL through the recent URL.
+    // URLs that have already been used are removed from the DEQUE
+    // If all URLs are new, there is nothing to do and 0 is returned.
+    // no new URL is found -1 returned
+    int idx = -1;
+    for(int i = 0; i < m_linesWithURL.size(); i++){
+        if(playlistBuff.equals(m_linesWithURL[i].get())) idx = i;
+    }
+    if(idx == -1){
+        AUDIO_LOG_WARN("nothing found, all entries are new");
+        return 0;
+    }
+    if(idx == m_linesWithURL.size()){
+        AUDIO_LOG_WARN("only last entry found, nothing is new");
+        return -1;
+    }
+    for(int j = 0; j < idx + 1; j++){
+         m_linesWithURL.pop_front();
+    }
+    AUDIO_LOG_WARN("%i entries are known and removed", idx + 1);
+    return idx  + 1;
+}
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ps_ptr<char> Audio::parsePlaylist_M3U8() {
     // example: audio chunks
@@ -3506,24 +3571,29 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if(lines){
         bool addNextLine = false;
-        vector_clear_and_shrink(m_linesWithSeqNrAndURL);
+        deque_clear_and_shrink(m_linesWithURL);
         vector_clear_and_shrink(m_linesWithEXTINF);
         for(uint8_t i = 0; i < lines; i++) {
-            //  AUDIO_LOG_INFO("pl%i = %s", i, m_playlistContent[i].get());
+            // AUDIO_LOG_INFO("pl%i = %s", i, m_playlistContent[i].get());
             if(m_playlistContent[i].starts_with("#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*AUDIO_LOG_ERROR("we have a redirection");*/}
             if(addNextLine) {
                 addNextLine = false;
                 // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
-                m_linesWithSeqNrAndURL.emplace_back().clone_from(m_playlistContent[i]);
+                m_linesWithURL.emplace_back().clone_from(m_playlistContent[i]);
             }
             if(startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
                 m_linesWithEXTINF.emplace_back().clone_from(m_playlistContent[i]);
                 addNextLine = true;
             }
         }
+        if(!f_haveRedirection) {
+            accomplish_m3u8_url();
+            prepare_first_m3u8_url(m_playlistBuff);
+            vector_clear_and_shrink(m_playlistContent);
+        }
     }
 
-    for(int i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {/*AUDIO_LOG_INFO("%s", m_linesWithSeqNrAndURL[i].get())*/;}
+    for(int i = 0; i < m_linesWithURL.size(); i++) {/*AUDIO_LOG_INFO("%s", m_linesWithURL[i].get())*/;}
     for(int i = 0; i < m_linesWithEXTINF.size(); i++)      {/*AUDIO_LOG_INFO("%s", m_linesWithEXTINF[i].get());*/ showstreamtitle(m_linesWithEXTINF[i].get());}
 
     if(f_haveRedirection) {
@@ -3538,145 +3608,22 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         m_pplM3U8.f_mediaSeq_found = false;
     }
 
-    if(!m_pplM3U8.f_mediaSeq_found) {m_pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &m_pplM3U8.xMedSeq); AUDIO_INFO("MediaSequenceNumber: %lli", m_pplM3U8.xMedSeq);}
+//    if(!m_pplM3U8.f_mediaSeq_found) {m_pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithURL, &m_pplM3U8.xMedSeq); AUDIO_INFO("MediaSequenceNumber: %lli", m_pplM3U8.xMedSeq);}
     if(m_codec == CODEC_NONE) {m_codec = CODEC_AAC; if(m_m3u8Codec == CODEC_MP3) m_codec = CODEC_MP3;}  // if we have no redirection
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 
-    boolean f_EXTINF_found = false;
-
-    if(lines) {
-        for(uint16_t i = 0; i < m_linesWithSeqNrAndURL.size(); i++) {
-
-            f_EXTINF_found = true;
-
-            ps_ptr<char> tmp(__LINE__);
-            if(!m_linesWithSeqNrAndURL[i].starts_with("http")) {
-
-                //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
-                //  chunklist:  http://station.com/aaa/bbb/ddd.aac
-                //  result:     http://station.com/aaa/bbb/ddd.aac
-
-                if(m_lastM3U8host.valid()) {
-                    tmp.clone_from(m_lastM3U8host);
-                }
-                else {
-                    tmp.clone_from(m_lastHost);
-                }
-                if(m_linesWithSeqNrAndURL[i][0] != '/'){
-
-                    //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
-                    //  chunklist:  ddd.aac                              // m_linesWithSeqNrAndURL[i]
-                    //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithSeqNrAndURL[i]
-
-                    int idx = tmp.last_index_of('/');
-                    tmp[idx  + 1] = '\0';
-                    tmp.append(m_linesWithSeqNrAndURL[i].get());
-                }
-                else{
-
-                    //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
-                    //  chunklist:  /aaa/bbb/ddd.aac
-                    //  result:     http://station.com/aaa/bbb/ddd.aac
-                    int idx = tmp.index_of('/', 8);
-                    tmp[idx] = '\0';
-                    tmp.append(m_linesWithSeqNrAndURL[i].get());
-                }
-            }
-            else {tmp.append(m_linesWithSeqNrAndURL[i].get());}
-
-            if(m_pplM3U8.f_mediaSeq_found) {
-                lltoa(m_pplM3U8.xMedSeq, llasc, 10);
-                if(tmp.contains(llasc)) {
-                    m_playlistURL.insert(m_playlistURL.begin(), std:: move(tmp));
-                    m_pplM3U8.xMedSeq++;
-                }
-                else{
-                    lltoa(m_pplM3U8.xMedSeq + 1, llasc, 10);
-                    if(tmp.contains(llasc)) {
-                        m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                        AUDIO_LOG_WARN("mediaseq %llu skipped", m_pplM3U8.xMedSeq);
-                        m_pplM3U8.xMedSeq+= 2;
-                    }
-                }
-            }
-            else { // without mediaSeqNr, with hash
-                uint32_t hash = simpleHash(tmp.get());
-                if(m_hashQueue.size() == 0) {
-                    m_hashQueue.insert(m_hashQueue.begin(), hash);
-                    m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                }
-                else {
-                    bool known = false;
-                    for(int i = 0; i < m_hashQueue.size(); i++) {
-                        if(hash == m_hashQueue[i]) {
-                            // AUDIO_LOG_INFO("file already known %s", tmp);
-                            known = true;
-                        }
-                    }
-                    if(!known) {
-                        m_hashQueue.insert(m_hashQueue.begin(), hash);
-                        m_playlistURL.insert(m_playlistURL.begin(), std::move(tmp));
-                    }
-                }
-                if(m_hashQueue.size() > 20) m_hashQueue.pop_back();
-            }
-            continue;
+    if(m_linesWithURL.size() > 0) {
+        ps_ptr<char>playlistBuff;
+        if(m_linesWithURL[0].valid()) {
+            playlistBuff.assign(m_linesWithURL[0].get());
+            m_linesWithURL.pop_front();
+            m_linesWithURL.shrink_to_fit();
         }
-        vector_clear_and_shrink(m_playlistContent); // clear after reading everything, m_playlistContent.size is now 0
-    }
-    if(m_playlistURL.size() > 0) {
-        ps_ptr<char>m_playlistBuff("m_playlistBuff");
-        if(m_playlistURL[m_playlistURL.size() - 1].valid()) {
-            m_playlistBuff.append(m_playlistURL[m_playlistURL.size() - 1].get());
-            m_playlistURL.pop_back();
-            m_playlistURL.shrink_to_fit();
-        }
-        // AUDIO_LOG_INFO("now playing %s", m_playlistBuff);
-        if(endsWith(m_playlistBuff.get(), "ts")) m_f_ts = true;
-        if(m_playlistBuff.contains(".ts?") > 0)  m_f_ts = true;
-        return m_playlistBuff;
-    }
-    else {
-        if(f_EXTINF_found) {
-            if(m_pplM3U8.f_mediaSeq_found) {
-                if(m_playlistContent.size() == 0) return {};
-
-                uint64_t mediaSeq;
-                m_pplM3U8.f_mediaSeq_found = m3u8_findMediaSeqInURL(m_linesWithSeqNrAndURL, &mediaSeq);
-                if(!m_pplM3U8.f_mediaSeq_found) {
-                    AUDIO_LOG_ERROR("xMediaSequence not found");
-                    httpPrint(m_lastHost.get());
-                }
-                if(mediaSeq < m_pplM3U8.xMedSeq) {
-                    uint64_t diff = m_pplM3U8.xMedSeq - mediaSeq;
-                    if(diff < 10) { ; }
-                    else {
-                        if(m_playlistContent.size() > 0) {
-                            for(int j = 0; j < lines; j++) {
-                                // AUDIO_LOG_INFO("lines %i, %s", lines, m_playlistContent[j]);
-                            }
-                        }
-                        else { ; }
-
-                        if(m_playlistURL.size() > 0) {
-                            for(int j = 0; j < m_playlistURL.size(); j++) {
-                                // AUDIO_LOG_INFO("m_playlistURL lines %i, %s", j, m_playlistURL[j]);
-                            }
-                        }
-                        else { ; }
-
-                        if(m_playlistURL.size() == 0) {
-                            m_f_reset_m3u8Codec = false;
-                            httpPrint(m_lastHost.get());
-                        }
-                    }
-                }
-                else {
-                    if(mediaSeq != UINT64_MAX) { AUDIO_LOG_ERROR("err, %u packets lost from %u, to %u", mediaSeq - m_pplM3U8.xMedSeq, m_pplM3U8.xMedSeq, mediaSeq); }
-                    m_pplM3U8.xMedSeq = mediaSeq;
-                }
-            } // f_medSeq_found
-        }
+        AUDIO_LOG_INFO("now playing %s", playlistBuff.get());
+        if(endsWith(playlistBuff.get(), "ts")) m_f_ts = true;
+        if(playlistBuff.contains(".ts?") > 0)  m_f_ts = true;
+        m_playlistBuff.clone_from(playlistBuff);
+        return playlistBuff;
     }
     return {};
 }
@@ -3768,52 +3715,6 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
     }
 
     return result; // it's a redirection, a new m3u8 playlist
-}
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-bool Audio::m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>&linesWithSeqNr, uint64_t* mediaSeqNr) { // We have no clue what the media sequence is
-
-    // example: linesWithSeqNr
-    // p:,<p:,<10.032,media_w630738364_405061.mp3
-    // p:,<p:,<9.952,media_w630738364_405062.mp3
-    // p:,<p:,<10.031,media_w630738364_405063.mp3
-
-    if(linesWithSeqNr.size() < 3) return false;
-    //     for (uint16_t i = 0; i < linesWithSeqNr.size(); i++) {
-    //         AUDIO_LOG_INFO("linesWithSeqNr[%i] = %s", i, linesWithSeqNr[i].get());
-    //     }
-
-    uint16_t pos;
-    std::array<std::vector<int64_t>, 3>numbers;
-    for(int i = 0; i < 3; i++){
-        pos = 0;
-        for(pos = 0; pos < linesWithSeqNr[i].strlen(); pos++){
-            if(isdigit(linesWithSeqNr[i][pos])){
-                numbers[i].push_back(strtoull(linesWithSeqNr[i].get() + pos, nullptr, 10));
-                // AUDIO_LOG_INFO("%lli", strtoull(linesWithSeqNr[i].get() + pos, nullptr, 10));
-                while(pos < linesWithSeqNr[i].strlen()){ // skip to next number or line end
-                    pos++;
-                    if(!isdigit(linesWithSeqNr[i][pos])) break;
-                }
-            }
-        }
-    }
-
-    // There must be three valid lines with a sequencer.Then the integers are sought for each line.For the example, these are:
-    // numbers[0] 10 32 630738364 405061
-    // numbers[1] 9 952 630738364 405062
-    // numbers[2] 10 31 630738364 405063
-    // then the absolute value is formed (-234 is also possible if there is a hyphen) and it is searched for three consecutive numbers
-
-    uint16_t idx = 0;
-    while(idx < numbers[0].size()){
-        // AUDIO_LOG_INFO("%lli, %lli, %lli", abs(numbers[0][idx]), abs(numbers[1][idx]), abs(numbers[2][idx]));
-        if(abs(numbers[0][idx]) + 1 == abs(numbers[1][idx]) && abs(numbers[1][idx]) + 1 == abs(numbers[2][idx])){
-            *mediaSeqNr = abs(numbers[0][idx]);
-            return true;
-        }
-        idx++;
-    }
-    return false;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processLocalFile() {

@@ -12,6 +12,7 @@
 #pragma GCC optimize ("Ofast")
 #include "esp_arduino_version.h"
 #include <vector>
+#include <deque>
 #include <Arduino.h>
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
@@ -496,8 +497,9 @@ private:
     const char*  parsePlaylist_PLS();
     const char*  parsePlaylist_ASX();
     ps_ptr<char> parsePlaylist_M3U8();
+    uint16_t     accomplish_m3u8_url();
+    int16_t      prepare_first_m3u8_url(ps_ptr<char>& playlistBuff);
     ps_ptr<char> m3u8redirection(uint8_t* codec);
-    bool         m3u8_findMediaSeqInURL(std::vector<ps_ptr<char>>& linesWithSeqNrAndURL, uint64_t* mediaSeqNr);
     void         showCodecParams();
     int          findNextSync(uint8_t* data, size_t len);
     uint32_t     decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded);
@@ -714,6 +716,12 @@ private:
         vec.shrink_to_fit();    // put back memory
     }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    void deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq){
+        for(int i = 0; i< deq.size(); i++) deq[i].reset();
+        deq.clear();            // unique_ptr takes care of free()
+        deq.shrink_to_fit();    // put back memory
+    }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     uint32_t simpleHash(const char* str){
         if(str == NULL) return 0;
         uint32_t hash = 0;
@@ -861,7 +869,7 @@ private:
 
     std::vector<ps_ptr<char>> m_playlistContent;        // m3u8 playlist buffer from responseHeader
     std::vector<ps_ptr<char>> m_playlistURL;            // m3u8 streamURLs buffer
-    std::vector<ps_ptr<char>> m_linesWithSeqNrAndURL;   // extract from m_playlistContent, contains URL and MediaSequenceNumber
+    std::deque <ps_ptr<char>> m_linesWithURL;   // extract from m_playlistContent, contains URL and MediaSequenceNumber
     std::vector<ps_ptr<char>> m_linesWithEXTINF;        // extract from m_playlistContent, contains length and metadata
     std::vector<ps_ptr<char>> m_syltLines;              // SYLT line table
     std::vector<uint32_t>     m_syltTimeStamp;          // SYLT time table
@@ -887,6 +895,7 @@ private:
     ps_ptr<char>     m_lastM3U8host;
     ps_ptr<char>     m_speechtxt;                   // stores tts text
     ps_ptr<char>     m_streamTitle;                 // stores the last StreamTitle
+    ps_ptr<char>     m_playlistBuff;
 
 
     filter_t        m_filter[3];                    // digital filters
