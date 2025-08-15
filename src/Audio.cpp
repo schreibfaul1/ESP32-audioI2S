@@ -3524,7 +3524,7 @@ uint16_t Audio::accomplish_m3u8_url() {
             continue;
         }
     }
-    for(uint16_t i = 0; i < m_linesWithURL.size(); i++) m_linesWithURL[i].println();
+    // for(uint16_t i = 0; i < m_linesWithURL.size(); i++) m_linesWithURL[i].println();
     return 0;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3538,17 +3538,17 @@ int16_t Audio::prepare_first_m3u8_url(ps_ptr<char>& playlistBuff){
         if(playlistBuff.equals(m_linesWithURL[i].get())) idx = i;
     }
     if(idx == -1){
-        AUDIO_LOG_WARN("nothing found, all entries are new");
+        AUDIO_LOG_DEBUG("nothing found, all entries are new");
         return 0;
     }
     if(idx == m_linesWithURL.size()){
-        AUDIO_LOG_WARN("only last entry found, nothing is new");
+        AUDIO_LOG_DEBUG("only last entry found, nothing is new");
         return -1;
     }
     for(int j = 0; j < idx + 1; j++){
          m_linesWithURL.pop_front();
     }
-    AUDIO_LOG_WARN("%i entries are known and removed", idx + 1);
+    AUDIO_LOG_DEBUG("%i entries are known and removed", idx + 1);
     return idx  + 1;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
