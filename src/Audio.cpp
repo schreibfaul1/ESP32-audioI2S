@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1h                                                                                                                              ";
+    Version 3.4.1i                                                                                                                              ";
 /*  Updated on: Aug 16.2025
 
     Author: Wolle (schreibfaul1)
@@ -3329,7 +3329,7 @@ bool Audio::readPlayListData() {
             AUDIO_INFO("url is a webpage!");
             goto exit;
         }
-        AUDIO_INFO("current playlist line: %s", pl.get());
+        // AUDIO_INFO("current playlist line: %s", pl.get());
         if(pl.size() > 0) m_playlistContent.emplace_back(std::move(pl));
 
 
@@ -3606,7 +3606,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
             m_linesWithURL.pop_front();
             m_linesWithURL.shrink_to_fit();
         }
-        AUDIO_LOG_INFO("now playing %s", playlistBuff.get());
+        AUDIO_LOG_DEBUG("now playing %s", playlistBuff.get());
         if(endsWith(playlistBuff.get(), "ts")) m_f_ts = true;
         if(playlistBuff.contains(".ts?") > 0)  m_f_ts = true;
         m_playlistBuff.clone_from(playlistBuff);
@@ -6371,6 +6371,8 @@ int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first) {
         *readedBytes += 2;
         m_gchs.f_skipCRLF = false;
     }
+
+    if (!m_client->available()) return -1;
 
     // -------- HTTP-chunked-Read Logic --------
     std::string chunkLine;
