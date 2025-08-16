@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1g                                                                                                                              ";
-/*  Updated on: Aug 15.2025
+    Version 3.4.1h                                                                                                                              ";
+/*  Updated on: Aug 16.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3267,6 +3267,7 @@ bool Audio::readPlayListData() {
     uint8_t  readedBytes = 0;
     getChunkSize(0, true);
     if(m_f_chunked) chunksize = getChunkSize(&readedBytes);
+    uint16_t plSize = max(m_audioFileSize, chunksize);
 
     ps_ptr<char>pl("pl");
     uint32_t ctl = 0;
@@ -3274,8 +3275,8 @@ bool Audio::readPlayListData() {
     // delete all memory in m_playlistContent
     if(m_playlistFormat == FORMAT_M3U8 && !psramFound()) { AUDIO_LOG_ERROR("m3u8 playlists requires PSRAM enabled!"); }
     vector_clear_and_shrink(m_playlistContent);
-    while(true) { // outer while
 
+    while(true) { // outer while
         uint32_t ctime = millis();
         uint32_t timeout = 2000; // ms
         pl.alloc(1024); pl.clear(); // playlistLine
@@ -3283,6 +3284,7 @@ bool Audio::readPlayListData() {
         while(true) { // inner while
             uint16_t pos = 0;
             while(m_client->available()) { // super inner while :-))
+                if(ctl == plSize) break;
                 pl[pos] = audioFileRead();
                 ctl++;
                 if(pl[pos] == '\n') {
@@ -3290,7 +3292,6 @@ bool Audio::readPlayListData() {
                     pos++;
                     break;
                 }
-                //    if(pl[pos] == '&' ) {pl[pos] = '\0'; pos++; break;}
                 if(pl[pos] == '\r') {
                     pl[pos] = '\0';
                     pos++;
@@ -3302,18 +3303,12 @@ bool Audio::readPlayListData() {
                     pos--;
                     continue;
                 }
-                if(pos == 509) { pl[pos] = '\0'; }
-                if(ctl == chunksize) {
-                    pl[pos] = '\0';
-                    break;
-                }
-                if(ctl == m_audioFileSize) {
+                if(ctl == plSize) {
                     pl[pos] = '\0';
                     break;
                 }
             }
-            if(ctl == chunksize) break;
-            if(ctl == m_audioFileSize) break;
+            if(ctl == plSize) break;
             if(pos) {
                 pl[pos] = '\0';
                 break;
@@ -3334,28 +3329,20 @@ bool Audio::readPlayListData() {
             AUDIO_INFO("url is a webpage!");
             goto exit;
         }
+        AUDIO_INFO("current playlist line: %s", pl.get());
         if(pl.size() > 0) m_playlistContent.emplace_back(std::move(pl));
 
-        if(m_playlistContent.size() && m_playlistContent.size() % 1000 == 0) { AUDIO_INFO("current playlist line: %lu", (long unsigned)m_playlistContent.size()); }
+
         // termination conditions
         // 1. The http response header returns a value for contentLength -> read chars until contentLength is reached
         // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
-        if(ctl == m_audioFileSize) {
-            while(m_client->available()) audioFileRead();
-            break;
-        } // read '\n\n' if exists
-        if(ctl == chunksize) {
-            while(m_client->available()) audioFileRead();
+        if(ctl == plSize) {
             break;
         }
-        if(!m_client->connected() && m_client->available() == 0) break;
-
     } // outer while
     lines = m_playlistContent.size();
-    for(int i = 0; i < lines; i++) { // print all string in first vector of 'arr'
-    //    AUDIO_LOG_INFO("pl=%i \"%s\"", i, m_playlistContent[i]);
-    }
+    if(m_f_chunked) getChunkSize(&readedBytes);
     m_dataMode = AUDIO_PLAYLISTDATA;
     return true;
 
