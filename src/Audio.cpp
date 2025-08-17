@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1i                                                                                                                              ";
+    Version 3.4.1j                                                                                                                              ";
 /*  Updated on: Aug 16.2025
 
     Author: Wolle (schreibfaul1)
@@ -3990,6 +3990,7 @@ nextRound:
         if(m_pwsst.f_chunkFinished ) goto chunkFinished;
         if(m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
             int cs = getChunkSize(&readedBytes);
+            if(cs == -1) return;
             m_pwsst.chunkSize += cs; AUDIO_LOG_DEBUG("cs %i, rb %i", cs, readedBytes);
             if(cs == 0){
                 m_pwsst.f_chunkFinished = true;
