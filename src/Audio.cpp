@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1j                                                                                                                              ";
-/*  Updated on: Aug 16.2025
+    Version 3.4.1k                                                                                                                              ";
+/*  Updated on: Aug 17.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3550,6 +3550,25 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     // #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
     // http://n3fa-e2.revma.ihrhls.com/zc7729/63_sdtszizjcjbz02/main/163374039.aac
 
+
+    // #EXTM3U
+    // #EXT-X-VERSION:3
+    // #EXT-X-MEDIA-SEQUENCE:0
+    // #EXT-X-TARGETDURATION:4
+    // #EXTINF:3.997,90s90s - Rock
+    // #EXT-X-PROGRAM-DATE-TIME:2025-08-17T14:08:21.088877044Z
+    // https://hz71.streamabc.net/hls/d2gu4l4peavc72tgotd0/regc-90s90srock1436287-mp3-192-2191420/0.mp3
+    // #EXTINF:3.997,90s90s - Rock
+    // #EXT-X-PROGRAM-DATE-TIME:2025-08-17T14:08:24.088877044Z
+    // https://hz71.streamabc.net/hls/d2gu4l4peavc72tgotd0/regc-90s90srock1436287-mp3-192-2191420/1.mp3
+    // #EXTINF:3.997,90s90s - Rock
+    // #EXT-X-PROGRAM-DATE-TIME:2025-08-17T14:08:28.088877044Z
+    // https://hz71.streamabc.net/hls/d2gu4l4peavc72tgotd0/regc-90s90srock1436287-mp3-192-2191420/2.mp3
+    // #EXTINF:3.997,90s90s - Rock
+    // #EXT-X-PROGRAM-DATE-TIME:2025-08-17T14:08:32.088877044Z
+    // https://hz71.streamabc.net/hls/d2gu4l4peavc72tgotd0/regc-90s90srock1436287-mp3-192-2191420/3.mp3
+
+
     if(!m_lastHost.valid())      {AUDIO_LOG_ERROR("m_lastHost is NULL");     return {};} // guard
 
     uint8_t lines = m_playlistContent.size();
@@ -3564,6 +3583,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
             // AUDIO_LOG_INFO("pl%i = %s", i, m_playlistContent[i].get());
             if(m_playlistContent[i].starts_with("#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*AUDIO_LOG_ERROR("we have a redirection");*/}
             if(addNextLine) {
+                if(startsWith(m_playlistContent[i].get(), "#EXT-X-PROGRAM-DATE-TIME:")) continue; // skip this line
                 addNextLine = false;
                 // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
                 m_linesWithURL.emplace_back().clone_from(m_playlistContent[i]);
@@ -3973,6 +3993,7 @@ void Audio::processWebStreamTS() {
         m_pwsst.ts_packetPtr = 0;
         m_t0 = millis();
         getChunkSize(0, true);
+        ts_parsePacket(0, 0, 0);
         if(!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
     } //—————————————————————————————————————————————————————————————————————————
 
@@ -6089,9 +6110,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     if(packet == NULL) {
         if(log) AUDIO_LOG_WARN("parseTS reset");
-        for(int i = 0; i < PID_ARRAY_LEN; i++) m_tspp.pids[i] = 0;
-        m_tspp.PES_DataLength = 0;
-        m_tspp.pidOfAAC = 0;
+        memset(&m_tspp, 0, sizeof(tspp_t));
         return true;
     }
 
