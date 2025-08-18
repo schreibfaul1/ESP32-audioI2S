@@ -17,19 +17,21 @@
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
 #include <WiFi.h>
-#include <WiFiClient.h>
-#include <WiFiClientSecure.h>
 #include <SD.h>
 #include <SD_MMC.h>
-#include <SPIFFS.h>
 #include <FS.h>
 #include <FFat.h>
 #include <atomic>
 #include <codecvt>
 #include <locale>
 #include <memory>
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#else
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
+#endif  // ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 #include <driver/i2s_std.h>
 #include "psram_unique_ptr.hpp"
 
@@ -845,7 +847,7 @@ private:
     } pid_array;
 
     File                  m_audiofile;
-#ifndef ETHERNET_IF
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
     WiFiClient            client;
     WiFiClientSecure      clientsecure;
     WiFiClient*           m_client = nullptr;
@@ -853,7 +855,7 @@ private:
     NetworkClient	      client;
     NetworkClientSecure	  clientsecure;
     NetworkClient*       m_client = nullptr;
-#endif
+#endif  // ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
     SemaphoreHandle_t     mutex_playAudioData;
     SemaphoreHandle_t     mutex_audioTask;
     TaskHandle_t          m_audioTaskHandle = nullptr;
