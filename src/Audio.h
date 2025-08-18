@@ -25,13 +25,8 @@
 #include <codecvt>
 #include <locale>
 #include <memory>
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-#include <WiFiClient.h>
-#include <WiFiClientSecure.h>
-#else
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
-#endif  // ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
 #include <driver/i2s_std.h>
 #include "psram_unique_ptr.hpp"
 
@@ -847,15 +842,10 @@ private:
     } pid_array;
 
     File                  m_audiofile;
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-    WiFiClient            client;
-    WiFiClientSecure      clientsecure;
-    WiFiClient*           m_client = nullptr;
-#else
     NetworkClient	      client;
     NetworkClientSecure	  clientsecure;
-    NetworkClient*       m_client = nullptr;
-#endif  // ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+    NetworkClient*        m_client = nullptr;
+
     SemaphoreHandle_t     mutex_playAudioData;
     SemaphoreHandle_t     mutex_audioTask;
     TaskHandle_t          m_audioTaskHandle = nullptr;

@@ -1,7 +1,6 @@
 #include "Arduino.h" // >= Arduino V3
 #include <ETH.h>
 #include <SPI.h>
-#define ETHERNET_IF
 #include "Audio.h"
 
 Audio audio;

@@ -2,8 +2,6 @@
 #include "Audio.h"
 #include "ETH.h"
 
-#define ETHERNET_IF
-
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define I2S_DOUT      25
 #define I2S_BCLK      27

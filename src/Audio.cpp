@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1k                                                                                                                              ";
-/*  Updated on: Aug 17.2025
+    Version 3.4.1l                                                                                                                              ";
+/*  Updated on: Aug 18.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -365,7 +365,7 @@ void Audio::setDefaults() {
     m_hashQueue.shrink_to_fit(); // uint32_t vector
     client.stop();
     clientsecure.stop();
-    m_client = static_cast<WiFiClient*>(&client); /* default to *something* so that no NULL deref can happen */
+    m_client = static_cast<NetworkClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                     // reset ts routine
     m_lastM3U8host.reset();
 
@@ -542,7 +542,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
 
     bool res = true;
     int port = 443;
-    m_client = static_cast<WiFiClient*>(&clientsecure);
+    m_client = static_cast<NetworkClientSecure*>(&clientsecure);
 
     uint32_t t = millis();
     AUDIO_INFO("Connect to: \"%s\"", host.get());
@@ -702,8 +702,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
                        rqh.append("Connection: keep-alive\r\n\r\n");
 
-    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(port == 80) port = 443;}
-    else        { m_client = static_cast<WiFiClient*>(&client); }
+    if(m_f_ssl) { m_client = static_cast<NetworkClientSecure*>(&clientsecure); if(port == 80) port = 443;}
+    else        { m_client = static_cast<NetworkClient*>(&client); }
 
     timestamp = millis();
     m_client->setTimeout(m_f_ssl ? m_timeout_ms_ssl : m_timeout_ms);
@@ -817,8 +817,8 @@ bool Audio::httpPrint(const char* host) {
         if(m_client->connected()) m_client->stop();
     }
     if(!m_client->connected() ) {
-         if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
-         else        { m_client = static_cast<WiFiClient*>(&client); }
+         if(m_f_ssl) { m_client = static_cast<NetworkClientSecure*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+         else        { m_client = static_cast<NetworkClient*>(&client); }
         if(f_equal) AUDIO_INFO("The host has disconnected, reconnecting");
 
         if(!m_client->connect(hwoe.get(), port)) {
@@ -909,8 +909,8 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
 
     if(m_client->connected()) {m_client->stop();}
-    if(m_f_ssl) { m_client = static_cast<WiFiClient*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
-    else        { m_client = static_cast<WiFiClient*>(&client); }
+    if(m_f_ssl) { m_client = static_cast<NetworkClientSecure*>(&clientsecure); if(m_f_ssl && port == 80) port = 443;}
+    else        { m_client = static_cast<NetworkClient*>(&client); }
 
     if(!m_client->connect(hwoe.get(), port)) {
         AUDIO_LOG_ERROR("connection lost %s", c_host.c_get());
@@ -999,7 +999,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     req.append("Accept: text/html\r\n");
     req.append("Connection: close\r\n\r\n");
 
-    m_client = static_cast<WiFiClient*>(&client);
+    m_client = static_cast<NetworkClient*>(&client);
     AUDIO_INFO("connect to \"%s\"", host);
     if(!m_client->connect(host, 80)) {
         AUDIO_LOG_ERROR("Connection failed");
