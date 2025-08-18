@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1l                                                                                                                              ";
+    Version 3.4.1m                                                                                                                              ";
 /*  Updated on: Aug 18.2025
 
     Author: Wolle (schreibfaul1)
@@ -686,9 +686,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
                        rqh.assign("GET /");
                        rqh.append(path.get());
                        rqh.append(" HTTP/1.1\r\n");
-                       rqh.append("Host: ");
-                       rqh.append(hwoe.get());
-                       rqh.append("\r\n");
+                       rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
                        rqh.append("Icy-MetaData:1\r\n");
                        rqh.append("Icy-MetaData:2\r\n");
                        rqh.append("Pragma: no-cache\r\n");
@@ -801,9 +799,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.assign("GET /");
     rqh.append(path.get());
     rqh.append(" HTTP/1.1\r\n");
-    rqh.append("Host: ");
-    rqh.append(hwoe.get());
-    rqh.append("\r\n");
+    rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Accept:*/*\r\n");
@@ -898,7 +894,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     else                     range.assignf("Range: bytes=%li-%li\r\n",seek, length);
 
     rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
-    rqh.appendf("Host: %s\r\n", hwoe.get());
+    rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
     rqh.append("Accept: */*\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
@@ -3229,7 +3225,14 @@ void Audio::loop() {
                     m_f_firstCall  = true;
                 }
                 break;
-            case AUDIO_PLAYLISTINIT: readPlayListData(); break;
+            case AUDIO_PLAYLISTINIT:
+                if(readPlayListData()) break;
+                else { // readPlayListData == false means connect to m3u8 URL
+                    if(m_lastM3U8host.valid()) {m_f_reset_m3u8Codec = false; httpPrint(m_lastM3U8host.get());}
+                    else                       {httpPrint(m_lastHost.get());}      // if url has no first redirection
+                    m_dataMode = HTTP_RESPONSE_HEADER;                             // we have a new playlist now
+                   break;
+                }
             case AUDIO_PLAYLISTDATA:
                 host = parsePlaylist_M3U8();
                 if(!host.valid()) m_lVar.no_host_cnt++;
@@ -3260,18 +3263,38 @@ void Audio::loop() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readPlayListData() {
-    if(m_dataMode != AUDIO_PLAYLISTINIT) return false;
-    if(m_client->available() == 0) return false;
 
-    uint32_t chunksize = 0;
-    uint8_t  readedBytes = 0;
+    uint32_t     chunksize = 0;
+    uint8_t      readedBytes = 0;
+    ps_ptr<char> pl("pl");
+    uint32_t     ctl = 0;
+    int          lines = 0;
+    uint16_t     plSize = 0;
+
+    auto detectTimeout = [&]() -> bool{
+        uint32_t t = millis();
+        while(!m_client->available()) {
+            vTaskDelay(50);
+            if(t + 1000 < millis()) {
+                AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
+                if(m_f_chunked) getChunkSize(0, true);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if(m_dataMode != AUDIO_PLAYLISTINIT) {AUDIO_LOG_ERROR("wrong datamode %s", dataModeStr[m_dataMode]); goto exit;}
+
     getChunkSize(0, true);
     if(m_f_chunked) chunksize = getChunkSize(&readedBytes);
-    uint16_t plSize = max(m_audioFileSize, chunksize);
+    plSize = max(m_audioFileSize, chunksize);
 
-    ps_ptr<char>pl("pl");
-    uint32_t ctl = 0;
-    int      lines = 0;
+    if(!plSize){ // maybe playlist without contentLength or chunkSize
+        if(detectTimeout()) goto exit;
+        plSize = m_client->available();
+    }
+
     // delete all memory in m_playlistContent
     if(m_playlistFormat == FORMAT_M3U8 && !psramFound()) { AUDIO_LOG_ERROR("m3u8 playlists requires PSRAM enabled!"); }
     vector_clear_and_shrink(m_playlistContent);
@@ -3283,42 +3306,24 @@ bool Audio::readPlayListData() {
 
         while(true) { // inner while
             uint16_t pos = 0;
-            while(m_client->available()) { // super inner while :-))
+            while(true) { // super inner while :-))
+                uint32_t t = millis();
                 if(ctl == plSize) break;
+                if(detectTimeout()) goto exit;
                 pl[pos] = audioFileRead();
                 ctl++;
-                if(pl[pos] == '\n') {
-                    pl[pos] = '\0';
-                    pos++;
-                    break;
-                }
-                if(pl[pos] == '\r') {
-                    pl[pos] = '\0';
-                    pos++;
-                    continue;
-                    ;
-                }
+                if(pl[pos] == '\n') {pl[pos] = '\0'; pos++; break;}
+                if(pl[pos] == '\r') {pl[pos] = '\0'; pos++; continue;}
                 pos++;
-                if(pos == 1022) {
-                    pos--;
-                    continue;
-                }
-                if(ctl == plSize) {
-                    pl[pos] = '\0';
-                    break;
-                }
+                if(pos == 1022)   {pos--; continue;}
+                if(ctl == plSize) {pl[pos] = '\0'; break;}
             }
-            if(ctl == plSize) break;
             if(pos) {
                 pl[pos] = '\0';
                 break;
             }
-
-            if(ctime + timeout < millis()) {
-                AUDIO_LOG_ERROR("timeout");
-                for(int i = 0; i < m_playlistContent.size(); i++) AUDIO_LOG_ERROR("pl%i = %s", i, m_playlistContent[i].get());
-                goto exit;
-            }
+            if(ctl == plSize) break;
+            if(detectTimeout()) goto exit;
         } // inner while
 
         if(pl.starts_with_icase("<!DOCTYPE")) {
@@ -3342,23 +3347,25 @@ bool Audio::readPlayListData() {
         }
     } // outer while
     lines = m_playlistContent.size();
-    if(m_f_chunked) getChunkSize(&readedBytes);
+
+    if(m_f_chunked) getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n"
     m_dataMode = AUDIO_PLAYLISTDATA;
     return true;
 
 exit:
     vector_clear_and_shrink(m_playlistContent);
-    m_f_running = false;
-    m_dataMode = AUDIO_NONE;
+    getChunkSize(0, true);
     return false;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 const char* Audio::parsePlaylist_M3U() {
+
     uint8_t lines = m_playlistContent.size();
     int     pos = 0;
     char*   host = nullptr;
 
     for(int i = 0; i < lines; i++) {
+       // m_playlistContent[i].println();
         if(m_playlistContent[i].contains("#EXTINF:")) { // Info?
             pos = m_playlistContent[i].index_of(",");        // Comma in this line?
             if(pos > 0) {
@@ -6380,9 +6387,11 @@ int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first) {
 
     // skip CRLF from the previous chunk (only http-chunked)
     if (m_gchs.f_skipCRLF) {
-        if (m_client->available() < 2) {
+        uint32_t t = millis();
+        while (m_client->available() < 2) {
+            if(t + 500 > millis()){vTaskDelay(100); continue;}
             AUDIO_LOG_WARN("Not enough bytes for CRLF");
-            return 0;
+            return -1;
         }
         int a = audioFileRead();
         int b = audioFileRead();
@@ -6444,10 +6453,8 @@ int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first) {
             idx++;
         }
     }
-
     return chunksize;
 }
-
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::readID3V1Tag() {
     if (m_codec != CODEC_MP3) return false;
