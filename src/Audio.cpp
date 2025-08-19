@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.1m                                                                                                                              ";
-/*  Updated on: Aug 18.2025
+    Version 3.4.1n                                                                                                                              ";
+/*  Updated on: Aug 19.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6535,11 +6535,15 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
         buffFillSize = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
 
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
+        {
             while(m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
             m_f_allDataReceived = false;
 
 /* process before */
-            if(m_codec == CODEC_M4A) m_resumeFilePos += m4a_correctResumeFilePos(); {if(m_resumeFilePos == -1) goto exit;}
+            if(m_codec == CODEC_M4A){
+                m_resumeFilePos += m4a_correctResumeFilePos();
+                if(m_resumeFilePos == -1) goto exit;
+            }
 
 /* skip to position */
             res = audioFileSeek(m_resumeFilePos);
@@ -6557,6 +6561,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
                 offset += bytesRead;
             }
             InBuff.bytesWritten(buffFillSize);
+
 /* process after */
             offset = 0;
             if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
@@ -6568,7 +6573,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
 
 
             InBuff.bytesWasRead(offset);
-
+        }
         m_f_lockInBuffer = false;
         return res + offset;
 exit:
