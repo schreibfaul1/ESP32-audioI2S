@@ -22,6 +22,8 @@
 #include <codecvt>
 #include <locale>
 #include <memory>
+#include <functional>
+#include <bitset>
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
 #include <driver/i2s_std.h>
@@ -31,6 +33,19 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
+// esc control sequences for log formatting
+#define ANSI_ESC_RESET          "\033[0m"
+#define ANSI_ESC_BLACK          "\033[30m"
+#define ANSI_ESC_RED            "\033[31m"
+#define ANSI_ESC_GREEN          "\033[32m"
+#define ANSI_ESC_YELLOW         "\033[33m"
+#define ANSI_ESC_BLUE           "\033[34m"
+#define ANSI_ESC_MAGENTA        "\033[35m"
+#define ANSI_ESC_CYAN           "\033[36m"
+#define ANSI_ESC_WHITE          "\033[37m"
+
+
+// weak-defined callback functions (deprecated callback style)
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
@@ -48,6 +63,31 @@ extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_eof_speech(const char*);
 extern __attribute__((weak)) void audio_eof_stream(const char*); // The webstream comes to an end
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
+
+namespace audio {
+    // various callback types
+    enum class callback_type_t : size_t {
+        none = 0,
+        info,
+        id3data,
+        id3lyrics,
+        streamtitle,
+        station,
+        bitrate,
+        commercial,
+        icyurl,
+        icylogo,
+        icydescr,
+        lasthost,
+        eof_mp3,
+        eof_speech,
+        eof_stream,
+        all
+    };
+
+    // callback functions prototypes
+    using literal_cb_t = std::function< void (const char*, callback_type_t)>;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -417,8 +457,34 @@ public:
     const char* getCodecname() { return codecname[m_codec]; }
     const char* getVersion() { return audioI2SVers; }
 
+    // callbacks
+    /**
+     * @brief Set functional callback for string-based events
+     * @note to dessign callback set it to a nullptr
+     * @param cb - functional callback
+     * @param type - type to enable
+     */
+    void setLiteralCallback(audio::literal_cb_t cb);
+
+    /**
+     * @brief enable certain types of events for callbacks
+     * @note 'all' enables all events
+     * @note 'none' disables all events
+     * 
+     * @param type to enable
+     * @param state 'true' to enable event, 'false' to disable
+     */
+    void enableCallbackType(audio::callback_type_t type, bool state);
+
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
+
+    // callback wrappers
+    template <typename... Args>
+    void AUDIO_INFO(const char* fmt, Args&&... args);
+
+    template <typename... Args>
+    void AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... args);
 
     void            latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void            htmlToUTF8(char* str);
@@ -944,6 +1010,86 @@ private:
     int16_t         m_pidOfAAC;
     uint8_t         m_packetBuff[m_tsPacketSize];
     int16_t         m_pesDataLength = 0;
+
+    // *********
+    // callbacks
+
+    void _callback_helper(const char* msg,audio::callback_type_t type);
+
+    /**
+     * @brief functional callback to execute on various events
+     * 
+     */
+    audio::literal_cb_t _literal_callback;
+    // enabled callback types
+    std::bitset<16> _cb_types{0};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// template implementations
+
+template <typename... Args>
+void Audio::AUDIO_INFO(const char* fmt, Args&&... args) {
+    // return if no callbacks defined
+    if((!_literal_callback || !_cb_types[static_cast<size_t>(audio::callback_type_t::info)]) && !audio_info) return;
+    ps_ptr<char> result;
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1, "result");
+    char* dst = result.get();
+    if (!dst) return;  // Or error treatment
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+    result.append(ANSI_ESC_RESET);
+
+
+    if(_literal_callback && _cb_types[static_cast<size_t>(audio::callback_type_t::info)])
+        _literal_callback(result.c_get(), audio::callback_type_t::info);
+    else     // compat with older weak callbacks
+        audio_info(result.c_get());
+
+    result.reset();
+}
+
+template <typename... Args>
+void Audio::AUDIO_ERROR_IMPL(const char* path, int line, const char* fmt, Args&&... args) {
+    ps_ptr<char> result;
+    ps_ptr<char> file;
+
+    file.copy_from(path);
+    while(file.contains("/")){
+        file.remove_before('/', false);
+    }
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1, "result");
+    char* dst = result.get();
+    if (!dst) return;
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+
+    // build a final string with file/line prefix
+    ps_ptr<char> final;
+    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    if (total_len <= 0) return;
+    final.alloc(total_len + 1, "final");
+    char* dest = final.get();
+    if (!dest) return;  // or error treatment
+    if(_literal_callback || audio_info){
+        std::snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        if (_literal_callback)
+            _literal_callback(final.get(), audio::callback_type_t::info);
+        else
+            audio_info(final.get());
+    }
+    else{
+         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+         log_e("%s", final.c_get());
+    }
+    final.reset();
+    result.reset();
+}
