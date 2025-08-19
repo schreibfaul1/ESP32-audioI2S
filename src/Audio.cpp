@@ -1544,7 +1544,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         if(m_rflh.picLen) {
             size_t pos = m_audioFilePosition;
-            if(audio_id3image) audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
+            if(_id3image_callback) _id3image_callback(m_audiofile, m_rflh.picPos, m_rflh.picLen);
+            else if (audio_id3image) audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
         AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
@@ -1758,7 +1759,7 @@ int Audio::read_ID3_Header_new(uint8_t* data, size_t len) {
 
     if(m_controlCounter == 1) { // first call
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
-            if(!m_f_m3u8data) {AUDIO_INFO("file has no ID3 tag, skip metadata");}
+            if(!m_f_m3u8data) {_callback_helper("file has no ID3 tag, skip metadata", callback_type_t::info);}
             m_audioDataSize = m_audioFileSize;
             m_audioDataStart = 0;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Data-Start: %u, Audio-Length: %u", m_audioDataStart, m_audioDataSize);
@@ -2271,9 +2272,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
             if(!m_f_m3u8data) AUDIO_INFO("Audio-Length: %u", m_audioDataSize);
-            if(m_ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
+            if(m_ID3Hdr.APIC_pos[0] && (_id3image_callback || audio_id3image)) { // if we have more than one APIC, output the first only
                 size_t pos = m_audioFilePosition;
-                audio_id3image(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
+                if (_id3image_callback)
+                    _id3image_callback(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
+                else if (audio_id3image)
+                    audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
+
                 audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
             }
             m_ID3Hdr.numID3Header = 0;
@@ -2866,7 +2871,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m_audioDataStart = m_m4aHdr.headerSize;
         if(m_m4aHdr.picLen) {
             size_t pos = m_audioFilePosition;
-            audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
+            if (_id3image_callback)
+                _id3image_callback(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
+            else if (audio_id3image)
+                audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
@@ -3122,10 +3130,14 @@ void IRAM_ATTR Audio::playChunk() {
     outBuff_ptr = m_outBuff.get();
 #endif
 
-    if(audio_process_i2s) {
+    if(_i2s_process_callback || audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)outBuff_ptr, m_validSamples, &continueI2S); // 48KHz stereo 16bps
+        if (_i2s_process_callback)
+            _i2s_process_callback((int16_t*)outBuff_ptr, m_validSamples, &continueI2S); // 48KHz stereo 16bps
+        else if (audio_process_i2s)
+            audio_process_i2s((int16_t*)outBuff_ptr, m_validSamples, &continueI2S); // 48KHz stereo 16bps
+
         if(!continueI2S) {
             m_validSamples = 0;
             m_plCh.count = 0;
@@ -3938,7 +3950,7 @@ void Audio::processWebFile() {
         }
         else {
             m_f_stream = true;
-            AUDIO_INFO("stream ready");
+            _callback_helper("stream ready", callback_type_t::info);
         }
     }
 
@@ -4639,7 +4651,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     _callback_helper("The MP3Decoder could not be initialized", callback_type_t::info);
                     goto exit;
                 }
-                AUDIO_INFO("MP3Decoder has been initialized");
+                _callback_helper("MP3Decoder has been initialized", callback_type_t::info);
                 InBuff.changeMaxBlockSize(m_frameSizeMP3);
             }
             break;
@@ -4649,7 +4661,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     _callback_helper("The AACDecoder could not be initialized", callback_type_t::info);
                     goto exit;
                 }
-                AUDIO_INFO("AACDecoder has been initialized");
+                _callback_helper("AACDecoder has been initialized", callback_type_t::info);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -4659,7 +4671,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                     _callback_helper("The AACDecoder could not be initialized", callback_type_t::info);
                     goto exit;
                 }
-                AUDIO_INFO("AACDecoder has been initialized");
+                _callback_helper("AACDecoder has been initialized", callback_type_t::info);
                 InBuff.changeMaxBlockSize(m_frameSizeAAC);
             }
             break;
@@ -4673,14 +4685,14 @@ bool Audio::initializeDecoder(uint8_t codec) {
                 goto exit;
             }
             InBuff.changeMaxBlockSize(m_frameSizeFLAC);
-            AUDIO_INFO("FLACDecoder has been initialized");
+            _callback_helper("FLACDecoder has been initialized", callback_type_t::info);
             break;
         case CODEC_OPUS:
             if(!OPUSDecoder_AllocateBuffers()) {
                 _callback_helper("The OPUSDecoder could not be initialized", callback_type_t::info);
                 goto exit;
             }
-            AUDIO_INFO("OPUSDecoder has been initialized");
+            _callback_helper("OPUSDecoder has been initialized", callback_type_t::info);
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
@@ -4692,7 +4704,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
                 _callback_helper("The VORBISDecoder could not be initialized", callback_type_t::info);
                 goto exit;
             }
-            AUDIO_INFO("VORBISDecoder has been initialized");
+            _callback_helper("VORBISDecoder has been initialized", callback_type_t::info);
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
         case CODEC_WAV: InBuff.changeMaxBlockSize(m_frameSizeWav); break;
@@ -5013,7 +5025,7 @@ void Audio::showCodecParams() {
     AUDIO_INFO("SampleRate: %lu", getSampleRate());
     AUDIO_INFO("BitsPerSample: %u", getBitsPerSample());
     if(getBitRate()) { AUDIO_INFO("BitRate: %lu", getBitRate()); }
-    else { AUDIO_INFO("BitRate: N/A"); }
+    else { _callback_helper("BitRate: N/A", callback_type_t::info); }
 
     if(m_codec == CODEC_AAC) {
         uint8_t answ = AACGetFormat();
@@ -5263,7 +5275,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_FLAC:    m_validSamples = FLACGetOutputSamps() / getChannels();
                             st = FLACgetStreamTitle();
                             if(st) {
-                                AUDIO_INFO(st);
+                                _callback_helper(st, callback_type_t::info);
                                 _callback_helper(st, callback_type_t::streamtitle);
                             }
                             vec = FLACgetMetadataBlockPicture();
@@ -5272,13 +5284,16 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
                                 // for(int i = 0; i < vec.size(); i += 2) { AUDIO_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
-                                if(audio_oggimage) audio_oggimage(m_audiofile, vec);
+                                if(_oggimage_callback)
+                                    _oggimage_callback(m_audiofile, vec);
+                                else if (audio_oggimage)
+                                    audio_oggimage(m_audiofile, vec);
                             }
                             break;
         case CODEC_OPUS:    m_validSamples = OPUSGetOutputSamps();
                             st = OPUSgetStreamTitle();
                             if(st){
-                                AUDIO_INFO(st);
+                                _callback_helper(st, callback_type_t::info);
                                 _callback_helper(st, callback_type_t::streamtitle);
                             }
                             vec = OPUSgetMetadataBlockPicture();
@@ -5287,7 +5302,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
                                 // for(int i = 0; i < vec.size(); i += 2) { AUDIO_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
-                                if(audio_oggimage) audio_oggimage(m_audiofile, vec);
+                                if(_oggimage_callback)
+                                    _oggimage_callback(m_audiofile, vec);
+                                else if (audio_oggimage)
+                                    audio_oggimage(m_audiofile, vec);
                             }
 
                             if(m_opus_mode != OPUSgetMode()){
@@ -5311,7 +5329,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
                                 // for(int i = 0; i < vec.size(); i += 2) { AUDIO_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, vec[i], vec[i + 1]); }
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
-                                if(audio_oggimage) audio_oggimage(m_audiofile, vec);
+                                if(_oggimage_callback)
+                                    _oggimage_callback(m_audiofile, vec);
+                                else if (audio_oggimage)
+                                    audio_oggimage(m_audiofile, vec);
                             }
                             break;
     }
@@ -5653,11 +5674,11 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 
     i2s_channel_disable(m_i2s_tx_handle);
     if(commFMT) {
-        AUDIO_INFO("commFMT = LSBJ (Least Significant Bit Justified)");
+        _callback_helper("commFMT = LSBJ (Least Significant Bit Justified)", callback_type_t::info);
         m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     }
     else {
-        AUDIO_INFO("commFMT = Philips");
+        _callback_helper("commFMT = Philips", callback_type_t::info);
         m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
@@ -6465,7 +6486,7 @@ bool Audio::readID3V1Tag() {
         uint8_t track = p[126];
         uint8_t genre8 = p[127];
 
-        AUDIO_INFO(zeroByte ? "ID3 version: 1" : "ID3 Version 1.1");
+        _callback_helper(zeroByte ? "ID3 version: 1" : "ID3 Version 1.1", callback_type_t::info);
 
         if (zeroByte == 0) {
             sprintf(chBuff.get(), "Track Number: %d", track);
@@ -6582,7 +6603,8 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         m_sdet.tmr_lost = millis() + 1000;
         if(m_sdet.cnt_lost == 5) { // 5s no data?
             m_sdet.cnt_lost = 0;
-            AUDIO_INFO("Stream lost -> try new connection");
+            _callback_helper("Stream lost -> try new connection", callback_type_t::info);
+
             m_f_reset_m3u8Codec = false;
             httpPrint(m_lastHost.get());
             return true;

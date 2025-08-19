@@ -85,6 +85,12 @@ namespace audio {
 
     // callback functions prototypes
     using literal_cb_t = std::function< void (const char*, callback_type_t)>;
+    //ID3 metadata image callback
+    using id3image_cb_t = std::function< void (File&, size_t,size_t)>;
+    //OGG blockpicture
+    using oggimage_cb_t = std::function< void (File&, std::vector<uint32_t>)>;
+    // record audiodata or send via BT
+    using i2s_process_cb_t = std::function< void (int16_t*, int32_t, bool*)>;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -518,6 +524,12 @@ private:
      * @param type - type to enable
      */
     void setLiteralCallback(audio::literal_cb_t cb);
+    // callback for ID3Image
+    void setID3imageCallback(audio::id3image_cb_t cb){ _id3image_callback = cb; };
+    // callback for OGG Image
+    void setOGGimageCallback(audio::oggimage_cb_t cb){ _oggimage_callback = cb; };
+    // callback for I2S processing
+    void setI2SProcessCallback(audio::i2s_process_cb_t cb){ _i2s_process_callback = cb; };
 
     /**
      * @brief enable certain types of events for callbacks
@@ -1082,6 +1094,10 @@ private:
      * 
      */
     audio::literal_cb_t _literal_callback;
+    audio::id3image_cb_t _id3image_callback;
+    audio::oggimage_cb_t _oggimage_callback;
+    audio::i2s_process_cb_t _i2s_process_callback;
+
     // enabled callback types
     std::bitset<16> _cb_types{0};
 };
