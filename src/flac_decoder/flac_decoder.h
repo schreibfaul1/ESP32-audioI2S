@@ -21,9 +21,9 @@
 #include "../psram_unique_ptr.hpp"
 using namespace std;
 
-#define MAX_CHANNELS 2
-#define MAX_BLOCKSIZE 24576  // 24 * 1024
-#define MAX_OUTBUFFSIZE 4096 * 2
+#define FLAC_MAX_CHANNELS 2
+#define FLAC_MAX_BLOCKSIZE 24576  // 24 * 1024
+#define FLAC_MAX_OUTBUFFSIZE 4096 * 2
 
 enum : uint8_t {FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT};
 enum : uint8_t {DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES};
@@ -178,7 +178,7 @@ int32_t          FLAC_specialIndexOf(uint8_t* base, const char* str, int32_t bas
 extern __attribute__((weak)) void audio_info(const char*);
 
 template <typename... Args>
-void FLAC_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+void FLAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
     #define ANSI_ESC_RESET          "\033[0m"
     #define ANSI_ESC_BLACK          "\033[30m"
     #define ANSI_ESC_RED            "\033[31m"
@@ -210,16 +210,17 @@ void FLAC_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt,
     ps_ptr<char> final;
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
-    final.alloc(total_len + 1, "final");
+    final.calloc(total_len + 1, "final");
+    final.clear();
     char* dest = final.get();
     if (!dest) return;  // Or error treatment
     if(audio_info){
-        if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_MAGENTA " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        audio_info(final.get());
+        if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        if(final.strlen()) audio_info(final.get());
     }
     else{
         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
@@ -234,10 +235,10 @@ void FLAC_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt,
 }
 
 // Macro for comfortable calls
-#define FLAC_ERROR(fmt, ...)   FLAC_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define FLAC_WARN(fmt, ...)    FLAC_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define FLAC_INFO(fmt, ...)    FLAC_ERROR_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define FLAC_DEBUG(fmt, ...)   FLAC_ERROR_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define FLAC_VERBOSE(fmt, ...) FLAC_ERROR_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_ERROR(fmt, ...)   FLAC_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_WARN(fmt, ...)    FLAC_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_INFO(fmt, ...)    FLAC_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_DEBUG(fmt, ...)   FLAC_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_VERBOSE(fmt, ...) FLAC_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

@@ -65,7 +65,7 @@ int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, boo
 
 
 enum : int8_t { OPUS_END = 120,
-                OPUS_CONTINUE = 110,
+                OPUS_CONTINUE = 10,
                 OPUS_PARSE_OGG_DONE = 100,
                 OPUS_NONE = 0,
                 OPUS_ERR = -1
@@ -74,10 +74,10 @@ enum {MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001,  MODE_CELT_ONLY 
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
+extern __attribute__((weak)) void audio_info(const char*);
 
 template <typename... Args>
-void OPUS_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-    extern __attribute__((weak)) void audio_info(const char*);
+void OPUS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
     #define ANSI_ESC_RESET          "\033[0m"
     #define ANSI_ESC_BLACK          "\033[30m"
     #define ANSI_ESC_RED            "\033[31m"
@@ -109,27 +109,35 @@ void OPUS_ERROR_IMPL(uint8_t level, const char* path, int line, const char* fmt,
     ps_ptr<char> final;
     int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
     if (total_len <= 0) return;
-    final.alloc(total_len + 1, "final");
+    final.calloc(total_len + 1, "final");
+    final.clear();
     char* dest = final.get();
     if (!dest) return;  // Or error treatment
     if(audio_info){
-        if     (level == 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else                snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        audio_info(final.get());
+        if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
+        else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
+        if(final.strlen() > 0)  audio_info(final.get());
     }
     else{
         std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
         if     (level == 1) log_e("%s", final.c_get());
         else if(level == 2) log_w("%s", final.c_get());
-        else                log_i("%s", final.c_get());
+        else if(level == 3) log_i("%s", final.c_get());
+        else if(level == 4) log_d("%s", final.c_get());
+        else                log_v("%s", final.c_get());
     }
     final.reset();
     result.reset();
 }
 
 // Macro for comfortable calls
-#define OPUS_ERROR(fmt, ...) OPUS_ERROR_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define OPUS_WARN(fmt, ...)  OPUS_ERROR_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_ERROR(fmt, ...)   OPUS_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_WARN(fmt, ...)    OPUS_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_INFO(fmt, ...)    OPUS_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_DEBUG(fmt, ...)   OPUS_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define OPUS_LOG_VERBOSE(fmt, ...) OPUS_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 

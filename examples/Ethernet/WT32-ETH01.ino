@@ -13,7 +13,6 @@
 #define I2S_BCLK      14
 #define I2S_LRC       15
 
-#define ETHERNET_IF
 #define ETH_PHY_TYPE  ETH_PHY_LAN8720
 #define ETH_PHY_MDC   23
 #define ETH_PHY_MDIO  18

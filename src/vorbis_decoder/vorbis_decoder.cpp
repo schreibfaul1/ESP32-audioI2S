@@ -212,10 +212,10 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         }
         if(s_vorbisRemainBlockPicLen <= 0 && !s_f_vorbisNewMetadataBlockPicture) {
             if(s_vorbisBlockPicItem.size() > 0) { // get blockpic data
-                // log_i("---------------------------------------------------------------------------");
-                // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
-                // log_i("---------------------------------------------------------------------------");
+                // VORBIS_LOG_INFO("---------------------------------------------------------------------------");
+                // VORBIS_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
+                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { VORBIS_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
+                // VORBIS_LOG_INFO("---------------------------------------------------------------------------");
                 s_f_vorbisNewMetadataBlockPicture = true;
             }
         }
@@ -226,7 +226,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         s_vorbisSegmentTableRdPtr = -1; // back to the parking position
         ret = VORBISparseOGG(inbuf, bytesLeft);
         s_f_parseOggDone = true;
-        if(!s_vorbisSegmentTableSize) {/* log_w("OggS without segments?") */; }
+        if(!s_vorbisSegmentTableSize) {/* VORBIS_LOG_WARN("OggS without segments?") */; }
         return ret;
     }
 
@@ -261,7 +261,7 @@ int32_t VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         case 4:
             ret = vorbisDecodePage4(inbuf, bytesLeft, segmentLength, outbuf); // decode audio
             break;
-        default: VORBIS_ERROR("unknown page %s", s_pageNr); ret = VORBIS_ERR; break;
+        default: VORBIS_LOG_ERROR("unknown page %s", s_pageNr); ret = VORBIS_ERR; break;
     }
     return ret;
 }
@@ -271,12 +271,12 @@ int32_t vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     clearGlobalConfigurations(); // if a new codebook is required, delete the old one
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     if(idx == 1) {
-        // log_i("first packet (identification segmentLength) %i", segmentLength);
+        // VORBIS_LOG_INFO("first packet (identification segmentLength) %i", segmentLength);
         s_identificatonHeaderLength = segmentLength;
         ret = parseVorbisFirstPacket(inbuf, segmentLength);
     }
     else {
-        VORBIS_ERROR("vorbis identificator not found");
+        VORBIS_LOG_ERROR("vorbis identificator not found");
         ret = VORBIS_ERR;
     }
 
@@ -321,7 +321,7 @@ int32_t vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     s_oggPage3Len = segmentLength;
     if(idx == 1) {
-        // log_i("third packet (setup segmentLength) %i", segmentLength);
+        // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         s_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
         if(segmentLength == 4080) {
@@ -335,12 +335,12 @@ int32_t vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
             s_oggPage3Len += l;
             s_setupHeaderLength += l;
             bitReader_setData(inbuf, s_oggPage3Len);
-            // log_w("s_oggPage3Len %i", s_oggPage3Len);
+            // VORBIS_LOG_INFO("s_oggPage3Len %i", s_oggPage3Len);
             s_pageNr++;
         }
         ret = parseVorbisCodebook();
     }
-    else {VORBIS_ERROR("no \"vorbis\" something went wrong, segmentLenght: %i", segmentLength); ret = VORBIS_ERR; }
+    else {VORBIS_LOG_ERROR("no \"vorbis\" something went wrong, segmentLenght: %i", segmentLength); ret = VORBIS_ERR; }
     s_pageNr = 4;
     s_dsp_state = vorbis_dsp_create();
 
@@ -359,7 +359,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     if(s_f_parseOggDone) { // first loop after VORBISparseOGG()
         if(s_f_oggContinuedPage) {
             if(s_lastSegmentTableLen > 0 || segmentLength > 0) {
-                if(s_lastSegmentTableLen + segmentLength > 1024) {VORBIS_ERROR("continued page too big, %i", s_lastSegmentTableLen + segmentLength); return VORBIS_ERR;}
+                if(s_lastSegmentTableLen + segmentLength > 1024) {VORBIS_LOG_ERROR("continued page too big, %i", s_lastSegmentTableLen + segmentLength); return VORBIS_ERR;}
                 memcpy(s_lastSegmentTable.get() + s_lastSegmentTableLen, inbuf, segmentLength);
                 bitReader_setData(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength);
                 ret = vorbis_dsp_synthesis(s_lastSegmentTable.get(), s_lastSegmentTableLen + segmentLength, outbuf);
@@ -394,7 +394,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
     }
     else { // not s_f_parseOggDone
         if(s_vorbisSegmentTableSize || s_f_lastSegmentTable) {
-            // if(s_f_oggLastPage) log_i("last page");
+            // if(s_f_oggLastPage) VORBIS_LOG_INFO("last page");
             bitReader_setData(inbuf, segmentLength);
             ret = vorbis_dsp_synthesis(inbuf, segmentLength, outbuf);
             uint16_t outBuffSize = 2048 * 2;
@@ -502,26 +502,26 @@ int32_t parseVorbisFirstPacket(uint8_t *inbuf, int16_t nBytes){ // 4.2.2. Identi
     s_blocksizes[1] = 1 << ((blocksize & 0xF0) >> 4);
 
     if(s_blocksizes[0] < 64){
-        VORBIS_ERROR("Vorbis, blocksize[0] too low %i", s_blocksizes[0]);
+        VORBIS_LOG_ERROR("Vorbis, blocksize[0] too low %i", s_blocksizes[0]);
         return -1;
     }
     if(s_blocksizes[1] < s_blocksizes[0]){
-        VORBIS_ERROR("Vorbis, s_blocksizes[1] %i is smaller than s_blocksizes[0] %i", s_blocksizes[1], s_blocksizes[0]);
+        VORBIS_LOG_ERROR("Vorbis, s_blocksizes[1] %i is smaller than s_blocksizes[0] %i", s_blocksizes[1], s_blocksizes[0]);
         return -1;
     }
     if(s_blocksizes[1] > 8192){
-        VORBIS_ERROR("Vorbis, s_blocksizes[1] is too big: %i", s_blocksizes[1]);
+        VORBIS_LOG_ERROR("Vorbis, s_blocksizes[1] is too big: %i", s_blocksizes[1]);
         return -1;
     }
 
     if(channels < 1 || channels > 2){
-        VORBIS_ERROR("Vorbis, nr of channels is not valid ch=%i", channels);
+        VORBIS_LOG_ERROR("Vorbis, nr of channels is not valid ch=%i", channels);
         return -1;
     }
     s_vorbisChannels = channels;
 
     if(sampleRate < 4096 || sampleRate > 64000){
-        VORBIS_ERROR("Vorbis, sampleRate is not valid sr=%i", sampleRate);
+        VORBIS_LOG_ERROR("Vorbis, sampleRate is not valid sr=%i", sampleRate);
         return -1;
     }
     s_vorbisSamplerate = sampleRate;
@@ -542,7 +542,7 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
              vendorLength      += *(inbuf + pos);
 
     if(vendorLength > 254){  // guard
-       VORBIS_WARN("vorbis comment too long, vendorLength %i", vendorLength);
+       VORBIS_LOG_WARN("vorbis comment too long, vendorLength %i", vendorLength);
        return 0;
     }
     s_vorbisChbuf.reset();
@@ -550,11 +550,11 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
     pos += 4 + vendorLength;
     s_vorbisCommentHeaderLength -= (7 + 4 + vendorLength);
 
-    // log_i("vendorLength %x", vendorLength);
-    // log_i("vendorString %s", s_vorbisChbuf);
+    // VORBIS_LOG_INFO("vendorLength %x", vendorLength);
+    // VORBIS_LOG_INFO("vendorString %s", s_vorbisChbuf);
 
     uint8_t nrOfComments = *(inbuf + pos);
-    // log_i("nrOfComments %i", nrOfComments);
+    // VORBIS_LOG_INFO("nrOfComments %i", nrOfComments);
     pos += 4;
     s_vorbisCommentHeaderLength -= 4;
 
@@ -572,7 +572,7 @@ int32_t parseVorbisComment(uint8_t *inbuf, int16_t nBytes){      // reference ht
         uint8_t cl = min((uint32_t)254, commentLength);
         s_vorbisChbuf.assign((char*)(inbuf + pos +  4), cl);
 
-        // log_i("commentLength %i comment %s", commentLength, s_vorbisChbuf);
+        // VORBIS_LOG_INFO("commentLength %i comment %s", commentLength, s_vorbisChbuf);
 
         if(s_vorbisChbuf.starts_with_icase("artist=")){
             artist.assign(s_vorbisChbuf.get() + 7, commentLength - 7);
@@ -622,7 +622,7 @@ int32_t parseVorbisCodebook(){
 
     for(i = 0; i < s_nrOfCodebooks; i++){
         ret = vorbis_book_unpack(s_codebooks.get() + i);
-        if(ret) VORBIS_ERROR("Vorbis codebook %i returned  a err", i);
+        if(ret) VORBIS_LOG_ERROR("Vorbis codebook %i returned  a err", i);
         if(ret) goto err_out;
     }
 
@@ -631,7 +631,7 @@ int32_t parseVorbisCodebook(){
     for(; i >= 0; i--){
         ret = bitReader(16);
         if(ret != 0){
-            VORBIS_ERROR("err while reading backend settings");
+            VORBIS_LOG_ERROR("err while reading backend settings");
             goto err_out;
         }
     }
@@ -642,7 +642,7 @@ int32_t parseVorbisCodebook(){
     for(i = 0; i < s_nrOfFloors; i++) {
         s_floor_type[i] = bitReader(16);
         if(s_floor_type[i] < 0 || s_floor_type[i] >= VI_FLOORB) {
-            VORBIS_ERROR("err while reading floors");
+            VORBIS_LOG_ERROR("err while reading floors");
             goto err_out;
         }
         if(s_floor_type[i]){
@@ -652,7 +652,7 @@ int32_t parseVorbisCodebook(){
             s_floor_param[i] = floor0_info_unpack();
         }
         if(!s_floor_param[i].valid()){
-            VORBIS_ERROR("floor parameter not found");
+            VORBIS_LOG_ERROR("floor parameter not found");
             goto err_out;
         }
     }
@@ -662,7 +662,7 @@ int32_t parseVorbisCodebook(){
     s_residue_param.alloc(sizeof(vorbis_info_residue_t) * s_nrOfResidues);
     for(i = 0; i < s_nrOfResidues; i++){
          if(res_unpack(s_residue_param.get() + i)){
-            VORBIS_ERROR("err while unpacking residues");
+            VORBIS_LOG_ERROR("err while unpacking residues");
             goto err_out;
          }
     }
@@ -673,7 +673,7 @@ int32_t parseVorbisCodebook(){
     for(i = 0; i < s_nrOfMaps; i++) {
         if(bitReader(16) != 0) goto err_out;
         if(mapping_info_unpack(s_map_param.get() + i)){
-            VORBIS_ERROR("err while unpacking mappings");
+            VORBIS_LOG_ERROR("err while unpacking mappings");
             goto err_out;
         }
     }
@@ -687,17 +687,17 @@ int32_t parseVorbisCodebook(){
         if(bitReader(16)) goto err_out;
         s_mode_param[i].mapping = bitReader(8);
         if(s_mode_param[i].mapping >= s_nrOfMaps){
-            VORBIS_ERROR("too many modes");
+            VORBIS_LOG_ERROR("too many modes");
             goto err_out;
         }
     }
 
     if(bitReader(1) != 1){
-        VORBIS_ERROR("codebooks, end bit not found");
+        VORBIS_LOG_ERROR("codebooks, end bit not found");
         goto err_out;
     }
     // if(s_setupHeaderLength != s_bitReader.headptr - s_bitReader.data){
-    //     VORBIS_ERROR("Error reading setup header, assumed %i bytes, read %i bytes", s_setupHeaderLength, s_bitReader.headptr - s_bitReader.data);
+    //     VORBIS_LOG_ERROR("Error reading setup header, assumed %i bytes, read %i bytes", s_setupHeaderLength, s_bitReader.headptr - s_bitReader.data);
     //     goto err_out;
     // }
     /* top level EOP check */
@@ -706,7 +706,7 @@ int32_t parseVorbisCodebook(){
 
 err_out:
     //    vorbis_info_clear(vi);
-    VORBIS_ERROR("err in codebook!  at pos %d", s_bitReader.headptr - s_bitReader.data);
+    VORBIS_LOG_ERROR("err in codebook!  at pos %d", s_bitReader.headptr - s_bitReader.data);
     return (OV_EBADHEADER);
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -716,7 +716,7 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
 
     int32_t idx = VORBIS_specialIndexOf(inbuf, "OggS", 8192);
     if(idx != 0){
-        if(s_f_oggContinuedPage){VORBIS_ERROR("Vorbis decoder asynchron, 'OggS' not found"); return VORBIS_ERR;}
+        if(s_f_oggContinuedPage){VORBIS_LOG_ERROR("Vorbis decoder asynchron, 'OggS' not found"); return VORBIS_ERR;}
         inbuf += idx;
         *bytesLeft -= idx;
         s_vorbisCurrentFilePos += idx;
@@ -773,9 +773,9 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
 
     uint16_t headerSize    = pageSegments + 27;
 
-    // log_i("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
+    // VORBIS_LOG_INFO("headerSize %i, s_vorbisSegmentLength %i, s_vorbisSegmentTableSize %i", headerSize, s_vorbisSegmentLength, s_vorbisSegmentTableSize);
     if(firstPage || continuedPage || lastPage){
-    // log_w("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
+    // VORBIS_LOG_INFO("firstPage %i  continuedPage %i  lastPage %i", firstPage, continuedPage, lastPage);
     }
 
     *bytesLeft -= headerSize;
@@ -796,7 +796,7 @@ int32_t VORBISparseOGG(uint8_t *inbuf, int32_t *bytesLeft){
 uint16_t continuedOggPackets(uint8_t *inbuf){
 
     // skip OggS header to pageSegments
-    // log_w("%c%c%c%c", *(inbuf+0), *(inbuf+1), *(inbuf+2), *(inbuf+3));
+    // VORBIS_LOG_INFO("%c%c%c%c", *(inbuf+0), *(inbuf+1), *(inbuf+2), *(inbuf+3));
     uint16_t segmentLength = 0;
     uint8_t  headerType    = *(inbuf +  5);
     uint8_t  pageSegments  = *(inbuf + 26);        // giving the number of segment entries
@@ -832,11 +832,11 @@ int32_t VORBISFindSyncWord(unsigned char *buf, int32_t nBytes){
     // assume we have a ogg wrapper
     int32_t idx = VORBIS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
-    //    log_i("OggS found at %i", idx);
+    //    VORBIS_LOG_INFO("OggS found at %i", idx);
         return idx;
     }
-    // log_i("find sync");
-    VORBIS_ERROR("Vorbis, sync 'OggS' not found");
+    // VORBIS_LOG_INFO("find sync");
+    VORBIS_LOG_ERROR("Vorbis, sync 'OggS' not found");
     return VORBIS_ERR;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -851,17 +851,17 @@ int32_t vorbis_book_unpack(codebook_t *s) {
 
     /* make sure alignment is correct */
     if(bitReader(24) != 0x564342){
-        VORBIS_ERROR("Vorbis, string \"BCV\" not found");
+        VORBIS_LOG_ERROR("Vorbis, string \"BCV\" not found");
         goto _eofout;  // "BCV"
     }
 
     /* first the basic parameters */
     ret = bitReader(16) ;
-    if(ret < 0) VORBIS_ERROR("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
-    if(ret > 255) VORBIS_ERROR("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
+    if(ret < 0) VORBIS_LOG_ERROR("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
+    if(ret > 255) VORBIS_LOG_ERROR("error in vorbis_book_unpack, ret =%li\n", (long int)ret);
     s->dim = (uint8_t)ret;
     s->entries = bitReader(24);
-    if(s->entries == -1) {VORBIS_ERROR("no entries in unpack codebooks ?");   goto _eofout;}
+    if(s->entries == -1) {VORBIS_LOG_ERROR("no entries in unpack codebooks ?");   goto _eofout;}
 
     /* codeword ordering.... length ordered or unordered? */
     switch(bitReader(1)) {
@@ -1036,7 +1036,7 @@ int32_t vorbis_book_unpack(codebook_t *s) {
             }
             break;
         default:
-            VORBIS_ERROR("maptype %i schould be 0, 1 or 2", maptype);
+            VORBIS_LOG_ERROR("maptype %i schould be 0, 1 or 2", maptype);
             goto _errout;
     }
     if(oggpack_eop()) goto _eofout;
@@ -1149,7 +1149,7 @@ int8_t bitReader_adv(uint16_t nBits) {
     s_bitReader.headptr += (nBits >> 3);
     if(s_bitReader.headend < 1){
         return -1;
-        VORBIS_ERROR("error in bitreader");
+        VORBIS_LOG_ERROR("error in bitreader");
     }
     return 0;
 }
@@ -1457,8 +1457,8 @@ uint8_t _book_maptype1_quantvals(codebook_t *b) {
 //---------------------------------------------------------------------------------------------------------------------
 int32_t oggpack_eop() {
     if(s_bitReader.headptr -s_bitReader.data  > s_setupHeaderLength){
-        log_i("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
-        log_i("ogg package 3 overflow");
+        VORBIS_LOG_INFO("s_bitReader.headptr %i, s_setupHeaderLength %i", s_bitReader.headptr, s_setupHeaderLength);
+        VORBIS_LOG_INFO("ogg package 3 overflow");
          return -1;
     }
     return 0;
@@ -1591,7 +1591,7 @@ err_out:
 void vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
     uint16_t i, j;
     ps_ptr<uint8_t> B_mem;
-    B_mem.alloc(n * sizeof(uint8_t), "vorbis_temp");
+    B_mem.alloc(n * sizeof(uint8_t));
 
     if (!B_mem.valid()) return;
 
@@ -1774,7 +1774,7 @@ void vorbis_book_clear(ps_ptr<codebook_t> &v){
     if(v->q_val.valid())       {s += v ->q_val.size(); v ->q_val.reset();}
     s += v.size(); v.reset();
     s_nrOfCodebooks = 0;
-    // log_w("free codebook_t %i bytes", s);
+    // VORBIS_LOG_INFO("free codebook_t %i bytes", s);
 }
 //---------------------------------------------------------------------------------------------------------------------
 int32_t vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
@@ -2064,7 +2064,7 @@ int32_t *floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t *fit_value) {
         return (fit_value);
     }
     else{
-        // log_i("err in br");
+        // VORBIS_LOG_ERROR("err in br");
         ;
     }
 eop:
@@ -2160,7 +2160,7 @@ int32_t decode_packed_entry_number(codebook_t *book) {
         return chase;
     }
     bitReader_adv(read + 1);
-    VORBIS_ERROR("read %i", read);
+    VORBIS_LOG_ERROR("read %i", read);
     return (VORBIS_ERR);
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -3143,7 +3143,7 @@ int32_t vorbis_dsp_pcmout(int16_t *outBuff, int32_t outBuffSize) {
             int32_t i;
             if(n > outBuffSize) {
                 n = outBuffSize;
-                VORBIS_ERROR("outBufferSize too small, must be min %i (int16_t) words", n);
+                VORBIS_LOG_ERROR("outBufferSize too small, must be min %i (int16_t) words", n);
             }
             for(i = 0; i < s_vorbisChannels; i++){
                 mdct_unroll_lap(s_blocksizes[0], s_blocksizes[1],

@@ -180,6 +180,7 @@ int AACDecode(uint8_t *inbuf, int32_t *bytesLeft, short *outbuf){
     validSamples = frameInfo.samples;
     int8_t err = 0 - frameInfo.error;
     compressionRatio = (float)frameInfo.samples * 2 / frameInfo.bytesconsumed;
+    if(err < 0) AAC_LOG_ERROR(AACGetErrorMessage(abs(err)));
     return err;
 }
 //----------------------------------------------------------------------------------------------------------------------

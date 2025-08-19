@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 01.07.2025
+ *  Updated on: 21.07.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -172,10 +172,10 @@ int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         }
         if(s_opusRemainBlockPicLen <= 0) {
             if(s_opusBlockPicItem.size() > 0) { // get blockpic data
-                // log_i("---------------------------------------------------------------------------");
-                // log_i("metadata blockpic found at pos %i, size %i bytes", s_vorbisBlockPicPos, s_vorbisBlockPicLen);
-                // for(int32_t i = 0; i < s_vorbisBlockPicItem.size(); i += 2) { log_i("segment %02i, pos %07i, len %05i", i / 2, s_vorbisBlockPicItem[i], s_vorbisBlockPicItem[i + 1]); }
-                // log_i("---------------------------------------------------------------------------");
+                // OPUS_LOG_INFO("---------------------------------------------------------------------------");
+                // OPUS_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", s_opusBlockPicPos, s_opusBlockPicItem);
+                // for(int32_t i = 0; i < s_opusBlockPicItem.size(); i += 2) { OPUS_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, s_opusBlockPicItem[i], s_opusBlockPicItem[i + 1]); }
+                // OPUS_LOG_INFO("---------------------------------------------------------------------------");
                 s_f_opusNewMetadataBlockPicture = true;
             }
         }
@@ -206,7 +206,7 @@ int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     }
     else if(s_opusPageNr == 1) { // OpusComment
         ret = parseOpusComment(inbuf, segmLen);
-        if(ret == 0){OPUS_ERROR("Opus comment page not found"); return OPUS_ERR;}
+        if(ret == 0){OPUS_LOG_ERROR("Opus comment page not found"); return OPUS_ERR;}
         s_opusRemainBlockPicLen = s_opusBlockPicLen;
         *bytesLeft -= (segmLen - s_blockPicLenUntilFrameEnd);
         s_opusCommentBlockSize = s_blockPicLenUntilFrameEnd;
@@ -237,7 +237,7 @@ int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     *bytesLeft           -= segmentLength;
     s_opusCurrentFilePos += segmentLength;
     if(ret == 1){ s_opusPageNr++;}
-    if(ret == 0){OPUS_ERROR("Opus head not found"); return OPUS_ERR;}
+    if(ret == 0){OPUS_LOG_ERROR("Opus head not found"); return OPUS_ERR;}
     if(ret < 0) return ret;
     return OPUS_PARSE_OGG_DONE;
 }
@@ -254,7 +254,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     if(s_frameCount > 0) goto FramePacking; // more than one frame in the packet
 
     s_odp3.configNr = parseOpusTOC(inbuf[0]);
-    if(s_odp3.configNr < 0) {OPUS_ERROR("wrong config number: %i", s_odp3.configNr); return OPUS_ERR;} // SILK or Hybrid mode
+    if(s_odp3.configNr < 0) {OPUS_LOG_ERROR("wrong config number: %i", s_odp3.configNr); return OPUS_ERR;} // SILK or Hybrid mode
 
     switch(s_odp3.configNr){
         case  0 ... 3:  s_endband  = 0; // OPUS_BANDWIDTH_SILK_NARROWBAND
@@ -296,7 +296,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
                         s_mode = MODE_CELT_ONLY;
                         s_bandWidth = OPUS_BANDWIDTH_FULLBAND;
                         break;
-        default:        OPUS_WARN("unknown bandwifth %i, s_odp3.configNr");
+        default:        OPUS_LOG_WARN("unknown bandwifth %i, s_odp3.configNr");
                         s_endband = 21; // assume OPUS_BANDWIDTH_FULLBAND
                         break;
     }
@@ -312,7 +312,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     s_odp3.samplesPerFrame = opus_packet_get_samples_per_frame(inbuf, /*s_opusSamplerate*/ 48000);
 
 FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2.html   3.2. Frame Packing
-//log_i("s_opusCountCode %i, configNr %i", s_opusCountCode, configNr);
+// OPUS_LOG_INFO("s_opusCountCode %i, configNr %i", s_opusCountCode, configNr);
 
     switch(s_opusCountCode){
         case 0:  // Code 0: One Frame in the Packet
@@ -328,7 +328,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
             ret = opus_FramePacking_Code3(inbuf, bytesLeft, outbuf, segmentLength, s_odp3.samplesPerFrame, &s_frameCount);
             break;
         default:
-            OPUS_ERROR("Opus unknown count code %i", s_opusCountCode);
+            OPUS_LOG_ERROR("Opus unknown count code %i", s_opusCountCode);
             return OPUS_ERR;
             break;
     }
@@ -336,7 +336,7 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
-    if(!packetLen) {OPUS_WARN("Opus packetLen is 0"); return 0;}
+    if(!packetLen) {OPUS_LOG_WARN("Opus packetLen is 0"); return 0;}
     int i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
     uint8_t payloadSize_ms = max(10, 1000 * samplesPerFrame / 48000);  /* The SILK PLC cannot produce frames of less than 10 ms */
@@ -494,12 +494,12 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
         *bytesLeft -= 1;
         s_opusCurrentFilePos += 1;
         s_ofp3.c1fs = packetLen / 2;
-        // log_w("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
+        // OPUS_LOG_WARN("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
         *frameCount = 2;
     }
     if(*frameCount > 0){
         ret = opus_decode_frame(inbuf, outbuf, s_ofp3.c1fs, samplesPerFrame);
-        // log_w("code 1, ret %i", ret);
+        // OPUS_LOG_WARN("code 1, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -565,7 +565,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     }
     if(*frameCount == 2){
         ret = opus_decode_frame(inbuf, outbuf, s_ofp2.firstFrameLength, samplesPerFrame);
-        // log_w("code 2, ret %i", ret);
+        // OPUS_LOG_WARN("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -576,7 +576,7 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     }
     if(*frameCount == 1){
         ret = opus_decode_frame(inbuf, outbuf, s_ofp2.secondFrameLength, samplesPerFrame);
-        // log_w("code 2, ret %i", ret);
+        // OPUS_LOG_WARN("code 2, ret %i", ret);
         if(ret < 0){
             *frameCount = 0;
             return ret;  // decode err
@@ -694,7 +694,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     s_ofp3.idx = 0;
 
     if (s_ofp3.firstCall) {
-    //    log_w("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X ",
+    //    OPUS_LOG_WARN("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X ",
     //          inbuf[0], inbuf[1], inbuf[2], inbuf[3], inbuf[4], inbuf[5], inbuf[6], inbuf[7], inbuf[8], inbuf[9]);
 
         // Reset all relevant state for a new packet
@@ -726,11 +726,11 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
 
         // M MUST NOT be zero (from spec)
         if (s_ofp3.M == 0) {
-            // log_i("Error: Opus Code 3 packet with M = 0 (no frames)");
+            // OPUS_LOG_INFO("Error: Opus Code 3 packet with M = 0 (no frames)");
             *bytesLeft -= packetLen;
             *frameCount = 0;
             s_ofp3.firstCall = true;
-            OPUS_ERROR("Opus code 3; packet with no frames");
+            OPUS_LOG_ERROR("Opus code 3; packet with no frames");
             return OPUS_ERR;
         }
 
@@ -739,18 +739,18 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
             uint32_t current_padding_chunk_val;
             do {
                 if (s_ofp3.idx >= packetLen) { // Check bounds
-                    // log_i("Error: Packet truncated during padding length parsing");
+                    // OPUS_LOG_INFO("Error: Packet truncated during padding length parsing");
                     *bytesLeft -= packetLen;
                     *frameCount = 0;
                     s_ofp3.firstCall = true;
-                    OPUS_ERROR("Opus packet is truncated during padding length parsing");
+                    OPUS_LOG_ERROR("Opus packet is truncated during padding length parsing");
                     return OPUS_ERR;
                 }
                 current_padding_chunk_val = inbuf[s_ofp3.idx];
                 s_ofp3.idx++;
                 s_ofp3.paddingLength += current_padding_chunk_val;
             } while (current_padding_chunk_val == 255); // Continue if the last byte read was 255
-            // log_w("we have %i padding bytes", s_ofp3.paddingLength);
+            // OPUS_LOG_WARN("we have %i padding bytes", s_ofp3.paddingLength);
         }
 
         // Parse Variable Frame Sizes (N1 to N[M-1] for VBR)
@@ -760,25 +760,25 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
                     *bytesLeft -= packetLen;
                     *frameCount = 0;
                     s_ofp3.firstCall = true;
-                    OPUS_ERROR("Opus packet has been truncated at VBR parsing");
+                    OPUS_LOG_ERROR("Opus packet has been truncated at VBR parsing");
                     return OPUS_ERR;
                 }
                 uint16_t current_frame_len_val = inbuf[s_ofp3.idx];
                 s_ofp3.idx++;
                 if(current_frame_len_val == 255){
                     if (s_ofp3.idx >= packetLen) { // Check bounds for second byte
-                        // log_i("Error: Packet truncated during VBR frame length parsing (second byte)");
+                        // OPUS_LOG_INFO("Error: Packet truncated during VBR frame length parsing (second byte)");
                         *bytesLeft -= packetLen;
                         *frameCount = 0;
                         s_ofp3.firstCall = true;
-                        OPUS_ERROR("Opus packet has been truncated at VBR parsing");
+                        OPUS_LOG_ERROR("Opus packet has been truncated at VBR parsing");
                         return OPUS_ERR;
                     }
                     current_frame_len_val += inbuf[s_ofp3.idx]; // Add the next byte's value
                     s_ofp3.idx++;
                 }
                 s_ofp3.vfs[m] = current_frame_len_val;
-                // log_i("VFS[%i]: %i", m, s_ofp3.vfs[m]);
+                // OPUS_LOG_INFO("VFS[%i]: %i", m, s_ofp3.vfs[m]);
             }
         }
 
@@ -788,18 +788,18 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
 
         // Verify enough data for padding
         if (remaining_bytes_for_data_and_padding < s_ofp3.paddingLength) {
-            // log_i("Error: Padding length %i exceeds remaining packet bytes %i", s_ofp3.paddingLength, remaining_bytes_for_data_and_padding);
+            // OPUS_LOG_INFO("Error: Padding length %i exceeds remaining packet bytes %i", s_ofp3.paddingLength, remaining_bytes_for_data_and_padding);
             *bytesLeft -= packetLen;
             *frameCount = 0;
             s_ofp3.firstCall = true;
-            OPUS_ERROR("Too many parsing bytes: %i, padding length; %i", remaining_bytes_for_data_and_padding, s_ofp3.paddingLength);
+            OPUS_LOG_ERROR("Too many parsing bytes: %i, padding length; %i", remaining_bytes_for_data_and_padding, s_ofp3.paddingLength);
             return OPUS_ERR;
         }
 
         // Bytes containing actual compressed data (excluding padding at the end)
         int32_t compressed_data_bytes = remaining_bytes_for_data_and_padding - s_ofp3.paddingLength;
 
-        // log_w("packetLen %i, total_header_bytes %i, compressed_data_bytes %i, paddingLength %i, framecount %u",
+        // OPUS_LOG_INFO("packetLen %i, total_header_bytes %i, compressed_data_bytes %i, paddingLength %i, framecount %u",
         //      packetLen, total_header_bytes, compressed_data_bytes, s_ofp3.paddingLength, *frameCount);
 
         if(!s_ofp3.v){  // Constant Bitrates (CBR)
@@ -809,18 +809,18 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
             // But simplified: R = compressed_data_bytes (calculated above)
 
             if (s_ofp3.M == 0) { // Already checked, but good for robustness
-                // log_i("Error: CBR with 0 frames (should not happen based on spec M>0)");
+                // OPUS_LOG_INFO("Error: CBR with 0 frames (should not happen based on spec M>0)");
                 *bytesLeft -= packetLen;
                 *frameCount = 0;
                 s_ofp3.firstCall = true;
-                OPUS_ERROR("Opus CBR wihtout frames");
+                OPUS_LOG_ERROR("Opus CBR wihtout frames");
                 return OPUS_ERR;
             }
 
             s_ofp3.fs = compressed_data_bytes / s_ofp3.M;
             int r = compressed_data_bytes % s_ofp3.M;
             if(r > 0) {
-                OPUS_WARN("CBR data not perfectly divisible by frame count. remainingBytes %i, frames %i, remainder %i",
+                OPUS_LOG_WARN("CBR data not perfectly divisible by frame count. remainingBytes %i, frames %i, remainder %i",
                       compressed_data_bytes, s_ofp3.M, r);
                 // This might indicate a malformed packet, or a small rounding difference for very short packets.
                 // For strict compliance, R MUST be a non-negative integer multiple of M.
@@ -839,7 +839,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
             }
 
             if (sum_of_signaled_lengths > compressed_data_bytes) {
-                OPUS_ERROR("Opus wrong VBR length, sum_of_signaled_lengths: %i, compressed_data_bytes: %i", sum_of_signaled_lengths, compressed_data_bytes);
+                OPUS_LOG_ERROR("Opus wrong VBR length, sum_of_signaled_lengths: %i, compressed_data_bytes: %i", sum_of_signaled_lengths, compressed_data_bytes);
                 return OPUS_ERR;
                 *bytesLeft -= packetLen;
                 *frameCount = 0;
@@ -847,7 +847,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
                 return OPUS_NONE;
             }
             s_ofp3.vfs[s_ofp3.M - 1] = compressed_data_bytes - sum_of_signaled_lengths;
-            // log_i("Calculated VFS[%i] (last frame): %i", s_ofp3.M - 1, s_ofp3.vfs[s_ofp3.M - 1]);
+            // OPUS_LOG_INFO("Calculated VFS[%i] (last frame): %i", s_ofp3.M - 1, s_ofp3.vfs[s_ofp3.M - 1]);
         }
         current_payload_offset = total_header_bytes; // This is where the first frame data starts
         (void)current_payload_offset;
@@ -861,11 +861,11 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
             // Get the length of the current frame to decode
             uint8_t current_frame_idx = s_ofp3.M - (*frameCount); // 0 for first, M-1 for last
             if (current_frame_idx >= s_ofp3.M) { // Safety check
-                // log_i("Error: Invalid VFS index access. current_frame_idx %i, M %i", current_frame_idx, s_ofp3.M);
+                // OPUS_LOG_INFO("Error: Invalid VFS index access. current_frame_idx %i, M %i", current_frame_idx, s_ofp3.M);
                 *bytesLeft -= (*bytesLeft > 0 ? *bytesLeft : 0); // Consume remaining bytes to reset
                 *frameCount = 0;
                 s_ofp3.firstCall = true;
-                OPUS_ERROR("opus invalid VFS index access, current_frame_idx; %i, nr of frames: %i", current_frame_idx, s_ofp3.M);
+                OPUS_LOG_ERROR("opus invalid VFS index access, current_frame_idx; %i, nr of frames: %i", current_frame_idx, s_ofp3.M);
                 return OPUS_ERR;
             }
             frame_len = s_ofp3.vfs[current_frame_idx];
@@ -874,7 +874,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
         }
         // Check if enough bytes are left for the current frame
         if (*bytesLeft < frame_len) {
-            OPUS_ERROR("Opus not enough bytes: %i, required: %i", *bytesLeft, frame_len);
+            OPUS_LOG_ERROR("Opus not enough bytes: %i, required: %i", *bytesLeft, frame_len);
             return OPUS_ERR;
             *bytesLeft -= (*bytesLeft > 0 ? *bytesLeft : 0); // Consume remaining bytes to reset
             *frameCount = 0;
@@ -886,7 +886,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
         // The inbuf + current_payload_offset points to the start of the current frame data
 
         ret = opus_decode_frame(inbuf + s_ofp3.idx, outbuf, frame_len, s_ofp3.spf);
-        // log_w("code 3, fs %i, spf %i, ret %i, offs %i", frame_len, s_ofp3.spf, ret, s_ofp3.idx);
+        // OPUS_LOG_INFO("code 3, fs %i, spf %i, ret %i, offs %i", frame_len, s_ofp3.spf, ret, s_ofp3.idx);
         // Update bytesLeft and frameCount
         *bytesLeft -= frame_len;
         *frameCount -= 1;
@@ -903,7 +903,7 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     // If there's a mismatch, it indicates an issue or just consume the rest.
     *bytesLeft -= s_ofp3.paddingLength; // Consume padding bytes from *bytesLeft for the packet
     if (*bytesLeft < 0) {
-        log_w("Warning: Negative bytesLeft after consuming padding. Remaining: %i", *bytesLeft);
+        OPUS_LOG_WARN("Warning: Negative bytesLeft after consuming padding. Remaining: %i", *bytesLeft);
         *bytesLeft = 0; // Prevent negative
     }
 
@@ -1066,7 +1066,7 @@ int32_t parseOpusComment(uint8_t *inbuf, int32_t nBytes){      // reference http
             s_opusCurrentFilePos += pos + 23;
             s_opusBlockPicPos += s_opusCurrentFilePos;
             s_blockPicLenUntilFrameEnd = nBytes - 23;
-        //  log_i("metadata block picture found at pos %i, length %i", s_opusBlockPicPos, s_opusBlockPicLen);
+        //  OPUS_LOG_INFO("metadata block picture found at pos %i, length %i", s_opusBlockPicPos, s_opusBlockPicLen);
             uint32_t pLen = _min(s_blockPicLenUntilFrameEnd, s_opusBlockPicLen);
             if(pLen){
                 s_opusBlockPicItem.push_back(s_opusBlockPicPos);
@@ -1112,19 +1112,19 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
              outputGain        += *(inbuf + 16);
     uint8_t  channelMap         = *(inbuf + 18);
 
-    if(channelCount == 0 || channelCount >2) {OPUS_ERROR("Opus channels out of range, ch: %i", channelCount); return OPUS_ERR;}
+    if(channelCount == 0 || channelCount >2) {OPUS_LOG_ERROR("Opus channels out of range, ch: %i", channelCount); return OPUS_ERR;}
     s_opusChannels = channelCount;
-//    log_i("sampleRate %i", sampleRate);
+//    OPUS_LOG_INFO("sampleRate %i", sampleRate);
 //    if(sampleRate != 48000 && sampleRate != 44100) return ERR_OPUS_INVALID_SAMPLERATE;
     s_opusSamplerate = sampleRate;
-    if(channelMap > 1) {OPUS_ERROR("Opus extra channels not supported"); return OPUS_ERR;}
+    if(channelMap > 1) {OPUS_LOG_ERROR("Opus extra channels not supported"); return OPUS_ERR;}
 
     (void)outputGain;
 
     CELTDecoder_ClearBuffer();
-    s_opusError = celt_decoder_init(s_opusChannels); if(s_opusError < 0)                 {OPUS_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
-    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {OPUS_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
-    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {OPUS_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celt_decoder_init(s_opusChannels); if(s_opusError < 0)                 {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
 
     return 1;
 }
@@ -1133,7 +1133,7 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
 int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
     int32_t idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
-    if(idx != 0) {OPUS_ERROR("Opus dec async, OGG capture pattern \"OggS\" not found"); return OPUS_ERR;}
+    if(idx != 0) {OPUS_LOG_ERROR("Opus dec async, OGG capture pattern \"OggS\" not found"); return OPUS_ERR;}
 
     int16_t segmentTableWrPtr = -1;
 
@@ -1184,7 +1184,7 @@ int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
     s_f_firstPage     = headerType & 0x02; // set: this is the first page of a logical bitstream (bos)
     s_f_lastPage      = headerType & 0x04; // set: this is the last page of a logical bitstream (eos)
 
-//  log_i("firstPage %i, continuedPage %i, lastPage %i",s_f_firstPage, s_f_continuedPage, s_f_lastPage);
+//  OPUS_LOG_INFO("firstPage %i, continuedPage %i, lastPage %i",s_f_firstPage, s_f_continuedPage, s_f_lastPage);
 
     uint16_t headerSize   = pageSegments + 27;
     *bytesLeft           -= headerSize;
@@ -1192,7 +1192,7 @@ int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
     s_opusOggHeaderSize   = headerSize;
 
     int32_t pLen = _min((int32_t)s_opusSegmentLength, s_opusRemainBlockPicLen);
-//  log_i("s_opusSegmentLength %i, s_opusRemainBlockPicLen %i", s_opusSegmentLength, s_opusRemainBlockPicLen);
+//  OPUS_LOG_INFO("s_opusSegmentLength %i, s_opusRemainBlockPicLen %i", s_opusSegmentLength, s_opusRemainBlockPicLen);
     if(s_opusBlockPicLen && pLen > 0){
         s_opusBlockPicItem.push_back(s_opusCurrentFilePos);
         s_opusBlockPicItem.push_back(pLen);
@@ -1205,12 +1205,12 @@ int32_t OPUSFindSyncWord(unsigned char *buf, int32_t nBytes){
     // assume we have a ogg wrapper
     int32_t idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
-    //    log_i("OggS found at %i", idx);
+    //    OPUS_LOG_INFO("OggS found at %i", idx);
         s_f_opusParseOgg = true;
         return idx;
     }
     s_f_opusParseOgg = false;
-    OPUS_ERROR("Opus syncword not found");
+    OPUS_LOG_ERROR("Opus syncword not found");
     return OPUS_ERR;
 }
 //----------------------------------------------------------------------------------------------------------------------

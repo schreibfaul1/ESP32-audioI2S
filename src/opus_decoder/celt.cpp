@@ -660,11 +660,11 @@ bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
     s_celtDec.alloc(omd, "CELTDecoder");
     if (s_celtDec.valid()) {
-        // log_w("Allocated %zu bytes", s_celtDec.size());
+        // OPUS_LOG_INFO("Allocated %zu bytes", s_celtDec.size());
         s_celtDec.clear();  // mem zero
         return true;
     }
-    log_e("oom for %i bytes", omd);
+    OPUS_LOG_ERROR("oom for %i bytes", omd);
     return false;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2203,12 +2203,12 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     {
         for (LM = 0; LM <= m_CELTMode.maxLM; LM++)
             if (m_CELTMode.shortMdctSize << LM == frame_size) break;
-        if (LM > m_CELTMode.maxLM) {OPUS_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+        if (LM > m_CELTMode.maxLM) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
     }
 
     M = 1 << LM;
 
-    if(s_ec.storage > 1275 || outbuf == NULL) {OPUS_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(s_ec.storage > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     N = M * m_CELTMode.shortMdctSize;
     c = 0;
@@ -2217,7 +2217,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while (++c < CC);
 
-    if(s_ec.storage <= 1) {OPUS_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(s_ec.storage <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     effEnd = end;
     if (effEnd > m_CELTMode.effEBands)

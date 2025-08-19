@@ -178,7 +178,7 @@ void audio_info(const char *info){
 void audio_id3data(const char *info){  //id3 metadata
     Serial.print("id3data     ");Serial.println(info);
 }
-void audio_eof_stream(const char* info){ // The webstream comes to an end
+void audio_eof(const char* info){ // The webstream comes to an end
     Serial.print("end of stream:      ");Serial.println(info);
 }
 void audio_bitrate(const char *info){
