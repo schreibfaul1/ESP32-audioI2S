@@ -2277,7 +2277,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 if (_id3image_callback)
                     _id3image_callback(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
                 else if (audio_id3image)
-                    audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
+                    audio_id3image(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
 
                 audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
             }
@@ -4505,6 +4505,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if(rhl.starts_with_icase("icy-url:")) {
             char* icyurl = (rhl.get() + 8);
             trim(icyurl);
+            _callback_helper(icyurl, callback_type_t::icyurl);
         }
 
         else if(rhl.starts_with_icase("www-authenticate:")) {
