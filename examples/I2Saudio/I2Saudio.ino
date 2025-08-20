@@ -34,6 +34,8 @@ WiFiMulti wifiMulti;
 String ssid =     "xxxxx";
 String password = "xxxxx";
 
+// callback declaration
+void meta_callback(const char *info, audio::callback_type_t type);
 
 void setup() {
     pinMode(SD_CS, OUTPUT);
@@ -51,6 +53,26 @@ void setup() {
     }
     audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
     audio.setVolume(12); // 0...21
+
+
+    // Optional - handling metadata and information logging
+
+    // attach callback function (optional)
+    audio.setLiteralCallback(meta_callback);
+    // enable all info messages (optional)
+    audio.enableCallbackType(audio::callback_type_t::all, true);
+    /*
+        you can also use functional callbacks and lamda's,
+        i.e.
+        audio.setLiteralCallback([](const char *info, audio::callback_type_t type){ Serial.printf("Message type:%u, msg:%s\n", static_cast<size_t>(type), info); });
+        audio.enableCallbackType(audio::callback_type_t::all, true);
+
+        selectively enabling/disabling message types as needed
+        audio.enableCallbackType(audio::callback_type_t::streamtitle, true);    // enable stream title callbacks
+        audio.enableCallbackType(audio::callback_type_t::info, false);          // disable info callbacks
+        audio.setLiteralCallback(nullptr);                                      // detach callback at run-time
+    */
+
 
 //    audio.connecttoFS(SD, "test.wav");
 //    audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u");
@@ -70,28 +92,51 @@ void loop(){
     }
 }
 
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof(const char *info){  //end of file
-    Serial.print("eof_mp3     ");Serial.println(info);
-}
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
+
+// metadata and debugging handler
+void meta_callback(const char *info, audio::callback_type_t type){
+  switch (type){
+    case audio::callback_type_t::id3data :
+      Serial.print("id3data: ");
+      Serial.println(info);
+      break;
+
+    // track title
+    case audio::callback_type_t::streamtitle :
+      Serial.print("Stream title: ");
+      Serial.println(info);
+        break;
+
+    // station title
+    case audio::callback_type_t::station :
+      Serial.print("Station title: ");
+      Serial.println(info);
+        break;
+
+    case audio::callback_type_t::bitrate :
+        Serial.print("BitRate: ");
+        Serial.println(info);
+        break;
+/*
+    // tailor it to your needs
+    case audio::callback_type_t::id3lyrics :
+      break;
+    case audio::callback_type_t::icyurl :
+      break;
+    case audio::callback_type_t::icylogo :
+      break;
+    case audio::callback_type_t::icydescr :
+      break;
+    case audio::callback_type_t::lasthost :
+      // passes connection URL
+      break;
+    case audio::callback_type_t::eof :
+      break;
+*/
+
+    default:
+      // default is just print the message and info code
+      Serial.printf("Audio info:%u, msg:", static_cast<size_t>(type));
+      Serial.println(info);
+  }
 }
