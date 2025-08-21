@@ -13,6 +13,7 @@
 #include "esp_arduino_version.h"
 #include <vector>
 #include <deque>
+#include <functional>
 #include <Arduino.h>
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
@@ -34,20 +35,22 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_info(const char*);
-extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
+// extern __attribute__((weak)) void audio_info(const char*);
+// extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
-extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
+// extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
 extern __attribute__((weak)) void audio_id3lyrics(const char* text); //ID3 metadata lyrics
-extern __attribute__((weak)) void audio_eof(const char*); //end of file
-extern __attribute__((weak)) void audio_showstreamtitle(const char*);
-extern __attribute__((weak)) void audio_showstation(const char*);
-extern __attribute__((weak)) void audio_bitrate(const char*);
-extern __attribute__((weak)) void audio_icyurl(const char*);
-extern __attribute__((weak)) void audio_icylogo(const char*);
-extern __attribute__((weak)) void audio_icydescription(const char*);
-extern __attribute__((weak)) void audio_lasthost(const char*);
+// extern __attribute__((weak)) void audio_eof(const char*); //end of file
+// extern __attribute__((weak)) void audio_showstreamtitle(const char*);
+// extern __attribute__((weak)) void audio_showstation(const char*);
+// extern __attribute__((weak)) void audio_bitrate(const char*);
+// extern __attribute__((weak)) void audio_icyurl(const char*);
+// extern __attribute__((weak)) void audio_icylogo(const char*);
+// extern __attribute__((weak)) void audio_icydescription(const char*);
+// extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
+
+
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -429,9 +432,25 @@ private:
     } fnsy_t;
     fnsy_t m_fnsy;
 
+
   public:
+
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
+
+// callbacks ---------------------------------------------------------
+    typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image} event_t;
+     typedef struct _msg{ // used in info(audio_info_callback());
+        const char* msg = nullptr;
+        event_t e = (event_t)0; // event type
+        uint8_t i2s_num = 0;
+        int32_t arg1 = 0;
+        int32_t arg2 = 0;
+        std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
+    } msg_t;
+    inline static std::function<void(msg_t i)> audio_info_callback;
+// -------------------------------------------------------------------
+
     bool         openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     hwoe_t       dismantle_host(const char* host);
     bool         connecttohost(const char* host, const char* user = "", const char* pwd = "");
@@ -474,7 +493,9 @@ private:
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
-
+    template <typename... Args>
+    void         info(event_t e, const char* fmt, Args&&... args);
+    void         info(event_t e, std::vector<uint32_t>& v);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
     void         setDefaults(); // free buffers and set defaults
@@ -828,6 +849,7 @@ private:
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
+private:
     typedef struct _filter{
         float a0;
         float a1;
