@@ -25,6 +25,8 @@
 #include <codecvt>
 #include <locale>
 #include <memory>
+#include <functional>
+#include <bitset>
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
 #include <driver/i2s_std.h>
@@ -34,6 +36,19 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
+// esc control sequences for log formatting
+#define ANSI_ESC_RESET          "\033[0m"
+#define ANSI_ESC_BLACK          "\033[30m"
+#define ANSI_ESC_RED            "\033[31m"
+#define ANSI_ESC_GREEN          "\033[32m"
+#define ANSI_ESC_YELLOW         "\033[33m"
+#define ANSI_ESC_BLUE           "\033[34m"
+#define ANSI_ESC_MAGENTA        "\033[35m"
+#define ANSI_ESC_CYAN           "\033[36m"
+#define ANSI_ESC_WHITE          "\033[37m"
+
+
+// weak-defined callback functions (deprecated callback style)
 extern __attribute__((weak)) void audio_info(const char*);
 extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
 extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
@@ -48,6 +63,35 @@ extern __attribute__((weak)) void audio_icylogo(const char*);
 extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
+
+namespace audiolib {
+    // various callback types
+    enum class callback_type_t : size_t {
+        none = 0,
+        info,
+        id3data,
+        id3lyrics,
+        streamtitle,
+        station,
+        bitrate,
+        commercial,
+        icyurl,
+        icylogo,
+        icydescr,
+        lasthost,
+        eof,
+        all
+    };
+
+    // callback functions prototypes
+    using literal_cb_t = std::function< void (const char*, callback_type_t)>;
+    //ID3 metadata image callback
+    using id3image_cb_t = std::function< void (File&, size_t,size_t)>;
+    //OGG blockpicture
+    using oggimage_cb_t = std::function< void (File&, std::vector<uint32_t>)>;
+    // record audiodata or send via BT
+    using i2s_process_cb_t = std::function< void (int16_t*, int32_t, bool*)>;
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -472,8 +516,40 @@ private:
     const char*  getCodecname() { return codecname[m_codec]; }
     const char*  getVersion() { return audioI2SVers; }
 
+    // callbacks
+    /**
+     * @brief Set functional callback for string-based events
+     * @note to dessign callback set it to a nullptr
+     * @param cb - functional callback
+     * @param type - type to enable
+     */
+    void setLiteralCallback(audiolib::literal_cb_t cb);
+    // callback for ID3Image
+    void setID3imageCallback(audiolib::id3image_cb_t cb){ _id3image_callback = cb; };
+    // callback for OGG Image
+    void setOGGimageCallback(audiolib::oggimage_cb_t cb){ _oggimage_callback = cb; };
+    // callback for I2S processing
+    void setI2SProcessCallback(audiolib::i2s_process_cb_t cb){ _i2s_process_callback = cb; };
+
+    /**
+     * @brief enable certain types of events for callbacks
+     * @note 'all' enables all events
+     * @note 'none' disables all events
+     * 
+     * @param type to enable
+     * @param state 'true' to enable event, 'false' to disable
+     */
+    void enableCallbackType(audiolib::callback_type_t type, bool state);
+
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
+
+    // callback wrappers
+    template <typename... Args>
+    void AUDIO_INFO(const char* fmt, Args&&... args);
+
+    template <typename... Args>
+    void AUDIO_ID3_DATA(const char* fmt, Args&&... args);
 
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
@@ -1007,6 +1083,67 @@ private:
     int16_t         m_pidOfAAC;
     uint8_t         m_packetBuff[m_tsPacketSize];
     int16_t         m_pesDataLength = 0;
+
+    // *********
+    // callbacks
+
+    void _callback_helper(const char* msg,audiolib::callback_type_t type);
+
+    /**
+     * @brief functional callback to execute on various events
+     * 
+     */
+    audiolib::literal_cb_t _literal_callback;
+    audiolib::id3image_cb_t _id3image_callback;
+    audiolib::oggimage_cb_t _oggimage_callback;
+    audiolib::i2s_process_cb_t _i2s_process_callback;
+
+    // enabled callback types
+    std::bitset<16> _cb_types{0};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// template implementations
+
+template <typename... Args>
+void Audio::AUDIO_INFO(const char* fmt, Args&&... args) {
+    // return if no callbacks defined
+    if((!_literal_callback || !_cb_types[static_cast<size_t>(audiolib::callback_type_t::info)]) && !audio_info) return;
+    ps_ptr<char> result;
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1, "result");
+    char* dst = result.get();
+    if (!dst) return;  // Or error treatment
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+    result.append(ANSI_ESC_RESET);
+
+
+    if(_literal_callback && _cb_types[static_cast<size_t>(audiolib::callback_type_t::info)])
+        _literal_callback(result.c_get(), audiolib::callback_type_t::info);
+    else     // compat with older weak callbacks
+        audio_info(result.c_get());
+
+    result.reset();
+}
+
+template <typename... Args>
+void Audio::AUDIO_ID3_DATA(const char* fmt, Args&&... args) {
+    ps_ptr<char> result(__LINE__);
+
+    // First run: determine size
+    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    if (len <= 0) return;
+
+    result.alloc(len + 1);
+    result.clear();
+    char* dst = result.get();
+    if (!dst) return;  // Or error treatment
+    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+  //  result.append(ANSI_ESC_RESET);
+    _callback_helper(result.c_get(), audiolib::callback_type_t::id3data);
+    result.reset();
+}
