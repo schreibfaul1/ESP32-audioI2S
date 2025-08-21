@@ -24,12 +24,32 @@ Other HW may work but not tested. Plays also icy-streams, GoogleTTS and OpenAIsp
 #define I2S_BCLK      27
 #define I2S_LRC       26
 
-Audio audio;
-
 String ssid =     "*******";
 String password = "*******";
 
+Audio audio;
+
+// callbacks
+void my_audio_info(Audio::msg_t m) {
+    switch(m.e){
+        case Audio::evt_info:           Serial.printf("info: ....... %s\n", m.msg); break;
+        case Audio::evt_eof:            Serial.printf("end of file:  %s\n", m.msg); break;
+        case Audio::evt_bitrate:        Serial.printf("bitrate: .... %s\n", m.msg); break; // icy-bitrate or bitrate from metadata
+        case Audio::evt_icyurl:         Serial.printf("icy URL: .... %s\n", m.msg); break;
+        case Audio::evt_id3data:        Serial.printf("ID3 data: ... %s\n", m.msg); break; // id3-data or metadata
+        case Audio::evt_lasthost:       Serial.printf("last URL: ... %s\n", m.msg); break;
+        case Audio::evt_name:           Serial.printf("station name: %s\n", m.msg); break; // station name or icy-name
+        case Audio::evt_streamtitle:    Serial.printf("stream title: %s\n", m.msg); break;
+        case Audio::evt_icylogo:        Serial.printf("icy logo: ... %s\n", m.msg); break;
+        case Audio::evt_icydescription: Serial.printf("icy descr: .. %s\n", m.msg); break;
+        case Audio::evt_image: for(int i = 0; i < m.vec.size(); i += 2){
+                                        Serial.printf("cover image:  segment %02i, pos %07i, len %05i\n", i / 2, m.vec[i], m.vec[i + 1]);} break; // APIC
+        default:                        Serial.printf("message:..... %s\n", m.msg); break;
+    }
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info; // optional
     pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     Serial.begin(115200);
@@ -76,32 +96,6 @@ void loop(){
     vTaskDelay(1);
 }
 
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof(const char *info){  //end of file
-    Serial.print("eof     ");Serial.println(info);
-}
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
-}
-
 ````
 
 ````c++
@@ -124,7 +118,13 @@ Audio audio;
 String ssid =     "*****";
 String password = "*****";
 
+
+void my_audio_info(Audio::msg_t m) {
+    if(m.e == Audio::evt_info) Serial.printf("info: %s\n", m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info; // optional
     Serial.begin(115200);
 //    WiFi.begin(ssid.c_str(), password.c_str());
 //    while (WiFi.status() != WL_CONNECTED) delay(1500);
@@ -144,11 +144,6 @@ void loop() {
     vTaskDelay(1);
 }
 
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-````
 
 <br>
 
