@@ -64,7 +64,7 @@ extern __attribute__((weak)) void audio_icydescription(const char*);
 extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
 
-namespace audio {
+namespace audiolib {
     // various callback types
     enum class callback_type_t : size_t {
         none = 0,
@@ -523,13 +523,13 @@ private:
      * @param cb - functional callback
      * @param type - type to enable
      */
-    void setLiteralCallback(audio::literal_cb_t cb);
+    void setLiteralCallback(audiolib::literal_cb_t cb);
     // callback for ID3Image
-    void setID3imageCallback(audio::id3image_cb_t cb){ _id3image_callback = cb; };
+    void setID3imageCallback(audiolib::id3image_cb_t cb){ _id3image_callback = cb; };
     // callback for OGG Image
-    void setOGGimageCallback(audio::oggimage_cb_t cb){ _oggimage_callback = cb; };
+    void setOGGimageCallback(audiolib::oggimage_cb_t cb){ _oggimage_callback = cb; };
     // callback for I2S processing
-    void setI2SProcessCallback(audio::i2s_process_cb_t cb){ _i2s_process_callback = cb; };
+    void setI2SProcessCallback(audiolib::i2s_process_cb_t cb){ _i2s_process_callback = cb; };
 
     /**
      * @brief enable certain types of events for callbacks
@@ -539,7 +539,7 @@ private:
      * @param type to enable
      * @param state 'true' to enable event, 'false' to disable
      */
-    void enableCallbackType(audio::callback_type_t type, bool state);
+    void enableCallbackType(audiolib::callback_type_t type, bool state);
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
@@ -1087,16 +1087,16 @@ private:
     // *********
     // callbacks
 
-    void _callback_helper(const char* msg,audio::callback_type_t type);
+    void _callback_helper(const char* msg,audiolib::callback_type_t type);
 
     /**
      * @brief functional callback to execute on various events
      * 
      */
-    audio::literal_cb_t _literal_callback;
-    audio::id3image_cb_t _id3image_callback;
-    audio::oggimage_cb_t _oggimage_callback;
-    audio::i2s_process_cb_t _i2s_process_callback;
+    audiolib::literal_cb_t _literal_callback;
+    audiolib::id3image_cb_t _id3image_callback;
+    audiolib::oggimage_cb_t _oggimage_callback;
+    audiolib::i2s_process_cb_t _i2s_process_callback;
 
     // enabled callback types
     std::bitset<16> _cb_types{0};
@@ -1108,7 +1108,7 @@ private:
 template <typename... Args>
 void Audio::AUDIO_INFO(const char* fmt, Args&&... args) {
     // return if no callbacks defined
-    if((!_literal_callback || !_cb_types[static_cast<size_t>(audio::callback_type_t::info)]) && !audio_info) return;
+    if((!_literal_callback || !_cb_types[static_cast<size_t>(audiolib::callback_type_t::info)]) && !audio_info) return;
     ps_ptr<char> result;
 
     // First run: determine size
@@ -1122,8 +1122,8 @@ void Audio::AUDIO_INFO(const char* fmt, Args&&... args) {
     result.append(ANSI_ESC_RESET);
 
 
-    if(_literal_callback && _cb_types[static_cast<size_t>(audio::callback_type_t::info)])
-        _literal_callback(result.c_get(), audio::callback_type_t::info);
+    if(_literal_callback && _cb_types[static_cast<size_t>(audiolib::callback_type_t::info)])
+        _literal_callback(result.c_get(), audiolib::callback_type_t::info);
     else     // compat with older weak callbacks
         audio_info(result.c_get());
 
@@ -1144,6 +1144,6 @@ void Audio::AUDIO_ID3_DATA(const char* fmt, Args&&... args) {
     if (!dst) return;  // Or error treatment
     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
   //  result.append(ANSI_ESC_RESET);
-    _callback_helper(result.c_get(), audio::callback_type_t::id3data);
+    _callback_helper(result.c_get(), audiolib::callback_type_t::id3data);
     result.reset();
 }

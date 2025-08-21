@@ -35,7 +35,7 @@ String ssid =     "xxxxx";
 String password = "xxxxx";
 
 // callback declaration
-void meta_callback(const char *info, audio::callback_type_t type);
+void meta_callback(const char *info, audiolib::callback_type_t type);
 
 void setup() {
     pinMode(SD_CS, OUTPUT);
@@ -60,16 +60,16 @@ void setup() {
     // attach callback function (optional)
     audio.setLiteralCallback(meta_callback);
     // enable all info messages (optional)
-    audio.enableCallbackType(audio::callback_type_t::all, true);
+    audio.enableCallbackType(audiolib::callback_type_t::all, true);
     /*
         you can also use functional callbacks and lamda's,
         i.e.
-        audio.setLiteralCallback([](const char *info, audio::callback_type_t type){ Serial.printf("Message type:%u, msg:%s\n", static_cast<size_t>(type), info); });
-        audio.enableCallbackType(audio::callback_type_t::all, true);
+        audio.setLiteralCallback([](const char *info, audiolib::callback_type_t type){ Serial.printf("Message type:%u, msg:%s\n", static_cast<size_t>(type), info); });
+        audio.enableCallbackType(audiolib::callback_type_t::all, true);
 
         selectively enabling/disabling message types as needed
-        audio.enableCallbackType(audio::callback_type_t::streamtitle, true);    // enable stream title callbacks
-        audio.enableCallbackType(audio::callback_type_t::info, false);          // disable info callbacks
+        audio.enableCallbackType(audiolib::callback_type_t::streamtitle, true);    // enable stream title callbacks
+        audio.enableCallbackType(audiolib::callback_type_t::info, false);          // disable info callbacks
         audio.setLiteralCallback(nullptr);                                      // detach callback at run-time
     */
 
@@ -94,43 +94,43 @@ void loop(){
 
 
 // metadata and debugging handler
-void meta_callback(const char *info, audio::callback_type_t type){
+void meta_callback(const char *info, audiolib::callback_type_t type){
   switch (type){
-    case audio::callback_type_t::id3data :
+    case audiolib::callback_type_t::id3data :
       Serial.print("id3data: ");
       Serial.println(info);
       break;
 
     // track title
-    case audio::callback_type_t::streamtitle :
+    case audiolib::callback_type_t::streamtitle :
       Serial.print("Stream title: ");
       Serial.println(info);
         break;
 
     // station title
-    case audio::callback_type_t::station :
+    case audiolib::callback_type_t::station :
       Serial.print("Station title: ");
       Serial.println(info);
         break;
 
-    case audio::callback_type_t::bitrate :
+    case audiolib::callback_type_t::bitrate :
         Serial.print("BitRate: ");
         Serial.println(info);
         break;
 /*
     // tailor it to your needs
-    case audio::callback_type_t::id3lyrics :
+    case audiolib::callback_type_t::id3lyrics :
       break;
-    case audio::callback_type_t::icyurl :
+    case audiolib::callback_type_t::icyurl :
       break;
-    case audio::callback_type_t::icylogo :
+    case audiolib::callback_type_t::icylogo :
       break;
-    case audio::callback_type_t::icydescr :
+    case audiolib::callback_type_t::icydescr :
       break;
-    case audio::callback_type_t::lasthost :
+    case audiolib::callback_type_t::lasthost :
       // passes connection URL
       break;
-    case audio::callback_type_t::eof :
+    case audiolib::callback_type_t::eof :
       break;
 */
 

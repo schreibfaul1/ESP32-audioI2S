@@ -24,7 +24,7 @@
 
 
 static constexpr const char __empty_string[] = "";
-using namespace audio;
+using namespace audiolib;
 
 template <typename... Args>
 void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
@@ -3460,7 +3460,7 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
             if(pos >= 0) {
                 *(plsStationName + pos) = 0; // remove </Title>
             }
-            _callback_helper(plsStationName, audio::callback_type_t::station);
+            _callback_helper(plsStationName, callback_type_t::station);
             AUDIO_INFO("StationName: \"%s\"", plsStationName);
         }
 
@@ -3805,7 +3805,7 @@ exit:
 
         if(afn.valid()) {
             AUDIO_INFO("End of file \"%s\"", afn.c_get());
-            _callback_helper(afn.c_get(), audio::callback_type_t::eof);
+            _callback_helper(afn.c_get(), callback_type_t::eof);
         }
         return;
     }
@@ -3885,7 +3885,7 @@ void Audio::processWebStream() {
     if(m_f_eof) {
         stopSong();
         AUDIO_INFO("End of webstream: \"%s\"", m_lastHost.c_get());
-        _callback_helper(m_lastHost.c_get(), audio::callback_type_t::eof);
+        _callback_helper(m_lastHost.c_get(), callback_type_t::eof);
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4362,7 +4362,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
             if(sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                _callback_helper(rhl.get(), audio::callback_type_t::streamtitle);
+                _callback_helper(rhl.get(), callback_type_t::streamtitle);
                 goto exit;
             }
         }
@@ -6835,11 +6835,11 @@ uint32_t Audio::getHighWatermark(){
     return highWaterMark; // dwords
 }
 
-void Audio::setLiteralCallback(audio::literal_cb_t cb){
+void Audio::setLiteralCallback(audiolib::literal_cb_t cb){
     _literal_callback = cb;
 }
 
-void Audio::enableCallbackType(audio::callback_type_t type, bool state){
+void Audio::enableCallbackType(audiolib::callback_type_t type, bool state){
     if (static_cast<size_t>(type) >= _cb_types.size()) return;
     switch (type){
         case callback_type_t::none :
@@ -6860,7 +6860,7 @@ void Audio::enableCallbackType(audio::callback_type_t type, bool state){
 }
 
 // helper to call various string callbacks
-void Audio::_callback_helper(const char* msg, audio::callback_type_t type){
+void Audio::_callback_helper(const char* msg, audiolib::callback_type_t type){
     if(_literal_callback && _cb_types[static_cast<size_t>(type)])
         return _literal_callback(msg, type);
     
