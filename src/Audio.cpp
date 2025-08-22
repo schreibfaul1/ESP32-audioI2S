@@ -22,72 +22,6 @@
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "psram_unique_ptr.hpp"
 
-template <typename... Args>
-void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-
-    #define ANSI_ESC_RESET          "\033[0m"
-    #define ANSI_ESC_BLACK          "\033[30m"
-    #define ANSI_ESC_RED            "\033[31m"
-    #define ANSI_ESC_GREEN          "\033[32m"
-    #define ANSI_ESC_YELLOW         "\033[33m"
-    #define ANSI_ESC_BLUE           "\033[34m"
-    #define ANSI_ESC_MAGENTA        "\033[35m"
-    #define ANSI_ESC_CYAN           "\033[36m"
-    #define ANSI_ESC_WHITE          "\033[37m"
-
-    ps_ptr<char> result(__LINE__);
-    ps_ptr<char> file(__LINE__);
-
-    file.copy_from(path);
-    while(file.contains("/")){
-        file.remove_before('/', false);
-    }
-
-    // First run: determine size
-    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-    if (len <= 0) return;
-
-    result.alloc(len + 1);
-    char* dst = result.get();
-    if (!dst) return;
-    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-
-    // build a final string with file/line prefix
-    ps_ptr<char> final(__LINE__);
-    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    if (total_len <= 0) return;
-    final.alloc(total_len + 1);
-    final.clear();
-    char* dest = final.get();
-    if (!dest) return;  // or error treatment
-    // if(audio_info){
-    //     if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    //     else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    //     else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    //     else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
-    //     else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
-    //     if(final.strlen() > 0)  audio_info(final.get());
-    // }
-    // else{
-    //     std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-    //     if     (level == 1) log_e("%s", final.c_get());
-    //     else if(level == 2) log_w("%s", final.c_get());
-    //     else if(level == 3) log_i("%s", final.c_get());
-    //     else if(level == 4) log_d("%s", final.c_get());
-    //     else                log_v("%s", final.c_get());
-    // }
-    final.reset();
-    result.reset();
-    file.reset();
-}
-
-
-// Macro for comfortable calls
-#define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
     if(maxBlockSize) m_resBuffSize = maxBlockSize;
@@ -102,7 +36,7 @@ int32_t AudioBuffer::getBufsize() { return m_buffSize; }
 
 bool AudioBuffer::setBufsize(size_t mbs) {
     if(mbs < 2 * m_resBuffSize) {
-        AUDIO_LOG_ERROR("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
+        log_e("not allowed buffer size must be greater than %i", 2 * m_resBuffSize);
         return false;
     }
     m_buffSize = mbs;
@@ -185,7 +119,7 @@ void AudioBuffer::bytesWritten(size_t bw) {
     if(!bw) return;
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer.get(); }
-    if(m_writePtr > m_endPtr) AUDIO_LOG_ERROR("AudioBuffer: m_writePtr %i > m_endPtr %i", m_writePtr, m_endPtr);
+    if(m_writePtr > m_endPtr) log_e("AudioBuffer: m_writePtr %i > m_endPtr %i", m_writePtr, m_endPtr);
     m_f_isEmpty = false;
 }
 
@@ -291,7 +225,7 @@ void Audio::info(event_t e, const char* fmt, Args&&... args) {
 
     char* p = result.get();
     std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
-    result.append(ANSI_ESC_RESET);
+//  result.append(ANSI_ESC_RESET);
     msg_t i;
     i.msg = result.c_get();
     i.e = e;
@@ -2121,7 +2055,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         //    syltBuff.hex_dump(10);
             m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
             if(m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
-            if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding), m_ID3Hdr.SYLT.text_encoding = 0;}
+            if(m_ID3Hdr.SYLT.text_encoding > 3){AUDIO_LOG_ERROR("unknown text encoding: %i", m_ID3Hdr.SYLT.text_encoding); m_ID3Hdr.SYLT.text_encoding = 0;}
             char encodingTab [4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
             memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3); m_ID3Hdr.SYLT.lang[3] = '\0';
             info(evt_info, "Lyrics: text_encoding: %s, language: %s, size %i", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
@@ -3010,8 +2944,8 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 
     size_t outputIndex = 0;
 
-    auto clipToInt16 = [](float value) -> int16_t {
-        if (value > 32767.0f){AUDIO_LOG_ERROR("overflow +"); return 32767;}
+    auto clipToInt16 = [this](float value) -> int16_t {
+        if (value > 32767.0f){AUDIO_LOG_INFO("overflow +"); return 32767;}
         if (value < -32768.0f) {AUDIO_LOG_ERROR("overflow -");return -32768;}
         return static_cast<int16_t>(value);
     };
