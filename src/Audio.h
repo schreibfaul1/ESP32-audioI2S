@@ -1079,6 +1079,9 @@ private:
             else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
             msg_t msg;
             msg.msg = final.get();
+            const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
+            msg.s = logStr[level];
+            msg.e = event_t(100);
             if(final.strlen() > 0)  audio_info_callback(msg);
         }
         else{
