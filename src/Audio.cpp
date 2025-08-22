@@ -22,44 +22,6 @@
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "psram_unique_ptr.hpp"
 
-// template <typename... Args>
-// void AUDIO_INFO(const char* fmt, Args&&... args) {
-//     ps_ptr<char> result(__LINE__);
-
-//     // First run: determine size
-//     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-//     if (len <= 0) return;
-
-//     result.alloc(len + 1);
-//     result.clear();
-//     char* dst = result.get();
-//     if (!dst) return;  // Or error treatment
-//     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-//     result.append(ANSI_ESC_RESET);
-//     if(audio_info) audio_info(result.c_get());
-//     result.reset();
-// }
-
-// template <typename... Args>
-// void AUDIO_ID3_DATA(const char* fmt, Args&&... args) {
-//     ps_ptr<char> result(__LINE__);
-
-//     // First run: determine size
-//     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-//     if (len <= 0) return;
-
-//     result.alloc(len + 1);
-//     result.clear();
-//     char* dst = result.get();
-//     if (!dst) return;  // Or error treatment
-//     std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-//   //  result.append(ANSI_ESC_RESET);
-//     if(audio_id3data) audio_id3data(result.c_get());
-//     result.reset();
-// }
-
-
-
 template <typename... Args>
 void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
 
@@ -331,15 +293,20 @@ void Audio::info(event_t e, const char* fmt, Args&&... args) {
     std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
     result.append(ANSI_ESC_RESET);
     msg_t i;
-    i.msg = result.get();
+    i.msg = result.c_get();
     i.e = e;
+    i.s = eventStr[e];
     i.i2s_num = m_i2s_num;
     if(audio_info_callback) audio_info_callback(i);
     result.reset();
 }
 void Audio::info(event_t e, std::vector<uint32_t>& v) {
+    ps_ptr<char>apic;
+    apic.assignf("APIC found at pos %lu", v[0]);
     msg_t i;
+    i.msg = apic.c_get();
     i.e = e;
+    i.s = eventStr[e];
     i.i2s_num = m_i2s_num;
     i.vec = v;
     if(audio_info_callback) audio_info_callback(i);
@@ -2344,15 +2311,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     ps_ptr<char>atom_size("atom_size");
     uint32_t idx = 0;
 
-    // Lambda function for Variant length determination
-    auto parse_variant_length = [](uint8_t *&ptr) -> int {
-        int length = 0;
-        do {
-            length = (length << 7) | (*ptr & 0x7F);  // Read the lower 7 bits of the current byte
-        } while (*(ptr++) & 0x80);  //Increment the pointer after each byte
-        return length;
-    };
-
     /*
          ftyp
            | - moov  -> trak -> ... -> mp4a contains raw block parameters
@@ -3297,7 +3255,6 @@ bool Audio::readPlayListData() {
     uint8_t      readedBytes = 0;
     ps_ptr<char> pl("pl");
     uint32_t     ctl = 0;
-    int          lines = 0;
     uint16_t     plSize = 0;
 
     auto detectTimeout = [&]() -> bool{
@@ -3375,7 +3332,6 @@ bool Audio::readPlayListData() {
             break;
         }
     } // outer while
-    lines = m_playlistContent.size();
 
     if(m_f_chunked) getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n"
     m_dataMode = AUDIO_PLAYLISTDATA;

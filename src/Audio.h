@@ -440,8 +440,10 @@ private:
 
 // callbacks ---------------------------------------------------------
     typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image} event_t;
-     typedef struct _msg{ // used in info(audio_info_callback());
+    const char* eventStr[11] = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image"};
+    typedef struct _msg{ // used in info(audio_info_callback());
         const char* msg = nullptr;
+        const char* s = nullptr;
         event_t e = (event_t)0; // event type
         uint8_t i2s_num = 0;
         int32_t arg1 = 0;
