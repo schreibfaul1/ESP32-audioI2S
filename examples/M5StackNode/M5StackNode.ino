@@ -22,7 +22,12 @@
 WM8978 dac;
 Audio audio;
 
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info;
     /* Setup wm8978 I2C interface */
     if (!dac.begin(I2C_SDA, I2C_SCL)) {
         log_e("Error setting up dac. System halted");

@@ -19,7 +19,12 @@ String ssid =     "*****";
 String password = "*****";
 
 
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info;
     Serial.begin(115200);
     Serial.print("\n\n");
     Serial.println("----------------------------------");
@@ -53,10 +58,5 @@ void setup() {
 void loop() {
     audio.loop();
     vTaskDelay(1);
-}
-
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
 }
 

@@ -47,36 +47,38 @@ Audio audio;
 
 //#####################################################################
 
-void setup()
-{
-  Serial.begin(115200);
-  Serial.println("\r\nReset");
-  Serial.printf_P(PSTR("Free mem=%l\n"), ESP.getFreeHeap());
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
 
-  pinMode(SD_CS, OUTPUT);
-  digitalWrite(SD_CS, HIGH);
-  SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
-  SPI.setFrequency(1000000);
+void setup() {
+    Audio::audio_info_callback = my_audio_info;
+    Serial.begin(115200);
+    Serial.println("\r\nReset");
+    Serial.printf_P(PSTR("Free mem=%l\n"), ESP.getFreeHeap());
 
-  SD.begin(SD_CS);
+    pinMode(SD_CS, OUTPUT);
+    digitalWrite(SD_CS, HIGH);
+    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
+    SPI.setFrequency(1000000);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
+    SD.begin(SD_CS);
 
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.print(".");
-    delay(100);
-  }
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
 
-  Serial.printf_P(PSTR("Connected\r\nRSSI: "));
-  Serial.print(WiFi.RSSI());
-  Serial.print(" IP: ");
-  Serial.println(WiFi.localIP());
+    while (WiFi.status() != WL_CONNECTED){
+        Serial.print(".");
+        delay(100);
+    }
+
+    Serial.printf_P(PSTR("Connected\r\nRSSI: "));
+    Serial.print(WiFi.RSSI());
+    Serial.print(" IP: ");
+    Serial.println(WiFi.localIP());
 
     Serial.printf("Connect to DAC codec... ");
-    while (not dac.begin(IIC_DATA, IIC_CLK))
-    {
+    while (not dac.begin(IIC_DATA, IIC_CLK)){
         Serial.printf("Failed!\n");
         delay(1000);
     }
@@ -104,30 +106,4 @@ void setup()
 void loop(){
     vTaskDelay(1);
     audio.loop();
-}
-
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof(const char *info){  //end of file
-    Serial.print("eof     ");Serial.println(info);
-}
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
 }

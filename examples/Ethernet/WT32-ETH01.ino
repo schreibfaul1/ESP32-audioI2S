@@ -61,7 +61,12 @@ void onEvent(arduino_event_id_t event) {
   }
 }
 
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info;
     pinMode(SD_CS, OUTPUT);      digitalWrite(SD_CS, HIGH);
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
     Serial.begin(115200);
@@ -80,8 +85,4 @@ void setup() {
 void loop(){
     vTaskDelay(1);
     audio.loop();
-}
-
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
 }

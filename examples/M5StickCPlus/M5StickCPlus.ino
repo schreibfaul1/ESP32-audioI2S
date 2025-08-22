@@ -20,7 +20,12 @@ Audio audio = Audio(true);
 String ssid =     "xxxxxxxx";
 String password = "xxxxxxxx";
 
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info;
     M5.begin(false);        // Lcd disabled to reduce noise
     M5.Axp.ScreenBreath(1); // Lower Lcd backlight
     pinMode(36, INPUT);
@@ -51,30 +56,4 @@ void loop() {
         if(r.length()>5) audio.connecttohost(r.c_str());
         log_i("free heap=%i", ESP.getFreeHeap());
     }
-}
-
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof(const char *info){  //end of file
-    Serial.print("eof_mp3     ");Serial.println(info);
-}
-void audio_showstation(const char *info){
-    Serial.print("station     ");Serial.println(info);
-}
-void audio_showstreamtitle(const char *info){
-    Serial.print("streamtitle ");Serial.println(info);
-}
-void audio_bitrate(const char *info){
-    Serial.print("bitrate     ");Serial.println(info);
-}
-void audio_icyurl(const char *info){  //homepage
-    Serial.print("icyurl      ");Serial.println(info);
-}
-void audio_lasthost(const char *info){  //stream URL played
-    Serial.print("lasthost    ");Serial.println(info);
 }

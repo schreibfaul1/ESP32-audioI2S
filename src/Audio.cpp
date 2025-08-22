@@ -1706,9 +1706,10 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
                     m_syltTimeStamp.push_back(ms);
                 }
             }
-            for(int i = 0; i < m_syltLines.size(); i++){
-                info(evt_info, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
-            }
+            info(evt_info, "audiofile contains synchronized lyrics");
+            // for(int i = 0; i < m_syltLines.size(); i++){
+            //     info(evt_lyrics, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            // }
         }
         m_controlCounter = FLAC_MBH;
         m_rflh.retvalue = vendorLength + 3;
@@ -2146,9 +2147,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 m_syltTimeStamp.push_back(timestamp);
                 idx += 4;
             }
-            for(int i = 0; i < m_syltLines.size(); i++){
-                info(evt_info, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
-            }
+            info(evt_info, "audiofile contains synchronized lyrics");
+            // for(int i = 0; i < m_syltLines.size(); i++){
+            //     info(evt_lyrics, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            // }
         }
         return 0;
     }
@@ -2248,8 +2250,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
                     idx += 4;
                 }
+                info(evt_info, "audiofile contains synchronized lyrics");
                 // for(int i = 0; i < m_syltLines.size(); i++){
-                //     info(evt_info, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+                //     info(evt_lyrics, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
                 // }
             }
         }
@@ -2824,9 +2827,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                             m_syltTimeStamp.push_back(ms);
                         }
                     }
-                    for(int i = 0; i < m_syltLines.size(); i++){
-                        info(evt_info, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
-                    }
+                    info(evt_info, "audiofile contains synchronized lyrics");
+                    // for(int i = 0; i < m_syltLines.size(); i++){
+                    //     info(evt_lyrics, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
+                    // }
                 }
 
                 m_m4aHdr.retvalue = consumed;
@@ -5400,8 +5404,7 @@ void Audio::computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) 
         //  AUDIO_LOG_INFO("%f", audioCurrentTime * 1000); // ms
         if(m_cat.syltIdx >= m_syltLines.size()) return;
         if(m_audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]){
-        //  info(evt_info, ANSI_ESC_CYAN "%s", m_syltLines[m_cat.syltIdx].c_get());
-            if(audio_id3lyrics) audio_id3lyrics(m_syltLines[m_cat.syltIdx].c_get());
+            info(evt_lyrics, "%s", m_syltLines[m_cat.syltIdx].c_get());
             m_cat.syltIdx++;
         }
     }

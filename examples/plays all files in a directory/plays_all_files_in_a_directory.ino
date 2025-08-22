@@ -20,7 +20,12 @@ Audio audio;
 File dir;
 const char audioDir[] = "/mp3";
 
+void my_audio_info(Audio::msg_t m) {
+    Serial.printf("%s: %s\n", m.s, m.msg);
+}
+
 void setup() {
+    Audio::audio_info_callback = my_audio_info;
     Serial.begin(115200);
     pinMode(SD_MMC_D0, INPUT_PULLUP);
     SD_MMC.setPins(SD_MMC_CLK,SD_MMC_CMD, SD_MMC_D0);
@@ -90,24 +95,4 @@ void vector_clear_and_shrink(vector<char*>&vec){
     }
     vec.clear();
     vec.shrink_to_fit();
-}
-
-
-// optional
-void audio_info(const char *info){
-    Serial.print("info        "); Serial.println(info);
-}
-void audio_id3data(const char *info){  //id3 metadata
-    Serial.print("id3data     ");Serial.println(info);
-}
-void audio_eof(const char *info){  //end of file
-    Serial.print("eof_mp3     ");Serial.println(info);
-    if(v_audioContent.size() == 0){
-        vector_clear_and_shrink(v_audioContent); // free memory
-        return;
-    }
-    const char* s = (const char*)v_audioContent[v_audioContent.size() - 1];
-    Serial.printf("playing %s\n", s);
-    audio.connecttoFS(SD_MMC, s);
-    v_audioContent.pop_back();
 }
