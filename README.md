@@ -62,7 +62,7 @@ void my_audio_info(Audio::msg_t m) {
         case Audio::evt_image: for(int i = 0; i < m.vec.size(); i += 2){
                                         Serial.printf("cover image:  segment %02i, pos %07lu, len %05lu\n", i / 2, m.vec[i], m.vec[i + 1]);} break; // APIC
         case Audio::evt_lyrics:         Serial.printf("sync lyrics:  %s\n", m.msg); break;
-                                        default:                        Serial.printf("message:..... %s\n", m.msg); break;
+        default:                        Serial.printf("message:..... %s\n", m.msg); break;
     }
 }
 ````
