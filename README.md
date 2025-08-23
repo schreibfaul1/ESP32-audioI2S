@@ -44,6 +44,7 @@ void loop(){
 }
 
 ````
+You can find more examples here: https://github.com/schreibfaul1/ESP32-audioI2S/tree/master/examples
 
 ````c++
 // detailed cb output
