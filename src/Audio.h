@@ -13,6 +13,7 @@
 #include "esp_arduino_version.h"
 #include <vector>
 #include <deque>
+#include <functional>
 #include <Arduino.h>
 #include <libb64/cencode.h>
 #include <esp32-hal-log.h>
@@ -34,19 +35,6 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_info(const char*);
-extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
-extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
-extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
-extern __attribute__((weak)) void audio_id3lyrics(const char* text); //ID3 metadata lyrics
-extern __attribute__((weak)) void audio_eof(const char*); //end of file
-extern __attribute__((weak)) void audio_showstreamtitle(const char*);
-extern __attribute__((weak)) void audio_showstation(const char*);
-extern __attribute__((weak)) void audio_bitrate(const char*);
-extern __attribute__((weak)) void audio_icyurl(const char*);
-extern __attribute__((weak)) void audio_icylogo(const char*);
-extern __attribute__((weak)) void audio_icydescription(const char*);
-extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -402,6 +390,7 @@ private:
         uint32_t ctime;
         uint32_t timeout;
         uint32_t stime;
+        uint32_t bitrate;
         bool     f_time = false;
         bool     f_icy_data = false;
     } phreh_t;
@@ -429,9 +418,27 @@ private:
     } fnsy_t;
     fnsy_t m_fnsy;
 
+
   public:
+
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
+
+// callbacks ---------------------------------------------------------
+    typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
+    const char* eventStr[13] = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
+    typedef struct _msg{ // used in info(audio_info_callback());
+        const char* msg = nullptr;
+        const char* s = nullptr;
+        event_t e = (event_t)0; // event type
+        uint8_t i2s_num = 0;
+        int32_t arg1 = 0;
+        int32_t arg2 = 0;
+        std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
+    } msg_t;
+    inline static std::function<void(msg_t i)> audio_info_callback;
+// -------------------------------------------------------------------
+
     bool         openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     hwoe_t       dismantle_host(const char* host);
     bool         connecttohost(const char* host, const char* user = "", const char* pwd = "");
@@ -439,7 +446,6 @@ private:
     bool         connecttoFS(fs::FS& fs, const char* path, int32_t m_fileStartPos = -1);
     void         setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool         setAudioPlayPosition(uint16_t sec);
-    bool         setFilePos(uint32_t pos);
     bool         setTimeOffset(int sec);
     bool         setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
     bool         pauseResume();
@@ -460,7 +466,6 @@ private:
     uint32_t     getBitRate(bool avg = false);
     uint32_t     getAudioFileDuration();
     uint32_t     getAudioCurrentTime();
-    uint32_t     getTotalPlayingTime();
     uint16_t     getVUlevel();
     uint32_t     inBufferFilled();            // returns the number of stored bytes in the inputbuffer
     uint32_t     inBufferFree();              // returns the number of free bytes in the inputbuffer
@@ -474,7 +479,10 @@ private:
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
-
+    template <typename... Args>
+    void         info(event_t e, const char* fmt, Args&&... args);
+    void         info(event_t e, std::vector<uint32_t>& v);
+    bool         setFilePos(uint32_t pos);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
     void         setDefaults(); // free buffers and set defaults
@@ -828,6 +836,7 @@ private:
     typedef enum { LEFTCHANNEL=0, RIGHTCHANNEL=1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF =2 } FilterType;
 
+private:
     typedef struct _filter{
         float a0;
         float a1;
@@ -943,7 +952,6 @@ private:
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
-    uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
     int32_t         m_fileStartPos = -1;            // may be set in connecttoFS()
     uint16_t        m_m3u8_targetDuration = 10;     //
@@ -1007,6 +1015,80 @@ private:
     int16_t         m_pidOfAAC;
     uint8_t         m_packetBuff[m_tsPacketSize];
     int16_t         m_pesDataLength = 0;
+
+//----------------------------------------------------------------------------------------------------------------------
+    template <typename... Args>
+    void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+
+        #define ANSI_ESC_RESET          "\033[0m"
+        #define ANSI_ESC_BLACK          "\033[30m"
+        #define ANSI_ESC_RED            "\033[31m"
+        #define ANSI_ESC_GREEN          "\033[32m"
+        #define ANSI_ESC_YELLOW         "\033[33m"
+        #define ANSI_ESC_BLUE           "\033[34m"
+        #define ANSI_ESC_MAGENTA        "\033[35m"
+        #define ANSI_ESC_CYAN           "\033[36m"
+        #define ANSI_ESC_WHITE          "\033[37m"
+
+        ps_ptr<char> result(__LINE__);
+        ps_ptr<char> file(__LINE__);
+
+        file.copy_from(path);
+        while(file.contains("/")){
+            file.remove_before('/', false);
+        }
+
+        // First run: determine size
+        int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (len <= 0) return;
+
+        result.alloc(len + 1);
+        char* dst = result.get();
+        if (!dst) return;
+        std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+
+        // build a final string with file/line prefix
+        ps_ptr<char> final(__LINE__);
+        int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        if (total_len <= 0) return;
+        final.alloc(total_len + 1);
+        final.clear();
+        char* dest = final.get();
+        if (!dest) return;  // or error treatment
+        if(audio_info_callback){
+            if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+            else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+            else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+            else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
+            else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
+            msg_t msg;
+            msg.msg = final.get();
+            const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
+            msg.s = logStr[level];
+            msg.e = evt_log;
+            if(final.strlen() > 0)  audio_info_callback(msg);
+        }
+        else{
+            std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+            if     (level == 1) log_e("%s", final.c_get());
+            else if(level == 2) log_w("%s", final.c_get());
+            else if(level == 3) log_i("%s", final.c_get());
+            else if(level == 4) log_d("%s", final.c_get());
+            else                log_v("%s", final.c_get());
+        }
+        final.reset();
+        result.reset();
+        file.reset();
+    }
+
+    // Macro for comfortable calls
+    #define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+
 };
+
 
 //----------------------------------------------------------------------------------------------------------------------
