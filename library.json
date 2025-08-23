@@ -1,6 +1,6 @@
 {
   "name": "ESP32-audioI2S",
-  "version": "3.4.1",
+  "version": "3.4.2",
   "description": "With this library You can easily build a WebRadio with a ESP32 board and a I2S-module",
   "keywords": "audio, i2s, esp32, esp32-s3, esp32-p4",
   "repository": {
