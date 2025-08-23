@@ -40,7 +40,7 @@ bool             s_f_flacParseOgg = false;
 bool             s_f_bitReaderError = false;
 uint8_t          s_flac_pageSegments = 0;
 ps_ptr<char>     s_flacStreamTitle = {};
-ps_ptr<char>     s_flacVendorString("s_flacVendorString");
+ps_ptr<char>     s_flacVendorString = {};
 bool             s_f_flacNewStreamtitle = false;
 bool             s_f_flacFirstCall = true;
 bool             s_f_oggWrapper = false;

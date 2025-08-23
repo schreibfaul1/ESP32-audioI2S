@@ -59,7 +59,7 @@ private:
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name\n", len);
+                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
             }
         }
     }
@@ -1907,7 +1907,7 @@ private:
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name\n", len);
+                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
             }
         }
     }
@@ -2129,7 +2129,7 @@ private:
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name\n", len);
+                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
             }
         }
     }
@@ -2325,7 +2325,7 @@ private:
             if (name) {
                 std::memcpy(name, new_name, len);
             } else {
-                printf("OOM: failed to allocate %zu bytes for name\n", len);
+                printf("OOM: failed to allocate %zu bytes for name %s\n", len, new_name);
             }
         }
     }
