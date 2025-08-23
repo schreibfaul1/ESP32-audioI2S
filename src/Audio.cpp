@@ -3546,7 +3546,6 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if(f_haveRedirection) {
         m_lastM3U8host.clone_from(m3u8redirection(&m_m3u8Codec));
-        accomplish_m3u8_url();
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
@@ -3640,7 +3639,7 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
         while (line.starts_with("../")){
             line.remove_prefix("../");
         }
-        result.clone_from(m_lastHost);
+        result.clone_from(m_currentHost);
         int idx = result.last_index_of('/');
         if(idx > 0 && (size_t)idx != result.strlen() - 1) result.truncate_at((size_t)idx + 1);
         result.append(line.get());
@@ -3651,8 +3650,8 @@ ps_ptr<char>Audio::m3u8redirection(uint8_t* codec) {
         // chunklist_w789468022.m3u8                                                   line
         // http://arcast.com.ar:1935/radio/radionar.stream/chunklist_w789468022.m3u8   --> result
 
-        result.clone_from(m_lastHost);
-        int pos = m_lastHost.last_index_of('/');
+        result.clone_from(m_currentHost);
+        int pos = m_currentHost.last_index_of('/');
         if(pos > 0){
             result.truncate_at((size_t)pos + 1);
             result.append(line.get());
@@ -4327,7 +4326,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         if(!strncmp(c_host, m_currentHost.get(), pos_slash)) {
                             info(evt_info, "redirect to new extension at existing host \"%s\"", c_host);
                             if(m_playlistFormat == FORMAT_M3U8) {
-                                m_lastHost.assign(c_host);
+                            //    m_lastHost.assign(c_host);
                                 m_f_m3u8data = true;
                             }
                             httpPrint(c_host);
