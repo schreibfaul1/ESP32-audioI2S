@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
     Version 3.4.2                                                                                                                              ";
-/*  Updated on: Aug 19.2025
+/*  Updated on: Aug 23.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3546,6 +3546,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     if(f_haveRedirection) {
         m_lastM3U8host.clone_from(m3u8redirection(&m_m3u8Codec));
+        accomplish_m3u8_url();
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
