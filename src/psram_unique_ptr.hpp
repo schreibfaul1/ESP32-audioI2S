@@ -1462,7 +1462,7 @@ void unicodeToUTF8(const char* src) {
         const char* str = get();
         char* end = nullptr;
         uint64_t result = std::strtoull(str, &end, base);
-        if (end == str || *end != '\0') {
+        if (end == str) {
             log_e("to_uint64: Invalid numeric value in '%s' for base %d", str, base);
             return 0;
         }
@@ -1487,7 +1487,7 @@ void unicodeToUTF8(const char* src) {
         const char* str = get();
         char* end = nullptr;
         unsigned long result = std::strtoul(str, &end, base);
-        if (end == str || *end != '\0') {
+        if (end == str) {
             log_e("to_uint32: Invalid numeric value in '%s' for base %d", str, base);
             return 0;
         }
