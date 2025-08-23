@@ -5258,7 +5258,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(m_sbyt.f_setDecodeParamsOnce && m_validSamples) {
         m_sbyt.f_setDecodeParamsOnce = false;
         setDecoderItems();
-        m_PlayingStartTime = millis();
     }
 
     uint16_t bytesDecoderOut = m_validSamples;
@@ -5428,12 +5427,6 @@ void Audio::setVolumeSteps(uint8_t steps) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t Audio::maxVolume() { return m_vol_steps; };
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint32_t Audio::getTotalPlayingTime() {
-    // Is set to zero by a connectToXXX() and starts as soon as the first audio data is available,
-    // the time counting is not interrupted by a 'pause / resume'
-    return millis() - m_PlayingStartTime;
-}
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
     // info(evt_info, "time offset %li sec", sec);

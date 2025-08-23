@@ -466,7 +466,6 @@ private:
     uint32_t     getBitRate(bool avg = false);
     uint32_t     getAudioFileDuration();
     uint32_t     getAudioCurrentTime();
-    uint32_t     getTotalPlayingTime();
     uint16_t     getVUlevel();
     uint32_t     inBufferFilled();            // returns the number of stored bytes in the inputbuffer
     uint32_t     inBufferFree();              // returns the number of free bytes in the inputbuffer
@@ -953,7 +952,6 @@ private:
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
-    uint32_t        m_PlayingStartTime = 0;         // Stores the milliseconds after the start of the audio
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
     int32_t         m_fileStartPos = -1;            // may be set in connecttoFS()
     uint16_t        m_m3u8_targetDuration = 10;     //
