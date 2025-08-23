@@ -446,7 +446,6 @@ private:
     bool         connecttoFS(fs::FS& fs, const char* path, int32_t m_fileStartPos = -1);
     void         setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     bool         setAudioPlayPosition(uint16_t sec);
-    bool         setFilePos(uint32_t pos);
     bool         setTimeOffset(int sec);
     bool         setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
     bool         pauseResume();
@@ -484,6 +483,7 @@ private:
     template <typename... Args>
     void         info(event_t e, const char* fmt, Args&&... args);
     void         info(event_t e, std::vector<uint32_t>& v);
+    bool         setFilePos(uint32_t pos);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
     void         setDefaults(); // free buffers and set defaults
