@@ -1498,8 +1498,12 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
         if(m_rflh.picLen) {
             size_t pos = m_audioFilePosition;
-            if(audio_id3image) audio_id3image(m_audiofile, m_rflh.picPos, m_rflh.picLen);
+            std::vector<uint32_t> vec;
+            vec.push_back(m_rflh.picPos);
+            vec.push_back(m_rflh.picLen);
+            info(evt_image, vec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
+            vec.clear();
         }
         info(evt_info, "Audio-Length: %u", m_audioDataSize);
         m_rflh.retvalue = 0;
@@ -2226,9 +2230,14 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
             if(!m_f_m3u8data) info(evt_info, "Audio-Length: %u", m_audioDataSize);
-            if(m_ID3Hdr.APIC_pos[0] && audio_id3image) { // if we have more than one APIC, output the first only
+            if(m_ID3Hdr.APIC_pos[0]) { // if we have more than one APIC, output the first only
+                std::vector<uint32_t> vec;
+                vec.push_back(m_ID3Hdr.APIC_pos[0]);
+                vec.push_back(m_ID3Hdr.APIC_size[0]);
+                info(evt_image, vec);
+                vec.clear();
+
                 size_t pos = m_audioFilePosition;
-                audio_id3image(m_audiofile, m_ID3Hdr.APIC_pos[0], m_ID3Hdr.APIC_size[0]);
                 audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
             }
             m_ID3Hdr.numID3Header = 0;
@@ -2813,7 +2822,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m_audioDataStart = m_m4aHdr.headerSize;
         if(m_m4aHdr.picLen) {
             size_t pos = m_audioFilePosition;
-            audio_id3image(m_audiofile, m_m4aHdr.picPos, m_m4aHdr.picLen);
+            std::vector<uint32_t> vec;
+            vec.push_back(m_m4aHdr.picPos);
+            vec.push_back(m_m4aHdr.picLen);
+            info(evt_image, vec);
+            vec.clear();
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
@@ -4371,7 +4384,9 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             ps_ptr<char>c_bitRate("c_bitRate"); c_bitRate.assign(rhl.get() + 7);
             c_bitRate.trim();
             c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
+            if(m_phreh.bitrate == c_bitRate.to_uint32(10)) continue;
             setBitrate(c_bitRate.to_uint32(10));
+            m_phreh.bitrate = getBitRate();
             info(evt_bitrate, c_bitRate.get());
         }
 
@@ -4383,7 +4398,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if(rhl.starts_with_icase("icy-name:")) {
-        //  AUDIO_LOG_INFO("%s", rhl.get());
+            //  AUDIO_LOG_INFO("%s", rhl.get());
             ps_ptr<char> icyName("icyName");
             icyName.assign(rhl.get() + 9); // Get station name
             icyName.trim();

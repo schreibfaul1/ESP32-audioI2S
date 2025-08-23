@@ -35,22 +35,7 @@
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-// extern __attribute__((weak)) void audio_info(const char*);
-// extern __attribute__((weak)) void audio_id3data(const char*); //ID3 metadata
-extern __attribute__((weak)) void audio_id3image(File& file, const size_t pos, const size_t size); //ID3 metadata image
-// extern __attribute__((weak)) void audio_oggimage(File& file, std::vector<uint32_t> v); //OGG blockpicture
-extern __attribute__((weak)) void audio_id3lyrics(const char* text); //ID3 metadata lyrics
-// extern __attribute__((weak)) void audio_eof(const char*); //end of file
-// extern __attribute__((weak)) void audio_showstreamtitle(const char*);
-// extern __attribute__((weak)) void audio_showstation(const char*);
-// extern __attribute__((weak)) void audio_bitrate(const char*);
-// extern __attribute__((weak)) void audio_icyurl(const char*);
-// extern __attribute__((weak)) void audio_icylogo(const char*);
-// extern __attribute__((weak)) void audio_icydescription(const char*);
-// extern __attribute__((weak)) void audio_lasthost(const char*);
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
-
-
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -405,6 +390,7 @@ private:
         uint32_t ctime;
         uint32_t timeout;
         uint32_t stime;
+        uint32_t bitrate;
         bool     f_time = false;
         bool     f_icy_data = false;
     } phreh_t;
@@ -439,8 +425,8 @@ private:
     ~Audio();
 
 // callbacks ---------------------------------------------------------
-    typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics} event_t;
-    const char* eventStr[12] = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics"};
+    typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
+    const char* eventStr[13] = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
     typedef struct _msg{ // used in info(audio_info_callback());
         const char* msg = nullptr;
         const char* s = nullptr;
@@ -1081,7 +1067,7 @@ private:
             msg.msg = final.get();
             const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
             msg.s = logStr[level];
-            msg.e = event_t(100);
+            msg.e = evt_log;
             if(final.strlen() > 0)  audio_info_callback(msg);
         }
         else{
