@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2                                                                                                                              ";
-/*  Updated on: Aug 23.2025
+    Version 3.4.2a                                                                                                                              ";
+/*  Updated on: Aug 24.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -533,11 +533,13 @@ Audio::hwoe_t Audio::dismantle_host(const char* host){
     if (path_sep  && path_sep  < host_end) host_end = path_sep;
     if (query_sep && query_sep < host_end) host_end = query_sep;
     result.hwoe.copy_from(host_start, host_end - host_start);
+    result.rqh_host.clone_from(result.hwoe);
 
     // ❓ 3. extract port
     result.port = result.ssl ? 443 : 80; // default
     if (port_sep && (!path_sep || port_sep < path_sep)) {
         result.port = atoi(port_sep + 1);
+        result.rqh_host.appendf(":%u", result.port);
     }
 
     // ❓ 4. extract extension (path)
@@ -567,6 +569,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     ps_ptr<char> c_host("c_host_connecttohost");             // copy of host
     ps_ptr<char> hwoe("hwoe_connecttohost");                 // host without extension
+    ps_ptr<char> rqh_host("rqh_host_connecttohost");         // host for request header
     ps_ptr<char> extension("extension_connecttohost");       // extension
     ps_ptr<char> query_string("query_string_connecttohost"); // parameter
     ps_ptr<char> path("path_connecttohost");                 // extension + '?' + parameter
@@ -588,6 +591,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     m_f_ssl = dismantledHost.ssl;
     port = dismantledHost.port;
     if(dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
+    if(dismantledHost.rqh_host.valid()) rqh_host.clone_from(dismantledHost.rqh_host);
     if(dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
     if(dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
 
@@ -613,10 +617,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     }
 
     setDefaults();
+
                        rqh.assign("GET /");
                        rqh.append(path.get());
                        rqh.append(" HTTP/1.1\r\n");
-                       rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
+                       rqh.appendf("Host: %s\r\n", rqh_host.get());
                        rqh.append("Icy-MetaData:1\r\n");
                        rqh.append("Icy-MetaData:2\r\n");
                        rqh.append("Pragma: no-cache\r\n");
@@ -687,6 +692,7 @@ bool Audio::httpPrint(const char* host) {
     uint16_t port = 0;         // port number
     ps_ptr<char> c_host;       // copy of host
     ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> rqh_host;     // host in request header
     ps_ptr<char> extension;    // extension
     ps_ptr<char> query_string; // parameter
     ps_ptr<char> path;         // extension + '?' + parameter
@@ -707,6 +713,7 @@ bool Audio::httpPrint(const char* host) {
     m_f_ssl = dismantledHost.ssl;
     port = dismantledHost.port;
     if(dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
+    if(dismantledHost.rqh_host.valid()) rqh_host.clone_from(dismantledHost.rqh_host);
     if(dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
     if(dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
 
@@ -729,7 +736,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.assign("GET /");
     rqh.append(path.get());
     rqh.append(" HTTP/1.1\r\n");
-    rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
+    rqh.appendf("Host: %s\r\n", rqh_host.get());
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Accept:*/*\r\n");
@@ -784,6 +791,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     uint16_t port = 0;         // port number
     ps_ptr<char> c_host;       // copy of host
     ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> rqh_host;     // host in request header
     ps_ptr<char> extension;    // extension
     ps_ptr<char> query_string; // parameter
     ps_ptr<char> path;         // extension + '?' + parameter
@@ -805,6 +813,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     m_f_ssl = dismantledHost.ssl;
     port = dismantledHost.port;
     if(dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
+    if(dismantledHost.rqh_host.valid()) rqh_host.clone_from(dismantledHost.rqh_host);
     if(dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
     if(dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
 
@@ -824,7 +833,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length){
     else                     range.assignf("Range: bytes=%li-%li\r\n",seek, length);
 
     rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
-    rqh.appendf("Host: %s:%u\r\n", hwoe.get(), port);
+    rqh.appendf("Host: %s\r\n", rqh_host.get());
     rqh.append("Accept: */*\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Cache-Control: no-cache\r\n");

@@ -238,7 +238,8 @@ private:
 
     typedef struct _hwoe{ // used in dismantle_host
         bool ssl;
-        ps_ptr<char> hwoe;  // host without extension
+        ps_ptr<char> hwoe;      // host without extension
+        ps_ptr<char> rqh_host;  // host in request header
         uint16_t     port;
         ps_ptr<char> extension;
         ps_ptr<char> query_string;
