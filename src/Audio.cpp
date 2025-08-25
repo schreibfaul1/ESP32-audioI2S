@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2a                                                                                                                              ";
-/*  Updated on: Aug 24.2025
+    Version 3.4.2b                                                                                                                              ";
+/*  Updated on: Aug 25.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -214,27 +214,25 @@ Audio::~Audio() {
 // clang-format on
 template <typename... Args>
 void Audio::info(event_t e, const char* fmt, Args&&... args) {
+    if(!audio_info_callback) return;
     ps_ptr<char> result(__LINE__);
-
     // First run: determine size
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
     if (len <= 0) return;
-
-    result.alloc(len + 1);
-    result.clear();
-
+    result.calloc(len + 1);
     char* p = result.get();
+    if(!p) return;
     std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
-//  result.append(ANSI_ESC_RESET);
     msg_t i;
     i.msg = result.c_get();
     i.e = e;
     i.s = eventStr[e];
     i.i2s_num = m_i2s_num;
-    if(audio_info_callback) audio_info_callback(i);
+    audio_info_callback(i);
     result.reset();
 }
 void Audio::info(event_t e, std::vector<uint32_t>& v) {
+    if(!audio_info_callback) return;
     ps_ptr<char>apic;
     apic.assignf("APIC found at pos %lu", v[0]);
     msg_t i;
@@ -243,7 +241,7 @@ void Audio::info(event_t e, std::vector<uint32_t>& v) {
     i.s = eventStr[e];
     i.i2s_num = m_i2s_num;
     i.vec = v;
-    if(audio_info_callback) audio_info_callback(i);
+    audio_info_callback(i);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
