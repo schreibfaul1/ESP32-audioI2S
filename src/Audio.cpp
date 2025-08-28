@@ -1430,6 +1430,9 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             m_audioDataSize = m_audioFileSize -m_rwh. headerSize;
         }
         info(evt_info, "Audio-Length: %u", m_audioDataSize);
+        m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
+        if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
+        info(evt_info, "duration: %us", m_audioFileDuration);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -5283,21 +5286,18 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
 
     if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
-    float audioCurrentTime;
+    float audioCurrentTime = 0.0;
 
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
         memset(&m_cat, 0, sizeof(cat_t));
+        m_cat.nominalBitRate = m_nominal_bitrate;
 
-        if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){
+        if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){ // BITSTREAMINFO FLAC/OGG
             m_audioFileDuration = FLACGetAudioFileDuration();
             m_cat.nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
         }
-        if(m_codec == CODEC_WAV){
-            m_cat.nominalBitRate = getBitRate();
-            m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
-            if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
-        }
+
         if(m_codec == CODEC_MP3){
             // if(MP3GetAudioFileDuration() > 0){ // XING header present?
             //     m_audioFileDuration = MP3GetAudioFileDuration();
@@ -5323,9 +5323,11 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
             m_cat.sumBitRate += ((m_cat.deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
             m_cat.counter ++;
             m_cat.avrBitRate = m_cat.sumBitRate / m_cat.counter;
-            m_avr_bitrate = m_cat.avrBitRate;
-            audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_cat.avrBitRate;
-            m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.avrBitRate));
+            if(m_cat.counter > 5){ // < 5 is too imprecise
+                m_avr_bitrate = m_cat.avrBitRate;
+                audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_cat.avrBitRate;
+                m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.avrBitRate));
+            }
         }
         m_cat.deltaBytesIn = 0;
         m_audioCurrentTime = round(audioCurrentTime);
