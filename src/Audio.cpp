@@ -1432,7 +1432,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         info(evt_info, "Audio-Length: %u", m_audioDataSize);
         m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
         if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
-        info(evt_info, "duration: %us", m_audioFileDuration);
+        info(evt_info, "Duration: %us", m_audioFileDuration);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -2434,6 +2434,15 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         atom_size.big_endian(data, 4);
         m_m4aHdr.sizeof_mdia -= atom_size.to_uint32(16);
 
+        if(atom_name.equals("mdhd")){
+            AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
+            m_m4aHdr.sizeof_mdhd = atom_size.to_uint32(16) - 8;
+            m_m4aHdr.retvalue += 8;
+            m_m4aHdr.headerSize += 8;
+            m_controlCounter = M4A_MDHD;
+            return 0;
+        }
+
         if(atom_name.equals("minf")){
             AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
             m_m4aHdr.sizeof_minf = atom_size.to_uint32(16) - 8;
@@ -2469,6 +2478,33 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
         m_m4aHdr.retvalue += atom_size.to_uint32(16);
         m_m4aHdr.headerSize += atom_size.to_uint32(16);
+        return 0;
+    }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(m_controlCounter == M4A_MDHD) { // mdhd
+        AUDIO_LOG_DEBUG("mdhd size remain %i", m_m4aHdr.sizeof_mdhd);
+        if(m_m4aHdr.sizeof_mdhd == 0) {m_controlCounter = M4A_MDIA; return 0;} // go back
+
+        ps_ptr<char> mdhd_buffer("mdhd_buffer"); // read ESDS content in a buffer
+        mdhd_buffer.copy_from((char*)data, m_m4aHdr.sizeof_mdhd); // read MDHD content (without header)
+    //    mdhd_buffer.hex_dump(m_m4aHdr.sizeof_mdhd);
+         /* version;           1 Byte  offset 0   0 -> 32 bit, 1 -> 64 bit
+            flags[3];          3 Bytes offset 1
+            creation_time;     4 Bytes offset 4
+            modification_time; 4 Bytes offset 8
+            timescale;         4 Bytes offset 12
+            duration;          4 Bytes offset 16
+            language;          2 Bytes offset 20
+            pre_defined;       2 Bytes offset 22 */
+        m_m4aHdr.timescale = bigEndian((uint8_t*)mdhd_buffer.get() + 12, 4);
+        m_m4aHdr.duration  = bigEndian((uint8_t*)mdhd_buffer.get() + 16, 4);
+        if(m_m4aHdr.timescale){
+            m_audioFileDuration = m_m4aHdr.duration / m_m4aHdr.timescale;
+            info(evt_info, "Duration: %us", m_audioFileDuration);
+        }
+        m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdhd;
+        m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdhd;
+        m_controlCounter = M4A_MDIA;
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2626,6 +2662,18 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         ps_ptr<char> esds_buffer("esds_buffer"); // read ESDS content in a buffer
         esds_buffer.copy_from((char*)data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
+
+        // search for decoderConfigDescriptor (tag 0x04)
+        int32_t dec_config_descriptor_offset = esds_buffer.special_index_of("\x04\x80\x80\x80", 4, m_m4aHdr.sizeof_esds);
+        if(dec_config_descriptor_offset > 0){ //decoderConfigDescriptor found
+            uint8_t  dec_config_descriptor_length = ((uint8_t*)esds_buffer.get())[dec_config_descriptor_offset + 4]; // Length after Tag + 3 Extended Length Bytes
+            m_m4aHdr.objectTypeIndicator = ((uint8_t*)esds_buffer.get())[dec_config_descriptor_offset + 5];  // 0x40 (AAC)
+            m_m4aHdr.streamType = ((uint8_t*)esds_buffer.get())[dec_config_descriptor_offset + 6]; // 0x05 (Audio)
+            m_m4aHdr.bufferSizeDB = bigEndian((uint8_t*)esds_buffer.get() + dec_config_descriptor_offset + 7, 3); // 24 bit
+            m_m4aHdr.maxBitrate = bigEndian((uint8_t*)esds_buffer.get() + dec_config_descriptor_offset + 10, 4); // 32 bit
+            m_m4aHdr.nomBitrate = bigEndian((uint8_t*)esds_buffer.get() + dec_config_descriptor_offset + 14, 4); // 32 bit
+            // info(evt_info, "maxBitrate %u, nominalBitrate %u", m_m4aHdr.maxBitrate, m_m4aHdr.nomBitrate);
+        }
 
         // search for decoderspecificinfo (tag 0x05)
         int32_t dec_specific_offset = esds_buffer.special_index_of("\x05\x80\x80\x80", 4, m_m4aHdr.sizeof_esds);
@@ -2843,6 +2891,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
         m_stsz_position = m_m4aHdr.stsz_table_pos;
+        if(m_audioFileDuration){
+            m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
+        }
+
         m_controlCounter = M4A_OKAY; // that's all
         return 0;
     }

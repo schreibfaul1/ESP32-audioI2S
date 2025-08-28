@@ -193,6 +193,7 @@ private:
         size_t      sizeof_esds;
         size_t      sizeof_mdia;
         size_t      sizeof_minf;
+        size_t      sizeof_mdhd;
         size_t      sizeof_stbl;
         size_t      sizeof_stsd;
         size_t      sizeof_stsz;
@@ -207,6 +208,13 @@ private:
         uint32_t    ilst_pos;
         uint8_t     channel_count;
         uint8_t     sample_size; // bps
+        uint8_t     objectTypeIndicator; // esds
+        uint8_t     streamType;   // esds
+        uint32_t    bufferSizeDB; // esds
+        uint32_t    maxBitrate;   // esds
+        uint32_t    nomBitrate;   // esds
+        uint32_t    timescale; // mdhd
+        uint32_t    duration;  // mdhd
         uint16_t    sample_rate;
         uint8_t     aac_profile;
         uint32_t    stsz_num_entries;
@@ -830,7 +838,7 @@ private:
                  FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100};
     enum : int { M4A_BEGIN = 0, M4A_FTYP = 1, M4A_CHK = 2, M4A_MOOV = 3, M4A_FREE = 4, M4A_TRAK = 5, M4A_MDAT = 6,
                  M4A_ILST = 7, M4A_MP4A = 8, M4A_ESDS = 9, M4A_MDIA = 10, M4A_MINF = 11, M4A_STBL = 12, M4A_STSD = 13, M4A_UDTA = 14,
-                 M4A_STSZ = 15, M4A_META = 16,  M4A_AMRDY = 99, M4A_OKAY = 100};
+                 M4A_STSZ = 15, M4A_META = 16, M4A_MDHD = 17, M4A_AMRDY = 99, M4A_OKAY = 100};
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5,
                  CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8, CODEC_VORBIS = 9};
     const char *codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS" };
