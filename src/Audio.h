@@ -256,7 +256,7 @@ private:
     } prlf_t;
     prlf_t m_prlf;
 
-    typedef struct _cat { // used in computeAudioTime
+    typedef struct _cat { // used in calculateAudioTime
         uint64_t sumBytesIn;
         uint64_t sumBytesOut;
         uint32_t sumBitRate;
@@ -264,6 +264,7 @@ private:
         uint32_t timeStamp;
         uint32_t deltaBytesIn;
         uint32_t nominalBitRate;
+        uint32_t avrBitRate;
         uint16_t syltIdx;
     } cat_t;
     cat_t m_cat;
@@ -380,10 +381,12 @@ private:
 
     typedef struct _rflh { // used in read_FLAC_Header
         size_t   headerSize;
-        size_t   retvalue = 0;
-        bool     f_lastMetaBlock = false;
-        uint32_t picPos = 0;
-        uint32_t picLen = 0;
+        size_t   retvalue;
+        bool     f_lastMetaBlock;
+        uint32_t picPos;
+        uint32_t picLen;
+        uint32_t duration;
+        uint32_t nominalBitrate;
     } rflh_t;
     rflh_t m_rflh;
 
@@ -464,7 +467,7 @@ private:
     uint32_t     getSampleRate();
     uint8_t      getBitsPerSample();
     uint8_t      getChannels();
-    uint32_t     getBitRate(bool avg = false);
+    uint32_t     getBitRate();
     uint32_t     getAudioFileDuration();
     uint32_t     getAudioCurrentTime();
     uint16_t     getVUlevel();
@@ -512,7 +515,7 @@ private:
     uint32_t     decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded);
     int          sendBytes(uint8_t* data, size_t len);
     void         setDecoderItems();
-    void         computeAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
+    void         calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
     void         showID3Tag(const char* tag, const char* val);
     size_t       readAudioHeader(uint32_t bytes);
     int          read_WAV_Header(uint8_t* data, size_t len);
@@ -524,7 +527,6 @@ private:
     bool         setSampleRate(uint32_t hz);
     bool         setBitsPerSample(int bits);
     bool         setChannels(int channels);
-    bool         setBitrate(int br);
     size_t       resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void         playChunk();
     void         computeVUlevel(int16_t sample[2]);
@@ -904,8 +906,8 @@ private:
     const uint16_t  m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
     int             m_LFcount = 0;                  // Detection of end of header
     uint32_t        m_sampleRate=48000;
-    uint32_t        m_bitRate=0;                    // current bitrate given fom decoder
-    uint32_t        m_avr_bitrate = 0;              // average bitrate, median computed by VBR
+    uint32_t        m_avr_bitrate = 0;              // average bitrate, median calculated by VBR
+    uint32_t        m_nominal_bitrate = 0;          // given br from header
     uint32_t        m_audioFilePosition = 0;        // current position, counts every readed byte
     uint32_t        m_audioFileSize = 0;            // local and web files
     int             m_readbytes = 0;                // bytes read
@@ -965,7 +967,7 @@ private:
     bool            m_f_ssl = false;
     bool            m_f_running = false;
     bool            m_f_firstCall = false;          // InitSequence for processWebstream and processLokalFile
-    bool            m_f_firstCurTimeCall = false;   // InitSequence for computeAudioTime
+    bool            m_f_firstCurTimeCall = false;   // InitSequence for calculateAudioTime
     bool            m_f_firstPlayCall = false;      // InitSequence for playAudioData
     bool            m_f_firstM3U8call = false;      // InitSequence for m3u8 parsing
     bool            m_f_ID3v1TagFound = false;      // ID3v1 tag found
