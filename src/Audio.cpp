@@ -214,6 +214,23 @@ Audio::~Audio() {
 // clang-format on
 template <typename... Args>
 void Audio::info(event_t e, const char* fmt, Args&&... args) {
+    auto extract_last_number = [&](std::string_view s) -> int32_t {
+        auto it = s.end(); // search from back to the front
+        while (it != s.begin()) {
+            --it;
+            if (std::isdigit(static_cast<unsigned char>(*it))) {
+                auto end = it + 1;  // end of the number found
+                while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) --it;   // go back to the beginning of the number
+                std::string_view number{it, static_cast<size_t>(end - it)};
+                uint32_t value{};
+                auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
+                if (ec == std::errc{}) return static_cast<int32_t>(value); // break if errc is invalid_argument or esult_out_of_range
+                break;
+            }
+        }
+        return -1; // no number found
+    };
+
     if(!audio_info_callback) return;
     ps_ptr<char> result(__LINE__);
     // First run: determine size
@@ -223,10 +240,11 @@ void Audio::info(event_t e, const char* fmt, Args&&... args) {
     char* p = result.get();
     if(!p) return;
     std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
-    msg_t i;
+    msg_t i = {0};
     i.msg = result.c_get();
     i.e = e;
     i.s = eventStr[e];
+    i.arg1 = extract_last_number(result.c_get());
     i.i2s_num = m_i2s_num;
     audio_info_callback(i);
     result.reset();
@@ -1374,7 +1392,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 
         info(evt_info, "FormatCode: %u", fc);
         // info(evt_info, "Channel: %u", nic);
-        // info(evt_info, "SampleRate: %u", sr);
+        // info(evt_info, "SampleRate (Hz): %u", sr);
         info(evt_info, "DataRate: %lu", (long unsigned int)dr);
         info(evt_info, "DataBlockSize: %u", dbs);
         info(evt_info, "BitsPerSample: %u", bps);
@@ -1432,7 +1450,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         info(evt_info, "Audio-Length: %u", m_audioDataSize);
         m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
         if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
-        info(evt_info, "Duration: %us", m_audioFileDuration);
+        info(evt_info, "Duration (s): %u", m_audioFileDuration);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -1513,8 +1531,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         if(m_rflh.duration){
             m_rflh.nominalBitrate =  (m_audioDataSize * 8) / m_rflh.duration;
             m_nominal_bitrate = m_rflh.nominalBitrate;
-            info(evt_info, "nominal bitrate: %u", m_rflh.nominalBitrate);
-            info(evt_info, "duration %u s", m_rflh.duration);
+            info(evt_info, "nominal bitrate (b/s): %u", m_rflh.nominalBitrate);
+            info(evt_info, "Duration (s): %u", m_rflh.duration);
         }
         m_rflh.retvalue = 0;
         return 0;
@@ -1538,7 +1556,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
         m_flacSampleRate = nextval >> 4;
-        info(evt_info, "FLAC sampleRate: %lu", (long unsigned int)m_flacSampleRate);
+        info(evt_info, "FLAC sampleRate (Hz): %lu", (long unsigned int)m_flacSampleRate);
         vTaskDelay(2);
         m_flacNumChannels = ((nextval & 0x06) >> 1) + 1;
         info(evt_info, "FLAC numChannels: %u", m_flacNumChannels);
@@ -1837,8 +1855,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
             if(!m_f_m3u8data) {info(evt_info, "file has no ID3 tag, skip metadata");}
             m_audioDataSize = m_audioFileSize;
-            if(!m_f_m3u8data) info(evt_info, "Audio-Length: %u", m_audioDataSize);
-            return -1; // error, no ID3 signature found
+            // if(!m_f_m3u8data) info(evt_info, "Audio-Length: %u", m_audioDataSize);
+            m_controlCounter = 99; // have xing?
+            return 0; // error, no ID3 signature found
         }
         m_ID3Hdr.ID3version = *(data + 3);
         switch(m_ID3Hdr.ID3version) {
@@ -2283,10 +2302,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t bytes = bigEndian(data + xingPos + 12, 4);
                 AUDIO_LOG_DEBUG("bytes %i", bytes);
                 uint32_t duration = frames * spf / samplerate;
-                info(evt_info, "Duration: %us", duration);
+                info(evt_info, "Duration (s): %u", duration);
                 m_audioFileDuration = duration;
                 uint32_t bitrate = bytes * 8 / duration;
-                info(evt_info,"Bitrate: %u", bitrate);
+                info(evt_info,"Bitrate (b/s): %u", bitrate);
                 m_nominal_bitrate = bitrate;
             }
 
@@ -2548,7 +2567,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m_m4aHdr.duration  = bigEndian((uint8_t*)mdhd_buffer.get() + 16, 4);
         if(m_m4aHdr.timescale){
             m_audioFileDuration = m_m4aHdr.duration / m_m4aHdr.timescale;
-            info(evt_info, "Duration: %us", m_audioFileDuration);
+            info(evt_info, "Duration (s): %u", m_audioFileDuration);
         }
         m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdhd;
         m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdhd;
@@ -5065,10 +5084,10 @@ void Audio::showstreamtitle(char* ml) {
 void Audio::showCodecParams() {
 
     info(evt_info, "Channels: %u", getChannels());
-    info(evt_info, "SampleRate: %lu", getSampleRate());
+    info(evt_info, "SampleRate (Hz): %lu", getSampleRate());
     info(evt_info, "BitsPerSample: %u", getBitsPerSample());
-    if(getBitRate()) { info(evt_info, "BitRate: %lu", getBitRate()); }
-    else { info(evt_info, "BitRate: N/A"); }
+    // if(getBitRate()) { info(evt_info, "BitRate (b/s): %lu", getBitRate()); }
+    // else { info(evt_info, "BitRate (b/s): N/A"); }
 
     if(m_codec == CODEC_AAC) {
         uint8_t answ = AACGetFormat();
@@ -5891,9 +5910,9 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2) { // Infi
     if(G2 < -40) G2 = -40;
     if(G2 > 6) G2 = 6;
 
-    const float FcLS = 500;    // Frequency LowShelf[Hz]
-    const float FcPKEQ = 3000; // Frequency PeakEQ[Hz]
-    float       FcHS = 6000;   // Frequency HighShelf[Hz]
+    const float FcLS = 500;    // Frequency LowShelf(Hz)
+    const float FcPKEQ = 3000; // Frequency PeakEQ(Hz)
+    float       FcHS = 6000;   // Frequency HighShelf(Hz)
 
     if(getSampleRate() < FcHS * 2 - 100) { // Prevent HighShelf filter from clogging
         FcHS = getSampleRate() / 2 - 100;
