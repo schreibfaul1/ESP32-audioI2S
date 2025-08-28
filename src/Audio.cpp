@@ -2230,6 +2230,22 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == 99) { //  exist another ID3tag?
+
+        static const int samplerate_table[4][3] = {
+            {11025, 12000, 8000},   // MPEG 2.5
+            {0, 0, 0},              // reserved
+            {22050, 24000, 16000},  // MPEG 2
+            {44100, 48000, 32000}   // MPEG 1
+        };
+
+        static const int samples_per_frame[4][4] = {
+        // layer:   0    1      2      3
+        /* V2.5 */ {0,   576, 1152,   384},
+        /* res. */ {0,     0,    0,     0},
+        /* V2   */ {0,   576, 1152,   384},
+        /* V1   */ {0,  1152, 1152,   384}
+        };
+
         m_audioDataStart += m_ID3Hdr.id3Size;
         //    vTaskDelay(30);
         if((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
@@ -2242,6 +2258,38 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
             if(!m_f_m3u8data) info(evt_info, "Audio-Length: %u", m_audioDataSize);
+
+            uint32_t hdr = bigEndian(data, 4);
+            if ((hdr & 0xFFE00000) != 0xFFE00000) AUDIO_LOG_ERROR("Syncword not found"); // check sync
+            int versionID   = (hdr >> 19) & 0x3;   // 0=MPEG2.5, 2=MPEG2, 3=MPEG1
+            int layerIndex  = (hdr >> 17) & 0x3;   // 1=Layer3
+            int bitrateIdx  = (hdr >> 12) & 0xF;
+            int samplerateIdx = (hdr >> 10) & 0x3;
+            int mode        = (hdr >> 6) & 0x3;   // 0=stereo,3=mono
+            int samplerate = samplerate_table[versionID][samplerateIdx];
+            int spf = samples_per_frame[versionID][layerIndex];
+
+            // Xing or Info Header present?
+            int8_t mp3_xing = specialIndexOf(data, "Xing", 50);
+            int8_t mp3_info = specialIndexOf(data, "Info", 50);
+
+            uint8_t xingPos = 0;
+            if(mp3_xing > 0) xingPos = mp3_xing;
+            if(mp3_info > 0) xingPos = mp3_info;
+
+            if(xingPos >0 && layerIndex == 1){ // layer III only
+                uint32_t frames = bigEndian(data + xingPos + 8, 4);
+                AUDIO_LOG_DEBUG("frames %i", frames);
+                uint32_t bytes = bigEndian(data + xingPos + 12, 4);
+                AUDIO_LOG_DEBUG("bytes %i", bytes);
+                uint32_t duration = frames * spf / samplerate;
+                info(evt_info, "Duration: %us", duration);
+                m_audioFileDuration = duration;
+                uint32_t bitrate = bytes * 8 / duration;
+                info(evt_info,"Bitrate: %u", bitrate);
+                m_nominal_bitrate = bitrate;
+            }
+
             if(m_ID3Hdr.APIC_pos[0]) { // if we have more than one APIC, output the first only
                 std::vector<uint32_t> vec;
                 vec.push_back(m_ID3Hdr.APIC_pos[0]);
