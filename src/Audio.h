@@ -455,9 +455,9 @@ private:
     hwoe_t       dismantle_host(const char* host);
     bool         connecttohost(const char* host, const char* user = "", const char* pwd = "");
     bool         connecttospeech(const char* speech, const char* lang);
-    bool         connecttoFS(fs::FS& fs, const char* path, int32_t m_fileStartPos = -1);
+    bool         connecttoFS(fs::FS& fs, const char* path, int32_t m_fileStartTime = -1);
     void         setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
-    bool         setAudioPlayPosition(uint16_t sec);
+    bool         setAudioPlayTime(uint16_t sec);
     bool         setTimeOffset(int sec);
     bool         setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
     bool         pauseResume();
@@ -494,7 +494,7 @@ private:
     template <typename... Args>
     void         info(event_t e, const char* fmt, Args&&... args);
     void         info(event_t e, std::vector<uint32_t>& v);
-    bool         setFilePos(uint32_t pos);
+    bool         fsRange(uint32_t range);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
     void         setDefaults(); // free buffers and set defaults
@@ -529,7 +529,6 @@ private:
     int          read_WAV_Header(uint8_t* data, size_t len);
     int          read_FLAC_Header(uint8_t* data, size_t len);
     int          read_ID3_Header(uint8_t* data, size_t len);
-    int          read_ID3_Header_new(uint8_t* data, size_t len);
     int          read_M4A_Header(uint8_t* data, size_t len);
     size_t       process_m3u8_ID3_Header(uint8_t* packet);
     bool         setSampleRate(uint32_t hz);
@@ -964,7 +963,7 @@ private:
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
     uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
-    int32_t         m_fileStartPos = -1;            // may be set in connecttoFS()
+    int32_t         m_fileStartTime = -1;            // may be set in connecttoFS()
     uint16_t        m_m3u8_targetDuration = 10;     //
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
