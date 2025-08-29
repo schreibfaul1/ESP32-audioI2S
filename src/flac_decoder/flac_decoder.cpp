@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: Jul 03,2020
- * Updated on: Jul 02,2025
+ * Updated on: Aug 28,2025
  *
  * Author: Wolle
  *
@@ -435,11 +435,11 @@ int32_t parseMetaDataBlockHeader(uint8_t *inbuf, int16_t nBytes){
                 FLACMetadataBlock->bitsPerSample = bitsPerSample;
                 //FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
 
-                totalSamplesInStream  = (uint64_t)(*(inbuf + pos + 17) & 0x0F) << 32;
-                totalSamplesInStream += (*(inbuf + pos + 14)) << 24;
-                totalSamplesInStream += (*(inbuf + pos + 14)) << 16;
-                totalSamplesInStream += (*(inbuf + pos + 15)) << 8;
-                totalSamplesInStream += (*(inbuf + pos + 16));
+                totalSamplesInStream  = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
+                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
+                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 15)) << 16;
+                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 16)) << 8;
+                totalSamplesInStream += (uint64_t)(*(inbuf + pos + 17));
                 //FLAC_LOG_INFO("totalSamplesInStream %lli", totalSamplesInStream);
                 FLACMetadataBlock->totalSamples = totalSamplesInStream;
 
