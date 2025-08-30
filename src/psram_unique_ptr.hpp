@@ -146,7 +146,9 @@ public:
             mem.reset(static_cast<T*>(malloc(size)));  // <--- Important!
         }
         allocated_size = size;
-        set_name(alloc_name);
+        if(alloc_name){
+            set_name(alloc_name);
+        }
         if (!mem) {
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
         }
@@ -161,7 +163,9 @@ public:
         else{
             raw_mem = malloc(sizeof(T)); // allocated im RAM
         }
-        set_name(alloc_name);
+        if(alloc_name){
+            set_name(alloc_name);
+        }
         if (raw_mem) {
             mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
             allocated_size = sizeof(T);
@@ -182,7 +186,9 @@ public:
         total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
         reset(); // Release of the previously held memory
-        set_name(alloc_name);
+        if (alloc_name){
+            set_name(alloc_name);
+        }
         void* raw_mem = nullptr;
 
         if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
@@ -209,7 +215,9 @@ public:
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
     void alloc_array(std::size_t count, const char* alloc_name = nullptr) {
-        set_name(alloc_name);
+        if (alloc_name){
+            set_name(alloc_name);
+        }
         alloc(sizeof(T) * count);
         clear();
     }
@@ -1836,7 +1844,7 @@ void unicodeToUTF8(const char* src) {
         };
         char* buff = get();
         int i = 0;
-        printf("Dumping %u bytes:\n", n);
+        printf("%s dumping %u bytes:\n", name, n);
         while (i < n) {
             int m = std::min(static_cast<int>(n), i + items_per_line); // max items_per_line, but not > n
             int s = 0;
