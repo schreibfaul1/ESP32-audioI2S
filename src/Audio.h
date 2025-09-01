@@ -39,8 +39,7 @@ extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t va
 extern char audioI2SVers[];
 
 // Audio event type descriptions
-static constexpr char* eventStr[13] = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
-
+static constexpr std::array<const char*, 13> eventStr = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
 //----------------------------------------------------------------------------------------------------------------------
 
 class AudioBuffer {
