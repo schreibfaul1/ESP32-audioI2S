@@ -22,6 +22,23 @@
 #include "vorbis_decoder/vorbis_decoder.h"
 #include "psram_unique_ptr.hpp"
 
+// constants
+constexpr size_t    m_frameSizeWav       = 4096;
+constexpr size_t    m_frameSizeMP3       = 1600 * 2;
+constexpr size_t    m_frameSizeAAC       = 1600;
+constexpr size_t    m_frameSizeFLAC      = 4096 * 6; // 24576
+constexpr size_t    m_frameSizeOPUS      = 2048;
+constexpr size_t    m_frameSizeVORBIS    = 4096 * 2;
+constexpr size_t    m_outbuffSize        = 4096 * 2;
+constexpr size_t    m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
+
+constexpr size_t    AUDIO_STACK_SIZE     = 3300;
+
+// static allocations for Audio task
+StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
+StackType_t  __attribute__((unused)) xAudioStack[AUDIO_STACK_SIZE];
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 AudioBuffer::AudioBuffer(size_t maxBlockSize) {
     if(maxBlockSize) m_resBuffSize = maxBlockSize;
@@ -520,10 +537,10 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     return res;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Audio::hwoe_t Audio::dismantle_host(const char* host){
+audiolib::hwoe_t Audio::dismantle_host(const char* host){
     if (!host) return {};
 
-    hwoe_t result;
+    audiolib::hwoe_t result;
 
     const char* p = host;
 
@@ -1475,7 +1492,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == FLAC_BEGIN) { // init
-        memset(&m_rflh,  0, sizeof(rflh_t));
+        memset(&m_rflh,  0, sizeof(audiolib::rflh_t));
         m_controlCounter = FLAC_MAGIC;
         return 0;
     }
@@ -2251,7 +2268,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_controlCounter == M4A_BEGIN) { // init
-        memset(&m_m4aHdr, 0, sizeof(m4aHdr_t));
+        memset(&m_m4aHdr, 0, sizeof(audiolib::m4aHdr_t));
 
         atom_size.big_endian(data, 4);
         atom_name.copy_from((const char*)data + 4, 4);
@@ -5292,7 +5309,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
 
     if(m_f_firstCurTimeCall) { // first call
         m_f_firstCurTimeCall = false;
-        memset(&m_cat, 0, sizeof(cat_t));
+        memset(&m_cat, 0, sizeof(audiolib::cat_t));
         m_cat.nominalBitRate = m_nominal_bitrate;
 
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){ // BITSTREAMINFO FLAC/OGG
@@ -6017,7 +6034,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     if(packet == NULL) {
         if(log) AUDIO_LOG_WARN("parseTS reset");
-        memset(&m_tspp, 0, sizeof(tspp_t));
+        memset(&m_tspp, 0, sizeof(audiolib::tspp_t));
         return true;
     }
 
