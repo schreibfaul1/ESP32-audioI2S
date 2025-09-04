@@ -1469,6 +1469,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         m_audioFileDuration = m_audioDataSize  / (getSampleRate() * getChannels());
         if(getBitsPerSample() == 16) m_audioFileDuration /= 2;
         info(evt_info, "Duration (s): %u", m_audioFileDuration);
+        info(evt_bitrate, "%i", m_nominal_bitrate);
+        info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -1549,8 +1551,10 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         if(m_rflh.duration){
             m_rflh.nominalBitrate =  (m_audioDataSize * 8) / m_rflh.duration;
             m_nominal_bitrate = m_rflh.nominalBitrate;
-            info(evt_info, "nominal bitrate (b/s): %u", m_rflh.nominalBitrate);
+            m_audioFileDuration = m_rflh.duration;
             info(evt_info, "Duration (s): %u", m_rflh.duration);
+            info(evt_bitrate, "%i", m_nominal_bitrate);
+            info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         }
         m_rflh.retvalue = 0;
         return 0;
@@ -2208,6 +2212,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t bitrate = bytes * 8 / duration;
                 info(evt_info,"Bitrate (b/s): %u", bitrate);
                 m_nominal_bitrate = bitrate;
+                info(evt_bitrate, "%i", m_nominal_bitrate);
             }
 
             if(m_ID3Hdr.APIC_pos[0]) { // if we have more than one APIC, output the first only
@@ -2861,6 +2866,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         m_stsz_position = m_m4aHdr.stsz_table_pos;
         if(m_audioFileDuration){
             m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
+            info(evt_info, "Duration (s): %u", m_audioFileDuration);
+            info(evt_bitrate, "%i", m_nominal_bitrate);
+            info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         }
 
         m_controlCounter = M4A_OKAY; // that's all
@@ -4428,7 +4436,8 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if(m_phreh.bitrate == c_bitRate.to_uint32(10)) continue; // avoid doubles
             else m_phreh.bitrate = c_bitRate.to_uint32(10);
             m_nominal_bitrate = c_bitRate.to_uint32(10);
-            info(evt_bitrate, "%s", c_bitRate.c_get());
+            info(evt_bitrate, "%i", m_nominal_bitrate);
+            info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         }
 
         else if(rhl.starts_with_icase("icy-metaint:")) {
@@ -5110,8 +5119,8 @@ void Audio::setDecoderItems() {
             m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
             m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
             info(evt_bitrate, "%i", m_nominal_bitrate);
-            AUDIO_LOG_DEBUG("Duration: %lus", m_audioFileDuration);
-            AUDIO_LOG_DEBUG("Bitrate: %lu", m_nominal_bitrate);
+            info(evt_info, "Duration (s): %lu", m_audioFileDuration);
+            info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         }
     }
     if(m_codec == CODEC_VORBIS) {
@@ -5127,8 +5136,8 @@ void Audio::setDecoderItems() {
             m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
             m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
             info(evt_bitrate, "%i", m_nominal_bitrate);
-            AUDIO_LOG_DEBUG("Duration: %lus", m_audioFileDuration);
-            AUDIO_LOG_DEBUG("Bitrate: %lu", m_nominal_bitrate);
+            info(evt_info, "Duration (s): %lu", m_audioFileDuration);
+            info(evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
         }
     }
     if(getBitsPerSample() != 8 && getBitsPerSample() != 16) {
