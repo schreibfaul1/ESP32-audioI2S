@@ -13,6 +13,7 @@
 #include "esp_arduino_version.h"
 #include <vector>
 #include <deque>
+#include <charconv>
 #include <functional>
 #include <Arduino.h>
 #include <libb64/cencode.h>
