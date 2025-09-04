@@ -231,6 +231,7 @@ class Audio{
     uint32_t     streamavail() { return m_client ? m_client->available() : 0; }
     void         IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool         ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+    uint64_t     getLastGranulePosition();
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -354,6 +355,24 @@ class Audio{
                 }
             }
             if (result >= 0) break;
+        }
+        return result;
+    }
+
+    // Find the last instance of Str in the buffer backwards and checks end-of-stream-bit
+    int specialIndexOfLast(uint8_t* base, const char* str, int baselen) {
+        int result = -1;
+        if (strlen(str) > baselen) return -1; // too short buffer
+
+        for (int i = baselen - strlen(str); i >= 0; i--) { // search backwards, start at the end of the buffer
+            int match = 1;
+            for (int j = 0; j < strlen(str); j++) {
+                if (base[i + j] != str[j]) {
+                    match = 0;
+                    break;
+                }
+            }
+            if(match) return i;
         }
         return result;
     }
