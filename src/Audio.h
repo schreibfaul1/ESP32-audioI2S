@@ -640,18 +640,13 @@ private:
     uint16_t        m_streamTitleHash = 0;          // remember streamtitle, ignore multiple occurence in metadata
     uint16_t        m_timeout_ms = 250;
     uint16_t        m_timeout_ms_ssl = 2700;
-    uint8_t         m_flacBitsPerSample = 0;        // bps should be 16
-    uint8_t         m_flacNumChannels = 0;          // can be read out in the FLAC file header
-    uint32_t        m_flacSampleRate = 0;           // can be read out in the FLAC file header
-    uint16_t        m_flacMaxFrameSize = 0;         // can be read out in the FLAC file header
-    uint16_t        m_flacMaxBlockSize = 0;         // can be read out in the FLAC file header
-    uint32_t        m_flacTotalSamplesInStream = 0; // can be read out in the FLAC file header
     uint32_t        m_metaint = 0;                  // Number of databytes between metadata
     uint32_t        m_chunkcount = 0 ;              // Counter for chunked transfer
     uint32_t        m_t0 = 0;                       // store millis(), is needed for a small delay
-    uint32_t        m_bytesNotConsumed = 0;          // pictures or something else that comes with the stream
+    uint32_t        m_bytesNotConsumed = 0;         // pictures or something else that comes with the stream
+    uint64_t        m_lastGranulePosition = 0;      // necessary to calculate the duration in OPUS and VORBIS
     int32_t         m_resumeFilePos = -1;           // the return value from stopSong(), (-1) is idle
-    int32_t         m_fileStartTime = -1;            // may be set in connecttoFS()
+    int32_t         m_fileStartTime = -1;           // may be set in connecttoFS()
     uint16_t        m_m3u8_targetDuration = 10;     //
     uint32_t        m_stsz_numEntries = 0;          // num of entries inside stsz atom (uint32_t)
     uint32_t        m_stsz_position = 0;            // pos of stsz atom within file
@@ -695,8 +690,6 @@ private:
     float           m_resampleError = 0.0f;
     float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
     float           m_resampleCursor = 0.0f;        // next frac in resampleTo48kStereo
-
-
 
     uint32_t        m_audioDataStart = 0;           // in bytes
     size_t          m_audioDataSize = 0;            //

@@ -270,6 +270,12 @@ namespace audiolib {
         uint32_t picLen;
         uint32_t duration;
         uint32_t nominalBitrate;
+        uint8_t  numChannels;
+        uint8_t  bitsPerSample;
+        uint32_t sampleRate;
+        uint32_t maxFrameSize;
+        uint32_t maxBlockSize;
+        uint32_t totalSamplesInStream;
     };
 
     struct phreh_t { // used in parseHttpResponseHeader

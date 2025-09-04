@@ -389,6 +389,7 @@ void Audio::setDefaults() {
     m_M4A_objectType = 0;
     m_M4A_sampleRate = 0;
     m_opus_mode = 0;
+    m_lastGranulePosition = 0;
     m_vuLeft = m_vuRight = 0; // #835
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
     if(m_f_reset_m3u8Codec){m_m3u8Codec = CODEC_AAC;} // reset to default
@@ -1534,7 +1535,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_controlCounter = FLAC_OKAY;
         m_audioDataStart =m_rflh. headerSize;
         m_audioDataSize = m_audioFileSize - m_audioDataStart;
-        FLACSetRawBlockParams(m_flacNumChannels, m_flacSampleRate, m_flacBitsPerSample, m_flacTotalSamplesInStream, m_audioDataSize);
+        FLACSetRawBlockParams(m_rflh.numChannels, m_rflh.sampleRate, m_rflh.bitsPerSample, m_rflh.totalSamplesInStream, m_audioDataSize);
         if(m_rflh.picLen) {
             size_t pos = m_audioFilePosition;
             std::vector<uint32_t> vec;
@@ -1558,40 +1559,40 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     if(m_controlCounter == FLAC_SINFO) { /* Stream info block */
         size_t l = bigEndian(data, 3);
         vTaskDelay(2);
-        m_flacMaxBlockSize = bigEndian(data + 5, 2);
-        info(evt_info, "FLAC maxBlockSize: %u", m_flacMaxBlockSize);
+        m_rflh.maxBlockSize = bigEndian(data + 5, 2);
+        info(evt_info, "FLAC maxBlockSize: %u", m_rflh.maxBlockSize );
         vTaskDelay(2);
-        m_flacMaxFrameSize = bigEndian(data + 10, 3);
-        if(m_flacMaxFrameSize) { info(evt_info, "FLAC maxFrameSize: %u", m_flacMaxFrameSize); }
+        m_rflh.maxFrameSize = bigEndian(data + 10, 3);
+        if(m_rflh.maxFrameSize) { info(evt_info, "FLAC maxFrameSize: %u", m_rflh.maxFrameSize); }
         else { info(evt_info, "FLAC maxFrameSize: N/A"); }
-        if(m_flacMaxFrameSize > InBuff.getMaxBlockSize()) {
+        if(m_rflh.maxFrameSize > InBuff.getMaxBlockSize()) {
             AUDIO_LOG_ERROR("FLAC maxFrameSize too large!");
             stopSong();
             return -1;
         }
-        //        InBuff.changeMaxBlockSize(m_flacMaxFrameSize);
+        //        InBuff.changeMaxBlockSize(m_rflh.maxFrameSize);
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
-        m_flacSampleRate = nextval >> 4;
-        info(evt_info, "FLAC sampleRate (Hz): %lu", (long unsigned int)m_flacSampleRate);
+        m_rflh.sampleRate = nextval >> 4;
+        info(evt_info, "FLAC sampleRate (Hz): %lu", (long unsigned int)m_rflh.sampleRate);
         vTaskDelay(2);
-        m_flacNumChannels = ((nextval & 0x06) >> 1) + 1;
-        info(evt_info, "FLAC numChannels: %u", m_flacNumChannels);
+        m_rflh.numChannels = ((nextval & 0x06) >> 1) + 1;
+        info(evt_info, "FLAC numChannels: %u", m_rflh.numChannels);
         vTaskDelay(2);
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data + 16) >> 4) + 1;
-        m_flacBitsPerSample = bps;
+        m_rflh.bitsPerSample = bps;
         if((bps != 8) && (bps != 16)) {
             AUDIO_LOG_ERROR("bits per sample must be 8 or 16, is %i", bps);
             stopSong();
             return -1;
         }
-        info(evt_info, "FLAC bitsPerSample: %u", m_flacBitsPerSample);
-        m_flacTotalSamplesInStream = bigEndian(data + 17, 4);
-        if(m_flacTotalSamplesInStream) { info(evt_info, "total samples in stream: %lu", (long unsigned int)m_flacTotalSamplesInStream); }
+        info(evt_info, "FLAC bitsPerSample: %u", m_rflh.bitsPerSample);
+        m_rflh.totalSamplesInStream = bigEndian(data + 17, 4);
+        if(m_rflh.totalSamplesInStream) { info(evt_info, "total samples in stream: %lu", (long unsigned int)m_rflh.totalSamplesInStream); }
         else { info(evt_info, "total samples in stream: N/A"); }
-        if(bps != 0 && m_flacTotalSamplesInStream && m_flacSampleRate) {
-            m_rflh.duration = (long unsigned int)m_flacTotalSamplesInStream / (long unsigned int)m_flacSampleRate;
+        if(bps != 0 && m_rflh.totalSamplesInStream && m_rflh.sampleRate) {
+            m_rflh.duration = (long unsigned int)m_rflh.totalSamplesInStream / (long unsigned int)m_rflh.sampleRate;
         }
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         m_rflh.retvalue = l + 3;
@@ -3737,9 +3738,9 @@ void Audio::processLocalFile() {
             else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = CODEC_OPUS;}
             else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = CODEC_VORBIS;}
             else                           {stopSong(); return;}
-            uint64_t grp = getLastGranulePosition();
+            m_lastGranulePosition = getLastGranulePosition();
             m_controlCounter = 100;
-            log_w("%lu, lastGranulePosition %llu", __LINE__, grp);
+            log_w("%lu, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
             return;
         }
         if(m_controlCounter != 100) {
@@ -3909,9 +3910,9 @@ void Audio::processWebFile() {
             else if(codec == CODEC_OPUS)   {initializeDecoder(codec); m_codec = CODEC_OPUS;}
             else if(codec == CODEC_VORBIS) {initializeDecoder(codec); m_codec = CODEC_VORBIS;}
             else                           {stopSong(); return;}
-            uint64_t grp = getLastGranulePosition();
+            m_lastGranulePosition = getLastGranulePosition(); // to calculate the duration
             m_controlCounter = 100;
-            log_w("lastGranulePosition %llu", grp);
+            log_w("%lu, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
             return;
         }
         if(m_controlCounter != 100) {
@@ -5105,6 +5106,13 @@ void Audio::setDecoderItems() {
             m_audioDataStart = OPUSGetAudioDataStart();
             if(m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
         }
+        if(m_lastGranulePosition && m_audioFileSize && m_sampleRate){
+            m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
+            m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
+            info(evt_bitrate, "%i", m_nominal_bitrate);
+            AUDIO_LOG_DEBUG("Duration: %lus", m_audioFileDuration);
+            AUDIO_LOG_DEBUG("Bitrate: %lu", m_nominal_bitrate);
+        }
     }
     if(m_codec == CODEC_VORBIS) {
         setChannels(VORBISGetChannels());
@@ -5114,6 +5122,13 @@ void Audio::setDecoderItems() {
         if(VORBISGetAudioDataStart() > 0){
             m_audioDataStart = VORBISGetAudioDataStart();
             if(m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
+        }
+        if(m_lastGranulePosition && m_audioFileSize && m_sampleRate){
+            m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
+            m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
+            info(evt_bitrate, "%i", m_nominal_bitrate);
+            AUDIO_LOG_DEBUG("Duration: %lus", m_audioFileDuration);
+            AUDIO_LOG_DEBUG("Bitrate: %lu", m_nominal_bitrate);
         }
     }
     if(getBitsPerSample() != 8 && getBitsPerSample() != 16) {
@@ -5299,6 +5314,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         m_sbyt.f_setDecodeParamsOnce = false;
         setDecoderItems();
     }
+    if(!m_validSamples) return bytesDecoded; //nothing to play
 
     uint16_t bytesDecoderOut = m_validSamples;
     if(m_channels == 2) bytesDecoderOut /= 2;
