@@ -3250,7 +3250,7 @@ bool Audio::readPlayListData() {
     auto detectTimeout = [&]() -> bool{
         uint32_t t = millis();
         while(!m_client->available()) {
-            vTaskDelay(50);
+            vTaskDelay(2);
             if(t + 1000 < millis()) {
                 AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
                 if(m_f_chunked) getChunkSize(0, true);
@@ -5524,7 +5524,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
             else{
                 readed_bytes = m_client->read(buff + offset, len);
                 if(readed_bytes >= 0) {m_audioFilePosition += readed_bytes; len -= readed_bytes; offset += readed_bytes; res = offset; t = millis();}
-                if(res != 0) vTaskDelay(30);
+                if(readed_bytes <= 0) vTaskDelay(5);
             }
             if(t + 3000 < millis()){AUDIO_LOG_ERROR("timeout"); res = -1; break;}
         }
