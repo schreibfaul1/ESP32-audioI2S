@@ -43,8 +43,7 @@ static constexpr std::array<const char*, 13> eventStr = {"info", "id3data", "eof
 //----------------------------------------------------------------------------------------------------------------------
 
 class AudioBuffer {
-// AudioBuffer will be allocated in PSRAM, If PSRAM not available or has not enough space AudioBuffer will be
-// allocated in FlashRAM with reduced size
+// AudioBuffer will be allocated in PSRAM
 //
 //  m_buffer            m_readPtr                 m_writePtr                 m_endPtr
 //   |                       |<------dataLength------->|<------ writeSpace ----->|

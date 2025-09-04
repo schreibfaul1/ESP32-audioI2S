@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2d                                                                                                                              ";
-/*  Updated on: Sep 01.2025
+    Version 3.4.2e                                                                                                                              ";
+/*  Updated on: Sep 04.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5434,14 +5434,15 @@ bool Audio::setAudioPlayTime(uint16_t sec) {
 
     if(sec > getAudioFileDuration()) sec = getAudioFileDuration();
     uint32_t filepos = m_audioDataStart + (getBitRate() * sec / 8);
-    if(m_dataMode == AUDIO_LOCALFILE) return fsRange(filepos);
-    if(m_streamType == ST_WEBFILE)    return httpRange(filepos);
-    return false;
+    m_resumeFilePos = filepos;
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current position in seconds
     // info(evt_info, "time offset %li sec", sec);
-    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){ AUDIO_LOG_WARN("%s","not a file");                 return false;}  // guard
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){ AUDIO_LOG_WARN("%s","not a file"); return false;}  // guard
+    if(!getBitRate())                                                   return false;  // guard
+    if(!m_f_running)                                                    return false;  // guard
 
     int32_t newTime = getAudioCurrentTime() + sec;
     if (newTime < 0) newTime = 0;
@@ -5451,8 +5452,8 @@ bool Audio::setTimeOffset(int sec) { // fast forward or rewind the current posit
     int32_t  offset = oneSec * sec;                      // bytes to be wind/rewind
     int32_t pos = m_audioFilePosition - inBufferFilled();
     pos += offset;
-
-    return setAudioPlayTime(newTime);
+    m_resumeFilePos = pos;
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setVolumeSteps(uint8_t steps) {
