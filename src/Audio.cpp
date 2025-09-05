@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2g                                                                                                                              ";
+    Version 3.4.2h                                                                                                                              ";
 /*  Updated on: Sep 05.2025
 
     Author: Wolle (schreibfaul1)
@@ -3765,7 +3765,7 @@ void Audio::processLocalFile() {
         }
     }
 
-    if(m_fileStartTime > 0){
+    if(m_fileStartTime > 0 && m_nominal_bitrate){
         if(getBitRate() > 0) setAudioPlayTime(m_fileStartTime);
         else info(evt_info, "can't set audio play time directly");
         m_fileStartTime = -1;
@@ -3935,6 +3935,12 @@ void Audio::processWebFile() {
             m_f_stream = true;
             info(evt_info, "stream ready");
         }
+    }
+
+    if(m_fileStartTime > 0 && m_nominal_bitrate){
+        if(getBitRate() > 0) setAudioPlayTime(m_fileStartTime);
+        else info(evt_info, "can't set audio play time directly");
+        m_fileStartTime = -1;
     }
 
     // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -5324,7 +5330,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     calculateAudioTime(bytesDecoded, bytesDecoderOut);
 
     m_curSample = 0;
-    playChunk();
+    if(m_validSamples) {log_i("%i", m_validSamples); playChunk();}
     return bytesDecoded;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5342,13 +5348,6 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
         if(m_codec == CODEC_FLAC && FLACGetAudioFileDuration()){ // BITSTREAMINFO FLAC/OGG
             m_audioFileDuration = FLACGetAudioFileDuration();
             m_cat.nominalBitRate = (m_audioDataSize / FLACGetAudioFileDuration()) * 8;
-        }
-
-        if(m_codec == CODEC_MP3){
-            // if(MP3GetAudioFileDuration() > 0){ // XING header present?
-            //     m_audioFileDuration = MP3GetAudioFileDuration();
-            //     m_cat.nominalBitRate  = MP3GetBitrate();
-            // }
         }
     }
 
@@ -5452,6 +5451,22 @@ uint32_t Audio::getAudioFileDuration() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioCurrentTime() { // return current time in seconds
     return m_audioCurrentTime;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+uint32_t Audio::getAudioFilePosition(){
+    if(!m_f_stream) return 0;
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){AUDIO_LOG_WARN("audio is not a file"); return 0;}
+    return m_audioFilePosition - inBufferFilled();
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bool Audio::setAudioFilePosition(uint32_t pos){
+    if(!m_f_stream) return false;
+    if((m_dataMode != AUDIO_LOCALFILE) && (m_streamType != ST_WEBFILE)){AUDIO_LOG_WARN("audio is not a file"); return false;}
+    if((m_streamType == ST_WEBFILE) && (!m_f_acceptRanges)){AUDIO_LOG_WARN("server does not accept ranges"); return false;}
+    if(pos > m_audioDataStart + m_audioDataSize) {AUDIO_LOG_WARN("given position is too large"); return false;}
+    if(pos < m_audioDataStart) {AUDIO_LOG_WARN("set audiodatastart at %lu", m_audioDataStart); m_resumeFilePos = m_audioDataStart;}
+    m_resumeFilePos = pos;
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayTime(uint16_t sec) {
