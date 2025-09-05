@@ -5330,7 +5330,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     calculateAudioTime(bytesDecoded, bytesDecoderOut);
 
     m_curSample = 0;
-    if(m_validSamples) {log_i("%i", m_validSamples); playChunk();}
+    if(m_validSamples) {playChunk();}
     return bytesDecoded;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
