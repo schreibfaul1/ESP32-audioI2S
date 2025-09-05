@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2f                                                                                                                              ";
-/*  Updated on: Sep 04.2025
+    Version 3.4.2g                                                                                                                              ";
+/*  Updated on: Sep 05.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1672,7 +1672,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         ps_ptr<char> timestamp(__LINE__);
         timestamp.alloc(12);
         if(lyricsBuffer.valid()){
-            m_ID3Hdr.SYLT.seen = true;
             lyricsBuffer.remove_prefix("LYRICS=");
             idx = 0;
             while(idx < lyricsBuffer.size()){
@@ -1741,7 +1740,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.ehsz = 0;
         m_ID3Hdr.framesize = 0;
         m_ID3Hdr.compressed = false;
-        m_ID3Hdr.SYLT.seen = false;
         m_ID3Hdr.SYLT.size = 0;
         m_ID3Hdr.SYLT.pos = 0;
         m_ID3Hdr.numID3Header = 0;
@@ -1754,7 +1752,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         info(evt_info, "File-Size: %lu", m_audioFileSize);
 
-        m_ID3Hdr.SYLT.seen = false;
         m_ID3Hdr.remainingHeaderBytes = 0;
         m_ID3Hdr.ehsz = 0;
         if(specialIndexOf(data, "ID3", 4) != 0) { // ID3 not found
@@ -1978,7 +1975,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             bool isBigEndian = true;
             size_t len = 0;
             int idx = 0;
-            m_ID3Hdr.SYLT.seen = true;
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
             syltBuff.alloc(m_ID3Hdr.SYLT.size + 1);
@@ -2077,10 +2073,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 size_t len = 0;
                 int idx = 0;
 
-                m_ID3Hdr.SYLT.seen = true; // #460
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
-
                 syltBuff.alloc(m_ID3Hdr.SYLT.size);
                 uint32_t pos = m_audioFilePosition;
                 audioFileSeek(m_ID3Hdr.SYLT.pos);
@@ -2779,7 +2773,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                 ps_ptr<char> timestamp(__LINE__);
                 timestamp.alloc(12);
                 if(lyricsBuffer.valid()){
-                    m_ID3Hdr.SYLT.seen = true;
                     lyricsBuffer.remove_prefix("LYRICS=");
                     idx = 0;
                     while(idx < lyricsBuffer.size()){
@@ -5370,7 +5363,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
         m_cat.timeStamp  = t;                   //    ---"---
 
         if(m_cat.nominalBitRate){
-            audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_cat.nominalBitRate;
+            audioCurrentTime = (uint32_t)(m_cat.sumBytesIn * 8 / m_cat.nominalBitRate);
         }
         else{
             m_cat.sumBitRate += ((m_cat.deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
@@ -5389,21 +5382,22 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
     if(m_haveNewFilePos && (m_cat.avrBitRate || m_cat.nominalBitRate)){
         uint32_t posWhithinAudioBlock =  m_haveNewFilePos - m_audioDataStart;
         float newTime = 0;
-        if(m_cat.nominalBitRate){newTime = (float)posWhithinAudioBlock / (m_cat.avrBitRate / 8); m_avr_bitrate = m_cat.avrBitRate;}
-        else                     newTime = (float)posWhithinAudioBlock / (m_cat.nominalBitRate / 8);
+        if(m_cat.nominalBitRate){newTime = (float)posWhithinAudioBlock / (m_cat.nominalBitRate / 8);}
+        else                    {newTime = (float)posWhithinAudioBlock / (m_cat.avrBitRate / 8); m_avr_bitrate = m_cat.avrBitRate;}
         m_audioCurrentTime = round(newTime);
         m_cat.sumBytesIn = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
         m_cat.syltIdx = 0;
-        if(m_ID3Hdr.SYLT.seen){
+        if(m_syltLines.size()){
             while(m_cat.syltIdx < m_syltLines.size()){
-                if(newTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
+                if(m_audioCurrentTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
                 m_cat.syltIdx++;
             }
+            if(m_cat.syltIdx) m_cat.syltIdx--;
         }
     }
 
-    if(m_ID3Hdr.SYLT.seen){
+    if(m_syltLines.size()){
         //  AUDIO_LOG_INFO("%f", audioCurrentTime * 1000); // ms
         if(m_cat.syltIdx >= m_syltLines.size()) return;
         if(m_audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]){
@@ -5457,7 +5451,7 @@ uint32_t Audio::getAudioFileDuration() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::getAudioCurrentTime() { // return current time in seconds
-    return round(m_audioCurrentTime);
+    return m_audioCurrentTime;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::setAudioPlayTime(uint16_t sec) {

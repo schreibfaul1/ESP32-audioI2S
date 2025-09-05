@@ -7,7 +7,6 @@
 
 namespace audiolib {
     struct sylt_t {
-        bool         seen;
         size_t       size;
         uint32_t     pos;
         char         lang[5];

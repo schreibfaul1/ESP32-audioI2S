@@ -686,8 +686,8 @@ private:
     bool            m_f_acceptRanges = false;
     bool            m_f_reset_m3u8Codec = true;     // reset codec for m3u8 stream
     bool            m_f_connectionClose = false;    // set in parseHttpResponseHeader
-    uint32_t        m_audioFileDuration = 0;
-    float           m_audioCurrentTime = 0;
+    uint32_t        m_audioFileDuration = 0;        // seconds
+    uint32_t        m_audioCurrentTime = 0;         // seconds
     float           m_resampleError = 0.0f;
     float           m_resampleRatio = 1.0f;         // resample ratio for e.g. 44.1kHz to 48kHz
     float           m_resampleCursor = 0.0f;        // next frac in resampleTo48kStereo
