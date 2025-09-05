@@ -5231,7 +5231,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(res <  0){ return decodeError(res, data, bytesDecoded);} // Error, skip the frame...
     if(res > 99){ return decodeContinue(res, data, bytesDecoded);} // decoder needs more data...
 
-    if(bytesDecoded == 0 && res == 0) { // unlikely framesize
+    if(bytesDecoded == 0 && !m_codec == CODEC_VORBIS) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
         info(evt_info, "framesize is 0, start decoding again");
         m_f_playing = false; // seek for new syncword
         // we're here because there was a wrong sync word so skip one byte and seek for the next

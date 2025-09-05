@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 03.06.2025
+ *  Updated on: 05.09.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G    I M P L.
@@ -381,7 +381,7 @@ int32_t vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLe
                 uint16_t outBuffSize = 2048 * 2;
                 s_vorbisValidSamples = vorbis_dsp_pcmout(outbuf, outBuffSize);
                 s_lastSegmentTableLen = 0;
-                if(ret == OV_ENOTAUDIO || ret == 0) ret = VORBIS_CONTINUE; // if no error send continue
+                if(ret == OV_ENOTAUDIO) ret = VORBIS_CONTINUE; // if no error send continue
             }
             else {
                 bitReader_setData(inbuf, segmentLength);
