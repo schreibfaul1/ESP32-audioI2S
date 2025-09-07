@@ -4,10 +4,11 @@
 #include "es8311.h"
 #include "Wire.h"
 
-#define I2S_DOUT       9
-#define I2S_BCLK      12
+// Pins: Waveshare ESP32-P4-Module-DEV-KIT and ESP32-P4-NANO High-performance Development Board
+#define I2S_DOUT       9 // DSDIN pin(es8311)
+#define I2S_BCLK      12 // SCLK
 #define I2S_MCLK      13
-#define I2S_LRC       10
+#define I2S_LRC       10 // LRCK
 #define I2C_SCL        8
 #define I2C_SDA        7
 #define PA_ENABLE     53
@@ -59,4 +60,3 @@ void loop() {
     audio.loop();
     vTaskDelay(1);
 }
-
