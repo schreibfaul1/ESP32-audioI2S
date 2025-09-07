@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2h                                                                                                                              ";
-/*  Updated on: Sep 05.2025
+    Version 3.4.2i                                                                                                                              ";
+/*  Updated on: Sep 07.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -136,7 +136,7 @@ void AudioBuffer::bytesWritten(size_t bw) {
     if(!bw) return;
     m_writePtr += bw;
     if(m_writePtr == m_endPtr) { m_writePtr = m_buffer.get(); }
-    if(m_writePtr > m_endPtr) log_e("AudioBuffer: m_writePtr %i > m_endPtr %i", m_writePtr, m_endPtr);
+    if(m_writePtr > m_endPtr) log_e("AudioBuffer: m_writePtr %p > m_endPtr %p", m_writePtr, m_endPtr);
     m_f_isEmpty = false;
 }
 
@@ -183,13 +183,16 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_num = i2sPort;  // i2s port number
 
     // -------- I2S configuration -------------------------------------------------------------------------------------------
+    memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     m_i2s_chan_cfg.id            = (i2s_port_t)m_i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role          = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
     m_i2s_chan_cfg.dma_desc_num  = 16;                     // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 512;                    // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear    = true;                   // i2s will always send zero automatically if no data to send
+    m_i2s_chan_cfg.allow_pd      = false;
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
+    memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
     m_i2s_std_cfg.slot_cfg                = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
     m_i2s_std_cfg.gpio_cfg.bclk           = I2S_GPIO_UNUSED;           // BCLK, Assignment in setPinout()
     m_i2s_std_cfg.gpio_cfg.din            = I2S_GPIO_UNUSED;           // not used
@@ -2274,7 +2277,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         atom_name.copy_from((const char*)data + 4, 4);
 
         if(atom_name.equals("ftyp")){
-            AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
+            AUDIO_LOG_DEBUG("atom %s @ %zu, size: %u, ends @ %zu", atom_name.c_get(),  m_m4aHdr.headerSize, (uint32_t)atom_size.to_uint32(16),  m_m4aHdr.headerSize + (size_t)atom_size.to_uint32(16));
             m_m4aHdr.sizeof_ftyp = atom_size.to_uint32(16);
             m_controlCounter = M4A_FTYP;
         }
@@ -2631,7 +2634,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
         // search for decoderConfigDescriptor (tag 0x04)
-        int32_t dec_config_descriptor_offset = esds_buffer.special_index_of("\x04\x80\x80\x80", 4, m_m4aHdr.sizeof_esds);
+        int32_t dec_config_descriptor_offset = esds_buffer.special_index_of("\x04\x80\x80\x80", 4, (uint32_t) m_m4aHdr.sizeof_esds);
         if(dec_config_descriptor_offset > 0){ //decoderConfigDescriptor found
             uint8_t  dec_config_descriptor_length = ((uint8_t*)esds_buffer.get())[dec_config_descriptor_offset + 4]; // Length after Tag + 3 Extended Length Bytes
             m_m4aHdr.objectTypeIndicator = ((uint8_t*)esds_buffer.get())[dec_config_descriptor_offset + 5];  // 0x40 (AAC)
@@ -3741,7 +3744,7 @@ void Audio::processLocalFile() {
             else                           {stopSong(); return;}
             m_lastGranulePosition = getLastGranulePosition();
             m_controlCounter = 100;
-            log_w("%lu, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
+            log_w("%i, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
             return;
         }
         if(m_controlCounter != 100) {
@@ -3913,7 +3916,7 @@ void Audio::processWebFile() {
             else                           {stopSong(); return;}
             m_lastGranulePosition = getLastGranulePosition(); // to calculate the duration
             m_controlCounter = 100;
-            log_w("%lu, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
+            log_w("%i, lastGranulePosition %llu", __LINE__, m_lastGranulePosition);
             return;
         }
         if(m_controlCounter != 100) {
@@ -5231,7 +5234,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(res <  0){ return decodeError(res, data, bytesDecoded);} // Error, skip the frame...
     if(res > 99){ return decodeContinue(res, data, bytesDecoded);} // decoder needs more data...
 
-    if(bytesDecoded == 0 && !m_codec == CODEC_VORBIS) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
+    if((bytesDecoded == 0) && (m_codec != CODEC_VORBIS)) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
         info(evt_info, "framesize is 0, start decoding again");
         m_f_playing = false; // seek for new syncword
         // we're here because there was a wrong sync word so skip one byte and seek for the next
@@ -6514,7 +6517,6 @@ bool Audio::readID3V1Tag() {
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
         int32_t  offset = 0, buffFillValue = 0, res = 0;
-        uint32_t timeOut = 0;
 
         if(m_controlCounter != 100){AUDIO_LOG_WARN("timeOffset not possible"); m_resumeFilePos = -1; offset = -1; goto exit;}
         if(m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {   m_resumeFilePos = -1; offset = -1; goto exit;}
@@ -6538,17 +6540,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
             res = audioFileSeek(m_resumeFilePos);
             InBuff.resetBuffer();
             offset = 0;
-            timeOut = millis();
             audioFileRead(InBuff.getReadPtr() + offset, buffFillValue);
-            // while (remaining > 0) {
-            //     int bytesRead = audioFileRead(InBuff.getReadPtr() + offset, remaining);
-            //     if (bytesRead <= 0) {
-            //         if(millis() > timeOut + 2000){AUDIO_LOG_ERROR("timeout, not enough data from host"); buffFillSize = offset; break;}
-            //         continue; // ggf. Sleep oder Timeout prüfen, um Endlosschleife zu vermeiden
-            //     }
-            //     remaining -= bytesRead;
-            //     offset += bytesRead;
-            // }
             InBuff.bytesWritten(buffFillValue);
 
 /* process after */

@@ -921,8 +921,6 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false) {
     //   ps_ptr<char> haystack; // Contains data, e.g., stsd atom content
     //   int32_t idx = haystack.index_of("mp4a", 1024); // Search for "mp4a"
     //   int32_t idx2 = haystack.index_of("\x00\x01\xFF", 3, 1024); // Search for byte sequence
-    template <typename U = T>
-    requires std::is_same_v<U, char>
     int32_t special_index_of(const char* needle, uint32_t needle_length, uint32_t max_length) const {
         static_assert(std::is_same_v<T, char>, "index_of is only valid for ps_ptr<char>");
         if (!mem || !get()) {
@@ -944,7 +942,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false) {
                 return static_cast<int32_t>(i);
             }
         }
-        log_d("index_of: Needle not found within %u bytes", max_length);
+        log_d("index_of: Needle not found within %lu bytes", max_length);
         return -1;
     }
 
@@ -1484,8 +1482,6 @@ void unicodeToUTF8(const char* src) {
     // Usage:
     //   ps_ptr<char> size = "227213779"; uint32_t val = size.to_uint32(10); // Returns 227213779
     //   ps_ptr<char> addr = "0x1A3B"; uint32_t val = addr.to_uint32(16); // Returns 6715
-    template <typename U = T>
-    requires std::is_same_v<U, char>
     uint32_t to_uint32(int base = 10) const {
         static_assert(std::is_same_v<T, char>, "to_uint32 is only valid for ps_ptr<char>");
         if (!mem || !get()) {
@@ -1496,11 +1492,11 @@ void unicodeToUTF8(const char* src) {
         char* end = nullptr;
         unsigned long result = std::strtoul(str, &end, base);
         if (end == str) {
-            log_e("to_uint32: Invalid numeric value in '%s' for base %d", str, base);
+            log_e("to_uint32: Invalid numeric value in '%s' for base %i", str, base);
             return 0;
         }
         if (result > UINT32_MAX) {
-            log_e("to_uint32: Value in '%s' exceeds UINT32_MAX (%u) for base %d", str, UINT32_MAX, base);
+            log_e("to_uint32: Value in '%s' exceeds UINT32_MAX (%u) for base %i", str, UINT32_MAX, base);
             return 0;
         }
         return static_cast<uint32_t>(result);
