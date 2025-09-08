@@ -750,9 +750,10 @@ void silk_decode_indices(uint8_t n,
 
     /* Remaining subframes */
     for (i = 1; i < s_channel_state[n].nb_subfr; i++) {
-        s_channel_state[n].indices.GainsIndices[i] = (int8_t)ec_dec_icdf(silk_delta_gain_iCDF, 8);
+        if (i < MAX_NB_SUBFR) {
+            s_channel_state[n].indices.GainsIndices[i] = (int8_t)ec_dec_icdf(silk_delta_gain_iCDF, 8);
+        }
     }
-
     /**********************/
     /* Decode LSF Indices */
     /**********************/
@@ -810,8 +811,10 @@ void silk_decode_indices(uint8_t n,
         s_channel_state[n].indices.PERIndex = (int8_t)ec_dec_icdf(silk_LTP_per_index_iCDF, 8);
 
         for (k = 0; k < s_channel_state[n].nb_subfr; k++) {
-            s_channel_state[n].indices.LTPIndex[k] =
-                (int8_t)ec_dec_icdf(silk_LTP_gain_iCDF_ptrs[s_channel_state[n].indices.PERIndex], 8);
+            if (k < MAX_NB_SUBFR) {
+                s_channel_state[n].indices.LTPIndex[k] =
+                    (int8_t)ec_dec_icdf(silk_LTP_gain_iCDF_ptrs[s_channel_state[n].indices.PERIndex], 8);
+            }
         }
 
         /**********************/

@@ -8812,7 +8812,9 @@ uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
             k += sect_len;
             i++;
         }
-        ics->num_sec[g] = i;
+        if (g < 8) {
+            ics->num_sec[g] = i;
+        }
         /* the sum of all sect_len_incr elements for a given window
          * group shall equal max_sfb */
         if (k != ics->max_sfb) { return 32; }
