@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2j                                                                                                                              ";
+    Version 3.4.2k                                                                                                                              ";
 /*  Updated on: Sep 08.2025
 
     Author: Wolle (schreibfaul1)
@@ -6148,7 +6148,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
         return false;
     }
     int PID = (packet[1] & 0x1F) << 8 | (packet[2] & 0xFF);
-    if(log) AUDIO_LOG_DEBUG("PID: 0x%04X(%d)", PID, PID);
+    if(log) AUDIO_LOG_DEBUG("PID: 0x%04X (%d)", PID, PID);
     int PUSI = (packet[1] & 0x40) >> 6;
     if(log) AUDIO_LOG_DEBUG("Payload Unit Start Indicator: %d", PUSI);
     int AFC = (packet[3] & 0x30) >> 4;
@@ -6306,6 +6306,9 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
     // PES received before PAT and PMT seen
     *packetStart = 0;
     *packetLength = 0;
+    if(PID > 0) {
+        return true;
+    }
     return false;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
