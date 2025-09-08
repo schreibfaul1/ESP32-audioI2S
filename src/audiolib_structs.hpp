@@ -201,6 +201,7 @@ namespace audiolib {
         bool f_skipCRLF;
         bool isHttpChunked;
         size_t transportLimit;
+        bool oneByteOfTwo;
     };
 
     struct pwf_t { // used in processWebFile
