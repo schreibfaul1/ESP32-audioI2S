@@ -59,7 +59,7 @@ namespace audiolib {
         bool         firstBytes;
         bool         f_chunkFinished;
         uint32_t     byteCounter;
-        size_t       chunkSize;
+        int32_t      chunkSize;
         uint16_t     ID3WritePtr;
         uint16_t     ID3ReadPtr;
         ps_ptr<uint8_t>ID3Buff;
@@ -194,7 +194,7 @@ namespace audiolib {
         bool      f_skipCRLF = false;
         uint32_t  availableBytes;
         bool      f_clientIsConnected;
-        uint8_t   readedBytes;
+        uint16_t  readedBytes;
     };
 
     struct gchs_t { // used in getChunkSize
@@ -237,7 +237,7 @@ namespace audiolib {
 
     struct rmet_t { // used in readMetadata
         uint16_t pos_ml = 0; // determines the current position in metaline
-        uint16_t metalen = 0;
+        uint16_t metaDataSize = 0;
         uint16_t res = 0;
     };
 

@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2i                                                                                                                              ";
-/*  Updated on: Sep 07.2025
+    Version 3.4.2j                                                                                                                              ";
+/*  Updated on: Sep 08.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3238,7 +3238,7 @@ void Audio::loop() {
 bool Audio::readPlayListData() {
 
     uint32_t     chunksize = 0;
-    uint8_t      readedBytes = 0;
+    uint16_t     readedBytes = 0;
     ps_ptr<char> pl("pl");
     uint32_t     ctl = 0;
     uint16_t     plSize = 0;
@@ -3796,6 +3796,7 @@ exit:
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::processWebStream() {
     if(m_dataMode != AUDIO_DATA) return; // guard
+    uint16_t readedBytes = 0;
 
     m_pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     m_pwst.availableBytes = 0; // available from stream
@@ -3808,12 +3809,11 @@ void Audio::processWebStream() {
         m_pwst.chunkSize = 0;
         m_metacount = m_metaint;
         m_f_allDataReceived = false;
-        readMetadata(0, true);
+        readMetadata(0, &readedBytes, true);
         getChunkSize(0, true);
         m_audioFilePosition = 0;
     }
     if(m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
-
 
     // chunked data tramsfer
     if(m_f_chunked && m_pwst.availableBytes){
@@ -3822,19 +3822,23 @@ void Audio::processWebStream() {
             if(chunkLen < 0) return;
             if(chunkLen == 0) m_f_allDataReceived = true;
             m_pwst.chunkSize = chunkLen;
+            m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
         }
         m_pwst.availableBytes = min(m_pwst.availableBytes, m_pwst.chunkSize);
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if(m_f_metadata && m_pwst.availableBytes) {
-        if(m_metacount == 0) {
-            int metaLen = readMetadata(m_pwst.availableBytes);
-            if(m_f_chunked) m_pwst.chunkSize -= metaLen; // reduce chunkSize by metadata length
-            return;
-        }
-        m_pwst.availableBytes = min(m_pwst.availableBytes, m_metacount);
+    if(m_f_metadata && (m_metacount == 0)) {
+        if(!m_pwst.availableBytes) return;
+        readedBytes = 0;
+        bool res = readMetadata(m_pwst.availableBytes, &readedBytes);
+        m_pwst.readedBytes += readedBytes;
+        if(m_f_chunked) m_pwst.chunkSize -= readedBytes; // reduce chunkSize by metadata length
+        if (res == false) return;
+        m_metacount = m_metaint;
+        return;
     }
+    if(m_f_metadata) m_pwst.availableBytes = min(m_pwst.availableBytes, m_metacount);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_f_stream) {
@@ -3994,7 +3998,7 @@ nextRound:
            However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
            calculated again. The data used to calculate (here readedBytes) the chunk size is not part of it.
         */
-        uint8_t readedBytes = 0;
+        uint16_t readedBytes = 0;
         uint32_t minAvBytes = 0;
         if(m_pwsst.f_chunkFinished ) goto chunkFinished;
         if(m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
@@ -4126,7 +4130,7 @@ void Audio::processWebStreamHLS() {
 
     m_pwsHLS.availableBytes = m_client->available();
     if(m_pwsHLS.availableBytes) { // an ID3 header could come here
-        uint8_t readedBytes = 0;
+        uint16_t readedBytes = 0;
 
         if(m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
@@ -6307,39 +6311,44 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //    W E B S T R E A M  -  H E L P   F U N C T I O N S
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
-    m_rmet.res = 0;
+bool Audio::readMetadata(uint16_t maxBytes, uint16_t *readedBytes, bool first) {
+    *readedBytes = 0;
     ps_ptr<char>buff(__LINE__); buff.alloc(4096); buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(first) {
         m_rmet.pos_ml = 0; // determines the current position in metaline
-        m_rmet.metalen = 0;
-        return 0;
+        m_rmet.metaDataSize = 0;
+        m_rmet.res = 0;
+        return true;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(!maxBytes) return 0; // guard
 
-    if(!m_rmet.metalen) {
+    if(!m_rmet.metaDataSize) {
         int b = audioFileRead(); // First byte of metadata?
         if (b < 0) {
             AUDIO_LOG_WARN("client->read() failed (%d)", b);
-            return 0;
+            return false;
         }
-        m_rmet.metalen = b * 16;        // New count for metadata including length byte, max 4096
+        m_rmet.metaDataSize = b * 16;        // New count for metadata including length byte, max 4096
         m_rmet.pos_ml = 0;
         buff[m_rmet.pos_ml] = 0; // Prepare for new line
-        m_rmet.res = 1;
+        *readedBytes = 1;
+        maxBytes -= 1;
     }
-    if(!m_rmet.metalen) {
-        m_metacount = m_metaint;
-        return m_rmet.res;
+    if(!m_rmet.metaDataSize) {
+        return *readedBytes;
     } // metalen is 0
-    uint16_t a = audioFileRead((uint8_t*)&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metalen - m_rmet.pos_ml), (uint16_t)(maxBytes)));
-    m_rmet.res += a;
-    m_rmet.pos_ml += a;
+    int32_t a = audioFileRead((uint8_t*)&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metaDataSize - m_rmet.pos_ml), (uint16_t)(maxBytes)));
 
-    if(m_rmet.pos_ml == m_rmet.metalen) {
+    if(a > 0){
+        m_rmet.res += a;
+        *readedBytes += a;
+        m_rmet.pos_ml += a;
+    }
+    if(m_rmet.pos_ml == m_rmet.metaDataSize) {
         buff[m_rmet.pos_ml] = '\0';
+        // buff.hex_dump(m_rmet.metaDataSize);
         if(buff.strlen() > 0) { // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
@@ -6354,13 +6363,17 @@ uint16_t Audio::readMetadata(uint16_t maxBytes, bool first) {
             showstreamtitle(buff.get()); // Show artist and title if present in metadata
         }
         m_metacount = m_metaint;
-        m_rmet.metalen = 0;
+        m_rmet.metaDataSize = 0;
         m_rmet.pos_ml = 0;
+        buff[m_rmet.pos_ml] = 0; // Prepare for new line
     }
-    return m_rmet.res;
+    else{
+        return false; // not enough data, next round
+    }
+    return true;
 }
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t Audio::getChunkSize(uint8_t *readedBytes, bool first) {
+int32_t Audio::getChunkSize(uint16_t *readedBytes, bool first) {
     uint32_t timeout = 2000; // ms
     uint32_t ctime;
 

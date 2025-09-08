@@ -249,8 +249,8 @@ class Audio{
     void         performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
-    uint16_t     readMetadata(uint16_t b, bool first = false);
-    int32_t      getChunkSize(uint8_t *readedBytes, bool first = false);
+    bool         readMetadata(uint16_t b, uint16_t *readedBytes, bool first = false);
+    int32_t      getChunkSize(uint16_t *readedBytes, bool first = false);
     bool         readID3V1Tag();
     int32_t      newInBuffStart(int32_t m_resumeFilePos);
     boolean      streamDetection(uint32_t bytesAvail);
