@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2l                                                                                                                              ";
+    Version 3.4.2m                                                                                                                              ";
 /*  Updated on: Sep 08.2025
 
     Author: Wolle (schreibfaul1)
@@ -5343,7 +5343,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut) {
 
-    if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
+   // if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
     float audioCurrentTime = 0.0;
 
@@ -5372,14 +5372,21 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
             audioCurrentTime = (uint32_t)(m_cat.sumBytesIn * 8 / m_cat.nominalBitRate);
         }
         else{
-            m_cat.sumBitRate += ((m_cat.deltaBytesIn * 8000) / delta_t);  // we know the time and bytesIn to compute the bitrate
+            double instBitRate = (m_cat.deltaBytesIn * 8000.0) / delta_t;
             m_cat.counter ++;
-            m_cat.avrBitRate = m_cat.sumBitRate / m_cat.counter;
-            if(m_cat.counter > 5){ // < 5 is too imprecise
-                m_avr_bitrate = m_cat.avrBitRate;
-                audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_cat.avrBitRate;
-                m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.avrBitRate));
+            m_cat.avrBitRate += (instBitRate - m_cat.avrBitRate) / m_cat.counter;
+            if((abs(m_cat.avrBitRate- m_cat.oldAvrBitrate < 50)) && !m_cat.avrBitrateStable){
+                m_cat.brCounter++;
+                if(m_cat.brCounter > 6){
+                    m_cat.avrBitrateStable = m_cat.avrBitRate;
+                    info(evt_bitrate, "%i", m_cat.avrBitrateStable);
+                    info(evt_info, "estimated bitrate (b/s): %lu", m_cat.avrBitrateStable);
+                }
             }
+            m_avr_bitrate = m_cat.avrBitRate;
+            audioCurrentTime = (float)m_cat.sumBytesIn * 8 / m_cat.avrBitRate;
+            m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.avrBitRate));
+            m_cat.oldAvrBitrate = m_avr_bitrate;
         }
         m_cat.deltaBytesIn = 0;
         m_audioCurrentTime = round(audioCurrentTime);
