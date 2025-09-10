@@ -526,7 +526,7 @@ __unused int latmCheck(latm_header* latm, bitfile* ld) {
         else {
             good++;
             while(bits > 0) {
-                m = min(bits, 8);
+                m = min(bits, (uint32_t) 8);
                 faad_getbits(ld, m);
                 bits -= m;
             }
@@ -7538,14 +7538,14 @@ void tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
         for (f = 0; f < tns->n_filt[w]; f++) {
             top = bottom;
             bottom = max(top - tns->length[w][f], 0);
-            tns_order = min(tns->order[w][f], TNS_MAX_ORDER);
+            tns_order = min(tns->order[w][f], (uint8_t)TNS_MAX_ORDER);
             if (!tns_order) continue;
             tns_decode_coef(tns_order, tns->coef_res[w] + 3, tns->coef_compress[w][f], tns->coef[w][f], lpc);
-            start = min(bottom, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
-            start = min(start, ics->max_sfb);
+            start = min(bottom, (uint16_t)max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            start = min(start, (uint16_t)ics->max_sfb);
             start = min(ics->swb_offset[start], ics->swb_offset_max);
-            end = min(top, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
-            end = min(end, ics->max_sfb);
+            end = min(top, (uint16_t)max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            end = min(end, (uint16_t)ics->max_sfb);
             end = min(ics->swb_offset[end], ics->swb_offset_max);
             size = end - start;
             if (size <= 0) continue;
@@ -7574,14 +7574,14 @@ void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
         for (f = 0; f < tns->n_filt[w]; f++) {
             top = bottom;
             bottom = max(top - tns->length[w][f], 0);
-            tns_order = min(tns->order[w][f], TNS_MAX_ORDER);
+            tns_order = min(tns->order[w][f], (uint8_t)TNS_MAX_ORDER);
             if (!tns_order) continue;
             tns_decode_coef(tns_order, tns->coef_res[w] + 3, tns->coef_compress[w][f], tns->coef[w][f], lpc);
-            start = min(bottom, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
-            start = min(start, ics->max_sfb);
+            start = min(bottom, (uint16_t)max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            start = min(start, (uint16_t)ics->max_sfb);
             start = min(ics->swb_offset[start], ics->swb_offset_max);
-            end = min(top, max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
-            end = min(end, ics->max_sfb);
+            end = min(top, (uint16_t)max_tns_sfb(sr_index, object_type, (ics->window_sequence == EIGHT_SHORT_SEQUENCE)));
+            end = min(end, (uint16_t)ics->max_sfb);
             end = min(ics->swb_offset[end], ics->swb_offset_max);
             size = end - start;
             if (size <= 0) continue;
@@ -9321,14 +9321,14 @@ uint32_t latmAudioMuxElement(latm_header* latm, bitfile* ld) {
             faad_rewindbits(ld);
             m = x1;
             while (m > 0) {
-                n = min(m, 32);
+                n = min(m, (uint32_t)32);
                 faad_getbits(ld, n);
                 m -= n;
             }
             i = 0;
             m = latm->ASCbits = y1 - x1;
             while (m > 0) {
-                n = min(m, 8);
+                n = min(m, (uint32_t) 8);
                 latm->ASC[i++] = (uint8_t)faad_getbits(ld, n);
                 m -= n;
             }
@@ -12625,7 +12625,7 @@ uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0)
         return min(64, k2);
     #endif
         /* bs_stop_freq <= 13 */
-        return min(64, stopMin + offset[get_sr_index(sample_rate)][min(bs_stop_freq, 13)]);
+        return min(64, stopMin + offset[get_sr_index(sample_rate)][min(bs_stop_freq, (uint8_t)13)]);
     }
     return 0;
 }
@@ -12654,7 +12654,7 @@ uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_
         nrBands = (((k2 - k0) >> 1) << 1);
     }
     #endif
-    nrBands = min(nrBands, 63);
+    nrBands = min(nrBands, (uint32_t) 63);
     if (nrBands <= 0) return 1;
     k2Achieved = k0 + nrBands * dk;
     k2Diff = k2 - k2Achieved;
@@ -12671,7 +12671,7 @@ uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_
     sbr->f_master[0] = k0;
     for (k = 1; k <= nrBands; k++) sbr->f_master[k] = (uint8_t)(sbr->f_master[k - 1] + vDk[k - 1]);
     sbr->N_master = (uint8_t)nrBands;
-    sbr->N_master = (min(sbr->N_master, 64));
+    sbr->N_master = (min(sbr->N_master, (uint8_t) 64));
     #if 0
     printf("f_master[%d]: ", nrBands);
     for (k = 0; k <= nrBands; k++)
@@ -12788,7 +12788,7 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
         k1 = k2;
     }
     nrBand0 = (uint8_t)(2 * find_bands(0, bands, k0, k1));
-    nrBand0 = min(nrBand0, 63);
+    nrBand0 = min(nrBand0, (uint8_t)63);
     if (nrBand0 <= 0) {ret = 1; goto exit;}
     q = find_initial_power(nrBand0, k0, k1);
     #ifdef FIXED_POINT
@@ -12820,12 +12820,12 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
     if (!twoRegions) {
         for (k = 0; k <= nrBand0; k++) sbr->f_master[k] = (uint8_t)vk0[k];
         sbr->N_master = nrBand0;
-        sbr->N_master = min(sbr->N_master, 64);
+        sbr->N_master = min(sbr->N_master, (uint8_t) 64);
         ret = 0;
         goto exit;
     }
     nrBand1 = (uint8_t)(2 * find_bands(1 /* warped */, bands, k1, k2));
-    nrBand1 = min(nrBand1, 63);
+    nrBand1 = min(nrBand1, (uint8_t) 63);
     q = find_initial_power(nrBand1, k1, k2);
     #ifdef FIXED_POINT
     qk = (real_t)k1 << REAL_BITS;
@@ -12862,7 +12862,7 @@ uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs
         if (vDk1[k - 1] == 0) {ret = 1; goto exit;}
     }
     sbr->N_master = nrBand0 + nrBand1;
-    sbr->N_master = min(sbr->N_master, 64);
+    sbr->N_master = min(sbr->N_master, (uint8_t)64);
     for (k = 0; k <= nrBand0; k++) { sbr->f_master[k] = (uint8_t)vk0[k]; }
     for (k = nrBand0 + 1; k <= sbr->N_master; k++) { sbr->f_master[k] = (uint8_t)vk1[k - nrBand0]; }
     #if 0
@@ -12933,9 +12933,9 @@ uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2
     #if 0
         sbr->N_Q = max(1, (int32_t)(sbr->bs_noise_bands*(log(k2/(float)sbr->kx)/log(2.0)) + 0.5));
     #else
-        sbr->N_Q = (uint8_t)(max(1, find_bands(0, sbr->bs_noise_bands, sbr->kx, k2)));
+        sbr->N_Q = (uint8_t)(max((int32_t) 1, find_bands(0, sbr->bs_noise_bands, sbr->kx, k2)));
     #endif
-        sbr->N_Q = min(5, sbr->N_Q);
+        sbr->N_Q = min((uint8_t)5, sbr->N_Q);
     }
     for (k = 0; k <= sbr->N_Q; k++) {
         if (k == 0) {
@@ -14336,9 +14336,9 @@ uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
             break;
     }
     if (sbr->bs_frame_class[ch] == VARVAR)
-        sbr->L_E[ch] = min(bs_num_env, 5);
+        sbr->L_E[ch] = min(bs_num_env, (uint8_t)5);
     else
-        sbr->L_E[ch] = min(bs_num_env, 4);
+        sbr->L_E[ch] = min(bs_num_env, (uint8_t)4);
     if (sbr->L_E[ch] <= 0) return 1;
     if (sbr->L_E[ch] > 1)
         sbr->L_Q[ch] = 2;
@@ -15311,7 +15311,7 @@ void patch_construction(sbr_info* sbr) {
         if (sbr->f_master[k] - sb < 3) k = sbr->N_master;
     } while (sb != (sbr->kx + sbr->M));
     if ((sbr->patchNoSubbands[sbr->noPatches - 1] < 3) && (sbr->noPatches > 1)) { sbr->noPatches--; }
-    sbr->noPatches = min(sbr->noPatches, 5);
+    sbr->noPatches = min(sbr->noPatches, (uint8_t) 5);
 }
 #endif // SBR_DEC
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

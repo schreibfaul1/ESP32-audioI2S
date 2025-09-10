@@ -173,8 +173,8 @@ class Audio{
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
     template <typename... Args>
-    void         info(event_t e, const char* fmt, Args&&... args);
-    void         info(event_t e, std::vector<uint32_t>& v);
+    bool         info(event_t e, const char* fmt, Args&&... args);
+    bool         info(event_t e, std::vector<uint32_t>& v);
     bool         fsRange(uint32_t range);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);

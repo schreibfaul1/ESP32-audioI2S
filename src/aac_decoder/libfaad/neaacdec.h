@@ -23,6 +23,7 @@
 // updated:      10.05.2025
 
 #pragma once
+#include "Arduino.h"
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -467,10 +468,11 @@ typedef real_t complex_t[2];
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
-#ifndef max
+
+#if !defined(max) && !defined(__cplusplus)
     #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
-#ifndef min
+#if !defined(min) && !defined(__cplusplus)
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 

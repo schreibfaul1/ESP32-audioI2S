@@ -1196,11 +1196,11 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
         uint8_t  sample_rate_idx;
         bool     padding;
         uint8_t  channel_mode;
-        uint32_t frame_length; // In Bytes
-        uint16_t sample_rate_hz; // Die tatsächliche Abtastrate in Hz
-        uint16_t bitrate_kbps;   // Die tatsächliche Bitrate in kbps
+        uint32_t frame_length = 0; // cytes
+        uint16_t sample_rate_hz;   // the actual sampling rate in Hz
+        uint16_t bitrate_kbps;     // the actual bit rate in Kbps
         uint16_t samples_per_frame;
-    } Mp3FrameHeader;
+    } Mp3FrameHeader_sync_t;
 
     // SamplingFrequenz-Lookup tables(Beispiel für MPEG1, MPEG2, MPEG2.5)
     const uint16_t sampling_rates[3][4] = {
@@ -1237,7 +1237,7 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
     };
 
     // Funktion zum Parsen des Headers und Überprüfen der Gültigkeit
-    auto parseMp3Header = [&](const uint8_t* header_data, Mp3FrameHeader* header_info) {
+    auto parseMp3Header = [&](const uint8_t* header_data, Mp3FrameHeader_sync_t* header_info) {
         // Byte 0: Syncword H (bereits geprüft)
         // Byte 1: Syncword L, MPEG Version, Layer
         // Byte 2: Bitrate, Sampling Frequency, Padding, Private
@@ -1415,12 +1415,12 @@ int32_t MP3FindSyncWord(uint8_t *buf, int32_t nBytes) {
             return -1; // Not enough data for a full header
         }
 
-        Mp3FrameHeader header;
+        Mp3FrameHeader_sync_t header;
         if (parseMp3Header(&buf[current_pos], &header)) {
             // This is where the crucial step comes: Check the next frame
             if (current_pos + header.frame_length + mp3FHsize <= current_pos + nBytes) {
                 // Check whether there is a syncword at the expected next frame start and a valid header is (optional but very robust)
-                Mp3FrameHeader next_header;
+                Mp3FrameHeader_sync_t next_header;
                 if (((buf[current_pos + header.frame_length] == SYNCWORDH) && ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL)) &&
                                         parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
                     // MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);

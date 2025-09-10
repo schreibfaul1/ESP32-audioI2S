@@ -233,7 +233,7 @@ Audio::~Audio() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format on
 template <typename... Args>
-void Audio::info(event_t e, const char* fmt, Args&&... args) {
+bool Audio::info(event_t e, const char* fmt, Args&&... args) {
     auto extract_last_number = [&](std::string_view s) -> int32_t {
         auto it = s.end(); // search from back to the front
         while (it != s.begin()) {
@@ -251,14 +251,14 @@ void Audio::info(event_t e, const char* fmt, Args&&... args) {
         return -1; // no number found
     };
 
-    if(!audio_info_callback) return;
+    if(!audio_info_callback) return false;
     ps_ptr<char> result(__LINE__);
     // First run: determine size
     int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-    if (len <= 0) return;
+    if (len <= 0) return false;
     result.calloc(len + 1);
     char* p = result.get();
-    if(!p) return;
+    if(!p) return false;
     std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
     msg_t i = {0};
     i.msg = result.c_get();
@@ -268,9 +268,10 @@ void Audio::info(event_t e, const char* fmt, Args&&... args) {
     i.i2s_num = m_i2s_num;
     audio_info_callback(i);
     result.reset();
+    return true;
 }
-void Audio::info(event_t e, std::vector<uint32_t>& v) {
-    if(!audio_info_callback) return;
+bool Audio::info(event_t e, std::vector<uint32_t>& v) {
+    if(!audio_info_callback) return false;
     ps_ptr<char>apic;
     apic.assignf("APIC found at pos %lu", v[0]);
     msg_t i;
@@ -280,6 +281,7 @@ void Audio::info(event_t e, std::vector<uint32_t>& v) {
     i.i2s_num = m_i2s_num;
     i.vec = v;
     audio_info_callback(i);
+    return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::initInBuff() {
@@ -2733,7 +2735,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             //     sub atom length   |   ©    d     a     y  |  sub sub atom length  |  d     a     t     a  | data type   1->UTF-8  |   reserved            |  2     0     2     2
 
             ps_ptr<char>sa("sa"); // sub atom
-            sa.copy_from((const char*)data + consumed - as, min(as, 1024));
+            sa.copy_from((const char*)data + consumed - as, min(as, (uint32_t)1024));
 
             char san [5] = {0}; // aub atom name
             char ssan[5] = {0}; // sub sub atom name (should be 'data')
@@ -3727,9 +3729,9 @@ void Audio::processLocalFile() {
         return;
     }
 
-    m_prlf.availableBytes = min(InBuff.writeSpace(), m_audioFileSize - m_audioFilePosition);
+    m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
 
-    m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, UINT16_MAX));
+    m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
     if(m_prlf.bytesAddedToBuffer > 0) {InBuff.bytesWritten(m_prlf.bytesAddedToBuffer);}
     if(m_audioDataSize && m_audioFilePosition >= m_audioDataSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
     if(!m_audioDataSize && m_audioFilePosition == m_audioFileSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
@@ -3849,7 +3851,7 @@ void Audio::processWebStream() {
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(m_pwst.availableBytes) {
         m_pwst.availableBytes = min(m_pwst.availableBytes, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwst.availableBytes, UINT16_MAX));
+        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwst.availableBytes, (uint32_t)UINT16_MAX));
         if(bytesAddedToBuffer > 0) {
             if(m_f_metadata) m_metacount -= bytesAddedToBuffer;
             if(m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
@@ -3904,8 +3906,8 @@ void Audio::processWebFile() {
         return;
     }
 
-    m_pwf.availableBytes = min(m_client->available(), InBuff.writeSpace());
-    m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwf.availableBytes, UINT16_MAX));
+    m_pwf.availableBytes = min(m_client->available(), (int) InBuff.writeSpace());
+    m_pwf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwf.availableBytes, (uint32_t)UINT16_MAX));
     if(m_pwf.bytesAddedToBuffer > 0) {InBuff.bytesWritten(m_pwf.bytesAddedToBuffer);}
     if(m_audioDataSize && m_audioFilePosition >= m_audioDataSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
     if(!m_audioDataSize && m_audioFilePosition == m_audioFileSize){if(!m_f_allDataReceived) m_f_allDataReceived = true;}
@@ -4235,7 +4237,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min(m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled(), InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled()), (uint32_t)InBuff.getMaxBlockSize());
 
         if(m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if(m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()){ // last frames to decode
@@ -4250,7 +4252,7 @@ void Audio::playAudioData() {
     }
     else{
         if(InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) {m_pad.lastFrames = true;}
-        m_pad.bytesToDecode = min(InBuff.bufferFilled(), InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min(InBuff.bufferFilled(), (size_t)InBuff.getMaxBlockSize());
     }
 
     if(m_pad.lastFrames){
@@ -6552,7 +6554,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
         if(m_codec == CODEC_M4A && ! m_stsz_position){                         m_resumeFilePos = -1; offset = -1; goto exit;}
 
         if(m_resumeFilePos <  (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-        buffFillValue = min(m_audioDataSize - m_resumeFilePos, UINT16_MAX);
+        buffFillValue = min((uint32_t)(m_audioDataSize - m_resumeFilePos), (uint32_t)UINT16_MAX);
 
         m_f_lockInBuffer = true;                          // lock the buffer, the InBuffer must not be re-entered in playAudioData()
         {

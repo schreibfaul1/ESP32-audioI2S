@@ -11,6 +11,8 @@
 #include "Arduino.h"
 #include "../psram_unique_ptr.hpp"
 #include "libfaad/neaacdec.h"
+#include "Audio.h"
+
 #pragma GCC diagnostic warning "-Wunused-function"
 
 struct AudioSpecificConfig {
@@ -37,7 +39,7 @@ const char* AACGetErrorMessage(int8_t err);
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  L O G G I N G   📌📌📌
-extern __attribute__((weak)) void audio_info(const char*);
+extern __attribute__((weak)) bool audio_info(const char*);
 
 template <typename... Args>
 void AAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
@@ -53,6 +55,7 @@ void AAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Ar
 
     ps_ptr<char> result;
     ps_ptr<char> file;
+    bool res = false;
 
     file.copy_from(path);
     while(file.contains("/")){
@@ -76,22 +79,26 @@ void AAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Ar
     final.clear();
     char* dest = final.get();
     if (!dest) return;  // Or error treatment
-    if(audio_info){
-        if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
-        else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
-        if(final.strlen()) audio_info(final.get());
+
+    if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+
+    if(final.strlen()){
+        res = audio_info(final.get());
+
+        if(!res){
+            std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+            if     (level == 1) log_e("%s", final.c_get());
+            else if(level == 2) log_w("%s", final.c_get());
+            else if(level == 3) log_i("%s", final.c_get());
+            else if(level == 4) log_d("%s", final.c_get());
+            else                log_v("%s", final.c_get());
+        }
     }
-    else{
-        std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-        if     (level == 1) log_e("%s", final.c_get());
-        else if(level == 2) log_w("%s", final.c_get());
-        else if(level == 3) log_i("%s", final.c_get());
-        else if(level == 4) log_d("%s", final.c_get());
-        else                log_v("%s", final.c_get());
-    }
+
     final.reset();
     result.reset();
 }
