@@ -30,7 +30,9 @@
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
 #include <driver/i2s_std.h>
+#include "psram_unique_ptr.hpp"
 #include "audiolib_structs.hpp"
+
 
 #ifndef I2S_GPIO_UNUSED
   #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -42,6 +44,26 @@ extern char audioI2SVers[];
 // Audio event type descriptions
 static constexpr std::array<const char*, 13> eventStr = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
 //----------------------------------------------------------------------------------------------------------------------
+
+
+class Decoder {
+public:
+    virtual ~Decoder() = default;
+    virtual bool init() = 0;
+    virtual int32_t findSyncWord() = 0;
+    virtual uint8_t getChannels() = 0;
+    virtual uint32_t getSampleRate() = 0;
+    virtual uint8_t getBitsPerSample() = 0;
+    virtual uint32_t getBitRate() = 0;
+    virtual uint32_t getAudioDataStart() = 0;
+    virtual int32_t decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf) = 0;
+    virtual const char* arg1() = 0;
+    virtual const char* arg2() = 0;
+    virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
+    virtual int16_t setRawBlockParams(uint8_t param1, uint16_t param2, uint8_t param3, uint32_t param4, size_t param5) = 0;
+    virtual void reset() = 0;
+};
+
 
 class AudioBuffer {
 // AudioBuffer will be allocated in PSRAM

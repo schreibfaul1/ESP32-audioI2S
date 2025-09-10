@@ -16,10 +16,9 @@
 #pragma once
 #pragma GCC optimize ("Ofast")
 
-#include "Arduino.h"
-#include <vector>
-#include "../psram_unique_ptr.hpp"
 #include "Audio.h"
+#include <vector>
+
 using namespace std;
 
 #define FLAC_MAX_CHANNELS 2

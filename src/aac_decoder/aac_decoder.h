@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "Arduino.h"
-#include "../psram_unique_ptr.hpp"
-#include "libfaad/neaacdec.h"
 #include "Audio.h"
+#include "libfaad/neaacdec.h"
 
 #pragma GCC diagnostic warning "-Wunused-function"
 

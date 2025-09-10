@@ -3,10 +3,6 @@
 //#pragma GCC optimize ("O3")
 //#pragma GCC diagnostic ignored "-Wnarrowing"
 
-#include <stdint.h>
-#include <string.h>
-#include <vector>
-#include "../psram_unique_ptr.hpp"
 #include "Audio.h"
 
 typedef struct _ofp2 {

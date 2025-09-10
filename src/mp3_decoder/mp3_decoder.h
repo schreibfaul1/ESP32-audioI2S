@@ -1,10 +1,7 @@
 // based om helix mp3 decoder
 #pragma once
 
-#include "Arduino.h"
-#include "../psram_unique_ptr.hpp"
 #include "Audio.h"
-#include "assert.h"
 
 extern __attribute__((weak)) bool audio_info(const char*);
 

@@ -23,9 +23,6 @@
  *  Updated on: 19.06.2025
  */
 
-#include "Arduino.h"
-#include <vector>
-#include "../psram_unique_ptr.hpp"
 #include "Audio.h"
 
 using namespace std;
