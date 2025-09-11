@@ -142,8 +142,7 @@ class Audio{
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
 
-
-// callbacks ---------------------------------------------------------
+     // callbacks ---------------------------------------------------------
     typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
     typedef struct _msg{ // used in info(audio_info_callback());
         const char* msg = nullptr;
@@ -155,7 +154,7 @@ class Audio{
         std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
     } msg_t;
     inline static std::function<void(msg_t i)> audio_info_callback;
-// -------------------------------------------------------------------
+    // -------------------------------------------------------------------
 
     bool         openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     audiolib::hwoe_t       dismantle_host(const char* host);
