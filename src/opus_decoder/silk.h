@@ -41,10 +41,6 @@ POSSIBILITY OF SUCH DAMAGE.
 /* Number of binary divisions, when not in low complexity mode */
 #define BIN_DIV_STEPS_A2NLSF_FIX 3 /* must be no higher than 16 - log2( LSF_COS_TAB_SZ_FIX ) */
 #define MAX_ITERATIONS_A2NLSF_FIX 16
-/* Useful Macros that can be adjusted to other platforms */
-#define silk_memcpy(dest, src, size)        memcpy((dest), (src), (size))
-#define silk_memset(dest, src, size)        memset((dest), (src), (size))
-#define silk_memmove(dest, src, size)       memmove((dest), (src), (size))
 
 /* Fixed point macros */
 /* (a32 * b32) output have to be 32bit int */

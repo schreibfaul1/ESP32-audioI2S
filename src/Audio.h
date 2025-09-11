@@ -50,18 +50,22 @@ class Decoder {
 public:
     virtual ~Decoder() = default;
     virtual bool init() = 0;
-    virtual int32_t findSyncWord() = 0;
+    virtual void clear() = 0;
+    virtual void reset() = 0;
+    virtual int32_t findSyncWord(uint8_t *buf, int32_t nBytes) = 0;
     virtual uint8_t getChannels() = 0;
     virtual uint32_t getSampleRate() = 0;
     virtual uint8_t getBitsPerSample() = 0;
     virtual uint32_t getBitRate() = 0;
     virtual uint32_t getAudioDataStart() = 0;
+    virtual uint32_t getAudioFileDuration() = 0;
+    virtual uint32_t getOutputSamples() = 0;
     virtual int32_t decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf) = 0;
-    virtual const char* arg1() = 0;
-    virtual const char* arg2() = 0;
+    virtual void setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
+    virtual const char* getStreamTitle();
     virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
-    virtual int16_t setRawBlockParams(uint8_t param1, uint16_t param2, uint8_t param3, uint32_t param4, size_t param5) = 0;
-    virtual void reset() = 0;
+    virtual const char* arg1() = 0; // decoder specific
+    virtual const char* arg2() = 0; // decoder specific
 };
 
 
@@ -138,6 +142,7 @@ class Audio{
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
 
+
 // callbacks ---------------------------------------------------------
     typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
     typedef struct _msg{ // used in info(audio_info_callback());
@@ -191,12 +196,14 @@ class Audio{
     int          getCodec() { return m_codec; }
     const char*  getCodecname() { return codecname[m_codec]; }
     const char*  getVersion() { return audioI2SVers; }
-
-  private:
-    // ------- PRIVATE MEMBERS ----------------------------------------
     template <typename... Args>
     bool         info(event_t e, const char* fmt, Args&&... args);
     bool         info(event_t e, std::vector<uint32_t>& v);
+
+  private:
+    // ------- PRIVATE MEMBERS ----------------------------------------
+    std::unique_ptr<Decoder> createDecoder(const std::string& type);
+
     bool         fsRange(uint32_t range);
     void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void         htmlToUTF8(char* str);
@@ -611,6 +618,7 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
+    std::unique_ptr<Decoder> decoder = {};
     ps_ptr<int16_t>  m_outBuff;                     // Interleaved L/R
     ps_ptr<int16_t>  m_samplesBuff48K;              // Interleaved L/R
     ps_ptr<char>     m_ibuff;                       // used in log_info()

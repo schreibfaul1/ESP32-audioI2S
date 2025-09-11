@@ -954,8 +954,7 @@ void silk_decode_pulses(int16_t pulses[],              /* O    Excitation signal
         if (sum_pulses[i] > 0) {
             silk_shell_decoder(&pulses[silk_SMULBB(i, SHELL_CODEC_FRAME_LENGTH)], sum_pulses[i]);
         } else {
-            silk_memset(&pulses[silk_SMULBB(i, SHELL_CODEC_FRAME_LENGTH)], 0,
-                        SHELL_CODEC_FRAME_LENGTH * sizeof(pulses[0]));
+            memset(&pulses[silk_SMULBB(i, SHELL_CODEC_FRAME_LENGTH)], 0, SHELL_CODEC_FRAME_LENGTH * sizeof(pulses[0]));
         }
     }
 
@@ -1561,10 +1560,9 @@ int32_t silk_Decode(                                   /* O    Returns error cod
 
     if (s_silk_DecControlStruct->nChannelsAPI == 2 && s_silk_DecControlStruct->nChannelsInternal == 2 &&
         (s_silk_decoder->nChannelsAPI == 1 || s_silk_decoder->nChannelsInternal == 1)) {
-        silk_memset(s_silk_decoder->sStereo.pred_prev_Q13, 0, sizeof(s_silk_decoder->sStereo.pred_prev_Q13));
-        silk_memset(s_silk_decoder->sStereo.sSide, 0, sizeof(s_silk_decoder->sStereo.sSide));
-        silk_memcpy(&s_resampler_state[n], &s_resampler_state[n],
-                    sizeof(silk_resampler_state_struct_t));
+        memset(s_silk_decoder->sStereo.pred_prev_Q13, 0, sizeof(s_silk_decoder->sStereo.pred_prev_Q13));
+        memset(s_silk_decoder->sStereo.sSide, 0, sizeof(s_silk_decoder->sStereo.sSide));
+        memcpy(&s_resampler_state[n], &s_resampler_state[n], sizeof(silk_resampler_state_struct_t));
     }
     s_silk_decoder->nChannelsAPI = s_silk_DecControlStruct->nChannelsAPI;
     s_silk_decoder->nChannelsInternal = s_silk_DecControlStruct->nChannelsInternal;
@@ -1587,7 +1585,7 @@ int32_t silk_Decode(                                   /* O    Returns error cod
         }
         /* Decode LBRR flags */
         for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
-            silk_memset(s_channel_state[n].LBRR_flags, 0, sizeof(s_channel_state[n].LBRR_flags));
+            memset(s_channel_state[n].LBRR_flags, 0, sizeof(s_channel_state[n].LBRR_flags));
             if (s_channel_state[n].LBRR_flag) {
                 if (s_channel_state[n].nFramesPerPacket == 1) {
                     s_channel_state[n].LBRR_flags[0] = 1;
@@ -1651,8 +1649,8 @@ int32_t silk_Decode(                                   /* O    Returns error cod
 
     /* Reset side channel decoder prediction memory for first frame with side coding */
     if (s_silk_DecControlStruct->nChannelsInternal == 2 && decode_only_middle == 0 && s_silk_decoder->prev_decode_only_middle == 1) {
-        silk_memset(s_channel_state[1].outBuf, 0, sizeof(s_channel_state[1].outBuf));
-        silk_memset(s_channel_state[1].sLPC_Q14_buf, 0, sizeof(s_channel_state[1].sLPC_Q14_buf));
+        memset(s_channel_state[1].outBuf, 0, sizeof(s_channel_state[1].outBuf));
+        memset(s_channel_state[1].sLPC_Q14_buf, 0, sizeof(s_channel_state[1].sLPC_Q14_buf));
         s_channel_state[1].lagPrev = 100;
         s_channel_state[1].LastGainIndex = 10;
         s_channel_state[1].prevSignalType = TYPE_NO_VOICE_ACTIVITY;
@@ -1705,7 +1703,7 @@ int32_t silk_Decode(                                   /* O    Returns error cod
             ret += silk_decode_frame(n, &samplesOut1_tmp[n][2], &nSamplesOutDec, lostFlag,
                                      condCoding);
         } else {
-            silk_memset(&samplesOut1_tmp[n][2], 0, nSamplesOutDec * sizeof(int16_t));
+            memset(&samplesOut1_tmp[n][2], 0, nSamplesOutDec * sizeof(int16_t));
         }
         s_channel_state[n].nFramesDecoded++;
     }
@@ -1716,8 +1714,8 @@ int32_t silk_Decode(                                   /* O    Returns error cod
                              s_channel_state[0].fs_kHz, nSamplesOutDec);
     } else {
         /* Buffering */
-        silk_memcpy(samplesOut1_tmp[0], s_silk_decoder->sStereo.sMid, 2 * sizeof(int16_t));
-        silk_memcpy(s_silk_decoder->sStereo.sMid, &samplesOut1_tmp[0][nSamplesOutDec], 2 * sizeof(int16_t));
+        memcpy(samplesOut1_tmp[0], s_silk_decoder->sStereo.sMid, 2 * sizeof(int16_t));
+        memcpy(s_silk_decoder->sStereo.sMid, &samplesOut1_tmp[0][nSamplesOutDec], 2 * sizeof(int16_t));
     }
 
     /* Number of output samples */
@@ -1975,7 +1973,7 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
         }
 
         /* Update LPC filter state */
-        silk_memcpy(sLPC_Q14.get(), &sLPC_Q14[s_channel_state[n].subfr_length], MAX_LPC_ORDER * sizeof(int32_t));
+        memcpy(sLPC_Q14.get(), &sLPC_Q14[s_channel_state[n].subfr_length], MAX_LPC_ORDER * sizeof(int32_t));
         pexc_Q14 += s_channel_state[n].subfr_length;
         pxq += s_channel_state[n].subfr_length;
     }
