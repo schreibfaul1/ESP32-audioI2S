@@ -142,7 +142,7 @@ class Audio{
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
 
-     // callbacks ---------------------------------------------------------
+    // callbacks ---------------------------------------------------------
     typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
     typedef struct _msg{ // used in info(audio_info_callback());
         const char* msg = nullptr;
