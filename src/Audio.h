@@ -172,9 +172,58 @@ private:
     int          getCodec() { return m_codec; }
     const char*  getCodecname() { return codecname[m_codec]; }
     const char*  getVersion() { return audioI2SVers; }
+
     template <typename... Args>
-    bool         info(event_t e, const char* fmt, Args&&... args);
-    bool         info(event_t e, std::vector<uint32_t>& v);
+    static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+        auto extract_last_number = [&](std::string_view s) -> int32_t {
+            auto it = s.end(); // search from back to the front
+            while (it != s.begin()) {
+                --it;
+                if (std::isdigit(static_cast<unsigned char>(*it))) {
+                    auto end = it + 1;  // end of the number found
+                    while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) --it;   // go back to the beginning of the number
+                    std::string_view number{it, static_cast<size_t>(end - it)};
+                    uint32_t value{};
+                    auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
+                    if (ec == std::errc{}) return static_cast<int32_t>(value); // break if errc is invalid_argument or esult_out_of_range
+                    break;
+                }
+            }
+            return -1; // no number found
+        };
+        if(!audio_info_callback) return false;
+        ps_ptr<char> result(__LINE__);
+        // First run: determine size
+        int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (len <= 0) return false;
+        result.calloc(len + 1);
+        char* p = result.get();
+        if(!p) return false;
+        std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
+        msg_t i = {0};
+        i.msg = result.c_get();
+        i.e = e;
+        i.s = eventStr[e];
+        i.arg1 = extract_last_number(result.c_get());
+        i.i2s_num = instance.m_i2s_num;
+        audio_info_callback(i);
+        result.reset();
+        return true;
+    }
+
+    static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
+        if(!audio_info_callback) return false;
+        ps_ptr<char>apic;
+        apic.assignf("APIC found at pos %lu", v[0]);
+        msg_t i;
+        i.msg = apic.c_get();
+        i.e = e;
+        i.s = eventStr[e];
+        i.i2s_num = instance.m_i2s_num;
+        i.vec = v;
+        audio_info_callback(i);
+        return true;
+    }
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
