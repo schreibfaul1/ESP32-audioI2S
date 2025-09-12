@@ -118,6 +118,7 @@ private:
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
+    std::mutex mutex_info; // mutex_info as member
 
     // callbacks ---------------------------------------------------------
     typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
@@ -175,6 +176,7 @@ private:
 
     template <typename... Args>
     static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
         auto extract_last_number = [&](std::string_view s) -> int32_t {
             auto it = s.end(); // search from back to the front
             while (it != s.begin()) {
