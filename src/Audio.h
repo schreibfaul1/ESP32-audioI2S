@@ -40,34 +40,11 @@
 
 extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool *continueI2S); // record audiodata or send via BT
 extern char audioI2SVers[];
+class Decoder; // prototype
 
 // Audio event type descriptions
 static constexpr std::array<const char*, 13> eventStr = {"info", "id3data", "eof", "station_name", "icy_description", "streamtitle", "bitrate", "icy_url", "icy_logo", "lasthost", "cover_image", "lyrics", "log"};
 //----------------------------------------------------------------------------------------------------------------------
-
-
-class Decoder {
-public:
-    virtual ~Decoder() = default;
-    virtual bool init() = 0;
-    virtual void clear() = 0;
-    virtual void reset() = 0;
-    virtual int32_t findSyncWord(uint8_t *buf, int32_t nBytes) = 0;
-    virtual uint8_t getChannels() = 0;
-    virtual uint32_t getSampleRate() = 0;
-    virtual uint8_t getBitsPerSample() = 0;
-    virtual uint32_t getBitRate() = 0;
-    virtual uint32_t getAudioDataStart() = 0;
-    virtual uint32_t getAudioFileDuration() = 0;
-    virtual uint32_t getOutputSamples() = 0;
-    virtual int32_t decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf) = 0;
-    virtual void setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
-    virtual const char* getStreamTitle();
-    virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
-    virtual const char* arg1() = 0; // decoder specific
-    virtual const char* arg2() = 0; // decoder specific
-};
-
 
 class AudioBuffer {
 // AudioBuffer will be allocated in PSRAM
@@ -134,11 +111,11 @@ protected:
 
 
 class Audio{
-
-    AudioBuffer InBuff; // instance of input buffer
+private:
+    AudioBuffer InBuff;    // instance of input buffer
+    uint8_t     m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
   public:
-
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
 
@@ -651,7 +628,7 @@ private:
     uint8_t         m_curve = 0;                    // volume characteristic
     uint8_t         m_bitsPerSample = 16;           // bitsPerSample
     uint8_t         m_channels = 2;
-    uint8_t         m_i2s_num = I2S_NUM_0;          // I2S_NUM_0 or I2S_NUM_1
+ 
     uint8_t         m_playlistFormat = 0;           // M3U, PLS, ASX
     uint8_t         m_codec = CODEC_NONE;           //
     uint8_t         m_m3u8Codec = CODEC_AAC;        // codec of m3u8 stream
@@ -839,6 +816,31 @@ private:
 
 
 };
-
-
 //----------------------------------------------------------------------------------------------------------------------
+class Decoder {
+public:
+    virtual ~Decoder() = default;
+    virtual bool init() = 0;
+    virtual void clear() = 0;
+    virtual void reset() = 0;
+    virtual int32_t findSyncWord(uint8_t *buf, int32_t nBytes) = 0;
+    virtual uint8_t getChannels() = 0;
+    virtual uint32_t getSampleRate() = 0;
+    virtual uint8_t getBitsPerSample() = 0;
+    virtual uint32_t getBitRate() = 0;
+    virtual uint32_t getAudioDataStart() = 0;
+    virtual uint32_t getAudioFileDuration() = 0;
+    virtual uint32_t getOutputSamples() = 0;
+    virtual int32_t decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf) = 0;
+    virtual void setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
+    virtual const char* getStreamTitle();
+    virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
+    virtual const char* arg1() = 0; // decoder specific
+    virtual const char* arg2() = 0; // decoder specific
+protected:
+    Decoder(Audio& audioRef) : audio(audioRef) {}
+    Audio& audio; // protected reference, usable by all subclasses
+private:
+    Decoder() = delete;  // Explizit Default-Konstruktor deaktivieren (optional, aber gut gegen Missbrauch)
+};
+

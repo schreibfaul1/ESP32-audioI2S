@@ -22,8 +22,8 @@
 class FlacDecoder : public Decoder {
 
 public:
-    FlacDecoder() {;}
-    ~FlacDecoder() {;}
+    FlacDecoder(Audio& audioRef) : Decoder(audioRef) {}
+    ~FlacDecoder() = default;
 
     enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                     FLAC_DECODE_FRAMES_LOOP = 100,
@@ -216,6 +216,7 @@ private:
     void             restoreLinearPrediction(uint8_t ch, uint8_t shift);
     int32_t          specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     // callbacks ---------------------------------------------------------
@@ -271,27 +272,30 @@ private:
         final.clear();
         char* dest = final.get();
         if (!dest) return;  // or error treatment
-        if(audio_info_callback){
-            if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
-            else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
-            msg_t msg;
-            msg.msg = final.get();
-            const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
-            msg.s = logStr[level];
-            msg.e = evt_log;
-            if(final.strlen() > 0)  audio_info_callback(msg);
-        }
-        else{
-            std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-            if     (level == 1) log_e("%s", final.c_get());
-            else if(level == 2) log_w("%s", final.c_get());
-            else if(level == 3) log_i("%s", final.c_get());
-            else if(level == 4) log_d("%s", final.c_get());
-            else                log_v("%s", final.c_get());
-        }
+
+        Audio::info(audio, Audio::evt_info, "Hallo");
+
+        // if(audio_info_callback){
+        //     if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        //     else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        //     else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+        //     else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
+        //     else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
+        //     msg_t msg;
+        //     msg.msg = final.get();
+        //     const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
+        //     msg.s = logStr[level];
+        //     msg.e = evt_log;
+        //     if(final.strlen() > 0)  audio_info_callback(msg);
+        // }
+        // else{
+        //     std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
+        //     if     (level == 1) log_e("%s", final.c_get());
+        //     else if(level == 2) log_w("%s", final.c_get());
+        //     else if(level == 3) log_i("%s", final.c_get());
+        //     else if(level == 4) log_d("%s", final.c_get());
+        //     else                log_v("%s", final.c_get());
+        // }
         final.reset();
         result.reset();
         file.reset();

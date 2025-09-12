@@ -172,7 +172,7 @@ uint32_t AudioBuffer::getWritePos() { return m_writePtr - m_buffer.get(); }
 uint32_t AudioBuffer::getReadPos() { return m_readPtr - m_buffer.get(); }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // clang-format off
-Audio::Audio(uint8_t i2sPort) {
+Audio::Audio(uint8_t i2sPort){
 
     mutex_playAudioData = xSemaphoreCreateMutex();
     mutex_audioTask     = xSemaphoreCreateMutex();
@@ -232,7 +232,7 @@ Audio::~Audio() {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
-    if (type == "flac") return std::make_unique<FlacDecoder>();
+    if (type == "flac") return std::make_unique<FlacDecoder>(*this);
     // if (type == "mp3")  return std::make_unique<Mp3Decoder>();
     // hier AAC, Vorbis, Opus ergänzen …
     return nullptr;
