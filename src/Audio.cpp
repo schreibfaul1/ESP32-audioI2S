@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2m                                                                                                                              ";
-/*  Updated on: Sep 08.2025
+    Version 3.4.2p                                                                                                                              ";
+/*  Updated on: Sep 12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5140,10 +5140,11 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded){
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded){
     // if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
-    if(m_codec == CODEC_FLAC){  if(res == FlacDecoder::FLAC_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
-    if(m_codec == CODEC_OPUS){  if(res == OPUS_PARSE_OGG_DONE)   return bytesDecoded;  // nothing to play
-                                if(res == OPUS_END)              return bytesDecoded;} // nothing to play
-    if(m_codec == CODEC_VORBIS){if(res == VORBIS_PARSE_OGG_DONE) return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_FLAC){  if(res == FlacDecoder::FLAC_PARSE_OGG_DONE)     return bytesDecoded;
+                                if(res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_OPUS){  if(res == OPUS_PARSE_OGG_DONE)     return bytesDecoded;  // nothing to play
+                                if(res == OPUS_END)                return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_VORBIS){if(res == VORBIS_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5193,7 +5194,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if(res <  0){ return decodeError(res, data, bytesDecoded);} // Error, skip the frame...
     if(res > 99){ return decodeContinue(res, data, bytesDecoded);} // decoder needs more data...
 
-    if((bytesDecoded == 0) && (m_codec != CODEC_VORBIS)) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
+     if((bytesDecoded == 0) && (m_codec != CODEC_VORBIS && m_codec != CODEC_FLAC)) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
         info(*this, evt_info, "framesize is 0, start decoding again");
         m_f_playing = false; // seek for new syncword
         // we're here because there was a wrong sync word so skip one byte and seek for the next
@@ -5498,11 +5499,12 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
             if(m_dataMode == AUDIO_LOCALFILE){
                 readed_bytes = m_audiofile.read(buff + offset, len);
                 if(readed_bytes >= 0) {m_audioFilePosition += readed_bytes; len -= readed_bytes; offset += readed_bytes; res = offset; t = millis();}
+                if(readed_bytes <= 0) break;
             }
             else{
                 readed_bytes = m_client->read(buff + offset, len);
                 if(readed_bytes >= 0) {m_audioFilePosition += readed_bytes; len -= readed_bytes; offset += readed_bytes; res = offset; t = millis();}
-                if(readed_bytes <= 0) vTaskDelay(5);
+                if(readed_bytes <= 0) break; // vTaskDelay(5);
             }
             if(t + 3000 < millis()){AUDIO_LOG_ERROR("timeout"); res = -1; break;}
         }
@@ -6358,29 +6360,29 @@ int32_t Audio::getChunkSize(uint16_t *readedBytes, bool first) {
     }
 
     // skip CRLF from the previous chunk (only http-chunked)
-    if (m_gchs.f_skipCRLF) {
+  if (m_gchs.f_skipCRLF) {
         uint32_t t = millis();
-        while (m_client->available() < 2) {
-            if(m_client->available() == 1){int a = audioFileRead(); m_gchs.oneByteOfTwo = true; *readedBytes = 1; return -1;}
-            if(t + 500 > millis()){vTaskDelay(100); continue;}
-            AUDIO_LOG_WARN("Not enough bytes for CRLF");
+        if(m_client->available() == 1 && !m_gchs.oneByteOfTwo){
+            int a = audioFileRead(); m_gchs.oneByteOfTwo = true; *readedBytes = 1;
+            if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
+
             return -1;
         }
         if(!m_gchs.oneByteOfTwo){
             int a = audioFileRead();
             if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
             *readedBytes += 1;
+            if(!m_client->available()){return -1;}
         }
         m_gchs.oneByteOfTwo = false;
         int b = audioFileRead();
         if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b);
         *readedBytes += 1;
         m_gchs.f_skipCRLF = false;
+        if(!m_client->available()){return -1;}
     }
 
-    if (!m_client->available()) return -1;
-
-    // -------- HTTP-chunked-Read Logic --------
+     // -------- HTTP-chunked-Read Logic --------
     std::string chunkLine;
     ctime = millis();
 
