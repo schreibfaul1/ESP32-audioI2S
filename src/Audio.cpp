@@ -3,7 +3,7 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2o                                                                                                                              ";
+    Version 3.4.2p                                                                                                                              ";
 /*  Updated on: Sep 12.2025
 
     Author: Wolle (schreibfaul1)
@@ -5544,11 +5544,12 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len){
             if(m_dataMode == AUDIO_LOCALFILE){
                 readed_bytes = m_audiofile.read(buff + offset, len);
                 if(readed_bytes >= 0) {m_audioFilePosition += readed_bytes; len -= readed_bytes; offset += readed_bytes; res = offset; t = millis();}
+                if(readed_bytes <= 0) break;
             }
             else{
                 readed_bytes = m_client->read(buff + offset, len);
                 if(readed_bytes >= 0) {m_audioFilePosition += readed_bytes; len -= readed_bytes; offset += readed_bytes; res = offset; t = millis();}
-                if(readed_bytes <= 0) vTaskDelay(5);
+                if(readed_bytes <= 0) break; // vTaskDelay(5);
             }
             if(t + 3000 < millis()){AUDIO_LOG_ERROR("timeout"); res = -1; break;}
         }
