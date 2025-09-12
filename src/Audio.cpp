@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2m                                                                                                                              ";
-/*  Updated on: Sep 08.2025
+    Version 3.4.2n                                                                                                                              ";
+/*  Updated on: Sep 12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6405,25 +6405,24 @@ int32_t Audio::getChunkSize(uint16_t *readedBytes, bool first) {
     // skip CRLF from the previous chunk (only http-chunked)
     if (m_gchs.f_skipCRLF) {
         uint32_t t = millis();
-        while (m_client->available() < 2) {
-            if(m_client->available() == 1){int a = audioFileRead(); m_gchs.oneByteOfTwo = true; *readedBytes = 1; return -1;}
-            if(t + 500 > millis()){vTaskDelay(100); continue;}
-            AUDIO_LOG_WARN("Not enough bytes for CRLF");
+        if(m_client->available() == 1 && !m_gchs.oneByteOfTwo){
+            int a = audioFileRead(); m_gchs.oneByteOfTwo = true; *readedBytes = 1;
+            if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
             return -1;
         }
         if(!m_gchs.oneByteOfTwo){
             int a = audioFileRead();
             if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
             *readedBytes += 1;
+            if(!m_client->available()){return -1;}
         }
         m_gchs.oneByteOfTwo = false;
         int b = audioFileRead();
         if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x%02X", b);
         *readedBytes += 1;
         m_gchs.f_skipCRLF = false;
+        if(!m_client->available()){return -1;}
     }
-
-    if (!m_client->available()) return -1;
 
     // -------- HTTP-chunked-Read Logic --------
     std::string chunkLine;
