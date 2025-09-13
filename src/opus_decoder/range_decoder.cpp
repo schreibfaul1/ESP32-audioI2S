@@ -104,7 +104,7 @@ int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
     ret = d < s;
     if (!ret) s_ec.val = d - s;
     s_ec.rng = ret ? s : r - s;
-    rd.dec_normalize();
+    dec_normalize();
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -124,7 +124,7 @@ int32_t RangeDecoder::dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
     } while (d < s);
     s_ec.val = d - s;
     s_ec.rng = t - s;
-    rd.dec_normalize();
+    dec_normalize();
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -141,7 +141,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
         ftb -= EC_UINT_BITS;
         ft = (uint32_t)(_ft >> ftb) + 1;
         s = decode(ft);
-        rd.dec_update(s, s + 1, ft);
+        dec_update(s, s + 1, ft);
         t = (uint32_t)s << ftb | dec_bits(ftb);
         if (t <= _ft) return t;
         s_ec.error = 1;
@@ -149,7 +149,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
     } else {
         _ft++;
         s = decode((uint32_t)_ft);
-        rd.dec_update(s, s + 1, (uint32_t)_ft);
+        dec_update(s, s + 1, (uint32_t)_ft);
         return s;
     }
 }
@@ -175,7 +175,7 @@ uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_tell(){return s_ec.nbits_total-EC_ILOG(s_ec.rng);}
+int32_t RangeDecoder::tell(){return s_ec.nbits_total-EC_ILOG(s_ec.rng);}
 void ec_add_nbits_total(int32_t nbits_total){s_ec.nbits_total += nbits_total;}
 uint32_t RangeDecoder::get_storage(){return m_storage;}
 int32_t ec_get_error(){return s_ec.error;}

@@ -404,7 +404,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
             decoded_samples += nSamplesOut;
         } while (decoded_samples < audiosize);
 
-        if (ec_tell() + 17 + 20 <= 8 * packetLen) {
+        if (rd.tell() + 17 + 20 <= 8 * packetLen) {
             /* Check if we have a redundant 0-8 kHz band */
             rd.dec_bit_logp(12);
         }

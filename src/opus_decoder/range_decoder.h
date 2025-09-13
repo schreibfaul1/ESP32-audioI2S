@@ -55,12 +55,10 @@ public:
     int32_t dec_bit_logp( uint32_t _logp);
     uint32_t tell_frac();
     int32_t dec_icdf(const uint8_t *_icdf, uint32_t _ftb);
-
+    int32_t tell();
 };
 
 
-
-int32_t ec_tell();
 
 void ec_add_nbits_total(int32_t nbits_total);
 

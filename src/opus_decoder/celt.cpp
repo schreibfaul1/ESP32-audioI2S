@@ -2125,7 +2125,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     uint32_t tell;
 
     budget = rd.get_storage() * 8;
-    tell = ec_tell();
+    tell = rd.tell();
     logp = isTransient ? 2 : 4;
     tf_select_rsv = LM > 0 && tell + logp + 1 <= budget;
     budget -= tf_select_rsv;
@@ -2133,7 +2133,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     for (i = start; i < end; i++) {
         if (tell + logp <= budget) {
             curr ^= rd.dec_bit_logp(logp);
-            tell = ec_tell();
+            tell = rd.tell();
             tf_changed |= curr;
         }
         tf_res[i] = curr;
@@ -2228,7 +2228,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     total_bits = rd.get_storage() * 8;
-    tell = ec_tell();
+    tell = rd.tell();
 
     if (tell >= total_bits)
         silence = 1;
@@ -2239,7 +2239,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     if (silence)  {
         /* Pretend we've read all the remaining bits */
         tell = rd.get_storage() * 8;
-        ec_add_nbits_total(tell - ec_tell());
+        ec_add_nbits_total(tell - rd.tell());
     }
 
     postfilter_gain = 0;
@@ -2252,16 +2252,16 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             octave = rd.dec_uint(6);
             postfilter_pitch = (16 << octave) + rd.dec_bits(4 + octave) - 1;
             qg = rd.dec_bits(3);
-            if (ec_tell() + 2 <= total_bits)
+            if (rd.tell() + 2 <= total_bits)
                 postfilter_tapset = rd.dec_icdf(tapset_icdf, 2);
             postfilter_gain = QCONST16(.09375f, 15) * (qg + 1);
         }
-        tell = ec_tell();
+        tell = rd.tell();
     }
 
     if (LM > 0 && tell + 3 <= total_bits) {
         isTransient = rd.dec_bit_logp( 3);
-        tell = ec_tell();
+        tell = rd.tell();
     }
     else
         isTransient = 0;
@@ -2279,7 +2279,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     auto tf_res = celt_malloc_arr<int32_t>(nbEBands * sizeof(int32_t));
     tf_decode(start, end, isTransient, tf_res.get(), LM);
 
-    tell = ec_tell();
+    tell = rd.tell();
     spread_decision = SPREAD_NORMAL;
     if (tell + 4 <= total_bits) spread_decision = rd.dec_icdf(spread_icdf, 5);
 
@@ -2355,7 +2355,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     unquant_energy_finalise(start, end, oldBandE,
-                            fine_quant.get(), fine_priority.get(), rd.get_storage() * 8 - ec_tell(), C);
+                            fine_quant.get(), fine_priority.get(), rd.get_storage() * 8 - rd.tell(), C);
 
     if (anti_collapse_on)
         anti_collapse(X.get(), collapse_masks.get(), LM, C, N,
@@ -2429,7 +2429,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     deemphasis(out_syn, outbuf, N, CC, s_celtDec->downsample, m_CELTMode.preemph, s_celtDec->preemph_memD, 0);
     s_celtDec->loss_count = 0;
-    if (ec_tell() > 8 * rd.get_storage())
+    if (rd.tell() > 8 * rd.get_storage())
         return OPUS_INTERNAL_ERROR;
     if (ec_get_error())
         s_celtDec->error = 1;
@@ -3462,7 +3462,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
             int32_t tmp;
             /* It would be better to express this invariant as a test on C at function entry, but that isn't enough to make the static analyzer happy. */
             assert(c < 2);
-            tell = ec_tell();
+            tell = rd.tell();
             if (budget - tell >= 15) {
                 int32_t pi;
                 pi = 2 * min(i, (int32_t)20);
