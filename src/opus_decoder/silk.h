@@ -28,7 +28,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 #include <Arduino.h>
 
-#include "celt.h"
+//#include "celt.h"
 #include "opus_decoder.h"
 #include <memory>
 
@@ -38,6 +38,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define FLAG_DECODE_NORMAL                      0
 #define FLAG_PACKET_LOST                        1
 #define FLAG_DECODE_LBRR                        2
+#define SILK_ALLOC_NONE                         1
 /* Number of binary divisions, when not in low complexity mode */
 #define BIN_DIV_STEPS_A2NLSF_FIX 3 /* must be no higher than 16 - log2( LSF_COS_TAB_SZ_FIX ) */
 #define MAX_ITERATIONS_A2NLSF_FIX 16

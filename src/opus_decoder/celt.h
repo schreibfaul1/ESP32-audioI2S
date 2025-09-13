@@ -56,6 +56,10 @@
 #define LEAK_BANDS 19
 #define MAXFACTORS 8
 
+#define CELT_CLZ0s    ((int32_t)sizeof(uint32_t)*CHAR_BIT)
+#define CELT_CLZ(_x) (__builtin_clz(_x))
+#define CELT_ILOG(_x) (CELT_CLZ0s-CELT_CLZ(_x))
+
 
 extern const uint8_t cache_bits50[392];
 extern const int16_t cache_index50[105];
@@ -70,20 +74,6 @@ typedef struct {
    int16_t i;
 }kiss_twiddle_cpx;
 
-typedef struct _ec_ctx {
-    uint8_t *buf; /*Buffered input/output.*/
-    uint32_t storage; /*The size of the buffer.*/
-    uint32_t end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
-    uint32_t end_window; /*Bits that will be read from/written at the end.*/
-    int32_t nend_bits; /*Number of valid bits in end_window.*/
-    int32_t nbits_total;
-    uint32_t offs; /*The offset at which the next range coder byte will be read/written.*/
-    uint32_t rng; /*The number of values in the current range.*/
-    uint32_t val;
-    uint32_t ext;
-    int32_t rem; /*A buffered input/output symbol, awaiting carry propagation.*/
-    int32_t error; /*Nonzero if an error occurred.*/
-} ec_ctx_t;
 
 typedef struct kiss_fft_state{
     int32_t nfft;
@@ -172,6 +162,7 @@ typedef struct _CELTDecoder {
 
 /* List of all the available modes */
 #define TOTAL_MODES 1
+#define BITRES 3
 
 #define SPREAD_NONE       (0)
 #define SPREAD_LIGHT      (1)
@@ -241,13 +232,7 @@ typedef struct _CELTDecoder {
 #define SCALEIN(a)      (a)
 #define SCALEOUT(a)     (a)
 
-# define EC_WINDOW_SIZE ((int32_t)sizeof(uint32_t)*CHAR_BIT)
-# define EC_UINT_BITS   (8)
-# define BITRES 3
-#define EC_MINI(_a,_b)      ((_a)+(((_b)-(_a))&-((_b)<(_a))))
-#define EC_CLZ0s    ((int32_t)sizeof(uint32_t)*CHAR_BIT)
-#define EC_CLZ(_x) (__builtin_clz(_x))
-#define EC_ILOG(_x) (EC_CLZ0s-EC_CLZ(_x))
+
 
 /** Multiply a 16-bit signed value by a 16-bit uint32_t value. The result is a 32-bit signed value */
 #define MULT16_16SU(a,b) ((int32_t)(int16_t)(a)*(int32_t)(uint16_t)(b))
@@ -394,7 +379,7 @@ int32_t celt_rcp(int32_t x);
 extern const signed char tf_select_table[4][8];
 extern const uint32_t SMALL_DIV_TABLE[129];
 extern const uint8_t LOG2_FRAC_TABLE[24];
-extern ec_ctx_t s_ec;
+
 
 /* Prototypes and inlines*/
 
@@ -417,9 +402,7 @@ static inline int16_t sig2word16(int32_t x){
    return EXTRACT16(x);
 }
 
-static inline int32_t ec_tell(){
-  return s_ec.nbits_total-EC_ILOG(s_ec.rng);
-}
+
 
 /* Atan approximation using a 4th order polynomial. Input is in Q15 format and normalized by pi/4. Output is in
    Q15 format */
@@ -468,7 +451,7 @@ static inline int32_t celt_maxabs32(const int32_t *x, int32_t len) {
 /** Integer log in base2. Undefined for zero and negative numbers */
 static inline int16_t celt_ilog2(int32_t x) {
     assert(x > 0);
-    return EC_ILOG(x) - 1;
+    return CELT_ILOG(x) - 1;
 }
 
 /** Integer log in base2. Defined for zero, but not for negative numbers */

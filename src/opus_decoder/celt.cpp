@@ -30,13 +30,12 @@
 #define CELT_C
 
 #include <Arduino.h>
+#include "range_decoder.h"
 #include "celt.h"
 #include "opus_decoder.h"
 
 celt_raw_ptr<CELTDecoder_t> s_celtDec; // unique pointer
 band_ctx_t     s_band_ctx;
-ec_ctx_t      *s_ec_ptr;
-ec_ctx_t       s_ec;
 
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
@@ -53,12 +52,7 @@ const uint32_t CELT_SET_SILK_INFO_REQUEST       = 10028;
 
 const uint32_t PLC_PITCH_LAG_MAX = 720;
 const uint32_t PLC_PITCH_LAG_MIN = 100;
-const uint32_t EC_SYM_BITS       = 8;
-const uint32_t EC_CODE_BITS      = 32;
-const uint32_t EC_SYM_MAX        = (1U << EC_SYM_BITS) - 1;
-const uint32_t EC_CODE_TOP       = 1U << (EC_CODE_BITS - 1);
-const uint32_t EC_CODE_BOT       = EC_CODE_TOP >> EC_SYM_BITS;
-const uint32_t EC_CODE_EXTRA     = (EC_CODE_BITS-2) % EC_SYM_BITS + 1;
+
 
 /*For each V(N,K) supported, we will access element U(min(N,K+1),max(N,K+1)). Thus, the number of entries in row I is
   the larger of the maximum number of pulses we will ever allocate for a given N=I (K=128, or however many fit in
@@ -932,8 +926,8 @@ int16_t bitexact_cos(int16_t x) {
 int32_t bitexact_log2tan(int32_t isin, int32_t icos) {
     int32_t lc;
     int32_t ls;
-    lc = EC_ILOG(icos);
-    ls = EC_ILOG(isin);
+    lc = CELT_ILOG(icos);
+    ls = CELT_ILOG(isin);
     icos <<= 15 - lc;
     isin <<= 15 - ls;
     return (ls - lc) * (1 << 11) + FRAC_MUL16(isin, FRAC_MUL16(isin, -2597) + 7932) - FRAC_MUL16(icos, FRAC_MUL16(icos, -2597) + 7932);
@@ -2128,7 +2122,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     uint32_t budget;
     uint32_t tell;
 
-    budget = s_ec.storage * 8;
+    budget = ec_get_storage() * 8;
     tell = ec_tell();
     logp = isTransient ? 2 : 4;
     tf_select_rsv = LM > 0 && tell + logp + 1 <= budget;
@@ -2208,7 +2202,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     M = 1 << LM;
 
-    if(s_ec.storage > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(ec_get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     N = M * m_CELTMode.shortMdctSize;
     c = 0;
@@ -2217,7 +2211,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while (++c < CC);
 
-    if(s_ec.storage <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(ec_get_storage() <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     effEnd = end;
     if (effEnd > m_CELTMode.effEBands)
@@ -2231,7 +2225,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);
     }
 
-    total_bits = s_ec.storage * 8;
+    total_bits = ec_get_storage() * 8;
     tell = ec_tell();
 
     if (tell >= total_bits)
@@ -2242,8 +2236,8 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         silence = 0;
     if (silence)  {
         /* Pretend we've read all the remaining bits */
-        tell = s_ec.storage * 8;
-        s_ec.nbits_total += tell - ec_tell();
+        tell = ec_get_storage() * 8;
+        ec_add_nbits_total(tell - ec_tell());
     }
 
     postfilter_gain = 0;
@@ -2326,7 +2320,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     alloc_trim = tell + (6 << BITRES) <= total_bits ? ec_dec_icdf(trim_icdf, 7) : 5;
 
-    bits = (((int32_t)s_ec.storage * 8) << BITRES) - ec_tell_frac() - 1;
+    bits = (((int32_t)ec_get_storage() * 8) << BITRES) - ec_tell_frac() - 1;
     anti_collapse_rsv = isTransient && LM >= 2 && bits >= ((LM + 2) << BITRES) ? (1 << BITRES) : 0;
     bits -= anti_collapse_rsv;
 
@@ -2351,7 +2345,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     quant_all_bands(start, end, X.get(), C == 2 ? X.get() + N : NULL, collapse_masks.get(),
                     NULL, pulses.get(), shortBlocks, spread_decision, dual_stereo, intensity, tf_res.get(),
-                    s_ec.storage * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &s_celtDec->rng, 0,
+                    ec_get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &s_celtDec->rng, 0,
                     s_celtDec->disable_inv);
 
     if (anti_collapse_rsv > 0) {
@@ -2359,7 +2353,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     unquant_energy_finalise(start, end, oldBandE,
-                            fine_quant.get(), fine_priority.get(), s_ec.storage * 8 - ec_tell(), C);
+                            fine_quant.get(), fine_priority.get(), ec_get_storage() * 8 - ec_tell(), C);
 
     if (anti_collapse_on)
         anti_collapse(X.get(), collapse_masks.get(), LM, C, N,
@@ -2429,13 +2423,13 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldLogE[c * nbEBands + i] = oldLogE2[c * nbEBands + i] = -QCONST16(28.f, DB_SHIFT);
         }
     } while (++c < 2);
-    s_celtDec->rng = s_ec.rng;
+    s_celtDec->rng = ec_get_rng();
 
     deemphasis(out_syn, outbuf, N, CC, s_celtDec->downsample, m_CELTMode.preemph, s_celtDec->preemph_memD, 0);
     s_celtDec->loss_count = 0;
-    if (ec_tell() > 8 * s_ec.storage)
+    if (ec_tell() > 8 * ec_get_storage())
         return OPUS_INTERNAL_ERROR;
-    if (s_ec.error)
+    if (ec_get_error())
         s_celtDec->error = 1;
     return frame_size / s_celtDec->downsample;
 }
@@ -2617,174 +2611,7 @@ int32_t cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
 int32_t decode_pulses(int32_t *_y, int32_t _n, int32_t _k) {
     return cwrsi(_n, _k, ec_dec_uint(CELT_PVQ_V(_n, _k)), _y);
 }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* This is a faster version of ec_tell_frac() that takes advantage of the low (1/8 bit) resolution to use just a linear function followed by a lookup to determine the exact transition thresholds. */
-uint32_t ec_tell_frac() {
-    const uint32_t correction[8] = {35733, 38967, 42495, 46340, 50535, 55109, 60097, 65535};
-    uint32_t nbits;
-    uint32_t r;
-    int32_t l;
-    uint32_t b;
-    nbits = s_ec.nbits_total << BITRES;
-    l = EC_ILOG(s_ec.rng);
-    r = s_ec.rng >> (l - 16);
-    b = (r >> 12) - 8;
-    b += r > correction[b];
-    l = (l << 3) + b;
-    return nbits - l;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_read_byte() { return s_ec.offs < s_ec.storage ? s_ec.buf[s_ec.offs++] : 0; }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_read_byte_from_end() {
-    return s_ec.end_offs < s_ec.storage ? s_ec.buf[s_ec.storage - ++(s_ec.end_offs)] : 0;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
-void ec_dec_normalize() {
-    /*If the range is too small, rescale it and input some bits.*/
-    while (s_ec.rng <= EC_CODE_BOT) {
-        int32_t sym;
-        s_ec.nbits_total += EC_SYM_BITS;
-        s_ec.rng <<= EC_SYM_BITS;
-        /*Use up the remaining bits from our last symbol.*/
-        sym = s_ec.rem;
-        /*Read the next value from the input.*/
-        s_ec.rem = ec_read_byte();
-        /*Take the rest of the bits we need from this new symbol.*/
-        sym = (sym << EC_SYM_BITS | s_ec.rem) >> (EC_SYM_BITS - EC_CODE_EXTRA);
-        /*And subtract them from val, capped to be less than EC_CODE_TOP.*/
-        s_ec.val = ((s_ec.val << EC_SYM_BITS) + (EC_SYM_MAX & ~sym)) & (EC_CODE_TOP - 1);
-    }
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void ec_dec_init(uint8_t *_buf, uint32_t _storage) {
 
-    s_ec.buf = _buf;
-    s_ec.storage = _storage;
-    s_ec.end_offs = 0;
-    s_ec.end_window = 0;
-    s_ec.nend_bits = 0;
-    s_ec.nbits_total = EC_CODE_BITS + 1 - ((EC_CODE_BITS - EC_CODE_EXTRA) / EC_SYM_BITS) * EC_SYM_BITS;
-    s_ec.offs = 0;
-    s_ec.rng = 1U << EC_CODE_EXTRA;
-    s_ec.rem = ec_read_byte();
-    s_ec.val = s_ec.rng - 1 - (s_ec.rem >> (EC_SYM_BITS - EC_CODE_EXTRA));
-    s_ec.error = 0;
-    /*Normalize the interval.*/
-    ec_dec_normalize();
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_decode(uint32_t _ft) {
-    uint32_t s;
-    s_ec.ext = celt_udiv(s_ec.rng, _ft);
-    s = (uint32_t)(s_ec.val / s_ec.ext);
-    return _ft - EC_MINI(s + 1, _ft);
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_decode_bin(uint32_t _bits) {
-    uint32_t s;
-    s_ec.ext = s_ec.rng >> _bits;
-    s = (uint32_t)(s_ec.val / s_ec.ext);
-    return (1U << _bits) - EC_MINI(s + 1U, 1U << _bits);
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
-    uint32_t s;
-    s = s_ec.ext *  (_ft - _fh);
-    s_ec.val -= s;
-
-    if(_fl > 0){
-        s_ec.rng = s_ec.ext * (_fh - _fl);
-    }
-    else{
-        s_ec.rng = s_ec.rng - s;
-    }
-    ec_dec_normalize();
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/*The probability of having a "one" is 1/(1<<_logp).*/
-int32_t ec_dec_bit_logp( uint32_t _logp) {
-    uint32_t r;
-    uint32_t d;
-    uint32_t s;
-    int32_t ret;
-    r = s_ec.rng;
-    d = s_ec.val;
-    s = r >> _logp;
-    ret = d < s;
-    if (!ret) s_ec.val = d - s;
-    s_ec.rng = ret ? s : r - s;
-    ec_dec_normalize();
-    return ret;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
-    uint32_t r;
-    uint32_t d;
-    uint32_t s;
-    uint32_t t;
-    int32_t ret;
-    s = s_ec.rng;
-    d = s_ec.val;
-    r = s >> _ftb;
-    ret = -1;
-    do {
-        t = s;
-        s = r * _icdf[++ret];
-    } while (d < s);
-    s_ec.val = d - s;
-    s_ec.rng = t - s;
-    ec_dec_normalize();
-    return ret;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_dec_uint(uint32_t _ft) {
-    uint32_t ft;
-    uint32_t s;
-    int32_t ftb;
-    /*In order to optimize EC_ILOG(), it is undefined for the value 0.*/
-    assert(_ft > 1);
-    _ft--;
-    ftb = EC_ILOG(_ft);
-    if (ftb > EC_UINT_BITS) {
-        uint32_t t;
-        ftb -= EC_UINT_BITS;
-        ft = (uint32_t)(_ft >> ftb) + 1;
-        s = ec_decode(ft);
-        ec_dec_update(s, s + 1, ft);
-        t = (uint32_t)s << ftb | ec_dec_bits(ftb);
-        if (t <= _ft) return t;
-        s_ec.error = 1;
-        return _ft;
-    } else {
-        _ft++;
-        s = ec_decode((uint32_t)_ft);
-        ec_dec_update(s, s + 1, (uint32_t)_ft);
-        return s;
-    }
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_dec_bits(uint32_t _bits) {
-    uint32_t window;
-    int32_t available;
-    uint32_t ret;
-    window = s_ec.end_window;
-    available = s_ec.nend_bits;
-    if ((uint32_t)available < _bits) {
-        do {
-            window |= (uint32_t)ec_read_byte_from_end() << available;
-            available += EC_SYM_BITS;
-        } while (available <= EC_WINDOW_SIZE - EC_SYM_BITS);
-    }
-    ret = (uint32_t)window & (((uint32_t)1 << _bits) - 1U);
-    window >>= _bits;
-    available -= _bits;
-    s_ec.end_window = window;
-    s_ec.nend_bits = available;
-    s_ec.nbits_total += _bits;
-    return ret;
-}
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N) {
     kiss_fft_cpx *Fout2;
@@ -3085,7 +2912,7 @@ uint32_t isqrt32(uint32_t _val) {
     /*Uses the second method from  http://www.azillionmonkeys.com/qed/sqroot.html The main idea is to search for the
      largest binary digit b such that (g+b)*(g+b) <= _val, and add it to the solution g.*/
     g = 0;
-    bshift = (EC_ILOG(_val) - 1) >> 1;
+    bshift = (CELT_ILOG(_val) - 1) >> 1;
     b = 1U << bshift;
     do {
         uint32_t t;
@@ -3622,7 +3449,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
         coef = pred_coef[LM];
     }
 
-    budget = s_ec.storage * 8;
+    budget = ec_get_storage() * 8;
 
     /* Decode at a fixed coarse resolution */
     for (i = start; i < end; i++) {

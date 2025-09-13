@@ -9,6 +9,7 @@
 //                                     O G G / O P U S     I M P L.
 //----------------------------------------------------------------------------------------------------------------------
 #include "opus_decoder.h"
+#include "range_decoder.h"
 #include "celt.h"
 #include "silk.h"
 #include "Arduino.h"

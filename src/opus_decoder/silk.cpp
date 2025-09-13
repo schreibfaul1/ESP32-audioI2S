@@ -13,6 +13,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 ********************************************************************************************************************************************************************************************************/
 
 #include "Arduino.h"
+#include "range_decoder.h"
 #include "silk.h"
 
 silk_ptr_arr<silk_resampler_state_struct_t> s_resampler_state;
@@ -1663,7 +1664,7 @@ int32_t silk_Decode(                                   /* O    Returns error cod
     delay_stack_alloc = s_silk_DecControlStruct->internalSampleRate * s_silk_DecControlStruct->nChannelsInternal <
                         s_silk_DecControlStruct->API_sampleRate * s_silk_DecControlStruct->nChannelsAPI;
 
-    size_t samplesOut1_tmp_storage1_len = delay_stack_alloc ? ALLOC_NONE : s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2);
+    size_t samplesOut1_tmp_storage1_len = delay_stack_alloc ? SILK_ALLOC_NONE : s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2);
     auto samplesOut1_tmp_storage1 = silk_malloc_arr<int16_t>(samplesOut1_tmp_storage1_len * sizeof(int16_t));
 
     if (delay_stack_alloc) {
@@ -1722,7 +1723,7 @@ int32_t silk_Decode(                                   /* O    Returns error cod
     *nSamplesOut = silk_DIV32(nSamplesOutDec * s_silk_DecControlStruct->API_sampleRate, silk_SMULBB(s_channel_state[0].fs_kHz, 1000));
 
     /* Set up pointers to temp buffers */
-    size_t samplesOut2_tmp_len = s_silk_DecControlStruct->nChannelsAPI == 2 ? *nSamplesOut : ALLOC_NONE;
+    size_t samplesOut2_tmp_len = s_silk_DecControlStruct->nChannelsAPI == 2 ? *nSamplesOut : SILK_ALLOC_NONE;
     auto samplesOut2_tmp = silk_malloc_arr<int16_t>(samplesOut2_tmp_len * sizeof(int16_t));
 
     if (s_silk_DecControlStruct->nChannelsAPI == 2) {
@@ -1731,7 +1732,7 @@ int32_t silk_Decode(                                   /* O    Returns error cod
         resample_out_ptr = samplesOut;
     }
 
-    size_t samplesOut1_tmp_storage2_len = delay_stack_alloc ? s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2) : ALLOC_NONE;
+    size_t samplesOut1_tmp_storage2_len = delay_stack_alloc ? s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2) : SILK_ALLOC_NONE;
     auto samplesOut1_tmp_storage2 = silk_malloc_arr<int16_t>(samplesOut1_tmp_storage2_len * sizeof(int16_t));
 
     if (delay_stack_alloc) {

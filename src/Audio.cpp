@@ -5331,7 +5331,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut
             double instBitRate = (m_cat.deltaBytesIn * 8000.0) / delta_t;
             m_cat.counter ++;
             m_cat.avrBitRate += (instBitRate - m_cat.avrBitRate) / m_cat.counter;
-            if((abs(m_cat.avrBitRate- m_cat.oldAvrBitrate < 50)) && !m_cat.avrBitrateStable){
+            if((abs(m_cat.avrBitRate- m_cat.oldAvrBitrate < 50)) && !m_cat.avrBitrateStable && m_cat.avrBitRate > 1000){
                 m_cat.brCounter++;
                 if(m_cat.brCounter > 6){
                     m_cat.avrBitrateStable = m_cat.avrBitRate;

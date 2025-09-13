@@ -16,7 +16,6 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 bool FlacDecoder::init() {
-    FLAC_LOG_ERROR("init");
     FLACFrameHeader.alloc();
     FLACMetadataBlock.alloc();
 
