@@ -20,18 +20,18 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 extern std::unique_ptr<RangeDecoder> rangedec;
 
 
-ps_ptr<silk_resampler_state_struct_t> s_resampler_state;
-ps_ptr<silk_decoder_state_t>          s_channel_state;
-ps_ptr<silk_decoder_t>                s_silk_decoder;
-ps_ptr<silk_decoder_control_t>        s_silk_decoder_control;
-ps_ptr<silk_DecControlStruct_t>       s_silk_DecControlStruct;
+ps_ptr<silk_resampler_state_struct_t> m_resampler_state;
+ps_ptr<silk_decoder_state_t>          m_channel_state;
+ps_ptr<silk_decoder_t>                m_silk_decoder;
+ps_ptr<silk_decoder_control_t>        m_silk_decoder_control;
+ps_ptr<silk_DecControlStruct_t>       m_silk_DecControlStruct;
 
-uint8_t            s_channelsInternal = 0;
-uint8_t            s_payloadSize_ms = 0;
-uint8_t            s_API_channels = 0;
-uint32_t           s_silk_internalSampleRate = 0;
-uint32_t           s_API_sampleRate = 0;
-uint32_t           s_prevPitchLag = 0;
+uint8_t            m_channelsInternal = 0;
+uint8_t            m_payloadSize_ms = 0;
+uint8_t            m_API_channels = 0;
+uint32_t           m_silk_internalSampleRate = 0;
+uint32_t           m_API_sampleRate = 0;
+uint32_t           m_prevPitchLag = 0;
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
@@ -430,32 +430,32 @@ const silk_NLSF_CB_struct_t silk_NLSF_CB_NB_MB = {
     silk_NLSF_CB2_BITS_NB_MB_Q5,
     silk_NLSF_DELTA_MIN_NB_MB_Q15,
 };
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool SILKDecoder_AllocateBuffers(){
-    s_resampler_state.alloc_array(DECODER_NUM_CHANNELS);
-    s_channel_state.alloc_array(DECODER_NUM_CHANNELS);
-    s_silk_decoder.alloc();
-    s_silk_decoder_control.alloc();
-    s_silk_DecControlStruct.alloc();
+    m_resampler_state.alloc_array(DECODER_NUM_CHANNELS);
+    m_channel_state.alloc_array(DECODER_NUM_CHANNELS);
+    m_silk_decoder.alloc();
+    m_silk_decoder_control.alloc();
+    m_silk_DecControlStruct.alloc();
     return true;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void SILKDecoder_ClearBuffers(){
-    s_resampler_state.clear();
-    s_channel_state.clear();
-    s_silk_decoder.clear();
-    s_silk_decoder_control.clear();
-    s_silk_DecControlStruct.clear();
+    m_resampler_state.clear();
+    m_channel_state.clear();
+    m_silk_decoder.clear();
+    m_silk_decoder_control.clear();
+    m_silk_DecControlStruct.clear();
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void SILKDecoder_FreeBuffers(){
-    s_resampler_state.reset();
-    s_channel_state.reset();
-    s_silk_decoder.reset();
-    s_silk_decoder_control.reset();
-    s_silk_DecControlStruct.reset();
+    m_resampler_state.reset();
+    m_channel_state.reset();
+    m_silk_decoder.reset();
+    m_silk_decoder_control.reset();
+    m_silk_DecControlStruct.reset();
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Split signal into two decimated bands using first-order allpass filters */
 void silk_ana_filt_bank_1(const int16_t* in,   /* I    Input signal [N]        */
                           int32_t*       S,    /* I/O  State vector [2]        */
@@ -491,7 +491,7 @@ void silk_ana_filt_bank_1(const int16_t* in,   /* I    Input signal [N]        *
         outH[k] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(silk_SUB32(out_2, out_1), 11));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Second order ARMA filter, alternative implementation */
 void silk_biquad_alt_stride1(const int16_t* in,    /* I     input signal                 */
                              const int32_t* B_Q28, /* I     MA coefficients [3]          */
@@ -527,7 +527,7 @@ void silk_biquad_alt_stride1(const int16_t* in,    /* I     input signal        
         out[k] = (int16_t)silk_SAT16(silk_RSHIFT(out32_Q14 + (1 << 14) - 1, 14));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_biquad_alt_stride2_c(const int16_t* in,    /* I     input signal                 */
                                const int32_t* B_Q28, /* I     MA coefficients [3]          */
                                const int32_t* A_Q28, /* I     AR coefficients [2]          */
@@ -569,7 +569,7 @@ void silk_biquad_alt_stride2_c(const int16_t* in,    /* I     input signal      
         out[2 * k + 1] = (int16_t)silk_SAT16(silk_RSHIFT(out32_Q14[1] + (1 << 14) - 1, 14));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Chirp (bandwidth expand) LP AR filter */
 void silk_bwexpander_32(int32_t*      ar,       /* I/O  AR filter to be expanded (without leading 1)                */
                         const int32_t d,        /* I    Length of ar                                                */
@@ -584,7 +584,7 @@ void silk_bwexpander_32(int32_t*      ar,       /* I/O  AR filter to be expanded
     }
     ar[d - 1] = silk_SMULWW(chirp_Q16, ar[d - 1]);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Chirp (bandwidth expand) LP AR filter */
 void silk_bwexpander(int16_t*      ar,       /* I/O  AR filter to be expanded (without leading 1)                */
                      const int32_t d,        /* I    Length of ar                                                */
@@ -600,7 +600,7 @@ void silk_bwexpander(int16_t*      ar,       /* I/O  AR filter to be expanded (w
     }
     ar[d - 1] = (int16_t)silk_RSHIFT_ROUND(silk_MUL(chirp_Q16, ar[d - 1]), 16);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Decode mid/side predictors */
 void silk_stereo_decode_pred(int32_t pred_Q13[]  /* O    Predictors                                  */
 ) {
@@ -627,14 +627,14 @@ void silk_stereo_decode_pred(int32_t pred_Q13[]  /* O    Predictors             
     /* Subtract second from first predictor (helps when actually applying these) */
     pred_Q13[0] -= pred_Q13[1];
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Decode mid-only flag */
 void silk_stereo_decode_mid_only(int32_t *decode_only_mid /* O    Flag that only mid channel has been coded   */
 ) {
     /* Decode flag that only mid channel is coded */
     *decode_only_mid = rangedec->dec_icdf(silk_stereo_only_code_mid_iCDF, 8);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* helper function for NLSF2A(intermediate polynomial, Q[dd+1], vector of interleaved 2*cos(LSFs), QA_[d], polynomial order (= 1/2 * filter order)  ) */
 void silk_NLSF2A_find_poly(int32_t* out, const int32_t* cLSF, int32_t dd) {
     int32_t k, n;
@@ -650,7 +650,7 @@ void silk_NLSF2A_find_poly(int32_t* out, const int32_t* cLSF, int32_t dd) {
         out[1] -= ftmp;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* compute whitening filter coefficients from normalized line spectral frequencies(monic whitening filter coefficients in Q12, normalized line spectral frequencies in Q15, filter order) */
 void silk_NLSF2A(int16_t* a_Q12, const int16_t* NLSF, const int32_t  d) {
     /* This ordering was found to maximize quality. It improves numerical accuracy of silk_NLSF2A_find_poly() compared to "standard" ordering. */
@@ -731,13 +731,13 @@ void silk_decode_indices(uint8_t n,
     /*******************************************/
     /* Decode signal type and quantizer offset */
     /*******************************************/
-    if (decode_LBRR || s_channel_state[n].VAD_flags[FrameIndex]) {
+    if (decode_LBRR || m_channel_state[n].VAD_flags[FrameIndex]) {
         Ix = rangedec->dec_icdf(silk_type_offset_VAD_iCDF, 8) + 2;
     } else {
         Ix = rangedec->dec_icdf(silk_type_offset_no_VAD_iCDF, 8);
     }
-    s_channel_state[n].indices.signalType = (int8_t)silk_RSHIFT(Ix, 1);
-    s_channel_state[n].indices.quantOffsetType = (int8_t)(Ix & 1);
+    m_channel_state[n].indices.signalType = (int8_t)silk_RSHIFT(Ix, 1);
+    m_channel_state[n].indices.quantOffsetType = (int8_t)(Ix & 1);
 
     /****************/
     /* Decode gains */
@@ -745,80 +745,80 @@ void silk_decode_indices(uint8_t n,
     /* First subframe */
     if(condCoding == CODE_CONDITIONALLY) {
         /* Conditional coding */
-        s_channel_state[n].indices.GainsIndices[0] = (int8_t)rangedec->dec_icdf(silk_delta_gain_iCDF, 8);
+        m_channel_state[n].indices.GainsIndices[0] = (int8_t)rangedec->dec_icdf(silk_delta_gain_iCDF, 8);
     } else {
         /* Independent coding, in two stages: MSB bits followed by 3 LSBs */
-        s_channel_state[n].indices.GainsIndices[0] =
-            (int8_t)silk_LSHIFT(rangedec->dec_icdf(silk_gain_iCDF[s_channel_state[n].indices.signalType], 8), 3);
-        s_channel_state[n].indices.GainsIndices[0] += (int8_t)rangedec->dec_icdf(silk_uniform8_iCDF, 8);
+        m_channel_state[n].indices.GainsIndices[0] =
+            (int8_t)silk_LSHIFT(rangedec->dec_icdf(silk_gain_iCDF[m_channel_state[n].indices.signalType], 8), 3);
+        m_channel_state[n].indices.GainsIndices[0] += (int8_t)rangedec->dec_icdf(silk_uniform8_iCDF, 8);
     }
 
     /* Remaining subframes */
-    for (i = 1; i < s_channel_state[n].nb_subfr; i++) {
+    for (i = 1; i < m_channel_state[n].nb_subfr; i++) {
         if (i < MAX_NB_SUBFR) {
-            s_channel_state[n].indices.GainsIndices[i] = (int8_t)rangedec->dec_icdf(silk_delta_gain_iCDF, 8);
+            m_channel_state[n].indices.GainsIndices[i] = (int8_t)rangedec->dec_icdf(silk_delta_gain_iCDF, 8);
         }
     }
     /**********************/
     /* Decode LSF Indices */
     /**********************/
-    s_channel_state[n].indices.NLSFIndices[0] = (int8_t)rangedec->dec_icdf(
-        &s_channel_state[n].psNLSF_CB->CB1_iCDF[(s_channel_state[n].indices.signalType >> 1) * s_channel_state[n].psNLSF_CB->nVectors], 8);
-    silk_NLSF_unpack(ec_ix, pred_Q8, s_channel_state[n].psNLSF_CB, s_channel_state[n].indices.NLSFIndices[0]);
-    assert(s_channel_state[n].psNLSF_CB->order == s_channel_state[n].LPC_order);
-    for (i = 0; i < s_channel_state[n].psNLSF_CB->order; i++) {
-        Ix = rangedec->dec_icdf(&s_channel_state[n].psNLSF_CB->ec_iCDF[ec_ix[i]], 8);
+    m_channel_state[n].indices.NLSFIndices[0] = (int8_t)rangedec->dec_icdf(
+        &m_channel_state[n].psNLSF_CB->CB1_iCDF[(m_channel_state[n].indices.signalType >> 1) * m_channel_state[n].psNLSF_CB->nVectors], 8);
+    silk_NLSF_unpack(ec_ix, pred_Q8, m_channel_state[n].psNLSF_CB, m_channel_state[n].indices.NLSFIndices[0]);
+    assert(m_channel_state[n].psNLSF_CB->order == m_channel_state[n].LPC_order);
+    for (i = 0; i < m_channel_state[n].psNLSF_CB->order; i++) {
+        Ix = rangedec->dec_icdf(&m_channel_state[n].psNLSF_CB->ec_iCDF[ec_ix[i]], 8);
         if (Ix == 0) {
             Ix -= rangedec->dec_icdf(silk_NLSF_EXT_iCDF, 8);
         } else if (Ix == 2 * NLSF_QUANT_MAX_AMPLITUDE) {
             Ix += rangedec->dec_icdf(silk_NLSF_EXT_iCDF, 8);
         }
-        s_channel_state[n].indices.NLSFIndices[i + 1] = (int8_t)(Ix - NLSF_QUANT_MAX_AMPLITUDE);
+        m_channel_state[n].indices.NLSFIndices[i + 1] = (int8_t)(Ix - NLSF_QUANT_MAX_AMPLITUDE);
     }
 
     /* Decode LSF interpolation factor */
-    if (s_channel_state[n].nb_subfr == MAX_NB_SUBFR) {
-        s_channel_state[n].indices.NLSFInterpCoef_Q2 = (int8_t)rangedec->dec_icdf(silk_NLSF_interpolation_factor_iCDF, 8);
+    if (m_channel_state[n].nb_subfr == MAX_NB_SUBFR) {
+        m_channel_state[n].indices.NLSFInterpCoef_Q2 = (int8_t)rangedec->dec_icdf(silk_NLSF_interpolation_factor_iCDF, 8);
     } else {
-        s_channel_state[n].indices.NLSFInterpCoef_Q2 = 4;
+        m_channel_state[n].indices.NLSFInterpCoef_Q2 = 4;
     }
 
-    if(s_channel_state[n].indices.signalType == TYPE_VOICED) {
+    if(m_channel_state[n].indices.signalType == TYPE_VOICED) {
         /*********************/
         /* Decode pitch lags */
         /*********************/
         /* Get lag index */
         decode_absolute_lagIndex = 1;
-        if(condCoding == CODE_CONDITIONALLY && s_channel_state[n].ec_prevSignalType == TYPE_VOICED) {
+        if(condCoding == CODE_CONDITIONALLY && m_channel_state[n].ec_prevSignalType == TYPE_VOICED) {
             /* Decode Delta index */
             delta_lagIndex = (int16_t)rangedec->dec_icdf(silk_pitch_delta_iCDF, 8);
             if (delta_lagIndex > 0) {
                 delta_lagIndex = delta_lagIndex - 9;
-                s_channel_state[n].indices.lagIndex = (int16_t)(s_channel_state[n].ec_prevLagIndex + delta_lagIndex);
+                m_channel_state[n].indices.lagIndex = (int16_t)(m_channel_state[n].ec_prevLagIndex + delta_lagIndex);
                 decode_absolute_lagIndex = 0;
             }
         }
         if(decode_absolute_lagIndex) {
             /* Absolute decoding */
-            s_channel_state[n].indices.lagIndex =
-                (int16_t)rangedec->dec_icdf(silk_pitch_lag_iCDF, 8) * silk_RSHIFT(s_channel_state[n].fs_kHz, 1);
-            s_channel_state[n].indices.lagIndex += (int16_t)rangedec->dec_icdf(s_channel_state[n].pitch_lag_low_bits_iCDF, 8);
+            m_channel_state[n].indices.lagIndex =
+                (int16_t)rangedec->dec_icdf(silk_pitch_lag_iCDF, 8) * silk_RSHIFT(m_channel_state[n].fs_kHz, 1);
+            m_channel_state[n].indices.lagIndex += (int16_t)rangedec->dec_icdf(m_channel_state[n].pitch_lag_low_bits_iCDF, 8);
         }
-        s_channel_state[n].ec_prevLagIndex = s_channel_state[n].indices.lagIndex;
+        m_channel_state[n].ec_prevLagIndex = m_channel_state[n].indices.lagIndex;
 
         /* Get countour index */
-        s_channel_state[n].indices.contourIndex = (int8_t)rangedec->dec_icdf(s_channel_state[n].pitch_contour_iCDF, 8);
+        m_channel_state[n].indices.contourIndex = (int8_t)rangedec->dec_icdf(m_channel_state[n].pitch_contour_iCDF, 8);
 
         /********************/
         /* Decode LTP gains */
         /********************/
         /* Decode PERIndex value */
-        s_channel_state[n].indices.PERIndex = (int8_t)rangedec->dec_icdf(silk_LTP_per_index_iCDF, 8);
+        m_channel_state[n].indices.PERIndex = (int8_t)rangedec->dec_icdf(silk_LTP_per_index_iCDF, 8);
 
-        for (k = 0; k < s_channel_state[n].nb_subfr; k++) {
+        for (k = 0; k < m_channel_state[n].nb_subfr; k++) {
             if (k < MAX_NB_SUBFR) {
-                s_channel_state[n].indices.LTPIndex[k] =
-                    (int8_t)rangedec->dec_icdf(silk_LTP_gain_iCDF_ptrs[s_channel_state[n].indices.PERIndex], 8);
+                m_channel_state[n].indices.LTPIndex[k] =
+                    (int8_t)rangedec->dec_icdf(silk_LTP_gain_iCDF_ptrs[m_channel_state[n].indices.PERIndex], 8);
             }
         }
 
@@ -826,19 +826,19 @@ void silk_decode_indices(uint8_t n,
         /* Decode LTP scaling */
         /**********************/
         if (condCoding == CODE_INDEPENDENTLY) {
-            s_channel_state[n].indices.LTP_scaleIndex = (int8_t)rangedec->dec_icdf(silk_LTPscale_iCDF, 8);
+            m_channel_state[n].indices.LTP_scaleIndex = (int8_t)rangedec->dec_icdf(silk_LTPscale_iCDF, 8);
         } else {
-            s_channel_state[n].indices.LTP_scaleIndex = 0;
+            m_channel_state[n].indices.LTP_scaleIndex = 0;
         }
     }
-    s_channel_state[n].ec_prevSignalType = s_channel_state[n].indices.signalType;
+    m_channel_state[n].ec_prevSignalType = m_channel_state[n].indices.signalType;
 
     /***************/
     /* Decode seed */
     /***************/
-    s_channel_state[n].indices.Seed = (int8_t)rangedec->dec_icdf(silk_uniform4_iCDF, 8);
+    m_channel_state[n].indices.Seed = (int8_t)rangedec->dec_icdf(silk_uniform4_iCDF, 8);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_decode_parameters(uint8_t n, int32_t condCoding) {
     int32_t       i, k, Ix;
@@ -846,66 +846,66 @@ void silk_decode_parameters(uint8_t n, int32_t condCoding) {
     const int8_t* cbk_ptr_Q7;
 
     /* Dequant Gains */
-    silk_gains_dequant(s_silk_decoder_control->Gains_Q16, s_channel_state[n].indices.GainsIndices, &s_channel_state[n].LastGainIndex, condCoding == CODE_CONDITIONALLY, s_channel_state[n].nb_subfr);
+    silk_gains_dequant(m_silk_decoder_control->Gains_Q16, m_channel_state[n].indices.GainsIndices, &m_channel_state[n].LastGainIndex, condCoding == CODE_CONDITIONALLY, m_channel_state[n].nb_subfr);
 
     /****************/
     /* Decode NLSFs */
     /****************/
-    silk_NLSF_decode(pNLSF_Q15, s_channel_state[n].indices.NLSFIndices, s_channel_state[n].psNLSF_CB);
+    silk_NLSF_decode(pNLSF_Q15, m_channel_state[n].indices.NLSFIndices, m_channel_state[n].psNLSF_CB);
 
     /* Convert NLSF parameters to AR prediction filter coefficients */
-    silk_NLSF2A(s_silk_decoder_control->PredCoef_Q12[1], pNLSF_Q15, s_channel_state[n].LPC_order);
+    silk_NLSF2A(m_silk_decoder_control->PredCoef_Q12[1], pNLSF_Q15, m_channel_state[n].LPC_order);
 
     /* If just reset, e.g., because internal Fs changed, do not allow interpolation */
     /* improves the case of packet loss in the first frame after a switch           */
-    if(s_channel_state[n].first_frame_after_reset == 1) { s_channel_state[n].indices.NLSFInterpCoef_Q2 = 4; }
+    if(m_channel_state[n].first_frame_after_reset == 1) { m_channel_state[n].indices.NLSFInterpCoef_Q2 = 4; }
 
-    if(s_channel_state[n].indices.NLSFInterpCoef_Q2 < 4) {
+    if(m_channel_state[n].indices.NLSFInterpCoef_Q2 < 4) {
         /* Calculation of the interpolated NLSF0 vector from the interpolation factor, the previous NLSF1, and the current NLSF1 */
-        for(i = 0; i < s_channel_state[n].LPC_order; i++) { pNLSF0_Q15[i] = s_channel_state[n].prevNLSF_Q15[i] + silk_RSHIFT(silk_MUL(s_channel_state[n].indices.NLSFInterpCoef_Q2, pNLSF_Q15[i] - s_channel_state[n].prevNLSF_Q15[i]), 2); }
+        for(i = 0; i < m_channel_state[n].LPC_order; i++) { pNLSF0_Q15[i] = m_channel_state[n].prevNLSF_Q15[i] + silk_RSHIFT(silk_MUL(m_channel_state[n].indices.NLSFInterpCoef_Q2, pNLSF_Q15[i] - m_channel_state[n].prevNLSF_Q15[i]), 2); }
 
         /* Convert NLSF parameters to AR prediction filter coefficients */
-        silk_NLSF2A(s_silk_decoder_control->PredCoef_Q12[0], pNLSF0_Q15, s_channel_state[n].LPC_order);
+        silk_NLSF2A(m_silk_decoder_control->PredCoef_Q12[0], pNLSF0_Q15, m_channel_state[n].LPC_order);
     }
     else {
         /* Copy LPC coefficients for first half from second half */
-        memcpy(s_silk_decoder_control->PredCoef_Q12[0], s_silk_decoder_control->PredCoef_Q12[1], s_channel_state[n].LPC_order * sizeof(int16_t));
+        memcpy(m_silk_decoder_control->PredCoef_Q12[0], m_silk_decoder_control->PredCoef_Q12[1], m_channel_state[n].LPC_order * sizeof(int16_t));
     }
-    memcpy(s_channel_state[n].prevNLSF_Q15, pNLSF_Q15, s_channel_state[n].LPC_order * sizeof(int16_t));
+    memcpy(m_channel_state[n].prevNLSF_Q15, pNLSF_Q15, m_channel_state[n].LPC_order * sizeof(int16_t));
 
     /* After a packet loss do BWE of LPC coefs */
-    if(s_channel_state[n].lossCnt) {
-        silk_bwexpander(s_silk_decoder_control->PredCoef_Q12[0], s_channel_state[n].LPC_order, BWE_AFTER_LOSS_Q16);
-        silk_bwexpander(s_silk_decoder_control->PredCoef_Q12[1], s_channel_state[n].LPC_order, BWE_AFTER_LOSS_Q16);
+    if(m_channel_state[n].lossCnt) {
+        silk_bwexpander(m_silk_decoder_control->PredCoef_Q12[0], m_channel_state[n].LPC_order, BWE_AFTER_LOSS_Q16);
+        silk_bwexpander(m_silk_decoder_control->PredCoef_Q12[1], m_channel_state[n].LPC_order, BWE_AFTER_LOSS_Q16);
     }
 
-    if(s_channel_state[n].indices.signalType == TYPE_VOICED) {
+    if(m_channel_state[n].indices.signalType == TYPE_VOICED) {
         /*********************/
         /* Decode pitch lags */
         /*********************/
 
         /* Decode pitch values */
-        silk_decode_pitch(s_channel_state[n].indices.lagIndex, s_channel_state[n].indices.contourIndex, s_silk_decoder_control->pitchL, s_channel_state[n].fs_kHz, s_channel_state[n].nb_subfr);
+        silk_decode_pitch(m_channel_state[n].indices.lagIndex, m_channel_state[n].indices.contourIndex, m_silk_decoder_control->pitchL, m_channel_state[n].fs_kHz, m_channel_state[n].nb_subfr);
 
         /* Decode Codebook Index */
-        cbk_ptr_Q7 = silk_LTP_vq_ptrs_Q7[s_channel_state[n].indices.PERIndex]; /* set pointer to start of codebook */
+        cbk_ptr_Q7 = silk_LTP_vq_ptrs_Q7[m_channel_state[n].indices.PERIndex]; /* set pointer to start of codebook */
 
-        for(k = 0; k < s_channel_state[n].nb_subfr; k++) {
-            Ix = s_channel_state[n].indices.LTPIndex[k];
-            for(i = 0; i < LTP_ORDER; i++) { s_silk_decoder_control->LTPCoef_Q14[k * LTP_ORDER + i] = silk_LSHIFT(cbk_ptr_Q7[Ix * LTP_ORDER + i], 7); }
+        for(k = 0; k < m_channel_state[n].nb_subfr; k++) {
+            Ix = m_channel_state[n].indices.LTPIndex[k];
+            for(i = 0; i < LTP_ORDER; i++) { m_silk_decoder_control->LTPCoef_Q14[k * LTP_ORDER + i] = silk_LSHIFT(cbk_ptr_Q7[Ix * LTP_ORDER + i], 7); }
         }
 
         /**********************/
         /* Decode LTP scaling */
         /**********************/
-        Ix = s_channel_state[n].indices.LTP_scaleIndex;
-        s_silk_decoder_control->LTP_scale_Q14 = silk_LTPScales_table_Q14[Ix];
+        Ix = m_channel_state[n].indices.LTP_scaleIndex;
+        m_silk_decoder_control->LTP_scale_Q14 = silk_LTPScales_table_Q14[Ix];
     }
     else {
-        memset(s_silk_decoder_control->pitchL, 0, s_channel_state[n].nb_subfr * sizeof(int32_t));
-        memset(s_silk_decoder_control->LTPCoef_Q14, 0, LTP_ORDER * s_channel_state[n].nb_subfr * sizeof(int16_t));
-        s_channel_state[n].indices.PERIndex = 0;
-        s_silk_decoder_control->LTP_scale_Q14 = 0;
+        memset(m_silk_decoder_control->pitchL, 0, m_channel_state[n].nb_subfr * sizeof(int32_t));
+        memset(m_silk_decoder_control->LTPCoef_Q14, 0, LTP_ORDER * m_channel_state[n].nb_subfr * sizeof(int16_t));
+        m_channel_state[n].indices.PERIndex = 0;
+        m_silk_decoder_control->LTP_scale_Q14 = 0;
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -988,71 +988,71 @@ void silk_decode_pulses(int16_t pulses[],              /* O    Excitation signal
     /****************************************/
     silk_decode_signs(pulses, frame_length, signalType, quantOffsetType, sum_pulses.get());
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Set decoder sampling rate (Decoder state pointer , Sampling frequency (kHz) , API Sampling frequency (Hz))*/
 int32_t silk_decoder_set_fs(uint8_t n, int32_t fs_kHz, int32_t fs_API_Hz) {
     int32_t frame_length, ret = 0;
 
     assert(fs_kHz == 8 || fs_kHz == 12 || fs_kHz == 16);
-    assert(s_channel_state[n].nb_subfr == MAX_NB_SUBFR || s_channel_state[n].nb_subfr == MAX_NB_SUBFR / 2);
+    assert(m_channel_state[n].nb_subfr == MAX_NB_SUBFR || m_channel_state[n].nb_subfr == MAX_NB_SUBFR / 2);
 
     /* New (sub)frame length */
-    s_channel_state[n].subfr_length = silk_SMULBB(SUB_FRAME_LENGTH_MS, fs_kHz);
-    frame_length = silk_SMULBB(s_channel_state[n].nb_subfr, s_channel_state[n].subfr_length);
+    m_channel_state[n].subfr_length = silk_SMULBB(SUB_FRAME_LENGTH_MS, fs_kHz);
+    frame_length = silk_SMULBB(m_channel_state[n].nb_subfr, m_channel_state[n].subfr_length);
 
     /* Initialize resampler when switching internal or external sampling frequency */
-    if(s_channel_state[n].fs_kHz != fs_kHz || s_channel_state[n].fs_API_hz != fs_API_Hz) {
+    if(m_channel_state[n].fs_kHz != fs_kHz || m_channel_state[n].fs_API_hz != fs_API_Hz) {
         /* Initialize the resampler for dec_API.c preparing resampling from fs_kHz to API_fs_Hz */
 
         ret += silk_resampler_init(n, silk_SMULBB(fs_kHz, 1000), fs_API_Hz, 0);
 
-        s_channel_state[n].fs_API_hz = fs_API_Hz;
+        m_channel_state[n].fs_API_hz = fs_API_Hz;
     }
 
-    if(s_channel_state[n].fs_kHz != fs_kHz || frame_length != s_channel_state[n].frame_length) {
+    if(m_channel_state[n].fs_kHz != fs_kHz || frame_length != m_channel_state[n].frame_length) {
         if(fs_kHz == 8) {
-            if(s_channel_state[n].nb_subfr == MAX_NB_SUBFR) { s_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_NB_iCDF; }
-            else { s_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_10_ms_NB_iCDF; }
+            if(m_channel_state[n].nb_subfr == MAX_NB_SUBFR) { m_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_NB_iCDF; }
+            else { m_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_10_ms_NB_iCDF; }
         }
         else {
-            if(s_channel_state[n].nb_subfr == MAX_NB_SUBFR) { s_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_iCDF; }
-            else { s_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_10_ms_iCDF; }
+            if(m_channel_state[n].nb_subfr == MAX_NB_SUBFR) { m_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_iCDF; }
+            else { m_channel_state[n].pitch_contour_iCDF = silk_pitch_contour_10_ms_iCDF; }
         }
-        if(s_channel_state[n].fs_kHz != fs_kHz) {
-            s_channel_state[n].ltp_mem_length = silk_SMULBB(LTP_MEM_LENGTH_MS, fs_kHz);
+        if(m_channel_state[n].fs_kHz != fs_kHz) {
+            m_channel_state[n].ltp_mem_length = silk_SMULBB(LTP_MEM_LENGTH_MS, fs_kHz);
             if(fs_kHz == 8 || fs_kHz == 12) {
-                s_channel_state[n].LPC_order = MIN_LPC_ORDER;
-                s_channel_state[n].psNLSF_CB = &silk_NLSF_CB_NB_MB;
+                m_channel_state[n].LPC_order = MIN_LPC_ORDER;
+                m_channel_state[n].psNLSF_CB = &silk_NLSF_CB_NB_MB;
             }
             else {
-                s_channel_state[n].LPC_order = MAX_LPC_ORDER;
-                s_channel_state[n].psNLSF_CB = &silk_NLSF_CB_WB;
+                m_channel_state[n].LPC_order = MAX_LPC_ORDER;
+                m_channel_state[n].psNLSF_CB = &silk_NLSF_CB_WB;
             }
-            if(fs_kHz == 16) { s_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform8_iCDF; }
-            else if(fs_kHz == 12) { s_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform6_iCDF; }
-            else if(fs_kHz == 8) { s_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform4_iCDF; }
+            if(fs_kHz == 16) { m_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform8_iCDF; }
+            else if(fs_kHz == 12) { m_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform6_iCDF; }
+            else if(fs_kHz == 8) { m_channel_state[n].pitch_lag_low_bits_iCDF = silk_uniform4_iCDF; }
             else {
                 /* unsupported sampling rate */
                 assert(0);
             }
-            s_channel_state[n].first_frame_after_reset = 1;
-            s_channel_state[n].lagPrev = 100;
-            s_channel_state[n].LastGainIndex = 10;
-            s_channel_state[n].prevSignalType = TYPE_NO_VOICE_ACTIVITY;
-            memset(s_channel_state[n].outBuf, 0, sizeof(s_channel_state[n].outBuf));
-            memset(s_channel_state[n].sLPC_Q14_buf, 0, sizeof(s_channel_state[n].sLPC_Q14_buf));
+            m_channel_state[n].first_frame_after_reset = 1;
+            m_channel_state[n].lagPrev = 100;
+            m_channel_state[n].LastGainIndex = 10;
+            m_channel_state[n].prevSignalType = TYPE_NO_VOICE_ACTIVITY;
+            memset(m_channel_state[n].outBuf, 0, sizeof(m_channel_state[n].outBuf));
+            memset(m_channel_state[n].sLPC_Q14_buf, 0, sizeof(m_channel_state[n].sLPC_Q14_buf));
         }
 
-        s_channel_state[n].fs_kHz = fs_kHz;
-        s_channel_state[n].frame_length = frame_length;
+        m_channel_state[n].fs_kHz = fs_kHz;
+        m_channel_state[n].frame_length = frame_length;
     }
 
     /* Check that settings are valid */
-    assert(s_channel_state[n].frame_length > 0 && s_channel_state[n].frame_length <= MAX_FRAME_LENGTH);
+    assert(m_channel_state[n].frame_length > 0 && m_channel_state[n].frame_length <= MAX_FRAME_LENGTH);
 
     return ret;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Encode quantization indices of excitation */
 inline int32_t combine_and_check(                            /* return ok                           */
                                         int32_t*       pulses_comb, /* O                                   */
@@ -1070,7 +1070,7 @@ inline int32_t combine_and_check(                            /* return ok       
 
     return 0;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_quant_LTP_gains(int16_t       B_Q14[MAX_NB_SUBFR * LTP_ORDER],              /* O    Quantized LTP gains             */
                           int8_t        cbk_index[MAX_NB_SUBFR],                      /* O    Codebook Index                  */
                           int8_t*       periodicity_index,                            /* O    Periodicity Index               */
@@ -1172,7 +1172,7 @@ inline void decode_split(int16_t *p_child1,         /* O    pulse amplitude of f
         p_child2[0] = 0;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Shell decoder, operates on one shell code frame of 16 pulses */
 void silk_shell_decoder(int16_t *pulses0,     /* O    data: nonnegative pulse amplitudes          */
                         const int32_t pulses4 /* I    number of pulses per pulse-subframe         */
@@ -1275,7 +1275,7 @@ void silk_LP_interpolate_filter_taps(int32_t B_Q28[TRANSITION_NB], int32_t A_Q28
         memcpy(A_Q28, silk_Transition_LP_A_Q28[TRANSITION_INT_NUM - 1], TRANSITION_NA * sizeof(int32_t));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Low-pass filter with variable cutoff frequency based on  */
 /* piece-wise linear interpolation between elliptic filters */
@@ -1315,7 +1315,7 @@ void silk_LP_variable_cutoff(silk_LP_state_t* psLP,        /* I/O  LP filter sta
         silk_biquad_alt_stride1(frame, B_Q28, A_Q28, psLP->In_LP_State, frame, frame_length);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Generates excitation for CNG LPC synthesis */
 void silk_CNG_exc(int32_t  exc_Q14[],     /* O    CNG excitation signal Q10                   */
                          int32_t  exc_buf_Q14[], /* I    Random samples buffer Q10                   */
@@ -1338,61 +1338,61 @@ void silk_CNG_exc(int32_t  exc_Q14[],     /* O    CNG excitation signal Q10     
     }
     *rand_seed = seed;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_CNG_Reset(uint8_t n) {
     int32_t i, NLSF_step_Q15, NLSF_acc_Q15;
 
-    NLSF_step_Q15 = silk_DIV32_16(silk_int16_MAX, s_channel_state[n].LPC_order + 1);
+    NLSF_step_Q15 = silk_DIV32_16(silk_int16_MAX, m_channel_state[n].LPC_order + 1);
     NLSF_acc_Q15 = 0;
-    for(i = 0; i < s_channel_state[n].LPC_order; i++) {
+    for(i = 0; i < m_channel_state[n].LPC_order; i++) {
         NLSF_acc_Q15 += NLSF_step_Q15;
-        s_channel_state[n].sCNG.CNG_smth_NLSF_Q15[i] = NLSF_acc_Q15;
+        m_channel_state[n].sCNG.CNG_smth_NLSF_Q15[i] = NLSF_acc_Q15;
     }
-    s_channel_state[n].sCNG.CNG_smth_Gain_Q16 = 0;
-    s_channel_state[n].sCNG.rand_seed = 3176576;
+    m_channel_state[n].sCNG.CNG_smth_Gain_Q16 = 0;
+    m_channel_state[n].sCNG.rand_seed = 3176576;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Updates CNG estimate, and applies the CNG when packet was lost   */
 void silk_CNG(uint8_t n, int16_t frame[], int32_t length ) {
     int32_t          i, subfr;
     int32_t          LPC_pred_Q10, max_Gain_Q16, gain_Q16, gain_Q10;
     int16_t          A_Q12[MAX_LPC_ORDER];
-    silk_CNG_struct_t* psCNG = &s_channel_state[n].sCNG;
+    silk_CNG_struct_t* psCNG = &m_channel_state[n].sCNG;
 
-    if(s_channel_state[n].fs_kHz != psCNG->fs_kHz) {
+    if(m_channel_state[n].fs_kHz != psCNG->fs_kHz) {
         /* Reset state */
         silk_CNG_Reset(n);
 
-        psCNG->fs_kHz = s_channel_state[n].fs_kHz;
+        psCNG->fs_kHz = m_channel_state[n].fs_kHz;
     }
-    if(s_channel_state[n].lossCnt == 0 && s_channel_state[n].prevSignalType == TYPE_NO_VOICE_ACTIVITY) {
+    if(m_channel_state[n].lossCnt == 0 && m_channel_state[n].prevSignalType == TYPE_NO_VOICE_ACTIVITY) {
         /* Update CNG parameters */
 
         /* Smoothing of LSF's  */
-        for(i = 0; i < s_channel_state[n].LPC_order; i++) { psCNG->CNG_smth_NLSF_Q15[i] += silk_SMULWB((int32_t)s_channel_state[n].prevNLSF_Q15[i] - (int32_t)psCNG->CNG_smth_NLSF_Q15[i], CNG_NLSF_SMTH_Q16); }
+        for(i = 0; i < m_channel_state[n].LPC_order; i++) { psCNG->CNG_smth_NLSF_Q15[i] += silk_SMULWB((int32_t)m_channel_state[n].prevNLSF_Q15[i] - (int32_t)psCNG->CNG_smth_NLSF_Q15[i], CNG_NLSF_SMTH_Q16); }
         /* Find the subframe with the highest gain */
         max_Gain_Q16 = 0;
         subfr = 0;
-        for(i = 0; i < s_channel_state[n].nb_subfr; i++) {
-            if(s_silk_decoder_control->Gains_Q16[i] > max_Gain_Q16) {
-                max_Gain_Q16 = s_silk_decoder_control->Gains_Q16[i];
+        for(i = 0; i < m_channel_state[n].nb_subfr; i++) {
+            if(m_silk_decoder_control->Gains_Q16[i] > max_Gain_Q16) {
+                max_Gain_Q16 = m_silk_decoder_control->Gains_Q16[i];
                 subfr = i;
             }
         }
         /* Update CNG excitation buffer with excitation from this subframe */
-        memmove(&psCNG->CNG_exc_buf_Q14[s_channel_state[n].subfr_length], psCNG->CNG_exc_buf_Q14, (s_channel_state[n].nb_subfr - 1) * s_channel_state[n].subfr_length * sizeof(int32_t));
-        memcpy(psCNG->CNG_exc_buf_Q14, &s_channel_state[n].exc_Q14[subfr * s_channel_state[n].subfr_length], s_channel_state[n].subfr_length * sizeof(int32_t));
+        memmove(&psCNG->CNG_exc_buf_Q14[m_channel_state[n].subfr_length], psCNG->CNG_exc_buf_Q14, (m_channel_state[n].nb_subfr - 1) * m_channel_state[n].subfr_length * sizeof(int32_t));
+        memcpy(psCNG->CNG_exc_buf_Q14, &m_channel_state[n].exc_Q14[subfr * m_channel_state[n].subfr_length], m_channel_state[n].subfr_length * sizeof(int32_t));
 
         /* Smooth gains */
-        for(i = 0; i < s_channel_state[n].nb_subfr; i++) { psCNG->CNG_smth_Gain_Q16 += silk_SMULWB(s_silk_decoder_control->Gains_Q16[i] - psCNG->CNG_smth_Gain_Q16, CNG_GAIN_SMTH_Q16); }
+        for(i = 0; i < m_channel_state[n].nb_subfr; i++) { psCNG->CNG_smth_Gain_Q16 += silk_SMULWB(m_silk_decoder_control->Gains_Q16[i] - psCNG->CNG_smth_Gain_Q16, CNG_GAIN_SMTH_Q16); }
     }
     /* Add CNG when packet is lost or during DTX */
-    if(s_channel_state[n].lossCnt) {
+    if(m_channel_state[n].lossCnt) {
         ps_ptr<int32_t>CNG_sig_Q14; CNG_sig_Q14.alloc_array(length + MAX_LPC_ORDER);
 
         /* Generate CNG excitation */
-        gain_Q16 = silk_SMULWW(s_channel_state[n].sPLC.randScale_Q14, s_channel_state[n].sPLC.prevGain_Q16[1]);
+        gain_Q16 = silk_SMULWW(m_channel_state[n].sPLC.randScale_Q14, m_channel_state[n].sPLC.prevGain_Q16[1]);
         if(gain_Q16 >= (1 << 21) || psCNG->CNG_smth_Gain_Q16 > (1 << 23)) {
             gain_Q16 = silk_SMULTT(gain_Q16, gain_Q16);
             gain_Q16 = silk_SUB_LSHIFT32(silk_SMULTT(psCNG->CNG_smth_Gain_Q16, psCNG->CNG_smth_Gain_Q16), gain_Q16, 5);
@@ -1408,14 +1408,14 @@ void silk_CNG(uint8_t n, int16_t frame[], int32_t length ) {
         silk_CNG_exc(CNG_sig_Q14.get() + MAX_LPC_ORDER, psCNG->CNG_exc_buf_Q14, length, &psCNG->rand_seed);
 
         /* Convert CNG NLSF to filter representation */
-        silk_NLSF2A(A_Q12, psCNG->CNG_smth_NLSF_Q15, s_channel_state[n].LPC_order);
+        silk_NLSF2A(A_Q12, psCNG->CNG_smth_NLSF_Q15, m_channel_state[n].LPC_order);
 
         /* Generate CNG signal, by synthesis filtering */
         memcpy(CNG_sig_Q14.get(), psCNG->CNG_synth_state, MAX_LPC_ORDER * sizeof(int32_t));
-        assert(s_channel_state[n].LPC_order == 10 || s_channel_state[n].LPC_order == 16);
+        assert(m_channel_state[n].LPC_order == 10 || m_channel_state[n].LPC_order == 16);
         for(i = 0; i < length; i++) {
             /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
-            LPC_pred_Q10 = silk_RSHIFT(s_channel_state[n].LPC_order, 1);
+            LPC_pred_Q10 = silk_RSHIFT(m_channel_state[n].LPC_order, 1);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 1], A_Q12[0]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 2], A_Q12[1]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 3], A_Q12[2]);
@@ -1426,7 +1426,7 @@ void silk_CNG(uint8_t n, int16_t frame[], int32_t length ) {
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 8], A_Q12[7]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 9], A_Q12[8]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 10], A_Q12[9]);
-            if(s_channel_state[n].LPC_order == 16) {
+            if(m_channel_state[n].LPC_order == 16) {
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 11], A_Q12[10]);
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 12], A_Q12[11]);
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, CNG_sig_Q14[MAX_LPC_ORDER + i - 13], A_Q12[12]);
@@ -1443,9 +1443,9 @@ void silk_CNG(uint8_t n, int16_t frame[], int32_t length ) {
         }
         memcpy(psCNG->CNG_synth_state, &CNG_sig_Q14[length], MAX_LPC_ORDER * sizeof(int32_t));
     }
-    else { memset(psCNG->CNG_synth_state, 0, s_channel_state[n].LPC_order * sizeof(int32_t)); }
+    else { memset(psCNG->CNG_synth_state, 0, m_channel_state[n].LPC_order * sizeof(int32_t)); }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Decodes signs of excitation */
 void silk_decode_signs(int16_t pulses[],              /* I/O  pulse signal                                */
@@ -1479,17 +1479,17 @@ void silk_decode_signs(int16_t pulses[],              /* I/O  pulse signal      
         q_ptr += SHELL_CODEC_FRAME_LENGTH;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_setRawParams(uint8_t channels, uint8_t API_channels, uint8_t payloadSize_ms, uint32_t internalSampleRate, uint32_t API_samleRate){
-    s_channelsInternal = channels;
-    s_API_channels = API_channels;
-    s_payloadSize_ms = payloadSize_ms;
-    s_silk_internalSampleRate = internalSampleRate;
-    s_API_sampleRate = API_samleRate;
+    m_channelsInternal = channels;
+    m_API_channels = API_channels;
+    m_payloadSize_ms = payloadSize_ms;
+    m_silk_internalSampleRate = internalSampleRate;
+    m_API_sampleRate = API_samleRate;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t silk_getPrevPitchLag(){
-    return s_prevPitchLag;
+    return m_prevPitchLag;
 }
 //----------------------------------------------------------------------------------------------------------------------
 /* Decode a frame */
@@ -1507,98 +1507,98 @@ int32_t silk_Decode(                                   /* O    Returns error cod
     int16_t* samplesOut1_tmp[2];
     int32_t MS_pred_Q13[2] = {0};
     int16_t *resample_out_ptr;
-    //silk_decoder_state_t *s_channel_state = s_channel_state;
+    //silk_decoder_state_t *m_channel_state = m_channel_state;
     int32_t has_side;
     int32_t stereo_to_mono;
     int delay_stack_alloc;
 
-    assert(s_silk_DecControlStruct->nChannelsInternal == 1 || s_silk_DecControlStruct->nChannelsInternal == 2);
+    assert(m_silk_DecControlStruct->nChannelsInternal == 1 || m_silk_DecControlStruct->nChannelsInternal == 2);
 
     /**********************************/
     /* Test if first frame in payload */
     /**********************************/
     if (newPacketFlag) {
-        for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
-            s_channel_state[n].nFramesDecoded = 0; /* Used to count frames in packet */
+        for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
+            m_channel_state[n].nFramesDecoded = 0; /* Used to count frames in packet */
         }
     }
 
     /* If Mono -> Stereo transition in bitstream: init state of second channel */
-    if (s_silk_DecControlStruct->nChannelsInternal > s_silk_decoder.get()->nChannelsInternal) {
+    if (m_silk_DecControlStruct->nChannelsInternal > m_silk_decoder.get()->nChannelsInternal) {
         ret += silk_init_decoder(1);
     }
 
-    stereo_to_mono = s_silk_DecControlStruct->nChannelsInternal == 1 && s_silk_decoder.get()->nChannelsInternal == 2 &&
-                     (s_silk_internalSampleRate == 1000 * s_channel_state[0].fs_kHz);
+    stereo_to_mono = m_silk_DecControlStruct->nChannelsInternal == 1 && m_silk_decoder.get()->nChannelsInternal == 2 &&
+                     (m_silk_internalSampleRate == 1000 * m_channel_state[0].fs_kHz);
 
-    if (s_channel_state[0].nFramesDecoded == 0) {
-        for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
+    if (m_channel_state[0].nFramesDecoded == 0) {
+        for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
             int32_t fs_kHz_dec;
-            if (s_payloadSize_ms == 0) {
+            if (m_payloadSize_ms == 0) {
                 /* Assuming packet loss, use 10 ms */
-                s_channel_state[n].nFramesPerPacket = 1;
-                s_channel_state[n].nb_subfr = 2;
-            } else if (s_payloadSize_ms == 10) {
-                s_channel_state[n].nFramesPerPacket = 1;
-                s_channel_state[n].nb_subfr = 2;
-            } else if (s_payloadSize_ms == 20) {
-                s_channel_state[n].nFramesPerPacket = 1;
-                s_channel_state[n].nb_subfr = 4;
-            } else if (s_payloadSize_ms == 40) {
-                s_channel_state[n].nFramesPerPacket = 2;
-                s_channel_state[n].nb_subfr = 4;
-            } else if (s_payloadSize_ms== 60) {
-                s_channel_state[n].nFramesPerPacket = 3;
-                s_channel_state[n].nb_subfr = 4;
+                m_channel_state[n].nFramesPerPacket = 1;
+                m_channel_state[n].nb_subfr = 2;
+            } else if (m_payloadSize_ms == 10) {
+                m_channel_state[n].nFramesPerPacket = 1;
+                m_channel_state[n].nb_subfr = 2;
+            } else if (m_payloadSize_ms == 20) {
+                m_channel_state[n].nFramesPerPacket = 1;
+                m_channel_state[n].nb_subfr = 4;
+            } else if (m_payloadSize_ms == 40) {
+                m_channel_state[n].nFramesPerPacket = 2;
+                m_channel_state[n].nb_subfr = 4;
+            } else if (m_payloadSize_ms== 60) {
+                m_channel_state[n].nFramesPerPacket = 3;
+                m_channel_state[n].nb_subfr = 4;
             } else {
                 OPUS_LOG_ERROR("Opus SILK: invalid frame size");
                 return OPUS_ERR;
             }
-            fs_kHz_dec = (s_silk_internalSampleRate >> 10) + 1;
+            fs_kHz_dec = (m_silk_internalSampleRate >> 10) + 1;
             if (fs_kHz_dec != 8 && fs_kHz_dec != 12 && fs_kHz_dec != 16) {
                 OPUS_LOG_ERROR("Opus SILK, invalid sampling frequency: %i", fs_kHz_dec);
                 return OPUS_ERR;
             }
-            ret += silk_decoder_set_fs(n, fs_kHz_dec, s_silk_DecControlStruct->API_sampleRate);
+            ret += silk_decoder_set_fs(n, fs_kHz_dec, m_silk_DecControlStruct->API_sampleRate);
         }
     }
 
-    if (s_silk_DecControlStruct->nChannelsAPI == 2 && s_silk_DecControlStruct->nChannelsInternal == 2 &&
-        (s_silk_decoder->nChannelsAPI == 1 || s_silk_decoder->nChannelsInternal == 1)) {
-        memset(s_silk_decoder->sStereo.pred_prev_Q13, 0, sizeof(s_silk_decoder->sStereo.pred_prev_Q13));
-        memset(s_silk_decoder->sStereo.sSide, 0, sizeof(s_silk_decoder->sStereo.sSide));
-        memcpy(&s_resampler_state[n], &s_resampler_state[n], sizeof(silk_resampler_state_struct_t));
+    if (m_silk_DecControlStruct->nChannelsAPI == 2 && m_silk_DecControlStruct->nChannelsInternal == 2 &&
+        (m_silk_decoder->nChannelsAPI == 1 || m_silk_decoder->nChannelsInternal == 1)) {
+        memset(m_silk_decoder->sStereo.pred_prev_Q13, 0, sizeof(m_silk_decoder->sStereo.pred_prev_Q13));
+        memset(m_silk_decoder->sStereo.sSide, 0, sizeof(m_silk_decoder->sStereo.sSide));
+        memcpy(&m_resampler_state[n], &m_resampler_state[n], sizeof(silk_resampler_state_struct_t));
     }
-    s_silk_decoder->nChannelsAPI = s_silk_DecControlStruct->nChannelsAPI;
-    s_silk_decoder->nChannelsInternal = s_silk_DecControlStruct->nChannelsInternal;
+    m_silk_decoder->nChannelsAPI = m_silk_DecControlStruct->nChannelsAPI;
+    m_silk_decoder->nChannelsInternal = m_silk_DecControlStruct->nChannelsInternal;
 
-    if (s_silk_DecControlStruct->API_sampleRate > (int32_t)MAX_API_FS_KHZ * 1000 || s_silk_DecControlStruct->API_sampleRate < 8000) {
-        OPUS_LOG_ERROR("Opus SILK, invalid sampling rate: %i", s_silk_DecControlStruct->API_sampleRate);
+    if (m_silk_DecControlStruct->API_sampleRate > (int32_t)MAX_API_FS_KHZ * 1000 || m_silk_DecControlStruct->API_sampleRate < 8000) {
+        OPUS_LOG_ERROR("Opus SILK, invalid sampling rate: %i", m_silk_DecControlStruct->API_sampleRate);
         ret = OPUS_ERR;
 
         return (ret);
     }
 
-    if (lostFlag != FLAG_PACKET_LOST && s_channel_state[0].nFramesDecoded == 0) {
+    if (lostFlag != FLAG_PACKET_LOST && m_channel_state[0].nFramesDecoded == 0) {
         /* First decoder call for this payload */
         /* Decode VAD flags and LBRR flag */
-        for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
-            for (i = 0; i < s_channel_state[n].nFramesPerPacket; i++) {
-                s_channel_state[n].VAD_flags[i] = rangedec->dec_bit_logp(1);
+        for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
+            for (i = 0; i < m_channel_state[n].nFramesPerPacket; i++) {
+                m_channel_state[n].VAD_flags[i] = rangedec->dec_bit_logp(1);
             }
-            s_channel_state[n].LBRR_flag = rangedec->dec_bit_logp(1);
+            m_channel_state[n].LBRR_flag = rangedec->dec_bit_logp(1);
         }
         /* Decode LBRR flags */
-        for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
-            memset(s_channel_state[n].LBRR_flags, 0, sizeof(s_channel_state[n].LBRR_flags));
-            if (s_channel_state[n].LBRR_flag) {
-                if (s_channel_state[n].nFramesPerPacket == 1) {
-                    s_channel_state[n].LBRR_flags[0] = 1;
+        for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
+            memset(m_channel_state[n].LBRR_flags, 0, sizeof(m_channel_state[n].LBRR_flags));
+            if (m_channel_state[n].LBRR_flag) {
+                if (m_channel_state[n].nFramesPerPacket == 1) {
+                    m_channel_state[n].LBRR_flags[0] = 1;
                 } else {
                     LBRR_symbol =
-                        rangedec->dec_icdf(silk_LBRR_flags_iCDF_ptr[s_channel_state[n].nFramesPerPacket - 2], 8) + 1;
-                    for (i = 0; i < s_channel_state[n].nFramesPerPacket; i++) {
-                        s_channel_state[n].LBRR_flags[i] = silk_RSHIFT(LBRR_symbol, i) & 1;
+                        rangedec->dec_icdf(silk_LBRR_flags_iCDF_ptr[m_channel_state[n].nFramesPerPacket - 2], 8) + 1;
+                    for (i = 0; i < m_channel_state[n].nFramesPerPacket; i++) {
+                        m_channel_state[n].LBRR_flags[i] = silk_RSHIFT(LBRR_symbol, i) & 1;
                     }
                 }
             }
@@ -1606,27 +1606,27 @@ int32_t silk_Decode(                                   /* O    Returns error cod
 
         if (lostFlag == FLAG_DECODE_NORMAL) {
             /* Regular decoding: skip all LBRR data */
-            for (i = 0; i < s_channel_state[0].nFramesPerPacket; i++) {
-                for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
-                    if (s_channel_state[n].LBRR_flags[i]) {
+            for (i = 0; i < m_channel_state[0].nFramesPerPacket; i++) {
+                for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
+                    if (m_channel_state[n].LBRR_flags[i]) {
                         int16_t pulses[MAX_FRAME_LENGTH];
                         int32_t condCoding;
 
-                        if (s_silk_DecControlStruct->nChannelsInternal == 2 && n == 0) {
+                        if (m_silk_DecControlStruct->nChannelsInternal == 2 && n == 0) {
                             silk_stereo_decode_pred(MS_pred_Q13);
-                            if (s_channel_state[1].LBRR_flags[i] == 0) {
+                            if (m_channel_state[1].LBRR_flags[i] == 0) {
                                 silk_stereo_decode_mid_only(&decode_only_middle);
                             }
                         }
                         /* Use conditional coding if previous frame available */
-                        if (i > 0 && s_channel_state[n].LBRR_flags[i - 1]) {
+                        if (i > 0 && m_channel_state[n].LBRR_flags[i - 1]) {
                             condCoding = CODE_CONDITIONALLY;
                         } else {
                             condCoding = CODE_INDEPENDENTLY;
                         }
                         silk_decode_indices(n, i, 1, condCoding);
-                        silk_decode_pulses(pulses, s_channel_state[n].indices.signalType,
-                                           s_channel_state[n].indices.quantOffsetType, s_channel_state[n].frame_length);
+                        silk_decode_pulses(pulses, m_channel_state[n].indices.signalType,
+                                           m_channel_state[n].indices.quantOffsetType, m_channel_state[n].frame_length);
                     }
                 }
             }
@@ -1634,71 +1634,71 @@ int32_t silk_Decode(                                   /* O    Returns error cod
     }
 
     /* Get MS predictor index */
-    if (s_silk_DecControlStruct->nChannelsInternal == 2) {
+    if (m_silk_DecControlStruct->nChannelsInternal == 2) {
         if (lostFlag == FLAG_DECODE_NORMAL ||
-            (lostFlag == FLAG_DECODE_LBRR && s_channel_state[0].LBRR_flags[s_channel_state[0].nFramesDecoded] == 1)) {
+            (lostFlag == FLAG_DECODE_LBRR && m_channel_state[0].LBRR_flags[m_channel_state[0].nFramesDecoded] == 1)) {
             silk_stereo_decode_pred(MS_pred_Q13);
             /* For LBRR data, decode mid-only flag only if side-channel's LBRR flag is false */
-            if ((lostFlag == FLAG_DECODE_NORMAL && s_channel_state[1].VAD_flags[s_channel_state[0].nFramesDecoded] == 0) ||
-                (lostFlag == FLAG_DECODE_LBRR && s_channel_state[1].LBRR_flags[s_channel_state[0].nFramesDecoded] == 0)) {
+            if ((lostFlag == FLAG_DECODE_NORMAL && m_channel_state[1].VAD_flags[m_channel_state[0].nFramesDecoded] == 0) ||
+                (lostFlag == FLAG_DECODE_LBRR && m_channel_state[1].LBRR_flags[m_channel_state[0].nFramesDecoded] == 0)) {
                 silk_stereo_decode_mid_only(&decode_only_middle);
             } else {
                 decode_only_middle = 0;
             }
         } else {
             for (n = 0; n < 2; n++) {
-                MS_pred_Q13[n] = s_silk_decoder->sStereo.pred_prev_Q13[n];
+                MS_pred_Q13[n] = m_silk_decoder->sStereo.pred_prev_Q13[n];
             }
         }
     }
 
     /* Reset side channel decoder prediction memory for first frame with side coding */
-    if (s_silk_DecControlStruct->nChannelsInternal == 2 && decode_only_middle == 0 && s_silk_decoder->prev_decode_only_middle == 1) {
-        memset(s_channel_state[1].outBuf, 0, sizeof(s_channel_state[1].outBuf));
-        memset(s_channel_state[1].sLPC_Q14_buf, 0, sizeof(s_channel_state[1].sLPC_Q14_buf));
-        s_channel_state[1].lagPrev = 100;
-        s_channel_state[1].LastGainIndex = 10;
-        s_channel_state[1].prevSignalType = TYPE_NO_VOICE_ACTIVITY;
-        s_channel_state[1].first_frame_after_reset = 1;
+    if (m_silk_DecControlStruct->nChannelsInternal == 2 && decode_only_middle == 0 && m_silk_decoder->prev_decode_only_middle == 1) {
+        memset(m_channel_state[1].outBuf, 0, sizeof(m_channel_state[1].outBuf));
+        memset(m_channel_state[1].sLPC_Q14_buf, 0, sizeof(m_channel_state[1].sLPC_Q14_buf));
+        m_channel_state[1].lagPrev = 100;
+        m_channel_state[1].LastGainIndex = 10;
+        m_channel_state[1].prevSignalType = TYPE_NO_VOICE_ACTIVITY;
+        m_channel_state[1].first_frame_after_reset = 1;
     }
 
     /* Check if the temp buffer fits into the output PCM buffer. If it fits,
        we can delay allocating the temp buffer until after the SILK peak stack
        usage. We need to use a < and not a <= because of the two extra samples. */
-    delay_stack_alloc = s_silk_DecControlStruct->internalSampleRate * s_silk_DecControlStruct->nChannelsInternal <
-                        s_silk_DecControlStruct->API_sampleRate * s_silk_DecControlStruct->nChannelsAPI;
+    delay_stack_alloc = m_silk_DecControlStruct->internalSampleRate * m_silk_DecControlStruct->nChannelsInternal <
+                        m_silk_DecControlStruct->API_sampleRate * m_silk_DecControlStruct->nChannelsAPI;
 
-    size_t samplesOut1_tmp_storage1_len = delay_stack_alloc ? SILK_ALLOC_NONE : s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2);
+    size_t samplesOut1_tmp_storage1_len = delay_stack_alloc ? SILK_ALLOC_NONE : m_silk_DecControlStruct->nChannelsInternal * (m_channel_state[0].frame_length + 2);
     ps_ptr<int16_t>samplesOut1_tmp_storage1; samplesOut1_tmp_storage1.alloc_array(samplesOut1_tmp_storage1_len);
 
     if (delay_stack_alloc) {
         samplesOut1_tmp[0] = samplesOut;
-        samplesOut1_tmp[1] = samplesOut + s_channel_state[0].frame_length + 2;
+        samplesOut1_tmp[1] = samplesOut + m_channel_state[0].frame_length + 2;
     } else {
         samplesOut1_tmp[0] = samplesOut1_tmp_storage1.get();
-        samplesOut1_tmp[1] = samplesOut1_tmp_storage1.get() + s_channel_state[0].frame_length + 2;
+        samplesOut1_tmp[1] = samplesOut1_tmp_storage1.get() + m_channel_state[0].frame_length + 2;
     }
 
     if (lostFlag == FLAG_DECODE_NORMAL) {
         has_side = !decode_only_middle;
     } else {
         has_side =
-            !s_silk_decoder->prev_decode_only_middle || (s_silk_DecControlStruct->nChannelsInternal == 2 && lostFlag == FLAG_DECODE_LBRR &&
-                                                s_channel_state[1].LBRR_flags[s_channel_state[1].nFramesDecoded] == 1);
+            !m_silk_decoder->prev_decode_only_middle || (m_silk_DecControlStruct->nChannelsInternal == 2 && lostFlag == FLAG_DECODE_LBRR &&
+                                                m_channel_state[1].LBRR_flags[m_channel_state[1].nFramesDecoded] == 1);
     }
     /* Call decoder for one frame */
-    for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
+    for (n = 0; n < m_silk_DecControlStruct->nChannelsInternal; n++) {
         if (n == 0 || has_side) {
             int32_t FrameIndex;
             int32_t condCoding;
 
-            FrameIndex = s_channel_state[0].nFramesDecoded - n;
+            FrameIndex = m_channel_state[0].nFramesDecoded - n;
             /* Use independent coding if no previous frame available */
             if (FrameIndex <= 0) {
                 condCoding = CODE_INDEPENDENTLY;
             } else if (lostFlag == FLAG_DECODE_LBRR) {
-                condCoding = s_channel_state[n].LBRR_flags[FrameIndex - 1] ? CODE_CONDITIONALLY : CODE_INDEPENDENTLY;
-            } else if (n > 0 && s_silk_decoder->prev_decode_only_middle) {
+                condCoding = m_channel_state[n].LBRR_flags[FrameIndex - 1] ? CODE_CONDITIONALLY : CODE_INDEPENDENTLY;
+            } else if (n > 0 && m_silk_decoder->prev_decode_only_middle) {
                 /* If we skipped a side frame in this packet, we don't
                    need LTP scaling; the LTP state is well-defined. */
                 condCoding = CODE_INDEPENDENTLY_NO_LTP_SCALING;
@@ -1710,58 +1710,58 @@ int32_t silk_Decode(                                   /* O    Returns error cod
         } else {
             memset(&samplesOut1_tmp[n][2], 0, nSamplesOutDec * sizeof(int16_t));
         }
-        s_channel_state[n].nFramesDecoded++;
+        m_channel_state[n].nFramesDecoded++;
     }
 
-    if (s_silk_DecControlStruct->nChannelsAPI == 2 && s_silk_DecControlStruct->nChannelsInternal == 2) {
+    if (m_silk_DecControlStruct->nChannelsAPI == 2 && m_silk_DecControlStruct->nChannelsInternal == 2) {
         /* Convert Mid/Side to Left/Right */
-        silk_stereo_MS_to_LR(&s_silk_decoder->sStereo, samplesOut1_tmp[0], samplesOut1_tmp[1], MS_pred_Q13,
-                             s_channel_state[0].fs_kHz, nSamplesOutDec);
+        silk_stereo_MS_to_LR(&m_silk_decoder->sStereo, samplesOut1_tmp[0], samplesOut1_tmp[1], MS_pred_Q13,
+                             m_channel_state[0].fs_kHz, nSamplesOutDec);
     } else {
         /* Buffering */
-        memcpy(samplesOut1_tmp[0], s_silk_decoder->sStereo.sMid, 2 * sizeof(int16_t));
-        memcpy(s_silk_decoder->sStereo.sMid, &samplesOut1_tmp[0][nSamplesOutDec], 2 * sizeof(int16_t));
+        memcpy(samplesOut1_tmp[0], m_silk_decoder->sStereo.sMid, 2 * sizeof(int16_t));
+        memcpy(m_silk_decoder->sStereo.sMid, &samplesOut1_tmp[0][nSamplesOutDec], 2 * sizeof(int16_t));
     }
 
     /* Number of output samples */
-    *nSamplesOut = silk_DIV32(nSamplesOutDec * s_silk_DecControlStruct->API_sampleRate, silk_SMULBB(s_channel_state[0].fs_kHz, 1000));
+    *nSamplesOut = silk_DIV32(nSamplesOutDec * m_silk_DecControlStruct->API_sampleRate, silk_SMULBB(m_channel_state[0].fs_kHz, 1000));
 
     /* Set up pointers to temp buffers */
-    size_t samplesOut2_tmp_len = s_silk_DecControlStruct->nChannelsAPI == 2 ? *nSamplesOut : SILK_ALLOC_NONE;
+    size_t samplesOut2_tmp_len = m_silk_DecControlStruct->nChannelsAPI == 2 ? *nSamplesOut : SILK_ALLOC_NONE;
     ps_ptr<int16_t>samplesOut2_tmp; samplesOut2_tmp.alloc_array(samplesOut2_tmp_len);
 
-    if (s_silk_DecControlStruct->nChannelsAPI == 2) {
+    if (m_silk_DecControlStruct->nChannelsAPI == 2) {
         resample_out_ptr = samplesOut2_tmp.get();
     } else {
         resample_out_ptr = samplesOut;
     }
 
-    size_t samplesOut1_tmp_storage2_len = delay_stack_alloc ? s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2) : SILK_ALLOC_NONE;
+    size_t samplesOut1_tmp_storage2_len = delay_stack_alloc ? m_silk_DecControlStruct->nChannelsInternal * (m_channel_state[0].frame_length + 2) : SILK_ALLOC_NONE;
     ps_ptr<int16_t>samplesOut1_tmp_storage2; samplesOut1_tmp_storage2.alloc_array(samplesOut1_tmp_storage2_len);
 
     if (delay_stack_alloc) {
-    //    size_t val1 = s_silk_DecControlStruct->nChannelsInternal * (s_channel_state[0].frame_length + 2);
+    //    size_t val1 = m_silk_DecControlStruct->nChannelsInternal * (m_channel_state[0].frame_length + 2);
         size_t val2 = samplesOut1_tmp_storage2_len *sizeof(int16_t);
         //size_t n = val1 * val2;
         memcpy(samplesOut1_tmp_storage2.get(), samplesOut, val2);
         samplesOut1_tmp[0] = samplesOut1_tmp_storage2.get();
-        samplesOut1_tmp[1] = samplesOut1_tmp_storage2.get() + s_channel_state[0].frame_length + 2;
+        samplesOut1_tmp[1] = samplesOut1_tmp_storage2.get() + m_channel_state[0].frame_length + 2;
     }
-    for (n = 0; n < silk_min(s_silk_DecControlStruct->nChannelsAPI, s_silk_DecControlStruct->nChannelsInternal); n++) {
+    for (n = 0; n < silk_min(m_silk_DecControlStruct->nChannelsAPI, m_silk_DecControlStruct->nChannelsInternal); n++) {
 
         /* Resample decoded signal to API_sampleRate */
         ret +=
             silk_resampler(n, resample_out_ptr, &samplesOut1_tmp[n][1], nSamplesOutDec);
 
         /* Interleave if stereo output and stereo stream */
-        if (s_silk_DecControlStruct->nChannelsAPI == 2) {
+        if (m_silk_DecControlStruct->nChannelsAPI == 2) {
             for (i = 0; i < *nSamplesOut; i++) {
                 samplesOut[n + 2 * i] = resample_out_ptr[i];
             }
         }
     }
     /* Create two channel output from mono stream */
-    if (s_silk_DecControlStruct->nChannelsAPI == 2 && s_silk_DecControlStruct->nChannelsInternal == 1) {
+    if (m_silk_DecControlStruct->nChannelsAPI == 2 && m_silk_DecControlStruct->nChannelsInternal == 1) {
         if (stereo_to_mono) {
             /* Resample right channel for newly collapsed stereo just in case
                we weren't doing collapsing when switching to mono */
@@ -1778,23 +1778,23 @@ int32_t silk_Decode(                                   /* O    Returns error cod
         }
     }
     /* Export pitch lag, measured at 48 kHz sampling rate */
-    if (s_channel_state[0].prevSignalType == TYPE_VOICED) {
+    if (m_channel_state[0].prevSignalType == TYPE_VOICED) {
         int mult_tab[3] = {6, 4, 3};
-        s_silk_DecControlStruct->prevPitchLag = s_channel_state[0].lagPrev * mult_tab[(s_channel_state[0].fs_kHz - 8) >> 2];
+        m_silk_DecControlStruct->prevPitchLag = m_channel_state[0].lagPrev * mult_tab[(m_channel_state[0].fs_kHz - 8) >> 2];
     } else {
-        s_silk_DecControlStruct->prevPitchLag = 0;
+        m_silk_DecControlStruct->prevPitchLag = 0;
     }
 
     if (lostFlag == FLAG_PACKET_LOST) {
         /* On packet loss, remove the gain clamping to prevent having the energy "bounce back"
            if we lose packets when the energy is going down */
-        for (i = 0; i < s_silk_decoder->nChannelsInternal; i++) s_channel_state[i].LastGainIndex = 10;
+        for (i = 0; i < m_silk_decoder->nChannelsInternal; i++) m_channel_state[i].LastGainIndex = 10;
     } else {
-        s_silk_decoder->prev_decode_only_middle = decode_only_middle;
+        m_silk_decoder->prev_decode_only_middle = decode_only_middle;
     }
     return ret;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Decoder functions */
 int32_t silk_Get_Decoder_Size(int32_t* decSizeBytes) {
     int32_t ret = SILK_NO_ERROR;
@@ -1803,21 +1803,21 @@ int32_t silk_Get_Decoder_Size(int32_t* decSizeBytes) {
 
     return ret;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Reset decoder state */
 int32_t silk_InitDecoder() {
     int32_t n, ret = SILK_NO_ERROR;
-   // s_channel_state = (silk_decoder_state_t*) &decState->s_channel_state;
+   // m_channel_state = (silk_decoder_state_t*) &decState->m_channel_state;
 
     for (n = 0; n < DECODER_NUM_CHANNELS; n++) {
         ret = silk_init_decoder(n);
     }
-    memset(&s_silk_decoder->sStereo, 0, sizeof(s_silk_decoder->sStereo));
-    s_silk_decoder->prev_decode_only_middle = 0;
+    memset(&m_silk_decoder->sStereo, 0, sizeof(m_silk_decoder->sStereo));
+    m_silk_decoder->prev_decode_only_middle = 0;
     return ret;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Core decoder. Performs inverse NSQ operation LTP + LPC */
 void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LENGTH]) {
@@ -1826,53 +1826,53 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
     int32_t  LTP_pred_Q13, LPC_pred_Q10, Gain_Q10, inv_gain_Q31, gain_adj_Q16, rand_seed, offset_Q10;
     int32_t *pred_lag_ptr, *pexc_Q14, *pres_Q14;
 
-    assert(s_channel_state[n].prev_gain_Q16 != 0);
+    assert(m_channel_state[n].prev_gain_Q16 != 0);
 
-    ps_ptr<int16_t>sLTP;     sLTP.alloc_array(s_channel_state[n].ltp_mem_length);
-    ps_ptr<int32_t>sLTP_Q15; sLTP_Q15.alloc_array(s_channel_state[n].ltp_mem_length + s_channel_state[n].frame_length);
-    ps_ptr<int32_t>res_Q14;  res_Q14.alloc_array(s_channel_state[n].subfr_length);
-    ps_ptr<int32_t>sLPC_Q14; sLPC_Q14.alloc_array(s_channel_state[n].subfr_length + MAX_LPC_ORDER);
+    ps_ptr<int16_t>sLTP;     sLTP.alloc_array(m_channel_state[n].ltp_mem_length);
+    ps_ptr<int32_t>sLTP_Q15; sLTP_Q15.alloc_array(m_channel_state[n].ltp_mem_length + m_channel_state[n].frame_length);
+    ps_ptr<int32_t>res_Q14;  res_Q14.alloc_array(m_channel_state[n].subfr_length);
+    ps_ptr<int32_t>sLPC_Q14; sLPC_Q14.alloc_array(m_channel_state[n].subfr_length + MAX_LPC_ORDER);
 
-    offset_Q10 = silk_Quantization_Offsets_Q10[s_channel_state[n].indices.signalType >> 1][s_channel_state[n].indices.quantOffsetType];
+    offset_Q10 = silk_Quantization_Offsets_Q10[m_channel_state[n].indices.signalType >> 1][m_channel_state[n].indices.quantOffsetType];
 
-    if(s_channel_state[n].indices.NLSFInterpCoef_Q2 < 1 << 2) { NLSF_interpolation_flag = 1; }
+    if(m_channel_state[n].indices.NLSFInterpCoef_Q2 < 1 << 2) { NLSF_interpolation_flag = 1; }
     else { NLSF_interpolation_flag = 0; }
 
     /* Decode excitation */
-    rand_seed = s_channel_state[n].indices.Seed;
-    for(i = 0; i < s_channel_state[n].frame_length; i++) {
+    rand_seed = m_channel_state[n].indices.Seed;
+    for(i = 0; i < m_channel_state[n].frame_length; i++) {
         rand_seed = silk_RAND(rand_seed);
-        s_channel_state[n].exc_Q14[i] = silk_LSHIFT((int32_t)pulses[i], 14);
-        if(s_channel_state[n].exc_Q14[i] > 0) { s_channel_state[n].exc_Q14[i] -= QUANT_LEVEL_ADJUST_Q10 << 4; }
-        else if(s_channel_state[n].exc_Q14[i] < 0) { s_channel_state[n].exc_Q14[i] += QUANT_LEVEL_ADJUST_Q10 << 4; }
-        s_channel_state[n].exc_Q14[i] += offset_Q10 << 4;
-        if(rand_seed < 0) { s_channel_state[n].exc_Q14[i] = -s_channel_state[n].exc_Q14[i]; }
+        m_channel_state[n].exc_Q14[i] = silk_LSHIFT((int32_t)pulses[i], 14);
+        if(m_channel_state[n].exc_Q14[i] > 0) { m_channel_state[n].exc_Q14[i] -= QUANT_LEVEL_ADJUST_Q10 << 4; }
+        else if(m_channel_state[n].exc_Q14[i] < 0) { m_channel_state[n].exc_Q14[i] += QUANT_LEVEL_ADJUST_Q10 << 4; }
+        m_channel_state[n].exc_Q14[i] += offset_Q10 << 4;
+        if(rand_seed < 0) { m_channel_state[n].exc_Q14[i] = -m_channel_state[n].exc_Q14[i]; }
 
         rand_seed = silk_ADD32_ovflw(rand_seed, pulses[i]);
     }
 
     /* Copy LPC state */
-    memcpy(sLPC_Q14.get(), s_channel_state[n].sLPC_Q14_buf, MAX_LPC_ORDER * sizeof(int32_t));
+    memcpy(sLPC_Q14.get(), m_channel_state[n].sLPC_Q14_buf, MAX_LPC_ORDER * sizeof(int32_t));
 
-    pexc_Q14 = s_channel_state[n].exc_Q14;
+    pexc_Q14 = m_channel_state[n].exc_Q14;
     pxq = xq;
-    sLTP_buf_idx =s_channel_state[n].ltp_mem_length;
+    sLTP_buf_idx =m_channel_state[n].ltp_mem_length;
     /* Loop over subframes */
-    for(k = 0; k < s_channel_state[n].nb_subfr; k++) {
+    for(k = 0; k < m_channel_state[n].nb_subfr; k++) {
         pres_Q14 = res_Q14.get();
-        A_Q12 = s_silk_decoder_control->PredCoef_Q12[k >> 1];
+        A_Q12 = m_silk_decoder_control->PredCoef_Q12[k >> 1];
 
         /* Preload LPC coeficients to array on stack. Gives small performance gain */
-        memcpy(A_Q12_tmp, A_Q12,s_channel_state[n].LPC_order * sizeof(int16_t));
-        B_Q14 = &s_silk_decoder_control->LTPCoef_Q14[k * LTP_ORDER];
-        signalType = s_channel_state[n].indices.signalType;
+        memcpy(A_Q12_tmp, A_Q12,m_channel_state[n].LPC_order * sizeof(int16_t));
+        B_Q14 = &m_silk_decoder_control->LTPCoef_Q14[k * LTP_ORDER];
+        signalType = m_channel_state[n].indices.signalType;
 
-        Gain_Q10 = silk_RSHIFT(s_silk_decoder_control->Gains_Q16[k], 6);
-        inv_gain_Q31 = silk_INVERSE32_varQ(s_silk_decoder_control->Gains_Q16[k], 47);
+        Gain_Q10 = silk_RSHIFT(m_silk_decoder_control->Gains_Q16[k], 6);
+        inv_gain_Q31 = silk_INVERSE32_varQ(m_silk_decoder_control->Gains_Q16[k], 47);
 
         /* Calculate gain adjustment factor */
-        if (s_silk_decoder_control->Gains_Q16[k] != s_channel_state[n].prev_gain_Q16) {
-            gain_adj_Q16 = silk_DIV32_varQ(s_channel_state[n].prev_gain_Q16, s_silk_decoder_control->Gains_Q16[k], 16);
+        if (m_silk_decoder_control->Gains_Q16[k] != m_channel_state[n].prev_gain_Q16) {
+            gain_adj_Q16 = silk_DIV32_varQ(m_channel_state[n].prev_gain_Q16, m_silk_decoder_control->Gains_Q16[k], 16);
 
             /* Scale short term state */
             for(i = 0; i < MAX_LPC_ORDER; i++) { sLPC_Q14[i] = silk_SMULWW(gain_adj_Q16, sLPC_Q14[i]); }
@@ -1881,37 +1881,37 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
 
         /* Save inv_gain */
         assert(inv_gain_Q31 != 0);
-        s_channel_state[n].prev_gain_Q16 = s_silk_decoder_control->Gains_Q16[k];
+        m_channel_state[n].prev_gain_Q16 = m_silk_decoder_control->Gains_Q16[k];
 
         /* Avoid abrupt transition from voiced PLC to unvoiced normal decoding */
-        if(s_channel_state[n].lossCnt && s_channel_state[n].prevSignalType == TYPE_VOICED && s_channel_state[n].indices.signalType != TYPE_VOICED && k < MAX_NB_SUBFR / 2) {
+        if(m_channel_state[n].lossCnt && m_channel_state[n].prevSignalType == TYPE_VOICED && m_channel_state[n].indices.signalType != TYPE_VOICED && k < MAX_NB_SUBFR / 2) {
             memset(B_Q14, 0, LTP_ORDER * sizeof(int16_t));
             B_Q14[LTP_ORDER / 2] = SILK_FIX_CONST(0.25, 14);
 
             signalType = TYPE_VOICED;
-            s_silk_decoder_control->pitchL[k] = s_channel_state[n].lagPrev;
+            m_silk_decoder_control->pitchL[k] = m_channel_state[n].lagPrev;
         }
 
         if(signalType == TYPE_VOICED) {
             /* Voiced */
-            lag = s_silk_decoder_control->pitchL[k];
+            lag = m_silk_decoder_control->pitchL[k];
 
             /* Re-whitening */
             if(k == 0 || (k == 2 && NLSF_interpolation_flag)) {
                 /* Rewhiten with new A coefs */
-                start_idx = s_channel_state[n].ltp_mem_length - lag - s_channel_state[n].LPC_order - LTP_ORDER / 2;
+                start_idx = m_channel_state[n].ltp_mem_length - lag - m_channel_state[n].LPC_order - LTP_ORDER / 2;
                 assert(start_idx > 0);
 
-                if(k == 2) { memcpy(&s_channel_state[n].outBuf[s_channel_state[n].ltp_mem_length], xq, 2 * s_channel_state[n].subfr_length * sizeof(int16_t)); }
+                if(k == 2) { memcpy(&m_channel_state[n].outBuf[m_channel_state[n].ltp_mem_length], xq, 2 * m_channel_state[n].subfr_length * sizeof(int16_t)); }
 
-                silk_LPC_analysis_filter(&sLTP[start_idx], &s_channel_state[n].outBuf[start_idx + k * s_channel_state[n].subfr_length], A_Q12, s_channel_state[n].ltp_mem_length - start_idx, s_channel_state[n].LPC_order);
+                silk_LPC_analysis_filter(&sLTP[start_idx], &m_channel_state[n].outBuf[start_idx + k * m_channel_state[n].subfr_length], A_Q12, m_channel_state[n].ltp_mem_length - start_idx, m_channel_state[n].LPC_order);
 
                 /* After rewhitening the LTP state is unscaled */
                 if(k == 0) {
                     /* Do LTP downscaling to reduce inter-packet dependency */
-                    inv_gain_Q31 = silk_LSHIFT(silk_SMULWB(inv_gain_Q31, s_silk_decoder_control->LTP_scale_Q14), 2);
+                    inv_gain_Q31 = silk_LSHIFT(silk_SMULWB(inv_gain_Q31, m_silk_decoder_control->LTP_scale_Q14), 2);
                 }
-                for(i = 0; i < lag + LTP_ORDER / 2; i++) { sLTP_Q15[sLTP_buf_idx - i - 1] = silk_SMULWB(inv_gain_Q31, sLTP[s_channel_state[n].ltp_mem_length - i - 1]); }
+                for(i = 0; i < lag + LTP_ORDER / 2; i++) { sLTP_Q15[sLTP_buf_idx - i - 1] = silk_SMULWB(inv_gain_Q31, sLTP[m_channel_state[n].ltp_mem_length - i - 1]); }
             }
             else {
                 /* Update LTP state when Gain changes */
@@ -1925,7 +1925,7 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
         if(signalType == TYPE_VOICED) {
             /* Set up pointer */
             pred_lag_ptr = &sLTP_Q15[sLTP_buf_idx - lag + LTP_ORDER / 2];
-            for(i = 0; i < s_channel_state[n].subfr_length; i++) {
+            for(i = 0; i < m_channel_state[n].subfr_length; i++) {
                 /* Unrolled loop */
                 /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
                 LTP_pred_Q13 = 2;
@@ -1946,11 +1946,11 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
         }
         else { pres_Q14 = pexc_Q14; }
 
-        for(i = 0; i < s_channel_state[n].subfr_length; i++) {
+        for(i = 0; i < m_channel_state[n].subfr_length; i++) {
             /* Short-term prediction */
-            assert(s_channel_state[n].LPC_order == 10 || s_channel_state[n].LPC_order == 16);
+            assert(m_channel_state[n].LPC_order == 10 || m_channel_state[n].LPC_order == 16);
             /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
-            LPC_pred_Q10 = silk_RSHIFT(s_channel_state[n].LPC_order, 1);
+            LPC_pred_Q10 = silk_RSHIFT(m_channel_state[n].LPC_order, 1);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 1], A_Q12_tmp[0]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 2], A_Q12_tmp[1]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 3], A_Q12_tmp[2]);
@@ -1961,7 +1961,7 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 8], A_Q12_tmp[7]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 9], A_Q12_tmp[8]);
             LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 10], A_Q12_tmp[9]);
-            if(s_channel_state[n].LPC_order == 16) {
+            if(m_channel_state[n].LPC_order == 16) {
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 11], A_Q12_tmp[10]);
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 12], A_Q12_tmp[11]);
                 LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14[MAX_LPC_ORDER + i - 13], A_Q12_tmp[12]);
@@ -1978,15 +1978,15 @@ void silk_decode_core(uint8_t n, int16_t xq[], const int16_t pulses[MAX_FRAME_LE
         }
 
         /* Update LPC filter state */
-        memcpy(sLPC_Q14.get(), &sLPC_Q14[s_channel_state[n].subfr_length], MAX_LPC_ORDER * sizeof(int32_t));
-        pexc_Q14 += s_channel_state[n].subfr_length;
-        pxq += s_channel_state[n].subfr_length;
+        memcpy(sLPC_Q14.get(), &sLPC_Q14[m_channel_state[n].subfr_length], MAX_LPC_ORDER * sizeof(int32_t));
+        pexc_Q14 += m_channel_state[n].subfr_length;
+        pxq += m_channel_state[n].subfr_length;
     }
 
     /* Save LPC state */
-    memcpy(s_channel_state[n].sLPC_Q14_buf, sLPC_Q14.get(), MAX_LPC_ORDER * sizeof(int32_t));
+    memcpy(m_channel_state[n].sLPC_Q14_buf, sLPC_Q14.get(), MAX_LPC_ORDER * sizeof(int32_t));
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Decode frame */
 int32_t silk_decode_frame(uint8_t n,
                           int16_t pOut[],            /* O    Pointer to output speech frame              */
@@ -1995,24 +1995,24 @@ int32_t silk_decode_frame(uint8_t n,
                           int32_t condCoding         /* I    The type of conditional coding to use       */
 ) {
     int32_t L, mv_len, ret = 0;
-    L = s_channel_state[n].frame_length;
-    s_silk_decoder_control->LTP_scale_Q14 = 0;
+    L = m_channel_state[n].frame_length;
+    m_silk_decoder_control->LTP_scale_Q14 = 0;
 
     /* Safety checks */
     assert(L > 0 && L <= MAX_FRAME_LENGTH);
 
-    if(lostFlag == FLAG_DECODE_NORMAL || (lostFlag == FLAG_DECODE_LBRR && s_channel_state[n].LBRR_flags[s_channel_state[n].nFramesDecoded] == 1)) {
+    if(lostFlag == FLAG_DECODE_NORMAL || (lostFlag == FLAG_DECODE_LBRR && m_channel_state[n].LBRR_flags[m_channel_state[n].nFramesDecoded] == 1)) {
         int16_t pulses[(L + SHELL_CODEC_FRAME_LENGTH - 1) & ~(SHELL_CODEC_FRAME_LENGTH - 1)];
         /*********************************************/
         /* Decode quantization indices of side info  */
         /*********************************************/
-        silk_decode_indices(n, s_channel_state[n].nFramesDecoded, lostFlag, condCoding);
+        silk_decode_indices(n, m_channel_state[n].nFramesDecoded, lostFlag, condCoding);
 
         /*********************************************/
         /* Decode quantization indices of excitation */
         /*********************************************/
-        silk_decode_pulses(pulses, s_channel_state[n].indices.signalType, s_channel_state[n].indices.quantOffsetType,
-                           s_channel_state[n].frame_length);
+        silk_decode_pulses(pulses, m_channel_state[n].indices.signalType, m_channel_state[n].indices.quantOffsetType,
+                           m_channel_state[n].frame_length);
 
         /********************************************/
         /* Decode parameters and pulse signal       */
@@ -2029,26 +2029,26 @@ int32_t silk_decode_frame(uint8_t n,
         /********************************************************/
         silk_PLC(n, pOut, 0);
 
-        s_channel_state[n].lossCnt = 0;
-        s_channel_state[n].prevSignalType = s_channel_state[n].indices.signalType;
-        assert(s_channel_state[n].prevSignalType >= 0 && s_channel_state[n].prevSignalType <= 2);
+        m_channel_state[n].lossCnt = 0;
+        m_channel_state[n].prevSignalType = m_channel_state[n].indices.signalType;
+        assert(m_channel_state[n].prevSignalType >= 0 && m_channel_state[n].prevSignalType <= 2);
 
         /* A frame has been decoded without errors */
-        s_channel_state[n].first_frame_after_reset = 0;
+        m_channel_state[n].first_frame_after_reset = 0;
     }
     else {
         /* Handle packet loss by extrapolation */
-        s_channel_state[n].indices.signalType = s_channel_state[n].prevSignalType;
+        m_channel_state[n].indices.signalType = m_channel_state[n].prevSignalType;
         silk_PLC(n, pOut, 1);
     }
 
     /*************************/
     /* Update output buffer. */
     /*************************/
-    assert(s_channel_state[n].ltp_mem_length >= s_channel_state[n].frame_length);
-    mv_len = s_channel_state[n].ltp_mem_length - s_channel_state[n].frame_length;
-    memmove(s_channel_state[n].outBuf, &s_channel_state[n].outBuf[s_channel_state[n].frame_length], mv_len * sizeof(int16_t));
-    memcpy(&s_channel_state[n].outBuf[mv_len], pOut, s_channel_state[n].frame_length * sizeof(int16_t));
+    assert(m_channel_state[n].ltp_mem_length >= m_channel_state[n].frame_length);
+    mv_len = m_channel_state[n].ltp_mem_length - m_channel_state[n].frame_length;
+    memmove(m_channel_state[n].outBuf, &m_channel_state[n].outBuf[m_channel_state[n].frame_length], mv_len * sizeof(int16_t));
+    memcpy(&m_channel_state[n].outBuf[mv_len], pOut, m_channel_state[n].frame_length * sizeof(int16_t));
 
     /************************************************/
     /* Comfort noise generation / estimation        */
@@ -2061,14 +2061,14 @@ int32_t silk_decode_frame(uint8_t n,
     silk_PLC_glue_frames(n, pOut, L);
 
     /* Update some decoder state variables */
-    s_channel_state[n].lagPrev = s_silk_decoder_control->pitchL[s_channel_state[n].nb_subfr - 1];
+    m_channel_state[n].lagPrev = m_silk_decoder_control->pitchL[m_channel_state[n].nb_subfr - 1];
 
     /* Set output frame length */
     *pN = L;
 
     return ret;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_decode_pitch(int16_t       lagIndex,     /* I                                                                */
                        int8_t        contourIndex, /* O                                                                */
                        int32_t       pitch_lags[], /* O    4 pitch values                                              */
@@ -2110,7 +2110,7 @@ void silk_decode_pitch(int16_t       lagIndex,     /* I                         
         pitch_lags[k] = silk_LIMIT(pitch_lags[k], min_lag, max_lag);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Gain scalar quantization with hysteresis, uniform on log scale */
 void silk_gains_quant(int8_t        ind[MAX_NB_SUBFR],      /* O    gain indices                                */
                       int32_t       gain_Q16[MAX_NB_SUBFR], /* I/O  gains (quantized out)                       */
@@ -2159,7 +2159,7 @@ void silk_gains_quant(int8_t        ind[MAX_NB_SUBFR],      /* O    gain indices
         gain_Q16[k] = silk_log2lin(silk_min_32(silk_SMULWB(INV_SCALE_Q16, *prev_ind) + OFFSET, 3967)); /* 3967 = 31 in Q7 */
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Gains scalar dequantization, uniform on log scale */
 void silk_gains_dequant(int32_t       gain_Q16[MAX_NB_SUBFR], /* O    quantized gains                             */
@@ -2190,7 +2190,7 @@ void silk_gains_dequant(int32_t       gain_Q16[MAX_NB_SUBFR], /* O    quantized 
         gain_Q16[k] = silk_log2lin(silk_min_32(silk_SMULWB(INV_SCALE_Q16, *prev_ind) + OFFSET, 3967)); /* 3967 = 31 in Q7 */
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Compute unique identifier of gain indices vector */
 int32_t silk_gains_ID(                                 /* O    returns unique identifier of gains          */
@@ -2205,14 +2205,14 @@ int32_t silk_gains_ID(                                 /* O    returns unique id
 
     return gainsID;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t silk_init_decoder(uint8_t n) {
     /* Clear the entire encoder state, except anything copied */
-    memset(&s_channel_state[n], 0, sizeof(silk_decoder_state_t));
+    memset(&m_channel_state[n], 0, sizeof(silk_decoder_state_t));
 
     /* Used to deactivate LSF interpolation */
-    s_channel_state[n].first_frame_after_reset = 1;
-    s_channel_state[n].prev_gain_Q16 = 65536;
+    m_channel_state[n].first_frame_after_reset = 1;
+    m_channel_state[n].prev_gain_Q16 = 65536;
 
     /* Reset CNG state */
     silk_CNG_Reset(n);
@@ -2222,7 +2222,7 @@ int32_t silk_init_decoder(uint8_t n) {
 
     return (0);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t silk_inner_prod_aligned_scale(const int16_t* const inVec1, /*    I input vector 1 */
                                       const int16_t* const inVec2, /*    I input vector 2 */
                                       const int32_t        scale,  /*    I number of bits to shift         */
@@ -2233,7 +2233,7 @@ int32_t silk_inner_prod_aligned_scale(const int16_t* const inVec1, /*    I input
     for(i = 0; i < len; i++) { sum = silk_ADD_RSHIFT32(sum, silk_SMULBB(inVec1[i], inVec2[i]), scale); }
     return sum;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Interpolate two vectors */
 void silk_interpolate(int16_t       xi[MAX_LPC_ORDER], /* O    interpolated vector                         */
                       const int16_t x0[MAX_LPC_ORDER], /* I    first vector                                */
@@ -2248,7 +2248,7 @@ void silk_interpolate(int16_t       xi[MAX_LPC_ORDER], /* O    interpolated vect
 
     for(i = 0; i < d; i++) { xi[i] = (int16_t)silk_ADD_RSHIFT(x0[i], silk_SMULBB(x1[i] - x0[i], ifact_Q2), 2); }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 int32_t silk_lin2log(const int32_t inLin /* I  input in linear scale                                         */
 ) {
@@ -2259,7 +2259,7 @@ int32_t silk_lin2log(const int32_t inLin /* I  input in linear scale            
     /* Piece-wise parabolic approximation */
     return silk_ADD_LSHIFT32(silk_SMLAWB(frac_Q7, silk_MUL(frac_Q7, 128 - frac_Q7), 179), 31 - lz, 7);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Approximation of 2^() (very close inverse of silk_lin2log()) Convert input to a linear scale    */
 int32_t silk_log2lin(const int32_t inLog_Q7) {
@@ -2280,7 +2280,7 @@ int32_t silk_log2lin(const int32_t inLog_Q7) {
     }
     return out;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_LPC_analysis_filter(int16_t*       out, /* O    Output signal                                               */
                               const int16_t* in,  /* I    Input signal                                                */
@@ -2325,7 +2325,7 @@ void silk_LPC_analysis_filter(int16_t*       out, /* O    Output signal         
     /* Set first d output samples to zero */
     memset(out, 0, d * sizeof(int16_t));
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Convert int32 coefficients to int16 coefs and make sure there's no wrap-around */
 void silk_LPC_fit(int16_t*      a_QOUT, /* O    Output signal                                               */
@@ -2370,7 +2370,7 @@ void silk_LPC_fit(int16_t*      a_QOUT, /* O    Output signal                   
         for(k = 0; k < d; k++) { a_QOUT[k] = (int16_t)silk_RSHIFT_ROUND(a_QIN[k], QIN - QOUT); }
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Compute inverse of LPC prediction gain, and                          */
 /* test if LPC coefficients are stable (all poles within unit circle)   */
 int32_t LPC_inverse_pred_gain_QA_c(                                        /* O   Returns inverse prediction gain in energy domain, Q30    */
@@ -2437,7 +2437,7 @@ int32_t LPC_inverse_pred_gain_QA_c(                                        /* O 
 
     return invGain_Q30;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* For input in Q12 domain */
 int32_t silk_LPC_inverse_pred_gain_c(                      /* O   Returns inverse prediction gain in energy domain, Q30        */
                                      const int16_t* A_Q12, /* I   Prediction coefficients, Q12 [order] */
@@ -2457,7 +2457,7 @@ int32_t silk_LPC_inverse_pred_gain_c(                      /* O   Returns invers
     if(DC_resp >= 4096) { return 0; }
     return LPC_inverse_pred_gain_QA_c(Atmp_QA, order);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Predictive dequantizer for NLSF residuals */
 void silk_NLSF_residual_dequant(                                   /* O    Returns RD value in Q30                     */
                                 int16_t       x_Q10[],             /* O    Output [ order ]                            */
@@ -2478,7 +2478,7 @@ void silk_NLSF_residual_dequant(                                   /* O    Retur
         x_Q10[i] = out_Q10;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* NLSF vector decoder */
 void silk_NLSF_decode(int16_t*                   pNLSF_Q15,   /* O    Quantized NLSF vector [ LPC_ORDER ]         */
                       int8_t*                    NLSFIndices, /* I    Codebook path vector [ LPC_ORDER + 1 ]      */
@@ -2509,7 +2509,7 @@ void silk_NLSF_decode(int16_t*                   pNLSF_Q15,   /* O    Quantized 
     /* NLSF stabilization */
     silk_NLSF_stabilize(pNLSF_Q15, psNLSF_CB->deltaMin_Q15, psNLSF_CB->order);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Delayed-decision quantizer for NLSF residuals */
 int32_t silk_NLSF_del_dec_quant(                                      /* O    Returns RD value in Q25                     */
                                 int8_t        indices[],              /* O    Quantization indices [ order ]              */
@@ -2688,7 +2688,7 @@ int32_t silk_NLSF_del_dec_quant(                                      /* O    Re
     assert(min_Q25 >= 0);
     return min_Q25;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* NLSF stabilizer, for a single input data vector */
 void silk_NLSF_stabilize(int16_t*       NLSF_Q15,      /* I/O   Unstable/stabilized normalized LSF vector in Q15 [L]       */
                          const int16_t* NDeltaMin_Q15, /* I     Min distance vector, NDeltaMin_Q15[L] must be >= 1 [L+1]   */
@@ -2774,7 +2774,7 @@ void silk_NLSF_stabilize(int16_t*       NLSF_Q15,      /* I/O   Unstable/stabili
         for(i = L - 2; i >= 0; i--) NLSF_Q15[i] = silk_min_int(NLSF_Q15[i], NLSF_Q15[i + 1] - NDeltaMin_Q15[i + 1]);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Unpack predictor values and indices for entropy coding tables */
 void silk_NLSF_unpack(int16_t                    ec_ix[],   /* O    Indices to entropy tables [ LPC_ORDER ]     */
                       uint8_t                    pred_Q8[], /* O    LSF predictor [ LPC_ORDER ]                 */
@@ -2794,7 +2794,7 @@ void silk_NLSF_unpack(int16_t                    ec_ix[],   /* O    Indices to e
         pred_Q8[i + 1] = psNLSF_CB->pred_Q8[i + (silk_RSHIFT(entry, 4) & 1) * (psNLSF_CB->order - 1) + 1];
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Laroia low complexity NLSF weights */
 void silk_NLSF_VQ_weights_laroia(int16_t*       pNLSFW_Q_OUT, /* O     Pointer to input vector weights [D]    */
                                  const int16_t* pNLSF_Q15,    /* I     Pointer to input vector         [D] */
@@ -2833,7 +2833,7 @@ void silk_NLSF_VQ_weights_laroia(int16_t*       pNLSFW_Q_OUT, /* O     Pointer t
     pNLSFW_Q_OUT[D - 1] = (int16_t)silk_min_int(tmp1_int + tmp2_int, silk_int16_MAX);
     assert(pNLSFW_Q_OUT[D - 1] > 0);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Compute quantization errors for an LPC_order element input vector for a VQ codebook */
 void silk_NLSF_VQ(int32_t       err_Q24[],  /* O    Quantization errors [K]                     */
                   const int16_t in_Q15[],   /* I    Input vectors to be quantized [LPC_order]   */
@@ -2875,21 +2875,21 @@ void silk_NLSF_VQ(int32_t       err_Q24[],  /* O    Quantization errors [K]     
         w_Q9_ptr += LPC_order;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void silk_PLC_Reset(uint8_t n) { /* I/O Decoder state        */
-    s_channel_state[n].sPLC.pitchL_Q8 = silk_LSHIFT(s_channel_state[n].frame_length, 8 - 1);
-    s_channel_state[n].sPLC.prevGain_Q16[0] = SILK_FIX_CONST(1, 16);
-    s_channel_state[n].sPLC.prevGain_Q16[1] = SILK_FIX_CONST(1, 16);
-    s_channel_state[n].sPLC.subfr_length = 20;
-    s_channel_state[n].sPLC.nb_subfr = 2;
+    m_channel_state[n].sPLC.pitchL_Q8 = silk_LSHIFT(m_channel_state[n].frame_length, 8 - 1);
+    m_channel_state[n].sPLC.prevGain_Q16[0] = SILK_FIX_CONST(1, 16);
+    m_channel_state[n].sPLC.prevGain_Q16[1] = SILK_FIX_CONST(1, 16);
+    m_channel_state[n].sPLC.subfr_length = 20;
+    m_channel_state[n].sPLC.nb_subfr = 2;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_PLC(uint8_t n, int16_t frame[], int32_t lost) {
     /* PLC control function */
-    if(s_channel_state[n].fs_kHz != s_channel_state[n].sPLC.fs_kHz) {
+    if(m_channel_state[n].fs_kHz != m_channel_state[n].sPLC.fs_kHz) {
         silk_PLC_Reset(n);
-        s_channel_state[n].sPLC.fs_kHz = s_channel_state[n].fs_kHz;
+        m_channel_state[n].sPLC.fs_kHz = m_channel_state[n].fs_kHz;
     }
 
     if(lost) {
@@ -2898,7 +2898,7 @@ void silk_PLC(uint8_t n, int16_t frame[], int32_t lost) {
         /****************************/
         silk_PLC_conceal(n, frame);
 
-        s_channel_state[n].lossCnt++;
+        m_channel_state[n].lossCnt++;
     }
     else {
         /****************************/
@@ -2907,28 +2907,28 @@ void silk_PLC(uint8_t n, int16_t frame[], int32_t lost) {
         silk_PLC_update(n);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Update state of PLC                            */
 void silk_PLC_update(uint8_t n) {
     int32_t          LTP_Gain_Q14, temp_LTP_Gain_Q14;
     int32_t          i, j;
     silk_PLC_struct_t* psPLC;
 
-    psPLC = &s_channel_state[n].sPLC;
+    psPLC = &m_channel_state[n].sPLC;
 
     /* Update parameters used in case of packet loss */
-    s_channel_state[n].prevSignalType = s_channel_state[n].indices.signalType;
+    m_channel_state[n].prevSignalType = m_channel_state[n].indices.signalType;
     LTP_Gain_Q14 = 0;
-    if(s_channel_state[n].indices.signalType == TYPE_VOICED) {
+    if(m_channel_state[n].indices.signalType == TYPE_VOICED) {
         /* Find the parameters for the last subframe which contains a pitch pulse */
-        for(j = 0; j * s_channel_state[n].subfr_length < s_silk_decoder_control->pitchL[s_channel_state[n].nb_subfr - 1]; j++) {
-            if(j == s_channel_state[n].nb_subfr) { break; }
+        for(j = 0; j * m_channel_state[n].subfr_length < m_silk_decoder_control->pitchL[m_channel_state[n].nb_subfr - 1]; j++) {
+            if(j == m_channel_state[n].nb_subfr) { break; }
             temp_LTP_Gain_Q14 = 0;
-            for(i = 0; i < LTP_ORDER; i++) { temp_LTP_Gain_Q14 += s_silk_decoder_control->LTPCoef_Q14[(s_channel_state[n].nb_subfr - 1 - j) * LTP_ORDER + i]; }
+            for(i = 0; i < LTP_ORDER; i++) { temp_LTP_Gain_Q14 += m_silk_decoder_control->LTPCoef_Q14[(m_channel_state[n].nb_subfr - 1 - j) * LTP_ORDER + i]; }
             if(temp_LTP_Gain_Q14 > LTP_Gain_Q14) {
                 LTP_Gain_Q14 = temp_LTP_Gain_Q14;
-                memcpy(psPLC->LTPCoef_Q14, &s_silk_decoder_control->LTPCoef_Q14[silk_SMULBB(s_channel_state[n].nb_subfr - 1 - j, LTP_ORDER)], LTP_ORDER * sizeof(int16_t));
-                psPLC->pitchL_Q8 = silk_LSHIFT(s_silk_decoder_control->pitchL[s_channel_state[n].nb_subfr - 1 - j], 8);
+                memcpy(psPLC->LTPCoef_Q14, &m_silk_decoder_control->LTPCoef_Q14[silk_SMULBB(m_channel_state[n].nb_subfr - 1 - j, LTP_ORDER)], LTP_ORDER * sizeof(int16_t));
+                psPLC->pitchL_Q8 = silk_LSHIFT(m_silk_decoder_control->pitchL[m_channel_state[n].nb_subfr - 1 - j], 8);
             }
         }
 
@@ -2954,21 +2954,21 @@ void silk_PLC_update(uint8_t n) {
         }
     }
     else {
-        psPLC->pitchL_Q8 = silk_LSHIFT(silk_SMULBB(s_channel_state[n].fs_kHz, 18), 8);
+        psPLC->pitchL_Q8 = silk_LSHIFT(silk_SMULBB(m_channel_state[n].fs_kHz, 18), 8);
         memset(psPLC->LTPCoef_Q14, 0, LTP_ORDER * sizeof(int16_t));
     }
 
     /* Save LPC coeficients */
-    memcpy(psPLC->prevLPC_Q12, s_silk_decoder_control->PredCoef_Q12[1], s_channel_state[n].LPC_order * sizeof(int16_t));
-    psPLC->prevLTP_scale_Q14 = s_silk_decoder_control->LTP_scale_Q14;
+    memcpy(psPLC->prevLPC_Q12, m_silk_decoder_control->PredCoef_Q12[1], m_channel_state[n].LPC_order * sizeof(int16_t));
+    psPLC->prevLTP_scale_Q14 = m_silk_decoder_control->LTP_scale_Q14;
 
     /* Save last two gains */
-    memcpy(psPLC->prevGain_Q16, &s_silk_decoder_control->Gains_Q16[s_channel_state[n].nb_subfr - 2], 2 * sizeof(int32_t));
+    memcpy(psPLC->prevGain_Q16, &m_silk_decoder_control->Gains_Q16[m_channel_state[n].nb_subfr - 2], 2 * sizeof(int32_t));
 
-    psPLC->subfr_length = s_channel_state[n].subfr_length;
-    psPLC->nb_subfr = s_channel_state[n].nb_subfr;
+    psPLC->subfr_length = m_channel_state[n].subfr_length;
+    psPLC->nb_subfr = m_channel_state[n].nb_subfr;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_PLC_energy(int32_t* energy1, int32_t* shift1, int32_t* energy2, int32_t* shift2, const int32_t* exc_Q14, const int32_t* prevGain_Q10, int subfr_length, int nb_subfr) {
     int i, k;
@@ -2985,7 +2985,7 @@ void silk_PLC_energy(int32_t* energy1, int32_t* shift1, int32_t* energy2, int32_
     silk_sum_sqr_shift(energy1, shift1, exc_buf.get(), subfr_length);
     silk_sum_sqr_shift(energy2, shift2, &exc_buf[subfr_length], subfr_length);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
     int32_t  i, j, k;
@@ -2997,26 +2997,26 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
     int16_t* B_Q14;
     int32_t* sLPC_Q14_ptr;
     int16_t  A_Q12[MAX_LPC_ORDER];
-    silk_PLC_struct_t* psPLC = &s_channel_state[n].sPLC;
+    silk_PLC_struct_t* psPLC = &m_channel_state[n].sPLC;
     int32_t          prevGain_Q10[2];
 
-    ps_ptr<int32_t>sLTP_Q14; sLTP_Q14.alloc_array(s_channel_state[n].ltp_mem_length + s_channel_state[n].frame_length);
-    ps_ptr<int16_t>sLTP; sLTP.alloc_array(s_channel_state[n].ltp_mem_length);
+    ps_ptr<int32_t>sLTP_Q14; sLTP_Q14.alloc_array(m_channel_state[n].ltp_mem_length + m_channel_state[n].frame_length);
+    ps_ptr<int16_t>sLTP; sLTP.alloc_array(m_channel_state[n].ltp_mem_length);
 
     prevGain_Q10[0] = silk_RSHIFT(psPLC->prevGain_Q16[0], 6);
     prevGain_Q10[1] = silk_RSHIFT(psPLC->prevGain_Q16[1], 6);
 
-    if(s_channel_state[n].first_frame_after_reset) { memset(psPLC->prevLPC_Q12, 0, sizeof(psPLC->prevLPC_Q12)); }
+    if(m_channel_state[n].first_frame_after_reset) { memset(psPLC->prevLPC_Q12, 0, sizeof(psPLC->prevLPC_Q12)); }
 
-    silk_PLC_energy(&energy1, &shift1, &energy2, &shift2, s_channel_state[n].exc_Q14, prevGain_Q10, s_channel_state[n].subfr_length, s_channel_state[n].nb_subfr);
+    silk_PLC_energy(&energy1, &shift1, &energy2, &shift2, m_channel_state[n].exc_Q14, prevGain_Q10, m_channel_state[n].subfr_length, m_channel_state[n].nb_subfr);
 
     if(silk_RSHIFT(energy1, shift2) < silk_RSHIFT(energy2, shift1)) {
         /* First sub-frame has lowest energy */
-        rand_ptr = &s_channel_state[n].exc_Q14[silk_max_int(0, (psPLC->nb_subfr - 1) * psPLC->subfr_length - RAND_BUF_SIZE)];
+        rand_ptr = &m_channel_state[n].exc_Q14[silk_max_int(0, (psPLC->nb_subfr - 1) * psPLC->subfr_length - RAND_BUF_SIZE)];
     }
     else {
         /* Second sub-frame has lowest energy */
-        rand_ptr = &s_channel_state[n].exc_Q14[silk_max_int(0, psPLC->nb_subfr * psPLC->subfr_length - RAND_BUF_SIZE)];
+        rand_ptr = &m_channel_state[n].exc_Q14[silk_max_int(0, psPLC->nb_subfr * psPLC->subfr_length - RAND_BUF_SIZE)];
     }
 
     /* Set up Gain to random noise component */
@@ -3024,22 +3024,22 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
     rand_scale_Q14 = psPLC->randScale_Q14;
 
     /* Set up attenuation gains */
-    harm_Gain_Q15 = HARM_ATT_Q15[silk_min_int(NB_ATT - 1, s_channel_state[n].lossCnt)];
-    if(s_channel_state[n].prevSignalType == TYPE_VOICED) { rand_Gain_Q15 = PLC_RAND_ATTENUATE_V_Q15[silk_min_int(NB_ATT - 1, s_channel_state[n].lossCnt)]; }
-    else { rand_Gain_Q15 = PLC_RAND_ATTENUATE_UV_Q15[silk_min_int(NB_ATT - 1, s_channel_state[n].lossCnt)]; }
+    harm_Gain_Q15 = HARM_ATT_Q15[silk_min_int(NB_ATT - 1, m_channel_state[n].lossCnt)];
+    if(m_channel_state[n].prevSignalType == TYPE_VOICED) { rand_Gain_Q15 = PLC_RAND_ATTENUATE_V_Q15[silk_min_int(NB_ATT - 1, m_channel_state[n].lossCnt)]; }
+    else { rand_Gain_Q15 = PLC_RAND_ATTENUATE_UV_Q15[silk_min_int(NB_ATT - 1, m_channel_state[n].lossCnt)]; }
 
     /* LPC concealment. Apply BWE to previous LPC */
-    silk_bwexpander(psPLC->prevLPC_Q12, s_channel_state[n].LPC_order, SILK_FIX_CONST(BWE_COEF, 16));
+    silk_bwexpander(psPLC->prevLPC_Q12, m_channel_state[n].LPC_order, SILK_FIX_CONST(BWE_COEF, 16));
 
     /* Preload LPC coeficients to array on stack. Gives small performance gain */
-    memcpy(A_Q12, psPLC->prevLPC_Q12, s_channel_state[n].LPC_order * sizeof(int16_t));
+    memcpy(A_Q12, psPLC->prevLPC_Q12, m_channel_state[n].LPC_order * sizeof(int16_t));
 
     /* First Lost frame */
-    if(s_channel_state[n].lossCnt == 0) {
+    if(m_channel_state[n].lossCnt == 0) {
         rand_scale_Q14 = 1 << 14;
 
         /* Reduce random noise Gain for voiced frames */
-        if(s_channel_state[n].prevSignalType == TYPE_VOICED) {
+        if(m_channel_state[n].prevSignalType == TYPE_VOICED) {
             for(i = 0; i < LTP_ORDER; i++) { rand_scale_Q14 -= B_Q14[i]; }
             rand_scale_Q14 = silk_max_16(3277, rand_scale_Q14); /* 0.2 */
             rand_scale_Q14 = (int16_t)silk_RSHIFT(silk_SMULBB(rand_scale_Q14, psPLC->prevLTP_scale_Q14), 14);
@@ -3048,7 +3048,7 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
             /* Reduce random noise for unvoiced frames with high LPC gain */
             int32_t invGain_Q30, down_scale_Q30;
 
-            invGain_Q30 = silk_LPC_inverse_pred_gain(psPLC->prevLPC_Q12, s_channel_state[n].LPC_order);
+            invGain_Q30 = silk_LPC_inverse_pred_gain(psPLC->prevLPC_Q12, m_channel_state[n].LPC_order);
 
             down_scale_Q30 = silk_min_32(silk_RSHIFT((int32_t)1 << 30, LOG2_INV_LPC_GAIN_HIGH_THRES), invGain_Q30);
             down_scale_Q30 = silk_max_32(silk_RSHIFT((int32_t)1 << 30, LOG2_INV_LPC_GAIN_LOW_THRES), down_scale_Q30);
@@ -3060,24 +3060,24 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
 
     rand_seed = psPLC->rand_seed;
     lag = silk_RSHIFT_ROUND(psPLC->pitchL_Q8, 8);
-    sLTP_buf_idx = s_channel_state[n].ltp_mem_length;
+    sLTP_buf_idx = m_channel_state[n].ltp_mem_length;
 
     /* Rewhiten LTP state */
-    idx = s_channel_state[n].ltp_mem_length - lag - s_channel_state[n].LPC_order - LTP_ORDER / 2;
+    idx = m_channel_state[n].ltp_mem_length - lag - m_channel_state[n].LPC_order - LTP_ORDER / 2;
     assert(idx > 0);
-    silk_LPC_analysis_filter(&sLTP[idx], &s_channel_state[n].outBuf[idx], A_Q12, s_channel_state[n].ltp_mem_length - idx, s_channel_state[n].LPC_order);
+    silk_LPC_analysis_filter(&sLTP[idx], &m_channel_state[n].outBuf[idx], A_Q12, m_channel_state[n].ltp_mem_length - idx, m_channel_state[n].LPC_order);
     /* Scale LTP state */
     inv_gain_Q30 = silk_INVERSE32_varQ(psPLC->prevGain_Q16[1], 46);
     inv_gain_Q30 = silk_min(inv_gain_Q30, silk_int32_MAX >> 1);
-    for(i = idx + s_channel_state[n].LPC_order; i < s_channel_state[n].ltp_mem_length; i++) { sLTP_Q14[i] = silk_SMULWB(inv_gain_Q30, sLTP[i]); }
+    for(i = idx + m_channel_state[n].LPC_order; i < m_channel_state[n].ltp_mem_length; i++) { sLTP_Q14[i] = silk_SMULWB(inv_gain_Q30, sLTP[i]); }
 
     /***************************/
     /* LTP synthesis filtering */
     /***************************/
-    for(k = 0; k < s_channel_state[n].nb_subfr; k++) {
+    for(k = 0; k < m_channel_state[n].nb_subfr; k++) {
         /* Set up pointer */
         pred_lag_ptr = &sLTP_Q14[sLTP_buf_idx - lag + LTP_ORDER / 2];
-        for(i = 0; i < s_channel_state[n].subfr_length; i++) {
+        for(i = 0; i < m_channel_state[n].subfr_length; i++) {
             /* Unrolled loop */
             /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
             LTP_pred_Q12 = 2;
@@ -3097,30 +3097,30 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
 
         /* Gradually reduce LTP gain */
         for(j = 0; j < LTP_ORDER; j++) { B_Q14[j] = silk_RSHIFT(silk_SMULBB(harm_Gain_Q15, B_Q14[j]), 15); }
-        if(s_channel_state[n].indices.signalType != TYPE_NO_VOICE_ACTIVITY) {
+        if(m_channel_state[n].indices.signalType != TYPE_NO_VOICE_ACTIVITY) {
             /* Gradually reduce excitation gain */
             rand_scale_Q14 = silk_RSHIFT(silk_SMULBB(rand_scale_Q14, rand_Gain_Q15), 15);
         }
 
         /* Slowly increase pitch lag */
         psPLC->pitchL_Q8 = silk_SMLAWB(psPLC->pitchL_Q8, psPLC->pitchL_Q8, PITCH_DRIFT_FAC_Q16);
-        psPLC->pitchL_Q8 = silk_min_32(psPLC->pitchL_Q8, silk_LSHIFT(silk_SMULBB(MAX_PITCH_LAG_MS, s_channel_state[n].fs_kHz), 8));
+        psPLC->pitchL_Q8 = silk_min_32(psPLC->pitchL_Q8, silk_LSHIFT(silk_SMULBB(MAX_PITCH_LAG_MS, m_channel_state[n].fs_kHz), 8));
         lag = silk_RSHIFT_ROUND(psPLC->pitchL_Q8, 8);
     }
 
     /***************************/
     /* LPC synthesis filtering */
     /***************************/
-    sLPC_Q14_ptr = &sLTP_Q14[s_channel_state[n].ltp_mem_length - MAX_LPC_ORDER];
+    sLPC_Q14_ptr = &sLTP_Q14[m_channel_state[n].ltp_mem_length - MAX_LPC_ORDER];
 
     /* Copy LPC state */
-    memcpy(sLPC_Q14_ptr, s_channel_state[n].sLPC_Q14_buf, MAX_LPC_ORDER * sizeof(int32_t));
+    memcpy(sLPC_Q14_ptr, m_channel_state[n].sLPC_Q14_buf, MAX_LPC_ORDER * sizeof(int32_t));
 
-    assert(s_channel_state[n].LPC_order >= 10); /* check that unrolling works */
-    for(i = 0; i < s_channel_state[n].frame_length; i++) {
+    assert(m_channel_state[n].LPC_order >= 10); /* check that unrolling works */
+    for(i = 0; i < m_channel_state[n].frame_length; i++) {
         /* partly unrolled */
         /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
-        LPC_pred_Q10 = silk_RSHIFT(s_channel_state[n].LPC_order, 1);
+        LPC_pred_Q10 = silk_RSHIFT(m_channel_state[n].LPC_order, 1);
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 1], A_Q12[0]);
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 2], A_Q12[1]);
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 3], A_Q12[2]);
@@ -3131,7 +3131,7 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 8], A_Q12[7]);
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 9], A_Q12[8]);
         LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - 10], A_Q12[9]);
-        for(j = 10; j < s_channel_state[n].LPC_order; j++) { LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - j - 1], A_Q12[j]); }
+        for(j = 10; j < m_channel_state[n].LPC_order; j++) { LPC_pred_Q10 = silk_SMLAWB(LPC_pred_Q10, sLPC_Q14_ptr[MAX_LPC_ORDER + i - j - 1], A_Q12[j]); }
 
         /* Add prediction to LPC excitation */
         sLPC_Q14_ptr[MAX_LPC_ORDER + i] = silk_ADD_SAT32(sLPC_Q14_ptr[MAX_LPC_ORDER + i], silk_LSHIFT_SAT32(LPC_pred_Q10, 4));
@@ -3141,31 +3141,31 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
     }
 
     /* Save LPC state */
-    memcpy(s_channel_state[n].sLPC_Q14_buf, &sLPC_Q14_ptr[s_channel_state[n].frame_length], MAX_LPC_ORDER * sizeof(int32_t));
+    memcpy(m_channel_state[n].sLPC_Q14_buf, &sLPC_Q14_ptr[m_channel_state[n].frame_length], MAX_LPC_ORDER * sizeof(int32_t));
 
     /**************************************/
     /* Update states                      */
     /**************************************/
     psPLC->rand_seed = rand_seed;
     psPLC->randScale_Q14 = rand_scale_Q14;
-    for(i = 0; i < MAX_NB_SUBFR; i++) { s_silk_decoder_control->pitchL[i] = lag; }
+    for(i = 0; i < MAX_NB_SUBFR; i++) { m_silk_decoder_control->pitchL[i] = lag; }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Glues concealed frames with new good received frames */
 void silk_PLC_glue_frames(uint8_t n, int16_t frame[], int32_t length) {
     int32_t          i, energy_shift;
     int32_t          energy;
     silk_PLC_struct_t* psPLC;
-    psPLC = &s_channel_state[n].sPLC;
+    psPLC = &m_channel_state[n].sPLC;
 
-    if(s_channel_state[n].lossCnt) {
+    if(m_channel_state[n].lossCnt) {
         /* Calculate energy in concealed residual */
         silk_sum_sqr_shift(&psPLC->conc_energy, &psPLC->conc_energy_shift, frame, length);
 
         psPLC->last_frame_lost = 1;
     }
     else {
-        if(s_channel_state[n].sPLC.last_frame_lost) {
+        if(m_channel_state[n].sPLC.last_frame_lost) {
             /* Calculate residual in decoded signal if last frame was lost */
             silk_sum_sqr_shift(&energy, &energy_shift, frame, length);
 
@@ -3200,7 +3200,7 @@ void silk_PLC_glue_frames(uint8_t n, int16_t frame[], int32_t length) {
         psPLC->last_frame_lost = 0;
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Downsample by a factor 2/3, low quality */
 void silk_resampler_down2_3(int32_t*       S,    /* I/O  State vector [ 6 ]                                          */
                             int16_t*       out,  /* O    Output signal [ floor(2*inLen/3) ]                          */
@@ -3260,7 +3260,7 @@ void silk_resampler_down2_3(int32_t*       S,    /* I/O  State vector [ 6 ]     
     /* Copy last part of filtered signal to the state for the next call */
     memcpy(S, &buf[nSamplesIn], ORDER_FIR * sizeof(int32_t));
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Downsample by a factor 2 */
 void silk_resampler_down2(int32_t*       S,    /* I/O  State vector [ 2 ]                                          */
                           int16_t*       out,  /* O    Output signal [ floor(len/2) ]                              */
@@ -3298,7 +3298,7 @@ void silk_resampler_down2(int32_t*       S,    /* I/O  State vector [ 2 ]       
         out[k] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(out32, 11));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Second order AR filter with single delay elements */
 void silk_resampler_private_AR2(int32_t       S[],      /* I/O  State vector [ 2 ]          */
                                 int32_t       out_Q8[], /* O    Output signal               */
@@ -3317,7 +3317,7 @@ void silk_resampler_private_AR2(int32_t       S[],      /* I/O  State vector [ 2
         S[1] = silk_SMULWB(out32, A_Q14[1]);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 int16_t* silk_resampler_private_down_FIR_INTERPOL(int16_t* out, int32_t* buf, const int16_t* FIR_Coefs, int32_t FIR_Order, int32_t FIR_Fracs, int32_t max_index_Q16, int32_t index_increment_Q16) {
     int32_t        index_Q16, res_Q6;
@@ -3418,7 +3418,7 @@ int16_t* silk_resampler_private_down_FIR_INTERPOL(int16_t* out, int32_t* buf, co
     }
     return out;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Resample with a 2nd order AR filter followed by FIR interpolation */
 void silk_resampler_private_down_FIR(void*         SS,    /* I/O  Resampler state             */
                                      int16_t       out[], /* O    Output signal               */
@@ -3463,7 +3463,7 @@ void silk_resampler_private_down_FIR(void*         SS,    /* I/O  Resampler stat
     /* Copy last part of filtered signal to the state for the next call */
     memcpy(S->sFIR.i32, &buf[nSamplesIn], S->FIR_Order * sizeof(int32_t));
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 int16_t* silk_resampler_private_IIR_FIR_INTERPOL(int16_t* out, int16_t* buf, int32_t max_index_Q16, int32_t index_increment_Q16) {
     int32_t  index_Q16, res_Q15;
@@ -3487,7 +3487,7 @@ int16_t* silk_resampler_private_IIR_FIR_INTERPOL(int16_t* out, int16_t* buf, int
     }
     return out;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Upsample using a combination of allpass-based 2x upsampling and FIR interpolation */
 void silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Resampler state             */
                                     int16_t       out[], /* O    Output signal               */
@@ -3526,7 +3526,7 @@ void silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Resampler state
     /* Copy last part of filtered signal to the state for the next call */
     memcpy(S->sFIR.i16, &buf[nSamplesIn << 1], RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Upsample by a factor 2, high quality. Uses 2nd order allpass filters for the 2x upsampling, followed by a      */
 /* notch filter just above Nyquist.                                         */
 void silk_resampler_private_up2_HQ(int32_t*       S,   /* I/O  Resampler state [ 6 ]       */
@@ -3592,7 +3592,7 @@ void silk_resampler_private_up2_HQ(int32_t*       S,   /* I/O  Resampler state [
         out[2 * k + 1] = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(out32_1, 10));
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_resampler_private_up2_HQ_wrapper(void*          SS,  /* I/O  Resampler state (unused)    */
                                            int16_t*       out, /* O    Output signal [ 2 * len ]   */
@@ -3602,7 +3602,7 @@ void silk_resampler_private_up2_HQ_wrapper(void*          SS,  /* I/O  Resampler
     silk_resampler_state_struct_t* S = (silk_resampler_state_struct_t*)SS;
     silk_resampler_private_up2_HQ(S->sIIR, out, in, len);
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Initialize/reset the resampler state for a given pair of input/output sampling rates */
 int32_t silk_resampler_init(uint8_t n,
                             int32_t                      Fs_Hz_in,  /* I    Input sampling rate (Hz)                                    */
@@ -3611,23 +3611,23 @@ int32_t silk_resampler_init(uint8_t n,
 ) {
     int32_t up2x;
     /* Clear state */
-    memset(&s_resampler_state[n], 0, sizeof(silk_resampler_state_struct_t));
+    memset(&m_resampler_state[n], 0, sizeof(silk_resampler_state_struct_t));
 
     /* Input checking */
     if(forEnc) {
         if((Fs_Hz_in != 8000 && Fs_Hz_in != 12000 && Fs_Hz_in != 16000 && Fs_Hz_in != 24000 && Fs_Hz_in != 48000) || (Fs_Hz_out != 8000 && Fs_Hz_out != 12000 && Fs_Hz_out != 16000)) { return -1; }
-        s_resampler_state[n].inputDelay = delay_matrix_enc[rateID(Fs_Hz_in)][rateID(Fs_Hz_out)];
+        m_resampler_state[n].inputDelay = delay_matrix_enc[rateID(Fs_Hz_in)][rateID(Fs_Hz_out)];
     }
     else {
         if((Fs_Hz_in != 8000 && Fs_Hz_in != 12000 && Fs_Hz_in != 16000) || (Fs_Hz_out != 8000 && Fs_Hz_out != 12000 && Fs_Hz_out != 16000 && Fs_Hz_out != 24000 && Fs_Hz_out != 48000)) { return -1; }
-        s_resampler_state[n].inputDelay = delay_matrix_dec[rateID(Fs_Hz_in)][rateID(Fs_Hz_out)];
+        m_resampler_state[n].inputDelay = delay_matrix_dec[rateID(Fs_Hz_in)][rateID(Fs_Hz_out)];
     }
 
-    s_resampler_state[n].Fs_in_kHz = silk_DIV32_16(Fs_Hz_in, 1000);
-    s_resampler_state[n].Fs_out_kHz = silk_DIV32_16(Fs_Hz_out, 1000);
+    m_resampler_state[n].Fs_in_kHz = silk_DIV32_16(Fs_Hz_in, 1000);
+    m_resampler_state[n].Fs_out_kHz = silk_DIV32_16(Fs_Hz_out, 1000);
 
     /* Number of samples processed per batch */
-    s_resampler_state[n].batchSize = s_resampler_state[n].Fs_in_kHz * RESAMPLER_MAX_BATCH_SIZE_MS;
+    m_resampler_state[n].batchSize = m_resampler_state[n].Fs_in_kHz * RESAMPLER_MAX_BATCH_SIZE_MS;
 
     /* Find resampler with the right sampling ratio */
     up2x = 0;
@@ -3635,41 +3635,41 @@ int32_t silk_resampler_init(uint8_t n,
         /* Upsample */
         if(Fs_Hz_out == silk_MUL(Fs_Hz_in, 2)) { /* Fs_out : Fs_in = 2 : 1 */
             /* Special case: directly use 2x upsampler */
-            s_resampler_state[n].resampler_function = USE_silk_resampler_private_up2_HQ_wrapper;
+            m_resampler_state[n].resampler_function = USE_silk_resampler_private_up2_HQ_wrapper;
         }
         else {
             /* Default resampler */
-            s_resampler_state[n].resampler_function = USE_silk_resampler_private_IIR_FIR;
+            m_resampler_state[n].resampler_function = USE_silk_resampler_private_IIR_FIR;
             up2x = 1;
         }
     }
     else if(Fs_Hz_out < Fs_Hz_in) {
         /* Downsample */
-        s_resampler_state[n].resampler_function = USE_silk_resampler_private_down_FIR;
+        m_resampler_state[n].resampler_function = USE_silk_resampler_private_down_FIR;
         if(silk_MUL(Fs_Hz_out, 4) == silk_MUL(Fs_Hz_in, 3)) { /* Fs_out : Fs_in = 3 : 4 */
-            s_resampler_state[n].FIR_Fracs = 3;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR0;
-            s_resampler_state[n].Coefs = silk_Resampler_3_4_COEFS;
+            m_resampler_state[n].FIR_Fracs = 3;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR0;
+            m_resampler_state[n].Coefs = silk_Resampler_3_4_COEFS;
         }
-        else if(silk_MUL(Fs_Hz_out, 3) == silk_MUL(Fs_Hz_in, 2)) { /* Fs_out : Fs_in = 2 : 3 */ s_resampler_state[n].FIR_Fracs = 2;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR0;
-            s_resampler_state[n].Coefs = silk_Resampler_2_3_COEFS;
+        else if(silk_MUL(Fs_Hz_out, 3) == silk_MUL(Fs_Hz_in, 2)) { /* Fs_out : Fs_in = 2 : 3 */ m_resampler_state[n].FIR_Fracs = 2;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR0;
+            m_resampler_state[n].Coefs = silk_Resampler_2_3_COEFS;
         }
-        else if(silk_MUL(Fs_Hz_out, 2) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 2 */ s_resampler_state[n].FIR_Fracs = 1;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR1;
-            s_resampler_state[n].Coefs = silk_Resampler_1_2_COEFS;
+        else if(silk_MUL(Fs_Hz_out, 2) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 2 */ m_resampler_state[n].FIR_Fracs = 1;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR1;
+            m_resampler_state[n].Coefs = silk_Resampler_1_2_COEFS;
         }
-        else if(silk_MUL(Fs_Hz_out, 3) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 3 */ s_resampler_state[n].FIR_Fracs = 1;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
-            s_resampler_state[n].Coefs = silk_Resampler_1_3_COEFS;
+        else if(silk_MUL(Fs_Hz_out, 3) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 3 */ m_resampler_state[n].FIR_Fracs = 1;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
+            m_resampler_state[n].Coefs = silk_Resampler_1_3_COEFS;
         }
-        else if(silk_MUL(Fs_Hz_out, 4) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 4 */ s_resampler_state[n].FIR_Fracs = 1;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
-            s_resampler_state[n].Coefs = silk_Resampler_1_4_COEFS;
+        else if(silk_MUL(Fs_Hz_out, 4) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 4 */ m_resampler_state[n].FIR_Fracs = 1;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
+            m_resampler_state[n].Coefs = silk_Resampler_1_4_COEFS;
         }
-        else if(silk_MUL(Fs_Hz_out, 6) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 6 */ s_resampler_state[n].FIR_Fracs = 1;
-            s_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
-            s_resampler_state[n].Coefs = silk_Resampler_1_6_COEFS;
+        else if(silk_MUL(Fs_Hz_out, 6) == Fs_Hz_in) { /* Fs_out : Fs_in = 1 : 6 */ m_resampler_state[n].FIR_Fracs = 1;
+            m_resampler_state[n].FIR_Order = RESAMPLER_DOWN_ORDER_FIR2;
+            m_resampler_state[n].Coefs = silk_Resampler_1_6_COEFS;
         }
         else {
             /* None available */
@@ -3678,17 +3678,17 @@ int32_t silk_resampler_init(uint8_t n,
     }
     else {
         /* Input and output sampling rates are equal: copy */
-        s_resampler_state[n].resampler_function = USE_silk_resampler_copy;
+        m_resampler_state[n].resampler_function = USE_silk_resampler_copy;
     }
 
     /* Ratio of input/output samples */
-    s_resampler_state[n].invRatio_Q16 = silk_LSHIFT32(silk_DIV32(silk_LSHIFT32(Fs_Hz_in, 14 + up2x), Fs_Hz_out), 2);
+    m_resampler_state[n].invRatio_Q16 = silk_LSHIFT32(silk_DIV32(silk_LSHIFT32(Fs_Hz_in, 14 + up2x), Fs_Hz_out), 2);
     /* Make sure the ratio is rounded up */
-    while(silk_SMULWW(s_resampler_state[n].invRatio_Q16, Fs_Hz_out) < silk_LSHIFT32(Fs_Hz_in, up2x)) { s_resampler_state[n].invRatio_Q16++; }
+    while(silk_SMULWW(m_resampler_state[n].invRatio_Q16, Fs_Hz_out) < silk_LSHIFT32(Fs_Hz_in, up2x)) { m_resampler_state[n].invRatio_Q16++; }
 
     return 0;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Resampler: convert from one sampling rate to another Input and output sampling rate are at most 48000 Hz  */
 int32_t silk_resampler(uint8_t n,
                        int16_t                      out[], /* O    Output signal                                               */
@@ -3698,37 +3698,37 @@ int32_t silk_resampler(uint8_t n,
     int32_t nSamples;
 
     /* Need at least 1 ms of input data */
-    assert(inLen >= s_resampler_state[n].Fs_in_kHz);
+    assert(inLen >= m_resampler_state[n].Fs_in_kHz);
     /* Delay can't exceed the 1 ms of buffering */
-    assert(s_resampler_state[n].inputDelay <= s_resampler_state[n].Fs_in_kHz);
+    assert(m_resampler_state[n].inputDelay <= m_resampler_state[n].Fs_in_kHz);
 
-    nSamples = s_resampler_state[n].Fs_in_kHz - s_resampler_state[n].inputDelay;
+    nSamples = m_resampler_state[n].Fs_in_kHz - m_resampler_state[n].inputDelay;
 
     /* Copy to delay buffer */
-    memcpy(&s_resampler_state[n].delayBuf[s_resampler_state[n].inputDelay], in, nSamples * sizeof(int16_t));
+    memcpy(&m_resampler_state[n].delayBuf[m_resampler_state[n].inputDelay], in, nSamples * sizeof(int16_t));
 
-    switch(s_resampler_state[n].resampler_function) {
+    switch(m_resampler_state[n].resampler_function) {
         case USE_silk_resampler_private_up2_HQ_wrapper:
-            silk_resampler_private_up2_HQ_wrapper(&s_resampler_state[n], out, s_resampler_state[n].delayBuf, s_resampler_state[n].Fs_in_kHz);
-            silk_resampler_private_up2_HQ_wrapper(&s_resampler_state[n], &out[s_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - s_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_up2_HQ_wrapper(&m_resampler_state[n], out, m_resampler_state[n].delayBuf, m_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_up2_HQ_wrapper(&m_resampler_state[n], &out[m_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - m_resampler_state[n].Fs_in_kHz);
             break;
         case USE_silk_resampler_private_IIR_FIR:
-            silk_resampler_private_IIR_FIR(&s_resampler_state[n], out, s_resampler_state[n].delayBuf, s_resampler_state[n].Fs_in_kHz);
-            silk_resampler_private_IIR_FIR(&s_resampler_state[n], &out[s_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - s_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_IIR_FIR(&m_resampler_state[n], out, m_resampler_state[n].delayBuf, m_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_IIR_FIR(&m_resampler_state[n], &out[m_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - m_resampler_state[n].Fs_in_kHz);
             break;
         case USE_silk_resampler_private_down_FIR:
-            silk_resampler_private_down_FIR(&s_resampler_state[n], out, s_resampler_state[n].delayBuf, s_resampler_state[n].Fs_in_kHz);
-            silk_resampler_private_down_FIR(&s_resampler_state[n], &out[s_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - s_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_down_FIR(&m_resampler_state[n], out, m_resampler_state[n].delayBuf, m_resampler_state[n].Fs_in_kHz);
+            silk_resampler_private_down_FIR(&m_resampler_state[n], &out[m_resampler_state[n].Fs_out_kHz], &in[nSamples], inLen - m_resampler_state[n].Fs_in_kHz);
             break;
-        default: memcpy(out, s_resampler_state[n].delayBuf, s_resampler_state[n].Fs_in_kHz * sizeof(int16_t)); memcpy(&out[s_resampler_state[n].Fs_out_kHz], &in[nSamples], (inLen - s_resampler_state[n].Fs_in_kHz) * sizeof(int16_t));
+        default: memcpy(out, m_resampler_state[n].delayBuf, m_resampler_state[n].Fs_in_kHz * sizeof(int16_t)); memcpy(&out[m_resampler_state[n].Fs_out_kHz], &in[nSamples], (inLen - m_resampler_state[n].Fs_in_kHz) * sizeof(int16_t));
     }
 
     /* Copy to delay buffer */
-    memcpy(s_resampler_state[n].delayBuf, &in[inLen - s_resampler_state[n].inputDelay], s_resampler_state[n].inputDelay * sizeof(int16_t));
+    memcpy(m_resampler_state[n].delayBuf, &in[inLen - m_resampler_state[n].inputDelay], m_resampler_state[n].inputDelay * sizeof(int16_t));
 
     return 0;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t silk_sigm_Q15(int32_t in_Q5) {
     int32_t ind;
     if(in_Q5 < 0) {
@@ -3751,7 +3751,7 @@ int32_t silk_sigm_Q15(int32_t in_Q5) {
         }
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // silk_insertion_sort_increasing(Unsorted / Sorted vector, Index vector for the sorted elements, Vector length, Number of correctly sorted positions )
 void silk_insertion_sort_increasing(int32_t* a, int32_t* idx, const int32_t L, const int32_t K){
     int32_t value;
@@ -3789,7 +3789,7 @@ void silk_insertion_sort_increasing(int32_t* a, int32_t* idx, const int32_t L, c
         }
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This function is only used by the fixed-point build */
 void silk_insertion_sort_decreasing_int16(int16_t*      a,   /* I/O   Unsorted / Sorted vector      */
                                           int32_t*      idx, /* O     Index vector for the sorted elements    */
@@ -3832,7 +3832,7 @@ void silk_insertion_sort_decreasing_int16(int16_t*      a,   /* I/O   Unsorted /
         }
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 void silk_insertion_sort_increasing_all_values_int16(int16_t*      a, /* I/O   Unsorted / Sorted vector     */
                                                      const int32_t L  /* I     Vector length */
@@ -3850,7 +3850,7 @@ void silk_insertion_sort_increasing_all_values_int16(int16_t*      a, /* I/O   U
         a[j + 1] = value; /* Write value */
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Compute number of bits to right shift the sum of squares of a vector */
 /* of int16s to make it fit in an int32                                 */
 void silk_sum_sqr_shift(int32_t*       energy, /* O   Energy of x, after shifting to the right                     */
@@ -3898,7 +3898,7 @@ void silk_sum_sqr_shift(int32_t*       energy, /* O   Energy of x, after shiftin
     *shift = shft;
     *energy = nrg;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Entropy constrained matrix-weighted VQ, hard-coded to 5-element vectors, for a single input data vector */
 void silk_VQ_WMat_EC_c(int8_t*        ind,          /* O    index of best codebook vector               */
                        int32_t*       res_nrg_Q15,  /* O    best residual energy                        */
@@ -4040,7 +4040,7 @@ int32_t silk_stereo_find_predictor(                                /* O    Retur
 
     return pred_Q13;
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Convert adaptive Mid/Side representation to Left/Right stereo signal */
 void silk_stereo_MS_to_LR(stereo_dec_state_t* state,       /* I/O  State                                       */
                           int16_t           x1[],        /* I/O  Left input signal, becomes mid signal       */
@@ -4091,7 +4091,7 @@ void silk_stereo_MS_to_LR(stereo_dec_state_t* state,       /* I/O  State        
         x2[n + 1] = (int16_t)silk_SAT16(diff);
     }
 }
-//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Initialization of the Silk VAD */
 int32_t silk_VAD_Init(                           /* O    Return value, 0 if success                  */
                       silk_VAD_state_t* psSilk_VAD /* I/O  Pointer to Silk VAD state                   */
@@ -4117,22 +4117,26 @@ int32_t silk_VAD_Init(                           /* O    Return value, 0 if succ
 
     return (ret);
 }
-//----------------------------------------------------------------------------------------------------------------------
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void setChannelsAPI(uint8_t nChannelsAPI){
-    s_silk_DecControlStruct->nChannelsAPI = nChannelsAPI;
+    m_silk_DecControlStruct->nChannelsAPI = nChannelsAPI;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void setChannelsInternal(uint8_t nChannelsInternal){
-    s_silk_DecControlStruct->nChannelsInternal = nChannelsInternal;
+    m_silk_DecControlStruct->nChannelsInternal = nChannelsInternal;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void setAPIsampleRate(uint32_t API_sampleRate){
-    s_silk_DecControlStruct->API_sampleRate = API_sampleRate;
+    m_silk_DecControlStruct->API_sampleRate = API_sampleRate;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void combine_pulses(int32_t *out, const int32_t *in, const int32_t len) {
     int32_t k;
     for (k = 0; k < len; k++) {
         out[k] = in[2 * k] + in[2 * k + 1];
     }
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Invert int32 value and return result as int32 in a given Q-domain */
 int32_t silk_INVERSE32_varQ(const int32_t b32, const int32_t Qres) {
     int32_t b_headrm, lshift;
@@ -4170,6 +4174,7 @@ int32_t silk_INVERSE32_varQ(const int32_t b32, const int32_t Qres) {
         }
     }
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Divide two int32 values and return result as int32 in a given Q-domain */
 int32_t silk_DIV32_varQ(const int32_t a32, const int32_t b32, const int32_t Qres) {
     int32_t a_headrm, b_headrm, lshift;
@@ -4210,6 +4215,7 @@ int32_t silk_DIV32_varQ(const int32_t a32, const int32_t b32, const int32_t Qres
         }
     }
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Approximation of square root, Accuracy: < +/- 10%  for output values > 15, < +/- 2.5% for output values > 120 */
 int32_t silk_SQRT_APPROX(int32_t x) {
     int32_t y, lz, frac_Q7;
@@ -4223,6 +4229,7 @@ int32_t silk_SQRT_APPROX(int32_t x) {
     y = silk_SMLAWB(y, y, silk_SMULBB(213, frac_Q7));  /* increment using fractional part of input */
     return y;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* get number of leading zeros and fractional part (the bits right after the leading one */
 void silk_CLZ_FRAC(int32_t in, int32_t *lz, int32_t *frac_Q7) {
     int32_t lzeros = silk_CLZ32(in);
@@ -4230,6 +4237,7 @@ void silk_CLZ_FRAC(int32_t in, int32_t *lz, int32_t *frac_Q7) {
     *lz = lzeros;
     *frac_Q7 = silk_ROR32(in, 24 - lzeros) & 0x7f;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Rotate a32 right by 'rot' bits. Negative rot values result in rotating left. Output is 32bit int.
    Note: contemporary compilers recognize the C expression below and compile it into a 'ror' instruction if available. No need for inline ASM! */
 int32_t silk_ROR32(int32_t a32, int32_t rot) {
@@ -4244,6 +4252,7 @@ int32_t silk_ROR32(int32_t a32, int32_t rot) {
         return (int32_t)((x << (32 - r)) | (x >> r));
     }
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* count leading zeros of int32_t64 */
 int32_t silk_CLZ64(int64_t in) {
     int32_t in_upper;
@@ -4257,6 +4266,7 @@ int32_t silk_CLZ64(int64_t in) {
         return silk_CLZ32(in_upper);
     }
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* silk_min() versions with typecast in the function call */
 int32_t silk_min_int(int32_t a, int32_t b) { return (((a) < (b)) ? (a) : (b)); }
 int16_t silk_min_16(int16_t a, int16_t b) { return (((a) < (b)) ? (a) : (b)); }
@@ -4271,7 +4281,7 @@ int64_t silk_max_64(int64_t a, int64_t b) { return (((a) > (b)) ? (a) : (b)); }
 
 int32_t silk_CLZ16(int16_t in16) { return 32 - EC_ILOGs(in16 << 16 | 0x8000); }
 int32_t silk_CLZ32(int32_t in32) { return in32 ? 32 - EC_ILOGs(in32) : 32; }
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t silk_noise_shape_quantizer_short_prediction_c(const int32_t *buf32, const int16_t *coef16, int32_t order) {
     int32_t out;
     assert(order == 10 || order == 16);
@@ -4299,6 +4309,7 @@ int32_t silk_noise_shape_quantizer_short_prediction_c(const int32_t *buf32, cons
     }
     return out;
 }
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t silk_NSQ_noise_shape_feedback_loop_c(const int32_t *data0, int32_t *data1, const int16_t *coef, int32_t order) {
     int32_t out;
     int32_t tmp1, tmp2;
