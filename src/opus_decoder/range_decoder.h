@@ -1,6 +1,10 @@
 #include "Arduino.h"
 #pragma once
 
+
+
+class RangeDecoder {
+
 #define EC_WINDOW_SIZE ((int32_t)sizeof(uint32_t)*CHAR_BIT)
 #define EC_UINT_BITS   (8)
 #define EC_MINI(_a,_b)      ((_a)+(((_b)-(_a))&-((_b)<(_a))))
@@ -16,27 +20,21 @@
 #define EC_CODE_BOT       EC_CODE_TOP >> EC_SYM_BITS
 #define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
-
-class RangeDecoder {
 private:
-    uint8_t* m_buf;     /*Buffered input/output */
-    uint32_t m_storage; /*The size of the buffer.*/
-    uint32_t m_end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
-    uint32_t m_end_window; /*Bits that will be read from/written at the end.*/
-    int32_t  m_nend_bits; /*Number of valid bits in end_window.*/
-    int32_t  m_nbits_total;
-    uint32_t m_offs; /*The offset at which the next range coder byte will be read/written.*/
-    uint32_t m_rng; /*The number of values in the current range.*/
-    uint32_t m_val;
-    uint32_t m_ext;
-    int32_t  m_rem; /*A buffered input/output symbol, awaiting carry propagation.*/
-    int32_t  m_error; /*Nonzero if an error occurred.*/
-public:
-    int32_t read_byte();
-    int32_t read_byte_from_end();
-    void dec_normalize();
+    uint8_t* m_buf = nullptr;     /*Buffered input/output */
+    uint32_t m_storage = 0; /*The size of the buffer.*/
+    uint32_t m_end_offs = 0; /*The offset at which the last byte containing raw bits was read/written.*/
+    uint32_t m_end_window = 0; /*Bits that will be read from/written at the end.*/
+    int32_t  m_nend_bits = 0; /*Number of valid bits in end_window.*/
+    int32_t  m_nbits_total = 0;
+    uint32_t m_offs = 0; /*The offset at which the next range coder byte will be read/written.*/
+    uint32_t m_rng = 0; /*The number of values in the current range.*/
+    uint32_t m_val = 0;
+    uint32_t m_ext = 0;
+    int32_t  m_rem = 0; /*A buffered input/output symbol, awaiting carry propagation.*/
+    int32_t  m_error = 0; /*Nonzero if an error occurred.*/
 
-    public:
+public:
     RangeDecoder();
     ~RangeDecoder(){;}
     void dec_init(uint8_t *_buf, uint32_t _storage);
@@ -53,5 +51,10 @@ public:
     void add_nbits_total(int32_t nbits_total);
     int32_t get_error();
     uint32_t get_rng();
+
+private:
+    int32_t read_byte();
+    int32_t read_byte_from_end();
+    void dec_normalize();
 };
 

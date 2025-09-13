@@ -15,7 +15,7 @@
 #include "Arduino.h"
 #include <vector>
 
-RangeDecoder rd;
+std::unique_ptr<RangeDecoder> rangedec;
 
 // global vars
 const uint32_t CELT_SET_END_BAND_REQUEST        = 10012;
@@ -75,6 +75,15 @@ odp3  s_odp3; // used in opusDecodePage3
 std::vector <uint32_t>s_opusBlockPicItem;
 
 bool OPUSDecoder_AllocateBuffers(){
+
+    if (!rangedec) {
+        rangedec = std::make_unique<RangeDecoder>();
+        if (!rangedec) {
+            OPUS_LOG_ERROR("Failed to allocate RangeDecoder");
+            return false;
+        }
+    }
+
     if(!SILKDecoder_AllocateBuffers()) {return false; /*ERR_OPUS_SILK_DEC_NOT_INIT*/}
     if(!CELTDecoder_AllocateBuffers()) {return false; /*ERR_OPUS_CELT_NOT_INIT*/}
     s_opusSegmentTable.alloc_array(256);
@@ -94,6 +103,7 @@ bool OPUSDecoder_AllocateBuffers(){
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
+    rangedec.reset();
     s_opusSegmentTable.reset();
     s_streamTitle.reset();
     s_frameCount = 0;
@@ -362,11 +372,11 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if (s_mode == MODE_CELT_ONLY){
         if(s_prev_mode != s_mode){
             celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
-            rd.dec_init((uint8_t *)inbuf, packetLen);
+            rangedec->dec_init((uint8_t *)inbuf, packetLen);
             celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
         }
         s_prev_mode = s_mode;
-        rd.dec_init((uint8_t *)inbuf, packetLen);
+        rangedec->dec_init((uint8_t *)inbuf, packetLen);
         celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
         return celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     }
@@ -374,7 +384,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if (s_mode == MODE_SILK_ONLY) {
         if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
         decoded_samples = 0;
-        rd.dec_init((uint8_t *)inbuf, samplesPerFrame);
+        rangedec->dec_init((uint8_t *)inbuf, samplesPerFrame);
         silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
         do {  /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
@@ -387,7 +397,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     }
 
     if (s_mode == MODE_HYBRID) {
-        rd.dec_init((uint8_t*)inbuf, packetLen);
+        rangedec->dec_init((uint8_t*)inbuf, packetLen);
         int      pcm_silk_size = samplesPerFrame * 4;
         ps_ptr<int16_t>pcm_silk; pcm_silk.alloc_array(pcm_silk_size);
         int16_t* pcm_ptr;
@@ -404,9 +414,9 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
             decoded_samples += nSamplesOut;
         } while (decoded_samples < audiosize);
 
-        if (rd.tell() + 17 + 20 <= 8 * packetLen) {
+        if (rangedec->tell() + 17 + 20 <= 8 * packetLen) {
             /* Check if we have a redundant 0-8 kHz band */
-            rd.dec_bit_logp(12);
+            rangedec->dec_bit_logp(12);
         }
         if (s_bandWidth) {
             switch (s_bandWidth) {
