@@ -20,8 +20,8 @@
 #define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
 typedef struct _ec_ctx {
-    uint32_t end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
-    uint32_t end_window; /*Bits that will be read from/written at the end.*/
+    
+    
     int32_t nend_bits; /*Number of valid bits in end_window.*/
     int32_t nbits_total;
     uint32_t offs; /*The offset at which the next range coder byte will be read/written.*/
@@ -37,6 +37,8 @@ class RangeDecoder {
 private:
     uint8_t* m_buf;     /*Buffered input/output */
     uint32_t m_storage; /*The size of the buffer.*/
+    uint32_t m_end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
+    uint32_t m_end_window; /*Bits that will be read from/written at the end.*/
 public:
     int32_t read_byte();
     int32_t read_byte_from_end();
@@ -45,7 +47,8 @@ public:
     ~RangeDecoder(){;}
     void dec_init(uint8_t *_buf, uint32_t _storage);
     uint32_t get_storage();
-
+    uint32_t dec_bits(uint32_t _bits);
+    uint32_t dec_uint(uint32_t _ft);
 
 };
 
@@ -62,8 +65,6 @@ uint32_t ec_decode_bin(uint32_t _bits);
 void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft);
 int32_t ec_dec_bit_logp( uint32_t _logp);
 int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb);
-uint32_t ec_dec_uint(uint32_t _ft);
-uint32_t ec_dec_bits(uint32_t _bits);
 void ec_add_nbits_total(int32_t nbits_total);
 
 int32_t ec_get_error();

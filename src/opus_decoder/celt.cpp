@@ -1273,7 +1273,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
         }
         else if (__B0 > 1 || stereo) {
             /* Uniform pdf */
-            itheta = ec_dec_uint(qn + 1);
+            itheta = rd.dec_uint(qn + 1);
         }
         else {
             int32_t fs = 1, ft;
@@ -1355,7 +1355,7 @@ uint32_t quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t *lowband_out)
     do {
         int32_t sign = 0;
         if (s_band_ctx.remaining_bits >= 1 << BITRES) {
-            sign = ec_dec_bits(1);
+            sign = rd.dec_bits(1);
             s_band_ctx.remaining_bits -= 1 << BITRES;
             b -= 1 << BITRES;
         }
@@ -1663,7 +1663,7 @@ uint32_t quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t
         x2 = c ? Y : X;
         y2 = c ? X : Y;
         if (sbits) {
-            sign = ec_dec_bits(1);
+            sign = rd.dec_bits(1);
         }
         sign = 1 - 2 * sign;
         /* We use orig_fill here because we want to fold the side, but if itheta==16384, we'll have cleared the low bits of fill. */
@@ -2249,9 +2249,9 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         if (ec_dec_bit_logp(1))
         {
             int32_t qg, octave;
-            octave = ec_dec_uint(6);
-            postfilter_pitch = (16 << octave) + ec_dec_bits(4 + octave) - 1;
-            qg = ec_dec_bits(3);
+            octave = rd.dec_uint(6);
+            postfilter_pitch = (16 << octave) + rd.dec_bits(4 + octave) - 1;
+            qg = rd.dec_bits(3);
             if (ec_tell() + 2 <= total_bits)
                 postfilter_tapset = ec_dec_icdf(tapset_icdf, 2);
             postfilter_gain = QCONST16(.09375f, 15) * (qg + 1);
@@ -2351,7 +2351,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
                     s_celtDec->disable_inv);
 
     if (anti_collapse_rsv > 0) {
-        anti_collapse_on = ec_dec_bits(1);
+        anti_collapse_on = rd.dec_bits(1);
     }
 
     unquant_energy_finalise(start, end, oldBandE,
@@ -2611,7 +2611,7 @@ int32_t cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t decode_pulses(int32_t *_y, int32_t _n, int32_t _k) {
-    return cwrsi(_n, _k, ec_dec_uint(CELT_PVQ_V(_n, _k)), _y);
+    return cwrsi(_n, _k, rd.dec_uint(CELT_PVQ_V(_n, _k)), _y);
 }
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3228,7 +3228,7 @@ int32_t interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, cons
         if (encode) {
             ;
         } else
-            *intensity = start + ec_dec_uint(codedBands + 1 - start);
+            *intensity = start + rd.dec_uint(codedBands + 1 - start);
     } else
         *intensity = 0;
     if (*intensity <= start) {
@@ -3494,7 +3494,7 @@ void unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t
         do {
             int32_t q2;
             int16_t offset;
-            q2 = ec_dec_bits(fine_quant[i]);
+            q2 = rd.dec_bits(fine_quant[i]);
             offset = SUB16(SHR32(SHL32(EXTEND32(q2), DB_SHIFT) + QCONST16(.5f, DB_SHIFT), fine_quant[i]),
                            QCONST16(.5f, DB_SHIFT));
             oldEBands[i + c * m_CELTMode.nbEBands] += offset;
@@ -3514,7 +3514,7 @@ void unquant_energy_finalise(int32_t start, int32_t end, int16_t *oldEBands, int
             do {
                 int32_t q2;
                 int16_t offset;
-                q2 = ec_dec_bits(1);
+                q2 = rd.dec_bits(1);
                 offset = SHR16(SHL16(q2, DB_SHIFT) - QCONST16(.5f, DB_SHIFT), fine_quant[i] + 1);
                 oldEBands[i + c * m_CELTMode.nbEBands] += offset;
                 bits_left--;

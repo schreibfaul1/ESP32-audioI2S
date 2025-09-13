@@ -26,7 +26,7 @@ uint32_t ec_tell_frac() {
 int32_t RangeDecoder::read_byte() { return s_ec.offs < m_storage ? m_buf[s_ec.offs++] : 0; }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t RangeDecoder::read_byte_from_end() {
-    return s_ec.end_offs < m_storage ? m_buf[m_storage - ++(s_ec.end_offs)] : 0;
+    return m_end_offs < m_storage ? m_buf[m_storage - ++(m_end_offs)] : 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
@@ -51,8 +51,8 @@ void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
 
     m_buf = _buf;
     m_storage = _storage;
-    s_ec.end_offs = 0;
-    s_ec.end_window = 0;
+    m_end_offs = 0;
+    m_end_window = 0;
     s_ec.nend_bits = 0;
     s_ec.nbits_total = EC_CODE_BITS + 1 - ((EC_CODE_BITS - EC_CODE_EXTRA) / EC_SYM_BITS) * EC_SYM_BITS;
     s_ec.offs = 0;
@@ -128,7 +128,7 @@ int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_dec_uint(uint32_t _ft) {
+uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
     uint32_t ft;
     uint32_t s;
     int32_t ftb;
@@ -142,7 +142,7 @@ uint32_t ec_dec_uint(uint32_t _ft) {
         ft = (uint32_t)(_ft >> ftb) + 1;
         s = ec_decode(ft);
         ec_dec_update(s, s + 1, ft);
-        t = (uint32_t)s << ftb | ec_dec_bits(ftb);
+        t = (uint32_t)s << ftb | dec_bits(ftb);
         if (t <= _ft) return t;
         s_ec.error = 1;
         return _ft;
@@ -154,11 +154,11 @@ uint32_t ec_dec_uint(uint32_t _ft) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_dec_bits(uint32_t _bits) {
+uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     uint32_t window;
     int32_t available;
     uint32_t ret;
-    window = s_ec.end_window;
+    window = m_end_window;
     available = s_ec.nend_bits;
     if ((uint32_t)available < _bits) {
         do {
@@ -169,7 +169,7 @@ uint32_t ec_dec_bits(uint32_t _bits) {
     ret = (uint32_t)window & (((uint32_t)1 << _bits) - 1U);
     window >>= _bits;
     available -= _bits;
-    s_ec.end_window = window;
+    m_end_window = window;
     s_ec.nend_bits = available;
     s_ec.nbits_total += _bits;
     return ret;
