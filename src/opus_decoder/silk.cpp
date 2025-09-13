@@ -16,6 +16,8 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 #include "range_decoder.h"
 #include "silk.h"
 
+extern RangeDecoder rd;
+
 silk_ptr_arr<silk_resampler_state_struct_t> s_resampler_state;
 silk_ptr_arr<silk_decoder_state_t>          s_channel_state;
 silk_ptr_obj<silk_decoder_t>                s_silk_decoder;
@@ -1580,9 +1582,9 @@ int32_t silk_Decode(                                   /* O    Returns error cod
         /* Decode VAD flags and LBRR flag */
         for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {
             for (i = 0; i < s_channel_state[n].nFramesPerPacket; i++) {
-                s_channel_state[n].VAD_flags[i] = ec_dec_bit_logp(1);
+                s_channel_state[n].VAD_flags[i] = rd.dec_bit_logp(1);
             }
-            s_channel_state[n].LBRR_flag = ec_dec_bit_logp(1);
+            s_channel_state[n].LBRR_flag = rd.dec_bit_logp(1);
         }
         /* Decode LBRR flags */
         for (n = 0; n < s_silk_DecControlStruct->nChannelsInternal; n++) {

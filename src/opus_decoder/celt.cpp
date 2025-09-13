@@ -1305,7 +1305,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
     else if (stereo) {
 
         if (*b > 2 << BITRES && s_band_ctx.remaining_bits > 2 << BITRES) {
-            inv = ec_dec_bit_logp(2);
+            inv = rd.dec_bit_logp(2);
         }
         else
             inv = 0;
@@ -2132,7 +2132,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     tf_changed = curr = 0;
     for (i = start; i < end; i++) {
         if (tell + logp <= budget) {
-            curr ^= ec_dec_bit_logp(logp);
+            curr ^= rd.dec_bit_logp(logp);
             tell = ec_tell();
             tf_changed |= curr;
         }
@@ -2143,7 +2143,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     if (tf_select_rsv &&
         tf_select_table[LM][4 * isTransient + 0 + tf_changed] !=
             tf_select_table[LM][4 * isTransient + 2 + tf_changed]) {
-        tf_select = ec_dec_bit_logp(1);
+        tf_select = rd.dec_bit_logp(1);
     }
     for (i = start; i < end; i++) {
         tf_res[i] = tf_select_table[LM][4 * isTransient + 2 * tf_select + tf_res[i]];
@@ -2233,7 +2233,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     if (tell >= total_bits)
         silence = 1;
     else if (tell == 1)
-        silence = ec_dec_bit_logp(15);
+        silence = rd.dec_bit_logp(15);
     else
         silence = 0;
     if (silence)  {
@@ -2246,7 +2246,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     postfilter_pitch = 0;
     postfilter_tapset = 0;
     if (start == 0 && tell + 16 <= total_bits) {
-        if (ec_dec_bit_logp(1))
+        if (rd.dec_bit_logp(1))
         {
             int32_t qg, octave;
             octave = rd.dec_uint(6);
@@ -2260,7 +2260,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     if (LM > 0 && tell + 3 <= total_bits) {
-        isTransient = ec_dec_bit_logp( 3);
+        isTransient = rd.dec_bit_logp( 3);
         tell = ec_tell();
     }
     else
@@ -2272,7 +2272,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         shortBlocks = 0;
 
     /* Decode the global flags (first symbols in the stream) */
-    intra_ener = tell + 3 <= total_bits ? ec_dec_bit_logp(3) : 0;
+    intra_ener = tell + 3 <= total_bits ? rd.dec_bit_logp(3) : 0;
     /* Get band energies */
     unquant_coarse_energy(start, end, oldBandE, intra_ener, C, LM);
 
@@ -2304,7 +2304,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         while (tell + (dynalloc_loop_logp << BITRES) < total_bits && boost < cap[i])
         {
             int32_t flag;
-            flag = ec_dec_bit_logp(dynalloc_loop_logp);
+            flag = rd.dec_bit_logp(dynalloc_loop_logp);
             tell = ec_tell_frac();
             if (!flag)
                 break;
@@ -3201,7 +3201,7 @@ int32_t interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, cons
         if (band_bits >= max(thresh[j], alloc_floor + (1 << BITRES))) {
             if (encode) {
                 ;
-            } else if (ec_dec_bit_logp(1)) {
+            } else if (rd.dec_bit_logp(1)) {
                 break;
             }
             /*We used a bit to skip this band.*/
@@ -3239,7 +3239,7 @@ int32_t interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, cons
         if (encode)
             ;
         else
-            *dual_stereo = ec_dec_bit_logp(1);
+            *dual_stereo = rd.dec_bit_logp(1);
     } else
         *dual_stereo = 0;
 
@@ -3471,7 +3471,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
                 qi = ec_dec_icdf(small_energy_icdf, 2);
                 qi = (qi >> 1) ^ -(qi & 1);
             } else if (budget - tell >= 1) {
-                qi = -ec_dec_bit_logp(1);
+                qi = -rd.dec_bit_logp(1);
             } else
                 qi = -1;
             q = (int32_t)SHL32(EXTEND32(qi), DB_SHIFT);

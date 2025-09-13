@@ -93,7 +93,7 @@ void RangeDecoder::dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*The probability of having a "one" is 1/(1<<_logp).*/
-int32_t ec_dec_bit_logp( uint32_t _logp) {
+int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
     uint32_t r;
     uint32_t d;
     uint32_t s;

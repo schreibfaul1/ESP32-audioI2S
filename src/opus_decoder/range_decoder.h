@@ -52,6 +52,7 @@ public:
     uint32_t decode(uint32_t _ft);
     uint32_t decode_bin(uint32_t _bits);
     void dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft);
+    int32_t dec_bit_logp( uint32_t _logp);
 
 };
 
@@ -60,7 +61,6 @@ public:
 int32_t ec_tell();
 uint32_t ec_tell_frac();
 
-int32_t ec_dec_bit_logp( uint32_t _logp);
 int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb);
 void ec_add_nbits_total(int32_t nbits_total);
 

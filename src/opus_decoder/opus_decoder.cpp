@@ -406,7 +406,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
 
         if (ec_tell() + 17 + 20 <= 8 * packetLen) {
             /* Check if we have a redundant 0-8 kHz band */
-            ec_dec_bit_logp(12);
+            rd.dec_bit_logp(12);
         }
         if (s_bandWidth) {
             switch (s_bandWidth) {
