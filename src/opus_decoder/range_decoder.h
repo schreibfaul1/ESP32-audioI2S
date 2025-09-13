@@ -8,9 +8,6 @@
 #define EC_CLZ(_x) (__builtin_clz(_x))
 #define EC_ILOG(_x) (EC_CLZ0s-EC_CLZ(_x))
 #define EC_BITRES 3
-#define LAPLACE_LOG_MINP (0)
-#define LAPLACE_MINP (1<<LAPLACE_LOG_MINP)
-#define LAPLACE_NMIN (16)
 
 #define EC_SYM_BITS       8
 #define EC_CODE_BITS      32
@@ -22,7 +19,7 @@
 typedef struct _ec_ctx {
     
     
-    int32_t nend_bits; /*Number of valid bits in end_window.*/
+    
     int32_t nbits_total;
     uint32_t offs; /*The offset at which the next range coder byte will be read/written.*/
     uint32_t rng; /*The number of values in the current range.*/
@@ -39,10 +36,12 @@ private:
     uint32_t m_storage; /*The size of the buffer.*/
     uint32_t m_end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
     uint32_t m_end_window; /*Bits that will be read from/written at the end.*/
+    int32_t  m_nend_bits; /*Number of valid bits in end_window.*/
 public:
     int32_t read_byte();
     int32_t read_byte_from_end();
-public:
+
+    public:
     RangeDecoder();
     ~RangeDecoder(){;}
     void dec_init(uint8_t *_buf, uint32_t _storage);
@@ -50,13 +49,12 @@ public:
     uint32_t dec_bits(uint32_t _bits);
     uint32_t dec_uint(uint32_t _ft);
 
+
 };
 
 
 
 int32_t ec_tell();
-uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay);
-int32_t laplace_decode(uint32_t fs, int32_t decay);
 uint32_t ec_tell_frac();
 
 void ec_dec_normalize();

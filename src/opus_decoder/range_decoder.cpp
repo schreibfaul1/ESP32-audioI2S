@@ -53,7 +53,7 @@ void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
     m_storage = _storage;
     m_end_offs = 0;
     m_end_window = 0;
-    s_ec.nend_bits = 0;
+    m_nend_bits = 0;
     s_ec.nbits_total = EC_CODE_BITS + 1 - ((EC_CODE_BITS - EC_CODE_EXTRA) / EC_SYM_BITS) * EC_SYM_BITS;
     s_ec.offs = 0;
     s_ec.rng = 1U << EC_CODE_EXTRA;
@@ -159,7 +159,7 @@ uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     int32_t available;
     uint32_t ret;
     window = m_end_window;
-    available = s_ec.nend_bits;
+    available = m_nend_bits;
     if ((uint32_t)available < _bits) {
         do {
             window |= (uint32_t)rd.read_byte_from_end() << available;
@@ -170,54 +170,9 @@ uint32_t RangeDecoder::dec_bits(uint32_t _bits) {
     window >>= _bits;
     available -= _bits;
     m_end_window = window;
-    s_ec.nend_bits = available;
+    m_nend_bits = available;
     s_ec.nbits_total += _bits;
     return ret;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* When called, decay is positive and at most 11456. */
-uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay) {
-    uint32_t ft;
-    ft = 32768 - LAPLACE_MINP * (2 * LAPLACE_NMIN) - fs0;
-    return ft * (int32_t)(16384 - decay) >> 15;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t laplace_decode(uint32_t fs, int32_t decay) {
-    int32_t val = 0;
-    uint32_t fl;
-    uint32_t fm;
-    fm = ec_decode_bin(15);
-    fl = 0;
-    if (fm >= fs) {
-        val++;
-        fl = fs;
-        fs = laplace_get_freq1(fs, decay) + LAPLACE_MINP;
-        /* Search the decaying part of the PDF.*/
-        while (fs > LAPLACE_MINP && fm >= fl + 2 * fs) {
-            fs *= 2;
-            fl += fs;
-            fs = ((fs - 2 * LAPLACE_MINP) * (int32_t)decay) >> 15;
-            fs += LAPLACE_MINP;
-            val++;
-        }
-        /* Everything beyond that has probability LAPLACE_MINP. */
-        if (fs <= LAPLACE_MINP) {
-            int32_t di;
-            di = (fm - fl) >> (LAPLACE_LOG_MINP + 1);
-            val += di;
-            fl += 2 * di * LAPLACE_MINP;
-        }
-        if (fm < fl + fs)
-            val = -val;
-        else
-            fl += fs;
-    }
-    assert(fl < 32768);
-    assert(fs > 0);
-    assert(fl <= fm);
-    assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
-    ec_dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
-    return val;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t ec_tell(){return s_ec.nbits_total-EC_ILOG(s_ec.rng);}
