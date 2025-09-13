@@ -575,22 +575,7 @@ typedef struct {
     int8_t                    PERIndex;
     int8_t                    LTP_scaleIndex;
     int8_t                    Seed;
-} SideInfoIndices_t;
-
-typedef struct {
-    int16_t                  xq[           2 * MAX_FRAME_LENGTH ]; /* Buffer for quantized output signal                             */
-    int32_t                  sLTP_shp_Q14[ 2 * MAX_FRAME_LENGTH ];
-    int32_t                  sLPC_Q14[ MAX_SUB_FRAME_LENGTH + NSQ_LPC_BUF_LENGTH ];
-    int32_t                  sAR2_Q14[ MAX_SHAPE_LPC_ORDER ];
-    int32_t                  sLF_AR_shp_Q14;
-    int32_t                  sDiff_shp_Q14;
-    int32_t                    lagPrev;
-    int32_t                    sLTP_buf_idx;
-    int32_t                    sLTP_shp_buf_idx;
-    int32_t                  rand_seed;
-    int32_t                  prev_gain_Q16;
-    int32_t                    rewhite_flag;
-} silk_nsq_state;
+} sideInfoIndices_t;
 
 typedef struct {
     int32_t                  AnaState[ 2 ];                  /* Analysis filterbank state: 0-8 kHz                                   */
@@ -603,7 +588,7 @@ typedef struct {
     int32_t                  inv_NL[ VAD_N_BANDS ];          /* Inverse noise energy level in each band                              */
     int32_t                  NoiseLevelBias[ VAD_N_BANDS ];  /* Noise level estimator bias/offset                                    */
     int32_t                  counter;                        /* Frame counter used in the initial phase                              */
-} silk_VAD_state;
+} silk_VAD_state_t;
 
 /* Variable cut-off low-pass filter state */
 typedef struct {
@@ -611,7 +596,7 @@ typedef struct {
     int32_t                   transition_frame_no;        /* Counter which is mapped to a cut-off frequency */
     int32_t                     mode;                       /* Operating mode, <0: switch down, >0: switch up; 0: do nothing           */
     int32_t                   saved_fs_kHz;               /* If non-zero, holds the last sampling rate before a bandwidth switching reset. */
-} silk_LP_state;
+} silk_LP_state_t;
 
 /* Structure containing NLSF codebook */
 typedef struct {
@@ -627,7 +612,7 @@ typedef struct {
     const uint8_t             *ec_iCDF;
     const uint8_t             *ec_Rates_Q5;
     const int16_t             *deltaMin_Q15;
-} silk_NLSF_CB_struct;
+} silk_NLSF_CB_struct_t;
 
 typedef struct _silk_resampler_state_struct{
     int32_t       sIIR[ SILK_RESAMPLER_MAX_IIR_ORDER ]; /* this must be the first element of this struct */
@@ -651,7 +636,7 @@ typedef struct {
     int16_t                   pred_prev_Q13[ 2 ];
     int16_t                   sMid[ 2 ];
     int16_t                   sSide[ 2 ];
-} stereo_dec_state;
+} stereo_dec_state_t;
 
 /* Struct for Packet Loss Concealment */
 typedef struct {
@@ -668,7 +653,7 @@ typedef struct {
     int32_t                  fs_kHz;
     int32_t                  nb_subfr;
     int32_t                  subfr_length;
-} silk_PLC_struct;
+} silk_PLC_struct_t;
 
 /* Struct for CNG */
 typedef struct {
@@ -678,7 +663,7 @@ typedef struct {
     int32_t                  CNG_smth_Gain_Q16;
     int32_t                  rand_seed;
     int32_t                  fs_kHz;
-} silk_CNG_struct;
+} silk_CNG_struct_t;
 
 typedef struct {
     int32_t prev_gain_Q16;
@@ -707,15 +692,15 @@ typedef struct {
     int32_t VAD_flags[MAX_FRAMES_PER_PACKET];
     int32_t LBRR_flag;
     int32_t LBRR_flags[MAX_FRAMES_PER_PACKET];
-    const silk_NLSF_CB_struct *psNLSF_CB; /* Pointer to NLSF codebook                                         */
+    const silk_NLSF_CB_struct_t *psNLSF_CB; /* Pointer to NLSF codebook                                         */
     /* Quantization indices */
-    SideInfoIndices_t indices;
+    sideInfoIndices_t indices;
     /* CNG state */
-    silk_CNG_struct sCNG;
+    silk_CNG_struct_t sCNG;
     /* Stuff used for PLC */
     int32_t lossCnt;
     int32_t prevSignalType;
-    silk_PLC_struct sPLC;
+    silk_PLC_struct_t sPLC;
 } silk_decoder_state_t;
 
 
@@ -735,7 +720,7 @@ typedef struct {
 /* Decoder Super Struct */
 typedef struct {
 
-    stereo_dec_state                sStereo;
+    stereo_dec_state_t                sStereo;
     int32_t                         nChannelsAPI;
     int32_t                         nChannelsInternal;
     int32_t                         prev_decode_only_middle;
@@ -1034,9 +1019,9 @@ void silk_PLC_Reset(uint8_t n);
 void silk_PLC(uint8_t n, int16_t frame[], int32_t lost);
 void silk_PLC_glue_frames(uint8_t, int16_t frame[], int32_t length);
 void silk_LP_interpolate_filter_taps(int32_t B_Q28[TRANSITION_NB], int32_t A_Q28[TRANSITION_NA], const int32_t ind, const int32_t fac_Q16);
-void silk_LP_variable_cutoff(silk_LP_state *psLP, int16_t *frame, const int32_t frame_length);
-void silk_NLSF_unpack(int16_t ec_ix[], uint8_t pred_Q8[], const silk_NLSF_CB_struct *psNLSF_CB, const int32_t CB1_index);
-void silk_NLSF_decode(int16_t *pNLSF_Q15, int8_t *NLSFIndices, const silk_NLSF_CB_struct   *psNLSF_CB);
+void silk_LP_variable_cutoff(silk_LP_state_t *psLP, int16_t *frame, const int32_t frame_length);
+void silk_NLSF_unpack(int16_t ec_ix[], uint8_t pred_Q8[], const silk_NLSF_CB_struct_t *psNLSF_CB, const int32_t CB1_index);
+void silk_NLSF_decode(int16_t *pNLSF_Q15, int8_t *NLSFIndices, const silk_NLSF_CB_struct_t   *psNLSF_CB);
 int32_t silk_decoder_set_fs(uint8_t n, int32_t fs_kHz, int32_t fs_API_Hz);
 void silk_decode_indices(uint8_t n, int32_t FrameIndex, int32_t decode_LBRR, int32_t condCoding);
 void silk_decode_parameters(uint8_t n, int32_t condCoding);
@@ -1049,9 +1034,9 @@ int32_t silk_NLSF_del_dec_quant(int8_t indices[], const int16_t x_Q10[], const i
                                 const int32_t mu_Q20, const int16_t order);
 void silk_NLSF_VQ(int32_t err_Q26[], const int16_t in_Q15[], const uint8_t pCB_Q8[], const int16_t pWght_Q9[],
                   const int32_t K, const int32_t LPC_order);
-void silk_LP_variable_cutoff(silk_LP_state *psLP, int16_t *frame, const int32_t frame_length);
-int32_t silk_VAD_Init(silk_VAD_state *psSilk_VAD);
-void silk_stereo_MS_to_LR(stereo_dec_state *state, int16_t x1[], int16_t x2[], const int32_t pred_Q13[], int32_t fs_kHz,
+void silk_LP_variable_cutoff(silk_LP_state_t *psLP, int16_t *frame, const int32_t frame_length);
+int32_t silk_VAD_Init(silk_VAD_state_t *psSilk_VAD);
+void silk_stereo_MS_to_LR(stereo_dec_state_t *state, int16_t x1[], int16_t x2[], const int32_t pred_Q13[], int32_t fs_kHz,
                           int32_t frame_length);
 int32_t silk_stereo_find_predictor(int32_t *ratio_Q14, const int16_t x[], const int16_t y[], int32_t mid_res_amp_Q0[], int32_t length, int32_t smooth_coef_Q16);
 void silk_stereo_quant_pred(int32_t pred_Q13[], int8_t ix[2][3]);

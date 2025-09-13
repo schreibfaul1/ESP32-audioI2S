@@ -13,6 +13,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 ********************************************************************************************************************************************************************************************************/
 
 #include "Arduino.h"
+#include "opus_decoder.h"
 #include "range_decoder.h"
 #include "silk.h"
 
@@ -384,7 +385,7 @@ const int32_t sigm_LUT_neg_Q15[6] = {16384, 8812, 3906, 1554, 589, 219};
 
 const int8_t silk_nb_cbk_searchs_stage3[SILK_PE_MAX_COMPLEX + 1] = {PE_NB_CBKS_STAGE3_MIN, PE_NB_CBKS_STAGE3_MID, PE_NB_CBKS_STAGE3_MAX};
 
-const silk_NLSF_CB_struct silk_NLSF_CB_WB = {
+const silk_NLSF_CB_struct_t silk_NLSF_CB_WB = {
     32,
     16,
     SILK_FIX_CONST(0.15, 16),
@@ -414,7 +415,7 @@ const uint8_t* const silk_LTP_vq_gain_ptrs_Q7[NB_LTP_CBKS] = {&silk_LTP_gain_vq_
 
 const int8_t silk_LTP_vq_sizes[NB_LTP_CBKS] = {8, 16, 32};
 
-const silk_NLSF_CB_struct silk_NLSF_CB_NB_MB = {
+const silk_NLSF_CB_struct_t silk_NLSF_CB_NB_MB = {
     32,
     10,
     SILK_FIX_CONST(0.18, 16),
@@ -1279,7 +1280,7 @@ void silk_LP_interpolate_filter_taps(int32_t B_Q28[TRANSITION_NB], int32_t A_Q28
 /* piece-wise linear interpolation between elliptic filters */
 /* Start by setting psEncC->mode <> 0;                      */
 /* Deactivate by setting psEncC->mode = 0;                  */
-void silk_LP_variable_cutoff(silk_LP_state* psLP,        /* I/O  LP filter state                             */
+void silk_LP_variable_cutoff(silk_LP_state_t* psLP,        /* I/O  LP filter state                             */
                              int16_t*       frame,       /* I/O  Low-pass filtered output signal             */
                              const int32_t  frame_length /* I    Frame length                                */
 ) {
@@ -1356,7 +1357,7 @@ void silk_CNG(uint8_t n, int16_t frame[], int32_t length ) {
     int32_t          i, subfr;
     int32_t          LPC_pred_Q10, max_Gain_Q16, gain_Q16, gain_Q10;
     int16_t          A_Q12[MAX_LPC_ORDER];
-    silk_CNG_struct* psCNG = &s_channel_state[n].sCNG;
+    silk_CNG_struct_t* psCNG = &s_channel_state[n].sCNG;
 
     if(s_channel_state[n].fs_kHz != psCNG->fs_kHz) {
         /* Reset state */
@@ -2480,7 +2481,7 @@ void silk_NLSF_residual_dequant(                                   /* O    Retur
 /* NLSF vector decoder */
 void silk_NLSF_decode(int16_t*                   pNLSF_Q15,   /* O    Quantized NLSF vector [ LPC_ORDER ]         */
                       int8_t*                    NLSFIndices, /* I    Codebook path vector [ LPC_ORDER + 1 ]      */
-                      const silk_NLSF_CB_struct* psNLSF_CB    /* I    Codebook object                             */
+                      const silk_NLSF_CB_struct_t* psNLSF_CB    /* I    Codebook object                             */
 ) {
     int32_t        i;
     uint8_t        pred_Q8[MAX_LPC_ORDER];
@@ -2776,7 +2777,7 @@ void silk_NLSF_stabilize(int16_t*       NLSF_Q15,      /* I/O   Unstable/stabili
 /* Unpack predictor values and indices for entropy coding tables */
 void silk_NLSF_unpack(int16_t                    ec_ix[],   /* O    Indices to entropy tables [ LPC_ORDER ]     */
                       uint8_t                    pred_Q8[], /* O    LSF predictor [ LPC_ORDER ]                 */
-                      const silk_NLSF_CB_struct* psNLSF_CB, /* I    Codebook object                             */
+                      const silk_NLSF_CB_struct_t* psNLSF_CB, /* I    Codebook object                             */
                       const int32_t              CB1_index  /* I    Index of vector in first LSF codebook       */
 ) {
     int32_t        i;
@@ -2910,7 +2911,7 @@ void silk_PLC(uint8_t n, int16_t frame[], int32_t lost) {
 void silk_PLC_update(uint8_t n) {
     int32_t          LTP_Gain_Q14, temp_LTP_Gain_Q14;
     int32_t          i, j;
-    silk_PLC_struct* psPLC;
+    silk_PLC_struct_t* psPLC;
 
     psPLC = &s_channel_state[n].sPLC;
 
@@ -2995,7 +2996,7 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
     int16_t* B_Q14;
     int32_t* sLPC_Q14_ptr;
     int16_t  A_Q12[MAX_LPC_ORDER];
-    silk_PLC_struct* psPLC = &s_channel_state[n].sPLC;
+    silk_PLC_struct_t* psPLC = &s_channel_state[n].sPLC;
     int32_t          prevGain_Q10[2];
 
     auto sLTP_Q14 = silk_malloc_arr<int32_t>(s_channel_state[n].ltp_mem_length + s_channel_state[n].frame_length * sizeof(int32_t));
@@ -3153,7 +3154,7 @@ void silk_PLC_conceal(uint8_t n, int16_t frame[]) {
 void silk_PLC_glue_frames(uint8_t n, int16_t frame[], int32_t length) {
     int32_t          i, energy_shift;
     int32_t          energy;
-    silk_PLC_struct* psPLC;
+    silk_PLC_struct_t* psPLC;
     psPLC = &s_channel_state[n].sPLC;
 
     if(s_channel_state[n].lossCnt) {
@@ -4040,7 +4041,7 @@ int32_t silk_stereo_find_predictor(                                /* O    Retur
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Convert adaptive Mid/Side representation to Left/Right stereo signal */
-void silk_stereo_MS_to_LR(stereo_dec_state* state,       /* I/O  State                                       */
+void silk_stereo_MS_to_LR(stereo_dec_state_t* state,       /* I/O  State                                       */
                           int16_t           x1[],        /* I/O  Left input signal, becomes mid signal       */
                           int16_t           x2[],        /* I/O  Right input signal, becomes side signal     */
                           const int32_t     pred_Q13[],  /* I    Predictors                                  */
@@ -4092,12 +4093,12 @@ void silk_stereo_MS_to_LR(stereo_dec_state* state,       /* I/O  State          
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 /* Initialization of the Silk VAD */
 int32_t silk_VAD_Init(                           /* O    Return value, 0 if success                  */
-                      silk_VAD_state* psSilk_VAD /* I/O  Pointer to Silk VAD state                   */
+                      silk_VAD_state_t* psSilk_VAD /* I/O  Pointer to Silk VAD state                   */
 ) {
     int32_t b, ret = 0;
 
     /* reset state memory */
-    memset(psSilk_VAD, 0, sizeof(silk_VAD_state));
+    memset(psSilk_VAD, 0, sizeof(silk_VAD_state_t));
 
     /* init noise levels */
     /* Initialize array with approx pink noise levels (psd proportional to inverse of frequency) */
