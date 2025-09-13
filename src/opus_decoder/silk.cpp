@@ -19,6 +19,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 
 extern std::unique_ptr<RangeDecoder> rangedec;
 
+
 ps_ptr<silk_resampler_state_struct_t> s_resampler_state;
 ps_ptr<silk_decoder_state_t>          s_channel_state;
 ps_ptr<silk_decoder_t>                s_silk_decoder;
@@ -32,7 +33,7 @@ uint32_t           s_silk_internalSampleRate = 0;
 uint32_t           s_API_sampleRate = 0;
 uint32_t           s_prevPitchLag = 0;
 
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /* Coefficients for 2-band filter bank based on first-order allpass filters */
 int16_t A_fb1_20 = 5394 << 1;
@@ -4268,6 +4269,9 @@ int16_t silk_max_16(int16_t a, int16_t b) { return (((a) > (b)) ? (a) : (b)); }
 int32_t silk_max_32(int32_t a, int32_t b) { return (((a) > (b)) ? (a) : (b)); }
 int64_t silk_max_64(int64_t a, int64_t b) { return (((a) > (b)) ? (a) : (b)); }
 
+int32_t silk_CLZ16(int16_t in16) { return 32 - EC_ILOGs(in16 << 16 | 0x8000); }
+int32_t silk_CLZ32(int32_t in32) { return in32 ? 32 - EC_ILOGs(in32) : 32; }
+
 int32_t silk_noise_shape_quantizer_short_prediction_c(const int32_t *buf32, const int16_t *coef16, int32_t order) {
     int32_t out;
     assert(order == 10 || order == 16);
@@ -4293,5 +4297,31 @@ int32_t silk_noise_shape_quantizer_short_prediction_c(const int32_t *buf32, cons
         out = silk_SMLAWB(out, buf32[-14], coef16[14]);
         out = silk_SMLAWB(out, buf32[-15], coef16[15]);
     }
+    return out;
+}
+int32_t silk_NSQ_noise_shape_feedback_loop_c(const int32_t *data0, int32_t *data1, const int16_t *coef, int32_t order) {
+    int32_t out;
+    int32_t tmp1, tmp2;
+    int32_t j;
+
+    tmp2 = data0[0];
+    tmp1 = data1[0];
+    data1[0] = tmp2;
+
+    out = silk_RSHIFT(order, 1);
+    out = silk_SMLAWB(out, tmp2, coef[0]);
+
+    for (j = 2; j < order; j += 2) {
+        tmp2 = data1[j - 1];
+        data1[j - 1] = tmp1;
+        out = silk_SMLAWB(out, tmp1, coef[j - 1]);
+        tmp1 = data1[j + 0];
+        data1[j + 0] = tmp2;
+        out = silk_SMLAWB(out, tmp2, coef[j]);
+    }
+    data1[order - 1] = tmp1;
+    out = silk_SMLAWB(out, tmp1, coef[order - 1]);
+    /* Q11 -> Q12 */
+    out = silk_LSHIFT32(out, 1);
     return out;
 }
