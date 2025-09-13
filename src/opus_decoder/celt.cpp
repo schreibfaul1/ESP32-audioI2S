@@ -1268,7 +1268,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
                 x = fs / p0;
             else
                 x = x0 + 1 + (fs - (x0 + 1) * p0);
-            ec_dec_update( x <= x0 ? p0 * x : (x - 1 - x0) + (x0 + 1) * p0, x <= x0 ? p0 * (x + 1) : (x - x0) + (x0 + 1) * p0, ft);
+            rd.dec_update( x <= x0 ? p0 * x : (x - 1 - x0) + (x0 + 1) * p0, x <= x0 ? p0 * (x + 1) : (x - x0) + (x0 + 1) * p0, ft);
             itheta = x;
         }
         else if (__B0 > 1 || stereo) {
@@ -1294,7 +1294,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
                 fs = qn + 1 - itheta;
                 fl = ft - ((qn + 1 - itheta) * (qn + 2 - itheta) >> 1);
             }
-            ec_dec_update(fl, fl + fs, ft);
+            rd.dec_update(fl, fl + fs, ft);
         }
         assert(itheta >= 0);
         itheta = celt_udiv((int32_t)itheta * 16384, qn);
@@ -2902,7 +2902,7 @@ int32_t ec_laplace_decode(uint32_t fs, int32_t decay) {
     assert(fs > 0);
     assert(fl <= fm);
     assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
-    ec_dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
+    rd.dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
     return val;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

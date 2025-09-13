@@ -78,7 +78,7 @@ uint32_t RangeDecoder::decode_bin(uint32_t _bits) {
     return (1U << _bits) - EC_MINI(s + 1U, 1U << _bits);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
+void RangeDecoder::dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
     uint32_t s;
     s = s_ec.ext *  (_ft - _fh);
     s_ec.val -= s;
@@ -89,7 +89,7 @@ void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
     else{
         s_ec.rng = s_ec.rng - s;
     }
-    rd.dec_normalize();
+    dec_normalize();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*The probability of having a "one" is 1/(1<<_logp).*/
@@ -141,7 +141,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
         ftb -= EC_UINT_BITS;
         ft = (uint32_t)(_ft >> ftb) + 1;
         s = decode(ft);
-        ec_dec_update(s, s + 1, ft);
+        rd.dec_update(s, s + 1, ft);
         t = (uint32_t)s << ftb | dec_bits(ftb);
         if (t <= _ft) return t;
         s_ec.error = 1;
@@ -149,7 +149,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
     } else {
         _ft++;
         s = decode((uint32_t)_ft);
-        ec_dec_update(s, s + 1, (uint32_t)_ft);
+        rd.dec_update(s, s + 1, (uint32_t)_ft);
         return s;
     }
 }
