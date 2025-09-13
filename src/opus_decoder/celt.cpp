@@ -1263,7 +1263,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
             int32_t ft = p0 * (x0 + 1) + x0;
             /* Use a probability of p0 up to itheta=8192 and then use 1 after */
             int32_t fs;
-            fs = ec_decode(ft);
+            fs = rd.decode(ft);
             if (fs < (x0 + 1) * p0)
                 x = fs / p0;
             else
@@ -1281,7 +1281,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
             /* Triangular pdf */
             int32_t fl = 0;
             int32_t fm;
-            fm = ec_decode(ft);
+            fm = rd.decode(ft);
             if (fm < ((qn >> 1) * ((qn >> 1) + 1) >> 1))
             {
                 itheta = (isqrt32(8 * (uint32_t)fm + 1) - 1) >> 1;
@@ -2872,7 +2872,7 @@ int32_t ec_laplace_decode(uint32_t fs, int32_t decay) {
     int32_t val = 0;
     uint32_t fl;
     uint32_t fm;
-    fm = ec_decode_bin(15);
+    fm = rd.decode_bin(15);
     fl = 0;
     if (fm >= fs) {
         val++;

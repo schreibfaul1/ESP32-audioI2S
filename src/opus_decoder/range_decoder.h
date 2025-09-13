@@ -40,6 +40,7 @@ private:
 public:
     int32_t read_byte();
     int32_t read_byte_from_end();
+    void dec_normalize();
 
     public:
     RangeDecoder();
@@ -48,7 +49,8 @@ public:
     uint32_t get_storage();
     uint32_t dec_bits(uint32_t _bits);
     uint32_t dec_uint(uint32_t _ft);
-
+    uint32_t decode(uint32_t _ft);
+    uint32_t decode_bin(uint32_t _bits);
 
 };
 
@@ -57,9 +59,6 @@ public:
 int32_t ec_tell();
 uint32_t ec_tell_frac();
 
-void ec_dec_normalize();
-uint32_t ec_decode(uint32_t _ft);
-uint32_t ec_decode_bin(uint32_t _bits);
 void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft);
 int32_t ec_dec_bit_logp( uint32_t _logp);
 int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb);

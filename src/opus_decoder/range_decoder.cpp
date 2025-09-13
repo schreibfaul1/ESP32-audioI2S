@@ -30,7 +30,7 @@ int32_t RangeDecoder::read_byte_from_end() {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
-void ec_dec_normalize() {
+void RangeDecoder::dec_normalize() {
     /*If the range is too small, rescale it and input some bits.*/
     while (s_ec.rng <= EC_CODE_BOT) {
         int32_t sym;
@@ -39,7 +39,7 @@ void ec_dec_normalize() {
         /*Use up the remaining bits from our last symbol.*/
         sym = s_ec.rem;
         /*Read the next value from the input.*/
-        s_ec.rem = rd.read_byte();
+        s_ec.rem = read_byte();
         /*Take the rest of the bits we need from this new symbol.*/
         sym = (sym << EC_SYM_BITS | s_ec.rem) >> (EC_SYM_BITS - EC_CODE_EXTRA);
         /*And subtract them from val, capped to be less than EC_CODE_TOP.*/
@@ -57,21 +57,21 @@ void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
     s_ec.nbits_total = EC_CODE_BITS + 1 - ((EC_CODE_BITS - EC_CODE_EXTRA) / EC_SYM_BITS) * EC_SYM_BITS;
     s_ec.offs = 0;
     s_ec.rng = 1U << EC_CODE_EXTRA;
-    s_ec.rem = rd.read_byte();
+    s_ec.rem = read_byte();
     s_ec.val = s_ec.rng - 1 - (s_ec.rem >> (EC_SYM_BITS - EC_CODE_EXTRA));
     s_ec.error = 0;
     /*Normalize the interval.*/
-    ec_dec_normalize();
+    dec_normalize();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_decode(uint32_t _ft) {
+uint32_t RangeDecoder::decode(uint32_t _ft) {
     uint32_t s;
     s_ec.ext = s_ec.rng / _ft;
     s = (uint32_t)(s_ec.val / s_ec.ext);
     return _ft - EC_MINI(s + 1, _ft);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ec_decode_bin(uint32_t _bits) {
+uint32_t RangeDecoder::decode_bin(uint32_t _bits) {
     uint32_t s;
     s_ec.ext = s_ec.rng >> _bits;
     s = (uint32_t)(s_ec.val / s_ec.ext);
@@ -89,7 +89,7 @@ void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft) {
     else{
         s_ec.rng = s_ec.rng - s;
     }
-    ec_dec_normalize();
+    rd.dec_normalize();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*The probability of having a "one" is 1/(1<<_logp).*/
@@ -104,7 +104,7 @@ int32_t ec_dec_bit_logp( uint32_t _logp) {
     ret = d < s;
     if (!ret) s_ec.val = d - s;
     s_ec.rng = ret ? s : r - s;
-    ec_dec_normalize();
+    rd.dec_normalize();
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -124,7 +124,7 @@ int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
     } while (d < s);
     s_ec.val = d - s;
     s_ec.rng = t - s;
-    ec_dec_normalize();
+    rd.dec_normalize();
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -140,7 +140,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
         uint32_t t;
         ftb -= EC_UINT_BITS;
         ft = (uint32_t)(_ft >> ftb) + 1;
-        s = ec_decode(ft);
+        s = decode(ft);
         ec_dec_update(s, s + 1, ft);
         t = (uint32_t)s << ftb | dec_bits(ftb);
         if (t <= _ft) return t;
@@ -148,7 +148,7 @@ uint32_t RangeDecoder::dec_uint(uint32_t _ft) {
         return _ft;
     } else {
         _ft++;
-        s = ec_decode((uint32_t)_ft);
+        s = decode((uint32_t)_ft);
         ec_dec_update(s, s + 1, (uint32_t)_ft);
         return s;
     }
