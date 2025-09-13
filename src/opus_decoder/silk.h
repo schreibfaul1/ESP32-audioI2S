@@ -977,30 +977,6 @@ struct Silk_PsramDeleter { // PSRAM deleter for Unique_PTR
         }
     }
 };
-template<typename T>
-using silk_ptr_arr = std::unique_ptr<T[], Silk_PsramDeleter>;
-
-template<typename T>
-using silk_ptr_obj = std::unique_ptr<T, Silk_PsramDeleter>;
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Request memory for an array of T
-    template <typename T>
-    std::unique_ptr<T[], Silk_PsramDeleter> silk_malloc_arr(std::size_t count) {
-        T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
-        if (!raw) {
-            log_e("silk_malloc_array: OOM, no space for %zu bytes", sizeof(T) * count);
-        }
-        return std::unique_ptr<T[], Silk_PsramDeleter>(raw);
-    }
-
-    template <typename T>
-    silk_ptr_obj<T> silk_malloc_obj() {
-        T* raw = static_cast<T*>(ps_malloc(sizeof(T)));
-        if (!raw) {
-            log_e("silk_malloc_obj: OOM, no space for %zu bytes", sizeof(T));
-        }
-        return silk_ptr_obj<T>(raw);
-    }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 bool SILKDecoder_AllocateBuffers();

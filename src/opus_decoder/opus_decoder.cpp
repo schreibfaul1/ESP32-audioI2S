@@ -25,7 +25,7 @@ const uint32_t CELT_SET_SIGNALLING_REQUEST      = 10016;
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_GET_MODE_REQUEST            = 10015;
 
-extern silk_ptr_obj<silk_DecControlStruct_t>    s_silk_DecControlStruct;
+extern ps_ptr<silk_DecControlStruct_t>    s_silk_DecControlStruct;
 
 enum {OPUS_BANDWIDTH_NARROWBAND = 1101,    OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103,
       OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105};
