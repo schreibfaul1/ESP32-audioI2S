@@ -23,10 +23,10 @@ uint32_t ec_tell_frac() {
     return nbits - l;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t RangeDecoder::read_byte() { return s_ec.offs < s_ec.storage ? m_buf[s_ec.offs++] : 0; }
+int32_t RangeDecoder::read_byte() { return s_ec.offs < m_storage ? m_buf[s_ec.offs++] : 0; }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t RangeDecoder::read_byte_from_end() {
-    return s_ec.end_offs < s_ec.storage ? m_buf[s_ec.storage - ++(s_ec.end_offs)] : 0;
+    return s_ec.end_offs < m_storage ? m_buf[m_storage - ++(s_ec.end_offs)] : 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
@@ -50,7 +50,7 @@ void ec_dec_normalize() {
 void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
 
     m_buf = _buf;
-    s_ec.storage = _storage;
+    m_storage = _storage;
     s_ec.end_offs = 0;
     s_ec.end_window = 0;
     s_ec.nend_bits = 0;
@@ -222,6 +222,6 @@ int32_t laplace_decode(uint32_t fs, int32_t decay) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t ec_tell(){return s_ec.nbits_total-EC_ILOG(s_ec.rng);}
 void ec_add_nbits_total(int32_t nbits_total){s_ec.nbits_total += nbits_total;}
-uint32_t ec_get_storage(){return s_ec.storage;}
+uint32_t RangeDecoder::get_storage(){return m_storage;}
 int32_t ec_get_error(){return s_ec.error;}
 uint32_t ec_get_rng(){return s_ec.rng;}

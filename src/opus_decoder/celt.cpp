@@ -34,6 +34,8 @@
 #include "celt.h"
 #include "opus_decoder.h"
 
+extern RangeDecoder rd;
+
 celt_raw_ptr<CELTDecoder_t> s_celtDec; // unique pointer
 band_ctx_t     s_band_ctx;
 
@@ -2122,7 +2124,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     uint32_t budget;
     uint32_t tell;
 
-    budget = ec_get_storage() * 8;
+    budget = rd.get_storage() * 8;
     tell = ec_tell();
     logp = isTransient ? 2 : 4;
     tf_select_rsv = LM > 0 && tell + logp + 1 <= budget;
@@ -2202,7 +2204,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     M = 1 << LM;
 
-    if(ec_get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(rd.get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     N = M * m_CELTMode.shortMdctSize;
     c = 0;
@@ -2211,7 +2213,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while (++c < CC);
 
-    if(ec_get_storage() <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(rd.get_storage() <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
 
     effEnd = end;
     if (effEnd > m_CELTMode.effEBands)
@@ -2225,7 +2227,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);
     }
 
-    total_bits = ec_get_storage() * 8;
+    total_bits = rd.get_storage() * 8;
     tell = ec_tell();
 
     if (tell >= total_bits)
@@ -2236,7 +2238,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         silence = 0;
     if (silence)  {
         /* Pretend we've read all the remaining bits */
-        tell = ec_get_storage() * 8;
+        tell = rd.get_storage() * 8;
         ec_add_nbits_total(tell - ec_tell());
     }
 
@@ -2320,7 +2322,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     alloc_trim = tell + (6 << BITRES) <= total_bits ? ec_dec_icdf(trim_icdf, 7) : 5;
 
-    bits = (((int32_t)ec_get_storage() * 8) << BITRES) - ec_tell_frac() - 1;
+    bits = (((int32_t)rd.get_storage() * 8) << BITRES) - ec_tell_frac() - 1;
     anti_collapse_rsv = isTransient && LM >= 2 && bits >= ((LM + 2) << BITRES) ? (1 << BITRES) : 0;
     bits -= anti_collapse_rsv;
 
@@ -2345,7 +2347,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     quant_all_bands(start, end, X.get(), C == 2 ? X.get() + N : NULL, collapse_masks.get(),
                     NULL, pulses.get(), shortBlocks, spread_decision, dual_stereo, intensity, tf_res.get(),
-                    ec_get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &s_celtDec->rng, 0,
+                    rd.get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &s_celtDec->rng, 0,
                     s_celtDec->disable_inv);
 
     if (anti_collapse_rsv > 0) {
@@ -2353,7 +2355,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     unquant_energy_finalise(start, end, oldBandE,
-                            fine_quant.get(), fine_priority.get(), ec_get_storage() * 8 - ec_tell(), C);
+                            fine_quant.get(), fine_priority.get(), rd.get_storage() * 8 - ec_tell(), C);
 
     if (anti_collapse_on)
         anti_collapse(X.get(), collapse_masks.get(), LM, C, N,
@@ -2427,7 +2429,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     deemphasis(out_syn, outbuf, N, CC, s_celtDec->downsample, m_CELTMode.preemph, s_celtDec->preemph_memD, 0);
     s_celtDec->loss_count = 0;
-    if (ec_tell() > 8 * ec_get_storage())
+    if (ec_tell() > 8 * rd.get_storage())
         return OPUS_INTERNAL_ERROR;
     if (ec_get_error())
         s_celtDec->error = 1;
@@ -3449,7 +3451,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
         coef = pred_coef[LM];
     }
 
-    budget = ec_get_storage() * 8;
+    budget = rd.get_storage() * 8;
 
     /* Decode at a fixed coarse resolution */
     for (i = start; i < end; i++) {
