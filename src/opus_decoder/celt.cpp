@@ -2239,7 +2239,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     if (silence)  {
         /* Pretend we've read all the remaining bits */
         tell = rd.get_storage() * 8;
-        ec_add_nbits_total(tell - rd.tell());
+        rd.add_nbits_total(tell - rd.tell());
     }
 
     postfilter_gain = 0;
@@ -2425,13 +2425,13 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldLogE[c * nbEBands + i] = oldLogE2[c * nbEBands + i] = -QCONST16(28.f, DB_SHIFT);
         }
     } while (++c < 2);
-    s_celtDec->rng = ec_get_rng();
+    s_celtDec->rng = rd.get_rng();
 
     deemphasis(out_syn, outbuf, N, CC, s_celtDec->downsample, m_CELTMode.preemph, s_celtDec->preemph_memD, 0);
     s_celtDec->loss_count = 0;
     if (rd.tell() > 8 * rd.get_storage())
         return OPUS_INTERNAL_ERROR;
-    if (ec_get_error())
+    if (rd.get_error())
         s_celtDec->error = 1;
     return frame_size / s_celtDec->downsample;
 }

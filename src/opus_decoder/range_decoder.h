@@ -16,19 +16,6 @@
 #define EC_CODE_BOT       EC_CODE_TOP >> EC_SYM_BITS
 #define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
-typedef struct _ec_ctx {
-    
-    
-    
-    int32_t nbits_total;
-    uint32_t offs; /*The offset at which the next range coder byte will be read/written.*/
-    uint32_t rng; /*The number of values in the current range.*/
-    uint32_t val;
-    uint32_t ext;
-    int32_t rem; /*A buffered input/output symbol, awaiting carry propagation.*/
-    int32_t error; /*Nonzero if an error occurred.*/
-} ec_ctx_t;
-
 
 class RangeDecoder {
 private:
@@ -37,6 +24,13 @@ private:
     uint32_t m_end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
     uint32_t m_end_window; /*Bits that will be read from/written at the end.*/
     int32_t  m_nend_bits; /*Number of valid bits in end_window.*/
+    int32_t  m_nbits_total;
+    uint32_t m_offs; /*The offset at which the next range coder byte will be read/written.*/
+    uint32_t m_rng; /*The number of values in the current range.*/
+    uint32_t m_val;
+    uint32_t m_ext;
+    int32_t  m_rem; /*A buffered input/output symbol, awaiting carry propagation.*/
+    int32_t  m_error; /*Nonzero if an error occurred.*/
 public:
     int32_t read_byte();
     int32_t read_byte_from_end();
@@ -56,11 +50,8 @@ public:
     uint32_t tell_frac();
     int32_t dec_icdf(const uint8_t *_icdf, uint32_t _ftb);
     int32_t tell();
+    void add_nbits_total(int32_t nbits_total);
+    int32_t get_error();
+    uint32_t get_rng();
 };
 
-
-
-void ec_add_nbits_total(int32_t nbits_total);
-
-int32_t ec_get_error();
-uint32_t ec_get_rng();
