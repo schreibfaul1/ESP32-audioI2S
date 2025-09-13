@@ -211,9 +211,6 @@ typedef struct _CELTDecoder {
 #define  kf_cexp2(x,phase) do{ (x)->r = TRIG_UPSCALE*celt_cos_norm((phase));\
                                (x)->i = TRIG_UPSCALE*celt_cos_norm((phase)-32768); }while(0)
 
-#define LAPLACE_LOG_MINP (0)
-#define LAPLACE_MINP (1<<LAPLACE_LOG_MINP)
-#define LAPLACE_NMIN (16)
 #define COMBFILTER_MAXPERIOD 1024
 #define COMBFILTER_MINPERIOD 15
 
@@ -695,25 +692,11 @@ int32_t celt_decode_with_ec(int16_t * pcm, int32_t frame_size);
 int32_t celt_decoder_ctl(int32_t request, ...);
 int32_t cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y);
 int32_t decode_pulses(int32_t *_y, int32_t _n, int32_t _k);
-uint32_t ec_tell_frac();
-int32_t ec_read_byte();
-int32_t ec_read_byte_from_end();
-void ec_dec_normalize();
-void ec_dec_init(uint8_t *_buf, uint32_t _storage);
-uint32_t ec_decode(uint32_t _ft);
-uint32_t ec_decode_bin(uint32_t _bits);
-void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft);
-int32_t ec_dec_bit_logp(uint32_t _logp);
-int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb);
-uint32_t ec_dec_uint(uint32_t _ft);
-uint32_t ec_dec_bits(uint32_t _bits);
 void kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N);
 void kf_bfly4(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *st, int32_t m, int32_t N, int32_t mm);
 void kf_bfly3(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *st, int32_t m, int32_t N, int32_t mm);
 void kf_bfly5(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *st, int32_t m, int32_t N, int32_t mm);
 void opus_fft_impl(const kiss_fft_state *st, kiss_fft_cpx *fout);
-uint32_t ec_laplace_get_freq1(uint32_t fs0, int32_t decay);
-int32_t ec_laplace_decode(uint32_t fs, int32_t decay);
 uint32_t isqrt32(uint32_t _val);
 int16_t celt_rsqrt_norm(int32_t x);
 int32_t celt_sqrt(int32_t x);

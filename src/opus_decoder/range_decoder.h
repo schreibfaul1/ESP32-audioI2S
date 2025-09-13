@@ -8,6 +8,16 @@
 #define EC_CLZ(_x) (__builtin_clz(_x))
 #define EC_ILOG(_x) (EC_CLZ0s-EC_CLZ(_x))
 #define EC_BITRES 3
+#define LAPLACE_LOG_MINP (0)
+#define LAPLACE_MINP (1<<LAPLACE_LOG_MINP)
+#define LAPLACE_NMIN (16)
+
+#define EC_SYM_BITS       8
+#define EC_CODE_BITS      32
+#define EC_SYM_MAX        ((1U << EC_SYM_BITS) - 1)
+#define EC_CODE_TOP       1U << (EC_CODE_BITS - 1)
+#define EC_CODE_BOT       EC_CODE_TOP >> EC_SYM_BITS
+#define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
 typedef struct _ec_ctx {
     uint8_t *buf; /*Buffered input/output.*/
@@ -25,6 +35,8 @@ typedef struct _ec_ctx {
 } ec_ctx_t;
 
 int32_t ec_tell();
+uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay);
+int32_t laplace_decode(uint32_t fs, int32_t decay);
 uint32_t ec_tell_frac();
 int32_t ec_read_byte();
 void ec_dec_normalize();

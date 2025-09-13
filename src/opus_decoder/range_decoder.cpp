@@ -1,11 +1,6 @@
 #include "range_decoder.h"
 
-const uint32_t EC_SYM_BITS       = 8;
-const uint32_t EC_CODE_BITS      = 32;
-const uint32_t EC_SYM_MAX        = (1U << EC_SYM_BITS) - 1;
-const uint32_t EC_CODE_TOP       = 1U << (EC_CODE_BITS - 1);
-const uint32_t EC_CODE_BOT       = EC_CODE_TOP >> EC_SYM_BITS;
-const uint32_t EC_CODE_EXTRA     = (EC_CODE_BITS-2) % EC_SYM_BITS + 1;
+
 
 ec_ctx_t s_ec;
 
@@ -46,7 +41,7 @@ void ec_dec_normalize() {
         /*Take the rest of the bits we need from this new symbol.*/
         sym = (sym << EC_SYM_BITS | s_ec.rem) >> (EC_SYM_BITS - EC_CODE_EXTRA);
         /*And subtract them from val, capped to be less than EC_CODE_TOP.*/
-        s_ec.val = ((s_ec.val << EC_SYM_BITS) + (EC_SYM_MAX & ~sym)) & (EC_CODE_TOP - 1);
+        s_ec.val = ((s_ec.val << EC_SYM_BITS) + (EC_SYM_MAX & ~sym)) & ((EC_CODE_TOP) - 1);
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -176,6 +171,51 @@ uint32_t ec_dec_bits(uint32_t _bits) {
     s_ec.nend_bits = available;
     s_ec.nbits_total += _bits;
     return ret;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* When called, decay is positive and at most 11456. */
+uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay) {
+    uint32_t ft;
+    ft = 32768 - LAPLACE_MINP * (2 * LAPLACE_NMIN) - fs0;
+    return ft * (int32_t)(16384 - decay) >> 15;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t laplace_decode(uint32_t fs, int32_t decay) {
+    int32_t val = 0;
+    uint32_t fl;
+    uint32_t fm;
+    fm = ec_decode_bin(15);
+    fl = 0;
+    if (fm >= fs) {
+        val++;
+        fl = fs;
+        fs = laplace_get_freq1(fs, decay) + LAPLACE_MINP;
+        /* Search the decaying part of the PDF.*/
+        while (fs > LAPLACE_MINP && fm >= fl + 2 * fs) {
+            fs *= 2;
+            fl += fs;
+            fs = ((fs - 2 * LAPLACE_MINP) * (int32_t)decay) >> 15;
+            fs += LAPLACE_MINP;
+            val++;
+        }
+        /* Everything beyond that has probability LAPLACE_MINP. */
+        if (fs <= LAPLACE_MINP) {
+            int32_t di;
+            di = (fm - fl) >> (LAPLACE_LOG_MINP + 1);
+            val += di;
+            fl += 2 * di * LAPLACE_MINP;
+        }
+        if (fm < fl + fs)
+            val = -val;
+        else
+            fl += fs;
+    }
+    assert(fl < 32768);
+    assert(fs > 0);
+    assert(fl <= fm);
+    assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
+    ec_dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
+    return val;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t ec_tell(){return s_ec.nbits_total-EC_ILOG(s_ec.rng);}
