@@ -17,6 +17,7 @@
 #include <vector>
 
 std::unique_ptr<RangeDecoder> rangedec;
+std::unique_ptr<SilkDecoder> silkdec;
 
 // global vars
 const uint32_t CELT_SET_END_BAND_REQUEST        = 10012;
@@ -83,11 +84,19 @@ bool OPUSDecoder_AllocateBuffers(){
         }
     }
 
-    if(!SILKDecoder_AllocateBuffers()) {return false; /*ERR_OPUS_SILK_DEC_NOT_INIT*/}
+    if (!silkdec) {
+        silkdec = std::make_unique<SilkDecoder>();
+        if (!silkdec) {
+            OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
+            return false;
+        }
+    }
+    silkdec->init();
+
     if(!CELTDecoder_AllocateBuffers()) {return false; /*ERR_OPUS_CELT_NOT_INIT*/}
     s_opusSegmentTable.alloc_array(256);
     CELTDecoder_ClearBuffer();
-    SILKDecoder_ClearBuffers();
+
     OPUSDecoder_ClearBuffers();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
     s_opusError = celt_decoder_init(2); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
@@ -98,7 +107,7 @@ bool OPUSDecoder_AllocateBuffers(){
     int32_t ret = 0, silkDecSizeBytes = 0;
     (void) ret;
     (void) silkDecSizeBytes;
-    silk_InitDecoder();
+    silkdec->silk_InitDecoder();
     return true;
 }
 void OPUSDecoder_FreeBuffers(){
@@ -112,7 +121,7 @@ void OPUSDecoder_FreeBuffers(){
     s_opusOggHeaderSize = 0;
     s_opusSegmentTableRdPtr = -1;
     s_opusCountCode = 0;
-    SILKDecoder_FreeBuffers();
+    silkdec.reset();
     CELTDecoder_FreeBuffers();
 }
 void OPUSDecoder_ClearBuffers(){
@@ -357,9 +366,9 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     uint8_t start_band = 17;
     uint8_t end_band = 21;
 
-    setChannelsAPI(s_opusChannels);
-    setChannelsInternal(s_opusChannels);
-    setAPIsampleRate(48000);
+    silkdec->setChannelsAPI(s_opusChannels);
+    silkdec->setChannelsInternal(s_opusChannels);
+    silkdec->setAPIsampleRate(48000);
 
     if (     s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) {s_internalSampleRate = 8000;}
     else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {s_internalSampleRate = 12000;}
@@ -381,13 +390,13 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     }
 
     if (s_mode == MODE_SILK_ONLY) {
-        if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
+        if(s_prev_mode == MODE_CELT_ONLY) silkdec->silk_InitDecoder();
         decoded_samples = 0;
         rangedec->dec_init((uint8_t *)inbuf, samplesPerFrame);
-        silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
+        silkdec->silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
         do {  /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
-            int silk_ret = silk_Decode(0, first_frame, (int16_t*)outbuf + decoded_samples, &silk_frame_size);
+            int silk_ret = silkdec->silk_Decode(0, first_frame, (int16_t*)outbuf + decoded_samples, &silk_frame_size);
             if(silk_ret < 0) return silk_ret;
             decoded_samples += silk_frame_size;
         } while(decoded_samples < samplesPerFrame);
@@ -401,13 +410,13 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
         ps_ptr<int16_t>pcm_silk; pcm_silk.alloc_array(pcm_silk_size);
         int16_t* pcm_ptr;
         pcm_ptr = pcm_silk.get();
-        if (s_prev_mode == MODE_CELT_ONLY || s_prev_mode == MODE_NONE) silk_InitDecoder();
+        if (s_prev_mode == MODE_CELT_ONLY || s_prev_mode == MODE_NONE) silkdec->silk_InitDecoder();
         decoded_samples = 0;
-        silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
+        silkdec->silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
         do { /* Call SILK decoder */
             int     first_frame = decoded_samples == 0;
             int32_t nSamplesOut;
-            silk_ret = silk_Decode(0, first_frame, pcm_ptr, &nSamplesOut);
+            silk_ret = silkdec->silk_Decode(0, first_frame, pcm_ptr, &nSamplesOut);
             if (silk_ret < 0) return silk_ret;
             pcm_ptr += nSamplesOut * s_opusChannels;
             decoded_samples += nSamplesOut;

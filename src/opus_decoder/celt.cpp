@@ -32,9 +32,11 @@
 #include <Arduino.h>
 #include "range_decoder.h"
 #include "celt.h"
+#include "silk.h"
 #include "opus_decoder.h"
 
 extern std::unique_ptr<RangeDecoder> rangedec;
+extern std::unique_ptr<SilkDecoder> silkdec;
 
 celt_raw_ptr<CELTDecoder_t> s_celtDec; // unique pointer
 band_ctx_t     s_band_ctx;
