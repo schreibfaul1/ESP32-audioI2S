@@ -4117,3 +4117,181 @@ int32_t silk_VAD_Init(                           /* O    Return value, 0 if succ
     return (ret);
 }
 //----------------------------------------------------------------------------------------------------------------------
+void setChannelsAPI(uint8_t nChannelsAPI){
+    s_silk_DecControlStruct->nChannelsAPI = nChannelsAPI;
+}
+void setChannelsInternal(uint8_t nChannelsInternal){
+    s_silk_DecControlStruct->nChannelsInternal = nChannelsInternal;
+}
+void setAPIsampleRate(uint32_t API_sampleRate){
+    s_silk_DecControlStruct->API_sampleRate = API_sampleRate;
+}
+void combine_pulses(int32_t *out, const int32_t *in, const int32_t len) {
+    int32_t k;
+    for (k = 0; k < len; k++) {
+        out[k] = in[2 * k] + in[2 * k + 1];
+    }
+}
+/* Invert int32 value and return result as int32 in a given Q-domain */
+int32_t silk_INVERSE32_varQ(const int32_t b32, const int32_t Qres) {
+    int32_t b_headrm, lshift;
+    int32_t b32_inv, b32_nrm, err_Q32, result;
+
+    assert(b32 != 0);
+    assert(Qres > 0);
+
+    /* Compute number of bits head room and normalize input */
+    b_headrm = silk_CLZ32(silk_abs(b32)) - 1;
+    b32_nrm = silk_LSHIFT(b32, b_headrm); /* Q: b_headrm                */
+
+    /* Inverse of b32, with 14 bits of precision */
+    b32_inv = silk_DIV32_16(silk_int32_MAX >> 2, silk_RSHIFT(b32_nrm, 16)); /* Q: 29 + 16 - b_headrm    */
+
+    /* First approximation */
+    result = silk_LSHIFT(b32_inv, 16); /* Q: 61 - b_headrm            */
+
+    /* Compute residual by subtracting product of denominator and first approximation from one */
+    err_Q32 = silk_LSHIFT(((int32_t)1 << 29) - silk_SMULWB(b32_nrm, b32_inv), 3); /* Q32                        */
+
+    /* Refinement */
+    result = silk_SMLAWW(result, err_Q32, b32_inv); /* Q: 61 - b_headrm            */
+
+    /* Convert to Qres domain */
+    lshift = 61 - b_headrm - Qres;
+    if (lshift <= 0) {
+        return silk_LSHIFT_SAT32(result, -lshift);
+    } else {
+        if (lshift < 32) {
+            return silk_RSHIFT(result, lshift);
+        } else {
+            /* Avoid undefined result */
+            return 0;
+        }
+    }
+}
+/* Divide two int32 values and return result as int32 in a given Q-domain */
+int32_t silk_DIV32_varQ(const int32_t a32, const int32_t b32, const int32_t Qres) {
+    int32_t a_headrm, b_headrm, lshift;
+    int32_t b32_inv, a32_nrm, b32_nrm, result;
+
+    assert(b32 != 0);
+    assert(Qres >= 0);
+
+    /* Compute number of bits head room and normalize inputs */
+    a_headrm = silk_CLZ32(silk_abs(a32)) - 1;
+    a32_nrm = silk_LSHIFT(a32, a_headrm); /* Q: a_headrm                  */
+    b_headrm = silk_CLZ32(silk_abs(b32)) - 1;
+    b32_nrm = silk_LSHIFT(b32, b_headrm); /* Q: b_headrm                  */
+
+    /* Inverse of b32, with 14 bits of precision */
+    b32_inv = silk_DIV32_16(silk_int32_MAX >> 2, silk_RSHIFT(b32_nrm, 16)); /* Q: 29 + 16 - b_headrm        */
+
+    /* First approximation */
+    result = silk_SMULWB(a32_nrm, b32_inv); /* Q: 29 + a_headrm - b_headrm  */
+
+    /* Compute residual by subtracting product of denominator and first approximation */
+    /* It's OK to overflow because the final value of a32_nrm should always be small */
+    a32_nrm = silk_SUB32_ovflw(a32_nrm, silk_LSHIFT_ovflw(silk_SMMUL(b32_nrm, result), 3)); /* Q: a_headrm   */
+
+    /* Refinement */
+    result = silk_SMLAWB(result, a32_nrm, b32_inv); /* Q: 29 + a_headrm - b_headrm  */
+
+    /* Convert to Qres domain */
+    lshift = 29 + a_headrm - b_headrm - Qres;
+    if (lshift < 0) {
+        return silk_LSHIFT_SAT32(result, -lshift);
+    } else {
+        if (lshift < 32) {
+            return silk_RSHIFT(result, lshift);
+        } else {
+            /* Avoid undefined result */
+            return 0;
+        }
+    }
+}
+/* Approximation of square root, Accuracy: < +/- 10%  for output values > 15, < +/- 2.5% for output values > 120 */
+int32_t silk_SQRT_APPROX(int32_t x) {
+    int32_t y, lz, frac_Q7;
+    if (x <= 0) {return 0;}
+    silk_CLZ_FRAC(x, &lz, &frac_Q7);
+
+    if (lz & 1) {y = 32768;}
+    else {y = 46214; /* 46214 = sqrt(2) * 32768 */}
+
+    y >>= silk_RSHIFT(lz, 1); /* get scaling right */
+    y = silk_SMLAWB(y, y, silk_SMULBB(213, frac_Q7));  /* increment using fractional part of input */
+    return y;
+}
+/* get number of leading zeros and fractional part (the bits right after the leading one */
+void silk_CLZ_FRAC(int32_t in, int32_t *lz, int32_t *frac_Q7) {
+    int32_t lzeros = silk_CLZ32(in);
+
+    *lz = lzeros;
+    *frac_Q7 = silk_ROR32(in, 24 - lzeros) & 0x7f;
+}
+/* Rotate a32 right by 'rot' bits. Negative rot values result in rotating left. Output is 32bit int.
+   Note: contemporary compilers recognize the C expression below and compile it into a 'ror' instruction if available. No need for inline ASM! */
+int32_t silk_ROR32(int32_t a32, int32_t rot) {
+    uint32_t x = (uint32_t)a32;
+    uint32_t r = (uint32_t)rot;
+    uint32_t m = (uint32_t)-rot;
+    if (rot == 0) {
+        return a32;
+    } else if (rot < 0) {
+        return (int32_t)((x << m) | (x >> (32 - m)));
+    } else {
+        return (int32_t)((x << (32 - r)) | (x >> r));
+    }
+}
+/* count leading zeros of int32_t64 */
+int32_t silk_CLZ64(int64_t in) {
+    int32_t in_upper;
+
+    in_upper = (int32_t)silk_RSHIFT64(in, 32);
+    if (in_upper == 0) {
+        /* Search in the lower 32 bits */
+        return 32 + silk_CLZ32((int32_t)in);
+    } else {
+        /* Search in the upper 32 bits */
+        return silk_CLZ32(in_upper);
+    }
+}
+/* silk_min() versions with typecast in the function call */
+int32_t silk_min_int(int32_t a, int32_t b) { return (((a) < (b)) ? (a) : (b)); }
+int16_t silk_min_16(int16_t a, int16_t b) { return (((a) < (b)) ? (a) : (b)); }
+int32_t silk_min_32(int32_t a, int32_t b) { return (((a) < (b)) ? (a) : (b)); }
+int64_t silk_min_64(int64_t a, int64_t b) { return (((a) < (b)) ? (a) : (b)); }
+
+/* silk_min() versions with typecast in the function call */
+int32_t silk_max_int(int32_t a, int32_t b) { return (((a) > (b)) ? (a) : (b)); }
+int16_t silk_max_16(int16_t a, int16_t b) { return (((a) > (b)) ? (a) : (b)); }
+int32_t silk_max_32(int32_t a, int32_t b) { return (((a) > (b)) ? (a) : (b)); }
+int64_t silk_max_64(int64_t a, int64_t b) { return (((a) > (b)) ? (a) : (b)); }
+
+int32_t silk_noise_shape_quantizer_short_prediction_c(const int32_t *buf32, const int16_t *coef16, int32_t order) {
+    int32_t out;
+    assert(order == 10 || order == 16);
+
+    /* Avoids introducing a bias because silk_SMLAWB() always rounds to -inf */
+    out = silk_RSHIFT(order, 1);
+    out = silk_SMLAWB(out, buf32[0], coef16[0]);
+    out = silk_SMLAWB(out, buf32[-1], coef16[1]);
+    out = silk_SMLAWB(out, buf32[-2], coef16[2]);
+    out = silk_SMLAWB(out, buf32[-3], coef16[3]);
+    out = silk_SMLAWB(out, buf32[-4], coef16[4]);
+    out = silk_SMLAWB(out, buf32[-5], coef16[5]);
+    out = silk_SMLAWB(out, buf32[-6], coef16[6]);
+    out = silk_SMLAWB(out, buf32[-7], coef16[7]);
+    out = silk_SMLAWB(out, buf32[-8], coef16[8]);
+    out = silk_SMLAWB(out, buf32[-9], coef16[9]);
+
+    if (order == 16) {
+        out = silk_SMLAWB(out, buf32[-10], coef16[10]);
+        out = silk_SMLAWB(out, buf32[-11], coef16[11]);
+        out = silk_SMLAWB(out, buf32[-12], coef16[12]);
+        out = silk_SMLAWB(out, buf32[-13], coef16[13]);
+        out = silk_SMLAWB(out, buf32[-14], coef16[14]);
+        out = silk_SMLAWB(out, buf32[-15], coef16[15]);
+    }
+    return out;
+}

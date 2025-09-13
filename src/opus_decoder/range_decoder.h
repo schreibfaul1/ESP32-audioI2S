@@ -36,7 +36,7 @@ private:
 
 public:
     RangeDecoder();
-    ~RangeDecoder(){;}
+    ~RangeDecoder(){}
     void dec_init(uint8_t *_buf, uint32_t _storage);
     uint32_t get_storage();
     uint32_t dec_bits(uint32_t _bits);

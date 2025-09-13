@@ -25,8 +25,6 @@ const uint32_t CELT_SET_SIGNALLING_REQUEST      = 10016;
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
 const uint32_t CELT_GET_MODE_REQUEST            = 10015;
 
-extern ps_ptr<silk_DecControlStruct_t>    s_silk_DecControlStruct;
-
 enum {OPUS_BANDWIDTH_NARROWBAND = 1101,    OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103,
       OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105};
 
@@ -358,9 +356,9 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     uint8_t start_band = 17;
     uint8_t end_band = 21;
 
-    s_silk_DecControlStruct->nChannelsAPI = s_opusChannels;
-    s_silk_DecControlStruct->nChannelsInternal = s_opusChannels;
-    s_silk_DecControlStruct->API_sampleRate = 48000;
+    setChannelsAPI(s_opusChannels);
+    setChannelsInternal(s_opusChannels);
+    setAPIsampleRate(48000);
 
     if (     s_bandWidth == OPUS_BANDWIDTH_NARROWBAND) {s_internalSampleRate = 8000;}
     else if (s_bandWidth == OPUS_BANDWIDTH_MEDIUMBAND) {s_internalSampleRate = 12000;}
