@@ -8,7 +8,7 @@ RangeDecoder::RangeDecoder() : m_buf(nullptr) {}
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This is a faster version of ec_tell_frac() that takes advantage of the low (1/8 bit) resolution to use just a linear function followed by a lookup to determine the exact transition thresholds. */
-uint32_t ec_tell_frac() {
+uint32_t RangeDecoder::tell_frac() {
     const uint32_t correction[8] = {35733, 38967, 42495, 46340, 50535, 55109, 60097, 65535};
     uint32_t nbits;
     uint32_t r;
@@ -108,7 +108,7 @@ int32_t RangeDecoder::dec_bit_logp( uint32_t _logp) {
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
+int32_t RangeDecoder::dec_icdf(const uint8_t *_icdf, uint32_t _ftb) {
     uint32_t r;
     uint32_t d;
     uint32_t s;

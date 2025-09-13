@@ -1253,7 +1253,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
     if (stereo && i >= intensity)
         qn = 1;
 
-    tell = ec_tell_frac();
+    tell = rd.tell_frac();
     if (qn != 1) {
         /* Entropy coding of the angle. We use a uniform pdf for the time split, a step for stereo, and a triangular one for the rest. */
         if (stereo && N > 2) {
@@ -1314,7 +1314,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
             inv = 0;
         itheta = 0;
     }
-    qalloc = ec_tell_frac() - tell;
+    qalloc = rd.tell_frac() - tell;
     *b -= qalloc;
 
     if (itheta == 0) {
@@ -1813,7 +1813,7 @@ void quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8
             Y = NULL;
         N = M * eBands[i + 1] - M * eBands[i];
         assert(N > 0);
-        tell = ec_tell_frac();
+        tell = rd.tell_frac();
 
         /* Compute how many bits we want to allocate to this band */
         if (i != start)
@@ -2253,7 +2253,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             postfilter_pitch = (16 << octave) + rd.dec_bits(4 + octave) - 1;
             qg = rd.dec_bits(3);
             if (ec_tell() + 2 <= total_bits)
-                postfilter_tapset = ec_dec_icdf(tapset_icdf, 2);
+                postfilter_tapset = rd.dec_icdf(tapset_icdf, 2);
             postfilter_gain = QCONST16(.09375f, 15) * (qg + 1);
         }
         tell = ec_tell();
@@ -2281,7 +2281,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     tell = ec_tell();
     spread_decision = SPREAD_NORMAL;
-    if (tell + 4 <= total_bits) spread_decision = ec_dec_icdf(spread_icdf, 5);
+    if (tell + 4 <= total_bits) spread_decision = rd.dec_icdf(spread_icdf, 5);
 
     auto cap = celt_malloc_arr<int32_t>(nbEBands * sizeof(int32_t));
 
@@ -2291,7 +2291,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     dynalloc_logp = 6;
     total_bits <<= BITRES;
-    tell = ec_tell_frac();
+    tell = rd.tell_frac();
     for (i = start; i < end; i++) {
         int32_t width, quanta;
         int32_t dynalloc_loop_logp;
@@ -2305,7 +2305,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         {
             int32_t flag;
             flag = rd.dec_bit_logp(dynalloc_loop_logp);
-            tell = ec_tell_frac();
+            tell = rd.tell_frac();
             if (!flag)
                 break;
             boost += quanta;
@@ -2320,9 +2320,9 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     auto fine_quant = celt_malloc_arr<int32_t>(nbEBands * sizeof(int32_t));
 
-    alloc_trim = tell + (6 << BITRES) <= total_bits ? ec_dec_icdf(trim_icdf, 7) : 5;
+    alloc_trim = tell + (6 << BITRES) <= total_bits ? rd.dec_icdf(trim_icdf, 7) : 5;
 
-    bits = (((int32_t)rd.get_storage() * 8) << BITRES) - ec_tell_frac() - 1;
+    bits = (((int32_t)rd.get_storage() * 8) << BITRES) - rd.tell_frac() - 1;
     anti_collapse_rsv = isTransient && LM >= 2 && bits >= ((LM + 2) << BITRES) ? (1 << BITRES) : 0;
     bits -= anti_collapse_rsv;
 
@@ -3468,7 +3468,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
                 pi = 2 * min(i, (int32_t)20);
                 qi = ec_laplace_decode(prob_model[pi] << 7, prob_model[pi + 1] << 6);
             } else if (budget - tell >= 2) {
-                qi = ec_dec_icdf(small_energy_icdf, 2);
+                qi = rd.dec_icdf(small_energy_icdf, 2);
                 qi = (qi >> 1) ^ -(qi & 1);
             } else if (budget - tell >= 1) {
                 qi = -rd.dec_bit_logp(1);
