@@ -20,7 +20,6 @@
 #define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
 typedef struct _ec_ctx {
-    uint8_t *buf; /*Buffered input/output.*/
     uint32_t storage; /*The size of the buffer.*/
     uint32_t end_offs; /*The offset at which the last byte containing raw bits was read/written.*/
     uint32_t end_window; /*Bits that will be read from/written at the end.*/
@@ -34,13 +33,30 @@ typedef struct _ec_ctx {
     int32_t error; /*Nonzero if an error occurred.*/
 } ec_ctx_t;
 
+
+class RangeDecoder {
+private:
+    uint8_t* m_buf;        // Buffered input/output
+    
+public:
+    int32_t read_byte();
+    int32_t read_byte_from_end();
+public:
+    RangeDecoder();
+    ~RangeDecoder(){;}
+    void dec_init(uint8_t *_buf, uint32_t _storage);
+
+
+};
+
+
+
 int32_t ec_tell();
 uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay);
 int32_t laplace_decode(uint32_t fs, int32_t decay);
 uint32_t ec_tell_frac();
-int32_t ec_read_byte();
+
 void ec_dec_normalize();
-void ec_dec_init(uint8_t *_buf, uint32_t _storage);
 uint32_t ec_decode(uint32_t _ft);
 uint32_t ec_decode_bin(uint32_t _bits);
 void ec_dec_update(uint32_t _fl, uint32_t _fh, uint32_t _ft);

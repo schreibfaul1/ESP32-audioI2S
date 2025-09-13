@@ -1,8 +1,10 @@
 #include "range_decoder.h"
 
-
+extern RangeDecoder rd;
 
 ec_ctx_t s_ec;
+
+RangeDecoder::RangeDecoder() : m_buf(nullptr) {}
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This is a faster version of ec_tell_frac() that takes advantage of the low (1/8 bit) resolution to use just a linear function followed by a lookup to determine the exact transition thresholds. */
@@ -21,10 +23,10 @@ uint32_t ec_tell_frac() {
     return nbits - l;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_read_byte() { return s_ec.offs < s_ec.storage ? s_ec.buf[s_ec.offs++] : 0; }
+int32_t RangeDecoder::read_byte() { return s_ec.offs < s_ec.storage ? m_buf[s_ec.offs++] : 0; }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_read_byte_from_end() {
-    return s_ec.end_offs < s_ec.storage ? s_ec.buf[s_ec.storage - ++(s_ec.end_offs)] : 0;
+int32_t RangeDecoder::read_byte_from_end() {
+    return s_ec.end_offs < s_ec.storage ? m_buf[s_ec.storage - ++(s_ec.end_offs)] : 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Normalizes the contents of val and rng so that rng lies entirely in the high-order symbol.*/
@@ -37,7 +39,7 @@ void ec_dec_normalize() {
         /*Use up the remaining bits from our last symbol.*/
         sym = s_ec.rem;
         /*Read the next value from the input.*/
-        s_ec.rem = ec_read_byte();
+        s_ec.rem = rd.read_byte();
         /*Take the rest of the bits we need from this new symbol.*/
         sym = (sym << EC_SYM_BITS | s_ec.rem) >> (EC_SYM_BITS - EC_CODE_EXTRA);
         /*And subtract them from val, capped to be less than EC_CODE_TOP.*/
@@ -45,9 +47,9 @@ void ec_dec_normalize() {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void ec_dec_init(uint8_t *_buf, uint32_t _storage) {
+void RangeDecoder::dec_init(uint8_t *_buf, uint32_t _storage) {
 
-    s_ec.buf = _buf;
+    m_buf = _buf;
     s_ec.storage = _storage;
     s_ec.end_offs = 0;
     s_ec.end_window = 0;
@@ -55,7 +57,7 @@ void ec_dec_init(uint8_t *_buf, uint32_t _storage) {
     s_ec.nbits_total = EC_CODE_BITS + 1 - ((EC_CODE_BITS - EC_CODE_EXTRA) / EC_SYM_BITS) * EC_SYM_BITS;
     s_ec.offs = 0;
     s_ec.rng = 1U << EC_CODE_EXTRA;
-    s_ec.rem = ec_read_byte();
+    s_ec.rem = rd.read_byte();
     s_ec.val = s_ec.rng - 1 - (s_ec.rem >> (EC_SYM_BITS - EC_CODE_EXTRA));
     s_ec.error = 0;
     /*Normalize the interval.*/
@@ -160,7 +162,7 @@ uint32_t ec_dec_bits(uint32_t _bits) {
     available = s_ec.nend_bits;
     if ((uint32_t)available < _bits) {
         do {
-            window |= (uint32_t)ec_read_byte_from_end() << available;
+            window |= (uint32_t)rd.read_byte_from_end() << available;
             available += EC_SYM_BITS;
         } while (available <= EC_WINDOW_SIZE - EC_SYM_BITS);
     }

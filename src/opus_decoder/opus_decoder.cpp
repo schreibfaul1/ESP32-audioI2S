@@ -15,6 +15,8 @@
 #include "Arduino.h"
 #include <vector>
 
+RangeDecoder rd;
+
 // global vars
 const uint32_t CELT_SET_END_BAND_REQUEST        = 10012;
 const uint32_t CELT_SET_CHANNELS_REQUEST        = 10008;
@@ -360,11 +362,11 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if (s_mode == MODE_CELT_ONLY){
         if(s_prev_mode != s_mode){
             celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
-            ec_dec_init((uint8_t *)inbuf, packetLen);
+            rd.dec_init((uint8_t *)inbuf, packetLen);
             celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
         }
         s_prev_mode = s_mode;
-        ec_dec_init((uint8_t *)inbuf, packetLen);
+        rd.dec_init((uint8_t *)inbuf, packetLen);
         celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
         return celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     }
@@ -372,7 +374,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     if (s_mode == MODE_SILK_ONLY) {
         if(s_prev_mode == MODE_CELT_ONLY) silk_InitDecoder();
         decoded_samples = 0;
-        ec_dec_init((uint8_t *)inbuf, samplesPerFrame);
+        rd.dec_init((uint8_t *)inbuf, samplesPerFrame);
         silk_setRawParams(s_opusChannels, 2, payloadSize_ms, s_internalSampleRate, 48000);
         do {  /* Call SILK decoder */
             int first_frame = decoded_samples == 0;
@@ -385,7 +387,7 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     }
 
     if (s_mode == MODE_HYBRID) {
-        ec_dec_init((uint8_t*)inbuf, packetLen);
+        rd.dec_init((uint8_t*)inbuf, packetLen);
         int      pcm_silk_size = samplesPerFrame * 4;
         ps_ptr<int16_t>pcm_silk; pcm_silk.alloc_array(pcm_silk_size);
         int16_t* pcm_ptr;
