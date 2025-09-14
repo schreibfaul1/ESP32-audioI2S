@@ -29,13 +29,8 @@
 
 #include <Arduino.h>
 #include "range_decoder.h"
-#include "celt.h"
-#include "silk.h"
 #include "opus_decoder.h"
-
-extern std::unique_ptr<RangeDecoder> rangedec;
-extern std::unique_ptr<SilkDecoder> silkdec;
-
+#include "celt.h"
 
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -630,7 +625,7 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
     if (stereo && i >= intensity)
         qn = 1;
 
-    tell = rangedec->tell_frac();
+    tell = rd.tell_frac(); // ->tell_frac();
     if (qn != 1) {
         /* Entropy coding of the angle. We use a uniform pdf for the time split, a step for stereo, and a triangular one for the rest. */
         if (stereo && N > 2) {
@@ -640,17 +635,17 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
             int32_t ft = p0 * (x0 + 1) + x0;
             /* Use a probability of p0 up to itheta=8192 and then use 1 after */
             int32_t fs;
-            fs = rangedec->decode(ft);
+            fs = rd.decode(ft);
             if (fs < (x0 + 1) * p0)
                 x = fs / p0;
             else
                 x = x0 + 1 + (fs - (x0 + 1) * p0);
-            rangedec->dec_update( x <= x0 ? p0 * x : (x - 1 - x0) + (x0 + 1) * p0, x <= x0 ? p0 * (x + 1) : (x - x0) + (x0 + 1) * p0, ft);
+            rd.dec_update( x <= x0 ? p0 * x : (x - 1 - x0) + (x0 + 1) * p0, x <= x0 ? p0 * (x + 1) : (x - x0) + (x0 + 1) * p0, ft);
             itheta = x;
         }
         else if (__B0 > 1 || stereo) {
             /* Uniform pdf */
-            itheta = rangedec->dec_uint(qn + 1);
+            itheta = rd.dec_uint(qn + 1);
         }
         else {
             int32_t fs = 1, ft;
@@ -658,7 +653,7 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
             /* Triangular pdf */
             int32_t fl = 0;
             int32_t fm;
-            fm = rangedec->decode(ft);
+            fm = rd.decode(ft);
             if (fm < ((qn >> 1) * ((qn >> 1) + 1) >> 1))
             {
                 itheta = (isqrt32(8 * (uint32_t)fm + 1) - 1) >> 1;
@@ -671,7 +666,7 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
                 fs = qn + 1 - itheta;
                 fl = ft - ((qn + 1 - itheta) * (qn + 2 - itheta) >> 1);
             }
-            rangedec->dec_update(fl, fl + fs, ft);
+            rd.dec_update(fl, fl + fs, ft);
         }
         assert(itheta >= 0);
         itheta = celt_udiv((int32_t)itheta * 16384, qn);
@@ -682,7 +677,7 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
     else if (stereo) {
 
         if (*b > 2 << BITRES && m_band_ctx.remaining_bits > 2 << BITRES) {
-            inv = rangedec->dec_bit_logp(2);
+            inv = rd.dec_bit_logp(2);
         }
         else
             inv = 0;
@@ -691,7 +686,7 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
             inv = 0;
         itheta = 0;
     }
-    qalloc = rangedec->tell_frac() - tell;
+    qalloc = rd.tell_frac() - tell;
     *b -= qalloc;
 
     if (itheta == 0) {
@@ -732,7 +727,7 @@ uint32_t CeltDecoder::quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t 
     do {
         int32_t sign = 0;
         if (m_band_ctx.remaining_bits >= 1 << BITRES) {
-            sign = rangedec->dec_bits(1);
+            sign = rd.dec_bits(1);
             m_band_ctx.remaining_bits -= 1 << BITRES;
             b -= 1 << BITRES;
         }
@@ -1040,7 +1035,7 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
         x2 = c ? Y : X;
         y2 = c ? X : Y;
         if (sbits) {
-            sign = rangedec->dec_bits(1);
+            sign = rd.dec_bits(1);
         }
         sign = 1 - 2 * sign;
         /* We use orig_fill here because we want to fold the side, but if itheta==16384, we'll have cleared the low bits of fill. */
@@ -1190,7 +1185,7 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
             Y = NULL;
         N = M * eBands[i + 1] - M * eBands[i];
         assert(N > 0);
-        tell = rangedec->tell_frac();
+        tell = rd.tell_frac();
 
         /* Compute how many bits we want to allocate to this band */
         if (i != start)
@@ -1496,16 +1491,16 @@ void CeltDecoder::tf_decode(int32_t start, int32_t end, int32_t isTransient, int
     uint32_t budget;
     uint32_t tell;
 
-    budget = rangedec->get_storage() * 8;
-    tell = rangedec->tell();
+    budget = rd.get_storage() * 8;
+    tell = rd.tell();
     logp = isTransient ? 2 : 4;
     tf_select_rsv = LM > 0 && tell + logp + 1 <= budget;
     budget -= tf_select_rsv;
     tf_changed = curr = 0;
     for (i = start; i < end; i++) {
         if (tell + logp <= budget) {
-            curr ^= rangedec->dec_bit_logp(logp);
-            tell = rangedec->tell();
+            curr ^= rd.dec_bit_logp(logp);
+            tell = rd.tell();
             tf_changed |= curr;
         }
         tf_res[i] = curr;
@@ -1515,7 +1510,7 @@ void CeltDecoder::tf_decode(int32_t start, int32_t end, int32_t isTransient, int
     if (tf_select_rsv &&
         tf_select_table[LM][4 * isTransient + 0 + tf_changed] !=
             tf_select_table[LM][4 * isTransient + 2 + tf_changed]) {
-        tf_select = rangedec->dec_bit_logp(1);
+        tf_select = rd.dec_bit_logp(1);
     }
     for (i = start; i < end; i++) {
         tf_res[i] = tf_select_table[LM][4 * isTransient + 2 * tf_select + tf_res[i]];
@@ -1571,12 +1566,12 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     {
         for (LM = 0; LM <= m_CELTMode.maxLM; LM++)
             if (m_CELTMode.shortMdctSize << LM == frame_size) break;
-        if (LM > m_CELTMode.maxLM) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+        if (LM > m_CELTMode.maxLM) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_BAD_ARG;}
     }
 
     M = 1 << LM;
 
-    if(rangedec->get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(rd.get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_BAD_ARG;}
 
     N = M * m_CELTMode.shortMdctSize;
     c = 0;
@@ -1585,7 +1580,7 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while (++c < CC);
 
-    if(rangedec->get_storage() <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_ERR;}
+    if(rd.get_storage() <= 1) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_BAD_ARG;}
 
     effEnd = end;
     if (effEnd > m_CELTMode.effEBands)
@@ -1599,41 +1594,41 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldBandE[i] = max(oldBandE[i], oldBandE[nbEBands + i]);
     }
 
-    total_bits = rangedec->get_storage() * 8;
-    tell = rangedec->tell();
+    total_bits = rd.get_storage() * 8;
+    tell = rd.tell();
 
     if (tell >= total_bits)
         silence = 1;
     else if (tell == 1)
-        silence = rangedec->dec_bit_logp(15);
+        silence = rd.dec_bit_logp(15);
     else
         silence = 0;
     if (silence)  {
         /* Pretend we've read all the remaining bits */
-        tell = rangedec->get_storage() * 8;
-        rangedec->add_nbits_total(tell - rangedec->tell());
+        tell = rd.get_storage() * 8;
+        rd.add_nbits_total(tell - rd.tell());
     }
 
     postfilter_gain = 0;
     postfilter_pitch = 0;
     postfilter_tapset = 0;
     if (start == 0 && tell + 16 <= total_bits) {
-        if (rangedec->dec_bit_logp(1))
+        if (rd.dec_bit_logp(1))
         {
             int32_t qg, octave;
-            octave = rangedec->dec_uint(6);
-            postfilter_pitch = (16 << octave) + rangedec->dec_bits(4 + octave) - 1;
-            qg = rangedec->dec_bits(3);
-            if (rangedec->tell() + 2 <= total_bits)
-                postfilter_tapset = rangedec->dec_icdf(tapset_icdf, 2);
+            octave = rd.dec_uint(6);
+            postfilter_pitch = (16 << octave) + rd.dec_bits(4 + octave) - 1;
+            qg = rd.dec_bits(3);
+            if (rd.tell() + 2 <= total_bits)
+                postfilter_tapset = rd.dec_icdf(tapset_icdf, 2);
             postfilter_gain = QCONST16(.09375f, 15) * (qg + 1);
         }
-        tell = rangedec->tell();
+        tell = rd.tell();
     }
 
     if (LM > 0 && tell + 3 <= total_bits) {
-        isTransient = rangedec->dec_bit_logp( 3);
-        tell = rangedec->tell();
+        isTransient = rd.dec_bit_logp( 3);
+        tell = rd.tell();
     }
     else
         isTransient = 0;
@@ -1644,16 +1639,16 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         shortBlocks = 0;
 
     /* Decode the global flags (first symbols in the stream) */
-    intra_ener = tell + 3 <= total_bits ? rangedec->dec_bit_logp(3) : 0;
+    intra_ener = tell + 3 <= total_bits ? rd.dec_bit_logp(3) : 0;
     /* Get band energies */
     unquant_coarse_energy(start, end, oldBandE, intra_ener, C, LM);
 
     ps_ptr<int32_t>tf_res; tf_res.alloc_array(nbEBands);
     tf_decode(start, end, isTransient, tf_res.get(), LM);
 
-    tell = rangedec->tell();
+    tell = rd.tell();
     spread_decision = SPREAD_NORMAL;
-    if (tell + 4 <= total_bits) spread_decision = rangedec->dec_icdf(spread_icdf, 5);
+    if (tell + 4 <= total_bits) spread_decision = rd.dec_icdf(spread_icdf, 5);
 
     ps_ptr<int32_t>cap; cap.alloc_array(nbEBands);
 
@@ -1663,7 +1658,7 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     dynalloc_logp = 6;
     total_bits <<= BITRES;
-    tell = rangedec->tell_frac();
+    tell = rd.tell_frac();
     for (i = start; i < end; i++) {
         int32_t width, quanta;
         int32_t dynalloc_loop_logp;
@@ -1676,8 +1671,8 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         while (tell + (dynalloc_loop_logp << BITRES) < total_bits && boost < cap[i])
         {
             int32_t flag;
-            flag = rangedec->dec_bit_logp(dynalloc_loop_logp);
-            tell = rangedec->tell_frac();
+            flag = rd.dec_bit_logp(dynalloc_loop_logp);
+            tell = rd.tell_frac();
             if (!flag)
                 break;
             boost += quanta;
@@ -1692,9 +1687,9 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     ps_ptr<int32_t>fine_quant; fine_quant.alloc_array(nbEBands);
 
-    alloc_trim = tell + (6 << BITRES) <= total_bits ? rangedec->dec_icdf(trim_icdf, 7) : 5;
+    alloc_trim = tell + (6 << BITRES) <= total_bits ? rd.dec_icdf(trim_icdf, 7) : 5;
 
-    bits = (((int32_t)rangedec->get_storage() * 8) << BITRES) - rangedec->tell_frac() - 1;
+    bits = (((int32_t)rd.get_storage() * 8) << BITRES) - rd.tell_frac() - 1;
     anti_collapse_rsv = isTransient && LM >= 2 && bits >= ((LM + 2) << BITRES) ? (1 << BITRES) : 0;
     bits -= anti_collapse_rsv;
 
@@ -1719,15 +1714,15 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     quant_all_bands(start, end, X.get(), C == 2 ? X.get() + N : NULL, collapse_masks.get(),
                     NULL, pulses.get(), shortBlocks, spread_decision, dual_stereo, intensity, tf_res.get(),
-                    rangedec->get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &m_celtDec.rng, 0,
+                    rd.get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &m_celtDec.rng, 0,
                     m_celtDec.disable_inv);
 
     if (anti_collapse_rsv > 0) {
-        anti_collapse_on = rangedec->dec_bits(1);
+        anti_collapse_on = rd.dec_bits(1);
     }
 
     unquant_energy_finalise(start, end, oldBandE,
-                            fine_quant.get(), fine_priority.get(), rangedec->get_storage() * 8 - rangedec->tell(), C);
+                            fine_quant.get(), fine_priority.get(), rd.get_storage() * 8 - rd.tell(), C);
 
     if (anti_collapse_on)
         anti_collapse(X.get(), collapse_masks.get(), LM, C, N,
@@ -1797,13 +1792,13 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldLogE[c * nbEBands + i] = oldLogE2[c * nbEBands + i] = -QCONST16(28.f, DB_SHIFT);
         }
     } while (++c < 2);
-    m_celtDec.rng = rangedec->get_rng();
+    m_celtDec.rng = rd.get_rng();
 
     deemphasis(out_syn, outbuf, N, CC, m_celtDec.downsample, m_CELTMode.preemph, m_celtDec.preemph_memD, 0);
     m_celtDec.loss_count = 0;
-    if (rangedec->tell() > 8 * rangedec->get_storage())
+    if (rd.tell() > 8 * rd.get_storage())
         return OPUS_INTERNAL_ERROR;
-    if (rangedec->get_error())
+    if (rd.get_error())
         m_celtDec.error = 1;
     return frame_size / m_celtDec.downsample;
 }
@@ -1983,7 +1978,7 @@ int32_t CeltDecoder::cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t CeltDecoder::decode_pulses(int32_t *_y, int32_t _n, int32_t _k) {
-    return cwrsi(_n, _k, rangedec->dec_uint(CELT_PVQ_V(_n, _k)), _y);
+    return cwrsi(_n, _k, rd.dec_uint(CELT_PVQ_V(_n, _k)), _y);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N) {
@@ -2523,7 +2518,7 @@ int32_t CeltDecoder::interp_bits2pulses( int32_t start, int32_t end, int32_t ski
         if (band_bits >= max(thresh[j], alloc_floor + (1 << BITRES))) {
             if (encode) {
                 ;
-            } else if (rangedec->dec_bit_logp(1)) {
+            } else if (rd.dec_bit_logp(1)) {
                 break;
             }
             /*We used a bit to skip this band.*/
@@ -2550,7 +2545,7 @@ int32_t CeltDecoder::interp_bits2pulses( int32_t start, int32_t end, int32_t ski
         if (encode) {
             ;
         } else
-            *intensity = start + rangedec->dec_uint(codedBands + 1 - start);
+            *intensity = start + rd.dec_uint(codedBands + 1 - start);
     } else
         *intensity = 0;
     if (*intensity <= start) {
@@ -2561,7 +2556,7 @@ int32_t CeltDecoder::interp_bits2pulses( int32_t start, int32_t end, int32_t ski
         if (encode)
             ;
         else
-            *dual_stereo = rangedec->dec_bit_logp(1);
+            *dual_stereo = rd.dec_bit_logp(1);
     } else
         *dual_stereo = 0;
 
@@ -2773,7 +2768,7 @@ void CeltDecoder::unquant_coarse_energy(int32_t start, int32_t end, int16_t *old
         coef = pred_coef[LM];
     }
 
-    budget = rangedec->get_storage() * 8;
+    budget = rd.get_storage() * 8;
 
     /* Decode at a fixed coarse resolution */
     for (i = start; i < end; i++) {
@@ -2784,16 +2779,16 @@ void CeltDecoder::unquant_coarse_energy(int32_t start, int32_t end, int16_t *old
             int32_t tmp;
             /* It would be better to express this invariant as a test on C at function entry, but that isn't enough to make the static analyzer happy. */
             assert(c < 2);
-            tell = rangedec->tell();
+            tell = rd.tell();
             if (budget - tell >= 15) {
                 int32_t pi;
                 pi = 2 * min(i, (int32_t)20);
-                qi = rangedec->laplace_decode(prob_model[pi] << 7, prob_model[pi + 1] << 6);
+                qi = rd.laplace_decode(prob_model[pi] << 7, prob_model[pi + 1] << 6);
             } else if (budget - tell >= 2) {
-                qi = rangedec->dec_icdf(small_energy_icdf, 2);
+                qi = rd.dec_icdf(small_energy_icdf, 2);
                 qi = (qi >> 1) ^ -(qi & 1);
             } else if (budget - tell >= 1) {
-                qi = -rangedec->dec_bit_logp(1);
+                qi = -rd.dec_bit_logp(1);
             } else
                 qi = -1;
             q = (int32_t)SHL32(EXTEND32(qi), DB_SHIFT);
@@ -2816,7 +2811,7 @@ void CeltDecoder::unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEB
         do {
             int32_t q2;
             int16_t offset;
-            q2 = rangedec->dec_bits(fine_quant[i]);
+            q2 = rd.dec_bits(fine_quant[i]);
             offset = SUB16(SHR32(SHL32(EXTEND32(q2), DB_SHIFT) + QCONST16(.5f, DB_SHIFT), fine_quant[i]),
                            QCONST16(.5f, DB_SHIFT));
             oldEBands[i + c * m_CELTMode.nbEBands] += offset;
@@ -2836,7 +2831,7 @@ void CeltDecoder::unquant_energy_finalise(int32_t start, int32_t end, int16_t *o
             do {
                 int32_t q2;
                 int16_t offset;
-                q2 = rangedec->dec_bits(1);
+                q2 = rd.dec_bits(1);
                 offset = SHR16(SHL16(q2, DB_SHIFT) - QCONST16(.5f, DB_SHIFT), fine_quant[i] + 1);
                 oldEBands[i + c * m_CELTMode.nbEBands] += offset;
                 bits_left--;

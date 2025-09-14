@@ -10,102 +10,45 @@
 //----------------------------------------------------------------------------------------------------------------------
 #include "Arduino.h"
 #include "opus_decoder.h"
-#include "range_decoder.h"
-#include "celt.h"
-#include "silk.h"
-#include <vector>
 
-std::unique_ptr<RangeDecoder> rangedec;
-std::unique_ptr<SilkDecoder> silkdec;
-std::unique_ptr<CeltDecoder> celtdec;
+OpusDecoder::OpusDecoder(Audio& audioRef)
+    : Decoder(audioRef),
+      rangedec(std::make_unique<RangeDecoder>()),
+      silkdec(std::make_unique<SilkDecoder>(*rangedec)),
+      celtdec(std::make_unique<CeltDecoder>(*rangedec)) {}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool OpusDecoder::init(){
 
-// global vars
-#define CELT_SET_END_BAND_REQUEST         10012
-#define CELT_SET_CHANNELS_REQUEST         10008
-#define CELT_SET_START_BAND_REQUEST       10010
-#define CELT_SET_SIGNALLING_REQUEST       10016
-#define CELT_GET_AND_CLEAR_ERROR_REQUEST  10007
-#define CELT_GET_MODE_REQUEST             10015
+    // if (!rangedec) {
+    //     rangedec = std::make_unique<RangeDecoder>();
+    //     if (!rangedec) {
+    //         OPUS_LOG_ERROR("Failed to allocate RangeDecoder");
+    //         return false;
+    //     }
+    // }
 
-enum {OPUS_BANDWIDTH_NARROWBAND = 1101,    OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103,
-      OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105};
-
-
-uint8_t          m_opusChannels = 0;
-uint8_t          m_opusCountCode = 0;
-uint8_t          m_opusPageNr = 0;
-uint8_t          m_frameCount = 0;
-uint8_t          m_opusSegmentTableSize = 0;
-uint16_t         m_mode = 0;
-uint16_t         m_opusOggHeaderSize = 0;
-uint16_t         m_bandWidth = 0;
-uint16_t         m_internalSampleRate = 0;
-uint16_t         m_endband = 0;
-uint32_t         m_opusSamplerate = 0;
-uint32_t         m_opusSegmentLength = 0;
-uint32_t         m_opusCurrentFilePos = 0;
-uint32_t         m_opusAudioDataStart = 0;
-uint32_t         m_opusBlockPicPos = 0;
-uint32_t         m_opusBlockLen = 0;
-bool             m_f_opusParseOgg = false;
-bool             m_f_newSteamTitle = false;               // streamTitle
-bool             m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
-bool             m_f_opusStereoFlag = false;
-bool             m_f_continuedPage = false;
-bool             m_f_firstPage = false;
-bool             m_f_lastPage = false;
-bool             m_f_nextChunk = false;
-int8_t           m_opusError = 0;
-int16_t          m_opusSegmentTableRdPtr = -1;
-int16_t          m_prev_mode = 0;
-int32_t          m_opusValidSamples = 0;
-int32_t          m_opusBlockPicLen = 0;
-int32_t          m_blockPicLenUntilFrameEnd = 0;
-int32_t          m_opusRemainBlockPicLen = 0;
-int32_t          m_opusCommentBlockSize = 0;
-float            m_opusCompressionRatio = 0;
-
-ps_ptr<char>     m_streamTitle;
-ps_ptr<uint16_t> m_opusSegmentTable;
-
-ofp2  m_ofp2; // used in opus_FramePacking_Code2
-ofp3  m_ofp3; // used in opus_FramePacking_Code3
-odp3  m_odp3; // used in opusDecodePage3
-
-std::vector<uint32_t>m_opusBlockPicItem;
-
-bool OPUSDecoder_AllocateBuffers(){
-
-    if (!rangedec) {
-        rangedec = std::make_unique<RangeDecoder>();
-        if (!rangedec) {
-            OPUS_LOG_ERROR("Failed to allocate RangeDecoder");
-            return false;
-        }
-    }
-
-    if (!silkdec) {
-        silkdec = std::make_unique<SilkDecoder>();
-        if (!silkdec) {
-            OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
-            return false;
-        }
-    }
+    // if (!silkdec) {
+    //     silkdec = std::make_unique<SilkDecoder>();
+    //     if (!silkdec) {
+    //         OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
+    //         return false;
+    //     }
+    // }
     silkdec->init();
 
-    if (!celtdec) {
-        celtdec = std::make_unique<CeltDecoder>();
-        if (!celtdec) {
-            OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
-            return false;
-        }
-    }
+    // if (!celtdec) {
+    //     celtdec = std::make_unique<CeltDecoder>();
+    //     if (!celtdec) {
+    //         OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
+    //         return false;
+    //     }
+    // }
     celtdec->init();
 
     m_opusSegmentTable.alloc_array(256);
     celtdec->clear();
 
-    OPUSDecoder_ClearBuffers();
+    clear();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
     m_opusError = celtdec->celt_decoder_init(2); if(m_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
     m_opusError = celtdec->celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(m_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
@@ -118,8 +61,11 @@ bool OPUSDecoder_AllocateBuffers(){
     silkdec->silk_InitDecoder();
     return true;
 }
-void OPUSDecoder_FreeBuffers(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void OpusDecoder::reset(){
     rangedec.reset();
+    silkdec.reset();
+    celtdec.reset();
     m_opusSegmentTable.reset();
     m_streamTitle.reset();
     m_frameCount = 0;
@@ -129,10 +75,9 @@ void OPUSDecoder_FreeBuffers(){
     m_opusOggHeaderSize = 0;
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
-    silkdec.reset();
-    celtdec.reset();
 }
-void OPUSDecoder_ClearBuffers(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void OpusDecoder::clear(){
     m_streamTitle.clear();
     m_opusSegmentTable.clear();
     m_frameCount = 0;
@@ -143,7 +88,8 @@ void OPUSDecoder_ClearBuffers(){
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
 }
-void OPUSsetDefaults(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void OpusDecoder::OPUSsetDefaults(){
     memset(&m_ofp2, 0, sizeof(m_ofp2));
     memset(&m_ofp3, 0, sizeof(m_ofp3));
     memset(&m_odp3, 0, sizeof(m_odp3));
@@ -179,10 +125,8 @@ void OPUSsetDefaults(){
     m_prev_mode = MODE_NONE;
     m_opusBlockPicItem.clear(); m_opusBlockPicItem.shrink_to_fit();
 }
-
-//----------------------------------------------------------------------------------------------------------------------
-
-int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     int32_t ret = OPUS_NONE;
     int32_t segmLen = 0;
 
@@ -258,9 +202,8 @@ int32_t OPUSDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     }
     return ret;
 }
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength){
     int32_t ret = 0;
     ret = parseOpusHead(inbuf, segmentLength);
     *bytesLeft           -= segmentLength;
@@ -270,8 +213,8 @@ int32_t opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
     if(ret < 0) return ret;
     return OPUS_PARSE_OGG_DONE;
 }
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t *outbuf){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t *outbuf){
 
     if(m_opusAudioDataStart == 0){
         m_opusAudioDataStart = m_opusCurrentFilePos;
@@ -363,8 +306,8 @@ FramePacking:            // https://www.tech-invite.com/y65/tinv-ietf-rfc-6716-2
     }
     return ret;
 }
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame) {
     if(!packetLen) {OPUS_LOG_WARN("Opus packetLen is 0"); return 0;}
     int i, silk_ret = 0, celt_ret = 0;
     uint16_t audiosize = 960;
@@ -462,8 +405,8 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     m_prev_mode = MODE_NONE;
     return 0;
 }
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t OpusDecoder::opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame){
 
 /*  Code 0: One Frame in the Packet
 
@@ -493,9 +436,8 @@ int8_t opus_FramePacking_Code0(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     m_opusValidSamples = ret;
     return OPUS_NONE;
 }
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t OpusDecoder::opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 1: Two Frames in the Packet, Each with Equal Compressed Size
 
@@ -540,9 +482,8 @@ int8_t opus_FramePacking_Code1(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     *frameCount -= 1;
     return OPUS_NONE;
 }
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t OpusDecoder::opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 2: Two Frames in the Packet, with Different Compressed Sizes
 
@@ -617,9 +558,8 @@ int8_t opus_FramePacking_Code2(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     *frameCount -= 1;
     return OPUS_NONE;
 }
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------
-int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t OpusDecoder::opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount){
 
 /*  Code 3: A Signaled Number of Frames in the Packet
 
@@ -941,9 +881,8 @@ int8_t opus_FramePacking_Code3(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outb
     m_ofp3.firstCall = true; // Signal for next packet
     return OPUS_NONE; // Packet finished
 }
-//----------------------------------------------------------------------------------------------------------------------
-
-int32_t opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
     int32_t audiosize;
     if ((data[0] & 0x80) == 0x080) {
         audiosize = ((data[0] >> 3) & 0x03);
@@ -961,40 +900,41 @@ int32_t opus_packet_get_samples_per_frame(const uint8_t *data, int32_t Fs) {
     }
     return audiosize;
 }
-//----------------------------------------------------------------------------------------------------------------------
-
-uint8_t OPUSGetChannels(){
-    return m_opusChannels;
-}
-uint32_t OPUSGetSampRate(){
-    return 48000;
-}
-uint8_t OPUSGetBitsPerSample(){
-    return 16;
-}
-uint32_t OPUSGetBitRate(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t OpusDecoder::getChannels(){return m_opusChannels;}
+uint32_t OpusDecoder::getSampleRate(){return 48000;}
+uint8_t OpusDecoder::getBitsPerSample(){return 16;}
+uint32_t OpusDecoder::getOutputSamples(){ return m_opusValidSamples;} // 1024
+uint32_t OpusDecoder::getAudioDataStart(){return m_opusAudioDataStart;}
+uint32_t OpusDecoder::getAudioFileDuration(){return 0;}
+void OpusDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {}
+const char* OpusDecoder::arg2() {return nullptr;}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t OpusDecoder::getBitRate(){
     if(m_opusCompressionRatio != 0){
         return (16 * 2 * 48000) / m_opusCompressionRatio;  //bitsPerSample * channel* SampleRate/CompressionRatio
     }
     else return 0;
 }
-uint16_t OPUSGetOutputSamps(){
-    return m_opusValidSamples; // 1024
-}
-uint32_t OPUSGetAudioDataStart(){
-    return m_opusAudioDataStart;
-}
-const char* OPUSgetStreamTitle(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const char* OpusDecoder::getStreamTitle(){
     if(m_f_newSteamTitle){
         m_f_newSteamTitle = false;
         return m_streamTitle.c_get();
     }
     return NULL;
 }
-uint16_t OPUSgetMode(){
-    return m_mode;
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const char* OpusDecoder::arg1(){  // mode CELT, SILK or HYBRID
+    const char* p = "unknown mode";
+    if(m_mode == MODE_CELT_ONLY) p = "Opus Mode: CELT_ONLY";
+    if(m_mode == MODE_HYBRID)    p = "Opus Mode: HYBRID";
+    if(m_mode == MODE_SILK_ONLY) p = "Opus Mode: SILK_ONLY";
+    if(m_mode == MODE_NONE)      p = "Opus Mode: NONE";
+    return p;
 }
-std::vector<uint32_t> OPUSgetMetadataBlockPicture(){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+std::vector<uint32_t> OpusDecoder::getMetadataBlockPicture(){
     if(m_f_opusNewMetadataBlockPicture){
         m_f_opusNewMetadataBlockPicture = false;
         return m_opusBlockPicItem;
@@ -1005,9 +945,8 @@ std::vector<uint32_t> OPUSgetMetadataBlockPicture(){
     }
     return m_opusBlockPicItem;
 }
-
-//----------------------------------------------------------------------------------------------------------------------
-int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int8_t OpusDecoder::parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
 
     uint8_t configNr = 0;
     uint8_t s = 0;              // stereo flag
@@ -1050,8 +989,8 @@ int8_t parseOpusTOC(uint8_t TOC_Byte){  // https://www.rfc-editor.org/rfc/rfc671
 
     return configNr;
 }
-//----------------------------------------------------------------------------------------------------------------------
-int32_t parseOpusComment(uint8_t *inbuf, int32_t nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::parseOpusComment(uint8_t *inbuf, int32_t nBytes){      // reference https://exiftool.org/TagNames/Vorbis.html#Comments
                                                                // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
     int32_t idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
     if(idx != 0) return 0; // is not OpusTags
@@ -1121,8 +1060,8 @@ int32_t parseOpusComment(uint8_t *inbuf, int32_t nBytes){      // reference http
     }
     return 1;
 }
-//----------------------------------------------------------------------------------------------------------------------
-int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wiki.xiph.org/OggOpus
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wiki.xiph.org/OggOpus
 
 
     int32_t idx = OPUS_specialIndexOf(inbuf, "OpusHead", 10);
@@ -1156,9 +1095,8 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
 
     return 1;
 }
-
-//----------------------------------------------------------------------------------------------------------------------
-int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
     int32_t idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if(idx != 0) {OPUS_LOG_ERROR("Opus dec async, OGG capture pattern \"OggS\" not found"); return OPUS_ERR;}
@@ -1227,9 +1165,8 @@ int32_t OPUSparseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://
     }
     return OPUS_NONE;
 }
-
-//----------------------------------------------------------------------------------------------------------------------
-int32_t OPUSFindSyncWord(unsigned char *buf, int32_t nBytes){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::findSyncWord(uint8_t *buf, int32_t nBytes){
     // assume we have a ogg wrapper
     int32_t idx = OPUS_specialIndexOf(buf, "OggS", nBytes);
     if(idx >= 0){ // Magic Word found
@@ -1241,8 +1178,8 @@ int32_t OPUSFindSyncWord(unsigned char *buf, int32_t nBytes){
     OPUS_LOG_ERROR("Opus syncword not found");
     return OPUS_ERR;
 }
-//----------------------------------------------------------------------------------------------------------------------
-int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact){
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact){
     int32_t result = -1;  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
     for (int32_t i = 0; i < baselen - strlen(str); i++){
@@ -1257,4 +1194,4 @@ int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, boo
     }
     return result;
 }
-//----------------------------------------------------------------------------------------------------------------------
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

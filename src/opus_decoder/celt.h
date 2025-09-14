@@ -35,9 +35,23 @@
 #pragma once
 
 #include "Arduino.h"
-#include "opus_decoder.h"
+#include "../psram_unique_ptr.hpp"
+#include "range_decoder.h"
 
 class CeltDecoder{
+public:
+    CeltDecoder(RangeDecoder& rangeDecoder) : rd(rangeDecoder) {}
+    ~CeltDecoder() {reset();}
+    bool init();
+    void clear();
+    void reset();
+    int32_t celt_decoder_init(int32_t channels);
+    int32_t celt_decoder_ctl(int32_t request, ...);
+    int32_t celt_decode_with_ec(int16_t * pcm, int32_t frame_size);
+    int16_t SAT16(int32_t x);
+
+private:
+    RangeDecoder& rd;  // Referenz auf RangeDecoder
 
     #define OPUS_OK                0
     #define OPUS_BAD_ARG          -1
@@ -147,13 +161,11 @@ class CeltDecoder{
     #define MULT16_16_P15(a,b) (SHR(ADD32(16384,MULT16_16((a),(b))),15))
     #define DIV32_16(a,b) ((int16_t)(((int32_t)(a))/((int16_t)(b)))) /** Divide a 32-bit value by a 16-bit value. Result fits in 16 bits */
     #define DIV32(a,b) (((int32_t)(a))/((int32_t)(b))) /** Divide a 32-bit value by a 32-bit value. Result fits in 32 bits */
-    int32_t celt_rcp(int32_t x);
     #define celt_div(a,b) MULT32_32_Q31((int32_t)(a),celt_rcp(b))
     #define MAX_PERIOD 1024
     #define OPUS_MOVE(dst, src, n) (memmove((dst), (src), (n)*sizeof(*(dst)) + 0*((dst)-(src)) ))
     #define OPUS_CLEAR(dst, n) (memset((dst), 0, (n)*sizeof(*(dst))))
     #define ALLOC_STEPS 6
-    int32_t celt_inner_prod_c(const int16_t *x, const int16_t *y, int32_t N);
     #define celt_inner_prod(x, y, N) (celt_inner_prod_c(x, y, N))
     #define dual_inner_prod(x, y01, y02, N, xy1, xy2) (dual_inner_prod_c(x, y01, y02, N, xy1, xy2))
     #define FRAC_MUL16(a,b) ((16384+((int32_t)(int16_t)(a)*(int16_t)(b)))>>15) /* Multiplies two 16-bit fractional values. Bit-exactness of this macro is important */
@@ -168,10 +180,8 @@ class CeltDecoder{
     #define ALLOC_NONE 1
     #define OPUS_FPRINTF (void)
     #define DECODE_BUFFER_SIZE 2048
-    uint32_t celt_pvq_u_row(uint32_t row, uint32_t data);
     #define CELT_PVQ_U(_n, _k) (celt_pvq_u_row(min(_n, _k), max(_n, _k)))
     #define CELT_PVQ_V(_n, _k) (CELT_PVQ_U(_n, _k) + CELT_PVQ_U(_n, (_k) + 1))
-
     #define CELT_GET_AND_CLEAR_ERROR_REQUEST 10007
     #define CELT_SET_CHANNELS_REQUEST        10008
     #define CELT_SET_START_BAND_REQUEST      10010
@@ -697,21 +707,11 @@ class CeltDecoder{
     CELTDecoder_t   m_celtDec; // unique pointer
     ps_ptr<int32_t> m_decode_mem;
     band_ctx_t      m_band_ctx;
-
-public:
-    CeltDecoder(){}
-    ~CeltDecoder(){reset();}
-    bool init();
-    void clear();
-    void reset();
-    int32_t celt_decoder_init(int32_t channels);
-    int32_t celt_decoder_ctl(int32_t request, ...);
-    int32_t celt_decode_with_ec(int16_t * pcm, int32_t frame_size);
-    int16_t SAT16(int32_t x);
-
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-private:
+
+    int32_t celt_inner_prod_c(const int16_t *x, const int16_t *y, int32_t N);
+    int32_t celt_rcp(int32_t x);
+    uint32_t celt_pvq_u_row(uint32_t row, uint32_t data);
     void exp_rotation1(int16_t *X, int32_t len, int32_t stride, int16_t c, int16_t s);
     void exp_rotation(int16_t *X, int32_t len, int32_t dir, int32_t stride, int32_t K, int32_t spread);
     void normalise_residual(int32_t * iy, int16_t * X, int32_t N, int32_t Ryy, int16_t gain);

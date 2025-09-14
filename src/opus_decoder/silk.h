@@ -27,12 +27,27 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 #include <Arduino.h>
+#include "../psram_unique_ptr.hpp"
+#include "range_decoder.h"
 
-#include "opus_decoder.h"
-#include <memory>
 
 class SilkDecoder{
+public:
+    SilkDecoder(RangeDecoder& rangeDecoder) : rd(rangeDecoder) {}
+    ~SilkDecoder() {reset();}
+    bool init();
+    void clear();
+    void reset();
+    int32_t silk_InitDecoder();
+    void setChannelsAPI(uint8_t nChannelsAPI);
+    void setChannelsInternal(uint8_t nChannelsInternal);
+    void setAPIsampleRate(uint32_t API_sampleRate);
+    void silk_setRawParams(uint8_t channels, uint8_t API_channels, uint8_t payloadSize_ms, uint32_t internalSampleRate, uint32_t API_samleRate);
+    int32_t silk_Decode(int32_t lostFlag, int32_t newPacketFlag, int16_t *samplesOut, int32_t *nSamplesOut);
+
 private:
+    RangeDecoder& rd;  // Referenz auf RangeDecoder
+
     #define SILK_MAX_FRAMES_PER_PACKET 3
     /* Decoder API flags */
     #define FLAG_DECODE_NORMAL                      0
@@ -556,21 +571,7 @@ private:
         int32_t payloadSize_ms; /* I:   Number of samples per packet in milliseconds; 10/20/40/60 */
         int32_t prevPitchLag; /* O:   Pitch lag of previous frame (0 if unvoiced), measured in samples at 48 kHz */
     } silk_DecControlStruct_t;
-public:
-    SilkDecoder(){}
-    ~SilkDecoder(){}
 
-    bool init();
-    void clear();
-    void reset();
-    int32_t silk_InitDecoder();
-    void setChannelsAPI(uint8_t nChannelsAPI);
-    void setChannelsInternal(uint8_t nChannelsInternal);
-    void setAPIsampleRate(uint32_t API_sampleRate);
-    void silk_setRawParams(uint8_t channels, uint8_t API_channels, uint8_t payloadSize_ms, uint32_t internalSampleRate, uint32_t API_samleRate);
-    int32_t silk_Decode(int32_t lostFlag, int32_t newPacketFlag, int16_t *samplesOut, int32_t *nSamplesOut);
-
-private:
     ps_ptr<silk_resampler_state_struct_t> m_resampler_state;
     ps_ptr<silk_decoder_state_t>          m_channel_state;
     ps_ptr<silk_decoder_t>                m_silk_decoder;
@@ -982,9 +983,6 @@ private:
     };
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-    bool SILKDecoder_AllocateBuffers();
-    void SILKDecoder_ClearBuffers();
-    void SILKDecoder_FreeBuffers();
     void silk_ana_filt_bank_1(const int16_t *in, int32_t *S, int16_t *outL, int16_t *outH, const int32_t N);
     void silk_biquad_alt_stride1(const int16_t *in, const int32_t *B_Q28, const int32_t *A_Q28, int32_t *S,int16_t *out, const int32_t len);
     void silk_biquad_alt_stride2_c(const int16_t *in, const int32_t *B_Q28, const int32_t *A_Q28, int32_t *S, int16_t *out, const int32_t len);
