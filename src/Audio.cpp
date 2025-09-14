@@ -3,8 +3,8 @@
     audio.cpp
 
     Created on: Oct 28.2018                                                                                                  */char audioI2SVers[] ="\
-    Version 3.4.2p                                                                                                                              ";
-/*  Updated on: Sep 12.2025
+    Version 3.4.2q                                                                                                                              ";
+/*  Updated on: Sep 14.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -233,7 +233,7 @@ Audio::~Audio() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
     if (type == "flac") return std::make_unique<FlacDecoder>(*this);
-    // if (type == "mp3")  return std::make_unique<Mp3Decoder>();
+    if (type == "opus")  return std::make_unique<OpusDecoder>(*this);
     // hier AAC, Vorbis, Opus ergänzen …
     return nullptr;
 }
@@ -275,7 +275,7 @@ void Audio::setDefaults() {
     MP3Decoder_FreeBuffers();
     // decoder->reset(); // flac
     AACDecoder_FreeBuffers();
-    OPUSDecoder_FreeBuffers();
+    // OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
     m_outBuff.clear(); // Clear OutputBuffer
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
@@ -2900,7 +2900,7 @@ uint32_t Audio::stopSong() {
         if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
         if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
         if(m_codec == CODEC_FLAC) decoder->reset();
-        if(m_codec == CODEC_OPUS) OPUSDecoder_FreeBuffers();
+        if(m_codec == CODEC_OPUS) decoder->reset();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
         m_validSamples = 0;
         m_audioCurrentTime = 0;
@@ -4635,10 +4635,9 @@ bool Audio::initializeDecoder(uint8_t codec) {
             info(*this, evt_info, "FLACDecoder has been initialized");
             break;
         case CODEC_OPUS:
-            if(!OPUSDecoder_AllocateBuffers()) {
-                AUDIO_LOG_ERROR("The OPUSDecoder could not be initialized");
-                goto exit;
-            }
+            decoder = createDecoder("opus");
+            decoder->init();
+            if (!decoder) {AUDIO_LOG_ERROR("The OPUSDecoder could not be initialized"); goto exit;}
             info(*this, evt_info, "OPUSDecoder has been initialized");
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
@@ -5016,7 +5015,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_codec == CODEC_OPUS) {
-        m_fnsy.nextSync = OPUSFindSyncWord(data, len);
+        m_fnsy.nextSync = decoder->findSyncWord(data, (int32_t)len);
         if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_codec == CODEC_VORBIS) {
@@ -5061,19 +5060,17 @@ void Audio::setDecoderItems() {
         setChannels(decoder->getChannels());
         setSampleRate(decoder->getSampleRate());
         setBitsPerSample(decoder->getBitsPerSample());
-    //    setBitrate(FLACGetBitRate());
         if(decoder->getAudioDataStart() > 0){ // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
             m_audioDataStart = decoder->getAudioDataStart();
             if(m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
         }
     }
     if(m_codec == CODEC_OPUS) {
-        setChannels(OPUSGetChannels());
-        setSampleRate(OPUSGetSampRate());
-        setBitsPerSample(OPUSGetBitsPerSample());
-    //    setBitrate(OPUSGetBitRate());
-        if(OPUSGetAudioDataStart() > 0){
-            m_audioDataStart = OPUSGetAudioDataStart();
+        setChannels(decoder->getChannels());
+        setSampleRate(decoder->getSampleRate());
+        setBitsPerSample(decoder->getBitsPerSample());
+        if(decoder->getAudioDataStart() > 0){ // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
+            m_audioDataStart = decoder->getAudioDataStart();
             if(m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
         }
         if(m_lastGranulePosition && m_audioFileSize && m_sampleRate){
@@ -5142,8 +5139,8 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded){
     // if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
     if(m_codec == CODEC_FLAC){  if(res == FlacDecoder::FLAC_PARSE_OGG_DONE)     return bytesDecoded;
                                 if(res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;} // nothing to play
-    if(m_codec == CODEC_OPUS){  if(res == OPUS_PARSE_OGG_DONE)     return bytesDecoded;  // nothing to play
-                                if(res == OPUS_END)                return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_OPUS){  if(res == OpusDecoder::OPUS_PARSE_OGG_DONE)     return bytesDecoded;  // nothing to play
+                                if(res == OpusDecoder::OPUS_END)                return bytesDecoded;} // nothing to play
     if(m_codec == CODEC_VORBIS){if(res == VORBIS_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
     return 0;
 }
@@ -5176,7 +5173,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_AAC:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_M4A:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_FLAC:   res = decoder->decode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_OPUS:   res = OPUSDecode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_OPUS:   res = decoder->decode(  data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_VORBIS: res = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         default: {
             AUDIO_LOG_ERROR("no valid codec found codec = %d", m_codec);
@@ -5243,12 +5240,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 info(*this, evt_image, vec);
                             }
                             break;
-        case CODEC_OPUS:    m_validSamples = OPUSGetOutputSamps();
-                            st = OPUSgetStreamTitle();
+        case CODEC_OPUS:    m_validSamples = decoder->getOutputSamples();
+                            st = decoder->getStreamTitle();
                             if(st){
                                 info(*this, evt_streamtitle, st);
                             }
-                            vec = OPUSgetMetadataBlockPicture();
+                            vec = decoder->getMetadataBlockPicture();
                             if(vec.size() > 0){ // get blockpic data
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
                                 // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
@@ -5256,13 +5253,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
                                 info(*this, evt_image, vec);
                             }
-
-                            if(m_opus_mode != OPUSgetMode()){
-                                m_opus_mode = OPUSgetMode();
-                                if(m_opus_mode == MODE_CELT_ONLY) info(*this, evt_info, "Opus Mode: CELT_ONLY");
-                                if(m_opus_mode == MODE_HYBRID)    info(*this, evt_info, "Opus Mode: HYBRID");
-                                if(m_opus_mode == MODE_SILK_ONLY) info(*this, evt_info, "Opus Mode: SILK_ONLY");
-                                if(m_opus_mode == MODE_NONE)      info(*this, evt_info, "Opus Mode: NONE");
+                            if(decoder->arg1()){
+                                if(m_sbyt.opus_mode != decoder->arg1()){
+                                    info(*this, evt_info, decoder->arg1());
+                                    m_sbyt.opus_mode = decoder->arg1();
+                                }
                             }
                             break;
 
@@ -6536,8 +6531,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
             if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
             if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; decoder.reset();}
             if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
-            if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; OPUSDecoder_ClearBuffers();}
-
+            if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; decoder.reset();}
 
             InBuff.bytesWasRead(offset);
         }

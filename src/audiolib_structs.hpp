@@ -236,6 +236,7 @@ namespace audiolib {
         uint8_t  channels = 0;
         int      nextSync = 0;
         uint8_t  isPS = 0;
+        const char* opus_mode = nullptr;
     };
 
     struct rmet_t { // used in readMetadata
