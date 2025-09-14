@@ -161,7 +161,6 @@ typedef struct _CELTDecoder {
     int32_t postfilter_tapset;
     int32_t postfilter_tapset_old;
     int32_t preemph_memD[2];
-    int32_t _decode_mem[1];
 }CELTDecoder_t;
 
 /* List of all the available modes */

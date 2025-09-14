@@ -38,7 +38,8 @@
 extern std::unique_ptr<RangeDecoder> rangedec;
 extern std::unique_ptr<SilkDecoder> silkdec;
 
-ps_ptr<CELTDecoder_t> m_celtDec; // unique pointer
+CELTDecoder_t   m_celtDec; // unique pointer
+ps_ptr<int32_t> m_decode_mem;
 band_ctx_t     s_band_ctx;
 
 const uint32_t CELT_GET_AND_CLEAR_ERROR_REQUEST = 10007;
@@ -656,10 +657,10 @@ uint32_t celt_pvq_u_row(uint32_t row, uint32_t data){
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
-    m_celtDec.alloc(omd, "CELTDecoder");
-    if (m_celtDec.valid()) {
+    m_decode_mem.alloc(omd, "decode_mem");
+    if (m_decode_mem.valid()) {
         // OPUS_LOG_INFO("Allocated %zu bytes", m_celtDec.size());
-        m_celtDec.clear();  // mem zero
+        m_decode_mem.clear();  // mem zero
         return true;
     }
     OPUS_LOG_ERROR("oom for %i bytes", omd);
@@ -667,11 +668,11 @@ bool CELTDecoder_AllocateBuffers(void) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CELTDecoder_ClearBuffer(void){
-    m_celtDec.clear();  // mem zero
+    m_decode_mem.clear();  // mem zero
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CELTDecoder_FreeBuffers(){
-    m_celtDec.reset();
+    m_decode_mem.reset();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void exp_rotation1(int16_t *X, int32_t len, int32_t stride, int16_t c, int16_t s) {
@@ -1925,28 +1926,24 @@ int32_t celt_decoder_get_size(int32_t channels){
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t celt_decoder_init(int32_t channels){
 
-    m_celtDec.clear();
-
-    m_celtDec->downsample = 1; //resampling_factor(Fs);
-    m_celtDec->channels = channels;
-    if(channels == 1) m_celtDec->disable_inv = 1; else m_celtDec->disable_inv = 0; // 1 mono ,  0 stereo
-    m_celtDec->end = m_CELTMode.nbEBands; // 21
-    m_celtDec->error = 0;
-    m_celtDec->overlap = m_CELTMode.overlap;
-    m_celtDec->postfilter_gain = 0;
-    m_celtDec->postfilter_gain_old = 0;
-    m_celtDec->postfilter_period = 0;
-    m_celtDec->postfilter_tapset = 0;
-    m_celtDec->postfilter_tapset_old = 0;
-    m_celtDec->preemph_memD[0] = 0;
-    m_celtDec->preemph_memD[1] = 0;
-    m_celtDec->rng = 0;
-    m_celtDec->signalling = 1;
-    m_celtDec->start = 0;
-    m_celtDec->end = m_CELTMode.effEBands;
-    m_celtDec->stream_channels = channels;
-    m_celtDec->_decode_mem[0] = 0;
-
+    m_celtDec.downsample = 1; //resampling_factor(Fs);
+    m_celtDec.channels = channels;
+    if(channels == 1) m_celtDec.disable_inv = 1; else m_celtDec.disable_inv = 0; // 1 mono ,  0 stereo
+    m_celtDec.end = m_CELTMode.nbEBands; // 21
+    m_celtDec.error = 0;
+    m_celtDec.overlap = m_CELTMode.overlap;
+    m_celtDec.postfilter_gain = 0;
+    m_celtDec.postfilter_gain_old = 0;
+    m_celtDec.postfilter_period = 0;
+    m_celtDec.postfilter_tapset = 0;
+    m_celtDec.postfilter_tapset_old = 0;
+    m_celtDec.preemph_memD[0] = 0;
+    m_celtDec.preemph_memD[1] = 0;
+    m_celtDec.rng = 0;
+    m_celtDec.signalling = 1;
+    m_celtDec.start = 0;
+    m_celtDec.end = m_CELTMode.effEBands;
+    m_celtDec.stream_channels = channels;
     int32_t ret = celt_decoder_ctl(OPUS_RESET_STATE);
     if(ret < 0) return ret;
 
@@ -2164,7 +2161,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     int32_t shortBlocks;
     int32_t isTransient;
     int32_t intra_ener;
-    const int32_t CC = m_celtDec->channels;
+    const int32_t CC = m_celtDec.channels;
     int32_t LM, M;
     int32_t start;
     int32_t end;
@@ -2183,16 +2180,16 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     int32_t anti_collapse_rsv;
     int32_t anti_collapse_on = 0;
     int32_t silence;
-    const uint8_t  C = m_celtDec->stream_channels; // =channels=2
+    const uint8_t  C = m_celtDec.stream_channels; // =channels=2
     const uint8_t  nbEBands = m_CELTMode.nbEBands; // =21
     const uint8_t  overlap = m_CELTMode.overlap; // =120
     const int16_t *eBands = eband5ms;
 
-    start = m_celtDec->start;
+    start = m_celtDec.start;
     end = m_CELTMode.effEBands;
-    frame_size *= m_celtDec->downsample;
+    frame_size *= m_celtDec.downsample;
 
-    lpc = (int16_t *)(m_celtDec->_decode_mem + (DECODE_BUFFER_SIZE + overlap) * CC);
+    lpc = (int16_t *)(m_decode_mem.get() + (DECODE_BUFFER_SIZE + overlap) * CC);
     oldBandE = lpc + CC * LPC_ORDER;
     oldLogE = oldBandE + 2 * nbEBands;
     oldLogE2 = oldLogE + 2 * nbEBands;
@@ -2211,7 +2208,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     N = M * m_CELTMode.shortMdctSize;
     c = 0;
     do {
-        decode_mem[c] = m_celtDec->_decode_mem + c * (DECODE_BUFFER_SIZE + overlap);  // todo
+        decode_mem[c] = (int32_t*)(m_decode_mem.get() + c * (DECODE_BUFFER_SIZE + overlap));  // todo
         out_syn[c] = decode_mem[c] + DECODE_BUFFER_SIZE - N;
     } while (++c < CC);
 
@@ -2222,7 +2219,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         effEnd = m_CELTMode.effEBands;
 
     /* Check if there are at least two packets received consecutively before turning on the pitch-based PLC */
-    m_celtDec->skip_plc = m_celtDec->loss_count != 0;
+    m_celtDec.skip_plc = m_celtDec.loss_count != 0;
 
     if (C == 1) {
         for (i = 0; i < nbEBands; i++)
@@ -2349,8 +2346,8 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     quant_all_bands(start, end, X.get(), C == 2 ? X.get() + N : NULL, collapse_masks.get(),
                     NULL, pulses.get(), shortBlocks, spread_decision, dual_stereo, intensity, tf_res.get(),
-                    rangedec->get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &m_celtDec->rng, 0,
-                    m_celtDec->disable_inv);
+                    rangedec->get_storage() * (8 << BITRES) - anti_collapse_rsv, balance, LM, codedBands, &m_celtDec.rng, 0,
+                    m_celtDec.disable_inv);
 
     if (anti_collapse_rsv > 0) {
         anti_collapse_on = rangedec->dec_bits(1);
@@ -2361,7 +2358,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     if (anti_collapse_on)
         anti_collapse(X.get(), collapse_masks.get(), LM, C, N,
-                      start, end, oldBandE, oldLogE, oldLogE2, pulses.get(), m_celtDec->rng);
+                      start, end, oldBandE, oldLogE, oldLogE2, pulses.get(), m_celtDec.rng);
 
     if (silence) {
         for (i = 0; i < C * nbEBands; i++)
@@ -2369,29 +2366,29 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     }
 
     celt_synthesis(X.get(), out_syn, oldBandE, start, effEnd,
-                   C, CC, isTransient, LM, m_celtDec->downsample, silence);
+                   C, CC, isTransient, LM, m_celtDec.downsample, silence);
 
     c = 0;
     do  {
-        m_celtDec->postfilter_period = max(m_celtDec->postfilter_period, (int32_t)COMBFILTER_MINPERIOD);
-        m_celtDec->postfilter_period_old = max(m_celtDec->postfilter_period_old, (int32_t)COMBFILTER_MINPERIOD);
-        comb_filter(out_syn[c], out_syn[c], m_celtDec->postfilter_period_old, m_celtDec->postfilter_period,m_CELTMode.shortMdctSize,
-                    m_celtDec->postfilter_gain_old, m_celtDec->postfilter_gain, m_celtDec->postfilter_tapset_old, m_celtDec->postfilter_tapset);
+        m_celtDec.postfilter_period = max(m_celtDec.postfilter_period, (int32_t)COMBFILTER_MINPERIOD);
+        m_celtDec.postfilter_period_old = max(m_celtDec.postfilter_period_old, (int32_t)COMBFILTER_MINPERIOD);
+        comb_filter(out_syn[c], out_syn[c], m_celtDec.postfilter_period_old, m_celtDec.postfilter_period,m_CELTMode.shortMdctSize,
+                    m_celtDec.postfilter_gain_old, m_celtDec.postfilter_gain, m_celtDec.postfilter_tapset_old, m_celtDec.postfilter_tapset);
         if (LM != 0)
-            comb_filter(out_syn[c] + m_CELTMode.shortMdctSize, out_syn[c] + m_CELTMode.shortMdctSize, m_celtDec->postfilter_period, postfilter_pitch, N - m_CELTMode.shortMdctSize,
-                        m_celtDec->postfilter_gain, postfilter_gain, m_celtDec->postfilter_tapset, postfilter_tapset);
+            comb_filter(out_syn[c] + m_CELTMode.shortMdctSize, out_syn[c] + m_CELTMode.shortMdctSize, m_celtDec.postfilter_period, postfilter_pitch, N - m_CELTMode.shortMdctSize,
+                        m_celtDec.postfilter_gain, postfilter_gain, m_celtDec.postfilter_tapset, postfilter_tapset);
 
     } while (++c < CC);
-    m_celtDec->postfilter_period_old = m_celtDec->postfilter_period;
-    m_celtDec->postfilter_gain_old = m_celtDec->postfilter_gain;
-    m_celtDec->postfilter_tapset_old = m_celtDec->postfilter_tapset;
-    m_celtDec->postfilter_period = postfilter_pitch;
-    m_celtDec->postfilter_gain = postfilter_gain;
-    m_celtDec->postfilter_tapset = postfilter_tapset;
+    m_celtDec.postfilter_period_old = m_celtDec.postfilter_period;
+    m_celtDec.postfilter_gain_old = m_celtDec.postfilter_gain;
+    m_celtDec.postfilter_tapset_old = m_celtDec.postfilter_tapset;
+    m_celtDec.postfilter_period = postfilter_pitch;
+    m_celtDec.postfilter_gain = postfilter_gain;
+    m_celtDec.postfilter_tapset = postfilter_tapset;
     if (LM != 0) {
-        m_celtDec->postfilter_period_old = m_celtDec->postfilter_period;
-        m_celtDec->postfilter_gain_old = m_celtDec->postfilter_gain;
-        m_celtDec->postfilter_tapset_old = m_celtDec->postfilter_tapset;
+        m_celtDec.postfilter_period_old = m_celtDec.postfilter_period;
+        m_celtDec.postfilter_gain_old = m_celtDec.postfilter_gain;
+        m_celtDec.postfilter_tapset_old = m_celtDec.postfilter_tapset;
     }
 
     if (C == 1)
@@ -2403,7 +2400,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
         memcpy(oldLogE2, oldLogE, 2 * nbEBands * sizeof(*oldLogE2));
         memcpy(oldLogE, oldBandE, 2 * nbEBands * sizeof(*oldLogE));
         /* In normal circumstances, we only allow the noise floor to increase by up to 2.4 dB/second, but when we're in DTX, we allow up to 6 dB increase for each update.*/
-        if (m_celtDec->loss_count < 10)
+        if (m_celtDec.loss_count < 10)
             max_background_increase = M * QCONST16(0.001f, DB_SHIFT);
         else
             max_background_increase = QCONST16(1.f, DB_SHIFT);
@@ -2427,15 +2424,15 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
             oldLogE[c * nbEBands + i] = oldLogE2[c * nbEBands + i] = -QCONST16(28.f, DB_SHIFT);
         }
     } while (++c < 2);
-    m_celtDec->rng = rangedec->get_rng();
+    m_celtDec.rng = rangedec->get_rng();
 
-    deemphasis(out_syn, outbuf, N, CC, m_celtDec->downsample, m_CELTMode.preemph, m_celtDec->preemph_memD, 0);
-    m_celtDec->loss_count = 0;
+    deemphasis(out_syn, outbuf, N, CC, m_celtDec.downsample, m_CELTMode.preemph, m_celtDec.preemph_memD, 0);
+    m_celtDec.loss_count = 0;
     if (rangedec->tell() > 8 * rangedec->get_storage())
         return OPUS_INTERNAL_ERROR;
     if (rangedec->get_error())
-        m_celtDec->error = 1;
-    return frame_size / m_celtDec->downsample;
+        m_celtDec.error = 1;
+    return frame_size / m_celtDec.downsample;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t celt_decoder_ctl(int32_t request, ...) {
@@ -2446,53 +2443,53 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
         case CELT_SET_START_BAND_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
             if (value < 0 || value >= m_CELTMode.nbEBands) goto bad_arg;
-            m_celtDec->start = value;
+            m_celtDec.start = value;
         } break;
         case CELT_SET_END_BAND_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
             if (value < 1 || value > m_CELTMode.nbEBands) goto bad_arg;
-            m_celtDec->end = value;
+            m_celtDec.end = value;
         } break;
         case CELT_SET_CHANNELS_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
             if (value < 1 || value > 2) goto bad_arg;
-            m_celtDec->stream_channels = value;
+            m_celtDec.stream_channels = value;
         } break;
         case CELT_GET_AND_CLEAR_ERROR_REQUEST: {
             int32_t *value = va_arg(ap, int32_t *);
             if (value == NULL) goto bad_arg;
-            *value = m_celtDec->error;
-            m_celtDec->error = 0;
+            *value = m_celtDec.error;
+            m_celtDec.error = 0;
         } break;
         case OPUS_GET_LOOKAHEAD_REQUEST: {
             int32_t *value = va_arg(ap, int32_t *);
             if (value == NULL) goto bad_arg;
-            *value = m_celtDec->overlap / m_celtDec->downsample;
+            *value = m_celtDec.overlap / m_celtDec.downsample;
         } break;
         case OPUS_RESET_STATE: {
             int32_t i;
             int16_t *lpc, *oldBandE, *oldLogE, *oldLogE2;
-            lpc = (int16_t *)(m_celtDec->_decode_mem + (DECODE_BUFFER_SIZE + m_celtDec->overlap) * m_celtDec->channels);
-            oldBandE = lpc + m_celtDec->channels * LPC_ORDER;
+            lpc = (int16_t *)(m_decode_mem.get() + (DECODE_BUFFER_SIZE + m_celtDec.overlap) * m_celtDec.channels);
+            oldBandE = lpc + m_celtDec.channels * LPC_ORDER;
             oldLogE = oldBandE + 2 * m_CELTMode.nbEBands;
             oldLogE2 = oldLogE + 2 * m_CELTMode.nbEBands;
 
-            m_celtDec->rng = 0;
-            m_celtDec->error = 0;
-            m_celtDec->postfilter_period = 0;
-            m_celtDec->postfilter_period_old = 0;
-            m_celtDec->postfilter_gain = 0;
-            m_celtDec->postfilter_gain_old = 0;
-            m_celtDec->postfilter_tapset = 0;
-            m_celtDec->postfilter_tapset_old = 0;
+            m_celtDec.rng = 0;
+            m_celtDec.error = 0;
+            m_celtDec.postfilter_period = 0;
+            m_celtDec.postfilter_period_old = 0;
+            m_celtDec.postfilter_gain = 0;
+            m_celtDec.postfilter_gain_old = 0;
+            m_celtDec.postfilter_tapset = 0;
+            m_celtDec.postfilter_tapset_old = 0;
 
             for (i = 0; i < 2 * m_CELTMode.nbEBands; i++) oldLogE[i] = oldLogE2[i] = -QCONST16(28.f, DB_SHIFT);
-            m_celtDec->skip_plc = 1;
+            m_celtDec.skip_plc = 1;
         } break;
         case OPUS_GET_PITCH_REQUEST: {
             int32_t *value = va_arg(ap, int32_t *);
             if (value == NULL) goto bad_arg;
-            *value = m_celtDec->postfilter_period;
+            *value = m_celtDec.postfilter_period;
         } break;
         case CELT_GET_MODE_REQUEST: {
             const CELTMode_t **value = va_arg(ap, const CELTMode_t **);
@@ -2501,26 +2498,26 @@ int32_t celt_decoder_ctl(int32_t request, ...) {
         } break;
         case CELT_SET_SIGNALLING_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
-            m_celtDec->signalling = value;
+            m_celtDec.signalling = value;
         } break;
         case OPUS_GET_FINAL_RANGE_REQUEST: {
             uint32_t *value = va_arg(ap, uint32_t *);
             if (value == 0) goto bad_arg;
-            *value = m_celtDec->rng;
+            *value = m_celtDec.rng;
         } break;
         case OPUS_SET_PHASE_INVERSION_DISABLED_REQUEST: {
             int32_t value = va_arg(ap, int32_t);
             if (value < 0 || value > 1) {
                 goto bad_arg;
             }
-            m_celtDec->disable_inv = value;
+            m_celtDec.disable_inv = value;
         } break;
         case OPUS_GET_PHASE_INVERSION_DISABLED_REQUEST: {
             int32_t *value = va_arg(ap, int32_t *);
             if (!value) {
                 goto bad_arg;
             }
-            *value = m_celtDec->disable_inv;
+            *value = m_celtDec.disable_inv;
         } break;
         default:
             goto bad_request;
@@ -2828,7 +2825,7 @@ void opus_fft_impl(const kiss_fft_state *tff, kiss_fft_cpx *fout) {
     int32_t i;
     int32_t shift;
 
-    /* m_celtDec->shift can be -1 */
+    /* m_celtDec.shift can be -1 */
     shift = tff->shift > 0 ? tff->shift : 0;
 
     fstride[0] = 1;
