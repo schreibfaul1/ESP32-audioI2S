@@ -36,7 +36,6 @@
 
 #include "Arduino.h"
 #include "opus_decoder.h"
-#include <memory>
 
 class CeltDecoder{
 
@@ -697,7 +696,7 @@ class CeltDecoder{
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     CELTDecoder_t   m_celtDec; // unique pointer
     ps_ptr<int32_t> m_decode_mem;
-    band_ctx_t      s_band_ctx;
+    band_ctx_t      m_band_ctx;
 
 public:
     CeltDecoder(){}

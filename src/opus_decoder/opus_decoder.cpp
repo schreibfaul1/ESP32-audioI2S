@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 21.07.2025
+ *  Updated on: 14.09.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -13,7 +13,6 @@
 #include "range_decoder.h"
 #include "celt.h"
 #include "silk.h"
-
 #include <vector>
 
 std::unique_ptr<RangeDecoder> rangedec;
@@ -73,7 +72,7 @@ ofp2  s_ofp2; // used in opus_FramePacking_Code2
 ofp3  s_ofp3; // used in opus_FramePacking_Code3
 odp3  s_odp3; // used in opusDecodePage3
 
-std::vector <uint32_t>s_opusBlockPicItem;
+std::vector<uint32_t>s_opusBlockPicItem;
 
 bool OPUSDecoder_AllocateBuffers(){
 

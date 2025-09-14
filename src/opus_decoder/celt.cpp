@@ -620,8 +620,8 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
     int32_t i;
     int32_t intensity;
 
-    i = s_band_ctx.i;
-    intensity = s_band_ctx.intensity;
+    i = m_band_ctx.i;
+    intensity = m_band_ctx.intensity;
 
     /* Decide on the resolution to give to the split parameter theta */
     pulse_cap = logN400[i] + LM * (1 << BITRES);
@@ -681,13 +681,13 @@ void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, 
     }
     else if (stereo) {
 
-        if (*b > 2 << BITRES && s_band_ctx.remaining_bits > 2 << BITRES) {
+        if (*b > 2 << BITRES && m_band_ctx.remaining_bits > 2 << BITRES) {
             inv = rangedec->dec_bit_logp(2);
         }
         else
             inv = 0;
         /* inv flag override to avoid problems with downmixing. */
-        if (s_band_ctx.disable_inv)
+        if (m_band_ctx.disable_inv)
             inv = 0;
         itheta = 0;
     }
@@ -731,12 +731,12 @@ uint32_t CeltDecoder::quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t 
     c = 0;
     do {
         int32_t sign = 0;
-        if (s_band_ctx.remaining_bits >= 1 << BITRES) {
+        if (m_band_ctx.remaining_bits >= 1 << BITRES) {
             sign = rangedec->dec_bits(1);
-            s_band_ctx.remaining_bits -= 1 << BITRES;
+            m_band_ctx.remaining_bits -= 1 << BITRES;
             b -= 1 << BITRES;
         }
-        if (s_band_ctx.resynth)
+        if (m_band_ctx.resynth)
             x[0] = sign ? -NORM_SCALING : NORM_SCALING;
         x = Y;
     } while (++c < 1 + stereo);
@@ -760,8 +760,8 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
     int32_t i;
     int32_t spread;
 
-    i = s_band_ctx.i;
-    spread = s_band_ctx.spread;
+    i = m_band_ctx.i;
+    spread = m_band_ctx.spread;
 
     /* If we need 1.5 more bit than we can produce, split the band in two. */
     cache = cache_bits50 + cache_index50[(LM + 1) * m_CELTMode.nbEBands + i];
@@ -801,16 +801,16 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
         }
         mbits = max((int32_t)0, min(b, (b - delta) / 2));
         sbits = b - mbits;
-        s_band_ctx.remaining_bits -= qalloc;
+        m_band_ctx.remaining_bits -= qalloc;
 
         if (lowband)
             next_lowband2 = lowband + N; /* >32-bit split case */
 
-        rebalance = s_band_ctx.remaining_bits;
+        rebalance = m_band_ctx.remaining_bits;
         if (mbits >= sbits)  {
             cm = quant_partition(X, N, mbits, B, lowband, LM,
                                  MULT16_16_P15(gain, mid), fill);
-            rebalance = mbits - (rebalance - s_band_ctx.remaining_bits);
+            rebalance = mbits - (rebalance - m_band_ctx.remaining_bits);
             if (rebalance > 3 << BITRES && itheta != 0)
                 sbits += rebalance - (3 << BITRES);
             cm |= quant_partition(Y, N, sbits, B, next_lowband2, LM,
@@ -821,7 +821,7 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
             cm = quant_partition(Y, N, sbits, B, next_lowband2, LM,
                                  MULT16_16_P15(gain, side), fill >> B)
                  << (_B0 >> 1);
-            rebalance = sbits - (rebalance - s_band_ctx.remaining_bits);
+            rebalance = sbits - (rebalance - m_band_ctx.remaining_bits);
             if (rebalance > 3 << BITRES && itheta != 16384)
                 mbits += rebalance - (3 << BITRES);
             cm |= quant_partition(X, N, mbits, B, lowband, LM,
@@ -832,14 +832,14 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
         /* This is the basic no-split case */
         q = bits2pulses(i, LM, b);
         curr_bits = pulses2bits(i, LM, q);
-        s_band_ctx.remaining_bits -= curr_bits;
+        m_band_ctx.remaining_bits -= curr_bits;
 
         /* Ensures we can never bust the budget */
-        while (s_band_ctx.remaining_bits < 0 && q > 0) {
-            s_band_ctx.remaining_bits += curr_bits;
+        while (m_band_ctx.remaining_bits < 0 && q > 0) {
+            m_band_ctx.remaining_bits += curr_bits;
             q--;
             curr_bits = pulses2bits(i, LM, q);
-            s_band_ctx.remaining_bits -= curr_bits;
+            m_band_ctx.remaining_bits -= curr_bits;
         }
 
         if (q != 0) {
@@ -851,7 +851,7 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
         else {
             /* If there's no pulse, fill the band anyway */
             int32_t j;
-            if (s_band_ctx.resynth)
+            if (m_band_ctx.resynth)
             {
                 uint32_t cm_mask;
                 /* B can be as large as 16, so this shift might overflow an int32_t on a 16-bit platform; use a long to get defined behavior.*/
@@ -864,8 +864,8 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
                     if (lowband == NULL) {
                         /* Noise */
                         for (j = 0; j < N; j++) {
-                            s_band_ctx.seed = celt_lcg_rand(s_band_ctx.seed);
-                            X[j] = (int16_t)((int32_t)s_band_ctx.seed >> 20);
+                            m_band_ctx.seed = celt_lcg_rand(m_band_ctx.seed);
+                            X[j] = (int16_t)((int32_t)m_band_ctx.seed >> 20);
                         }
                         cm = cm_mask;
                     }
@@ -873,10 +873,10 @@ uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t 
                         /* Folded spectrum */
                         for (j = 0; j < N; j++) {
                             int16_t tmp;
-                            s_band_ctx.seed = celt_lcg_rand(s_band_ctx.seed);
+                            m_band_ctx.seed = celt_lcg_rand(m_band_ctx.seed);
                             /* About 48 dB below the "normal" folding level */
                             tmp = QCONST16(1.0f / 256, 10);
-                            tmp = (s_band_ctx.seed) & 0x8000 ? tmp : -tmp;
+                            tmp = (m_band_ctx.seed) & 0x8000 ? tmp : -tmp;
                             X[j] = lowband[j] + tmp;
                         }
                         cm = fill;
@@ -904,7 +904,7 @@ uint32_t CeltDecoder::quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, in
     int32_t k;
     int32_t tf_change;
 
-    tf_change = s_band_ctx.tf_change;
+    tf_change = m_band_ctx.tf_change;
 
     longBlocks = _B0 == 1;
 
@@ -955,7 +955,7 @@ uint32_t CeltDecoder::quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, in
 
     cm = quant_partition(X, N, b, B, lowband, LM, gain, fill);
 
-    if (s_band_ctx.resynth) {
+    if (m_band_ctx.resynth) {
         /* Undo the sample reorganization going from time order to frequency order */
         if (_B0 > 1)
             interleave_hadamard(X, N_B >> recombine, _B0 << recombine, longBlocks);
@@ -1035,7 +1035,7 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
             sbits = 1 << BITRES;
         mbits -= sbits;
         c = itheta > 8192;
-        s_band_ctx.remaining_bits -= qalloc + sbits;
+        m_band_ctx.remaining_bits -= qalloc + sbits;
 
         x2 = c ? Y : X;
         y2 = c ? X : Y;
@@ -1049,7 +1049,7 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
         /* We don't split N=2 bands, so cm is either 1 or 0 (for a fold-collapse), and there's no need to worry about mixing with the other channel. */
         y2[0] = -sign * x2[1];
         y2[1] = sign * x2[0];
-        if (s_band_ctx.resynth) {
+        if (m_band_ctx.resynth) {
             int16_t tmp;
             X[0] = MULT16_16_Q15(mid, X[0]);
             X[1] = MULT16_16_Q15(mid, X[1]);
@@ -1069,14 +1069,14 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
 
         mbits = max((int32_t)0, min(b, (b - delta) / 2));
         sbits = b - mbits;
-        s_band_ctx.remaining_bits -= qalloc;
+        m_band_ctx.remaining_bits -= qalloc;
 
-        rebalance = s_band_ctx.remaining_bits;
+        rebalance = m_band_ctx.remaining_bits;
         if (mbits >= sbits) {
             /* In stereo mode, we do not apply a scaling to the mid because we need the normalized mid for folding later. */
             cm = quant_band(X, N, mbits, B, lowband, LM, lowband_out, 32767,
                             lowband_scratch, fill);
-            rebalance = mbits - (rebalance - s_band_ctx.remaining_bits);
+            rebalance = mbits - (rebalance - m_band_ctx.remaining_bits);
             if (rebalance > 3 << BITRES && itheta != 0)
                 sbits += rebalance - (3 << BITRES);
 
@@ -1087,7 +1087,7 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
         else {
             /* For a stereo split, the high bits of fill are always zero, so no folding will be done to the side. */
             cm = quant_band(Y, N, sbits, B, NULL, LM, NULL, side, NULL, fill >> B);
-            rebalance = sbits - (rebalance - s_band_ctx.remaining_bits);
+            rebalance = sbits - (rebalance - m_band_ctx.remaining_bits);
             if (rebalance > 3 << BITRES && itheta != 16384)
                 mbits += rebalance - (3 << BITRES);
             /* In stereo mode, we do not apply a scaling to the mid because we need the normalized mid for folding later. */
@@ -1095,7 +1095,7 @@ uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32
                              lowband_scratch, fill);
         }
     }
-    if (s_band_ctx.resynth) {
+    if (m_band_ctx.resynth) {
         if (N != 2)
             stereo_merge(X, Y, mid, N);
         if (inv)
@@ -1159,15 +1159,15 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
     ps_ptr<int16_t>norm_save2;  norm_save2.alloc_array(resynth_alloc);
 
     lowband_offset = 0;
-    s_band_ctx.bandE = bandE;
-    s_band_ctx.intensity = intensity;
-    s_band_ctx.seed = *seed;
-    s_band_ctx.spread = spread;
-    s_band_ctx.disable_inv = disable_inv;
-    s_band_ctx.resynth = resynth;
-    s_band_ctx.theta_round = 0;
+    m_band_ctx.bandE = bandE;
+    m_band_ctx.intensity = intensity;
+    m_band_ctx.seed = *seed;
+    m_band_ctx.spread = spread;
+    m_band_ctx.disable_inv = disable_inv;
+    m_band_ctx.resynth = resynth;
+    m_band_ctx.theta_round = 0;
     /* Avoid injecting noise in the first band on transients. */
-    s_band_ctx.avoid_split_noise = B > 1;
+    m_band_ctx.avoid_split_noise = B > 1;
     for (i = start; i < end; i++){
         int32_t tell;
         int32_t b;
@@ -1180,7 +1180,7 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
         uint32_t y_cm;
         int32_t last;
 
-        s_band_ctx.i = i;
+        m_band_ctx.i = i;
         last = (i == end - 1);
 
         X = X_ + M * eBands[i];
@@ -1196,7 +1196,7 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
         if (i != start)
             balance -= tell;
         remaining_bits = total_bits - tell - 1;
-        s_band_ctx.remaining_bits = remaining_bits;
+        m_band_ctx.remaining_bits = remaining_bits;
         if (i <= codedBands - 1){
             curr_balance = celt_sudiv(balance, min((int32_t)3, codedBands - i));
             b = max((int32_t)0, min((int32_t)16383, min(remaining_bits + (int32_t)1, (int32_t)pulses[i] + curr_balance)));
@@ -1211,7 +1211,7 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
             special_hybrid_folding(norm, norm2, start, M, dual_stereo);
 
         tf_change = tf_res[i];
-        s_band_ctx.tf_change = tf_change;
+        m_band_ctx.tf_change = tf_change;
         if (i >= m_CELTMode.effEBands) {
             X = norm;
             if (Y_ != NULL)
@@ -1266,7 +1266,7 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
         }
         else {
             if (Y != NULL) {
-                s_band_ctx.theta_round = 0;
+                m_band_ctx.theta_round = 0;
                 x_cm = quant_band_stereo(X, Y, N, b, B,
                     effective_lowband != -1 ? norm + effective_lowband : NULL, LM,
                     last ? NULL : norm + M * eBands[i] - norm_offset, lowband_scratch, x_cm | y_cm);
@@ -1286,9 +1286,9 @@ void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16
         update_lowband = b > (N << BITRES);
         /* We only need to avoid noise on a split for the first band. After that, we
            have folding. */
-        s_band_ctx.avoid_split_noise = 0;
+        m_band_ctx.avoid_split_noise = 0;
     }
-    *seed = s_band_ctx.seed;
+    *seed = m_band_ctx.seed;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t CeltDecoder::celt_decoder_get_size(int32_t channels){
@@ -2865,7 +2865,7 @@ int16_t CeltDecoder::sig2word16(int32_t x){
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Atan approximation using a 4th order polynomial. Input is in Q15 format and normalized by pi/4. Output is in Q15 format */
-int16_t celt_atan01(int16_t x) {
+int16_t CeltDecoder::celt_atan01(int16_t x) {
     return MULT16_16_P15(
         x, ADD32(32767, MULT16_16_P15(x, ADD32(-21, MULT16_16_P15(x, ADD32(-11943, MULT16_16_P15(4936, x)))))));
 }

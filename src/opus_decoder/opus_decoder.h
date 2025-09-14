@@ -1,7 +1,6 @@
 // based on Xiph.Org Foundation celt decoder
 #pragma once
-//#pragma GCC optimize ("O3")
-//#pragma GCC diagnostic ignored "-Wnarrowing"
+
 
 #include "Audio.h"
 
