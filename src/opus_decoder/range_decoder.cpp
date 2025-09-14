@@ -176,3 +176,48 @@ void RangeDecoder::add_nbits_total(int32_t nbits_total){m_nbits_total += nbits_t
 uint32_t RangeDecoder::get_storage(){return m_storage;}
 int32_t RangeDecoder::get_error(){return m_error;}
 uint32_t RangeDecoder::get_rng(){return m_rng;}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* When called, decay is positive and at most 11456. */
+uint32_t RangeDecoder::laplace_get_freq1(uint32_t fs0, int32_t decay) {
+    uint32_t ft;
+    ft = 32768 - LAPLACE_MINP * (2 * LAPLACE_NMIN) - fs0;
+    return ft * (int32_t)(16384 - decay) >> 15;
+}
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t RangeDecoder::laplace_decode(uint32_t fs, int32_t decay) {
+    int32_t val = 0;
+    uint32_t fl;
+    uint32_t fm;
+    fm = decode_bin(15);
+    fl = 0;
+    if (fm >= fs) {
+        val++;
+        fl = fs;
+        fs = laplace_get_freq1(fs, decay) + LAPLACE_MINP;
+        /* Search the decaying part of the PDF.*/
+        while (fs > LAPLACE_MINP && fm >= fl + 2 * fs) {
+            fs *= 2;
+            fl += fs;
+            fs = ((fs - 2 * LAPLACE_MINP) * (int32_t)decay) >> 15;
+            fs += LAPLACE_MINP;
+            val++;
+        }
+        /* Everything beyond that has probability LAPLACE_MINP. */
+        if (fs <= LAPLACE_MINP) {
+            int32_t di;
+            di = (fm - fl) >> (LAPLACE_LOG_MINP + 1);
+            val += di;
+            fl += 2 * di * LAPLACE_MINP;
+        }
+        if (fm < fl + fs)
+            val = -val;
+        else
+            fl += fs;
+    }
+    assert(fl < 32768);
+    assert(fs > 0);
+    assert(fl <= fm);
+    assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
+    dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
+    return val;
+}

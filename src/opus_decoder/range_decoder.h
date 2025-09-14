@@ -20,6 +20,10 @@ class RangeDecoder {
 #define EC_CODE_BOT       EC_CODE_TOP >> EC_SYM_BITS
 #define EC_CODE_EXTRA     ((EC_CODE_BITS-2) % EC_SYM_BITS + 1)
 
+#define LAPLACE_LOG_MINP (0)
+#define LAPLACE_MINP (1<<LAPLACE_LOG_MINP)
+#define LAPLACE_NMIN (16)
+
 private:
     uint8_t* m_buf = nullptr;     /*Buffered input/output */
     uint32_t m_storage = 0; /*The size of the buffer.*/
@@ -51,10 +55,11 @@ public:
     void add_nbits_total(int32_t nbits_total);
     int32_t get_error();
     uint32_t get_rng();
-
+    int32_t laplace_decode(uint32_t fs, int32_t decay);
 private:
     int32_t read_byte();
     int32_t read_byte_from_end();
     void dec_normalize();
+    uint32_t laplace_get_freq1(uint32_t fs0, int32_t decay);
 };
 

@@ -281,16 +281,6 @@ void CeltDecoder::comb_filter(int32_t *y, int32_t *x, int32_t T0, int32_t T1, in
     comb_filter_const(y + i, x + i, T1, N - i, g10, g11, g12);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* TF change table. Positive values mean better frequency resolution (longer effective window), whereas negative values mean better time resolution (shorter effective window).
-   The second index is computed as: 4*isTransient + 2*tf_select + per_band_flag */
-const signed char tf_select_table[4][8] = {
-    /*isTransient=0     isTransient=1 */
-    {0, -1, 0, -1, 0, -1, 0, -1}, /* 2.5 ms */
-    {0, -1, 0, -2, 1, 0, 1, -1},  /* 5 ms */
-    {0, -2, 0, -3, 2, 0, 1, -1},  /* 10 ms */
-    {0, -2, 0, -3, 3, 0, 1, -1},  /* 20 ms */
-};
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::init_caps(int32_t *cap, int32_t LM, int32_t C) {
     int32_t i;
     for (i = 0; i < m_CELTMode.nbEBands; i++)
@@ -482,7 +472,7 @@ void CeltDecoder::compute_channel_weights(int32_t Ex, int32_t Ey, int16_t w[2]) 
     w[1] = VSHR32(Ey, shift);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void stereo_split(int16_t * X, int16_t * Y, int32_t N) {
+void CeltDecoder::stereo_split(int16_t * X, int16_t * Y, int32_t N) {
     int32_t j;
     for (j = 0; j < N; j++) {
         int32_t r, l;
@@ -536,11 +526,6 @@ void CeltDecoder::stereo_merge(int16_t * X, int16_t * Y, int16_t mid, int32_t N)
         Y[j] = EXTRACT16(PSHR32(MULT16_16(rgain, ADD16(l, r)), kr + 1));
     }
 }
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* Indexing table for converting from natural Hadamard to ordery Hadamarangedec-> This is essentially a bit-reversed Gray,
-   on top of which we've added an inversion of the order because we want the DC at the end rather than the beginning.
-   The lines are for N=2, 4, 8, 16 */
-const int32_t ordery_table[] = { 1, 0, 3, 0, 2, 1, 7, 0, 4, 3, 6, 1, 5, 2, 15, 0, 8, 7, 12, 3, 11, 4, 14, 1, 9, 6, 13, 2, 10, 5,};
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void CeltDecoder::deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard){
     int32_t i, j;
@@ -2247,51 +2232,6 @@ void CeltDecoder::opus_fft_impl(const kiss_fft_state *tff, kiss_fft_cpx *fout) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* When called, decay is positive and at most 11456. */
-uint32_t CeltDecoder::ec_laplace_get_freq1(uint32_t fs0, int32_t decay) {
-    uint32_t ft;
-    ft = 32768 - LAPLACE_MINP * (2 * LAPLACE_NMIN) - fs0;
-    return ft * (int32_t)(16384 - decay) >> 15;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t CeltDecoder::ec_laplace_decode(uint32_t fs, int32_t decay) {
-    int32_t val = 0;
-    uint32_t fl;
-    uint32_t fm;
-    fm = rangedec->decode_bin(15);
-    fl = 0;
-    if (fm >= fs) {
-        val++;
-        fl = fs;
-        fs = ec_laplace_get_freq1(fs, decay) + LAPLACE_MINP;
-        /* Search the decaying part of the PDF.*/
-        while (fs > LAPLACE_MINP && fm >= fl + 2 * fs) {
-            fs *= 2;
-            fl += fs;
-            fs = ((fs - 2 * LAPLACE_MINP) * (int32_t)decay) >> 15;
-            fs += LAPLACE_MINP;
-            val++;
-        }
-        /* Everything beyond that has probability LAPLACE_MINP. */
-        if (fs <= LAPLACE_MINP) {
-            int32_t di;
-            di = (fm - fl) >> (LAPLACE_LOG_MINP + 1);
-            val += di;
-            fl += 2 * di * LAPLACE_MINP;
-        }
-        if (fm < fl + fs)
-            val = -val;
-        else
-            fl += fs;
-    }
-    assert(fl < 32768);
-    assert(fs > 0);
-    assert(fl <= fm);
-    assert(fm < min((uint32_t)(fl + fs), (uint32_t)32768));
-    rangedec->dec_update(fl, min((uint32_t)(fl + fs), (uint32_t)32768), (uint32_t)32768);
-    return val;
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Compute floor(sqrt(_val)) with exact arithmetic. _val must be greater than 0. This has been tested on all possible 32-bit inputs greater than 0.*/
 uint32_t CeltDecoder::isqrt32(uint32_t _val) {
     uint32_t b;
@@ -2848,7 +2788,7 @@ void CeltDecoder::unquant_coarse_energy(int32_t start, int32_t end, int16_t *old
             if (budget - tell >= 15) {
                 int32_t pi;
                 pi = 2 * min(i, (int32_t)20);
-                qi = ec_laplace_decode(prob_model[pi] << 7, prob_model[pi + 1] << 6);
+                qi = rangedec->laplace_decode(prob_model[pi] << 7, prob_model[pi + 1] << 6);
             } else if (budget - tell >= 2) {
                 qi = rangedec->dec_icdf(small_energy_icdf, 2);
                 qi = (qi >> 1) ^ -(qi & 1);

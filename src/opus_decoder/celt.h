@@ -54,9 +54,6 @@ class CeltDecoder{
     #define OPUS_GET_FINAL_RANGE_REQUEST 4031
     #define OPUS_SET_PHASE_INVERSION_DISABLED_REQUEST 4046
     #define OPUS_GET_PHASE_INVERSION_DISABLED_REQUEST 4047
-    #define LAPLACE_LOG_MINP (0)
-    #define LAPLACE_MINP (1<<LAPLACE_LOG_MINP)
-    #define LAPLACE_NMIN (16)
     #define LEAK_BANDS 19
     #define MAXFACTORS 8
     #define CELT_CLZ0s    ((int32_t)sizeof(uint32_t)*CHAR_BIT)
@@ -614,6 +611,21 @@ class CeltDecoder{
 
     const uint8_t small_energy_icdf[3] = {2, 1, 0};
 
+    /* TF change table. Positive values mean better frequency resolution (longer effective window), whereas negative values mean better time resolution (shorter effective window).
+       The second index is computed as: 4*isTransient + 2*tf_select + per_band_flag */
+    const signed char tf_select_table[4][8] = {
+        /*isTransient=0     isTransient=1 */
+        {0, -1, 0, -1, 0, -1, 0, -1}, /* 2.5 ms */
+        {0, -1, 0, -2, 1, 0, 1, -1},  /* 5 ms */
+        {0, -2, 0, -3, 2, 0, 1, -1},  /* 10 ms */
+        {0, -2, 0, -3, 3, 0, 1, -1},  /* 20 ms */
+    };
+
+    /* Indexing table for converting from natural Hadamard to ordery Hadamarangedec-> This is essentially a bit-reversed Gray,
+       on top of which we've added an inversion of the order because we want the DC at the end rather than the beginning.
+       The lines are for N=2, 4, 8, 16 */
+    const int32_t ordery_table[30] = { 1, 0, 3, 0, 2, 1, 7, 0, 4, 3, 6, 1, 5, 2, 15, 0, 8, 7, 12, 3, 11, 4, 14, 1, 9, 6, 13, 2, 10, 5,};
+
     const int32_t second_check[16] = {0, 0, 3, 2, 3, 2, 5, 2, 3, 2, 3, 2, 5, 2, 3, 2};
 
     const uint8_t trim_icdf[11] = {126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0};
@@ -689,7 +701,7 @@ class CeltDecoder{
 
 public:
     CeltDecoder(){}
-    ~CeltDecoder(){}
+    ~CeltDecoder(){reset();}
     bool init();
     void clear();
     void reset();
@@ -775,7 +787,5 @@ private:
     int32_t bits2pulses(int32_t band, int32_t LM, int32_t bits);
     int32_t pulses2bits(int32_t band, int32_t LM, int32_t pulses);
     int16_t celt_log2(int32_t x);
-    uint32_t ec_laplace_get_freq1(uint32_t fs0, int32_t decay);
-    int32_t ec_laplace_decode(uint32_t fs, int32_t decay);
     int16_t _celt_cos_pi_2(int16_t x);
 };
