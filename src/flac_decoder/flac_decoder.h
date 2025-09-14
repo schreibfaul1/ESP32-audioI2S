@@ -23,7 +23,25 @@ class FlacDecoder : public Decoder {
 
 public:
     FlacDecoder(Audio& audioRef) : Decoder(audioRef) {}
-    ~FlacDecoder() = default;
+    ~FlacDecoder() {reset();}
+    bool             init() override;
+    void             clear() override;
+    void             reset() override;
+    bool             isValid() override;
+    int32_t          findSyncWord(uint8_t* buf, int32_t nBytes) override;
+    uint8_t          getChannels() override;
+    uint32_t         getSampleRate() override;
+    uint32_t         getOutputSamples();
+    uint8_t          getBitsPerSample() override;
+    uint32_t         getBitRate() override;
+    uint32_t         getAudioDataStart() override;
+    uint32_t         getAudioFileDuration() override;
+    const char*      getStreamTitle() override;
+    int32_t          decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
+    void             setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
+    std::vector<uint32_t> getMetadataBlockPicture() override;
+    const char*      arg1() override;
+    const char*      arg2() override;
 
     enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                     FLAC_DECODE_FRAMES_LOOP = 100,
@@ -170,32 +188,14 @@ private:
     bool             m_f_oggWrapper = false;
     bool             m_f_lastMetaDataBlock = false;
     bool             m_f_flacNewMetadataBlockPicture = false;
+    bool             m_valid = false;
     uint8_t          m_flacPageNr = 0;
     std::vector<ps_ptr<int32_t>> m_samplesBuffer;
     uint16_t         m_maxBlocksize = FLAC_MAX_BLOCKSIZE;
     int32_t          m_nBytes = 0;
 
-public:
-    bool             init() override;
-    void             clear() override;
-    void             reset() override;
-    int32_t          findSyncWord(uint8_t* buf, int32_t nBytes) override;
-    uint8_t          getChannels() override;
-    uint32_t         getSampleRate() override;
-    uint32_t         getOutputSamples();
-    uint8_t          getBitsPerSample() override;
-    uint32_t         getBitRate() override;
-    uint32_t         getAudioDataStart() override;
-    uint32_t         getAudioFileDuration() override;
-    const char*      getStreamTitle() override;
-    int32_t          decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
-    void             setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
-    std::vector<uint32_t> getMetadataBlockPicture() override;
-    const char*      arg1() override;
-    const char*      arg2() override;
-private:
-    boolean          FLACFindMagicWord(unsigned char* buf, int32_t nBytes);
 
+    boolean          FLACFindMagicWord(unsigned char* buf, int32_t nBytes);
     int32_t          parseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t          parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes);
     int32_t          parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes);

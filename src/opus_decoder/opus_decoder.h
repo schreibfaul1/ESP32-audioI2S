@@ -17,6 +17,7 @@ public:
     bool             init() override;
     void             clear() override;
     void             reset() override;
+    bool             isValid() override;
     int32_t          findSyncWord(uint8_t* buf, int32_t nBytes) override;
     uint8_t          getChannels() override;
     uint32_t         getSampleRate() override;
@@ -102,6 +103,7 @@ private:
     bool             m_f_firstPage = false;
     bool             m_f_lastPage = false;
     bool             m_f_nextChunk = false;
+    bool             m_isValid = false;
     int8_t           m_opusError = 0;
     int16_t          m_opusSegmentTableRdPtr = -1;
     int16_t          m_prev_mode = 0;

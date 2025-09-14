@@ -16,15 +16,16 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 bool FlacDecoder::init() {
-    FLACFrameHeader.alloc();
-    FLACMetadataBlock.alloc();
+    if(!FLACFrameHeader.alloc())  {m_valid = false; return false;}
+    if(!FLACMetadataBlock.alloc()){m_valid = false; return false;}
 
     m_samplesBuffer.resize(FLAC_MAX_CHANNELS);
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++){
         m_samplesBuffer[i].alloc(m_maxBlocksize  * sizeof(int32_t));
-        if(!m_samplesBuffer[i]){ // ps_ptr<T> sollte operator bool() überladen
+        if(!m_samplesBuffer[i]){ // ps_ptr<T> should overload operator bool()
             FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffers");
-            m_samplesBuffer.clear(); // Vektor leeren und alle ps_ptr Objekte zerstören
+            m_samplesBuffer.clear(); // clear vektor and destroy all ps_ptr objects
+            m_valid= false;
             return false;
         }
     }
@@ -32,6 +33,7 @@ bool FlacDecoder::init() {
     clear();
     setDefaults();
     m_flacPageNr = 0;
+    m_valid= true;
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -58,6 +60,7 @@ void FlacDecoder::reset(){
     coefs.clear(); coefs.shrink_to_fit();
     m_flacSegmTableVec.clear(); m_flacSegmTableVec.shrink_to_fit();
     m_flacBlockPicItem.clear(); m_flacBlockPicItem.shrink_to_fit();
+    m_valid= false;
 }
 //----------------------------------------------------------------------------------------------------------------------
 void FlacDecoder::setDefaults(){
@@ -89,6 +92,7 @@ void FlacDecoder::setDefaults(){
     m_f_bitReaderError = false;
     m_nBytes = 0;
 }
+bool FlacDecoder::isValid(){return m_valid;}
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
 //----------------------------------------------------------------------------------------------------------------------
@@ -776,7 +780,8 @@ int8_t FlacDecoder::decodeFrame(uint8_t *inbuf, int32_t *bytesLeft){
 }
 //----------------------------------------------------------------------------------------------------------------------
 uint32_t FlacDecoder::getOutputSamples(){
-    uint32_t vs = m_flacValidSamples;
+    if(!FLACMetadataBlock->numChannels) return 0;
+    uint32_t vs = m_flacValidSamples / FLACMetadataBlock->numChannels;
     m_flacValidSamples=0;
     return vs;
 }

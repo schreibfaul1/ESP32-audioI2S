@@ -645,7 +645,7 @@ private:
     static const uint8_t m_tsPacketSize  = 188;
     static const uint8_t m_tsHeaderSize  = 4;
 
-    std::unique_ptr<Decoder> decoder = {};
+    std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int16_t>  m_outBuff;                     // Interleaved L/R
     ps_ptr<int16_t>  m_samplesBuff48K;              // Interleaved L/R
     ps_ptr<char>     m_ibuff;                       // used in log_info()
@@ -874,6 +874,7 @@ public:
     virtual bool init() = 0;
     virtual void clear() = 0;
     virtual void reset() = 0;
+    virtual bool isValid() = 0;
     virtual int32_t findSyncWord(uint8_t *buf, int32_t nBytes) = 0;
     virtual uint8_t getChannels() = 0;
     virtual uint32_t getSampleRate() = 0;
@@ -892,6 +893,6 @@ protected:
     Decoder(Audio& audioRef) : audio(audioRef) {}
     Audio& audio; // protected reference, usable by all subclasses
 private:
-    Decoder() = delete;  // Explizit Default-Konstruktor deaktivieren (optional, aber gut gegen Missbrauch)
+    Decoder() = delete;  // Deactivate default constructor explicitly (optional but good against abuse)
 };
 

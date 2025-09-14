@@ -19,33 +19,25 @@ OpusDecoder::OpusDecoder(Audio& audioRef)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool OpusDecoder::init(){
 
-    // if (!rangedec) {
-    //     rangedec = std::make_unique<RangeDecoder>();
-    //     if (!rangedec) {
-    //         OPUS_LOG_ERROR("Failed to allocate RangeDecoder");
-    //         return false;
-    //     }
+    if (!rangedec) {
+        OPUS_LOG_ERROR("RangeDecoder is null");
+        return false;
+    }
     // }
 
-    // if (!silkdec) {
-    //     silkdec = std::make_unique<SilkDecoder>();
-    //     if (!silkdec) {
-    //         OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
-    //         return false;
-    //     }
-    // }
+    if (!silkdec) {
+        OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
+        return false;
+    }
     silkdec->init();
 
-    // if (!celtdec) {
-    //     celtdec = std::make_unique<CeltDecoder>();
-    //     if (!celtdec) {
-    //         OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
-    //         return false;
-    //     }
-    // }
+    if (!celtdec) {
+        OPUS_LOG_ERROR("Failed to allocate CeltkDecoder");
+        return false;
+    }
     celtdec->init();
 
-    m_opusSegmentTable.alloc_array(256);
+    if(!m_opusSegmentTable.alloc_array(256)) return false;;
     celtdec->clear();
 
     clear();
@@ -59,6 +51,7 @@ bool OpusDecoder::init(){
     (void) ret;
     (void) silkDecSizeBytes;
     silkdec->silk_InitDecoder();
+    m_isValid = true;
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -75,6 +68,7 @@ void OpusDecoder::reset(){
     m_opusOggHeaderSize = 0;
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
+    m_isValid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::clear(){
@@ -88,6 +82,8 @@ void OpusDecoder::clear(){
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
 }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool OpusDecoder::isValid(){return m_isValid;}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::OPUSsetDefaults(){
     memset(&m_ofp2, 0, sizeof(m_ofp2));

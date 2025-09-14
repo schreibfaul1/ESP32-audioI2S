@@ -137,7 +137,7 @@ public:
     //     test.clear(); // memset "0"
     // }
 
-    void alloc(std::size_t size, const char* alloc_name = nullptr, bool usePSRAM = true) {
+    bool alloc(std::size_t size, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size = (size + 15) & ~15; // Align to 16 bytes
         if (psramFound() && usePSRAM) { // Check at the runtime whether PSRAM is available
             mem.reset(static_cast<T*>(ps_malloc(size)));  // <--- Important!
@@ -151,10 +151,12 @@ public:
         }
         if (!mem) {
             printf("OOM: failed to allocate %zu bytes for %s\n", size, name ? name : "unnamed");
+            return false;
         }
+        return true;
     }
 
-    void alloc(const char* alloc_name = nullptr) { // alloc for single objects/structures
+    bool alloc(const char* alloc_name = nullptr) { // alloc for single objects/structures
         reset();  // Freigabe des zuvor gehaltenen Speichers
         void* raw_mem = nullptr;
         if (psramFound()) { // Check at the runtime whether PSRAM is available
@@ -167,12 +169,14 @@ public:
             set_name(alloc_name);
         }
         if (raw_mem) {
-            mem.reset(new (raw_mem) T()); // Platziertes New: Konstruktor von T wird im PSRAM aufgerufen
+            mem.reset(new (raw_mem) T()); // placed new: constructor of T is called up in PSRAM
             allocated_size = sizeof(T);
         } else {
             printf("OOM: failed to allocate %zu bytes for %s\n", sizeof(T), name ? name : "unnamed");
-            allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+            allocated_size = 0; // make sure that allocated_size is 0 if allocation fails
+            return false;
         }
+        return true;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C A L L O C    📌📌📌
@@ -181,7 +185,7 @@ public:
      * Chooses between PSRAM (if available) and DRAM.
      * @param num_elements The number of elements to allocate space for.
      */
-    void calloc(std::size_t num_elements, const char* alloc_name = nullptr, bool usePSRAM = true) {
+    bool calloc(std::size_t num_elements, const char* alloc_name = nullptr, bool usePSRAM = true) {
         size_t total_size = num_elements * sizeof(T);
         total_size = (total_size + 15) & ~15; // Align to 16 bytes, consistent with your alloc()
 
@@ -209,17 +213,20 @@ public:
             // Error treatment for storage allocation
             printf("OOM: failed to calloc %zu bytes for %s\n", total_size, name ? name : "unnamed");
             allocated_size = 0; // Sicherstellen, dass allocated_size 0 ist, wenn Allokation fehlschlägt
+            return false;
         }
+        return true;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C _ A R R A Y   📌📌📌
 
-    void alloc_array(std::size_t count, const char* alloc_name = nullptr) {
+    bool alloc_array(std::size_t count, const char* alloc_name = nullptr) {
         if (alloc_name){
             set_name(alloc_name);
         }
-        alloc(sizeof(T) * count);
+        bool res = alloc(sizeof(T) * count);
         clear();
+        return res;
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  Z E R O _ M E M  📌📌📌
