@@ -18,6 +18,7 @@
 
 std::unique_ptr<RangeDecoder> rangedec;
 std::unique_ptr<SilkDecoder> silkdec;
+std::unique_ptr<CeltDecoder> celtdec;
 
 // global vars
 #define CELT_SET_END_BAND_REQUEST         10012
@@ -93,15 +94,23 @@ bool OPUSDecoder_AllocateBuffers(){
     }
     silkdec->init();
 
-    if(!CELTDecoder_AllocateBuffers()) {return false; /*ERR_OPUS_CELT_NOT_INIT*/}
+    if (!celtdec) {
+        celtdec = std::make_unique<CeltDecoder>();
+        if (!celtdec) {
+            OPUS_LOG_ERROR("Failed to allocate SilkDecoder");
+            return false;
+        }
+    }
+    celtdec->init();
+
     s_opusSegmentTable.alloc_array(256);
-    CELTDecoder_ClearBuffer();
+    celtdec->clear();
 
     OPUSDecoder_ClearBuffers();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
-    s_opusError = celt_decoder_init(2); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
-    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
-    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
+    s_opusError = celtdec->celt_decoder_init(2); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
+    s_opusError = celtdec->celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
+    s_opusError = celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {return false; /*ERR_OPUS_CELT_NOT_INIT;*/}
     OPUSsetDefaults();
 
     int32_t ret = 0, silkDecSizeBytes = 0;
@@ -122,7 +131,7 @@ void OPUSDecoder_FreeBuffers(){
     s_opusSegmentTableRdPtr = -1;
     s_opusCountCode = 0;
     silkdec.reset();
-    CELTDecoder_FreeBuffers();
+    celtdec.reset();
 }
 void OPUSDecoder_ClearBuffers(){
     s_streamTitle.clear();
@@ -324,7 +333,7 @@ int32_t opusDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLeng
 
 //    celt_decoder_ctl(CELT_SET_START_BAND_REQUEST, s_endband);
     if (s_mode == MODE_CELT_ONLY){
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
     }
     else if(s_mode == MODE_SILK_ONLY){
         // silk_InitDecoder();
@@ -375,18 +384,18 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
     else if (s_bandWidth == OPUS_BANDWIDTH_WIDEBAND)   {s_internalSampleRate = 16000;}
     else                                               {s_internalSampleRate = 16000;}
 
-    if(s_prev_mode == MODE_NONE) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+    if(s_prev_mode == MODE_NONE) celtdec->celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
 
     if (s_mode == MODE_CELT_ONLY){
         if(s_prev_mode != s_mode){
-            celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+            celtdec->celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
             rangedec->dec_init((uint8_t *)inbuf, packetLen);
-            celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
+            celtdec->celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, 0);
         }
         s_prev_mode = s_mode;
         rangedec->dec_init((uint8_t *)inbuf, packetLen);
-        celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
-        return celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
+        celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST, s_endband);
+        return celtdec->celt_decode_with_ec((int16_t*)outbuf, samplesPerFrame);
     }
 
     if (s_mode == MODE_SILK_ONLY) {
@@ -435,18 +444,18 @@ int32_t opus_decode_frame(uint8_t *inbuf, int16_t *outbuf, int32_t packetLen, ui
                 case OPUS_BANDWIDTH_FULLBAND:      end_band = 21; break;
                 default: break;
             }
-            celt_decoder_ctl((int32_t)CELT_SET_END_BAND_REQUEST, (end_band));
-            celt_decoder_ctl((int32_t)CELT_SET_CHANNELS_REQUEST, (s_opusChannels));
+            celtdec->celt_decoder_ctl((int32_t)CELT_SET_END_BAND_REQUEST, (end_band));
+            celtdec->celt_decoder_ctl((int32_t)CELT_SET_CHANNELS_REQUEST, (s_opusChannels));
         }
 
         /* MUST be after PLC */
-        celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, start_band);
+        celtdec->celt_decoder_ctl((int32_t)CELT_SET_START_BAND_REQUEST, start_band);
 
         /* Make sure to discard any previous CELT state */
-        if (s_mode != s_prev_mode && s_prev_mode > 0) celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
-        celt_ret = celt_decode_with_ec(outbuf, audiosize);
+        if (s_mode != s_prev_mode && s_prev_mode > 0) celtdec->celt_decoder_ctl((int32_t)OPUS_RESET_STATE);
+        celt_ret = celtdec->celt_decode_with_ec(outbuf, audiosize);
 
-        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = SAT16(ADD32(outbuf[i], pcm_silk[i]));
+        for (i = 0; i < audiosize * s_opusChannels; i++) outbuf[i] = celtdec->SAT16(ADD32(outbuf[i], pcm_silk[i]));
 
         s_prev_mode = MODE_HYBRID;
         return celt_ret < 0 ? celt_ret : audiosize;
@@ -1142,10 +1151,9 @@ int32_t parseOpusHead(uint8_t *inbuf, int32_t nBytes){  // reference https://wik
 
     (void)outputGain;
 
-    CELTDecoder_ClearBuffer();
-    s_opusError = celt_decoder_init(s_opusChannels); if(s_opusError < 0)                 {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
-    s_opusError = celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
-    s_opusError = celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celtdec->celt_decoder_init(s_opusChannels); if(s_opusError < 0)                 {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celtdec->celt_decoder_ctl(CELT_SET_SIGNALLING_REQUEST,  0); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
+    s_opusError = celtdec->celt_decoder_ctl(CELT_SET_END_BAND_REQUEST,   21); if(s_opusError < 0) {OPUS_LOG_ERROR("The CELT Decoder could not be initialized"); return OPUS_ERR;}
 
     return 1;
 }

@@ -36,17 +36,15 @@
 extern std::unique_ptr<RangeDecoder> rangedec;
 extern std::unique_ptr<SilkDecoder> silkdec;
 
-CELTDecoder_t   m_celtDec; // unique pointer
-ps_ptr<int32_t> m_decode_mem;
-band_ctx_t     s_band_ctx;
 
 
-uint32_t celt_pvq_u_row(uint32_t row, uint32_t data){
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t CeltDecoder::celt_pvq_u_row(uint32_t row, uint32_t data){
     uint32_t  ret = CELT_PVQ_U_DATA[row_idx[row] + data];
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool CELTDecoder_AllocateBuffers(void) {
+bool CeltDecoder::init() {
     size_t omd = celt_decoder_get_size(2);
     m_decode_mem.alloc(omd, "decode_mem");
     if (m_decode_mem.valid()) {
@@ -58,15 +56,15 @@ bool CELTDecoder_AllocateBuffers(void) {
     return false;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void CELTDecoder_ClearBuffer(void){
+void CeltDecoder::clear(){
     m_decode_mem.clear();  // mem zero
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void CELTDecoder_FreeBuffers(){
+void CeltDecoder::reset(){
     m_decode_mem.reset();
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void exp_rotation1(int16_t *X, int32_t len, int32_t stride, int16_t c, int16_t s) {
+void CeltDecoder::exp_rotation1(int16_t *X, int32_t len, int32_t stride, int16_t c, int16_t s) {
     int32_t i;
     int16_t ms;
     int16_t *Xptr;
@@ -89,7 +87,7 @@ void exp_rotation1(int16_t *X, int32_t len, int32_t stride, int16_t c, int16_t s
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void exp_rotation(int16_t *X, int32_t len, int32_t dir, int32_t stride, int32_t K, int32_t spread) {
+void CeltDecoder::exp_rotation(int16_t *X, int32_t len, int32_t dir, int32_t stride, int32_t K, int32_t spread) {
     const int32_t SPREAD_FACTOR[3] = {15, 10, 5};
     int32_t i;
     int16_t c, s;
@@ -127,7 +125,7 @@ void exp_rotation(int16_t *X, int32_t len, int32_t dir, int32_t stride, int32_t 
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Takes the pitch vector and the decoded residual vector, computes the gain that will give ||p+g*y||=1 and mixes the residual with the pitch. */
-void normalise_residual(int32_t * iy, int16_t * X, int32_t N, int32_t Ryy, int16_t gain) {
+void CeltDecoder::normalise_residual(int32_t * iy, int16_t * X, int32_t N, int32_t Ryy, int16_t gain) {
     int32_t i;
     int32_t k;
     int32_t t;
@@ -142,7 +140,7 @@ void normalise_residual(int32_t * iy, int16_t * X, int32_t N, int32_t Ryy, int16
     while (++i < N);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t extract_collapse_mask(int32_t *iy, int32_t N, int32_t B) {
+uint32_t CeltDecoder::extract_collapse_mask(int32_t *iy, int32_t N, int32_t B) {
     uint32_t collapse_mask;
     int32_t N0;
     int32_t i;
@@ -164,7 +162,7 @@ uint32_t extract_collapse_mask(int32_t *iy, int32_t N, int32_t B) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Decode pulse vector and combine the result with the pitch vector to produce the final normalised signal in the current band. */
-uint32_t alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B, int16_t gain) {
+uint32_t CeltDecoder::alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B, int16_t gain) {
     int32_t Ryy;
     uint32_t collapse_mask;
 
@@ -179,7 +177,7 @@ uint32_t alg_unquant(int16_t *X, int32_t N, int32_t K, int32_t spread, int32_t B
     return collapse_mask;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void renormalise_vector(int16_t *X, int32_t N, int16_t gain) {
+void CeltDecoder::renormalise_vector(int16_t *X, int32_t N, int16_t gain) {
     int32_t i;
     int32_t k;
     int32_t E;
@@ -199,7 +197,7 @@ void renormalise_vector(int16_t *X, int32_t N, int16_t gain) {
     /*return celt_sqrt(E);*/
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t resampling_factor(int32_t rate){
+int32_t CeltDecoder::resampling_factor(int32_t rate){
     int32_t ret;
     switch (rate){
         case 48000: ret = 1;  break;
@@ -212,7 +210,7 @@ int32_t resampling_factor(int32_t rate){
     return ret;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void comb_filter_const_c(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g10, int16_t g11, int16_t g12) {
+void CeltDecoder::comb_filter_const_c(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g10, int16_t g11, int16_t g12) {
     int32_t x0, x1, x2, x3, x4;
     int32_t i;
     x4 = x[-T - 2];
@@ -230,7 +228,7 @@ void comb_filter_const_c(int32_t *y, int32_t *x, int32_t T, int32_t N, int16_t g
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void comb_filter(int32_t *y, int32_t *x, int32_t T0, int32_t T1, int32_t N, int16_t g0, int16_t g1, int32_t tapset0, int32_t tapset1){
+void CeltDecoder::comb_filter(int32_t *y, int32_t *x, int32_t T0, int32_t T1, int32_t N, int16_t g0, int16_t g1, int32_t tapset0, int32_t tapset1){
     int32_t i;
     /* printf ("%d %d %f %f\n", T0, T1, g0, g1); */
     uint8_t  overlap = m_CELTMode.overlap; // =120
@@ -293,7 +291,7 @@ const signed char tf_select_table[4][8] = {
     {0, -2, 0, -3, 3, 0, 1, -1},  /* 20 ms */
 };
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void init_caps(int32_t *cap, int32_t LM, int32_t C) {
+void CeltDecoder::init_caps(int32_t *cap, int32_t LM, int32_t C) {
     int32_t i;
     for (i = 0; i < m_CELTMode.nbEBands; i++)
     {
@@ -303,12 +301,12 @@ void init_caps(int32_t *cap, int32_t LM, int32_t C) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t celt_lcg_rand(uint32_t seed) {
+uint32_t CeltDecoder::celt_lcg_rand(uint32_t seed) {
     return 1664525 * seed + 1013904223;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This is a cos() approximation designed to be bit-exact on any platform. Bit exactness with this approximation is important because it has an impact on the bit allocation */
-int16_t bitexact_cos(int16_t x) {
+int16_t CeltDecoder::bitexact_cos(int16_t x) {
     int32_t tmp;
     int16_t x2;
     tmp = (4096 + ((int32_t)(x) * (x))) >> 13;
@@ -319,7 +317,7 @@ int16_t bitexact_cos(int16_t x) {
     return 1 + x2;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t bitexact_log2tan(int32_t isin, int32_t icos) {
+int32_t CeltDecoder::bitexact_log2tan(int32_t isin, int32_t icos) {
     int32_t lc;
     int32_t ls;
     lc = CELT_ILOG(icos);
@@ -330,7 +328,7 @@ int32_t bitexact_log2tan(int32_t isin, int32_t icos) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* De-normalise the energy to produce the synthesis from the unit-energy bands */
-void denormalise_bands(const int16_t * X, int32_t * freq,
+void CeltDecoder::denormalise_bands(const int16_t * X, int32_t * freq,
                        const int16_t *bandLogE, int32_t start, int32_t end, int32_t M, int32_t downsample, int32_t silence) {
     int32_t i, N;
     int32_t bound;
@@ -392,7 +390,7 @@ void denormalise_bands(const int16_t * X, int32_t * freq,
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This prevents energy collapse for transients with multiple short MDCTs */
-void anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size, int32_t start,
+void CeltDecoder::anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, int32_t size, int32_t start,
                    int32_t end, const int16_t *logE, const int16_t *prev1logE, const int16_t *prev2logE, const int32_t *pulses,
                    uint32_t seed){
     int32_t c, i, j, k;
@@ -469,7 +467,7 @@ void anti_collapse(int16_t *X_, uint8_t *collapse_masks, int32_t LM, int32_t C, 
 /* Compute the weights to use for optimizing normalized distortion across channels. We use the amplitude to weight   square distortion, which means that we use the square root of the value we would
    have been using if we wanted to minimize the MSE in the non-normalized domain. This roughly corresponds to some quick-and-dirty perceptual experiments I ran to measure inter-aural masking
    (there doesn't seem to be any published data on the topic). */
-void compute_channel_weights(int32_t Ex, int32_t Ey, int16_t w[2]) {
+void CeltDecoder::compute_channel_weights(int32_t Ex, int32_t Ey, int16_t w[2]) {
     int32_t minE;
     int32_t shift;
 
@@ -495,7 +493,7 @@ void stereo_split(int16_t * X, int16_t * Y, int32_t N) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void stereo_merge(int16_t * X, int16_t * Y, int16_t mid, int32_t N){
+void CeltDecoder::stereo_merge(int16_t * X, int16_t * Y, int16_t mid, int32_t N){
     int32_t j;
     int32_t xp = 0, side = 0;
     int32_t El, Er;
@@ -544,7 +542,7 @@ void stereo_merge(int16_t * X, int16_t * Y, int16_t mid, int32_t N){
    The lines are for N=2, 4, 8, 16 */
 const int32_t ordery_table[] = { 1, 0, 3, 0, 2, 1, 7, 0, 4, 3, 6, 1, 5, 2, 15, 0, 8, 7, 12, 3, 11, 4, 14, 1, 9, 6, 13, 2, 10, 5,};
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard){
+void CeltDecoder::deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard){
     int32_t i, j;
     int32_t N;
     N = N0 * stride;
@@ -565,7 +563,7 @@ void deinterleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadam
     memcpy(X, tmp.get(), N * sizeof(*X));
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard){
+void CeltDecoder::interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamard){
     int32_t i, j;
     int32_t N;
     N = N0 * stride;
@@ -584,7 +582,7 @@ void interleave_hadamard(int16_t *X, int32_t N0, int32_t stride, int32_t hadamar
     memcpy(X, tmp.get(), N * sizeof(*X));
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void haar1(int16_t *X, int32_t N0, int32_t stride) {
+void CeltDecoder::haar1(int16_t *X, int32_t N0, int32_t stride) {
     int32_t i, j;
     N0 >>= 1;
     for (i = 0; i < stride; i++)
@@ -597,7 +595,7 @@ void haar1(int16_t *X, int32_t N0, int32_t stride) {
         }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t compute_qn(int32_t N, int32_t b, int32_t offset, int32_t pulse_cap, int32_t stereo) {
+int32_t CeltDecoder::compute_qn(int32_t N, int32_t b, int32_t offset, int32_t pulse_cap, int32_t stereo) {
     const int16_t exp2_table8[8] =
         {16384, 17866, 19483, 21247, 23170, 25267, 27554, 30048};
     int32_t qn, qb;
@@ -623,7 +621,7 @@ int32_t compute_qn(int32_t N, int32_t b, int32_t offset, int32_t pulse_cap, int3
     return qn;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, int32_t *b, int32_t B,
+void CeltDecoder::compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, int32_t *b, int32_t B,
                           int32_t __B0, int32_t LM, int32_t stereo, int32_t *fill) {
     int32_t qn;
     int32_t itheta = 0;
@@ -739,7 +737,7 @@ void compute_theta(struct split_ctx *sctx, int16_t *X, int16_t *Y, int32_t N, in
     sctx->qalloc = qalloc;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t *lowband_out) {
+uint32_t CeltDecoder::quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t *lowband_out) {
     int32_t c;
     int32_t stereo;
     int16_t *x = X;
@@ -764,7 +762,7 @@ uint32_t quant_band_n1(int16_t *X, int16_t *Y, int32_t b,  int16_t *lowband_out)
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This function is responsible for encoding and decoding a mono partition. It can split the band in two and transmit  the energy difference with the two half-bands.
    It can be called recursively so bands can end up being split in 8 parts. */
-uint32_t quant_partition(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
+uint32_t CeltDecoder::quant_partition(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
                                 int16_t gain, int32_t fill){
     const uint8_t *cache;
     int32_t q;
@@ -908,7 +906,7 @@ uint32_t quant_partition(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *l
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This function is responsible for encoding and decoding a band for the mono case. */
-uint32_t quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
+uint32_t CeltDecoder::quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowband, int32_t LM,
                            int16_t *lowband_out, int16_t gain, int16_t *lowband_scratch, int32_t fill) {
     int32_t N0 = N;
     int32_t N_B = N;
@@ -1010,7 +1008,7 @@ uint32_t quant_band(int16_t *X, int32_t N, int32_t b, int32_t B, int16_t *lowban
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* This function is responsible for encoding and decoding a band for the stereo case. */
-uint32_t quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t B, int16_t *lowband,
+uint32_t CeltDecoder::quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t B, int16_t *lowband,
                                   int32_t LM, int16_t *lowband_out, int16_t *lowband_scratch, int32_t fill) {
     int32_t imid = 0, iside = 0;
     int32_t inv = 0;
@@ -1125,7 +1123,7 @@ uint32_t quant_band_stereo(int16_t *X, int16_t *Y, int32_t N, int32_t b, int32_t
     return cm;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t start, int32_t M, int32_t dual_stereo){
+void CeltDecoder::special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t start, int32_t M, int32_t dual_stereo){
     int32_t n1, n2;
     const int16_t * eBands = eband5ms;
     n1 = M * (eBands[start + 1] - eBands[start]);
@@ -1136,7 +1134,7 @@ void special_hybrid_folding(int16_t *norm, int16_t *norm2, int32_t start, int32_
         memcpy(&norm2[n1], &norm2[2 * n1 - n2], (n2 - n1) * sizeof(*norm2));
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, const int32_t *bandE, int32_t *pulses, int32_t shortBlocks, int32_t spread, int32_t dual_stereo,
+void CeltDecoder::quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8_t *collapse_masks, const int32_t *bandE, int32_t *pulses, int32_t shortBlocks, int32_t spread, int32_t dual_stereo,
                      int32_t intensity, int32_t *tf_res, int32_t total_bits, int32_t balance,  int32_t LM, int32_t codedBands, uint32_t *seed, int32_t complexity, int32_t disable_inv){
     int32_t i;
     int32_t remaining_bits;
@@ -1308,13 +1306,13 @@ void quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8
     *seed = s_band_ctx.seed;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_decoder_get_size(int32_t channels){
+int32_t CeltDecoder::celt_decoder_get_size(int32_t channels){
     int32_t size = (channels * (DECODE_BUFFER_SIZE + m_CELTMode.overlap) - 1) * sizeof(int32_t)
            + channels * 24 * sizeof(int16_t) + 4 * 2 * m_CELTMode.nbEBands * sizeof(int16_t);
     return size;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_decoder_init(int32_t channels){
+int32_t CeltDecoder::celt_decoder_init(int32_t channels){
 
     m_celtDec.downsample = 1; //resampling_factor(Fs);
     m_celtDec.channels = channels;
@@ -1342,7 +1340,7 @@ int32_t celt_decoder_init(int32_t channels){
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Special case for stereo with no downsampling and no accumulation. This is quite common and we can make it faster by  processing both channels in the same loop, reducing overhead due to the
    dependency loop in the IIR filter. */
-void deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int16_t coef0, int32_t *mem) {
+void CeltDecoder::deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int16_t coef0, int32_t *mem) {
     int32_t * x0;
     int32_t * x1;
     int32_t m0, m1;
@@ -1365,7 +1363,7 @@ void deemphasis_stereo_simple(int32_t *in[], int16_t *pcm, int32_t N, const int1
     mem[1] = m1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void deemphasis(int32_t *in[], int16_t *pcm, int32_t N, int32_t C, int32_t downsample, const int16_t *coef,
+void CeltDecoder::deemphasis(int32_t *in[], int16_t *pcm, int32_t N, int32_t C, int32_t downsample, const int16_t *coef,
                int32_t *mem, int32_t accum) {
     int32_t c;
     int32_t Nd;
@@ -1434,7 +1432,7 @@ void deemphasis(int32_t *in[], int16_t *pcm, int32_t N, int32_t C, int32_t downs
     } while (++c < C);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t start,
+void CeltDecoder::celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t start,
                            int32_t effEnd, int32_t C, int32_t CC, int32_t isTransient, int32_t LM, int32_t downsample, int32_t silence){
     int32_t c, i;
     int32_t M;
@@ -1505,7 +1503,7 @@ void celt_synthesis(int16_t *X, int32_t *out_syn[], int16_t *oldBandE, int32_t s
     } while (++c < CC);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res, int32_t LM){
+void CeltDecoder::tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res, int32_t LM){
     int32_t i, curr, tf_select;
     int32_t tf_select_rsv;
     int32_t tf_changed;
@@ -1539,7 +1537,7 @@ void tf_decode(int32_t start, int32_t end, int32_t isTransient, int32_t *tf_res,
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
+int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     int32_t c, i, N;
     int32_t spread_decision;
     int32_t bits;
@@ -1825,7 +1823,7 @@ int32_t celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
     return frame_size / m_celtDec.downsample;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_decoder_ctl(int32_t request, ...) {
+int32_t CeltDecoder::celt_decoder_ctl(int32_t request, ...) {
     va_list ap;
 
     va_start(ap, request);
@@ -1922,7 +1920,7 @@ bad_request:
     return OPUS_UNIMPLEMENTED;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
+int32_t CeltDecoder::cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
     uint32_t p;
     int32_t s;
     int32_t k0;
@@ -1999,12 +1997,11 @@ int32_t cwrsi(int32_t _n, int32_t _k, uint32_t _i, int32_t *_y) {
     return yy;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t decode_pulses(int32_t *_y, int32_t _n, int32_t _k) {
+int32_t CeltDecoder::decode_pulses(int32_t *_y, int32_t _n, int32_t _k) {
     return cwrsi(_n, _k, rangedec->dec_uint(CELT_PVQ_V(_n, _k)), _y);
 }
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N) {
+void CeltDecoder::kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N) {
     kiss_fft_cpx *Fout2;
     int32_t i;
     (void)m;
@@ -2040,7 +2037,7 @@ void kf_bfly2(kiss_fft_cpx *Fout, int32_t m, int32_t N) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void kf_bfly4(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw, int32_t m, int32_t N, int32_t mm) {
+void CeltDecoder::kf_bfly4(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw, int32_t m, int32_t N, int32_t mm) {
     int32_t i;
 
     if (m == 1) {
@@ -2097,7 +2094,7 @@ void kf_bfly4(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void kf_bfly3(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw, int32_t m, int32_t N, int32_t mm) {
+void CeltDecoder::kf_bfly3(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw, int32_t m, int32_t N, int32_t mm) {
     int32_t i;
     size_t k;
     const size_t m2 = 2 * m;
@@ -2140,7 +2137,7 @@ void kf_bfly3(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tw
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void kf_bfly5(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tff, int32_t m, int32_t N, int32_t mm) {
+void CeltDecoder::kf_bfly5(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tff, int32_t m, int32_t N, int32_t mm) {
     kiss_fft_cpx *Fout0, *Fout1, *Fout2, *Fout3, *Fout4;
     int32_t i, u;
     kiss_fft_cpx scratch[13];
@@ -2207,7 +2204,7 @@ void kf_bfly5(kiss_fft_cpx *Fout, const size_t fstride, const kiss_fft_state *tf
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void opus_fft_impl(const kiss_fft_state *tff, kiss_fft_cpx *fout) {
+void CeltDecoder::opus_fft_impl(const kiss_fft_state *tff, kiss_fft_cpx *fout) {
     int32_t m2, m;
     int32_t p;
     int32_t L;
@@ -2251,13 +2248,13 @@ void opus_fft_impl(const kiss_fft_state *tff, kiss_fft_cpx *fout) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* When called, decay is positive and at most 11456. */
-uint32_t ec_laplace_get_freq1(uint32_t fs0, int32_t decay) {
+uint32_t CeltDecoder::ec_laplace_get_freq1(uint32_t fs0, int32_t decay) {
     uint32_t ft;
     ft = 32768 - LAPLACE_MINP * (2 * LAPLACE_NMIN) - fs0;
     return ft * (int32_t)(16384 - decay) >> 15;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t ec_laplace_decode(uint32_t fs, int32_t decay) {
+int32_t CeltDecoder::ec_laplace_decode(uint32_t fs, int32_t decay) {
     int32_t val = 0;
     uint32_t fl;
     uint32_t fm;
@@ -2296,7 +2293,7 @@ int32_t ec_laplace_decode(uint32_t fs, int32_t decay) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*Compute floor(sqrt(_val)) with exact arithmetic. _val must be greater than 0. This has been tested on all possible 32-bit inputs greater than 0.*/
-uint32_t isqrt32(uint32_t _val) {
+uint32_t CeltDecoder::isqrt32(uint32_t _val) {
     uint32_t b;
     uint32_t g;
     int32_t bshift;
@@ -2319,7 +2316,7 @@ uint32_t isqrt32(uint32_t _val) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Reciprocal sqrt approximation in the range [0.25,1) (Q16 in, Q14 out) */
-int16_t celt_rsqrt_norm(int32_t x) {
+int16_t CeltDecoder::celt_rsqrt_norm(int32_t x) {
     int16_t n;
     int16_t r;
     int16_t r2;
@@ -2341,7 +2338,7 @@ int16_t celt_rsqrt_norm(int32_t x) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Sqrt approximation (QX input, QX/2 output) */
-int32_t celt_sqrt(int32_t x) {
+int32_t CeltDecoder::celt_sqrt(int32_t x) {
     int32_t k;
     int16_t n;
     int32_t rt;
@@ -2361,13 +2358,13 @@ int32_t celt_sqrt(int32_t x) {
     return rt;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int16_t _celt_cos_pi_2(int16_t x) {
+int16_t CeltDecoder::_celt_cos_pi_2(int16_t x) {
     int16_t x2;
     x2 = MULT16_16_P15(x, x);
     return ADD16(1, min((int32_t)32766, (int32_t)(ADD32(SUB16(32767, x2), MULT16_16_P15(x2, ADD32(-7651, MULT16_16_P15(x2, ADD32(8277, MULT16_16_P15(-626, x2)))))))));
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int16_t celt_cos_norm(int32_t x) {
+int16_t CeltDecoder::celt_cos_norm(int32_t x) {
     x = x & 0x0001ffff;
     if (x > SHL32(EXTEND32(1), 16)) x = SUB32(SHL32(EXTEND32(1), 17), x);
     if (x & 0x00007fff) {
@@ -2387,7 +2384,7 @@ int16_t celt_cos_norm(int32_t x) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Reciprocal approximation (Q15 input, Q16 output) */
-int32_t celt_rcp(int32_t x) {
+int32_t CeltDecoder::celt_rcp(int32_t x) {
     int32_t i;
     int16_t n;
     int16_t r;
@@ -2410,7 +2407,7 @@ int32_t celt_rcp(int32_t x) {
     return VSHR32(EXTEND32(r), i - 16);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void clt_mdct_backward(int32_t *in, int32_t * out, int32_t overlap, int32_t shift, int32_t stride) {
+void CeltDecoder::clt_mdct_backward(int32_t *in, int32_t * out, int32_t overlap, int32_t shift, int32_t stride) {
     int32_t i;
     int32_t N, N2, N4;
     const int16_t *trig;
@@ -2504,7 +2501,7 @@ void clt_mdct_backward(int32_t *in, int32_t * out, int32_t overlap, int32_t shif
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, const int32_t *bits1, const int32_t *bits2, const int32_t *thresh, const int32_t *cap, int32_t total, int32_t *_balance,
+int32_t CeltDecoder::interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, const int32_t *bits1, const int32_t *bits2, const int32_t *thresh, const int32_t *cap, int32_t total, int32_t *_balance,
                             int32_t skip_rsv, int32_t *intensity, int32_t intensity_rsv, int32_t *dual_stereo, int32_t dual_stereo_rsv, int32_t *bits, int32_t *ebits, int32_t *fine_priority,
                             int32_t C, int32_t LM, int32_t encode, int32_t prev, int32_t signalBandwidth) {
     int32_t psum;
@@ -2729,7 +2726,7 @@ int32_t interp_bits2pulses( int32_t start, int32_t end, int32_t skip_start, cons
     return codedBands;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t clt_compute_allocation(int32_t start, int32_t end, const int32_t *offsets, const int32_t *cap, int32_t alloc_trim, int32_t *intensity, int32_t *dual_stereo, int32_t total, int32_t *balance,
+int32_t CeltDecoder::clt_compute_allocation(int32_t start, int32_t end, const int32_t *offsets, const int32_t *cap, int32_t alloc_trim, int32_t *intensity, int32_t *dual_stereo, int32_t total, int32_t *balance,
                                int32_t *pulses, int32_t *ebits, int32_t *fine_priority, int32_t C, int32_t LM, int32_t encode, int32_t prev, int32_t signalBandwidth) {
     int32_t lo, hi, len, j;
     int32_t codedBands;
@@ -2819,7 +2816,7 @@ int32_t clt_compute_allocation(int32_t start, int32_t end, const int32_t *offset
     return codedBands;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM) {
+void CeltDecoder::unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t intra, int32_t C, int32_t LM) {
     const uint8_t *prob_model = e_prob_model[LM][intra];
     int32_t i, c;
     int32_t prev[2] = {0, 0};
@@ -2870,7 +2867,7 @@ void unquant_coarse_energy(int32_t start, int32_t end, int16_t *oldEBands, int32
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant, int32_t C) {
+void CeltDecoder::unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant, int32_t C) {
     int32_t i, c;
     /* Decode finer resolution */
     for (i = start; i < end; i++) {
@@ -2887,7 +2884,7 @@ void unquant_fine_energy(int32_t start, int32_t end, int16_t *oldEBands, int32_t
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void unquant_energy_finalise(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant,
+void CeltDecoder::unquant_energy_finalise(int32_t start, int32_t end, int16_t *oldEBands, int32_t *fine_quant,
                              int32_t *fine_priority, int32_t bits_left, int32_t C) {
     int32_t i, prio, c;
 
@@ -2908,19 +2905,19 @@ void unquant_energy_finalise(int32_t start, int32_t end, int16_t *oldEBands, int
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int16_t SAT16(int32_t x) {
+int16_t CeltDecoder::SAT16(int32_t x) {
    return x > 32767 ? 32767 : x < -32768 ? -32768 : (int16_t)x;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t celt_udiv(uint32_t n, uint32_t d) {
+uint32_t CeltDecoder::celt_udiv(uint32_t n, uint32_t d) {
    assert(d>0); return n/d;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_sudiv(int32_t n, int32_t d) {
+int32_t CeltDecoder::celt_sudiv(int32_t n, int32_t d) {
    assert(d>0); return n/d;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int16_t sig2word16(int32_t x){
+int16_t CeltDecoder::sig2word16(int32_t x){
    x = PSHR32(x, 12);
    x = max(x, (int32_t)-32768);
    x = min(x, (int32_t)32767);
@@ -2934,7 +2931,7 @@ int16_t celt_atan01(int16_t x) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* atan2() approximation valid for positive input values */
-int16_t celt_atan2p(int16_t y, int16_t x) {
+int16_t CeltDecoder::celt_atan2p(int16_t y, int16_t x) {
     if (y < x) {
         int32_t arg;
         arg = celt_div(SHL32(EXTEND32(y), 15), x);
@@ -2948,7 +2945,7 @@ int16_t celt_atan2p(int16_t y, int16_t x) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_maxabs16(const int16_t *x, int32_t len) {
+int32_t CeltDecoder::celt_maxabs16(const int16_t *x, int32_t len) {
     int32_t i;
     int16_t maxval = 0;
     int16_t minval = 0;
@@ -2959,7 +2956,7 @@ int32_t celt_maxabs16(const int16_t *x, int32_t len) {
     return max(EXTEND32(maxval), -EXTEND32(minval));
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_maxabs32(const int32_t *x, int32_t len) {
+int32_t CeltDecoder::celt_maxabs32(const int32_t *x, int32_t len) {
     int32_t i;
     int32_t maxval = 0;
     int32_t minval = 0;
@@ -2971,16 +2968,16 @@ int32_t celt_maxabs32(const int32_t *x, int32_t len) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Integer log in base2. Undefined for zero and negative numbers */
-int16_t celt_ilog2(int32_t x) {
+int16_t CeltDecoder::celt_ilog2(int32_t x) {
     assert(x > 0);
     return CELT_ILOG(x) - 1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Integer log in base2. Defined for zero, but not for negative numbers */
-int16_t celt_zlog2(int32_t x) { return x <= 0 ? 0 : celt_ilog2(x); }
+int16_t CeltDecoder::celt_zlog2(int32_t x) { return x <= 0 ? 0 : celt_ilog2(x); }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Base-2 logarithm approximation (log2(x)). (Q14 input, Q10 output) */
-int16_t celt_log2(int32_t x) {
+int16_t CeltDecoder::celt_log2(int32_t x) {
     int32_t i;
     int16_t n, frac;
     /* -0.41509302963303146, 0.9609890551383969, -0.31836011537636605,
@@ -2996,7 +2993,7 @@ int16_t celt_log2(int32_t x) {
     return SHL16(i - 13, DB_SHIFT) + SHR16(frac, 14 - DB_SHIFT);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_exp2_frac(int16_t x) {
+int32_t CeltDecoder::celt_exp2_frac(int16_t x) {
     int16_t frac;
     frac = SHL16(x, 4);
     return ADD16(16383,
@@ -3004,7 +3001,7 @@ int32_t celt_exp2_frac(int16_t x) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /** Base-2 exponential approximation (2^x). (Q10 input, Q16 output) */
-int32_t celt_exp2(int16_t x) {
+int32_t CeltDecoder::celt_exp2(int16_t x) {
     int32_t integer;
     int16_t frac;
     integer = SHR16(x, 10);
@@ -3016,7 +3013,7 @@ int32_t celt_exp2(int16_t x) {
     return VSHR32(EXTEND32(frac), -integer - 2);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void dual_inner_prod_c(const int16_t *x, const int16_t *y01, const int16_t *y02, int32_t N, int32_t *xy1, int32_t *xy2) {
+void CeltDecoder::dual_inner_prod_c(const int16_t *x, const int16_t *y01, const int16_t *y02, int32_t N, int32_t *xy1, int32_t *xy2) {
     int32_t i;
     int32_t xy01 = 0;
     int32_t xy02 = 0;
@@ -3028,18 +3025,18 @@ void dual_inner_prod_c(const int16_t *x, const int16_t *y01, const int16_t *y02,
     *xy2 = xy02;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t celt_inner_prod_c(const int16_t *x, const int16_t *y, int32_t N) {
+int32_t CeltDecoder::celt_inner_prod_c(const int16_t *x, const int16_t *y, int32_t N) {
     int32_t i;
     int32_t xy = 0;
     for (i = 0; i < N; i++) xy = MAC16_16(xy, x[i], y[i]);
     return xy;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t get_pulses(int32_t i){
+int32_t CeltDecoder::get_pulses(int32_t i){
    return i<8 ? i : (8 + (i&7)) << ((i>>3)-1);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t bits2pulses(int32_t band, int32_t LM, int32_t bits){
+int32_t CeltDecoder::bits2pulses(int32_t band, int32_t LM, int32_t bits){
    int32_t i;
    int32_t lo, hi;
    const uint8_t *cache;
@@ -3065,7 +3062,7 @@ int32_t bits2pulses(int32_t band, int32_t LM, int32_t bits){
       return hi;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t pulses2bits(int32_t band, int32_t LM, int32_t pulses){
+int32_t CeltDecoder::pulses2bits(int32_t band, int32_t LM, int32_t pulses){
    const uint8_t *cache;
 
    LM++;
