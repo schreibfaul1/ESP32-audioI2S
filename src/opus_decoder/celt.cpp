@@ -41,19 +41,10 @@ ps_ptr<int32_t> m_decode_mem;
 band_ctx_t     s_band_ctx;
 
 
-
-
-
-
-
-
-
-
 uint32_t celt_pvq_u_row(uint32_t row, uint32_t data){
     uint32_t  ret = CELT_PVQ_U_DATA[row_idx[row] + data];
     return ret;
 }
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool CELTDecoder_AllocateBuffers(void) {
     size_t omd = celt_decoder_get_size(2);
@@ -1318,8 +1309,7 @@ void quant_all_bands(int32_t start, int32_t end, int16_t *X_, int16_t *Y_, uint8
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t celt_decoder_get_size(int32_t channels){
-    static int32_t size;
-    size = (channels * (DECODE_BUFFER_SIZE + m_CELTMode.overlap) - 1) * sizeof(int32_t)
+    int32_t size = (channels * (DECODE_BUFFER_SIZE + m_CELTMode.overlap) - 1) * sizeof(int32_t)
            + channels * 24 * sizeof(int16_t) + 4 * 2 * m_CELTMode.nbEBands * sizeof(int16_t);
     return size;
 }
@@ -2371,16 +2361,12 @@ int32_t celt_sqrt(int32_t x) {
     return rt;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-inline int16_t _celt_cos_pi_2(int16_t x) {
+int16_t _celt_cos_pi_2(int16_t x) {
     int16_t x2;
-
     x2 = MULT16_16_P15(x, x);
-    return ADD16(
-        1,
-        min((int32_t)32766, (int32_t)(ADD32(SUB16(32767, x2), MULT16_16_P15(x2, ADD32(-7651, MULT16_16_P15(x2, ADD32(8277, MULT16_16_P15(-626, x2)))))))));
+    return ADD16(1, min((int32_t)32766, (int32_t)(ADD32(SUB16(32767, x2), MULT16_16_P15(x2, ADD32(-7651, MULT16_16_P15(x2, ADD32(8277, MULT16_16_P15(-626, x2)))))))));
 }
-//----------------------------------------------------------------------------------------------------------------------
-
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int16_t celt_cos_norm(int32_t x) {
     x = x & 0x0001ffff;
     if (x > SHL32(EXTEND32(1), 16)) x = SUB32(SHL32(EXTEND32(1), 17), x);
@@ -2999,7 +2985,7 @@ int16_t celt_log2(int32_t x) {
     int16_t n, frac;
     /* -0.41509302963303146, 0.9609890551383969, -0.31836011537636605,
         0.15530808010959576, -0.08556153059057618 */
-    static const int16_t C[5] = {-6801 + (1 << (13 - DB_SHIFT)), 15746, -5217, 2545, -1401};
+    const int16_t C[5] = {-6801 + (1 << (13 - DB_SHIFT)), 15746, -5217, 2545, -1401};
     if (x == 0) return -32767;
     i = celt_ilog2(x);
     n = VSHR32(x, i - 15) - 32768 - 16384;
