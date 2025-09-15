@@ -1,6 +1,7 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
-#include "neaacdec.h"
+#include "settings.h"
+#include "structs.h"
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
