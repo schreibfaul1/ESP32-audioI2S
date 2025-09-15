@@ -11,11 +11,8 @@
 #include "Arduino.h"
 #include "opus_decoder.h"
 
-OpusDecoder::OpusDecoder(Audio& audioRef)
-    : Decoder(audioRef),
-      rangedec(std::make_unique<RangeDecoder>()),
-      silkdec(std::make_unique<SilkDecoder>(*rangedec)),
-      celtdec(std::make_unique<CeltDecoder>(*rangedec)) {}
+
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool OpusDecoder::init(){
 

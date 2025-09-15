@@ -34,6 +34,7 @@ bool FlacDecoder::init() {
     setDefaults();
     m_flacPageNr = 0;
     m_valid= true;
+    FLAC_LOG_ERROR("init %i",1001);
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------

@@ -795,8 +795,9 @@ private:
 
 
 //----------------------------------------------------------------------------------------------------------------------
+public:
     template <typename... Args>
-    void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+    static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
 
         #define ANSI_ESC_RESET          "\033[0m"
         #define ANSI_ESC_BLACK          "\033[30m"
@@ -808,55 +809,38 @@ private:
         #define ANSI_ESC_CYAN           "\033[36m"
         #define ANSI_ESC_WHITE          "\033[37m"
 
-        ps_ptr<char> result(__LINE__);
-        ps_ptr<char> file(__LINE__);
+        ps_ptr<char> logStr(__LINE__);
+        logStr.copy_from(path); while(logStr.contains("/")){logStr.remove_before('/', false);}
+        logStr.appendf(":%i ", line);
 
-        file.copy_from(path);
-        while(file.contains("/")){
-            file.remove_before('/', false);
+        if     (level == 1 && CORE_DEBUG_LEVEL >= 1) {logStr.append(ANSI_ESC_RED);}
+        else if(level == 2 && CORE_DEBUG_LEVEL >= 2) {logStr.append(ANSI_ESC_YELLOW);}
+        else if(level == 3 && CORE_DEBUG_LEVEL >= 3) {logStr.append(ANSI_ESC_GREEN);}
+        else if(level == 4 && CORE_DEBUG_LEVEL >= 4) {logStr.append(ANSI_ESC_CYAN);} // debug
+        else if(level == 5 && CORE_DEBUG_LEVEL >= 4) {logStr.append(ANSI_ESC_WHITE);} // verbose
+        else return;
+
+        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (add_len > 0) {
+            logStr.appendf(fmt, std::forward<Args>(args)...);  // <-- neue appendf()
         }
+        logStr.append(ANSI_ESC_RESET);
 
-        // First run: determine size
-        int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (len <= 0) return;
+        msg_t msg;
+        msg.msg = logStr.get();
+        const char* tag[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
+        msg.s = tag[level];
+        msg.e = evt_log;
 
-        result.alloc(len + 1);
-        char* dst = result.get();
-        if (!dst) return;
-        std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-
-        // build a final string with file/line prefix
-        ps_ptr<char> final(__LINE__);
-        int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        if (total_len <= 0) return;
-        final.alloc(total_len + 1);
-        final.clear();
-        char* dest = final.get();
-        if (!dest) return;  // or error treatment
-        if(audio_info_callback){
-            if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-            else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
-            else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
-            msg_t msg;
-            msg.msg = final.get();
-            const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
-            msg.s = logStr[level];
-            msg.e = evt_log;
-            if(final.strlen() > 0)  audio_info_callback(msg);
-        }
+        if(audio_info_callback) audio_info_callback(msg);
         else{
-            std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-            if     (level == 1) log_e("%s", final.c_get());
-            else if(level == 2) log_w("%s", final.c_get());
-            else if(level == 3) log_i("%s", final.c_get());
-            else if(level == 4) log_d("%s", final.c_get());
-            else                log_v("%s", final.c_get());
+            if     (level == 1) log_e("%s", logStr.c_get());
+            else if(level == 2) log_w("%s", logStr.c_get());
+            else if(level == 3) log_i("%s", logStr.c_get());
+            else if(level == 4) log_d("%s", logStr.c_get());
+            else                log_v("%s", logStr.c_get());
         }
-        final.reset();
-        result.reset();
-        file.reset();
+        logStr.reset();
     }
 
     // Macro for comfortable calls
@@ -864,8 +848,6 @@ private:
     #define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
     #define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
     #define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-
-
 };
 //----------------------------------------------------------------------------------------------------------------------
 class Decoder {

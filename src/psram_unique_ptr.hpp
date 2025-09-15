@@ -765,46 +765,32 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false) {
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
 
     // Nur aktivieren, wenn T = char
-    template <typename U = T>
-    requires std::is_same_v<U, char>
-    void appendf(const char* fmt, ...) {
+
+    template <typename... Args>
+    void appendf(const char* fmt, Args&&... args) {
         if (!fmt) return;
+        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (add_len < 0) return;
 
-        // Formatstring vorbereiten
-        va_list args;
-        va_start(args, fmt);
-        va_list args_copy;
-        va_copy(args_copy, args);
-        int add_len = vsnprintf(nullptr, 0, fmt, args_copy);
-        va_end(args_copy);
+        std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
+        std::size_t new_len = old_len + add_len + 1;
 
-        if (add_len < 0) {
-            va_end(args);
-            return;
-        }
-
-        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
-        std::size_t new_len = old_len + static_cast<std::size_t>(add_len) + 1;
-
-        // Speicher reservieren
         char* old_data = static_cast<char*>(mem.release());
-        reset(); alloc(new_len);
+        reset();
+        alloc(new_len);
+
         if (!mem) {
             printf("OOM: appendf() failed for %zu bytes\n", new_len);
             if (old_data) free(old_data);
-            va_end(args);
             return;
         }
 
-        // Vorherigen Inhalt übernehmen
         if (old_data) {
             std::memcpy(mem.get(), old_data, old_len);
             free(old_data);
         }
 
-        // Formatierter Teil wird angehängt
-        vsnprintf(static_cast<char*>(mem.get()) + old_len, new_len - old_len, fmt, args);
-        va_end(args);
+        std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
     }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F _ V A  📌📌📌
@@ -821,7 +807,7 @@ size_t copy_from_utf16(const uint8_t* src, bool is_big_endian = false) {
 
     template <typename U = T>
     requires std::is_same_v<U, char>
-    void appendf_va(const char* fmt, va_list args) {
+    void appendf_va(const char* fmt, va_list& args) {
         if (!fmt) return;
         // Formatlänge bestimmen (benötigt Kopie von args!)
         va_list args_copy;

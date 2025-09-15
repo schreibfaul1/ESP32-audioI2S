@@ -234,6 +234,7 @@ Audio::~Audio() {
 std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
     if(m_decoder && m_decoder->isValid()){
         m_decoder->reset();
+        m_decoder.reset();
     }
     if (type == "flac") return std::make_unique<FlacDecoder>(*this);
     if (type == "opus")  return std::make_unique<OpusDecoder>(*this);
@@ -4638,7 +4639,7 @@ bool Audio::initializeDecoder(uint8_t codec) {
             break;
         case CODEC_OPUS:
             m_decoder = createDecoder("opus");
-            if (!m_decoder || m_decoder->init()) {AUDIO_LOG_ERROR("The OPUSDecoder could not be initialized"); goto exit;}
+            if (!m_decoder || !m_decoder->init()) {AUDIO_LOG_ERROR("The OPUSDecoder could not be initialized"); goto exit;}
             info(*this, evt_info, "OPUSDecoder has been initialized");
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;

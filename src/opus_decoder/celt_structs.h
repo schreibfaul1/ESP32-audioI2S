@@ -1,8 +1,7 @@
 #pragma once
 
 #include <stdint-gcc.h>
-
-#define MAXFACTORS 8
+#include "celt_defines.h"
 
 typedef struct {
     int32_t r;

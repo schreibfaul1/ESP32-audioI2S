@@ -19,10 +19,20 @@
 #include "Audio.h"
 #include <vector>
 
+#define ANSI_ESC_RESET          "\033[0m"
+#define ANSI_ESC_BLACK          "\033[30m"
+#define ANSI_ESC_RED            "\033[31m"
+#define ANSI_ESC_GREEN          "\033[32m"
+#define ANSI_ESC_YELLOW         "\033[33m"
+#define ANSI_ESC_BLUE           "\033[34m"
+#define ANSI_ESC_MAGENTA        "\033[35m"
+#define ANSI_ESC_CYAN           "\033[36m"
+#define ANSI_ESC_WHITE          "\033[37m"
+
 class FlacDecoder : public Decoder {
 
 public:
-    FlacDecoder(Audio& audioRef) : Decoder(audioRef) {}
+    FlacDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
     ~FlacDecoder() {reset();}
     bool             init() override;
     void             clear() override;
@@ -53,6 +63,7 @@ public:
     };
 
 private:
+    Audio& audio;
     #define FLAC_MAX_CHANNELS 2
     #define FLAC_MAX_BLOCKSIZE 24576  // 24 * 1024
     #define FLAC_MAX_OUTBUFFSIZE 4096 * 2
@@ -216,97 +227,13 @@ private:
     void             restoreLinearPrediction(uint8_t ch, uint8_t shift);
     int32_t          specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-    // callbacks ---------------------------------------------------------
-        typedef enum {evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log} event_t;
-        typedef struct _msg{ // used in info(audio_info_callback());
-            const char* msg = nullptr;
-            const char* s = nullptr;
-            event_t e = (event_t)0; // event type
-            uint8_t i2s_num = 0;
-            int32_t arg1 = 0;
-            int32_t arg2 = 0;
-            std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
-        } msg_t;
-        inline static std::function<void(msg_t i)> audio_info_callback;
-    // -------------------------------------------------------------------
-
-    // 📌📌📌  L O G G I N G   📌📌📌
-    template <typename... Args>
-    void FLAC_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-
-        #define ANSI_ESC_RESET          "\033[0m"
-        #define ANSI_ESC_BLACK          "\033[30m"
-        #define ANSI_ESC_RED            "\033[31m"
-        #define ANSI_ESC_GREEN          "\033[32m"
-        #define ANSI_ESC_YELLOW         "\033[33m"
-        #define ANSI_ESC_BLUE           "\033[34m"
-        #define ANSI_ESC_MAGENTA        "\033[35m"
-        #define ANSI_ESC_CYAN           "\033[36m"
-        #define ANSI_ESC_WHITE          "\033[37m"
-
-        ps_ptr<char> result(__LINE__);
-        ps_ptr<char> file(__LINE__);
-
-        file.copy_from(path);
-        while(file.contains("/")){
-            file.remove_before('/', false);
-        }
-
-        // First run: determine size
-        int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (len <= 0) return;
-
-        result.alloc(len + 1);
-        char* dst = result.get();
-        if (!dst) return;
-        std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
-
-        // build a final string with file/line prefix
-        ps_ptr<char> final(__LINE__);
-        int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        if (total_len <= 0) return;
-        final.alloc(total_len + 1);
-        final.clear();
-        char* dest = final.get();
-        if (!dest) return;  // or error treatment
-
-        Audio::info(audio, Audio::evt_info, "Hallo");
-
-        // if(audio_info_callback){
-        //     if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        //     else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        //     else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-        //     else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);  // debug
-        //     else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE " %s" ANSI_ESC_RESET, file.c_get(), line, dst); // verbose
-        //     msg_t msg;
-        //     msg.msg = final.get();
-        //     const char* logStr[7] ={"", "LOGE", "LOGW", "LOGI", "LOGD", "LOGV", ""};
-        //     msg.s = logStr[level];
-        //     msg.e = evt_log;
-        //     if(final.strlen() > 0)  audio_info_callback(msg);
-        // }
-        // else{
-        //     std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-        //     if     (level == 1) log_e("%s", final.c_get());
-        //     else if(level == 2) log_w("%s", final.c_get());
-        //     else if(level == 3) log_i("%s", final.c_get());
-        //     else if(level == 4) log_d("%s", final.c_get());
-        //     else                log_v("%s", final.c_get());
-        // }
-        final.reset();
-        result.reset();
-        file.reset();
-    }
-
     // Macro for comfortable calls
-    #define FLAC_LOG_ERROR(fmt, ...)   FLAC_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_WARN(fmt, ...)    FLAC_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_INFO(fmt, ...)    FLAC_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_DEBUG(fmt, ...)   FLAC_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_VERBOSE(fmt, ...) FLAC_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define FLAC_LOG_ERROR(fmt, ...)   Audio::AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define FLAC_LOG_WARN(fmt, ...)    Audio::AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define FLAC_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define FLAC_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    #define FLAC_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
