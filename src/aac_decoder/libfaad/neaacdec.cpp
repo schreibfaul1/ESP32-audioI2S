@@ -6146,7 +6146,7 @@ void xxx DCT2_32_unscaled(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-static void fft_dif(real_t* Real, real_t* Imag) {
+void xxx fft_dif(real_t* Real, real_t* Imag) {
     const uint8_t _n = 32;
     real_t        w_real, w_imag;                                     // For faster access
     real_t        point1_real, point1_imag, point2_real, point2_imag; // For faster access
@@ -6323,9 +6323,8 @@ static void fft_dif(real_t* Real, real_t* Imag) {
     #endif // SBR_LOW_POWER
 #endif     // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static void flt_round(float* pf) {
+void xxx flt_round(float* pf) {
     int32_t  flg;
     uint32_t tmp, tmp1, tmp2;
     tmp = *(uint32_t*)pf;
@@ -6352,7 +6351,7 @@ static void flt_round(float* pf) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static int16_t quant_pred(float x) {
+int16_t xxx quant_pred(float x) {
     int16_t   q;
     uint32_t* tmp = (uint32_t*)&x;
     q = (int16_t)(*tmp >> 16);
@@ -6361,7 +6360,7 @@ static int16_t quant_pred(float x) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static float inv_quant_pred(int16_t q) {
+float xxx inv_quant_pred(int16_t q) {
     float     x = 0.0f;
     uint32_t* tmp = (uint32_t*)&x;
     *tmp = ((uint32_t)q) << 16;
@@ -6370,7 +6369,7 @@ static float inv_quant_pred(int16_t q) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t pred) {
+void xxx ic_predict(pred_state* state, real_t input, real_t* output, uint8_t pred) {
     uint16_t tmp;
     int16_t  i, j;
     real_t   dr1;
@@ -6459,7 +6458,7 @@ static void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t 
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static void reset_pred_state(pred_state* state) {
+void xxx reset_pred_state(pred_state* state) {
     state->r[0] = 0;
     state->r[1] = 0;
     state->COR[0] = 0;
@@ -6470,7 +6469,7 @@ static void reset_pred_state(pred_state* state) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-void pns_reset_pred_state(ic_stream* ics, pred_state* state) {
+void xxx pns_reset_pred_state(ic_stream* ics, pred_state* state) {
     uint8_t  sfb, g, b;
     uint16_t i, offs, offs2;
     /* prediction only for long blocks */
@@ -6490,7 +6489,7 @@ void pns_reset_pred_state(ic_stream* ics, pred_state* state) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-void reset_all_predictors(pred_state* state, uint16_t frame_len) {
+void xxx reset_all_predictors(pred_state* state, uint16_t frame_len) {
     uint16_t i;
     for (i = 0; i < frame_len; i++) reset_pred_state(&state[i]);
 }
@@ -6498,7 +6497,7 @@ void reset_all_predictors(pred_state* state, uint16_t frame_len) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
 /* intra channel prediction */
-void ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t frame_len, uint8_t sf_index) {
+void xxx ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t frame_len, uint8_t sf_index) {
     uint8_t  sfb;
     uint16_t bin;
     if (ics->window_sequence == EIGHT_SHORT_SEQUENCE) {
@@ -6518,56 +6517,6 @@ void ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t fra
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef LD_DEC
-static const uint16_t* swb_offset_512_window[] = {
-    0,                 /* 96000 */
-    0,                 /* 88200 */
-    0,                 /* 64000 */
-    swb_offset_512_48, /* 48000 */
-    swb_offset_512_48, /* 44100 */
-    swb_offset_512_32, /* 32000 */
-    swb_offset_512_24, /* 24000 */
-    swb_offset_512_24, /* 22050 */
-    0,                 /* 16000 */
-    0,                 /* 12000 */
-    0,                 /* 11025 */
-    0                  /* 8000  */
-};
-#endif // LD_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef LD_DEC
-static const uint16_t* swb_offset_480_window[] = {
-    0,                 /* 96000 */
-    0,                 /* 88200 */
-    0,                 /* 64000 */
-    swb_offset_480_48, /* 48000 */
-    swb_offset_480_48, /* 44100 */
-    swb_offset_480_32, /* 32000 */
-    swb_offset_480_24, /* 24000 */
-    swb_offset_480_24, /* 22050 */
-    0,                 /* 16000 */
-    0,                 /* 12000 */
-    0,                 /* 11025 */
-    0                  /* 8000  */
-};
-#endif // LD_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const uint16_t* swb_offset_128_window[] = {
-    swb_offset_128_96, /* 96000 */
-    swb_offset_128_96, /* 88200 */
-    swb_offset_128_64, /* 64000 */
-    swb_offset_128_48, /* 48000 */
-    swb_offset_128_48, /* 44100 */
-    swb_offset_128_48, /* 32000 */
-    swb_offset_128_24, /* 24000 */
-    swb_offset_128_24, /* 22050 */
-    swb_offset_128_16, /* 16000 */
-    swb_offset_128_16, /* 12000 */
-    swb_offset_128_16, /* 11025 */
-    swb_offset_128_8   /* 8000  */
-};
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#define bit_set(A, B) ((A) & (1 << (B)))
 /* 4.5.2.3.4 */
 /*
   - determine the number of windows in a window_sequence named num_windows
@@ -6648,7 +6597,7 @@ uint8_t window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* ics) {
             ics->swb_offset[ics->num_swb] = hDecoder->frameLength / 8;
             ics->swb_offset_max = hDecoder->frameLength / 8;
             for (i = 0; i < ics->num_windows - 1; i++) {
-                if (bit_set(ics->scale_factor_grouping, 6 - i) == 0) {
+                if (!(ics->scale_factor_grouping & (1u << (6 - i)))) {
                     ics->num_window_groups += 1;
                     ics->window_group_length[ics->num_window_groups - 1] = 1;
                 } else {
