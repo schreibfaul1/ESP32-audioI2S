@@ -310,11 +310,11 @@ void       sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch);
 void       sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch);
 uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 #ifdef SSR_DEC
-static real_t **pp_q0, **pp_t0, **pp_t1;
+real_t **pp_q0, **pp_t0, **pp_t1;
 void            ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+void  gc_set_protopqf(real_t* p_proto)
 #endif
 #ifdef PS_DEC
-/* static function declarations */
 void      ps_data_decode(ps_info* ps);
 hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
 void      channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
