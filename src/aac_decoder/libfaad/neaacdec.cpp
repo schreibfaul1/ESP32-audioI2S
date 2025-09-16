@@ -9394,7 +9394,7 @@ int8_t xxx rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
-int8_t rvlc_huffman_esc(bitfile* ld, int8_t direction) {
+int8_t xxx rvlc_huffman_esc(bitfile* ld, int8_t direction) {
     uint8_t          i, j;
     uint32_t         cw;
     rvlc_huff_table* h = book_escape;
@@ -9418,7 +9418,7 @@ int8_t rvlc_huffman_esc(bitfile* ld, int8_t direction) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
+void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
                 real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
@@ -9446,7 +9446,7 @@ void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t win
 #endif // SSR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len) {
+void xxx ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
     real_t   gc_function[2 * 1024 / SSR_BANDS];
     if (window_sequence != EIGHT_SHORT_SEQUENCE) {
@@ -9471,7 +9471,7 @@ void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overl
 #endif // SSR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len) {
+void xxx ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
     uint16_t len_area1, len_area2;
     (void)len_area1;
@@ -9504,7 +9504,7 @@ void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8
 }
 #endif // SSR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t pulse_decode(ic_stream* ics, int16_t* spec_data, uint16_t framelen) {
+uint8_t xxx pulse_decode(ic_stream* ics, int16_t* spec_data, uint16_t framelen) {
     uint8_t     i;
     uint16_t    k;
     pulse_info* pul = &(ics->pul);
@@ -9521,9 +9521,9 @@ uint8_t pulse_decode(ic_stream* ics, int16_t* spec_data, uint16_t framelen) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.6.1 */
-char NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
+char xxx NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t buffer_size, uint8_t short_form) {
+int8_t xxx AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t buffer_size, uint8_t short_form) {
     int8_t   result = 0;
     uint32_t startpos = faad_get_processed_bits(ld);
 #ifdef SBR_DEC
@@ -9623,7 +9623,7 @@ int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4AS
     return result;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint8_t short_form) {
+int8_t xxx AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint8_t short_form) {
     uint8_t ret = 0;
     bitfile ld;
     faad_initbits(&ld, pBuffer, buffer_size);
@@ -9634,7 +9634,7 @@ int8_t AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpec
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-fb_info* ssr_filter_bank_init(uint16_t frame_len) {
+fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
@@ -9650,7 +9650,7 @@ fb_info* ssr_filter_bank_init(uint16_t frame_len) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void ssr_filter_bank_end(fb_info* fb) {
+void xxx ssr_filter_bank_end(fb_info* fb) {
     faad_mdct_end(fb->mdct256);
     faad_mdct_end(fb->mdct2048);
     if (fb) faad_free(&fb);
@@ -9658,7 +9658,7 @@ void ssr_filter_bank_end(fb_info* fb) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-static inline void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct = {0};
     switch (len) {
         case 512: mdct = fb->mdct2048; break;
@@ -9670,7 +9670,7 @@ static inline void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uin
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 /* NON-overlapping inverse filterbank for use with SSR */
-void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
+void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
     #define MUL_R_C(A, B) ((A) * (B))
     int16_t  i;
     real_t*  transf_buf;
@@ -9745,7 +9745,7 @@ void ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 /* check if the object type is an object type that can have LTP */
-uint8_t is_ltp_ot(uint8_t object_type) {
+uint8_t xxx is_ltp_ot(uint8_t object_type) {
     #ifdef LTP_DEC
     if ((object_type == LTP)
         #ifdef ERROR_RESILIENCE
@@ -9760,11 +9760,6 @@ uint8_t is_ltp_ot(uint8_t object_type) {
     #endif
     return 0;
 }
-#endif // LPT_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef LTP_DEC
-const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
-                            REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
