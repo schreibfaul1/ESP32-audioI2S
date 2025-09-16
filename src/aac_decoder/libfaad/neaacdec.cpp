@@ -3241,7 +3241,7 @@ int8_t xxx huffman_scale_factor(bitfile* ld) {
     return hcb_sf[offset][0];
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
+void xxx huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
     uint8_t i;
     for (i = 0; i < len; i++) {
         if (sp[i]) {
@@ -3250,7 +3250,7 @@ void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_getescape(bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_getescape(bitfile* ld, int16_t* sp) {
     uint8_t neg, i;
     int16_t j;
     int16_t off;
@@ -3273,7 +3273,7 @@ uint8_t huffman_getescape(bitfile* ld, int16_t* sp) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_2step_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_2step_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint32_t cw;
     uint16_t offset = 0;
     uint8_t  extra_bits;
@@ -3300,13 +3300,13 @@ uint8_t huffman_2step_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_2step_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_2step_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint8_t err = huffman_2step_quad(cb, ld, sp);
     huffman_sign_bits(ld, sp, QUAD_LEN);
     return err;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_2step_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_2step_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint32_t cw;
     uint16_t offset = 0;
     uint8_t  extra_bits;
@@ -3331,13 +3331,13 @@ uint8_t huffman_2step_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_2step_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_2step_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint8_t err = huffman_2step_pair(cb, ld, sp);
     huffman_sign_bits(ld, sp, PAIR_LEN);
     return err;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_binary_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_binary_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint16_t offset = 0;
     while (!hcb3[offset].is_leaf) {
         uint8_t b = faad_get1bit(ld);
@@ -3355,13 +3355,13 @@ uint8_t huffman_binary_quad(uint8_t cb, bitfile* ld, int16_t* sp) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_binary_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_binary_quad_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint8_t err = huffman_binary_quad(cb, ld, sp);
     huffman_sign_bits(ld, sp, QUAD_LEN);
     return err;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_binary_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_binary_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint16_t offset = 0;
     while (!hcb_bin_table[cb][offset].is_leaf) {
         uint8_t b = faad_get1bit(ld);
@@ -3377,13 +3377,13 @@ uint8_t huffman_binary_pair(uint8_t cb, bitfile* ld, int16_t* sp) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_binary_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_binary_pair_sign(uint8_t cb, bitfile* ld, int16_t* sp) {
     uint8_t err = huffman_binary_pair(cb, ld, sp);
     huffman_sign_bits(ld, sp, PAIR_LEN);
     return err;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int16_t huffman_codebook(uint8_t i) {
+int16_t xxx huffman_codebook(uint8_t i) {
     static const uint32_t data = 16428320;
     if (i == 0)
         return (int16_t)(data >> 16) & 0xFFFF;
@@ -3391,7 +3391,7 @@ int16_t huffman_codebook(uint8_t i) {
         return (int16_t)data & 0xFFFF;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void vcb11_check_LAV(uint8_t cb, int16_t* sp) {
+void xxx vcb11_check_LAV(uint8_t cb, int16_t* sp) {
     static const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
     uint16_t              max = 0;
     if (cb < 16 || cb > 31) return;
@@ -3402,7 +3402,7 @@ void vcb11_check_LAV(uint8_t cb, int16_t* sp) {
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp) {
+uint8_t xxx huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp) {
     switch (cb) {
         case 1: /* 2-step method for data quadruples */
         case 2: return huffman_2step_quad(cb, ld, sp);
@@ -3465,7 +3465,7 @@ uint8_t huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp) {
 Will not read from a bitfile but a bits_t structure.
 Will keep track of the bits decoded and return the number of bits remaining.
 Do not read more than ld->len, return -1 if codeword would be longer */
-int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
+int8_t xxx huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
     uint32_t cw;
     uint16_t offset = 0;
     uint8_t  extra_bits;
@@ -3592,7 +3592,7 @@ int8_t huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len) {
+void xxx is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len) {
     uint8_t  g, sfb, b;
     uint16_t i;
 #ifndef FIXED_POINT
@@ -3643,7 +3643,7 @@ void is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, 
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-real_t fp_sqrt(real_t value) {
+real_t xxx fp_sqrt(real_t value) {
     real_t root = 0;
     step(0);
     step(2);
@@ -3667,7 +3667,7 @@ real_t fp_sqrt(real_t value) {
 }
 #endif /*FIXED_POINT*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-mdct_info* faad_mdct_init(uint16_t N) {
+mdct_info* xxx faad_mdct_init(uint16_t N) {
     mdct_info* mdct = (mdct_info*)faad_malloc(sizeof(mdct_info));
     assert(N % 8 == 0);
     mdct->N = N;
@@ -3703,7 +3703,7 @@ mdct_info* faad_mdct_init(uint16_t N) {
     return mdct;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void faad_mdct_end(mdct_info* mdct) {
+void xxx faad_mdct_end(mdct_info* mdct) {
     if (mdct != NULL) {
 #ifdef PROFILE
         printf("MDCT[%.4d]:         %I64d cycles\n", mdct->N, mdct->cycles);
@@ -3714,7 +3714,7 @@ void faad_mdct_end(mdct_info* mdct) {
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
+void xxx faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t  k;
     complex_t x;
 #ifdef ALLOW_SMALL_FRAMELENGTH
@@ -3796,7 +3796,7 @@ void faad_imdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
+void xxx faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
     uint16_t  k;
     complex_t x;
     // complex_t Z1[512];
@@ -3850,7 +3850,7 @@ void faad_mdct(mdct_info* mdct, real_t* X_in, real_t* X_out) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-fb_info* filter_bank_init(uint16_t frame_len) {
+fb_info* xxx filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
 #ifdef LD_DEC
     uint16_t frame_len_ld = frame_len / 2;
@@ -3890,7 +3890,7 @@ fb_info* filter_bank_init(uint16_t frame_len) {
     return fb;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void filter_bank_end(fb_info* fb) {
+void xxx filter_bank_end(fb_info* fb) {
     if (fb != NULL) {
 #ifdef PROFILE
         printf("FB:                 %I64d cycles\n", fb->cycles);
@@ -3904,7 +3904,7 @@ void filter_bank_end(fb_info* fb) {
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 #ifdef LD_DEC
     mdct_info* mdct = NULL;
     switch (len) {
@@ -3920,7 +3920,7 @@ void imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct = NULL;
     switch (len) {
         case 2048:
@@ -3936,7 +3936,7 @@ void mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len) {
+void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
     real_t*       transf_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -4071,7 +4071,7 @@ void ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, ui
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 /* only works for LTP -> no overlapping, no short blocks */
-void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
+void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     // real_t windowed_buf[2*1024] = {0};
     real_t*       windowed_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -4123,18 +4123,9 @@ void filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape,
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const uint8_t PreSortCB_STD[NUM_CB] = {11, 9, 7, 5, 3, 1};
-const uint8_t PreSortCB_ER[NUM_CB_ER] = {11, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 9, 7, 5, 3, 1};
-/* 8.5.3.3.2 Derivation of segment width */
-const uint8_t maxCwLen[MAX_CB] = {0, 11, 9, 20, 16, 13, 11, 14, 12, 17, 14, 49, 0, 0, 0, 0, 14, 17, 21, 21, 25, 25, 29, 29, 29, 29, 33, 33, 33, 37, 37, 41};
-#define segmentWidth(cb) min(maxCwLen[cb], ics->length_of_longest_codeword)
-/* bit-twiddling helpers */
-const uint8_t  S[] = {1, 2, 4, 8, 16};
-const uint32_t B[] = {0x55555555, 0x33333333, 0x0F0F0F0F, 0x00FF00FF, 0x0000FFFF};
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* rewind and reverse */
 /* 32 bit version */
-uint32_t rewrev_word(uint32_t v, const uint8_t len) {
+uint32_t xxx rewrev_word(uint32_t v, const uint8_t len) {
     /* 32 bit reverse */
     v = ((v >> S[0]) & B[0]) | ((v << S[0]) & ~B[0]);
     v = ((v >> S[1]) & B[1]) | ((v << S[1]) & ~B[1]);
@@ -4147,7 +4138,7 @@ uint32_t rewrev_word(uint32_t v, const uint8_t len) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* 64 bit version */
-void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
+void xxx rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
     if (len <= 32) {
         *hi = 0;
         *lo = rewrev_word(*lo, len);
@@ -4172,13 +4163,13 @@ void rewrev_lword(uint32_t* hi, uint32_t* lo, const uint8_t len) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* bits_t version */
-void rewrev_bits(bits_t* bits) {
+void xxx rewrev_bits(bits_t* bits) {
     if (bits->len == 0) return;
     rewrev_lword(&bits->bufb, &bits->bufa, bits->len);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* merge bits of a to b */
-void concat_bits(bits_t* b, bits_t* a) {
+void xxx concat_bits(bits_t* b, bits_t* a) {
     uint32_t bl, bh, al, ah;
     if (a->len == 0) return;
     al = a->bufa;
@@ -4202,7 +4193,7 @@ void concat_bits(bits_t* b, bits_t* a) {
     b->len += a->len;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
+uint8_t xxx is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
     /* only want spectral data CB's */
     if ((this_sec_CB > ZERO_HCB && this_sec_CB <= ESC_HCB) || (this_sec_CB >= VCB11_FIRST && this_sec_CB <= VCB11_LAST)) {
         if (this_CB < ESC_HCB) {
@@ -4216,7 +4207,7 @@ uint8_t is_good_cb(uint8_t this_CB, uint8_t this_sec_CB) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
+void xxx read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
     segment->len = segwidth;
     if (segwidth > 32) {
         segment->bufb = faad_getbits(ld, segwidth - 32);
@@ -4227,14 +4218,14 @@ void read_segment(bits_t* segment, uint8_t segwidth, bitfile* ld) {
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void fill_in_codeword(codeword_t* codeword, uint16_t index, uint16_t sp, uint8_t cb) {
+void xxx fill_in_codeword(codeword_t* codeword, uint16_t index, uint16_t sp, uint8_t cb) {
     codeword[index].sp_offset = sp;
     codeword[index].cb = cb;
     codeword[index].decoded = 0;
     codeword[index].bits.len = 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data) {
+uint8_t xxx reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data) {
     uint8_t  ret = 0;
     uint16_t PCWs_done;
     uint16_t numberOfSegments, numberOfSets, numberOfCodewords;
@@ -4296,7 +4287,7 @@ uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfil
                                 uint16_t sect_sfb_size = ics->sect_sfb_offset[g][sfb + 1] - ics->sect_sfb_offset[g][sfb];
                                 uint8_t  inc = (this_sec_CB < FIRST_PAIR_HCB) ? QUAD_LEN : PAIR_LEN;
                                 uint16_t group_cws_count = (4 * ics->window_group_length[g]) / inc;
-                                uint8_t  segwidth = segmentWidth(this_sec_CB);
+                                uint8_t  segwidth = min(maxCwLen[this_sec_CB], ics->length_of_longest_codeword);
                                 uint16_t cws;
                                 /* read codewords until end of sfb or end of window group (shouldn't only 1 trigger?) */
                                 for (cws = 0; (cws < group_cws_count) && ((cws + w_idx * group_cws_count) < sect_sfb_size); cws++) {
@@ -4395,9 +4386,8 @@ exit:
     return ret;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void DCT4_32(real_t* y, real_t* x) {
+void xxx DCT4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE "\n");
     int32_t* f = (int32_t*)faad_malloc(397 * sizeof(int32_t));
     f[0] = x[15] - x[16];
@@ -4805,7 +4795,7 @@ void DCT4_32(real_t* y, real_t* x) {
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void DST4_32(real_t* y, real_t* x) {
+void xxx DST4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "DST4_32" ANSI_ESC_WHITE "\n");
     int32_t* f = (int32_t*)faad_malloc(336 * sizeof(int32_t));
     f[0] = x[0] - x[1];
@@ -5182,7 +5172,7 @@ void DST4_32(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void DCT2_16_unscaled(real_t* y, real_t* x) {
+void xxx DCT2_16_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
     real_t f21, f22, f23, f24, f25, f26, f27, f28, f31, f32;
@@ -5312,7 +5302,7 @@ void DCT2_16_unscaled(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void DCT4_16(real_t* y, real_t* x) {
+void xxx DCT4_16(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
     real_t f21, f22, f23, f24, f25, f26, f27, f28, f29, f30;
@@ -5494,7 +5484,7 @@ void DCT4_16(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void DCT3_32_unscaled(real_t* y, real_t* x) {
+void xxx DCT3_32_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
     real_t f21, f22, f23, f24, f25, f26, f27, f28, f29, f30;
@@ -5834,7 +5824,7 @@ void DCT3_32_unscaled(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void DCT2_32_unscaled(real_t* y, real_t* x) {
+void xxx DCT2_32_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
     real_t f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
     real_t f21, f22, f23, f24, f25, f26, f27, f28, f29, f30;
@@ -6151,24 +6141,6 @@ void DCT2_32_unscaled(real_t* y, real_t* x) {
     y[15] = f285 - f284;
     y[17] = f286 - f285;
 }
-    #endif // SBR_LOW_POWER
-#endif     // SBR_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef SBR_DEC
-    #ifndef SBR_LOW_POWER
-// w_array_real[i] = cos(2*M_PI*i/32)
-static const real_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
-                                      FRAC_CONST(0.707106765732237),  FRAC_CONST(0.555570210304169),  FRAC_CONST(0.382683402077046),  FRAC_CONST(0.195090284503576),
-                                      FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090370246552), FRAC_CONST(-0.382683482845162), FRAC_CONST(-0.555570282993553),
-                                      FRAC_CONST(-0.707106827549476), FRAC_CONST(-0.831469651765257), FRAC_CONST(-0.923879561784627), FRAC_CONST(-0.980785296392607)};
-// w_array_imag[i] = sin(-2*M_PI*i/32)
-static const real_t w_array_imag[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090327375064), FRAC_CONST(-0.382683442461104), FRAC_CONST(-0.555570246648862),
-                                      FRAC_CONST(-0.707106796640858), FRAC_CONST(-0.831469627480512), FRAC_CONST(-0.923879545057005), FRAC_CONST(-0.980785287864940),
-                                      FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.980785270809601), FRAC_CONST(-0.923879511601754), FRAC_CONST(-0.831469578911016),
-                                      FRAC_CONST(-0.707106734823616), FRAC_CONST(-0.555570173959476), FRAC_CONST(-0.382683361692986), FRAC_CONST(-0.195090241632088)};
-    // FFT decimation in frequency
-    // 4*16*2+16=128+16=144 multiplications
-    // 6*16*2+10*8+4*16*2=192+80+128=400 additions
     #endif // SBR_LOW_POWER
 #endif     // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
