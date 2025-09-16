@@ -9763,7 +9763,7 @@ uint8_t xxx is_ltp_ot(uint8_t object_type) {
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
+void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                    uint16_t frame_len) {
     uint8_t  sfb;
     uint16_t bin, i, num_samples;
@@ -9806,7 +9806,7 @@ void lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
     #ifdef FIXED_POINT
-inline int16_t real_to_int16(real_t sig_in) {
+int16_t xxx real_to_int16(real_t sig_in) {
     if (sig_in >= 0) {
         sig_in += (1 << (REAL_BITS - 1));
         if (sig_in >= REAL_CONST(32768)) return 32767;
@@ -9820,26 +9820,7 @@ inline int16_t real_to_int16(real_t sig_in) {
 #endif     // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-    #ifndef FIXED_POINT
-inline int16_t real_to_int16(real_t sig_in) {
-    if (sig_in >= 0) {
-        #ifndef HAS_LRINTF
-        sig_in += 0.5f;
-        #endif
-        if (sig_in >= 32768.0f) return 32767;
-    } else {
-        #ifndef HAS_LRINTF
-        sig_in += -0.5f;
-        #endif
-        if (sig_in <= -32768.0f) return -32768;
-    }
-    return (int32_t)(sig_in);
-}
-    #endif // FIXED_POINT
-#endif     // LPT_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef LTP_DEC
-void lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type) {
+void xxx lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type) {
     uint16_t i;
     /*
      * The reference point for index i and the content of the buffer
@@ -9877,28 +9858,7 @@ void lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint1
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-/* static function declarations */
-static void      ps_data_decode(ps_info* ps);
-static hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
-static void      channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
-static void inline DCT3_4_unscaled(real_t* y, real_t* x);
-static void   channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
-static void   hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate);
-static void   hybrid_synthesis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate);
-static int8_t delta_clip(int8_t i, int8_t min, int8_t max);
-static void   delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t min_index, int8_t max_index);
-static void   delta_modulo_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t and_modulo);
-static void   map20indexto34(int8_t* index, uint8_t bins);
-    #ifdef PS_LOW_POWER
-static void map34indexto20(int8_t* index, uint8_t bins);
-    #endif
-static void ps_data_decode(ps_info* ps);
-static void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
-static void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
-#endif //  PS_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
-static hyb_info* hybrid_init(uint8_t numTimeSlotsRate) {
+hyb_info* xxx hybrid_init(uint8_t numTimeSlotsRate) {
     uint8_t   i;
     hyb_info* hyb = (hyb_info*)faad_malloc(sizeof(hyb_info));
     hyb->resolution34[0] = 12;
@@ -9924,7 +9884,7 @@ static hyb_info* hybrid_init(uint8_t numTimeSlotsRate) {
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static void hybrid_free(hyb_info* hyb) {
+void xxx hybrid_free(hyb_info* hyb) {
     uint8_t i;
     if (!hyb) return;
     if (hyb->work) faad_free(&hyb->work);
@@ -9942,7 +9902,7 @@ static void hybrid_free(hyb_info* hyb) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* real filter, size 2 */
-static void channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
+void xxx channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i;
     for (i = 0; i < frame_len; i++) {
         real_t r0 = MUL_F(filter[0], (QMF_RE(buffer[0 + i]) + QMF_RE(buffer[12 + i])));
@@ -9971,7 +9931,7 @@ static void channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filt
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* complex filter, size 4 */
-static void channel_filter4(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
+void xxx channel_filter4(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i;
     real_t  input_re1[2], input_re2[2], input_im1[2], input_im2[2];
     for (i = 0; i < frame_len; i++) {
@@ -10004,7 +9964,7 @@ static void channel_filter4(hyb_info* hyb, uint8_t frame_len, const real_t* filt
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void inline DCT3_4_unscaled(real_t* y, real_t* x) {
+void xxx DCT3_4_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7, f8;
     f0 = MUL_F(x[2], FRAC_CONST(0.7071067811865476));
     f1 = x[0] - f0;
@@ -10024,7 +9984,7 @@ void inline DCT3_4_unscaled(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* complex filter, size 8 */
-void channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
+void xxx channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i, n;
     real_t  input_re1[4], input_re2[4], input_im1[4], input_im2[4];
     real_t  x[4];
@@ -10074,7 +10034,7 @@ void channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void DCT3_6_unscaled(real_t* y, real_t* x) {
+void xxx DCT3_6_unscaled(real_t* y, real_t* x) {
     real_t f0, f1, f2, f3, f4, f5, f6, f7;
     f0 = MUL_F(x[3], FRAC_CONST(0.70710678118655));
     f1 = x[0] + f0;
@@ -10095,7 +10055,7 @@ void DCT3_6_unscaled(real_t* y, real_t* x) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* complex filter, size 12 */
-void channel_filter12(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
+void xxx channel_filter12(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i, n;
     real_t  input_re1[6], input_re2[6], input_im1[6], input_im2[6];
     real_t  out_re1[6], out_re2[6], out_im1[6], out_im2[6];
@@ -10131,7 +10091,7 @@ void channel_filter12(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qm
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* Hybrid analysis: further split up QMF subbands to improve frequency resolution */
-void hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate) {
+void xxx hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate) {
     uint8_t  k, n, band;
     uint8_t  offset = 0;
     uint8_t  qmf_bands = (use34) ? 5 : 3;
@@ -10189,7 +10149,7 @@ void hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uin
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void hybrid_synthesis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate) {
+void xxx hybrid_synthesis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate) {
     uint8_t  k, n, band;
     uint8_t  offset = 0;
     uint8_t  qmf_bands = (use34) ? 5 : 3;
@@ -10210,7 +10170,7 @@ void hybrid_synthesis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], ui
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* limits the value i to the range [min,max] */
-int8_t delta_clip(int8_t i, int8_t min, int8_t max) {
+int8_t xxx delta_clip(int8_t i, int8_t min, int8_t max) {
     if (i < min)
         return min;
     else if (i > max)
@@ -10222,7 +10182,7 @@ int8_t delta_clip(int8_t i, int8_t min, int8_t max) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* delta decode array */
-void delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t min_index, int8_t max_index) {
+void xxx delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t min_index, int8_t max_index) {
     int8_t i;
     if (enable == 1) {
         if (dt_flag == 0) {
@@ -10266,7 +10226,7 @@ void delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_
 #ifdef PS_DEC
 /* delta modulo decode array */
 /* in: log2 value of the modulo value to allow using AND instead of MOD */
-void delta_modulo_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t and_modulo) {
+void xxx delta_modulo_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t and_modulo) {
     int8_t i;
     if (enable == 1) {
         if (dt_flag == 0) {
@@ -10298,7 +10258,7 @@ void delta_modulo_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
     #ifdef PS_LOW_POWER
-static void map34indexto20(int8_t* index, uint8_t bins) {
+void xxx map34indexto20(int8_t* index, uint8_t bins) {
     index[0] = (2 * index[0] + index[1]) / 3;
     index[1] = (index[1] + 2 * index[2]) / 3;
     index[2] = (2 * index[3] + index[4]) / 3;
@@ -10326,7 +10286,7 @@ static void map34indexto20(int8_t* index, uint8_t bins) {
 #endif     //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void map20indexto34(int8_t* index, uint8_t bins) {
+void xxx map20indexto34(int8_t* index, uint8_t bins) {
     index[0] = index[0];
     index[1] = (index[0] + index[1]) / 2;
     index[2] = index[1];
@@ -10368,7 +10328,7 @@ void map20indexto34(int8_t* index, uint8_t bins) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* parse the bitstream data decoded in ps_data() */
-void ps_data_decode(ps_info* ps) {
+void xxx ps_data_decode(ps_info* ps) {
     uint8_t env, bin;
     /* ps data not available, use data from previous frame */
     if (ps->ps_data_available == 0) { ps->num_env = 0; }
@@ -10532,7 +10492,7 @@ void ps_data_decode(ps_info* ps) {
 #ifdef PS_DEC
 extern const complex_t Phi_Fract_Qmf[];
 /* decorrelate the mono signal using an allpass filter */
-void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
+void xxx ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
     uint8_t gr, n, m, bk;
     uint8_t temp_delay = 0;
     (void)temp_delay;
@@ -10787,57 +10747,8 @@ void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qm
 }
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* #ifdef PS_DEC
-       #ifdef FIXED_POINT
-           #define step(shift)                                  \
-               if((0x40000000l >> shift) + root <= value) {     \
-                   value -= (0x40000000l >> shift) + root;      \
-                   root = (root >> 1) | (0x40000000l >> shift); \
-               }                                                \
-               else { root = root >> 1; }
-       #endif // FIXED_POINT
-   #endif //  PS_DEC */
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-    #ifdef FIXED_POINT
-/* fixed point square root approximation */
-real_t          ps_sqrt(real_t value);
-__unused real_t ps_sqrt(real_t value) {
-    real_t root = 0;
-    step(0);
-    step(2);
-    step(4);
-    step(6);
-    step(8);
-    step(10);
-    step(12);
-    step(14);
-    step(16);
-    step(18);
-    step(20);
-    step(22);
-    step(24);
-    step(26);
-    step(28);
-    step(30);
-    if (root < value) ++root;
-    root <<= (REAL_BITS / 2);
-    return root;
-}
-    #else //  FIXED_POINT
-        #define ps_sqrt(A) sqrt(A)
-    #endif //  FIXED_POINT
-#endif     //  PS_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
-const real_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
-                                 FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000), FRAC_CONST(0.707106781186547), FRAC_CONST(1.000000000000000)};
-const real_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.707106781186547),  FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548), FRAC_CONST(0.000000000000000),
-                                 FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000)};
-#endif //  PS_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
-real_t magnitude_c(complex_t c) {
+real_t xxx magnitude_c(complex_t c) {
     #ifdef FIXED_POINT
         #define ps_abs(A) (((A) > 0) ? (A) : (-(A)))
         #define ALPHA     FRAC_CONST(0.948059448969)
@@ -10856,7 +10767,7 @@ real_t magnitude_c(complex_t c) {
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
+void xxx ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
     uint8_t       n;
     uint8_t       gr;
     uint8_t       bk = 0;
@@ -11197,7 +11108,7 @@ void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-void ps_free(ps_info* ps) {
+void xxx ps_free(ps_info* ps) {
     /* free hybrid filterbank structures */
     hybrid_free((hyb_info*)ps->hyb);
     faad_free(&ps);
@@ -11205,7 +11116,7 @@ void ps_free(ps_info* ps) {
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-ps_info* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
+ps_info* xxx ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
     uint8_t  i;
     uint8_t  short_delay_band;
     ps_info* ps = (ps_info*)faad_malloc(sizeof(ps_info));
@@ -11277,7 +11188,7 @@ ps_info* ps_init(uint8_t sr_index, uint8_t numTimeSlotsRate) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* main Parametric Stereo decoding function */
-uint8_t ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
+uint8_t xxx ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     // qmf_t X_hybrid_left[32][32] = {{{0}}};
     // qmf_t X_hybrid_right[32][32] = {{{0}}};
     qmf_t(*X_hybrid_left)[32] = (qmf_t(*)[32])faad_calloc(32, 32 * sizeof(qmf_t));

@@ -313,3 +313,23 @@ uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 static real_t **pp_q0, **pp_t0, **pp_t1;
 void            ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
 #endif
+#ifdef PS_DEC
+/* static function declarations */
+void      ps_data_decode(ps_info* ps);
+hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
+void      channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
+void inline DCT3_4_unscaled(real_t* y, real_t* x);
+void   channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
+void   hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate);
+void   hybrid_synthesis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate);
+int8_t delta_clip(int8_t i, int8_t min, int8_t max);
+void   delta_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t min_index, int8_t max_index);
+void   delta_modulo_decode(uint8_t enable, int8_t* index, int8_t* index_prev, uint8_t dt_flag, uint8_t nr_par, uint8_t stride, int8_t and_modulo);
+void   map20indexto34(int8_t* index, uint8_t bins);
+    #ifdef PS_LOW_POWER
+void map34indexto20(int8_t* index, uint8_t bins);
+    #endif
+void ps_data_decode(ps_info* ps);
+void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
+void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
+#endif //  PS_DEC
