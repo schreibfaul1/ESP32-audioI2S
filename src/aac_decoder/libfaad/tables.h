@@ -1,14 +1,87 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #include "settings.h"
+#include "defines.h"
 #include "structs.h"
 
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+static const uint8_t mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x72, 0x20, 0x65, 0x20, 0x6e, 0x20, 0x20, 0x20, 0x74,
+                             0x20, 0x68, 0x20, 0x67, 0x20, 0x69, 0x20, 0x72, 0x20, 0x79, 0x20, 0x70, 0x20, 0x6f, 0x20, 0x63};
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+static const uint8_t Parity[256] = { // parity
+    0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
+    1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+    1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
+    0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
+/*
+ *  This is a simple random number generator with good quality for audio purposes.
+ *  It consists of two polycounters with opposite rotation direction and different
+ *  periods. The periods are coprime, so the total period is the product of both.
+ *
+ *     -------------------------------------------------------------------------------------------------
+ * +-> |31:30:29:28:27:26:25:24:23:22:21:20:19:18:17:16:15:14:13:12:11:10: 9: 8: 7: 6: 5: 4: 3: 2: 1: 0|
+ * |   -------------------------------------------------------------------------------------------------
+ * |                                                                          |  |  |  |     |        |
+ * |                                                                          +--+--+--+-XOR-+--------+
+ * |                                                                                      |
+ * +--------------------------------------------------------------------------------------+
+ *
+ *     -------------------------------------------------------------------------------------------------
+ *     |31:30:29:28:27:26:25:24:23:22:21:20:19:18:17:16:15:14:13:12:11:10: 9: 8: 7: 6: 5: 4: 3: 2: 1: 0| <-+
+ *     -------------------------------------------------------------------------------------------------   |
+ *       |  |           |  |                                                                               |
+ *       +--+----XOR----+--+                                                                               |
+ *                |                                                                                        |
+ *                +----------------------------------------------------------------------------------------+
+ *
+ *
+ *  The first has an period of 3*5*17*257*65537, the second of 7*47*73*178481,
+ *  which gives a period of 18.410.713.077.675.721.215. The result is the
+ *  XORed values of both generators.
+ */
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+static const char *err_msg[] = {
+    "No error",
+    "Gain control not yet implemented",
+    "Pulse coding not allowed in short blocks",
+    "Invalid huffman codebook",
+    "Scalefactor out of range",
+    "Unable to find ADTS syncword",
+    "Channel coupling not yet implemented",
+    "Channel configuration not allowed in error resilient frame",
+    "Bit error in error resilient scalefactor decoding",
+    "Error decoding huffman scalefactor (bitstream error)",
+    "Error decoding huffman codeword (bitstream error)",
+    "Non existent huffman codebook number found",
+    "Invalid number of channels",
+    "Maximum number of bitstream elements exceeded",
+    "Input data buffer too small",
+    "Array index out of range",
+    "Maximum number of scalefactor bands exceeded",
+    "Quantised value out of range",
+    "LTP lag out of range",
+    "Invalid SBR parameter decoded",
+    "SBR called without being initialised",
+    "Unexpected channel configuration change",
+    "Error in program_config_element",
+    "First SBR frame is not the same as first AAC frame",
+    "Unexpected fill element with SBR data",
+    "Not all elements were provided with SBR data",
+    "LTP decoding not available",
+    "Output data buffer too small",
+    "CRC error in DRM data",
+    "PNS not allowed in DRM data stream",
+    "No standard extension payload allowed in DRM",
+    "PCE shall be the first element in a frame",
+    "Bitstream value not allowed by specification",
+	"MAIN prediction not initialised"
+};
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
     #define TABLE_BITS 6
     /* just take the maximum number of bits for interpolation */
     #define INTERP_BITS (REAL_BITS - TABLE_BITS)
-const real_t pow2_tab[] = {
+static const real_t pow2_tab[] = {
     REAL_CONST(1.000000000000000), REAL_CONST(1.010889286051701), REAL_CONST(1.021897148654117), REAL_CONST(1.033024879021228), REAL_CONST(1.044273782427414), REAL_CONST(1.055645178360557),
     REAL_CONST(1.067140400676824), REAL_CONST(1.078760797757120), REAL_CONST(1.090507732665258), REAL_CONST(1.102382583307841), REAL_CONST(1.114386742595892), REAL_CONST(1.126521618608242),
     REAL_CONST(1.138788634756692), REAL_CONST(1.151189229952983), REAL_CONST(1.163724858777578), REAL_CONST(1.176396991650281), REAL_CONST(1.189207115002721), REAL_CONST(1.202156731452703),
@@ -21692,8 +21765,6 @@ static rvlc_huff_table book_escape[] = {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-        #undef n
-        #undef log2n
 static const real_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),
                                      COEF_CONST(0.998118102550507),
                                      COEF_CONST(0.993906974792480),

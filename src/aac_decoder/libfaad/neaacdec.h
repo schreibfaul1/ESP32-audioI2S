@@ -37,6 +37,10 @@
 #include "tables.h"
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+
+
+
+
 uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
 uint32_t wl_min_lzc(uint32_t x);
 #ifdef FIXED_POINT
@@ -95,14 +99,14 @@ cfft_info*               cffti(uint16_t n);
 void                     cfftu(cfft_info* cfft);
 NeAACDecHandle           NeAACDecOpen(void);
 const char*              NeAACDecGetErrorMessage(unsigned const char errcode);
-void*                    NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size);
-long                     NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buffer_size, uint32_t* samplerate, unsigned char* channels);
-unsigned char            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
-char                     NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, unsigned char* channels);
-unsigned char            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
+void*                    NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size);
+long                     NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels);
+uint8_t            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
+char                     NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, uint8_t* channels);
+uint8_t            NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config);
 void                     NeAACDecClose(NeAACDecHandle hpDecoder);
 NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
-void*                    aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size);
+void*                    aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size);
 void                     create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
 void                     ssr_filter_bank_end(fb_info* fb);
 void                     passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);

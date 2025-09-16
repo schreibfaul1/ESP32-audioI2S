@@ -32,9 +32,12 @@
 #include <stdint-gcc.h>
 #include "neaacdec.h"
 
+uint32_t __r1 __attribute__((unused)) = 1;
+uint32_t __r2 __attribute__((unused)) = 1;
 
+#define xxx
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t get_sr_index(const uint32_t samplerate) {
+uint8_t xxx get_sr_index(const uint32_t samplerate) {
     if(92017 <= samplerate) return 0;
     if(75132 <= samplerate) return 1;
     if(55426 <= samplerate) return 2;
@@ -51,19 +54,19 @@ uint8_t get_sr_index(const uint32_t samplerate) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Returns the sample rate based on the sample rate index */
-uint32_t get_sample_rate(const uint8_t sr_index) {
+uint32_t xxx get_sample_rate(const uint8_t sr_index) {
     const uint32_t sample_rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000};
     if(sr_index < 12) return sample_rates[sr_index];
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t max_pred_sfb(const uint8_t sr_index) {
+uint8_t xxx max_pred_sfb(const uint8_t sr_index) {
     const uint8_t pred_sfb_max[] = {33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34};
     if(sr_index < 12) return pred_sfb_max[sr_index];
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short) {
+uint8_t xxx max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uint8_t is_short) {
     /* entry for each sampling rate
      * 1    Main/LC long window
      * 2    Main/LC short window
@@ -91,7 +94,7 @@ uint8_t max_tns_sfb(const uint8_t sr_index, const uint8_t object_type, const uin
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Returns 0 if an object type is decodable, otherwise returns -1 */
-int8_t can_decode_ot(const uint8_t object_type) {
+int8_t xxx can_decode_ot(const uint8_t object_type) {
     switch(object_type) {
         case LC: return 0;
         case MAIN:
@@ -136,14 +139,14 @@ int8_t can_decode_ot(const uint8_t object_type) {
     return -1;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* faad_malloc(size_t size) {
+void* xxx faad_malloc(size_t size) {
     char* ps_str = NULL;
     if(psramFound()){ps_str = (char*) ps_malloc(size);}
     else             {ps_str = (char*)    malloc(size);}
     return ps_str;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* faad_calloc(size_t len, size_t size) {
+void* xxx faad_calloc(size_t len, size_t size) {
     char* ps_str = NULL;
     if(psramFound()){ps_str = (char*) ps_calloc(len, size);}
     else            {ps_str = (char*)    calloc(len, size);}
@@ -152,45 +155,11 @@ void* faad_calloc(size_t len, size_t size) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* common free function */
 template <typename freeType>
-void faad_free(freeType** b){
+void xxx faad_free(freeType** b){
     if(*b){free(*b); *b = NULL;}
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const uint8_t Parity[256] = { // parity
-    0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
-    1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
-    1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
-    0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
-uint32_t __r1 __attribute__((unused)) = 1;
-uint32_t __r2 __attribute__((unused)) = 1;
-/*
- *  This is a simple random number generator with good quality for audio purposes.
- *  It consists of two polycounters with opposite rotation direction and different
- *  periods. The periods are coprime, so the total period is the product of both.
- *
- *     -------------------------------------------------------------------------------------------------
- * +-> |31:30:29:28:27:26:25:24:23:22:21:20:19:18:17:16:15:14:13:12:11:10: 9: 8: 7: 6: 5: 4: 3: 2: 1: 0|
- * |   -------------------------------------------------------------------------------------------------
- * |                                                                          |  |  |  |     |        |
- * |                                                                          +--+--+--+-XOR-+--------+
- * |                                                                                      |
- * +--------------------------------------------------------------------------------------+
- *
- *     -------------------------------------------------------------------------------------------------
- *     |31:30:29:28:27:26:25:24:23:22:21:20:19:18:17:16:15:14:13:12:11:10: 9: 8: 7: 6: 5: 4: 3: 2: 1: 0| <-+
- *     -------------------------------------------------------------------------------------------------   |
- *       |  |           |  |                                                                               |
- *       +--+----XOR----+--+                                                                               |
- *                |                                                                                        |
- *                +----------------------------------------------------------------------------------------+
- *
- *
- *  The first has an period of 3*5*17*257*65537, the second of 7*47*73*178481,
- *  which gives a period of 18.410.713.077.675.721.215. The result is the
- *  XORed values of both generators.
- */
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2) {
+uint32_t xxx ne_rng(uint32_t* __r1, uint32_t* __r2) {
     uint32_t t1, t2, t3, t4;
     t3 = t1 = *__r1;
     t4 = t2 = *__r2; // Parity calculation is done via table lookup, this is also available
@@ -203,7 +172,7 @@ uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2) {
     return (*__r1 = (t3 >> 1) | t1) ^ (*__r2 = (t4 + t4) | t2);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t ones32(uint32_t x) {
+uint32_t xxx ones32(uint32_t x) {
     x -= ((x >> 1) & 0x55555555);
     x = (((x >> 2) & 0x33333333) + (x & 0x33333333));
     x = (((x >> 4) + x) & 0x0f0f0f0f);
@@ -212,7 +181,7 @@ uint32_t ones32(uint32_t x) {
     return (x & 0x0000003f);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t floor_log2(uint32_t x) {
+uint32_t xxx floor_log2(uint32_t x) {
 #if 1
     x |= (x >> 1);
     x |= (x >> 2);
@@ -229,7 +198,7 @@ uint32_t floor_log2(uint32_t x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* returns position of first bit that is not 0 from msb,
  * starting count at lsb */
-uint32_t wl_min_lzc(uint32_t x) {
+uint32_t xxx wl_min_lzc(uint32_t x) {
 #if 1
     x |= (x >> 1);
     x |= (x >> 2);
@@ -244,7 +213,7 @@ uint32_t wl_min_lzc(uint32_t x) {
 #endif
 }
 #ifdef FIXED_POINT
-real_t pow2_fix(real_t val) {
+real_t xxx pow2_fix(real_t val) {
     uint32_t x1, x2;
     uint32_t errcorr;
     uint32_t index_frac;
@@ -270,7 +239,7 @@ real_t pow2_fix(real_t val) {
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-int32_t pow2_int(real_t val) {
+int32_t xxx pow2_int(real_t val) {
     uint32_t x1, x2;
     uint32_t errcorr;
     uint32_t index_frac;
@@ -296,7 +265,7 @@ int32_t pow2_int(real_t val) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
 /* ld(x) = ld(x*y/y) = ld(x/y) + ld(y), with y=2^N and [1 <= (x/y) < 2] */
-int32_t log2_int(uint32_t val) {
+int32_t xxx log2_int(uint32_t val) {
     uint32_t frac;
     uint32_t whole = (val); (void)whole;
     int32_t  exp = 0;
@@ -328,7 +297,7 @@ int32_t log2_int(uint32_t val) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
 /* ld(x) = ld(x*y/y) = ld(x/y) + ld(y), with y=2^N and [1 <= (x/y) < 2] */
-real_t log2_fix(uint32_t val) {
+real_t xxx log2_fix(uint32_t val) {
     uint32_t frac;
     uint32_t whole = (val >> REAL_BITS); (void) whole;
     int8_t   exp = 0;
@@ -358,44 +327,7 @@ real_t log2_fix(uint32_t val) {
 }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char *err_msg[] = {
-    "No error",
-    "Gain control not yet implemented",
-    "Pulse coding not allowed in short blocks",
-    "Invalid huffman codebook",
-    "Scalefactor out of range",
-    "Unable to find ADTS syncword",
-    "Channel coupling not yet implemented",
-    "Channel configuration not allowed in error resilient frame",
-    "Bit error in error resilient scalefactor decoding",
-    "Error decoding huffman scalefactor (bitstream error)",
-    "Error decoding huffman codeword (bitstream error)",
-    "Non existent huffman codebook number found",
-    "Invalid number of channels",
-    "Maximum number of bitstream elements exceeded",
-    "Input data buffer too small",
-    "Array index out of range",
-    "Maximum number of scalefactor bands exceeded",
-    "Quantised value out of range",
-    "LTP lag out of range",
-    "Invalid SBR parameter decoded",
-    "SBR called without being initialised",
-    "Unexpected channel configuration change",
-    "Error in program_config_element",
-    "First SBR frame is not the same as first AAC frame",
-    "Unexpected fill element with SBR data",
-    "Not all elements were provided with SBR data",
-    "LTP decoding not available",
-    "Output data buffer too small",
-    "CRC error in DRM data",
-    "PNS not allowed in DRM data stream",
-    "No standard extension payload allowed in DRM",
-    "PCE shall be the first element in a frame",
-    "Bitstream value not allowed by specification",
-	"MAIN prediction not initialised"
-};
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string) {
+int xxx NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string) {
     const char* libfaadName = "2.20.1";
     const char* libCopyright = " Copyright 2002-2004: Ahead Software AG\n"
                                       " http://www.audiocoding.com\n"
@@ -405,12 +337,12 @@ int NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_
     return 0;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* NeAACDecGetErrorMessage(unsigned const char errcode) {
+const char* xxx NeAACDecGetErrorMessage(const uint8_t errcode) {
     if(errcode >= NUM_ERROR_MESSAGES) return NULL;
     return err_msg[errcode];
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t NeAACDecGetCapabilities(void) {
+uint32_t xxx NeAACDecGetCapabilities(void) {
     uint32_t cap = 0;
     /* can't do without it */
     cap += LC_DEC_CAP;
@@ -431,12 +363,8 @@ uint32_t NeAACDecGetCapabilities(void) {
 #endif
     return cap;
 }
-
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const unsigned char mes[] = {0x67, 0x20, 0x61, 0x20, 0x20, 0x20, 0x6f, 0x20, 0x72, 0x20, 0x65, 0x20, 0x6e, 0x20, 0x20, 0x20, 0x74,
-                             0x20, 0x68, 0x20, 0x67, 0x20, 0x69, 0x20, 0x72, 0x20, 0x79, 0x20, 0x70, 0x20, 0x6f, 0x20, 0x63};
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-NeAACDecHandle      NeAACDecOpen(void) {
+NeAACDecHandle xxx NeAACDecOpen(void) {
     uint8_t         i;
     NeAACDecStruct* hDecoder = NULL;
     if((hDecoder = (NeAACDecStruct*)faad_calloc(1, sizeof(NeAACDecStruct))) == NULL) return NULL;
@@ -483,7 +411,7 @@ NeAACDecHandle      NeAACDecOpen(void) {
     return hDecoder;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder) {
+NeAACDecConfigurationPtr xxx NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if(hDecoder) {
         NeAACDecConfigurationPtr config = &(hDecoder->config);
@@ -492,7 +420,7 @@ NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecode
     return NULL;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-unsigned char NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config) {
+uint8_t xxx NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigurationPtr config) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if(hDecoder && config) {
         /* check if we can decode this object type */
@@ -535,7 +463,7 @@ __unused int latmCheck(latm_header* latm, bitfile* ld) {
     return (good > 0);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-long NeAACDecInit(NeAACDecHandle hpDecoder, unsigned char* buffer, uint32_t buffer_size, uint32_t* samplerate, unsigned char* channels) {
+long NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t        bits = 0;
     int32_t         ret = 0;
     // bitfile         ld;
@@ -647,7 +575,7 @@ exit:
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Init the library using a DecoderSpecificInfo */
-char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, unsigned char* channels) {
+char NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, uint8_t* channels) {
     NeAACDecStruct*        hDecoder = (NeAACDecStruct*)hpDecoder;
     int8_t                 rc;
     mp4AudioSpecificConfig mp4ASC;
@@ -706,7 +634,7 @@ char NeAACDecInit2(NeAACDecHandle hpDecoder, unsigned char* pBuffer, uint32_t Si
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, unsigned char channels) {
+char NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, uint8_t channels) {
     NeAACDecStruct** hDecoder = (NeAACDecStruct**)hpDecoder;
     if(hDecoder == NULL) return 1; /* error */
     NeAACDecClose(*hDecoder);
@@ -973,12 +901,12 @@ void create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo) {
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size) {
+void* NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     return aac_frame_decode(hDecoder, hInfo, buffer, buffer_size, NULL, 0);
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size) {
+void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size) {
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if((sample_buffer == NULL) || (sample_buffer_size == 0)) {
         hInfo->error = 27;
@@ -992,7 +920,7 @@ void* NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, unsign
 void conceal_output(NeAACDecStruct* hDecoder, uint16_t frame_len, uint8_t out_ch, void* sample_buffer) { return; }
 #endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, unsigned char* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size) {
+void* aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size) {
     uint16_t i;
     uint8_t  channels = 0;
     uint8_t  output_channels = 0;
@@ -1297,12 +1225,12 @@ const uint8_t crc_table_G8[256] = {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t faad_check_CRC(bitfile* ld, uint16_t len) {
     int          bytes, rem;
-    unsigned int CRC;
-    unsigned int r = 255; /* Initialize to all ones */
+    int32_t CRC;
+    int32_t r = 255; /* Initialize to all ones */
     /* CRC polynome used x^8 + x^4 + x^3 + x^2 +1 */
 #define GPOLY 0435
     faad_rewindbits(ld);
-    CRC = (unsigned int)~faad_getbits(ld, 8) & 0xFF; /* CRC is stored inverted */
+    CRC = (int32_t)~faad_getbits(ld, 8) & 0xFF; /* CRC is stored inverted */
     bytes = len >> 3;
     rem = len & 0x7;
     for (; bytes > 0; bytes--) { r = crc_table_G8[(r ^ faad_getbits(ld, 8)) & 0xFF]; }
@@ -1452,7 +1380,7 @@ void faad_resetbits(bitfile* ld, int bits) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t* faad_getbitbuffer(bitfile* ld, uint32_t bits) {
     int          i;
-    unsigned int temp;
+    int32_t temp;
     int          bytes = bits >> 3;
     int          remainder = bits & 0x7;
     uint8_t* buffer = (uint8_t*)faad_malloc((bytes + 1) * sizeof(uint8_t));
@@ -6312,8 +6240,6 @@ void DCT2_32_unscaled(real_t* y, real_t* x) {
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-        #define _n   32
-        #define log2n 5
 // w_array_real[i] = cos(2*M_PI*i/32)
 static const real_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
                                       FRAC_CONST(0.707106765732237),  FRAC_CONST(0.555570210304169),  FRAC_CONST(0.382683402077046),  FRAC_CONST(0.195090284503576),
@@ -6333,6 +6259,7 @@ static const real_t w_array_imag[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
 static void fft_dif(real_t* Real, real_t* Imag) {
+    const uint8_t _n = 32;
     real_t   w_real, w_imag;                                     // For faster access
     real_t   point1_real, point1_imag, point2_real, point2_imag; // For faster access
     uint32_t j, i, i2, w_index;                                  // Counters
@@ -9802,7 +9729,7 @@ uint8_t pulse_decode(ic_stream* ics, int16_t* spec_data, uint16_t framelen) {
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.6.1 */
-char NeAACDecAudioSpecificConfig(unsigned char* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
+char NeAACDecAudioSpecificConfig(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC) { return AudioSpecificConfig2(pBuffer, buffer_size, mp4ASC, NULL, 0); }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t buffer_size, uint8_t short_form) {
     int8_t   result = 0;
@@ -9883,7 +9810,7 @@ int8_t AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4AS
     }
     /* no SBR signalled, this could mean either implicit signalling or no SBR in this file */
     /* MPEG specification states: assume SBR on files with samplerate <= 24000 Hz */
-    if(mp4ASC->sbr_present_flag == (char)-1) /* cannot be -1 on systems with unsigned char */
+    if(mp4ASC->sbr_present_flag == (char)-1) /* cannot be -1 on systems with uint8_t */
     {
         if(mp4ASC->samplingFrequency <= 24000) {
             mp4ASC->samplingFrequency *= 2;

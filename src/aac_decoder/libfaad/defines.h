@@ -1,5 +1,6 @@
 #pragma once
 #include "Arduino.h"
+#include "settings.h"
 
 #ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
     #define DRM
@@ -486,3 +487,24 @@ typedef real_t complex_t[2];
 #define MAX_LTP_SFB         40
 #define MAX_LTP_SFB_S        8
 #define MAX_ASC_BYTES 64
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifndef FIXED_POINT
+    #ifndef HAS_LRINTF
+        #define CLIP(sample, max, min)           \
+            if (sample >= 0.0f) {                \
+                sample += 0.5f;                  \
+                if (sample >= max) sample = max; \
+            } else {                             \
+                sample += -0.5f;                 \
+                if (sample <= min) sample = min; \
+            }
+    #else
+        #define CLIP(sample, max, min)           \
+            if (sample >= 0.0f) {                \
+                if (sample >= max) sample = max; \
+            } else {                             \
+                if (sample <= min) sample = min; \
+            }
+    #endif
+    #define CONV(a, b) ((a << 1) | (b & 0x1))
+#endif

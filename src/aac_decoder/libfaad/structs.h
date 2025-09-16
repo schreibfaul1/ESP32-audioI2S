@@ -593,7 +593,7 @@ typedef struct {
     int64_t scalefac_cycles;
     int64_t requant_cycles;
     latm_header          latm_config;
-    const unsigned char* cmes;
+    const uint8_t* cmes;
     uint8_t              isPS;
 } NeAACDecStruct;
 /* 1st step table */
