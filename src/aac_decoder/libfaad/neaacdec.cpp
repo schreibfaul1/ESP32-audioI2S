@@ -11227,22 +11227,6 @@ uint8_t xxx ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) 
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-typedef const int8_t (*ps_huff_tab)[2];
-/* data tables */
-const uint8_t nr_iid_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
-const uint8_t nr_ipdopd_par_tab[] = {5, 11, 17, 5, 11, 17, 0, 0};
-const uint8_t nr_icc_par_tab[] = {10, 20, 34, 10, 20, 34, 0, 0};
-const uint8_t num_env_tab[][4] = {{0, 1, 2, 4}, {1, 2, 3, 4}};
-#endif //  PS_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
-/* static function declarations */
-uint16_t             ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left);
-void                 huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par);
-static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff);
-#endif //  PS_DEC
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
 uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
     uint8_t  tmp, n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);

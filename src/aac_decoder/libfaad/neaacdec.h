@@ -333,3 +333,8 @@ void ps_data_decode(ps_info* ps);
 void ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
 void ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]);
 #endif //  PS_DEC
+#ifdef PS_DEC
+uint16_t             ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left);
+void                 huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par);
+int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff);
+#endif //  PS_DEC
