@@ -3031,7 +3031,7 @@ real_t xxx get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t 
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
+void* xxx output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffer, uint8_t channels, uint16_t frame_len, uint8_t format) {
     uint8_t  ch;
     uint16_t i;
     int16_t* short_sample_buffer = (int16_t*)sample_buffer;
@@ -3096,7 +3096,7 @@ void* output_to_PCM(NeAACDecStruct* hDecoder, real_t** input, void* sample_buffe
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* The function gen_rand_vector(addr, size) generates a vector of length <size> with signed random values of average energy MEAN_NRG per random
    value. A suitable random number generator can be realized using one multiplication/accumulation per random value.*/
-void gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
+void xxx gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
 #ifndef FIXED_POINT
     uint16_t i;
     real_t   energy = 0.0;
@@ -3140,7 +3140,7 @@ void gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint8_t 
 #endif
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
+void xxx pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
                 /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
     uint8_t  g, sfb, b;
     uint16_t size, offs;
@@ -3228,7 +3228,7 @@ void pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, re
     } /* g */
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t huffman_scale_factor(bitfile* ld) {
+int8_t xxx huffman_scale_factor(bitfile* ld) {
     uint16_t offset = 0;
     while (hcb_sf[offset][1]) {
         uint8_t b = faad_get1bit(ld);
@@ -3240,21 +3240,6 @@ int8_t huffman_scale_factor(bitfile* ld) {
     }
     return hcb_sf[offset][0];
 }
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const hcb*          hcb_table[] = {0, hcb1_1, hcb2_1, 0, hcb4_1, 0, hcb6_1, 0, hcb8_1, 0, hcb10_1, hcb11_1};
-const hcb_2_quad*   hcb_2_quad_table[] = {0, hcb1_2, hcb2_2, 0, hcb4_2, 0, 0, 0, 0, 0, 0, 0};
-const hcb_2_pair*   hcb_2_pair_table[] = {0, 0, 0, 0, 0, 0, hcb6_2, 0, hcb8_2, 0, hcb10_2, hcb11_2};
-const hcb_bin_pair* hcb_bin_table[] = {0, 0, 0, 0, 0, hcb5, 0, hcb7, 0, hcb9, 0, 0};
-uint8_t             hcbN[] = {0, 5, 5, 0, 5, 0, 5, 0, 5, 0, 6, 5};
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* defines whether a huffman codebook is unsigned or not */
-/* Table 4.6.2 */
-uint8_t unsigned_cb[] = {
-    0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-};
-int hcb_2_quad_table_size[] = {0, 114, 86, 0, 185, 0, 0, 0, 0, 0, 0, 0};
-int hcb_2_pair_table_size[] = {0, 0, 0, 0, 0, 0, 126, 0, 83, 0, 210, 373};
-int hcb_bin_table_size[] = {0, 0, 0, 161, 0, 161, 0, 127, 0, 337, 0, 0};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void huffman_sign_bits(bitfile* ld, int16_t* sp, uint8_t len) {
     uint8_t i;
