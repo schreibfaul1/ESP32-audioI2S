@@ -3141,7 +3141,7 @@ void xxx gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t size, uint
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
-                /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
+                    /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
     uint8_t  g, sfb, b;
     uint16_t size, offs;
     uint8_t  group = 0;
@@ -3936,7 +3936,8 @@ void xxx mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len) {
+void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
+                      uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
     real_t*       transf_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -6530,7 +6531,7 @@ void xxx ic_prediction(ic_stream* ics, real_t* spec, pred_state* state, uint16_t
     in section named section. This offset depends on window_sequence and
     scale_factor_grouping and is needed to decode the spectral_data().
 */
-uint8_t window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* ics) {
+uint8_t xxx window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* ics) {
     uint8_t i, g;
     uint8_t sf_index = hDecoder->sf_index;
     switch (ics->window_sequence) {
@@ -6628,16 +6629,16 @@ uint8_t window_grouping_info(NeAACDecStruct* hDecoder, ic_stream* ics) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* iquant() */
 /* output = sign(input)*abs(input)^(4/3) */
-static inline real_t iquant(int16_t q, const real_t* tab, uint8_t* error) {
+real_t xxx iquant(int16_t q, const real_t* tab, uint8_t* error) {
 #ifdef FIXED_POINT
     /* For FIXED_POINT the iq_table is prescaled by 3 bits (iq_table[]/8) */
     /* BIG_IQ_TABLE allows you to use the full 8192 value table, if this is not
      * defined a 1026 value table and interpolation will be used
      */
     #ifndef BIG_IQ_TABLE
-    static const real_t errcorr[] = {REAL_CONST(0),         REAL_CONST(1.0 / 8.0), REAL_CONST(2.0 / 8.0), REAL_CONST(3.0 / 8.0), REAL_CONST(4.0 / 8.0),
-                                     REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
-    real_t              x1, x2;
+    const real_t errcorr[] = {REAL_CONST(0),         REAL_CONST(1.0 / 8.0), REAL_CONST(2.0 / 8.0), REAL_CONST(3.0 / 8.0), REAL_CONST(4.0 / 8.0),
+                              REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
+    real_t       x1, x2;
     #endif
     int16_t sgn = 1;
     if (q < 0) {
@@ -6693,7 +6694,7 @@ static inline real_t iquant(int16_t q, const real_t* tab, uint8_t* error) {
     SHORT_WINDOWs is interleaved by scalefactor window bands.
   - Within a scalefactor window band, the coefficients are in ascending spectral order.
 */
-uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len) {
+uint8_t xxx quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len) {
     static const real_t pow2_table[] = {
         COEF_CONST(1.0), COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
         COEF_CONST(1.4142135623730950488016887242097),                  /* 2^0.5 */
@@ -6797,7 +6798,7 @@ uint8_t quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_d
     return error;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t output_channels) {
+uint8_t xxx allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t output_channels) {
     int mul = 1;
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
@@ -6871,7 +6872,7 @@ static uint8_t allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t paired_channel) {
+uint8_t xxx allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uint8_t paired_channel) {
     int mul = 1;
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
@@ -6950,7 +6951,7 @@ static uint8_t allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, 
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
+uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
     uint8_t retval = 0;
     int     output_channels;
     real_t* spec_coef = (real_t*)faad_malloc(1024 * sizeof(real_t));
@@ -7119,7 +7120,7 @@ exit:
     return retval;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, element* cpe, int16_t* spec_data1, int16_t* spec_data2) {
+uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, element* cpe, int16_t* spec_data1, int16_t* spec_data2) {
     uint8_t retval;
     // real_t spec_coef1[1024];
     // real_t spec_coef2[1024];
@@ -7176,22 +7177,6 @@ uint8_t reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_s
 #endif
     /* intensity stereo decoding */
     is_decode(ics1, ics2, spec_coef1, spec_coef2, hDecoder->frameLength);
-#if 0
-    {
-        int i;
-        for (i = 0; i < 1024; i++)
-        {
-            printf("%d\n", spec_coef1[i]);
-            //printf("0x%.8X\n", spec_coef1[i]);
-        }
-        for (i = 0; i < 1024; i++)
-        {
-            printf("%d\n", spec_coef2[i]);
-            //printf("0x%.8X\n", spec_coef2[i]);
-        }
-    }
-#endif // 0
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
@@ -7294,7 +7279,7 @@ exit:
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* TNS decoding for one channel and frame */
-void tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
+void xxx tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
     uint8_t  w, f, tns_order;
     int8_t   inc;
     int16_t  size;
@@ -7330,7 +7315,7 @@ void tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* TNS encoding for one channel and frame */
-void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
+void xxx tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len) {
     uint8_t  w, f, tns_order;
     int8_t   inc;
     int16_t  size;
@@ -7366,7 +7351,7 @@ void tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t o
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Decoder transmitted coefficients for one TNS filter */
-void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a) {
+void xxx tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a) {
     uint8_t i, m;
     real_t  tmp2[TNS_MAX_ORDER + 1], b[TNS_MAX_ORDER + 1];
     /* Conversion to signed integer */
@@ -7396,7 +7381,7 @@ void tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
+void xxx tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
     /*
      - Simple all-pole filter of order "order" defined by y(n) = x(n) - lpc[1]*y(n-1) - ... - lpc[order]*y(n-order)
      - The state variables of the filter are initialized to zero every time
@@ -7426,7 +7411,7 @@ void tns_ar_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uin
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
+void xxx tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uint8_t order) {
     /*
      - Simple all-zero filter of order "order" defined by y(n) =  x(n) + a(2)*x(n-1) + ... + a(order+1)*x(n-order)
      - The state variables of the filter are initialized to zero every time
@@ -7452,7 +7437,7 @@ void tns_ma_filter(real_t* spectrum, uint16_t size, int8_t inc, real_t* lpc, uin
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.1 */
-int8_t GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce_out) {
+int8_t xxx GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce_out) {
     program_config pce;
     /* 1024 or 960 */
     mp4ASC->frameLengthFlag = faad_get1bit(ld);
@@ -7491,7 +7476,7 @@ int8_t GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_con
    any Program Configuration Elements that may occur in raw data blocks. PCEs transmitted in raw data blocks cannot be used to convey decoder
    configuration information.
 */
-uint8_t program_config_element(program_config* pce, bitfile* ld) {
+uint8_t xxx program_config_element(program_config* pce, bitfile* ld) {
     uint8_t i;
     memset(pce, 0, sizeof(program_config));
     pce->channels = 0;
@@ -7571,7 +7556,7 @@ uint8_t program_config_element(program_config* pce, bitfile* ld) {
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
+void xxx decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
     uint8_t channels = hDecoder->fr_channels;
     uint8_t tag = 0;
     if (channels + 1 > MAX_CHANNELS) {
@@ -7610,7 +7595,7 @@ void decode_sce_lfe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     hDecoder->fr_ch_ele++;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
+void xxx decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, uint8_t id_syn_ele) {
     uint8_t channels = hDecoder->fr_channels;
     hInfo->error = 0;
     uint8_t tag = 0;
@@ -7654,7 +7639,7 @@ void decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld,
     hDecoder->fr_ch_ele++;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
     uint8_t id_syn_ele;
     uint8_t ele_this_frame = 0;
     hDecoder->fr_channels = 0;
@@ -7811,7 +7796,7 @@ void raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.4 and */
 /* Table 4.4.9 */
-uint8_t single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag) {
+uint8_t xxx single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channel, uint8_t* tag) {
     uint8_t retval = 0;
     //  element       sce = {0};
     element*   sce = (element*)faad_calloc(1, sizeof(element));
@@ -7849,7 +7834,7 @@ exit:
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.5 */
-uint8_t channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
+uint8_t xxx channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t channels, uint8_t* tag) {
     // int16_t spec_data1[1024] = {0};
     // int16_t spec_data2[1024] = {0};
     int16_t* spec_data1 = (int16_t*)faad_calloc(1024, sizeof(int16_t));
@@ -7938,7 +7923,7 @@ exit:
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.6 */
-uint8_t ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t common_window) {
+uint8_t xxx ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t common_window) {
     uint8_t retval = 0;
     uint8_t ics_reserved_bit;
     ics_reserved_bit = faad_get1bit(ld);
@@ -8014,7 +7999,7 @@ uint8_t ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t 
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.7 */
-uint8_t pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld) {
+uint8_t xxx pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld) {
     uint8_t i;
     pul->number_pulse = (uint8_t)faad_getbits(ld, 2);
     pul->pulse_start_sfb = (uint8_t)faad_getbits(ld, 6);
@@ -8035,7 +8020,7 @@ uint8_t pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef COUPLING_DEC
 /* Table 4.4.8: Currently just for skipping the bits... */
-uint8_t coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld) {
+uint8_t xxx coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld) {
     uint8_t   c, result = 0;
     uint8_t   ind_sw_cce_flag = 0;
     uint8_t   num_gain_element_lists = 0;
@@ -8086,7 +8071,7 @@ uint8_t coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.10 */
-uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
+uint16_t xxx data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
     uint8_t  byte_aligned;
     uint16_t i, count;
     /* element_instance_tag = */ faad_getbits(ld, LEN_TAG);
@@ -8099,7 +8084,7 @@ uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.11 */
-uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, uint8_t sbr_ele) {
+uint8_t xxx fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, uint8_t sbr_ele) {
     uint16_t count;
 #ifdef SBR_DEC
     uint8_t bs_extension_type;
@@ -8147,7 +8132,7 @@ uint8_t fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, uint8
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.12 */
 #ifdef SSR_DEC
-static void gain_control_data(bitfile* ld, ic_stream* ics) {
+void xxx gain_control_data(bitfile* ld, ic_stream* ics) {
     uint8_t   bd, wd, ad;
     ssr_info* ssr = &(ics->ssr);
     ssr->max_band = (uint8_t)faad_getbits(ld, 2);
@@ -8205,7 +8190,7 @@ static void gain_control_data(bitfile* ld, ic_stream* ics) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* Table 4.4.13 ASME */
-void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+void xxx DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
     uint8_t retval = 0;
     (void)retval;
     uint8_t channels = hDecoder->fr_channels = 0;
@@ -8352,7 +8337,7 @@ void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* 
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.15 */
-int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo) {
+int8_t xxx DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo) {
     uint8_t retval = 0;
     uint8_t ch;
     (void)ch;
@@ -8394,7 +8379,7 @@ int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, i
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag) {
+uint8_t xxx side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag) {
     uint8_t result;
     ics->global_gain = (uint8_t)faad_getbits(ld, 8);
     if (!ele->common_window && !scal_flag) {
@@ -8451,7 +8436,7 @@ uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.24 */
-uint8_t individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag, int16_t* spec_data) {
+uint8_t xxx individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag, int16_t* spec_data) {
     uint8_t result;
     result = side_info(hDecoder, ele, ld, ics, scal_flag);
     if (result > 0) return result;
@@ -8487,7 +8472,7 @@ uint8_t individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfil
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.25 */
-uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
+uint8_t xxx section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
     uint8_t g;
     uint8_t sect_esc_val, sect_bits;
     if (ics->window_sequence == EIGHT_SHORT_SEQUENCE)
@@ -8596,7 +8581,7 @@ uint8_t section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
  * scalefactor (respectively previous stereo position or previous pns energy, see subclause 4.6.2 and 4.6.3). The first active scalefactor is
  * differentially coded relative to the global gain.
  */
-uint8_t decode_scale_factors(ic_stream* ics, bitfile* ld) {
+uint8_t xxx decode_scale_factors(ic_stream* ics, bitfile* ld) {
     uint8_t g, sfb;
     int16_t t;
     int8_t  noise_pcm_flag = 1;
@@ -8664,7 +8649,7 @@ uint8_t decode_scale_factors(ic_stream* ics, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.26 */
-uint8_t scale_factor_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
+uint8_t xxx scale_factor_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld) {
     uint8_t ret = 0;
 #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -8747,7 +8732,7 @@ void tns_data(ic_stream* ics, tns_info* tns, bitfile* ld) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 /* Table 4.4.28 */
-uint8_t ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfile* ld) {
+uint8_t xxx ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfile* ld) {
     uint8_t sfb, w;
     ltp->lag = 0;
     #ifdef LD_DEC
@@ -8779,7 +8764,7 @@ uint8_t ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfil
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.29 */
-uint8_t spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data) {
+uint8_t xxx spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data) {
     int8_t   i;
     uint8_t  g;
     uint16_t inc, k, p = 0;
@@ -8840,7 +8825,7 @@ uint8_t spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.30 */
-uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
+uint16_t xxx extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
     uint16_t i, dri, dataElementLength;
     uint8_t  dataElementLengthPart;
     uint8_t  align = 4, data_element_version, loopCounter;
@@ -8888,7 +8873,7 @@ uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.31 */
-uint8_t dynamic_range_info(bitfile* ld, drc_info* drc) {
+uint8_t xxx dynamic_range_info(bitfile* ld, drc_info* drc) {
     uint8_t i, idx = 1;
     uint8_t band_incr;
     drc->num_bands = 1;
@@ -8923,7 +8908,7 @@ uint8_t dynamic_range_info(bitfile* ld, drc_info* drc) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.32 */
-uint8_t excluded_channels(bitfile* ld, drc_info* drc) {
+uint8_t xxx excluded_channels(bitfile* ld, drc_info* drc) {
     uint8_t i, idx = 0;
     uint8_t num_excl_chan = 7;
     for (i = 0; i < 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
@@ -8939,7 +8924,7 @@ uint8_t excluded_channels(bitfile* ld, drc_info* drc) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Annex A: Audio Interchange Formats */
 /* Table 1.A.2 */
-void get_adif_header(adif_header* adif, bitfile* ld) {
+void xxx get_adif_header(adif_header* adif, bitfile* ld) {
     uint8_t i;
     /* adif_id[0] = */ faad_getbits(ld, 8);
     /* adif_id[1] = */ faad_getbits(ld, 8);
@@ -8966,7 +8951,7 @@ void get_adif_header(adif_header* adif, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.A.5 */
-uint8_t adts_frame(adts_header* adts, bitfile* ld) {
+uint8_t xxx adts_frame(adts_header* adts, bitfile* ld) {
     /* faad_byte_align(ld); */
     if (adts_fixed_header(adts, ld)) return 5;
     adts_variable_header(adts, ld);
@@ -8975,7 +8960,7 @@ uint8_t adts_frame(adts_header* adts, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.A.6 */
-uint8_t adts_fixed_header(adts_header* adts, bitfile* ld) {
+uint8_t xxx adts_fixed_header(adts_header* adts, bitfile* ld) {
     uint16_t i;
     uint8_t  sync_err = 1;
     /* try to recover from sync errors */
@@ -9007,7 +8992,7 @@ uint8_t adts_fixed_header(adts_header* adts, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.A.7 */
-void adts_variable_header(adts_header* adts, bitfile* ld) {
+void xxx adts_variable_header(adts_header* adts, bitfile* ld) {
     adts->copyright_identification_bit = faad_get1bit(ld);
     adts->copyright_identification_start = faad_get1bit(ld);
     adts->aac_frame_length = (uint16_t)faad_getbits(ld, 13);
@@ -9016,12 +9001,12 @@ void adts_variable_header(adts_header* adts, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 1.A.8 */
-void adts_error_check(adts_header* adts, bitfile* ld) {
+void xxx adts_error_check(adts_header* adts, bitfile* ld) {
     if (adts->protection_absent == 0) { adts->crc_check = (uint16_t)faad_getbits(ld, 16); }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* LATM parsing functions */
-uint32_t latm_get_value(bitfile* ld) {
+uint32_t xxx latm_get_value(bitfile* ld) {
     uint32_t l, value;
     uint8_t  bytesForValue;
     bytesForValue = (uint8_t)faad_getbits(ld, 2);
@@ -9030,7 +9015,7 @@ uint32_t latm_get_value(bitfile* ld) {
     return value;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t latmParsePayload(latm_header* latm, bitfile* ld) {
+uint32_t xxx latmParsePayload(latm_header* latm, bitfile* ld) {
     // assuming there's only one program with a single layer and 1 subFrame,
     // allStreamsSametimeframing is set,
     uint32_t framelen;
@@ -9047,7 +9032,7 @@ uint32_t latmParsePayload(latm_header* latm, bitfile* ld) {
     return framelen;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t latmAudioMuxElement(latm_header* latm, bitfile* ld) {
+uint32_t xxx latmAudioMuxElement(latm_header* latm, bitfile* ld) {
     uint32_t               ascLen, asc_bits = 0;
     uint32_t               x1, y1, m, n, i;
     program_config         pce;
@@ -9136,7 +9121,7 @@ uint32_t latmAudioMuxElement(latm_header* latm, bitfile* ld) {
         return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t faad_latm_frame(latm_header* latm, bitfile* ld) {
+uint32_t xxx faad_latm_frame(latm_header* latm, bitfile* ld) {
     uint16_t len;
     uint32_t initpos, endpos, firstpos, ret;
     (void)firstpos;
@@ -9161,7 +9146,7 @@ uint32_t faad_latm_frame(latm_header* latm, bitfile* ld) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
-uint8_t rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
+uint8_t xxx rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
     uint8_t bits = 9;
     ics->sf_concealment = faad_get1bit(ld);
     ics->rev_global_gain = (uint8_t)faad_getbits(ld, 8);
@@ -9180,7 +9165,7 @@ uint8_t rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
-uint8_t rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
+uint8_t xxx rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
     uint8_t  result;
     uint8_t  intensity_used = 0;
     uint8_t* rvlc_sf_buffer = NULL;
@@ -9214,7 +9199,7 @@ uint8_t rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
-uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used) {
+uint8_t xxx rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used) {
     int8_t  g, sfb;
     int8_t  t = 0;
     int8_t  error = 0;
@@ -9276,9 +9261,7 @@ uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
     #if 0 // not used right now, doesn't work correctly yet
-static uint8_t rvlc_decode_sf_reverse(ic_stream *ics, bitfile *ld_sf, bitfile *ld_esc,
-                                      uint8_t intensity_used)
-{
+uint8_t xxx rvlc_decode_sf_reverse(ic_stream *ics, bitfile *ld_sf, bitfile *ld_esc, uint8_t intensity_used){
     int8_t g, sfb;
     int8_t t = 0;
     int8_t error = 0;
@@ -9369,38 +9352,7 @@ static uint8_t rvlc_decode_sf_reverse(ic_stream *ics, bitfile *ld_sf, bitfile *l
 #endif     // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
-/* index == 99 means not allowed codeword */
-static rvlc_huff_table book_rvlc[] = {
-    /*index  length  codeword */
-    {0, 1, 0},    /*         0 */
-    {-1, 3, 5},   /*       101 */
-    {1, 3, 7},    /*       111 */
-    {-2, 4, 9},   /*      1001 */
-    {-3, 5, 17},  /*     10001 */
-    {2, 5, 27},   /*     11011 */
-    {-4, 6, 33},  /*    100001 */
-    {99, 6, 50},  /*    110010 */
-    {3, 6, 51},   /*    110011 */
-    {99, 6, 52},  /*    110100 */
-    {-7, 7, 65},  /*   1000001 */
-    {99, 7, 96},  /*   1100000 */
-    {99, 7, 98},  /*   1100010 */
-    {7, 7, 99},   /*   1100011 */
-    {4, 7, 107},  /*   1101011 */
-    {-5, 8, 129}, /*  10000001 */
-    {99, 8, 194}, /*  11000010 */
-    {5, 8, 195},  /*  11000011 */
-    {99, 8, 212}, /*  11010100 */
-    {99, 9, 256}, /* 100000000 */
-    {-6, 9, 257}, /* 100000001 */
-    {99, 9, 426}, /* 110101010 */
-    {6, 9, 427},  /* 110101011 */
-    {99, 10, 0}   /* Shouldn't come this far */
-};
-#endif // ERROR_RESILIENCE
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef ERROR_RESILIENCE
-int8_t rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction) {
+int8_t xxx rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction) {
     uint8_t          i, j;
     int8_t           index;
     uint32_t         cw;
