@@ -11227,7 +11227,7 @@ uint8_t xxx ps_decode(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) 
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
+uint16_t xxx ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
     uint8_t  tmp, n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
     *header = 0;
@@ -11304,7 +11304,7 @@ uint16_t ps_data(ps_info* ps, bitfile* ld, uint8_t* header) {
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
+uint16_t xxx ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, const uint16_t num_bits_left) {
     uint8_t  n;
     uint16_t bits = (uint16_t)faad_get_processed_bits(ld);
     if (ps_extension_id == 0) {
@@ -11329,7 +11329,7 @@ uint16_t ps_extension(ps_info* ps, bitfile* ld, const uint8_t ps_extension_id, c
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* binary search huffman decoding */
-static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff) {
+int8_t xxx ps_huff_dec(bitfile* ld, ps_huff_tab t_huff) {
     uint8_t bit;
     int16_t index = 0;
     while (index >= 0) {
@@ -11342,7 +11342,7 @@ static inline int8_t ps_huff_dec(bitfile* ld, ps_huff_tab t_huff) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* read huffman data coded in either the frequency or the time direction */
-void huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
+void xxx huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab t_huff, ps_huff_tab f_huff, int8_t* par) {
     uint8_t n;
     if (dt) {
         /* coded in time direction */
@@ -11356,7 +11356,7 @@ void huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_tab 
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) {
+void xxx ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) {
     static int initFlag = 0;
     real_t     a_pqfproto[PQFTAPS];
     int        i;
@@ -11393,7 +11393,7 @@ void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SS
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-sbr_info* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM) {
+sbr_info* xxx sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM) {
     sbr_info* sbr = (sbr_info*)faad_malloc(sizeof(sbr_info));
     memset(sbr, 0, sizeof(sbr_info));
     /* save id of the parent element */
@@ -11468,7 +11468,7 @@ sbr_info* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_ra
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void sbrDecodeEnd(sbr_info* sbr) {
+void xxx sbrDecodeEnd(sbr_info* sbr) {
     uint8_t j;
     if (sbr) {
         qmfa_end(sbr->qmfa[0]);
@@ -11495,7 +11495,7 @@ void sbrDecodeEnd(sbr_info* sbr) {
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void sbrReset(sbr_info* sbr) {
+void xxx sbrReset(sbr_info* sbr) {
     uint8_t j;
     if (sbr->qmfa[0] != NULL) memset(sbr->qmfa[0]->x, 0, 2 * sbr->qmfa[0]->channels * 10 * sizeof(real_t));
     if (sbr->qmfa[1] != NULL) memset(sbr->qmfa[1]->x, 0, 2 * sbr->qmfa[1]->channels * 10 * sizeof(real_t));
@@ -11547,7 +11547,7 @@ void sbrReset(sbr_info* sbr) {
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t sbr_save_prev_data(sbr_info* sbr, uint8_t ch) {
+uint8_t xxx sbr_save_prev_data(sbr_info* sbr, uint8_t ch) {
     uint8_t i;
     /* save data for next frame */
     sbr->kx_prev = sbr->kx;
@@ -11572,7 +11572,7 @@ uint8_t sbr_save_prev_data(sbr_info* sbr, uint8_t ch) {
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void sbr_save_matrix(sbr_info* sbr, uint8_t ch) {
+void xxx sbr_save_matrix(sbr_info* sbr, uint8_t ch) {
     uint8_t i;
     for (i = 0; i < sbr->tHFGen; i++) { memmove(sbr->Xsbr[ch][i], sbr->Xsbr[ch][i + sbr->numTimeSlotsRate], 64 * sizeof(qmf_t)); }
     for (i = sbr->tHFGen; i < MAX_NTSRHFG; i++) { memset(sbr->Xsbr[ch][i], 0, 64 * sizeof(qmf_t)); }
@@ -11580,7 +11580,7 @@ void sbr_save_matrix(sbr_info* sbr, uint8_t ch) {
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qmf_t X[MAX_NTSR][64], uint8_t ch, uint8_t dont_process, const uint8_t downSampledSBR) {
+uint8_t xxx sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qmf_t X[MAX_NTSR][64], uint8_t ch, uint8_t dont_process, const uint8_t downSampledSBR) {
     int16_t k, l;
     uint8_t ret = 0;
     real_t  deg[64];
@@ -11679,7 +11679,7 @@ uint8_t sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qmf_t X[MAX_NTSR
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR) {
+uint8_t xxx sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR) {
     uint8_t dont_process = 0;
     uint8_t ret = 0;
     // qmf_t X[MAX_NTSR][64];
@@ -11744,7 +11744,7 @@ exit:
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
+uint8_t xxx sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
     uint8_t dont_process = 0;
     uint8_t ret = 0;
     // qmf_t X[MAX_NTSR][64];
@@ -11799,7 +11799,7 @@ exit:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #if (defined(PS_DEC) || defined(DRM_PS))
-uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
+uint8_t xxx sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR) {
     uint8_t l, k;
     uint8_t dont_process = 0;
     uint8_t ret = 0;
@@ -11878,7 +11878,7 @@ exit:
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
 /* size 64 only! */
-void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out_imag) {
+void xxx dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out_imag) {
     // Tables with bit reverse values for 5 bits, bit reverse of i at i-th position
     const uint8_t bit_rev_tab[32] = {0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31};
     uint32_t      i, i_rev;
@@ -11924,7 +11924,7 @@ void dct4_kernel(real_t* in_real, real_t* in_imag, real_t* out_real, real_t* out
 #endif     //  SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
+void xxx extract_envelope_data(sbr_info* sbr, uint8_t ch) {
     uint8_t l, k;
     for (l = 0; l < sbr->L_E[ch]; l++) {
         if (sbr->bs_df_env[ch][l] == 0) {
@@ -11976,7 +11976,7 @@ void extract_envelope_data(sbr_info* sbr, uint8_t ch) {
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void extract_noise_floor_data(sbr_info* sbr, uint8_t ch) {
+void xxx extract_noise_floor_data(sbr_info* sbr, uint8_t ch) {
     uint8_t l, k;
     for (l = 0; l < sbr->L_Q[ch]; l++) {
         if (sbr->bs_df_noise[ch][l] == 0) {
@@ -11996,7 +11996,7 @@ void extract_noise_floor_data(sbr_info* sbr, uint8_t ch) {
     #ifndef FIXED_POINT
 /* calculates 1/(1+Q) */
 /* [0..1] */
-static real_t calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
+real_t xxx calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
     if (sbr->bs_coupling) {
         /* left channel */
         if ((sbr->Q[0][m][l] < 0 || sbr->Q[0][m][l] > 30) || (sbr->Q[1][m][l] < 0 || sbr->Q[1][m][l] > 24 /* 2*panOffset(1) */)) {
@@ -12025,7 +12025,7 @@ static real_t calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
     #ifndef FIXED_POINT
 /* calculates Q/(1+Q) */
 /* [0..1] */
-static real_t calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
+real_t xxx calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
     if (sbr->bs_coupling) {
         if ((sbr->Q[0][m][l] < 0 || sbr->Q[0][m][l] > 30) || (sbr->Q[1][m][l] < 0 || sbr->Q[1][m][l] > 24 /* 2*panOffset(1) */)) {
             return 0;
@@ -12051,7 +12051,7 @@ static real_t calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-void envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch) {
+void xxx envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch) {
     if (sbr->bs_coupling == 0) {
         int16_t exp;
         uint8_t l, k;
@@ -12085,7 +12085,7 @@ void envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-void unmap_envelope_noise(sbr_info* sbr) {
+void xxx unmap_envelope_noise(sbr_info* sbr) {
     real_t  tmp;
     int16_t exp0, exp1;
     uint8_t l, k;
@@ -12127,7 +12127,7 @@ void unmap_envelope_noise(sbr_info* sbr) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* calculate the start QMF channel for the master frequency band table parameter is also called k0 */
-uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uint32_t sample_rate) {
+uint8_t xxx qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uint32_t sample_rate) {
     const uint8_t startMinTable[12] = {7, 7, 10, 11, 12, 16, 16, 17, 24, 32, 35, 48};
     const uint8_t offsetIndexTable[12] = {5, 5, 4, 4, 4, 3, 2, 1, 0, 6, 6, 6};
     const int8_t  offset[7][16] = {{-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7}, {-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13},
@@ -12175,13 +12175,13 @@ uint8_t qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_samplerate_mode, uin
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-static int longcmp(const void* a, const void* b) { return ((int)(*(int32_t*)a - *(int32_t*)b)); }
+int xxx longcmp(const void* a, const void* b) { return ((int)(*(int32_t*)a - *(int32_t*)b)); }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* calculate the stop QMF channel for the master frequency band table */
 /* parameter is also called k2 */
-uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0) {
+uint8_t xxx qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0) {
     if (bs_stop_freq == 15) {
         return min(64, k0 * 3);
     } else if (bs_stop_freq == 14) {
@@ -12236,7 +12236,7 @@ uint8_t qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0)
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* calculate the master frequency table from k0, k2, bs_freq_scale  and bs_alter_scale version for bs_freq_scale = 0*/
-uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale) {
+uint8_t xxx master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_alter_scale) {
     int8_t   incr;
     uint8_t  k;
     uint8_t  dk;
@@ -12289,7 +12289,7 @@ uint8_t master_frequency_table_fs0(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /*  This function finds the number of bands using this formula:   bands * log(a1/a0)/log(2.0) + 0.5*/
-int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
+int32_t xxx find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
     #ifdef FIXED_POINT
     /* table with log2() values */
     const real_t log2Table[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(1.0000000000), COEF_CONST(1.5849625007), COEF_CONST(2.0000000000), COEF_CONST(2.3219280949),
@@ -12319,7 +12319,7 @@ int32_t find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-real_t find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
+real_t xxx find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
     #ifdef FIXED_POINT
     /* table with log() values */
     const real_t logTable[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(0.6931471806), COEF_CONST(1.0986122887), COEF_CONST(1.3862943611), COEF_CONST(1.6094379124),
@@ -12353,7 +12353,7 @@ real_t find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /*   version for bs_freq_scale > 0*/
-uint8_t master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
+uint8_t xxx master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
     uint8_t k, bands, twoRegions;
     uint8_t k1, ret = 0;
     uint8_t nrBand0, nrBand1;
@@ -12497,7 +12497,7 @@ exit:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* calculate the derived frequency border tables from f_master */
-uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2) {
+uint8_t xxx derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2) {
     uint8_t  k, i;
     uint32_t minus;
     /* The following relation shall be satisfied: bs_xover_band < N_Master */
@@ -12584,7 +12584,7 @@ uint8_t derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_band, uint8_t k2
 /* TODO: blegh, ugly */
 /* Modified to calculate for all possible bs_limiter_bands always
  * This reduces the number calls to this functions needed (now only on header reset) */
-void limiter_frequency_table(sbr_info* sbr) {
+void xxx limiter_frequency_table(sbr_info* sbr) {
     #if 0
     static const real_t limiterBandsPerOctave[] = { REAL_CONST(1.2),
         REAL_CONST(2), REAL_CONST(3) };
@@ -12699,7 +12699,7 @@ exit:
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+real_t xxx find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
         if ((sbr->Q[0][k][l] >= 0) && (sbr->Q[0][k][l] <= 30) && (sbr->Q[1][k][l] >= 0) && (sbr->Q[1][k][l] <= 24)) {
@@ -12726,7 +12726,7 @@ real_t find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static real_t limGain[] = {-1.0, 0.0, 1.0, 33.219};
     uint8_t       m, l, k;
@@ -12901,7 +12901,7 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifndef LOG2_TEST
-void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
+void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     static real_t limGain[] = {0.5, 1.0, 2.0, 1e10};
     uint8_t       m, l, k;
     uint8_t       current_t_noise_band = 0;
@@ -13045,7 +13045,7 @@ void calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
+void xxx calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
     uint8_t l, k, i;
     uint8_t grouping;
     uint8_t S_mapped;
@@ -13090,7 +13090,7 @@ void calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t c
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
-void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
+void xxx aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t ch) {
     uint8_t l, k, m;
     real_t  E_total, E_total_est, G_target, acc;
     for (l = 0; l < sbr->L_E[ch]; l++) {
@@ -13170,7 +13170,7 @@ void aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, real_t* deg, uint8_t
 #endif     // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
+void xxx hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     real_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
     int8_t phi_re[] = {1, 0, -1, 0};
     (void)h_smooth;
@@ -13325,7 +13325,7 @@ void hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64]
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+real_t xxx find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
         real_t amp0 = (sbr->amp_res[0]) ? 1.0 : 0.5;
@@ -13364,7 +13364,7 @@ static real_t find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
+real_t xxx find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
         float tmp = QUANTISE2REAL(7.0 - (real_t)sbr->Q[0][k][l]);
@@ -13399,7 +13399,7 @@ static real_t find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 typedef const int8_t (*sbr_huff_tab)[2];
-int16_t sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff) {
+int16_t xxx sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff) {
     uint8_t bit;
     int16_t index = 0;
     while (index >= 0) {
@@ -13412,7 +13412,7 @@ int16_t sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 10 */
-void sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+void xxx sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t      env, band;
     int8_t       delta = 0;
     sbr_huff_tab t_huff, f_huff;
@@ -13465,7 +13465,7 @@ void sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 11 */
-void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+void xxx sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t      noise, band;
     int8_t       delta = 0;
     sbr_huff_tab t_huff, f_huff;
@@ -13495,7 +13495,7 @@ void sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 #endif /*SBR_DEC*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void sbr_reset(sbr_info* sbr) {
+void xxx sbr_reset(sbr_info* sbr) {
     #if 0
     printf("%d\n", sbr->bs_start_freq_prev);
     printf("%d\n", sbr->bs_stop_freq_prev);
@@ -13521,7 +13521,7 @@ void sbr_reset(sbr_info* sbr) {
 #endif /*SBR_DEC*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-uint8_t calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band) {
+uint8_t xxx calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band) {
     uint8_t result = 0;
     uint8_t k2;
     /* calculate the Master Frequency Table */
@@ -13548,7 +13548,7 @@ uint8_t calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, ui
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 2 */
-uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psResetFlag) {
+uint8_t xxx sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psResetFlag) {
     uint8_t  result = 0;
     uint16_t num_align_bits = 0;
     uint16_t num_sbr_bits1 = (uint16_t)faad_get_processed_bits(ld);
@@ -13633,7 +13633,7 @@ uint8_t sbr_extension_data(bitfile* ld, sbr_info* sbr, uint16_t cnt, uint8_t psR
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 3 */
-void sbr_header(bitfile* ld, sbr_info* sbr) {
+void xxx sbr_header(bitfile* ld, sbr_info* sbr) {
     uint8_t bs_header_extra_1, bs_header_extra_2;
     sbr->header_count++;
     sbr->bs_amp_res = faad_get1bit(ld);
@@ -13693,7 +13693,7 @@ void sbr_header(bitfile* ld, sbr_info* sbr) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 5 */
-uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
+uint8_t xxx sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
     uint8_t result;
     if (faad_get1bit(ld)) { faad_getbits(ld, 4); }
     #ifdef DRM
@@ -13765,7 +13765,7 @@ uint8_t sbr_single_channel_element(bitfile* ld, sbr_info* sbr) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 6 */
-uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
+uint8_t xxx sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
     uint8_t n, result;
     if (faad_get1bit(ld)) {
         faad_getbits(ld, 4);
@@ -13860,7 +13860,7 @@ uint8_t sbr_channel_pair_element(bitfile* ld, sbr_info* sbr) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 4 */
-uint8_t sbr_data(bitfile* ld, sbr_info* sbr) {
+uint8_t xxx sbr_data(bitfile* ld, sbr_info* sbr) {
     uint8_t result;
     #if 0
     sbr->bs_samplerate_mode = faad_get1bit(ld);
@@ -13880,7 +13880,7 @@ uint8_t sbr_data(bitfile* ld, sbr_info* sbr) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* integer log[2](x): input range [0,10) */
-int8_t sbr_log2(const int8_t val) {
+int8_t xxx sbr_log2(const int8_t val) {
     int8_t log2tab[] = {0, 0, 1, 2, 2, 3, 3, 3, 3, 4};
     if (val < 10 && val >= 0)
         return log2tab[val];
@@ -13891,7 +13891,7 @@ int8_t sbr_log2(const int8_t val) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 7 */
-uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+uint8_t xxx sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t i, env, rel, result;
     uint8_t bs_abs_bord, bs_abs_bord_1;
     uint8_t bs_num_env = 0;
@@ -13980,13 +13980,14 @@ uint8_t sbr_grid(bitfile* ld, sbr_info* sbr, uint8_t ch) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 /* table 8 */
-void sbr_dtdf(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+void xxx sbr_dtdf(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t i;
     for (i = 0; i < sbr->L_E[ch]; i++) { sbr->bs_df_env[ch][i] = faad_get1bit(ld); }
     for (i = 0; i < sbr->L_Q[ch]; i++) { sbr->bs_df_noise[ch][i] = faad_get1bit(ld); }
 }
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* table 9 */
-void invf_mode(bitfile* ld, sbr_info* sbr, uint8_t ch) {
+void xxx invf_mode(bitfile* ld, sbr_info* sbr, uint8_t ch) {
     uint8_t n;
     for (n = 0; n < sbr->N_Q; n++) { sbr->bs_invf_mode[ch][n] = (uint8_t)faad_getbits(ld, 2); }
 }
