@@ -102,9 +102,6 @@ typedef struct {
     const real_t* long_window[2];
     const real_t* short_window[2];
     const real_t* ld_window[2];
-    mdct_info* mdct256;
-    mdct_info* mdct1024;
-    mdct_info* mdct2048;
     int64_t cycles;
 } fb_info;
 typedef struct {

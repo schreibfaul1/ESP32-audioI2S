@@ -35,6 +35,10 @@
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
 
+mdct_info* m_mdct256;
+mdct_info* m_mdct1024;
+mdct_info* m_mdct2048;
+
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t xxx get_sr_index(const uint32_t samplerate) {
@@ -3858,11 +3862,11 @@ fb_info* xxx filter_bank_init(uint16_t frame_len) {
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
     /* normal */
-    fb->mdct256 = faad_mdct_init(2 * nshort);
-    fb->mdct2048 = faad_mdct_init(2 * frame_len);
+    m_mdct256 = faad_mdct_init(2 * nshort);
+    m_mdct2048 = faad_mdct_init(2 * frame_len);
 #ifdef LD_DEC
     /* LD */
-    fb->mdct1024 = faad_mdct_init(2 * frame_len_ld);
+    m_mdct1024 = faad_mdct_init(2 * frame_len_ld);
 #endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
     if (frame_len == 1024) {
@@ -3895,10 +3899,10 @@ void xxx filter_bank_end(fb_info* fb) {
 #ifdef PROFILE
         printf("FB:                 %I64d cycles\n", fb->cycles);
 #endif
-        faad_mdct_end(fb->mdct256);
-        faad_mdct_end(fb->mdct2048);
+        faad_mdct_end(m_mdct256);
+        faad_mdct_end(m_mdct2048);
 #ifdef LD_DEC
-        faad_mdct_end(fb->mdct1024);
+        faad_mdct_end(m_mdct1024);
 #endif
         faad_free(&fb);
     }
@@ -3909,27 +3913,27 @@ void xxx imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len
     mdct_info* mdct = NULL;
     switch (len) {
         case 2048:
-        case 1920: mdct = fb->mdct2048; break;
+        case 1920: mdct = m_mdct2048; break;
         case 1024:
-        case 960: mdct = fb->mdct1024; break;
+        case 960: mdct = m_mdct1024; break;
     }
     faad_imdct(mdct, in_data, out_data);
 #else
-    faad_imdct(fb->mdct2048, in_data, out_data);
+    faad_imdct(m_mdct2048, in_data, out_data);
 #endif
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx mdct(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct = NULL;
     switch (len) {
         case 2048:
-        case 1920: mdct = fb->mdct2048; break;
+        case 1920: mdct = m_mdct2048; break;
         case 256:
-        case 240: mdct = fb->mdct256; break;
+        case 240: mdct = m_mdct256; break;
     #ifdef LD_DEC
         case 1024:
-        case 960: mdct = fb->mdct1024; break;
+        case 960: mdct = m_mdct1024; break;
     #endif
     }
     faad_mdct(mdct, in_data, out_data);
@@ -4012,14 +4016,14 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             break;
         case EIGHT_SHORT_SEQUENCE:
             /* perform iMDCT for each short block */
-            faad_imdct(fb->mdct256, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0);
-            faad_imdct(fb->mdct256, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1);
-            faad_imdct(fb->mdct256, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2);
-            faad_imdct(fb->mdct256, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3);
-            faad_imdct(fb->mdct256, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4);
-            faad_imdct(fb->mdct256, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5);
-            faad_imdct(fb->mdct256, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6);
-            faad_imdct(fb->mdct256, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7);
+            faad_imdct(m_mdct256, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0);
+            faad_imdct(m_mdct256, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1);
+            faad_imdct(m_mdct256, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2);
+            faad_imdct(m_mdct256, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3);
+            faad_imdct(m_mdct256, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4);
+            faad_imdct(m_mdct256, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5);
+            faad_imdct(m_mdct256, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6);
+            faad_imdct(m_mdct256, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nflat_ls; i++) time_out[i] = overlap[i];
             for (i = 0; i < nshort; i++) {
@@ -4103,21 +4107,21 @@ void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_sh
                 windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
                 windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
             }
-            mdct(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_START_SEQUENCE:
             for (i = 0; i < nlong; i++) windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong] = in_data[i + nlong];
             for (i = 0; i < nshort; i++) windowed_buf[i + nlong + nflat_ls] = MUL_F(in_data[i + nlong + nflat_ls], window_short[nshort - 1 - i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong + nflat_ls + nshort] = 0;
-            mdct(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_STOP_SEQUENCE:
             for (i = 0; i < nflat_ls; i++) windowed_buf[i] = 0;
             for (i = 0; i < nshort; i++) windowed_buf[i + nflat_ls] = MUL_F(in_data[i + nflat_ls], window_short_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nflat_ls + nshort] = in_data[i + nflat_ls + nshort];
             for (i = 0; i < nlong; i++) windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
-            mdct(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
     }
     faad_free(&windowed_buf);
@@ -9419,7 +9423,7 @@ int8_t xxx rvlc_huffman_esc(bitfile* ld, int8_t direction) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
-                real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
+                    real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
     real_t   time_tmp[2048] = {0};
@@ -9639,8 +9643,8 @@ fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
     /* normal */
-    fb->mdct256 = faad_mdct_init(2 * nshort);
-    fb->mdct2048 = faad_mdct_init(2 * frame_len);
+    m_mdct256 = faad_mdct_init(2 * nshort);
+    m_mdct2048 = faad_mdct_init(2 * frame_len);
     fb->long_window[0] = sine_long_256;
     fb->short_window[0] = sine_short_32;
     fb->long_window[1] = kbd_long_256;
@@ -9651,8 +9655,8 @@ fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx ssr_filter_bank_end(fb_info* fb) {
-    faad_mdct_end(fb->mdct256);
-    faad_mdct_end(fb->mdct2048);
+    faad_mdct_end(m_mdct256);
+    faad_mdct_end(m_mdct2048);
     if (fb) faad_free(&fb);
 }
 #endif
@@ -9661,8 +9665,8 @@ void xxx ssr_filter_bank_end(fb_info* fb) {
 void xxx imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     mdct_info* mdct = {0};
     switch (len) {
-        case 512: mdct = fb->mdct2048; break;
-        case 64: mdct = fb->mdct256; break;
+        case 512: mdct = m_mdct2048; break;
+        case 64: mdct = m_mdct256; break;
     }
     faad_imdct(mdct, in_data, out_data);
 }
@@ -9764,7 +9768,7 @@ uint8_t xxx is_ltp_ot(uint8_t object_type) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
-                   uint16_t frame_len) {
+                       uint16_t frame_len) {
     uint8_t  sfb;
     uint16_t bin, i, num_samples;
     // real_t x_est[2048];
@@ -9816,8 +9820,24 @@ int16_t xxx real_to_int16(real_t sig_in) {
     }
     return (sig_in >> REAL_BITS);
 }
+    #else
+int16_t xxx real_to_int16(real_t sig_in) {
+    if (sig_in >= 0) {
+        #ifndef HAS_LRINTF
+        sig_in += 0.5f;
+        #endif
+        if (sig_in >= 32768.0f) return 32767;
+    } else {
+        #ifndef HAS_LRINTF
+        sig_in += -0.5f;
+        #endif
+        if (sig_in <= -32768.0f) return -32768;
+    }
+
+    return (int16_t)lrintf(sig_in);
+}
     #endif // FIXED_POINT
-#endif     // LPT_DEC
+#endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void xxx lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type) {
@@ -12941,7 +12961,7 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
              * of the HF generated signal
              */
             G_max = ((_EPS + acc1) / (_EPS + acc2)) * limGain[sbr->bs_limiter_gains];
-            G_max = min(G_max, 1e10);
+            G_max = min(G_max, (real_t)1e10);
             for (m = ml1; m < ml2; m++) {
                 real_t  Q_M, G;
                 real_t  Q_div, Q_div2;
@@ -13018,7 +13038,7 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
             /* G_boost: [0..2.51188643] */
             G_boost = (acc1 + _EPS) / (den + _EPS);
-            G_boost = min(G_boost, 2.51188643 /* 1.584893192 ^ 2 */);
+            G_boost = min(G_boost, (real_t)2.51188643 /* 1.584893192 ^ 2 */);
             for (m = ml1; m < ml2; m++) {
                         /* apply compensation to gain, noise floor sf's and sinusoid levels */
             #ifndef SBR_LOW_POWER
@@ -14462,8 +14482,8 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
             #define LOG2_MIN_INF -100000
-        float xxx pow2(float val) { return pow(2.0, val); }
-        float xxx log2(float val) { return log(val) / log(2.0); }
+float xxx pow2(float val) { return pow(2.0, val); }
+float xxx log2(float val) { return log(val) / log(2.0); }
             #define RB 14
 float QUANTISE2REAL(float val) {
     __int32 ival = (__int32)(val * (1 << RB));
@@ -15015,7 +15035,7 @@ void xxx noise_floor_time_border_vector(sbr_info* sbr, uint8_t ch) {
         sbr->t_Q[ch][2] = sbr->t_E[ch][sbr->L_E[ch]];
     }
 }
-#endif     /*SBR_DEC*/
+#endif /*SBR_DEC*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 uint8_t xxx middleBorder(sbr_info* sbr, uint8_t ch) {
@@ -15471,7 +15491,7 @@ void xxx sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const real_t* input
 #endif /*SBR_DEC*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void  xxx gc_set_protopqf(real_t* p_proto) {
+void xxx gc_set_protopqf(real_t* p_proto) {
     int           j;
     static real_t a_half[48] = {1.2206911375946939E-05,  1.7261986723798209E-05,  1.2300093657077942E-05,  -1.0833943097791965E-05, -5.7772498639901686E-05, -1.2764767618947719E-04,
                                 -2.0965186675013334E-04, -2.8166673689263850E-04, -3.1234860429017460E-04, -2.6738519958452353E-04, -1.1949424681824722E-04, 1.3965139412648678E-04,
