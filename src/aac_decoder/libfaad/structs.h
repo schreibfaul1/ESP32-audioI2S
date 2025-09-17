@@ -99,9 +99,9 @@ typedef struct {
     int64_t fft_cycles;
 } mdct_info;
 typedef struct {
-    const int32_t* long_window[2];
-    const int32_t* short_window[2];
-    const int32_t* ld_window[2];
+    const real_t* long_window[2];
+    const real_t* short_window[2];
+    const real_t* ld_window[2];
     int64_t cycles;
 } fb_info;
 typedef struct {
@@ -115,8 +115,8 @@ typedef struct {
     uint8_t dyn_rng_ctl[17];
     uint8_t exclude_mask[MAX_CHANNELS];
     uint8_t additional_excluded_chns[MAX_CHANNELS];
-    int32_t  ctrl1;
-    int32_t  ctrl2;
+    real_t  ctrl1;
+    real_t  ctrl2;
 } drc_info;
 typedef struct {
     uint8_t element_instance_tag;
@@ -323,9 +323,9 @@ typedef struct
     complex_t d_buff[2][MAX_SA_BAND];
     complex_t d2_buff[NUM_OF_LINKS][MAX_DELAY][MAX_SA_BAND];
     uint8_t delay_buf_index_ser[NUM_OF_LINKS];
-    int32_t prev_nrg[MAX_SA_BAND];
-    int32_t prev_peakdiff[MAX_SA_BAND];
-    int32_t peakdecay_fast[MAX_SA_BAND];
+    real_t prev_nrg[MAX_SA_BAND];
+    real_t prev_peakdiff[MAX_SA_BAND];
+    real_t peakdecay_fast[MAX_SA_BAND];
 } drm_ps_info;
 typedef struct
 {
@@ -387,11 +387,11 @@ typedef struct
     complex_t delay_Qmf_ser[NO_ALLPASS_LINKS][5][64]; /* 5 samples delay max (table 8.34), 64 QMF channels */
     complex_t delay_SubQmf_ser[NO_ALLPASS_LINKS][5][32]; /* 5 samples delay max (table 8.34) */
     /* transients */
-    int32_t alpha_decay;
-    int32_t alpha_smooth;
-    int32_t P_PeakDecayNrg[34];
-    int32_t P_prev[34];
-    int32_t P_SmoothPeakDecayDiffNrg_prev[34];
+    real_t alpha_decay;
+    real_t alpha_smooth;
+    real_t P_PeakDecayNrg[34];
+    real_t P_prev[34];
+    real_t P_SmoothPeakDecayDiffNrg_prev[34];
     /* mixing and phase */
     complex_t h11_prev[50];
     complex_t h12_prev[50];
@@ -402,12 +402,12 @@ typedef struct
     complex_t opd_prev[20][2];
 } ps_info;
 typedef struct {
-    int32_t *x;
+    real_t *x;
     int16_t x_index;
     uint8_t channels;
 } qmfa_info;
 typedef struct {
-    int32_t *v;
+    real_t *v;
     int16_t v_index;
     uint8_t channels;
 } qmfs_info;
@@ -445,23 +445,23 @@ typedef struct{
     uint8_t t_Q[2][3];
     uint8_t f[2][MAX_L_E+1];
     uint8_t f_prev[2];
-    int32_t *G_temp_prev[2][5];
-    int32_t *Q_temp_prev[2][5];
+    real_t *G_temp_prev[2][5];
+    real_t *Q_temp_prev[2][5];
     int8_t GQ_ringbuf_index[2];
     int16_t E[2][64][MAX_L_E];
     int16_t E_prev[2][64];
-    int32_t E_orig[2][64][MAX_L_E];
-    int32_t E_curr[2][64][MAX_L_E];
+    real_t E_orig[2][64][MAX_L_E];
+    real_t E_curr[2][64][MAX_L_E];
     int32_t Q[2][64][2];
-    int32_t Q_div[2][64][2];
-    int32_t Q_div2[2][64][2];
+    real_t Q_div[2][64][2];
+    real_t Q_div2[2][64][2];
     int32_t Q_prev[2][64];
     int8_t l_A[2];
     int8_t l_A_prev[2];
     uint8_t bs_invf_mode[2][MAX_L_E];
     uint8_t bs_invf_mode_prev[2][MAX_L_E];
-    int32_t bwArray[2][64];
-    int32_t bwArray_prev[2][64];
+    real_t bwArray[2][64];
+    real_t bwArray_prev[2][64];
     uint8_t noPatches;
     uint8_t patchNoSubbands[64];
     uint8_t patchStartSubband[64];
@@ -561,8 +561,9 @@ typedef struct {
     uint8_t window_shape_prev[MAX_CHANNELS];
     uint16_t ltp_lag[MAX_CHANNELS];
     fb_info*  fb;
-    int32_t*   time_out[MAX_CHANNELS];
-    int32_t*   fb_intermed[MAX_CHANNELS];
+    drc_info* drc;
+    real_t*   time_out[MAX_CHANNELS];
+    real_t*   fb_intermed[MAX_CHANNELS];
     int8_t sbr_present_flag;
     int8_t forceUpSampling;
     int8_t downSampledSBR;
@@ -570,9 +571,9 @@ typedef struct {
     sbr_info* sbr[MAX_SYNTAX_ELEMENTS];
     uint8_t ps_used[MAX_SYNTAX_ELEMENTS];
     uint8_t ps_used_global;
-    int32_t* ssr_overlap[MAX_CHANNELS];
-    int32_t* prev_fmd[MAX_CHANNELS];
-    int32_t  ipqf_buffer[MAX_CHANNELS][4][96 / 4];
+    real_t* ssr_overlap[MAX_CHANNELS];
+    real_t* prev_fmd[MAX_CHANNELS];
+    real_t  ipqf_buffer[MAX_CHANNELS][4][96 / 4];
     pred_state* pred_stat[MAX_CHANNELS];
     int16_t* lt_pred_stat[MAX_CHANNELS];
     uint8_t error_state;
@@ -666,9 +667,9 @@ typedef struct {
 } hyb_info;
 #endif //  PS_DEC
 typedef struct {
-    int32_t G_lim_boost[MAX_L_E][MAX_M];
-    int32_t Q_M_lim_boost[MAX_L_E][MAX_M];
-    int32_t S_M_boost[MAX_L_E][MAX_M];
+    real_t G_lim_boost[MAX_L_E][MAX_M];
+    real_t Q_M_lim_boost[MAX_L_E][MAX_M];
+    real_t S_M_boost[MAX_L_E][MAX_M];
 } sbr_hfadj_info;
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
@@ -678,7 +679,7 @@ typedef struct {
     complex_t r11;
     complex_t r12;
     complex_t r22;
-    int32_t    det;
+    real_t    det;
 } acorr_coef;
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

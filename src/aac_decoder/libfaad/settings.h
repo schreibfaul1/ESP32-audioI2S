@@ -20,3 +20,70 @@
 // #define LC_ONLY_DECODER // if you want a pure AAC LC decoder (independant of SBR_DEC and PS_DEC)
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+#ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
+    #define DRM
+    #define DRM_PS
+#endif
+#ifdef LD_DEC /* LD can't do without LTP */
+    #ifndef ERROR_RESILIENCE
+        #define ERROR_RESILIENCE
+    #endif
+    #ifndef LTP_DEC
+        #define LTP_DEC
+    #endif
+#endif
+#ifdef LC_ONLY_DECODER
+    #undef LD_DEC
+    #undef LTP_DEC
+    #undef MAIN_DEC
+    #undef SSR_DEC
+    #undef DRM
+    #undef DRM_PS
+    #undef ALLOW_SMALL_FRAMELENGTH
+    #undef ERROR_RESILIENCE
+#endif
+#ifdef SBR_LOW_POWER
+    #undef PS_DEC
+#endif
+#ifdef FIXED_POINT /*  No MAIN decoding */
+    #ifdef MAIN_DEC
+        #undef MAIN_DEC
+    #endif
+#endif // FIXED_POINT
+#ifdef DRM
+    #ifndef ALLOW_SMALL_FRAMELENGTH
+        #define ALLOW_SMALL_FRAMELENGTH
+    #endif
+    #undef LD_DEC
+    #undef LTP_DEC
+    #undef MAIN_DEC
+    #undef SSR_DEC
+#endif
+/* END COMPILE TIME DEFINITIONS */
+
+
+#ifdef WORDS_BIGENDIAN
+    #define ARCH_IS_BIG_ENDIAN
+#endif
+/* FIXED_POINT doesn't work with MAIN and SSR yet */
+#ifdef FIXED_POINT
+    #undef MAIN_DEC
+    #undef SSR_DEC
+#endif
+#if defined(FIXED_POINT)
+#elif defined(USE_DOUBLE_PRECISION)
+#else                                   /* Normal floating point operation */
+    #ifdef HAVE_LRINTF
+        #define HAS_LRINTF
+        #define _ISOC9X_SOURCE 1
+        #define _ISOC99_SOURCE 1
+        #define __USE_ISOC9X   1
+        #define __USE_ISOC99   1
+    #endif
+
+
+#endif
+#ifndef HAS_LRINTF
+/* standard cast */
+// #define int32_t(f) ((int32_t)(f))
+#endif

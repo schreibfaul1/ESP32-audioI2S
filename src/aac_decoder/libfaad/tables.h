@@ -100,7 +100,7 @@ static const char* err_msg[] = {"No error",
     #define TABLE_BITS 6
     /* just take the maximum number of bits for interpolation */
     #define INTERP_BITS (REAL_BITS - TABLE_BITS)
-static const int32_t pow2_tab[] = {
+static const real_t pow2_tab[] = {
     REAL_CONST(1.000000000000000), REAL_CONST(1.010889286051701), REAL_CONST(1.021897148654117), REAL_CONST(1.033024879021228), REAL_CONST(1.044273782427414), REAL_CONST(1.055645178360557),
     REAL_CONST(1.067140400676824), REAL_CONST(1.078760797757120), REAL_CONST(1.090507732665258), REAL_CONST(1.102382583307841), REAL_CONST(1.114386742595892), REAL_CONST(1.126521618608242),
     REAL_CONST(1.138788634756692), REAL_CONST(1.151189229952983), REAL_CONST(1.163724858777578), REAL_CONST(1.176396991650281), REAL_CONST(1.189207115002721), REAL_CONST(1.202156731452703),
@@ -112,7 +112,7 @@ static const int32_t pow2_tab[] = {
     REAL_CONST(1.681792830507429), REAL_CONST(1.700106353718524), REAL_CONST(1.718619298122478), REAL_CONST(1.737333835273706), REAL_CONST(1.756252160373300), REAL_CONST(1.775376492526521),
     REAL_CONST(1.794709075003107), REAL_CONST(1.814252175500399), REAL_CONST(1.834008086409342), REAL_CONST(1.853979125083386), REAL_CONST(1.874167634110300), REAL_CONST(1.894575981586966),
     REAL_CONST(1.915206561397147), REAL_CONST(1.936061793492294), REAL_CONST(1.957144124175400), REAL_CONST(1.978456026387951), REAL_CONST(2.000000000000000)};
-static const int32_t log2_tab[] = {
+static const real_t log2_tab[] = {
     REAL_CONST(0.000000000000000), REAL_CONST(0.022367813028455), REAL_CONST(0.044394119358453), REAL_CONST(0.066089190457772), REAL_CONST(0.087462841250339), REAL_CONST(0.108524456778169),
     REAL_CONST(0.129283016944966), REAL_CONST(0.149747119504682), REAL_CONST(0.169925001442312), REAL_CONST(0.189824558880017), REAL_CONST(0.209453365628950), REAL_CONST(0.228818690495881),
     REAL_CONST(0.247927513443585), REAL_CONST(0.266786540694901), REAL_CONST(0.285402218862248), REAL_CONST(0.303780748177103), REAL_CONST(0.321928094887362), REAL_CONST(0.339850002884625),
@@ -1028,7 +1028,7 @@ static const complex_t cfft_tab_128[] = {{FRAC_CONST(1.000000000000000), FRAC_CO
 #endif // FIXED_POINT
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-static const int32_t drc_pow2_table[] = {COEF_CONST(0.5146511183), COEF_CONST(0.5297315472), COEF_CONST(0.5452538663), COEF_CONST(0.5612310242), COEF_CONST(0.5776763484), COEF_CONST(0.5946035575),
+static const real_t drc_pow2_table[] = {COEF_CONST(0.5146511183), COEF_CONST(0.5297315472), COEF_CONST(0.5452538663), COEF_CONST(0.5612310242), COEF_CONST(0.5776763484), COEF_CONST(0.5946035575),
                                         COEF_CONST(0.6120267717), COEF_CONST(0.6299605249), COEF_CONST(0.6484197773), COEF_CONST(0.6674199271), COEF_CONST(0.6869768237), COEF_CONST(0.7071067812),
                                         COEF_CONST(0.7278265914), COEF_CONST(0.7491535384), COEF_CONST(0.7711054127), COEF_CONST(0.7937005260), COEF_CONST(0.8169577266), COEF_CONST(0.8408964153),
                                         COEF_CONST(0.8655365610), COEF_CONST(0.8908987181), COEF_CONST(0.9170040432), COEF_CONST(0.9438743127), COEF_CONST(0.9715319412), COEF_CONST(1.0000000000),
@@ -1145,7 +1145,7 @@ static const int8_t t_huffman_pan[][2] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* There are 3 classes in the standard but the last 2 are identical */
-static const int32_t sa_quant[8][2] = {
+static const real_t sa_quant[8][2] = {
     {FRAC_CONST(0.0000), FRAC_CONST(0.0000)}, {FRAC_CONST(0.0501), FRAC_CONST(0.1778)}, {FRAC_CONST(0.0706), FRAC_CONST(0.2818)}, {FRAC_CONST(0.0995), FRAC_CONST(0.4467)},
     {FRAC_CONST(0.1399), FRAC_CONST(0.5623)}, {FRAC_CONST(0.1957), FRAC_CONST(0.7079)}, {FRAC_CONST(0.2713), FRAC_CONST(0.8913)}, {FRAC_CONST(0.3699), FRAC_CONST(1.0000)},
 };
@@ -1154,7 +1154,7 @@ static const int32_t sa_quant[8][2] = {
 #ifdef DRM
     /* We don't need the actual quantizer values */
     #if 0
-static const int32_t pan_quant[8][5] =
+static const real_t pan_quant[8][5] =
 {
     { COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000), COEF_CONST(0.0000) },
     { COEF_CONST(0.1661), COEF_CONST(0.1661), COEF_CONST(0.3322), COEF_CONST(0.3322), COEF_CONST(0.3322) },
@@ -1170,7 +1170,7 @@ static const int32_t pan_quant[8][5] =
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(pan_quant[x][y] */
-static const int32_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000)},
+static const real_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000), REAL_CONST(1.0000000)},
                                            {REAL_CONST(1.1220021), REAL_CONST(1.1220021), REAL_CONST(1.2589312), REAL_CONST(1.2589312), REAL_CONST(1.2589312)},
                                            {REAL_CONST(1.2589312), REAL_CONST(1.2589312), REAL_CONST(1.5849090), REAL_CONST(1.7783016), REAL_CONST(1.7783016)},
                                            {REAL_CONST(1.4125481), REAL_CONST(1.5849090), REAL_CONST(1.9952921), REAL_CONST(2.8184461), REAL_CONST(3.1623565)},
@@ -1182,7 +1182,7 @@ static const int32_t pan_pow_2_pos[8][5] = {{REAL_CONST(1.0000000), REAL_CONST(1
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(-pan_quant[x][y] */
-static const int32_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1)},
+static const real_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1), REAL_CONST(1)},
                                            {REAL_CONST(0.8912487), REAL_CONST(0.8912487), REAL_CONST(0.7943242), REAL_CONST(0.7943242), REAL_CONST(0.7943242)},
                                            {REAL_CONST(0.7943242), REAL_CONST(0.7943242), REAL_CONST(0.6309511), REAL_CONST(0.5623344), REAL_CONST(0.5623344)},
                                            {REAL_CONST(0.7079405), REAL_CONST(0.6309511), REAL_CONST(0.5011797), REAL_CONST(0.3548054), REAL_CONST(0.3162199)},
@@ -1194,7 +1194,7 @@ static const int32_t pan_pow_2_neg[8][5] = {{REAL_CONST(1), REAL_CONST(1), REAL_
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(pan_quant[x][y]/30) */
-static const int32_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
+static const real_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
                                               {COEF_CONST(1.003845098), COEF_CONST(1.003845098), COEF_CONST(1.007704982), COEF_CONST(1.007704982), COEF_CONST(1.007704982)},
                                               {COEF_CONST(1.007704982), COEF_CONST(1.007704982), COEF_CONST(1.01546933), COEF_CONST(1.019373909), COEF_CONST(1.019373909)},
                                               {COEF_CONST(1.011579706), COEF_CONST(1.01546933), COEF_CONST(1.023293502), COEF_CONST(1.035142941), COEF_CONST(1.039123167)},
@@ -1206,7 +1206,7 @@ static const int32_t pan_pow_2_30_pos[8][5] = {{COEF_CONST(1), COEF_CONST(1), CO
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* 2^(-pan_quant[x][y]/30) */
-static const int32_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
+static const real_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1), COEF_CONST(1)},
                                               {COEF_CONST(0.99616963), COEF_CONST(0.99616963), COEF_CONST(0.992353931), COEF_CONST(0.992353931), COEF_CONST(0.99235393)},
                                               {COEF_CONST(0.992353931), COEF_CONST(0.992353931), COEF_CONST(0.984766325), COEF_CONST(0.980994305), COEF_CONST(0.980994305)},
                                               {COEF_CONST(0.988552848), COEF_CONST(0.984766325), COEF_CONST(0.977236734), COEF_CONST(0.966050157), COEF_CONST(0.962349827)},
@@ -1217,7 +1217,7 @@ static const int32_t pan_pow_2_30_neg[8][5] = {{COEF_CONST(1), COEF_CONST(1), CO
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const int32_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1),    FRAC_CONST(1),   FRAC_CONST(0.95), FRAC_CONST(0.9), FRAC_CONST(0.85), FRAC_CONST(0.8), FRAC_CONST(0.75),
+static const real_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1),    FRAC_CONST(1),   FRAC_CONST(0.95), FRAC_CONST(0.9), FRAC_CONST(0.85), FRAC_CONST(0.8), FRAC_CONST(0.75),
                                                  FRAC_CONST(0.7), FRAC_CONST(0.65), FRAC_CONST(0.6), FRAC_CONST(0.55), FRAC_CONST(0.5), FRAC_CONST(0.45), FRAC_CONST(0.4), FRAC_CONST(0.35),
                                                  FRAC_CONST(0.3), FRAC_CONST(0.25), FRAC_CONST(0.2), FRAC_CONST(0.15), FRAC_CONST(0.1), FRAC_CONST(0.05), FRAC_CONST(0),   FRAC_CONST(0),
                                                  FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),    FRAC_CONST(0),   FRAC_CONST(0),
@@ -1226,7 +1226,7 @@ static const int32_t g_decayslope[MAX_SA_BAND] = {FRAC_CONST(1),   FRAC_CONST(1)
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-static const int32_t sa_sqrt_1_minus[8][2] = {{FRAC_CONST(1), FRAC_CONST(1)},
+static const real_t sa_sqrt_1_minus[8][2] = {{FRAC_CONST(1), FRAC_CONST(1)},
                                              {FRAC_CONST(0.998744206), FRAC_CONST(0.984066644)},
                                              {FRAC_CONST(0.997504707), FRAC_CONST(0.959473168)},
                                              {FRAC_CONST(0.995037562), FRAC_CONST(0.894683804)},
@@ -1244,11 +1244,11 @@ static const uint8_t pan_quant_class[20] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 
 static const uint8_t pan_inv_freq[64] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18,
                                          19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19};
 static const uint8_t sa_inv_freq[MAX_SA_BAND] = {0, 1, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7};
-static const int32_t  filter_coeff[] = {FRAC_CONST(0.65143905754106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
+static const real_t  filter_coeff[] = {FRAC_CONST(0.65143905754106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
 static const uint8_t delay_length[3] = {3, 4, 5};
-static const int32_t  delay_fraction[] = {FRAC_CONST(0.43), FRAC_CONST(0.75), FRAC_CONST(0.347)};
-static const int32_t  peak_decay = FRAC_CONST(0.76592833836465);
-static const int32_t  smooth_coeff = FRAC_CONST(0.25);
+static const real_t  delay_fraction[] = {FRAC_CONST(0.43), FRAC_CONST(0.75), FRAC_CONST(0.347)};
+static const real_t  peak_decay = FRAC_CONST(0.76592833836465);
+static const real_t  smooth_coeff = FRAC_CONST(0.25);
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
@@ -1744,12 +1744,12 @@ const uint32_t B[] = {0x55555555, 0x33333333, 0x0F0F0F0F, 0x00FF00FF, 0x0000FFFF
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
 // w_array_real[i] = cos(2*M_PI*i/32)
-static const int32_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
+static const real_t w_array_real[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.980785279337272),  FRAC_CONST(0.923879528329380),  FRAC_CONST(0.831469603195765),
                                       FRAC_CONST(0.707106765732237),  FRAC_CONST(0.555570210304169),  FRAC_CONST(0.382683402077046),  FRAC_CONST(0.195090284503576),
                                       FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090370246552), FRAC_CONST(-0.382683482845162), FRAC_CONST(-0.555570282993553),
                                       FRAC_CONST(-0.707106827549476), FRAC_CONST(-0.831469651765257), FRAC_CONST(-0.923879561784627), FRAC_CONST(-0.980785296392607)};
 // w_array_imag[i] = sin(-2*M_PI*i/32)
-static const int32_t w_array_imag[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090327375064), FRAC_CONST(-0.382683442461104), FRAC_CONST(-0.555570246648862),
+static const real_t w_array_imag[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(-0.195090327375064), FRAC_CONST(-0.382683442461104), FRAC_CONST(-0.555570246648862),
                                       FRAC_CONST(-0.707106796640858), FRAC_CONST(-0.831469627480512), FRAC_CONST(-0.923879545057005), FRAC_CONST(-0.980785287864940),
                                       FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.980785270809601), FRAC_CONST(-0.923879511601754), FRAC_CONST(-0.831469578911016),
                                       FRAC_CONST(-0.707106734823616), FRAC_CONST(-0.555570173959476), FRAC_CONST(-0.382683361692986), FRAC_CONST(-0.195090241632088)};
@@ -2987,7 +2987,7 @@ static const complex_t mdct_tab_64[] = {
     #endif // SSR_DEC
 #endif     // FIXED_POINT
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t kbd_long_1024[] = {
+static const real_t kbd_long_1024[] = {
     FRAC_CONST(0.00029256153896361), FRAC_CONST(0.00042998567353047), FRAC_CONST(0.00054674074589540), FRAC_CONST(0.00065482304299792), FRAC_CONST(0.00075870195068747),
     FRAC_CONST(0.00086059331713336), FRAC_CONST(0.00096177541439010), FRAC_CONST(0.0010630609410878),  FRAC_CONST(0.0011650036308132),  FRAC_CONST(0.0012680012194148),
     FRAC_CONST(0.0013723517232956),  FRAC_CONST(0.0014782864109136),  FRAC_CONST(0.0015859901976719),  FRAC_CONST(0.0016956148252373),  FRAC_CONST(0.0018072876903517),
@@ -3194,7 +3194,7 @@ static const int32_t kbd_long_1024[] = {
     FRAC_CONST(0.99999932138304),    FRAC_CONST(0.99999943495056),    FRAC_CONST(0.99999953749392),    FRAC_CONST(0.99999962968950),    FRAC_CONST(0.99999971218563),
     FRAC_CONST(0.99999978560337),    FRAC_CONST(0.99999985053727),    FRAC_CONST(0.99999990755616),    FRAC_CONST(0.99999995720387)};
 #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t kbd_long_960[] = {
+static const real_t kbd_long_960[] = {
     FRAC_CONST(0.0003021562530949), FRAC_CONST(0.0004452267024786), FRAC_CONST(0.0005674947527496), FRAC_CONST(0.0006812465553466), FRAC_CONST(0.0007910496776387), FRAC_CONST(0.0008991655033895),
     FRAC_CONST(0.0010068978259384), FRAC_CONST(0.0011150758515751), FRAC_CONST(0.0012242653193642), FRAC_CONST(0.0013348735658205), FRAC_CONST(0.0014472068670273), FRAC_CONST(0.0015615039850448),
     FRAC_CONST(0.0016779568885263), FRAC_CONST(0.0017967241232412), FRAC_CONST(0.0019179397560955), FRAC_CONST(0.0020417195415393), FRAC_CONST(0.0021681652836642), FRAC_CONST(0.0022973679910599),
@@ -3356,7 +3356,7 @@ static const int32_t kbd_long_960[] = {
     FRAC_CONST(0.9999987808519092), FRAC_CONST(0.9999989527955938), FRAC_CONST(0.9999991090558848), FRAC_CONST(0.9999992505869332), FRAC_CONST(0.9999993783027293), FRAC_CONST(0.9999994930782556),
     FRAC_CONST(0.9999995957506171), FRAC_CONST(0.9999996871201549), FRAC_CONST(0.9999997679515386), FRAC_CONST(0.9999998389748399), FRAC_CONST(0.9999999008865869), FRAC_CONST(0.9999999543507984)};
 #endif
-static const int32_t kbd_short_128[] = {
+static const real_t kbd_short_128[] = {
     FRAC_CONST(4.3795702929468881e-005), FRAC_CONST(0.00011867384265436617), FRAC_CONST(0.0002307165763996192), FRAC_CONST(0.00038947282760568383), FRAC_CONST(0.00060581272288302553),
     FRAC_CONST(0.00089199695169487453),  FRAC_CONST(0.0012617254423430522),  FRAC_CONST(0.0017301724373162003), FRAC_CONST(0.0023140071937421476),  FRAC_CONST(0.0030313989666022221),
     FRAC_CONST(0.0039020049735530842),   FRAC_CONST(0.0049469401815512024),  FRAC_CONST(0.0061887279335368318), FRAC_CONST(0.0076512306364647726),  FRAC_CONST(0.0093595599562652423),
@@ -3384,7 +3384,7 @@ static const int32_t kbd_short_128[] = {
     FRAC_CONST(0.99999850325054862),     FRAC_CONST(0.99999920402413744),    FRAC_CONST(0.9999996021706401),    FRAC_CONST(0.99999981649545566),    FRAC_CONST(0.99999992415545547),
     FRAC_CONST(0.99999997338493041),     FRAC_CONST(0.99999999295825959),    FRAC_CONST(0.99999999904096815)};
 #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t kbd_short_120[] = {
+static const real_t kbd_short_120[] = {
     FRAC_CONST(0.0000452320086910), FRAC_CONST(0.0001274564692111), FRAC_CONST(0.0002529398385345), FRAC_CONST(0.0004335140496648), FRAC_CONST(0.0006827100966952), FRAC_CONST(0.0010158708222246),
     FRAC_CONST(0.0014502162869659), FRAC_CONST(0.0020048865156264), FRAC_CONST(0.0027009618393178), FRAC_CONST(0.0035614590925043), FRAC_CONST(0.0046113018122711), FRAC_CONST(0.0058772627936484),
     FRAC_CONST(0.0073878776584103), FRAC_CONST(0.0091733284512589), FRAC_CONST(0.0112652966728373), FRAC_CONST(0.0136967855861945), FRAC_CONST(0.0165019120857793), FRAC_CONST(0.0197156688892217),
@@ -3407,7 +3407,7 @@ static const int32_t kbd_short_120[] = {
     FRAC_CONST(0.9999994840031031), FRAC_CONST(0.9999997669534347), FRAC_CONST(0.9999999060327799), FRAC_CONST(0.9999999680107184), FRAC_CONST(0.9999999918774242), FRAC_CONST(0.9999999989770326)};
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sine_long_1024[] = {
+static const real_t sine_long_1024[] = {
     FRAC_CONST(0.00076699031874270449), FRAC_CONST(0.002300969151425805),  FRAC_CONST(0.0038349425697062275), FRAC_CONST(0.0053689069639963425), FRAC_CONST(0.0069028587247297558),
     FRAC_CONST(0.0084367942423697988),  FRAC_CONST(0.0099707099074180308), FRAC_CONST(0.011504602110422714),  FRAC_CONST(0.013038467241987334),  FRAC_CONST(0.014572301692779064),
     FRAC_CONST(0.016106101853537287),   FRAC_CONST(0.017639864115082053),  FRAC_CONST(0.019173584868322623),  FRAC_CONST(0.020707260504265895),  FRAC_CONST(0.022240887414024961),
@@ -3615,7 +3615,7 @@ static const int32_t sine_long_1024[] = {
     FRAC_CONST(0.9999855873151432),     FRAC_CONST(0.99999264658070719),   FRAC_CONST(0.99999735276697821),   FRAC_CONST(0.99999970586288223)};
 
 #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t sine_long_960[] = {
+static const real_t sine_long_960[] = {
     FRAC_CONST(0.00081812299560725323), FRAC_CONST(0.0024543667964602917), FRAC_CONST(0.0040906040262347889), FRAC_CONST(0.0057268303042312674), FRAC_CONST(0.0073630412497795667),
     FRAC_CONST(0.0089992324822505774),  FRAC_CONST(0.010635399621067975),  FRAC_CONST(0.012271538285719924),  FRAC_CONST(0.013907644095770845),  FRAC_CONST(0.015543712670873098),
     FRAC_CONST(0.017179739630778748),   FRAC_CONST(0.018815720595351273),  FRAC_CONST(0.020451651184577292),  FRAC_CONST(0.022087527018578291),  FRAC_CONST(0.023723343717622358),
@@ -3810,7 +3810,7 @@ static const int32_t sine_long_960[] = {
     FRAC_CONST(0.99997289244436727),    FRAC_CONST(0.99998360157287902),   FRAC_CONST(0.9999916334443506),    FRAC_CONST(0.99999698803727821),   FRAC_CONST(0.99999966533732598)};
 #endif
 
-static const int32_t sine_short_128[] = {
+static const real_t sine_short_128[] = {
     FRAC_CONST(0.0061358846491544753), FRAC_CONST(0.01840672990580482),  FRAC_CONST(0.030674803176636626), FRAC_CONST(0.04293825693494082), FRAC_CONST(0.055195244349689934),
     FRAC_CONST(0.067443919563664051),  FRAC_CONST(0.079682437971430126), FRAC_CONST(0.091908956497132724), FRAC_CONST(0.10412163387205459), FRAC_CONST(0.11631863091190475),
     FRAC_CONST(0.12849811079379317),   FRAC_CONST(0.14065823933284921),  FRAC_CONST(0.15279718525844344),  FRAC_CONST(0.16491312048996989), FRAC_CONST(0.17700422041214875),
@@ -3839,7 +3839,7 @@ static const int32_t sine_short_128[] = {
     FRAC_CONST(0.99952941750109314),   FRAC_CONST(0.9998305817958234),   FRAC_CONST(0.99998117528260111)};
 
 #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t sine_short_120[] = {
+static const real_t sine_short_120[] = {
     FRAC_CONST(0.0065449379673518581), FRAC_CONST(0.019633692460628301), FRAC_CONST(0.032719082821776137), FRAC_CONST(0.045798866936520771), FRAC_CONST(0.058870803651189033),
     FRAC_CONST(0.071932653156719387),  FRAC_CONST(0.084982177372441667), FRAC_CONST(0.09801714032956059),  FRAC_CONST(0.11103530855427769),  FRAC_CONST(0.12403445145048532),
     FRAC_CONST(0.13701234168196802),   FRAC_CONST(0.14996675555404498),  FRAC_CONST(0.16289547339458874),  FRAC_CONST(0.17579627993435451),  FRAC_CONST(0.18866696468655525),
@@ -3867,7 +3867,7 @@ static const int32_t sine_short_120[] = {
 #endif
 
 #ifdef LD_DEC
-static const int32_t sine_mid_512[] = {
+static const real_t sine_mid_512[] = {
     FRAC_CONST(0.0015339801862847655), FRAC_CONST(0.0046019261204485705), FRAC_CONST(0.007669828739531097), FRAC_CONST(0.010737659167264491), FRAC_CONST(0.013805388528060391),
     FRAC_CONST(0.01687298794728171),   FRAC_CONST(0.019940428551514441),  FRAC_CONST(0.023007681468839369), FRAC_CONST(0.026074717829103901), FRAC_CONST(0.029141508764193722),
     FRAC_CONST(0.032208025408304586),  FRAC_CONST(0.035274238898213947),  FRAC_CONST(0.038340120373552694), FRAC_CONST(0.041405640977076739), FRAC_CONST(0.044470771854938668),
@@ -3973,7 +3973,7 @@ static const int32_t sine_mid_512[] = {
     FRAC_CONST(0.9999894110819284),    FRAC_CONST(0.99999882345170188)};
 
     #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t sine_mid_480[] = {
+static const real_t sine_mid_480[] = {
     FRAC_CONST(0.0016362454436240478), FRAC_CONST(0.00490871880799799),  FRAC_CONST(0.0081811396039371282), FRAC_CONST(0.011453472786443779), FRAC_CONST(0.014725683311458524),
     FRAC_CONST(0.017997736136235509),  FRAC_CONST(0.021269596219717739), FRAC_CONST(0.024541228522912285),  FRAC_CONST(0.027812598009265607), FRAC_CONST(0.03108366964503869),
     FRAC_CONST(0.034354408399682276),  FRAC_CONST(0.037624779246211978), FRAC_CONST(0.04089474716158345),   FRAC_CONST(0.044164277127067358), FRAC_CONST(0.047433334128624507),
@@ -4072,7 +4072,7 @@ static const int32_t sine_mid_480[] = {
     FRAC_CONST(0.99989157124710804),   FRAC_CONST(0.9999344068293331),   FRAC_CONST(0.99996653391740109),   FRAC_CONST(0.99998795216725689),  FRAC_CONST(0.99999866134952808)};
     #endif
 
-static const int32_t ld_mid_512[] = {FRAC_CONST(0),
+static const real_t ld_mid_512[] = {FRAC_CONST(0),
                                     FRAC_CONST(0),
                                     FRAC_CONST(0),
                                     FRAC_CONST(0),
@@ -4586,7 +4586,7 @@ static const int32_t ld_mid_512[] = {FRAC_CONST(0),
                                     FRAC_CONST(1)};
 
     #ifdef ALLOW_SMALL_FRAMELENGTH
-static const int32_t ld_mid_480[] = {FRAC_CONST(0),
+static const real_t ld_mid_480[] = {FRAC_CONST(0),
                                     FRAC_CONST(0),
                                     FRAC_CONST(0),
                                     FRAC_CONST(0),
@@ -5070,7 +5070,7 @@ static const int32_t ld_mid_480[] = {FRAC_CONST(0),
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef FIXED_POINT
-static int32_t pow05_table[] = {
+static real_t pow05_table[] = {
     COEF_CONST(1.68179283050743), /* 0.5^(-3/4) */
     COEF_CONST(1.41421356237310), /* 0.5^(-2/4) */
     COEF_CONST(1.18920711500272), /* 0.5^(-1/4) */
@@ -5082,7 +5082,7 @@ static int32_t pow05_table[] = {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef MAIN_DEC
-static const int32_t mnt_table[128] = {
+static const real_t mnt_table[128] = {
     COEF_CONST(0.9531250000), COEF_CONST(0.9453125000), COEF_CONST(0.9375000000), COEF_CONST(0.9296875000), COEF_CONST(0.9257812500), COEF_CONST(0.9179687500), COEF_CONST(0.9101562500),
     COEF_CONST(0.9023437500), COEF_CONST(0.8984375000), COEF_CONST(0.8906250000), COEF_CONST(0.8828125000), COEF_CONST(0.8789062500), COEF_CONST(0.8710937500), COEF_CONST(0.8671875000),
     COEF_CONST(0.8593750000), COEF_CONST(0.8515625000), COEF_CONST(0.8476562500), COEF_CONST(0.8398437500), COEF_CONST(0.8359375000), COEF_CONST(0.8281250000), COEF_CONST(0.8242187500),
@@ -5102,7 +5102,7 @@ static const int32_t mnt_table[128] = {
     COEF_CONST(0.5078125000), COEF_CONST(0.5078125000), COEF_CONST(0.5039062500), COEF_CONST(0.5039062500), COEF_CONST(0.5000000000), COEF_CONST(0.4980468750), COEF_CONST(0.4960937500),
     COEF_CONST(0.4941406250), COEF_CONST(0.4921875000), COEF_CONST(0.4902343750), COEF_CONST(0.4882812500), COEF_CONST(0.4863281250), COEF_CONST(0.4843750000), COEF_CONST(0.4824218750),
     COEF_CONST(0.4804687500), COEF_CONST(0.4785156250)};
-static const int32_t exp_table[128] = {COEF_CONST(0.50000000000000000000000000000000000000000000000000),
+static const real_t exp_table[128] = {COEF_CONST(0.50000000000000000000000000000000000000000000000000),
                                       COEF_CONST(0.25000000000000000000000000000000000000000000000000),
                                       COEF_CONST(0.12500000000000000000000000000000000000000000000000),
                                       COEF_CONST(0.06250000000000000000000000000000000000000000000000),
@@ -5233,7 +5233,7 @@ static const int32_t exp_table[128] = {COEF_CONST(0.5000000000000000000000000000
 #endif /* MAIN_DEC */
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
-static const int32_t pow2sf_tab[] = {2.9802322387695313E-008,
+static const real_t pow2sf_tab[] = {2.9802322387695313E-008,
                                     5.9604644775390625E-008,
                                     1.1920928955078125E-007,
                                     2.384185791015625E-007,
@@ -5358,7 +5358,7 @@ static const uint16_t* swb_offset_1024_window[] = {
 };
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
-static const int32_t iq_table[IQ_TABLE_SIZE] = {0,
+static const real_t iq_table[IQ_TABLE_SIZE] = {0,
                                                1,
                                                2.5198420997897464,
                                                4.3267487109222245,
@@ -13556,7 +13556,7 @@ static const int32_t iq_table[IQ_TABLE_SIZE] = {0,
     #else
         #define IQ_TABLE_SIZE 1026
     #endif
-static const int32_t iq_table[IQ_TABLE_SIZE] = {REAL_CONST(0.0),
+static const real_t iq_table[IQ_TABLE_SIZE] = {REAL_CONST(0.0),
                                                REAL_CONST(1.0 / 8.0),
                                                REAL_CONST(2.5198420997897464 / 8.0),
                                                REAL_CONST(4.3267487109222245 / 8.0),
@@ -21754,16 +21754,16 @@ static const int32_t iq_table[IQ_TABLE_SIZE] = {REAL_CONST(0.0),
 };
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static int32_t tns_coef_0_3[] = {COEF_CONST(0.0),           COEF_CONST(0.4338837391),  COEF_CONST(0.7818314825),  COEF_CONST(0.9749279122),  COEF_CONST(-0.9848077530), COEF_CONST(-0.8660254038),
+static real_t tns_coef_0_3[] = {COEF_CONST(0.0),           COEF_CONST(0.4338837391),  COEF_CONST(0.7818314825),  COEF_CONST(0.9749279122),  COEF_CONST(-0.9848077530), COEF_CONST(-0.8660254038),
                                 COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433), COEF_CONST(-0.4338837391), COEF_CONST(-0.7818314825), COEF_CONST(-0.9749279122), COEF_CONST(-0.9749279122),
                                 COEF_CONST(-0.9848077530), COEF_CONST(-0.8660254038), COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433)};
-static int32_t tns_coef_0_4[] = {COEF_CONST(0.0),           COEF_CONST(0.2079116908),  COEF_CONST(0.4067366431),  COEF_CONST(0.5877852523),  COEF_CONST(0.7431448255),  COEF_CONST(0.8660254038),
+static real_t tns_coef_0_4[] = {COEF_CONST(0.0),           COEF_CONST(0.2079116908),  COEF_CONST(0.4067366431),  COEF_CONST(0.5877852523),  COEF_CONST(0.7431448255),  COEF_CONST(0.8660254038),
                                 COEF_CONST(0.9510565163),  COEF_CONST(0.9945218954),  COEF_CONST(-0.9957341763), COEF_CONST(-0.9618256432), COEF_CONST(-0.8951632914), COEF_CONST(-0.7980172273),
                                 COEF_CONST(-0.6736956436), COEF_CONST(-0.5264321629), COEF_CONST(-0.3612416662), COEF_CONST(-0.1837495178)};
-static int32_t tns_coef_1_3[] = {COEF_CONST(0.0),           COEF_CONST(0.4338837391),  COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433), COEF_CONST(0.9749279122),  COEF_CONST(0.7818314825),
+static real_t tns_coef_1_3[] = {COEF_CONST(0.0),           COEF_CONST(0.4338837391),  COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433), COEF_CONST(0.9749279122),  COEF_CONST(0.7818314825),
                                 COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433), COEF_CONST(-0.4338837391), COEF_CONST(-0.7818314825), COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433),
                                 COEF_CONST(-0.7818314825), COEF_CONST(-0.4338837391), COEF_CONST(-0.6427876097), COEF_CONST(-0.3420201433)};
-static int32_t tns_coef_1_4[] = {COEF_CONST(0.0),           COEF_CONST(0.2079116908),  COEF_CONST(0.4067366431),  COEF_CONST(0.5877852523), COEF_CONST(-0.6736956436), COEF_CONST(-0.5264321629),
+static real_t tns_coef_1_4[] = {COEF_CONST(0.0),           COEF_CONST(0.2079116908),  COEF_CONST(0.4067366431),  COEF_CONST(0.5877852523), COEF_CONST(-0.6736956436), COEF_CONST(-0.5264321629),
                                 COEF_CONST(-0.3612416662), COEF_CONST(-0.1837495178), COEF_CONST(0.9945218954),  COEF_CONST(0.9510565163), COEF_CONST(0.8660254038),  COEF_CONST(0.7431448255),
                                 COEF_CONST(-0.6736956436), COEF_CONST(-0.5264321629), COEF_CONST(-0.3612416662), COEF_CONST(-0.1837495178)};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -21781,7 +21781,7 @@ static rvlc_huff_table book_escape[] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef SBR_LOW_POWER
-static const int32_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),  COEF_CONST(0.998118102550507),  COEF_CONST(0.993906974792480),  COEF_CONST(0.987301409244537),  COEF_CONST(0.978317379951477),
+static const real_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),  COEF_CONST(0.998118102550507),  COEF_CONST(0.993906974792480),  COEF_CONST(0.987301409244537),  COEF_CONST(0.978317379951477),
                                      COEF_CONST(0.966976463794708),  COEF_CONST(0.953306019306183),  COEF_CONST(0.937339007854462),  COEF_CONST(0.919113874435425),  COEF_CONST(0.898674488067627),
                                      COEF_CONST(0.876070082187653),  COEF_CONST(0.851355195045471),  COEF_CONST(0.824589252471924),  COEF_CONST(0.795836925506592),  COEF_CONST(0.765167236328125),
                                      COEF_CONST(0.732654273509979),  COEF_CONST(0.698376238346100),  COEF_CONST(0.662415742874146),  COEF_CONST(0.624859452247620),  COEF_CONST(0.585797846317291),
@@ -21824,13 +21824,13 @@ static const int32_t dct4_64_tab[] = {COEF_CONST(0.999924719333649),  COEF_CONST
 #endif     // SBR_DEC
 #ifdef SSR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sine_short_32[] = {0.0245412290, 0.0735645667, 0.1224106774, 0.1709618866, 0.2191012502, 0.2667127550, 0.3136817515, 0.3598950505, 0.4052413106, 0.4496113360, 0.4928981960,
+static const real_t sine_short_32[] = {0.0245412290, 0.0735645667, 0.1224106774, 0.1709618866, 0.2191012502, 0.2667127550, 0.3136817515, 0.3598950505, 0.4052413106, 0.4496113360, 0.4928981960,
                                        0.5349976420, 0.5758082271, 0.6152316332, 0.6531728506, 0.6895405650, 0.7242470980, 0.7572088838, 0.7883464694, 0.8175848126, 0.8448535800, 0.8700870275,
                                        0.8932242990, 0.9142097831, 0.9329928160, 0.9495282173, 0.9637760520, 0.9757021666, 0.9852776527, 0.9924795628, 0.9972904325, 0.9996988177};
     #ifdef SSR_DEC
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     #endif /*SSR_DEC*/
-static int32_t sine_long_256[] = {
+static real_t sine_long_256[] = {
     0.0030679568, 0.0092037553, 0.0153392069, 0.0214740802, 0.0276081469, 0.0337411724, 0.0398729295, 0.0460031852, 0.0521317050, 0.0582582653, 0.0643826351, 0.0705045760, 0.0766238645, 0.0827402696,
     0.0888535529, 0.0949634984, 0.1010698676, 0.1071724296, 0.1132709533, 0.1193652153, 0.1254549921, 0.1315400302, 0.1376201212, 0.1436950415, 0.1497645378, 0.1558284014, 0.1618863940, 0.1679383069,
     0.1739838719, 0.1800229102, 0.1860551536, 0.1920804083, 0.1980984211, 0.2041089684, 0.2101118416, 0.2161068022, 0.2220936269, 0.2280720919, 0.2340419590, 0.2400030345, 0.2459550500, 0.2518978119,
@@ -21853,7 +21853,7 @@ static int32_t sine_long_256[] = {
     #ifdef SSR_DEC
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     #endif /*SSR_DEC*/
-static const int32_t kbd_short_32[] = {0.0000875914060105, 0.0009321760265333, 0.0032114611466596, 0.0081009893216786, 0.0171240286619181, 0.0320720743527833, 0.0548307856028528, 0.0871361822564870,
+static const real_t kbd_short_32[] = {0.0000875914060105, 0.0009321760265333, 0.0032114611466596, 0.0081009893216786, 0.0171240286619181, 0.0320720743527833, 0.0548307856028528, 0.0871361822564870,
                                       0.1302923415174603, 0.1848955425508276, 0.2506163195331889, 0.3260874142923209, 0.4089316830907141, 0.4959414909423747, 0.5833939894958904, 0.6674601983218376,
                                       0.7446454751465113, 0.8121892962974020, 0.8683559394406505, 0.9125649996381605, 0.9453396205809574, 0.9680864942677585, 0.9827581789763112, 0.9914756203467121,
                                       0.9961964092194694, 0.9984956609571091, 0.9994855586984285, 0.9998533730714648, 0.9999671864476404, 0.9999948432453556, 0.9999995655238333, 0.9999999961638728};
@@ -21861,7 +21861,7 @@ static const int32_t kbd_short_32[] = {0.0000875914060105, 0.0009321760265333, 0
     #ifdef SSR_DEC
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     #endif /*SSR_DEC*/
-static const int32_t kbd_long_256[] = {
+static const real_t kbd_long_256[] = {
     0.0005851230124487, 0.0009642149851497, 0.0013558207534965, 0.0017771849644394, 0.0022352533849672, 0.0027342299070304, 0.0032773001022195, 0.0038671998069216, 0.0045064443384152,
     0.0051974336885144, 0.0059425050016407, 0.0067439602523141, 0.0076040812644888, 0.0085251378135895, 0.0095093917383048, 0.0105590986429280, 0.0116765080854300, 0.0128638627792770,
     0.0141233971318631, 0.0154573353235409, 0.0168678890600951, 0.0183572550877256, 0.0199276125319803, 0.0215811201042484, 0.0233199132076965, 0.0251461009666641, 0.0270617631981826,
@@ -21895,24 +21895,24 @@ static const int32_t kbd_long_256[] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 /* filters are mirrored in coef 6, second half left out */
-static const int32_t p8_13_20[7] = {FRAC_CONST(0.00746082949812),
+static const real_t p8_13_20[7] = {FRAC_CONST(0.00746082949812),
                                    FRAC_CONST(0.02270420949825),
                                    FRAC_CONST(0.04546865930473),
                                    FRAC_CONST(0.07266113929591),
                                    FRAC_CONST(0.09885108575264),
                                    FRAC_CONST(0.11793710567217),
                                    FRAC_CONST(0.125)};
-static const int32_t p2_13_20[7] = {FRAC_CONST(0.0), FRAC_CONST(0.01899487526049), FRAC_CONST(0.0), FRAC_CONST(-0.07293139167538), FRAC_CONST(0.0), FRAC_CONST(0.30596630545168), FRAC_CONST(0.5)};
-static const int32_t p12_13_34[7] = {FRAC_CONST(0.04081179924692), FRAC_CONST(0.03812810994926), FRAC_CONST(0.05144908135699), FRAC_CONST(0.06399831151592),
+static const real_t p2_13_20[7] = {FRAC_CONST(0.0), FRAC_CONST(0.01899487526049), FRAC_CONST(0.0), FRAC_CONST(-0.07293139167538), FRAC_CONST(0.0), FRAC_CONST(0.30596630545168), FRAC_CONST(0.5)};
+static const real_t p12_13_34[7] = {FRAC_CONST(0.04081179924692), FRAC_CONST(0.03812810994926), FRAC_CONST(0.05144908135699), FRAC_CONST(0.06399831151592),
                                     FRAC_CONST(0.07428313801106), FRAC_CONST(0.08100347892914), FRAC_CONST(0.08333333333333)};
-static const int32_t p8_13_34[7] = {FRAC_CONST(0.01565675600122),
+static const real_t p8_13_34[7] = {FRAC_CONST(0.01565675600122),
                                    FRAC_CONST(0.03752716391991),
                                    FRAC_CONST(0.05417891378782),
                                    FRAC_CONST(0.08417044116767),
                                    FRAC_CONST(0.10307344158036),
                                    FRAC_CONST(0.12222452249753),
                                    FRAC_CONST(0.125)};
-static const int32_t p4_13_34[7] = {FRAC_CONST(-0.05908211155639), FRAC_CONST(-0.04871498374946), FRAC_CONST(0.0), FRAC_CONST(0.07778723915851),
+static const real_t p4_13_34[7] = {FRAC_CONST(-0.05908211155639), FRAC_CONST(-0.04871498374946), FRAC_CONST(0.0), FRAC_CONST(0.07778723915851),
                                    FRAC_CONST(0.16486303567403),  FRAC_CONST(0.23279856662996),  FRAC_CONST(0.25)};
     #ifdef PARAM_32KHZ
 static const uint8_t delay_length_d[2][NO_ALLPASS_LINKS] = {
@@ -21924,7 +21924,7 @@ static const uint8_t delay_length_d[NO_ALLPASS_LINKS] = {
     3, 4, 5 /* d_48kHz */
 };
     #endif                                          //  PARAM_32KHZ
-static const int32_t   filter_a[NO_ALLPASS_LINKS] = {/* a(m) = exp(-d_48kHz(m)/7) */
+static const real_t   filter_a[NO_ALLPASS_LINKS] = {/* a(m) = exp(-d_48kHz(m)/7) */
                                                   FRAC_CONST(0.65143905753106), FRAC_CONST(0.56471812200776), FRAC_CONST(0.48954165955695)};
 static const uint8_t  group_border20[10 + 12 + 1] = {6,  7,  0, 1, 2, 3, /* 6 subqmf subbands */
                                                      9,  8,              /* 2 subqmf subbands */
@@ -22410,12 +22410,12 @@ static const complex_t Q_Fract_allpass_SubQmf34[][3] = {
     {{FRAC_CONST(0.8910064697), FRAC_CONST(0.4539906085)}, {FRAC_CONST(0.7071067691), FRAC_CONST(-0.7071067691)}, {FRAC_CONST(0.6730125546), FRAC_CONST(-0.7396310568)}},
     {{FRAC_CONST(-0.6129069924), FRAC_CONST(-0.7901550531)}, {FRAC_CONST(0.7071067691), FRAC_CONST(0.7071067691)}, {FRAC_CONST(-0.9917160273), FRAC_CONST(-0.1284494549)}}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t cos_alphas[] = {COEF_CONST(1.0000000000), COEF_CONST(0.9841239700), COEF_CONST(0.9594738210), COEF_CONST(0.8946843079),
+static const real_t cos_alphas[] = {COEF_CONST(1.0000000000), COEF_CONST(0.9841239700), COEF_CONST(0.9594738210), COEF_CONST(0.8946843079),
                                     COEF_CONST(0.8269340931), COEF_CONST(0.7071067812), COEF_CONST(0.4533210856), COEF_CONST(0.0000000000)};
-static const int32_t sin_alphas[] = {COEF_CONST(0.0000000000), COEF_CONST(0.1774824264), COEF_CONST(0.2817977763), COEF_CONST(0.4466989918),
+static const real_t sin_alphas[] = {COEF_CONST(0.0000000000), COEF_CONST(0.1774824264), COEF_CONST(0.2817977763), COEF_CONST(0.4466989918),
                                     COEF_CONST(0.5622988580), COEF_CONST(0.7071067812), COEF_CONST(0.8913472911), COEF_CONST(1.0000000000)};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t cos_betas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000),
+static const real_t cos_betas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000),
                                               COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000)},
                                              {COEF_CONST(1.0000000000), COEF_CONST(0.9995871699), COEF_CONST(0.9989419133), COEF_CONST(0.9972204583), COEF_CONST(0.9953790839),
                                               COEF_CONST(0.9920112747), COEF_CONST(0.9843408180), COEF_CONST(0.9681727381)},
@@ -22432,7 +22432,7 @@ static const int32_t cos_betas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_CO
                                              {COEF_CONST(1.0000000000), COEF_CONST(0.9858996945), COEF_CONST(0.9639898866), COEF_CONST(0.9063034786), COEF_CONST(0.8458214608),
                                               COEF_CONST(0.7384262300), COEF_CONST(0.5089811277), COEF_CONST(0.0905465944)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sin_betas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000),
+static const real_t sin_betas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000),
                                               COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000)},
                                              {COEF_CONST(0.0000000000), COEF_CONST(-0.0287313368), COEF_CONST(-0.0459897147), COEF_CONST(-0.0745074328), COEF_CONST(-0.0960233266),
                                               COEF_CONST(-0.1261492408), COEF_CONST(-0.1762757894), COEF_CONST(-0.2502829383)},
@@ -22449,7 +22449,7 @@ static const int32_t sin_betas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_CO
                                              {COEF_CONST(0.0000000000), COEF_CONST(-0.1673373610), COEF_CONST(-0.2659389001), COEF_CONST(-0.4226275012), COEF_CONST(-0.5334660781),
                                               COEF_CONST(-0.6743342664), COEF_CONST(-0.8607776784), COEF_CONST(-0.9958922202)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t cos_betas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000),
+static const real_t cos_betas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000), COEF_CONST(1.0000000000),
                                             COEF_CONST(1.0000000000), COEF_CONST(1.0000000000)},
                                            {COEF_CONST(1.0000000000), COEF_CONST(0.9995871699), COEF_CONST(0.9989419133), COEF_CONST(0.9972204583), COEF_CONST(0.9953790839), COEF_CONST(0.9920112747),
                                             COEF_CONST(0.9843408180), COEF_CONST(0.9681727381)},
@@ -22482,7 +22482,7 @@ static const int32_t cos_betas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CONS
                                            {COEF_CONST(1.0000000000), COEF_CONST(0.9842241136), COEF_CONST(0.9597283916), COEF_CONST(0.8953385094), COEF_CONST(0.8279961409), COEF_CONST(0.7088635748),
                                             COEF_CONST(0.4564246834), COEF_CONST(0.0049751355)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sin_betas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000),
+static const real_t sin_betas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000), COEF_CONST(0.0000000000),
                                             COEF_CONST(0.0000000000), COEF_CONST(0.0000000000)},
                                            {COEF_CONST(0.0000000000), COEF_CONST(-0.0287313368), COEF_CONST(-0.0459897147), COEF_CONST(-0.0745074328), COEF_CONST(-0.0960233266),
                                             COEF_CONST(-0.1261492408), COEF_CONST(-0.1762757894), COEF_CONST(-0.2502829383)},
@@ -22515,7 +22515,7 @@ static const int32_t sin_betas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CONS
                                            {COEF_CONST(0.0000000000), COEF_CONST(-0.1769262394), COEF_CONST(-0.2809295540), COEF_CONST(-0.4453862969), COEF_CONST(-0.5607337966),
                                             COEF_CONST(-0.7053456119), COEF_CONST(-0.8897620516), COEF_CONST(-0.9999876239)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sincos_alphas_B_normal[][8] = {{COEF_CONST(0.0561454100), COEF_CONST(0.0526385859), COEF_CONST(0.0472937334), COEF_CONST(0.0338410641), COEF_CONST(0.0207261065),
+static const real_t sincos_alphas_B_normal[][8] = {{COEF_CONST(0.0561454100), COEF_CONST(0.0526385859), COEF_CONST(0.0472937334), COEF_CONST(0.0338410641), COEF_CONST(0.0207261065),
                                                     COEF_CONST(0.0028205635), COEF_CONST(0.0028205635), COEF_CONST(0.0028205635)},
                                                    {COEF_CONST(0.1249065138), COEF_CONST(0.1173697697), COEF_CONST(0.1057888284), COEF_CONST(0.0761985131), COEF_CONST(0.0468732723),
                                                     COEF_CONST(0.0063956103), COEF_CONST(0.0063956103), COEF_CONST(0.0063956103)},
@@ -22546,7 +22546,7 @@ static const int32_t sincos_alphas_B_normal[][8] = {{COEF_CONST(0.0561454100), C
                                                    {COEF_CONST(0.9984226014), COEF_CONST(0.9986136287), COEF_CONST(0.9988810254), COEF_CONST(0.9994272242), COEF_CONST(0.9997851906),
                                                     COEF_CONST(0.9999960221), COEF_CONST(0.9999960221), COEF_CONST(0.9999960221)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sincos_alphas_B_fine[][8] = {{COEF_CONST(0.0031622158), COEF_CONST(0.0029630181), COEF_CONST(0.0026599892), COEF_CONST(0.0019002704), COEF_CONST(0.0011626042),
+static const real_t sincos_alphas_B_fine[][8] = {{COEF_CONST(0.0031622158), COEF_CONST(0.0029630181), COEF_CONST(0.0026599892), COEF_CONST(0.0019002704), COEF_CONST(0.0011626042),
                                                   COEF_CONST(0.0001580278), COEF_CONST(0.0001580278), COEF_CONST(0.0001580278)},
                                                  {COEF_CONST(0.0056232673), COEF_CONST(0.0052689825), COEF_CONST(0.0047302825), COEF_CONST(0.0033791756), COEF_CONST(0.0020674015),
                                                   COEF_CONST(0.0002811710), COEF_CONST(0.0002811710), COEF_CONST(0.0002811710)},
@@ -22609,7 +22609,7 @@ static const int32_t sincos_alphas_B_fine[][8] = {{COEF_CONST(0.0031622158), COE
                                                  {COEF_CONST(0.9999950000), COEF_CONST(0.9999956102), COEF_CONST(0.9999964621), COEF_CONST(0.9999981945), COEF_CONST(0.9999993242),
                                                   COEF_CONST(0.9999999875), COEF_CONST(0.9999999875), COEF_CONST(0.9999999875)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t cos_gammas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(0.9841239707), COEF_CONST(0.9594738226), COEF_CONST(0.8946843024), COEF_CONST(0.8269341029),
+static const real_t cos_gammas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(0.9841239707), COEF_CONST(0.9594738226), COEF_CONST(0.8946843024), COEF_CONST(0.8269341029),
                                                COEF_CONST(0.7245688486), COEF_CONST(0.7245688486), COEF_CONST(0.7245688486)},
                                               {COEF_CONST(1.0000000000), COEF_CONST(0.9849690570), COEF_CONST(0.9617776789), COEF_CONST(0.9020941550), COEF_CONST(0.8436830391),
                                                COEF_CONST(0.7846832804), COEF_CONST(0.7846832804), COEF_CONST(0.7846832804)},
@@ -22626,7 +22626,7 @@ static const int32_t cos_gammas_normal[][8] = {{COEF_CONST(1.0000000000), COEF_C
                                               {COEF_CONST(1.0000000000), COEF_CONST(0.9998081748), COEF_CONST(0.9995400312), COEF_CONST(0.9989936459), COEF_CONST(0.9986365356),
                                                COEF_CONST(0.9984265591), COEF_CONST(0.9984265591), COEF_CONST(0.9984265591)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t cos_gammas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(0.9841239707), COEF_CONST(0.9594738226), COEF_CONST(0.8946843024), COEF_CONST(0.8269341029), COEF_CONST(0.7245688486),
+static const real_t cos_gammas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CONST(0.9841239707), COEF_CONST(0.9594738226), COEF_CONST(0.8946843024), COEF_CONST(0.8269341029), COEF_CONST(0.7245688486),
                                              COEF_CONST(0.7245688486), COEF_CONST(0.7245688486)},
                                             {COEF_CONST(1.0000000000), COEF_CONST(0.9849690570), COEF_CONST(0.9617776789), COEF_CONST(0.9020941550), COEF_CONST(0.8436830391), COEF_CONST(0.7846832804),
                                              COEF_CONST(0.7846832804), COEF_CONST(0.7846832804)},
@@ -22659,7 +22659,7 @@ static const int32_t cos_gammas_fine[][8] = {{COEF_CONST(1.0000000000), COEF_CON
                                             {COEF_CONST(1.0000000000), COEF_CONST(0.9999993891), COEF_CONST(0.9999985397), COEF_CONST(0.9999968037), COEF_CONST(0.9999956786), COEF_CONST(0.9999950155),
                                              COEF_CONST(0.9999950155), COEF_CONST(0.9999950155)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sin_gammas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.1774824223), COEF_CONST(0.2817977711), COEF_CONST(0.4466990028), COEF_CONST(0.5622988435),
+static const real_t sin_gammas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.1774824223), COEF_CONST(0.2817977711), COEF_CONST(0.4466990028), COEF_CONST(0.5622988435),
                                                COEF_CONST(0.6892024258), COEF_CONST(0.6892024258), COEF_CONST(0.6892024258)},
                                               {COEF_CONST(0.0000000000), COEF_CONST(0.1727308798), COEF_CONST(0.2738315110), COEF_CONST(0.4315392630), COEF_CONST(0.5368416242),
                                                COEF_CONST(0.6198968861), COEF_CONST(0.6198968861), COEF_CONST(0.6198968861)},
@@ -22676,7 +22676,7 @@ static const int32_t sin_gammas_normal[][8] = {{COEF_CONST(0.0000000000), COEF_C
                                               {COEF_CONST(0.0000000000), COEF_CONST(0.0195860576), COEF_CONST(0.0303269852), COEF_CONST(0.0448519274), COEF_CONST(0.0522022017),
                                                COEF_CONST(0.0560750040), COEF_CONST(0.0560750040), COEF_CONST(0.0560750040)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sin_gammas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.1774824223), COEF_CONST(0.2817977711), COEF_CONST(0.4466990028), COEF_CONST(0.5622988435), COEF_CONST(0.6892024258),
+static const real_t sin_gammas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CONST(0.1774824223), COEF_CONST(0.2817977711), COEF_CONST(0.4466990028), COEF_CONST(0.5622988435), COEF_CONST(0.6892024258),
                                              COEF_CONST(0.6892024258), COEF_CONST(0.6892024258)},
                                             {COEF_CONST(0.0000000000), COEF_CONST(0.1727308798), COEF_CONST(0.2738315110), COEF_CONST(0.4315392630), COEF_CONST(0.5368416242), COEF_CONST(0.6198968861),
                                              COEF_CONST(0.6198968861), COEF_CONST(0.6198968861)},
@@ -22709,11 +22709,11 @@ static const int32_t sin_gammas_fine[][8] = {{COEF_CONST(0.0000000000), COEF_CON
                                             {COEF_CONST(0.0000000000), COEF_CONST(0.0011053943), COEF_CONST(0.0017089869), COEF_CONST(0.0025283670), COEF_CONST(0.0029398552), COEF_CONST(0.0031573685),
                                              COEF_CONST(0.0031573685), COEF_CONST(0.0031573685)}};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sf_iid_normal[] = {COEF_CONST(1.4119827747), COEF_CONST(1.4031381607), COEF_CONST(1.3868767023), COEF_CONST(1.3483997583), COEF_CONST(1.2912493944),
+static const real_t sf_iid_normal[] = {COEF_CONST(1.4119827747), COEF_CONST(1.4031381607), COEF_CONST(1.3868767023), COEF_CONST(1.3483997583), COEF_CONST(1.2912493944),
                                        COEF_CONST(1.1960374117), COEF_CONST(1.1073724031), COEF_CONST(1.0000000000), COEF_CONST(0.8796171546), COEF_CONST(0.7546485662),
                                        COEF_CONST(0.5767799020), COEF_CONST(0.4264014363), COEF_CONST(0.2767182887), COEF_CONST(0.1766446233), COEF_CONST(0.0794016272)};
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t sf_iid_fine[] = {COEF_CONST(1.4142065048), COEF_CONST(1.4141912460), COEF_CONST(1.4141428471), COEF_CONST(1.4139900208), COEF_CONST(1.4135069847), COEF_CONST(1.4119827747),
+static const real_t sf_iid_fine[] = {COEF_CONST(1.4142065048), COEF_CONST(1.4141912460), COEF_CONST(1.4141428471), COEF_CONST(1.4139900208), COEF_CONST(1.4135069847), COEF_CONST(1.4119827747),
                                      COEF_CONST(1.4097729921), COEF_CONST(1.4053947926), COEF_CONST(1.3967796564), COEF_CONST(1.3800530434), COEF_CONST(1.3483997583), COEF_CONST(1.3139201403),
                                      COEF_CONST(1.2643101215), COEF_CONST(1.1960374117), COEF_CONST(1.1073724031), COEF_CONST(1.0000000000), COEF_CONST(0.8796171546), COEF_CONST(0.7546485662),
                                      COEF_CONST(0.6336560845), COEF_CONST(0.5230810642), COEF_CONST(0.4264014363), COEF_CONST(0.3089554012), COEF_CONST(0.2213746458), COEF_CONST(0.1576878875),
@@ -22722,7 +22722,7 @@ static const int32_t sf_iid_fine[] = {COEF_CONST(1.4142065048), COEF_CONST(1.414
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t E_pan_tab[25] = {FRAC_CONST(0.000244081), FRAC_CONST(0.000488043), FRAC_CONST(0.00097561), FRAC_CONST(0.00194932), FRAC_CONST(0.00389105),
+static const real_t E_pan_tab[25] = {FRAC_CONST(0.000244081), FRAC_CONST(0.000488043), FRAC_CONST(0.00097561), FRAC_CONST(0.00194932), FRAC_CONST(0.00389105),
                                      FRAC_CONST(0.00775194),  FRAC_CONST(0.0153846),   FRAC_CONST(0.030303),   FRAC_CONST(0.0588235),  FRAC_CONST(0.111111),
                                      FRAC_CONST(0.2),         FRAC_CONST(0.333333),    FRAC_CONST(0.5),        FRAC_CONST(0.666667),   FRAC_CONST(0.8),
                                      FRAC_CONST(0.888889),    FRAC_CONST(0.941176),    FRAC_CONST(0.969697),   FRAC_CONST(0.984615),   FRAC_CONST(0.992248),
@@ -22732,7 +22732,7 @@ static const int32_t E_pan_tab[25] = {FRAC_CONST(0.000244081), FRAC_CONST(0.0004
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t E_deq_tab[64] = {
+static const real_t E_deq_tab[64] = {
     64.0f,         128.0f,        256.0f,        512.0f,        1024.0f,       2048.0f,       4096.0f,       8192.0f,       16384.0f,      32768.0f,      65536.0f,      131072.0f,     262144.0f,
     524288.0f,     1.04858E+006f, 2.09715E+006f, 4.1943E+006f,  8.38861E+006f, 1.67772E+007f, 3.35544E+007f, 6.71089E+007f, 1.34218E+008f, 2.68435E+008f, 5.36871E+008f, 1.07374E+009f, 2.14748E+009f,
     4.29497E+009f, 8.58993E+009f, 1.71799E+010f, 3.43597E+010f, 6.87195E+010f, 1.37439E+011f, 2.74878E+011f, 5.49756E+011f, 1.09951E+012f, 2.19902E+012f, 4.39805E+012f, 8.79609E+012f, 1.75922E+013f,
@@ -22744,7 +22744,7 @@ static const int32_t E_deq_tab[64] = {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
 /* table for Q_div2 values when no coupling */
-static const int32_t Q_div2_tab[31] = {FRAC_CONST(0.984615),     FRAC_CONST(0.969697),     FRAC_CONST(0.941176),     FRAC_CONST(0.888889),     FRAC_CONST(0.8),          FRAC_CONST(0.666667),
+static const real_t Q_div2_tab[31] = {FRAC_CONST(0.984615),     FRAC_CONST(0.969697),     FRAC_CONST(0.941176),     FRAC_CONST(0.888889),     FRAC_CONST(0.8),          FRAC_CONST(0.666667),
                                       FRAC_CONST(0.5),          FRAC_CONST(0.333333),     FRAC_CONST(0.2),          FRAC_CONST(0.111111),     FRAC_CONST(0.0588235),    FRAC_CONST(0.030303),
                                       FRAC_CONST(0.0153846),    FRAC_CONST(0.00775194),   FRAC_CONST(0.00389105),   FRAC_CONST(0.00194932),   FRAC_CONST(0.00097561),   FRAC_CONST(0.000488043),
                                       FRAC_CONST(0.000244081),  FRAC_CONST(0.000122055),  FRAC_CONST(6.10314E-005), FRAC_CONST(3.05166E-005), FRAC_CONST(1.52586E-005), FRAC_CONST(7.62934E-006),
@@ -22755,7 +22755,7 @@ static const int32_t Q_div2_tab[31] = {FRAC_CONST(0.984615),     FRAC_CONST(0.96
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t Q_div2_tab_left[31][13] = {
+static const real_t Q_div2_tab_left[31][13] = {
     {FRAC_CONST(0.0302959), FRAC_CONST(0.111015), FRAC_CONST(0.332468), FRAC_CONST(0.663212), FRAC_CONST(0.882759), FRAC_CONST(0.962406), FRAC_CONST(0.984615), FRAC_CONST(0.990329),
      FRAC_CONST(0.991768), FRAC_CONST(0.992128), FRAC_CONST(0.992218), FRAC_CONST(0.992241), FRAC_CONST(0.992246)},
     {FRAC_CONST(0.0153809), FRAC_CONST(0.0587695), FRAC_CONST(0.199377), FRAC_CONST(0.496124), FRAC_CONST(0.790123), FRAC_CONST(0.927536), FRAC_CONST(0.969697), FRAC_CONST(0.980843),
@@ -22822,7 +22822,7 @@ static const int32_t Q_div2_tab_left[31][13] = {
 #endif     // SBR_DEC
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t Q_div2_tab_right[31][13] = {
+static const real_t Q_div2_tab_right[31][13] = {
     {FRAC_CONST(0.992246), FRAC_CONST(0.992241), FRAC_CONST(0.992218), FRAC_CONST(0.992128), FRAC_CONST(0.991768), FRAC_CONST(0.990329), FRAC_CONST(0.984615), FRAC_CONST(0.962406),
      FRAC_CONST(0.882759), FRAC_CONST(0.663212), FRAC_CONST(0.332468), FRAC_CONST(0.111015), FRAC_CONST(0.0302959)},
     {FRAC_CONST(0.984612), FRAC_CONST(0.984601), FRAC_CONST(0.984556), FRAC_CONST(0.984379), FRAC_CONST(0.98367), FRAC_CONST(0.980843), FRAC_CONST(0.969697), FRAC_CONST(0.927536),
@@ -22891,7 +22891,7 @@ static const int32_t Q_div2_tab_right[31][13] = {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
 /* table for Q_div values when no coupling */
-static const int32_t Q_div_tab[31] = {FRAC_CONST(0.0153846), FRAC_CONST(0.030303), FRAC_CONST(0.0588235), FRAC_CONST(0.111111), FRAC_CONST(0.2),      FRAC_CONST(0.333333), FRAC_CONST(0.5),
+static const real_t Q_div_tab[31] = {FRAC_CONST(0.0153846), FRAC_CONST(0.030303), FRAC_CONST(0.0588235), FRAC_CONST(0.111111), FRAC_CONST(0.2),      FRAC_CONST(0.333333), FRAC_CONST(0.5),
                                      FRAC_CONST(0.666667),  FRAC_CONST(0.8),      FRAC_CONST(0.888889),  FRAC_CONST(0.941176), FRAC_CONST(0.969697), FRAC_CONST(0.984615), FRAC_CONST(0.992248),
                                      FRAC_CONST(0.996109),  FRAC_CONST(0.998051), FRAC_CONST(0.999024),  FRAC_CONST(0.999512), FRAC_CONST(0.999756), FRAC_CONST(0.999878), FRAC_CONST(0.999939),
                                      FRAC_CONST(0.999969),  FRAC_CONST(0.999985), FRAC_CONST(0.999992),  FRAC_CONST(0.999996), FRAC_CONST(0.999998), FRAC_CONST(0.999999), FRAC_CONST(1),
@@ -22901,7 +22901,7 @@ static const int32_t Q_div_tab[31] = {FRAC_CONST(0.0153846), FRAC_CONST(0.030303
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t Q_div_tab_left[31][13] = {
+static const real_t Q_div_tab_left[31][13] = {
     {FRAC_CONST(0.969704), FRAC_CONST(0.888985), FRAC_CONST(0.667532), FRAC_CONST(0.336788), FRAC_CONST(0.117241), FRAC_CONST(0.037594), FRAC_CONST(0.0153846), FRAC_CONST(0.00967118),
      FRAC_CONST(0.00823245), FRAC_CONST(0.00787211), FRAC_CONST(0.00778198), FRAC_CONST(0.00775945), FRAC_CONST(0.00775382)},
     {FRAC_CONST(0.984619), FRAC_CONST(0.94123), FRAC_CONST(0.800623), FRAC_CONST(0.503876), FRAC_CONST(0.209877), FRAC_CONST(0.0724638), FRAC_CONST(0.030303), FRAC_CONST(0.0191571),
@@ -22967,7 +22967,7 @@ static const int32_t Q_div_tab_left[31][13] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
-static const int32_t Q_div_tab_right[31][13] = {
+static const real_t Q_div_tab_right[31][13] = {
     {FRAC_CONST(0.00775382), FRAC_CONST(0.00775945), FRAC_CONST(0.00778198), FRAC_CONST(0.00787211), FRAC_CONST(0.00823245), FRAC_CONST(0.00967118), FRAC_CONST(0.0153846), FRAC_CONST(0.037594),
      FRAC_CONST(0.117241), FRAC_CONST(0.336788), FRAC_CONST(0.667532), FRAC_CONST(0.888985), FRAC_CONST(0.969704)},
     {FRAC_CONST(0.0153883), FRAC_CONST(0.0153994), FRAC_CONST(0.0154438), FRAC_CONST(0.0156212), FRAC_CONST(0.0163305), FRAC_CONST(0.0191571), FRAC_CONST(0.030303), FRAC_CONST(0.0724638),
@@ -23093,7 +23093,7 @@ static const int8_t t_huffman_noise_bal_3_0dB[24][2] = {{-64, 1},   {-65, 2},   
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-static const int32_t log_Qplus1_pan[31][13] = {
+static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.044383447617292), REAL_CONST(0.169768601655960), REAL_CONST(0.583090126514435), REAL_CONST(1.570089221000671), REAL_CONST(3.092446088790894), REAL_CONST(4.733354568481445),
      REAL_CONST(6.022367954254150), REAL_CONST(6.692092418670654), REAL_CONST(6.924463272094727), REAL_CONST(6.989034175872803), REAL_CONST(7.005646705627441), REAL_CONST(7.009829998016357),
      REAL_CONST(7.010877609252930)},
@@ -23368,7 +23368,7 @@ static const complex_t V[] = {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
-static const int32_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
+static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
                                       REAL_CONST(1.584962500721156), REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312),
                                       REAL_CONST(0.087462841250339), REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878),
                                       REAL_CONST(0.002815015607054), REAL_CONST(0.001408194392808), REAL_CONST(0.000704269011247), REAL_CONST(0.000352177480301), REAL_CONST(0.000176099486443),
@@ -23382,7 +23382,7 @@ static const int32_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
 /* log2 values of [0..63] */
-static const int32_t log2_int_tab[] = {LOG2_MIN_INF,
+static const real_t log2_int_tab[] = {LOG2_MIN_INF,
                                       REAL_CONST(0.000000000000000),
                                       REAL_CONST(1.000000000000000),
                                       REAL_CONST(1.584962500721156),
@@ -23451,7 +23451,7 @@ static const int32_t log2_int_tab[] = {LOG2_MIN_INF,
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
-static const int32_t pan_log2_tab[] = {REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312), REAL_CONST(0.087462841250339),
+static const real_t pan_log2_tab[] = {REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312), REAL_CONST(0.087462841250339),
                                       REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878), REAL_CONST(0.002815015607054),
                                       REAL_CONST(0.001408194392808), REAL_CONST(0.000704269011247), REAL_CONST(0.000352177480301), REAL_CONST(0.000176099486443), REAL_CONST(0.000088052430122),
                                       REAL_CONST(0.000044026886827), REAL_CONST(0.000022013611360), REAL_CONST(0.000011006847667)};
@@ -23460,7 +23460,7 @@ static const int32_t pan_log2_tab[] = {REAL_CONST(1.000000000000000), REAL_CONST
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
-static const int32_t log_Qplus1_pan[31][13] = {
+static const real_t log_Qplus1_pan[31][13] = {
     {REAL_CONST(0.044383447617292), REAL_CONST(0.169768601655960), REAL_CONST(0.583090126514435), REAL_CONST(1.570089221000671), REAL_CONST(3.092446088790894), REAL_CONST(4.733354568481445),
      REAL_CONST(6.022367954254150), REAL_CONST(6.692092418670654), REAL_CONST(6.924463272094727), REAL_CONST(6.989034175872803), REAL_CONST(7.005646705627441), REAL_CONST(7.009829998016357),
      REAL_CONST(7.010877609252930)},
@@ -23559,7 +23559,7 @@ static const int32_t log_Qplus1_pan[31][13] = {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
     #ifdef FIXED_POINT
-static const int32_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
+static const real_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST(5.044394119358453), REAL_CONST(4.087462841250339), REAL_CONST(3.169925001442313), REAL_CONST(2.321928094887362),
                                       REAL_CONST(1.584962500721156), REAL_CONST(1.000000000000000), REAL_CONST(0.584962500721156), REAL_CONST(0.321928094887362), REAL_CONST(0.169925001442312),
                                       REAL_CONST(0.087462841250339), REAL_CONST(0.044394119358453), REAL_CONST(0.022367813028455), REAL_CONST(0.011227255423254), REAL_CONST(0.005624549193878),
                                       REAL_CONST(0.002815015607054), REAL_CONST(0.001408194392808), REAL_CONST(0.000704269011247), REAL_CONST(0.000352177480301), REAL_CONST(0.000176099486443),
@@ -23573,7 +23573,7 @@ static const int32_t log_Qplus1[31] = {REAL_CONST(6.022367813028454), REAL_CONST
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
 /* log2 values of [0..63] */
-static const int32_t log2_int_tab[] = {LOG2_MIN_INF,      0.000000000000000, 1.000000000000000, 1.584962500721156, 2.000000000000000, 2.321928094887362, 2.584962500721156, 2.807354922057604,
+static const real_t log2_int_tab[] = {LOG2_MIN_INF,      0.000000000000000, 1.000000000000000, 1.584962500721156, 2.000000000000000, 2.321928094887362, 2.584962500721156, 2.807354922057604,
                                       3.000000000000000, 3.169925001442313, 3.321928094887363, 3.459431618637297, 3.584962500721156, 3.700439718141092, 3.807354922057604, 3.906890595608519,
                                       4.000000000000000, 4.087462841250339, 4.169925001442312, 4.247927513443585, 4.321928094887362, 4.392317422778761, 4.459431618637297, 4.523561956057013,
                                       4.584962500721156, 4.643856189774724, 4.700439718141093, 4.754887502163468, 4.807354922057604, 4.857980995127572, 4.906890595608519, 4.954196310386875,
@@ -23581,14 +23581,14 @@ static const int32_t log2_int_tab[] = {LOG2_MIN_INF,      0.000000000000000, 1.0
                                       5.321928094887363, 5.357552004618084, 5.392317422778761, 5.426264754702098, 5.459431618637297, 5.491853096329675, 5.523561956057013, 5.554588851677637,
                                       5.584962500721156, 5.614709844115208, 5.643856189774724, 5.672425341971495, 5.700439718141093, 5.727920454563200, 5.754887502163469, 5.781359713524660,
                                       5.807354922057605, 5.832890014164742, 5.857980995127572, 5.882643049361842, 5.906890595608518, 5.930737337562887, 5.954196310386876, 5.977279923499916};
-static const int32_t pan_log2_tab[] = {1.000000000000000, 0.584962500721156, 0.321928094887362, 0.169925001442312, 0.087462841250339, 0.044394119358453,
+static const real_t pan_log2_tab[] = {1.000000000000000, 0.584962500721156, 0.321928094887362, 0.169925001442312, 0.087462841250339, 0.044394119358453,
                                       0.022367813028455, 0.011227255423254, 0.005624549193878, 0.002815015607054, 0.001408194392808, 0.000704269011247,
                                       0.000352177480301, 0.000176099486443, 0.000088052430122, 0.000044026886827, 0.000022013611360, 0.000011006847667};
         #endif // LOG2_TEST
     #endif     // FIXED_POINT
 #endif         // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-static const int32_t qmf_c[640] = {
+static const real_t qmf_c[640] = {
     FRAC_CONST(0.0000000000000),   FRAC_CONST(-0.00055252865047), FRAC_CONST(-0.00056176925738),        FRAC_CONST(-0.00049475180896), FRAC_CONST(-0.00048752279712), FRAC_CONST(-0.00048937912498),
     FRAC_CONST(-0.00050407143497), FRAC_CONST(-0.00052265642972), FRAC_CONST(-0.00054665656337),        FRAC_CONST(-0.00056778025613), FRAC_CONST(-0.00058709304852), FRAC_CONST(-0.00061327473938),
     FRAC_CONST(-0.00063124935319), FRAC_CONST(-0.00065403333621), FRAC_CONST(-0.00067776907764),        FRAC_CONST(-0.00069416146273), FRAC_CONST(-0.00071577364744), FRAC_CONST(-0.00072550431222),
@@ -23792,14 +23792,14 @@ static rvlc_huff_table book_rvlc[] = {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-static const int32_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
+static const real_t codebook[8] = {REAL_CONST(0.570829), REAL_CONST(0.696616), REAL_CONST(0.813004), REAL_CONST(0.911304),
                             REAL_CONST(0.984900), REAL_CONST(1.067894), REAL_CONST(1.194601), REAL_CONST(1.369533)};
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
-static const int32_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
+static const real_t ipdopd_cos_tab[] = {FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548),  FRAC_CONST(0.000000000000000), FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000),
                                  FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000), FRAC_CONST(0.707106781186547), FRAC_CONST(1.000000000000000)};
-static const int32_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.707106781186547),  FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548), FRAC_CONST(0.000000000000000),
+static const real_t ipdopd_sin_tab[] = {FRAC_CONST(0.000000000000000),  FRAC_CONST(0.707106781186547),  FRAC_CONST(1.000000000000000),  FRAC_CONST(0.707106781186548), FRAC_CONST(0.000000000000000),
                                  FRAC_CONST(-0.707106781186547), FRAC_CONST(-1.000000000000000), FRAC_CONST(-0.707106781186548), FRAC_CONST(-0.000000000000000)};
 #endif //  PS_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

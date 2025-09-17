@@ -2,73 +2,7 @@
 #include "Arduino.h"
 #include "settings.h"
 
-#ifdef DRM_SUPPORT // Allow decoding of Digital Radio Mondiale (DRM)
-    #define DRM
-    #define DRM_PS
-#endif
-#ifdef LD_DEC /* LD can't do without LTP */
-    #ifndef ERROR_RESILIENCE
-        #define ERROR_RESILIENCE
-    #endif
-    #ifndef LTP_DEC
-        #define LTP_DEC
-    #endif
-#endif
-#ifdef LC_ONLY_DECODER
-    #undef LD_DEC
-    #undef LTP_DEC
-    #undef MAIN_DEC
-    #undef SSR_DEC
-    #undef DRM
-    #undef DRM_PS
-    #undef ALLOW_SMALL_FRAMELENGTH
-    #undef ERROR_RESILIENCE
-#endif
-#ifdef SBR_LOW_POWER
-    #undef PS_DEC
-#endif
-#ifdef FIXED_POINT /*  No MAIN decoding */
-    #ifdef MAIN_DEC
-        #undef MAIN_DEC
-    #endif
-#endif // FIXED_POINT
-#ifdef DRM
-    #ifndef ALLOW_SMALL_FRAMELENGTH
-        #define ALLOW_SMALL_FRAMELENGTH
-    #endif
-    #undef LD_DEC
-    #undef LTP_DEC
-    #undef MAIN_DEC
-    #undef SSR_DEC
-#endif
-/* END COMPILE TIME DEFINITIONS */
 
-
-#ifdef WORDS_BIGENDIAN
-    #define ARCH_IS_BIG_ENDIAN
-#endif
-/* FIXED_POINT doesn't work with MAIN and SSR yet */
-#ifdef FIXED_POINT
-    #undef MAIN_DEC
-    #undef SSR_DEC
-#endif
-#if defined(FIXED_POINT)
-#elif defined(USE_DOUBLE_PRECISION)
-#else                                   /* Normal floating point operation */
-    #ifdef HAVE_LRINTF
-        #define HAS_LRINTF
-        #define _ISOC9X_SOURCE 1
-        #define _ISOC99_SOURCE 1
-        #define __USE_ISOC9X   1
-        #define __USE_ISOC99   1
-    #endif
-
-
-#endif
-#ifndef HAS_LRINTF
-/* standard cast */
-// #define int32_t(f) ((int32_t)(f))
-#endif
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* defines if an object type can be decoded by this library or not */
 __unused static uint8_t ObjectTypesTable[32] = {
@@ -299,28 +233,28 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
     #define FRAC_BITS      31
     #define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
     #define FRAC_MAX       0x7FFFFFFF
-    typedef int32_t int32_t;
-    #define REAL_CONST(A) (((A) >= 0) ? ((int32_t)((A) * (REAL_PRECISION) + 0.5)) : ((int32_t)((A) * (REAL_PRECISION) - 0.5)))
-    #define COEF_CONST(A) (((A) >= 0) ? ((int32_t)((A) * (COEF_PRECISION) + 0.5)) : ((int32_t)((A) * (COEF_PRECISION) - 0.5)))
-    #define FRAC_CONST(A) (((A) == 1.00) ? ((int32_t)FRAC_MAX) : (((A) >= 0) ? ((int32_t)((A) * (FRAC_PRECISION) + 0.5)) : ((int32_t)((A) * (FRAC_PRECISION) - 0.5))))
-    // #define FRAC_CONST(A) (((A) >= 0) ? ((int32_t)((A)*(FRAC_PRECISION)+0.5)) : ((int32_t)((A)*(FRAC_PRECISION)-0.5)))
+    typedef int32_t real_t;
+    #define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
+    #define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
+    #define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
+    // #define FRAC_CONST(A) (((A) >= 0) ? ((real_t)((A)*(FRAC_PRECISION)+0.5)) : ((real_t)((A)*(FRAC_PRECISION)-0.5)))
     #define Q2_BITS      22
     #define Q2_PRECISION (1 << Q2_BITS)
-    #define Q2_CONST(A)  (((A) >= 0) ? ((int32_t)((A) * (Q2_PRECISION) + 0.5)) : ((int32_t)((A) * (Q2_PRECISION) - 0.5)))
+    #define Q2_CONST(A)  (((A) >= 0) ? ((real_t)((A) * (Q2_PRECISION) + 0.5)) : ((real_t)((A) * (Q2_PRECISION) - 0.5)))
     /* multiply with real shift */
-    #define MUL_R(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS)
+    #define MUL_R(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (REAL_BITS - 1))) >> REAL_BITS)
     /* multiply with coef shift */
-    #define MUL_C(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS)
+    #define MUL_C(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (COEF_BITS - 1))) >> COEF_BITS)
     /* multiply with fractional shift */
-    #define _MulHigh(A, B)    (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
-    #define MUL_F(A, B)       (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
-    #define MUL_Q2(A, B)      (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
-    #define MUL_SHIFT6(A, B)  (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
-    #define MUL_SHIFT23(A, B) (int32_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
+    #define _MulHigh(A, B)    (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_SIZE - 1))) >> FRAC_SIZE)
+    #define MUL_F(A, B)       (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (FRAC_BITS - 1))) >> FRAC_BITS)
+    #define MUL_Q2(A, B)      (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (Q2_BITS - 1))) >> Q2_BITS)
+    #define MUL_SHIFT6(A, B)  (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (6 - 1))) >> 6)
+    #define MUL_SHIFT23(A, B) (real_t)(((int64_t)(A) * (int64_t)(B) + (1 << (23 - 1))) >> 23)
     #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
     #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
 /*    Complex multiplication */
-   static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) { // FIXED POINT
+   static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
        *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
        *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
    }
@@ -355,7 +289,7 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
         }
 
 
-int32_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
+real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
 #endif // FIXED_POINT
 #ifndef FIXED_POINT
     #ifdef MAIN_DEC
@@ -366,41 +300,41 @@ int32_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COE
     #define DIV_R(A, B)   ((A) / (B))
     #define DIV_C(A, B)   ((A) / (B))
     #ifdef USE_DOUBLE_PRECISION /* double */
-typedef double int32_t;
+typedef double real_t;
         #include <math.h>
         #define MUL_R(A, B) ((A) * (B))
         #define MUL_C(A, B) ((A) * (B))
         #define MUL_F(A, B) ((A) * (B))
 /* Complex multiplication */
-static void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) {
+static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
     *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
     *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
 }
-        #define REAL_CONST(A) ((int32_t)(A))
-        #define COEF_CONST(A) ((int32_t)(A))
-        #define Q2_CONST(A)   ((int32_t)(A))
+        #define REAL_CONST(A) ((real_t)(A))
+        #define COEF_CONST(A) ((real_t)(A))
+        #define Q2_CONST(A)   ((real_t)(A))
  
-       #define FRAC_CONST(A) ((int32_t)(A)) /* pure fractional part */
+       #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
     #else                                   /* Normal floating point operation */
-typedef float int32_t;
+typedef float real_t;
         #define MUL_R(A, B)   ((A) * (B))
         #define MUL_C(A, B)   ((A) * (B))
         #define MUL_F(A, B)   ((A) * (B))
-        #define REAL_CONST(A) ((int32_t)(A))
-        #define COEF_CONST(A) ((int32_t)(A))
-        #define Q2_CONST(A)   ((int32_t)(A))
-        #define FRAC_CONST(A) ((int32_t)(A)) /* pure fractional part */
+        #define REAL_CONST(A) ((real_t)(A))
+        #define COEF_CONST(A) ((real_t)(A))
+        #define Q2_CONST(A)   ((real_t)(A))
+        #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
     /* Complex multiplication */
-        static void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) {
+        static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
             *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
             *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
         }
 
     #endif                                  /* USE_DOUBLE_PRECISION */
 #endif                                      // FIXED_POINT
-typedef int32_t complex_t[2];
+
 #ifdef SBR_LOW_POWER
-    #define qmf_t     int32_t
+    #define qmf_t     real_t
     #define QMF_RE(A) (A)
     #define QMF_IM(A)
 #else
@@ -408,7 +342,7 @@ typedef int32_t complex_t[2];
     #define QMF_RE(A) RE(A)
     #define QMF_IM(A) IM(A)
 #endif
-
+typedef real_t complex_t[2];
 #define RE(A) A[0]
 #define IM(A) A[1]
 
