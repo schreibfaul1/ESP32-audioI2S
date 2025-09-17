@@ -38,6 +38,9 @@ uint32_t __r2 __attribute__((unused)) = 1;
 ps_ptr<mdct_info>m_mdct256;
 ps_ptr<mdct_info>m_mdct1024;
 ps_ptr<mdct_info>m_mdct2048;
+ps_ptr<cfft_info>m_ccft256;
+ps_ptr<cfft_info>m_ccft1024;
+ps_ptr<cfft_info>m_ccft2048;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2127,24 +2130,26 @@ void xxx cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cfftf(uint16_t mdct_len, complex_t* c) {
     mdct_info* mdct_select = nullptr;
+    cfft_info* cfft_select = nullptr;
     switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
-        case 1024: mdct_select = m_mdct1024.get(); break;
-        case 2048: mdct_select = m_mdct2048.get(); break;
+        case 256:  mdct_select = m_mdct256.get();  cfft_select = m_ccft256.get(); break;
+        case 1024: mdct_select = m_mdct1024.get(); cfft_select = m_ccft1024.get(); break;
+        case 2048: mdct_select = m_mdct2048.get(); cfft_select = m_ccft2048.get(); break;
         default: log_e("wrong length");
     }
-    cfftf1neg(mdct_select->cfft->n, c, mdct_select->cfft->work, (const uint16_t*)mdct_select->cfft->ifac, (const complex_t*)mdct_select->cfft->tab, -1);
+    cfftf1neg(cfft_select->n, c, cfft_select->work, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cfftb(uint16_t mdct_len, complex_t* c) {
     mdct_info* mdct_select = nullptr;
+    cfft_info* cfft_select = nullptr;
     switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
-        case 1024: mdct_select = m_mdct1024.get(); break;
-        case 2048: mdct_select = m_mdct2048.get(); break;
+        case 256:  mdct_select = m_mdct256.get();  cfft_select = m_ccft256.get(); break;
+        case 1024: mdct_select = m_mdct1024.get(); cfft_select = m_ccft1024.get();break;
+        case 2048: mdct_select = m_mdct2048.get(); cfft_select = m_ccft2048.get(); break;
         default: log_e("wrong length");
     }
-    cfftf1pos(mdct_select->cfft->n, c, mdct_select->cfft->work, (const uint16_t*)mdct_select->cfft->ifac, (const complex_t*)mdct_select->cfft->tab, +1);
+    cfftf1pos(cfft_select->n, c, cfft_select->work, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
@@ -2224,34 +2229,35 @@ startloop:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti(uint16_t mdct_len, uint16_t n) {
    mdct_info* mdct_select = nullptr;
+   cfft_info* cfft_select = nullptr;
     switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
-        case 1024: mdct_select = m_mdct1024.get(); break;
-        case 2048: mdct_select = m_mdct2048.get(); break;
+        case 256:  mdct_select = m_mdct256.get();  m_ccft256.alloc();  cfft_select = m_ccft256.get();  break;
+        case 1024: mdct_select = m_mdct1024.get(); m_ccft1024.alloc(); cfft_select = m_ccft1024.get();break;
+        case 2048: mdct_select = m_mdct2048.get(); m_ccft2048.alloc(); cfft_select = m_ccft2048.get(); break;
         default: log_e("wrong length");
     }
-    mdct_select->cfft = (cfft_info*)faad_malloc(sizeof(cfft_info));
-    mdct_select->cfft->n = n;
-    mdct_select->cfft->work = (complex_t*)faad_malloc(n * sizeof(complex_t));
+    cfft_select->n = n;
+    cfft_select->work = (complex_t*)faad_malloc(n * sizeof(complex_t));
+
 #ifndef FIXED_POINT
-    cfft->tab = (complex_t*)faad_malloc(n * sizeof(complex_t));
-    cffti1(n, cfft->tab, cfft->ifac);
+    cfft_select->tab = (complex_t*)faad_malloc(n * sizeof(complex_t));
+    cffti1(n, cfft_select->tab, cfft_select->ifac);
 #else
-    cffti1(n, NULL, mdct_select->cfft->ifac);
+    cffti1(n, NULL, cfft_select->ifac);
     switch (n) {
-        case 64: mdct_select->cfft->tab = (complex_t*)cfft_tab_64; break;
-        case 512: mdct_select->cfft->tab = (complex_t*)cfft_tab_512; break;
+        case 64: cfft_select->tab = (complex_t*)cfft_tab_64; break;
+        case 512: cfft_select->tab = (complex_t*)cfft_tab_512; break;
     #ifdef LD_DEC
-        case 256: mdct_select->cfft->tab = (complex_t*)cfft_tab_256; break;
+        case 256: cfft_select->tab = (complex_t*)cfft_tab_256; break;
     #endif
     #ifdef ALLOW_SMALL_FRAMELENGTH
-        case 60: mdct_select->cfft->tab = (complex_t*)cfft_tab_60; break;
-        case 480: mdct_select->cfft->tab = (complex_t*)cfft_tab_480; break;
+        case 60: cfft_select->tab = (complex_t*)cfft_tab_60; break;
+        case 480: cfft_select->tab = (complex_t*)cfft_tab_480; break;
         #ifdef LD_DEC
-        case 240: mdct_select->cfft->tab = (complex_t*)cfft_tab_240; break;
+        case 240: cfft_select->tab = (complex_t*)cfft_tab_240; break;
         #endif
     #endif
-        case 128: mdct_select->cfft->tab = (complex_t*)cfft_tab_128; break;
+        case 128: cfft_select->tab = (complex_t*)cfft_tab_128; break;
     }
 #endif
     return;
@@ -3740,9 +3746,9 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_end(uint16_t mdct_len) {
     switch(mdct_len){
-        case 256:  cfftu(m_mdct256->cfft);  m_mdct256.reset();  break;
-        case 1024: cfftu(m_mdct1024->cfft); m_mdct1024.reset();  break;
-        case 2048: cfftu(m_mdct2048->cfft); m_mdct2048.reset();  break;
+        case 256:  m_ccft256.reset();  m_mdct256.reset();  break;
+        case 1024: m_ccft1024.reset(); m_mdct1024.reset();  break;
+        case 2048: m_ccft2048.reset(); m_mdct2048.reset();  break;
         default: log_e("wrong length");
     }
 }
