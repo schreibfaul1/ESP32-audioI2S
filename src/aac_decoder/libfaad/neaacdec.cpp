@@ -35,15 +35,16 @@
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
 
-ps_ptr<mdct_info>m_mdct256;
-ps_ptr<mdct_info>m_mdct1024;
-ps_ptr<mdct_info>m_mdct2048;
-ps_ptr<cfft_info>m_ccft256;
-ps_ptr<cfft_info>m_ccft1024;
-ps_ptr<cfft_info>m_ccft2048;
-ps_ptr<complex_t>m_work256;
-ps_ptr<complex_t>m_work1024;
-ps_ptr<complex_t>m_work2048;
+ps_ptr<mdct_info> m_mdct256;
+ps_ptr<mdct_info> m_mdct1024;
+ps_ptr<mdct_info> m_mdct2048;
+ps_ptr<cfft_info> m_ccft256;
+ps_ptr<cfft_info> m_ccft1024;
+ps_ptr<cfft_info> m_ccft2048;
+ps_ptr<complex_t> m_work256;
+ps_ptr<complex_t> m_work1024;
+ps_ptr<complex_t> m_work2048;
+ps_ptr<drc_info>  m_drc_info;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -439,7 +440,7 @@ NeAACDecHandle xxx NeAACDecOpen(void) {
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) { hDecoder->sbr[i] = NULL; }
 #endif
-    hDecoder->drc = drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
+    drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
     return hDecoder;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -698,7 +699,7 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
     else
 #endif
         filter_bank_end(hDecoder->fb);
-    drc_end(hDecoder->drc);
+    m_drc_info.reset();
     if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
@@ -1021,10 +1022,10 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
     /* decode the complete bitstream */
 #ifdef DRM
     if (/*(hDecoder->object_type == 6) ||*/ (hDecoder->object_type == DRM_ER_LC)) {
-        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, m_drc_info.get());
     } else {
 #endif
-        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce);
 #ifdef DRM
     }
 #endif
@@ -2134,10 +2135,19 @@ void xxx cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac
 void xxx cfftf(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
         default: log_e("wrong length");
     }
     cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
@@ -2146,10 +2156,19 @@ void xxx cfftf(uint16_t mdct_len, complex_t* c) {
 void xxx cfftb(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
         default: log_e("wrong length");
     }
     cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
@@ -2232,15 +2251,25 @@ startloop:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti(uint16_t mdct_len, uint16_t n) {
     cfft_info* cfft_select = nullptr;
-
-    switch(mdct_len){
-        case 256:  m_ccft256.alloc();  cfft_select = m_ccft256.get();  m_work256.alloc_array(n * sizeof(complex_t));  break;
-        case 1024: m_ccft1024.alloc(); cfft_select = m_ccft1024.get(); m_work1024.alloc_array(n * sizeof(complex_t)); break;
-        case 2048: m_ccft2048.alloc(); cfft_select = m_ccft2048.get(); m_work2048.alloc_array(n * sizeof(complex_t)); break;
+    switch (mdct_len) {
+        case 256:
+            m_ccft256.alloc();
+            cfft_select = m_ccft256.get();
+            m_work256.alloc_array(n * sizeof(complex_t));
+            break;
+        case 1024:
+            m_ccft1024.alloc();
+            cfft_select = m_ccft1024.get();
+            m_work1024.alloc_array(n * sizeof(complex_t));
+            break;
+        case 2048:
+            m_ccft2048.alloc();
+            cfft_select = m_ccft2048.get();
+            m_work2048.alloc_array(n * sizeof(complex_t));
+            break;
         default: log_e("wrong length");
     }
     cfft_select->n = n;
-
 #ifndef FIXED_POINT
     cfft_select->tab = (complex_t*)faad_malloc(n * sizeof(complex_t));
     cffti1(n, cfft_select->tab, cfft_select->ifac);
@@ -2265,23 +2294,22 @@ void xxx cffti(uint16_t mdct_len, uint16_t n) {
     return;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-drc_info* xxx drc_init(real_t cut, real_t boost) {
-    drc_info* drc = (drc_info*)faad_malloc(sizeof(drc_info));
-    memset(drc, 0, sizeof(drc_info));
-    drc->ctrl1 = cut;
-    drc->ctrl2 = boost;
-    drc->num_bands = 1;
-    drc->band_top[0] = 1024 / 4 - 1;
-    drc->dyn_rng_sgn[0] = 1;
-    drc->dyn_rng_ctl[0] = 0;
-    return drc;
+void xxx drc_init(real_t cut, real_t boost) {
+    m_drc_info.calloc(1);
+    m_drc_info->ctrl1 = cut;
+    m_drc_info->ctrl2 = boost;
+    m_drc_info->num_bands = 1;
+    m_drc_info->band_top[0] = 1024 / 4 - 1;
+    m_drc_info->dyn_rng_sgn[0] = 1;
+    m_drc_info->dyn_rng_ctl[0] = 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx drc_end(drc_info* drc) {
     if (drc) faad_free(&drc);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx drc_decode(drc_info* drc, real_t* spec) {
+void xxx drc_decode(real_t* spec) {
+    drc_info* drc = m_drc_info.get();
     uint16_t i, bd, top;
 #ifdef FIXED_POINT
     int32_t exp, frac;
@@ -3697,12 +3725,22 @@ real_t xxx fp_sqrt(real_t value) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
-    switch(mdct_len){
-        case 256:  m_mdct256.alloc();  mdct_new = m_mdct256.get();  break;
-        case 1024: m_mdct1024.alloc(); mdct_new = m_mdct1024.get(); break;
-        case 2048: m_mdct2048.alloc(); mdct_new = m_mdct2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            m_mdct256.alloc();
+            mdct_new = m_mdct256.get();
+            break;
+        case 1024:
+            m_mdct1024.alloc();
+            mdct_new = m_mdct1024.get();
+            break;
+        case 2048:
+            m_mdct2048.alloc();
+            mdct_new = m_mdct2048.get();
+            break;
         default: log_e("wrong length");
     }
+
     assert(N % 8 == 0);
     mdct_new->N = N;
     /* NOTE: For "small framelengths" in FIXED_POINT the coefficients need to be
@@ -3729,7 +3767,7 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 #endif
     }
     /* initialise fft */
-    cffti (mdct_len, N / 4);
+    cffti(mdct_len, N / 4);
 #ifdef PROFILE
     mdct_new->cycles = 0;
     mdct_new->fft_cycles = 0;
@@ -3738,10 +3776,22 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_end(uint16_t mdct_len) {
-    switch(mdct_len){
-        case 256:  m_work256.reset();  m_ccft256.reset();  m_mdct256.reset();  break;
-        case 1024: m_work1024.reset(); m_ccft1024.reset(); m_mdct1024.reset();  break;
-        case 2048: m_work2048.reset(); m_ccft2048.reset(); m_mdct2048.reset();  break;
+    switch (mdct_len) {
+        case 256:
+            m_work256.reset();
+            m_ccft256.reset();
+            m_mdct256.reset();
+            break;
+        case 1024:
+            m_work1024.reset();
+            m_ccft1024.reset();
+            m_mdct1024.reset();
+            break;
+        case 2048:
+            m_work2048.reset();
+            m_ccft2048.reset();
+            m_mdct2048.reset();
+            break;
         default: log_e("wrong length");
     }
 }
@@ -3749,7 +3799,7 @@ void xxx faad_mdct_end(uint16_t mdct_len) {
 void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_info* mdct_select = nullptr;
     switch(mdct_len){
-        case 256: mdct_select = m_mdct256.get(); break;
+        case 256:  mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
@@ -7086,8 +7136,8 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
     tns_decode_frame(ics, &(ics->tns), hDecoder->sf_index, hDecoder->object_type, spec_coef, hDecoder->frameLength);
     /* drc decoding */
 #ifdef APPLY_DRC
-    if (hDecoder->drc->present) {
-        if (!hDecoder->drc->exclude_mask[sce->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef);
+    if (m_drc_info->present) {
+        if (!m_drc_info->exclude_mask[sce->channel] || m_drc_info->excluded_chns_present) drc_decode(spec_coef);
     }
 #endif
     /* filter bank */
@@ -7258,9 +7308,8 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
     tns_decode_frame(ics2, &(ics2->tns), hDecoder->sf_index, hDecoder->object_type, spec_coef2, hDecoder->frameLength);
     /* drc decoding */
 #if APPLY_DRC
-    if (hDecoder->drc->present) {
-        if (!hDecoder->drc->exclude_mask[cpe->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef1);
-        if (!hDecoder->drc->exclude_mask[cpe->paired_channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef2);
+        if (!m_drc_info->exclude_mask[cpe->channel] || !m_drc_info->excluded_chns_present) drc_decode(spec_coef1);
+        if (!m_drc_info->exclude_mask[cpe->paired_channel] || !hm_drc_info > excluded_chns_present) drc_decode(spec_coef2);
     }
 #endif
     /* filter bank */
@@ -7678,7 +7727,8 @@ void xxx decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     hDecoder->fr_ch_ele++;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce) {
+    drc_info* drc = m_drc_info.get();
     uint8_t id_syn_ele;
     uint8_t ele_this_frame = 0;
     hDecoder->fr_channels = 0;
@@ -7859,7 +7909,7 @@ uint8_t xxx single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, ui
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((retval = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -7941,7 +7991,7 @@ uint8_t xxx channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t 
         }
     }
 #endif
-    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics2, 0, spec_data2)) > 0) { goto exit; }
+    if ((result = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
 #ifdef SBR_DEC
     /* check if next bitstream element is a fill element */
     /* if so, read it now so SBR decoding can be done in case of a file with SBR */

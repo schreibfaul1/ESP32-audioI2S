@@ -57,10 +57,7 @@ uint32_t                          get_sample_rate(const uint8_t sr_index);
 int8_t                            can_decode_ot(const uint8_t object_type);
 void*                             faad_malloc(size_t size);
 template <typename freeType> void faad_free(freeType** b);
-
-drc_info*                drc_init(real_t cut, real_t boost);
-void                     drc_end(drc_info* drc);
-void                     drc_decode(drc_info* drc, real_t* spec);
+void                     drc_decode(real_t* spec);
 sbr_info*                sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
 void                     sbrDecodeEnd(sbr_info* sbr);
 void                     sbrReset(sbr_info* sbr);
@@ -116,9 +113,8 @@ void                     passf4pos(const uint16_t ido, const uint16_t l1, const 
 void                     passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
 void      passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign);
 void      cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
-drc_info* drc_init(real_t cut, real_t boost);
+void      drc_init(real_t cut, real_t boost);
 void      drc_end(drc_info* drc);
-void      drc_decode(drc_info* drc, real_t* spec);
 fb_info*  filter_bank_init(uint16_t frame_len);
 void      filter_bank_end(fb_info* fb);
 void      filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len);
@@ -209,7 +205,7 @@ uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream
 int8_t  GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce);
 uint8_t adts_frame(adts_header* adts, bitfile* ld);
 void    get_adif_header(adif_header* adif, bitfile* ld);
-void    raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc);
+void    raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce);
 uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data);
 #ifdef DRM
 int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo);
