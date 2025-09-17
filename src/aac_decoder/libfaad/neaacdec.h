@@ -114,8 +114,7 @@ void                     passf4neg(const uint16_t ido, const uint16_t l1, const 
 void      passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign);
 void      cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
 void      drc_init(int32_t cut, int32_t boost);
-void      drc_end(drc_info* drc);
-void      drc_decode(drc_info* drc, int32_t* spec);
+void      drc_decode(int32_t* spec);
 fb_info*  filter_bank_init(uint16_t frame_len);
 void      filter_bank_end(fb_info* fb);
 void      filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, int32_t* in_data, int32_t* out_mdct, uint8_t object_type, uint16_t frame_len);
@@ -182,7 +181,7 @@ uint8_t coupling_channel_element(NeAACDecStruct* hDecoder, bitfile* ld);
 #endif
 uint16_t data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld);
 uint8_t  program_config_element(program_config* pce, bitfile* ld);
-uint8_t  fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, uint8_t sbr_ele);
+uint8_t  fill_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t sbr_ele);
 uint8_t  individual_channel_stream(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag, int16_t* spec_data);
 uint8_t  ics_info(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, uint8_t common_window);
 uint8_t  section_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld);
@@ -191,7 +190,7 @@ uint8_t  scale_factor_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld
 void gain_control_data(bitfile* ld, ic_stream* ics);
 #endif
 uint8_t  spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data);
-uint16_t extension_payload(bitfile* ld, drc_info* drc, uint16_t count);
+uint16_t extension_payload(bitfile* ld, uint16_t count);
 uint8_t  pulse_data(ic_stream* ics, pulse_info* pul, bitfile* ld);
 void     tns_data(ic_stream* ics, tns_info* tns, bitfile* ld);
 #ifdef LTP_DEC
@@ -200,8 +199,8 @@ uint8_t ltp_data(NeAACDecStruct* hDecoder, ic_stream* ics, ltp_info* ltp, bitfil
 uint8_t adts_fixed_header(adts_header* adts, bitfile* ld);
 void    adts_variable_header(adts_header* adts, bitfile* ld);
 void    adts_error_check(adts_header* adts, bitfile* ld);
-uint8_t dynamic_range_info(bitfile* ld, drc_info* drc);
-uint8_t excluded_channels(bitfile* ld, drc_info* drc);
+uint8_t dynamic_range_info(bitfile* ld);
+uint8_t excluded_channels(bitfile* ld);
 uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream* ics, uint8_t scal_flag);
 int8_t  GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce);
 uint8_t adts_frame(adts_header* adts, bitfile* ld);
@@ -225,7 +224,7 @@ int8_t  rvlc_huffman_sf(bitfile* ld_sf, bitfile* ld_esc, int8_t direction);
 int8_t  rvlc_huffman_esc(bitfile* ld_esc, int8_t direction);
 uint8_t rvlc_decode_sf_forward(ic_stream* ics, bitfile* ld_sf, bitfile* ld_esc, uint8_t* intensity_used);
 #ifdef DRM
-void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc);
+void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce);
 #endif
 uint32_t faad_latm_frame(latm_header* latm, bitfile* ld);
 #ifdef SSR_DEC

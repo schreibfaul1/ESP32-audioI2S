@@ -45,6 +45,7 @@ ps_ptr<complex_t> m_work256;
 ps_ptr<complex_t> m_work1024;
 ps_ptr<complex_t> m_work2048;
 ps_ptr<drc_info>  m_drc_info;
+ps_ptr<adif_header>m_adif;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1022,7 +1023,7 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
     /* decode the complete bitstream */
 #ifdef DRM
     if (/*(hDecoder->object_type == 6) ||*/ (hDecoder->object_type == DRM_ER_LC)) {
-        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, m_drc_info.get());
+        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce);
     } else {
 #endif
         raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce);
@@ -7795,7 +7796,7 @@ void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitf
                     /* one sbr_info describes a channel_element not a channel! */
                     /* if we encounter SBR data here: error */
                     /* SBR data will be read directly in the SCE/LFE/CPE element */
-                    if ((hInfo->error = fill_element(hDecoder, ld, drc, INVALID_SBR_ELEMENT)) > 0) return;
+                    if ((hInfo->error = fill_element(hDecoder, ld, INVALID_SBR_ELEMENT)) > 0) return;
                     break;
             }
         }
@@ -7857,13 +7858,6 @@ void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitf
                 break;
             default: hInfo->error = 7; return;
         }
-    #if 0
-        cnt = bits_to_decode() / 8;
-        while (cnt >= 1)
-        {
-            cnt -= extension_payload(cnt);
-        }
-    #endif
     }
 #endif
     /* new in corrigendum 14496-3:2002 */
@@ -7906,7 +7900,7 @@ uint8_t xxx single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, ui
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((retval = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((retval = fill_element(hDecoder, ld, hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -7995,7 +7989,7 @@ uint8_t xxx channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t 
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((result = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((result = fill_element(hDecoder, ld, hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -8170,7 +8164,8 @@ uint16_t xxx data_stream_element(NeAACDecStruct* hDecoder, bitfile* ld) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.11 */
-uint8_t xxx fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, uint8_t sbr_ele) {
+uint8_t xxx fill_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t sbr_ele) {
+    drc_info* drc = m_drc_info.get();
     uint16_t count;
 #ifdef SBR_DEC
     uint8_t bs_extension_type;
@@ -8205,7 +8200,7 @@ uint8_t xxx fill_element(NeAACDecStruct* hDecoder, bitfile* ld, drc_info* drc, u
         } else {
 #endif
 #ifndef DRM
-            while (count > 0) { count -= extension_payload(ld, drc, count); }
+            while (count > 0) { count -= extension_payload(ld, count); }
 #else
         return 30;
 #endif
@@ -8276,7 +8271,8 @@ void xxx gain_control_data(bitfile* ld, ic_stream* ics) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* Table 4.4.13 ASME */
-void xxx DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+void xxx DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce) {
+    drc_info* drc = m_drc_info.get();
     uint8_t retval = 0;
     (void)retval;
     uint8_t channels = hDecoder->fr_channels = 0;
@@ -8911,7 +8907,8 @@ uint8_t xxx spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld,
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.30 */
-uint16_t xxx extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
+uint16_t xxx extension_payload(bitfile* ld, uint16_t count) {
+    drc_info* drc = m_drc_info.get();
     uint16_t i, dri, dataElementLength;
     uint8_t  dataElementLengthPart;
     uint8_t  align = 4, data_element_version, loopCounter;
@@ -8919,7 +8916,7 @@ uint16_t xxx extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
     switch (extension_type) {
         case EXT_DYNAMIC_RANGE:
             drc->present = 1;
-            dri = dynamic_range_info(ld, drc);
+            dri = dynamic_range_info(ld);
             return dri;
         case EXT_FILL_DATA:
             /* fill_nibble = */ faad_getbits(ld, 4); /* must be '0000' */
@@ -8959,7 +8956,8 @@ uint16_t xxx extension_payload(bitfile* ld, drc_info* drc, uint16_t count) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.31 */
-uint8_t xxx dynamic_range_info(bitfile* ld, drc_info* drc) {
+uint8_t xxx dynamic_range_info(bitfile* ld) {
+    drc_info* drc = m_drc_info.get();
     uint8_t i, idx = 1;
     uint8_t band_incr;
     drc->num_bands = 1;
@@ -8969,7 +8967,7 @@ uint8_t xxx dynamic_range_info(bitfile* ld, drc_info* drc) {
         idx++;
     }
     drc->excluded_chns_present = faad_get1bit(ld);
-    if (drc->excluded_chns_present == 1) { idx += excluded_channels(ld, drc); }
+    if (drc->excluded_chns_present == 1) { idx += excluded_channels(ld); }
     if (faad_get1bit(ld)) {
         band_incr = (uint8_t)faad_getbits(ld, 4);
         /* drc->drc_bands_reserved_bits = */ faad_getbits(ld, 4);
@@ -8994,7 +8992,8 @@ uint8_t xxx dynamic_range_info(bitfile* ld, drc_info* drc) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Table 4.4.32 */
-uint8_t xxx excluded_channels(bitfile* ld, drc_info* drc) {
+uint8_t xxx excluded_channels(bitfile* ld) {
+    drc_info* drc = m_drc_info.get();
     uint8_t i, idx = 0;
     uint8_t num_excl_chan = 7;
     for (i = 0; i < 7; i++) { drc->exclude_mask[i] = faad_get1bit(ld); }
