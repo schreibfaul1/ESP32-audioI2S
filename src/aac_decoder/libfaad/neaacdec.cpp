@@ -35,12 +35,9 @@
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
 
-// ps_ptr<mdct_info>m_mdct256;
-// ps_ptr<mdct_info>m_mdct1024;
-// ps_ptr<mdct_info>m_mdct2048;
-mdct_info* m_mdct256;
-mdct_info* m_mdct1024;
-mdct_info* m_mdct2048;
+ps_ptr<mdct_info>m_mdct256;
+ps_ptr<mdct_info>m_mdct1024;
+ps_ptr<mdct_info>m_mdct2048;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3677,9 +3674,9 @@ real_t xxx fp_sqrt(real_t value) {
 void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
     switch(mdct_len){
-        case 256:  m_mdct256  = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct256;  break;
-        case 1024: m_mdct1024 = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct1024; break;
-        case 2048: m_mdct2048 = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct2048; break;
+        case 256:  m_mdct256.alloc();  mdct_new = m_mdct256.get();  break;
+        case 1024: m_mdct1024.alloc(); mdct_new = m_mdct1024.get(); break;
+        case 2048: m_mdct2048.alloc(); mdct_new = m_mdct2048.get(); break;
         default: log_e("wrong length");
     }
     assert(N % 8 == 0);
@@ -3718,9 +3715,9 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_end(uint16_t mdct_len) {
     switch(mdct_len){
-        case 256:  cfftu(m_mdct256->cfft); faad_free(&m_mdct256);  break;
-        case 1024: cfftu(m_mdct1024->cfft); faad_free(&m_mdct1024);  break;
-        case 2048: cfftu(m_mdct2048->cfft); faad_free(&m_mdct2048);  break;
+        case 256:  cfftu(m_mdct256->cfft);  m_mdct256.reset();  break;
+        case 1024: cfftu(m_mdct1024->cfft); m_mdct1024.reset();  break;
+        case 2048: cfftu(m_mdct2048->cfft); m_mdct2048.reset();  break;
         default: log_e("wrong length");
     }
 }
@@ -3728,9 +3725,9 @@ void xxx faad_mdct_end(uint16_t mdct_len) {
 void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_info* mdct_select = nullptr;
     switch(mdct_len){
-        case 256: mdct_select = m_mdct256; break;
-        case 1024: mdct_select = m_mdct1024; break;
-        case 2048: mdct_select = m_mdct2048; break;
+        case 256: mdct_select = m_mdct256.get(); break;
+        case 1024: mdct_select = m_mdct1024.get(); break;
+        case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
     }
     uint16_t  k;
@@ -3817,9 +3814,9 @@ void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
 void xxx faad_mdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_info* mdct_select = nullptr;
     switch(mdct_len){
-        case 256: mdct_select = m_mdct256; break;
-        case 1024: mdct_select = m_mdct1024; break;
-        case 2048: mdct_select = m_mdct2048; break;
+        case 256: mdct_select =  m_mdct256.get(); break;
+        case 1024: mdct_select = m_mdct1024.get(); break;
+        case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
     }
     uint16_t  k;
