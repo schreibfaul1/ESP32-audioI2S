@@ -35,15 +35,16 @@
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
 
-ps_ptr<mdct_info>m_mdct256;
-ps_ptr<mdct_info>m_mdct1024;
-ps_ptr<mdct_info>m_mdct2048;
-ps_ptr<cfft_info>m_ccft256;
-ps_ptr<cfft_info>m_ccft1024;
-ps_ptr<cfft_info>m_ccft2048;
-ps_ptr<complex_t>m_work256;
-ps_ptr<complex_t>m_work1024;
-ps_ptr<complex_t>m_work2048;
+ps_ptr<mdct_info> m_mdct256;
+ps_ptr<mdct_info> m_mdct1024;
+ps_ptr<mdct_info> m_mdct2048;
+ps_ptr<cfft_info> m_ccft256;
+ps_ptr<cfft_info> m_ccft1024;
+ps_ptr<cfft_info> m_ccft2048;
+ps_ptr<complex_t> m_work256;
+ps_ptr<complex_t> m_work1024;
+ps_ptr<complex_t> m_work2048;
+ps_ptr<drc_info>  m_drc_info;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -235,7 +236,7 @@ int32_t xxx pow2_fix(int32_t val) {
     uint32_t x1, x2;
     uint32_t errcorr;
     uint32_t index_frac;
-    int32_t   retval;
+    int32_t  retval;
     int32_t  whole = (val >> REAL_BITS);
     /* rest = [0..1] */
     int32_t rest = val - (whole << REAL_BITS);
@@ -267,7 +268,7 @@ int32_t xxx pow2_int(int32_t val) {
     uint32_t x1, x2;
     uint32_t errcorr;
     uint32_t index_frac;
-    int32_t   retval;
+    int32_t  retval;
     int32_t  whole = (val >> REAL_BITS);
     /* rest = [0..1] */
     int32_t rest = val - (whole << REAL_BITS);
@@ -439,7 +440,7 @@ NeAACDecHandle xxx NeAACDecOpen(void) {
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) { hDecoder->sbr[i] = NULL; }
 #endif
-    hDecoder->drc = drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
+    drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
     return hDecoder;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -698,7 +699,7 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
     else
 #endif
         filter_bank_end(hDecoder->fb);
-    drc_end(hDecoder->drc);
+    m_drc_info.reset();
     if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
@@ -1021,10 +1022,10 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
     /* decode the complete bitstream */
 #ifdef DRM
     if (/*(hDecoder->object_type == 6) ||*/ (hDecoder->object_type == DRM_ER_LC)) {
-        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, m_drc_info.get());
     } else {
 #endif
-        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
+        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce);
 #ifdef DRM
     }
 #endif
@@ -1637,8 +1638,8 @@ void xxx passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
 void xxx passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign) {
     static int32_t taur = FRAC_CONST(-0.5);
     static int32_t taui = FRAC_CONST(0.866025403784439);
-    uint16_t      i, k, ac, ah;
-    complex_t     c2, c3, d2, d3, t2;
+    uint16_t       i, k, ac, ah;
+    complex_t      c2, c3, d2, d3, t2;
     if (ido == 1) {
         if (isign == 1) {
             for (k = 0; k < l1; k++) {
@@ -1853,10 +1854,10 @@ void xxx passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, c
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign) {
-    int32_t    tr11 = FRAC_CONST(0.309016994374947);
-    int32_t    ti11 = FRAC_CONST(0.951056516295154);
-    int32_t    tr12 = FRAC_CONST(-0.809016994374947);
-    int32_t    ti12 = FRAC_CONST(0.587785252292473);
+    int32_t   tr11 = FRAC_CONST(0.309016994374947);
+    int32_t   ti11 = FRAC_CONST(0.951056516295154);
+    int32_t   tr12 = FRAC_CONST(-0.809016994374947);
+    int32_t   ti12 = FRAC_CONST(0.587785252292473);
     uint16_t  i, k, ac, ah;
     complex_t c2, c3, c4, c5, d3, d4, d5, d2, t2, t3, t4, t5;
     if (ido == 1) {
@@ -2134,29 +2135,49 @@ void xxx cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac
 void xxx cfftf(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
         default: log_e("wrong length");
     }
-    cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1); }
+    cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
+}
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cfftb(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
         default: log_e("wrong length");
     }
-    cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1); }
+    cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
+}
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
     uint16_t ntryh[4] = {3, 4, 2, 5};
 #ifndef FIXED_POINT
-    int32_t   arg, argh, argld, fi;
+    int32_t  arg, argh, argld, fi;
     uint16_t ido, ipm;
     uint16_t i1, k1, l1, l2;
     uint16_t ld, ii, ip;
@@ -2230,10 +2251,22 @@ startloop:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti(uint16_t mdct_len, uint16_t n) {
     cfft_info* cfft_select = nullptr;
-    switch(mdct_len){
-        case 256:  m_ccft256.alloc();  cfft_select = m_ccft256.get();  m_work256.alloc_array(n * sizeof(complex_t));  break;
-        case 1024: m_ccft1024.alloc(); cfft_select = m_ccft1024.get(); m_work1024.alloc_array(n * sizeof(complex_t)); break;
-        case 2048: m_ccft2048.alloc(); cfft_select = m_ccft2048.get(); m_work2048.alloc_array(n * sizeof(complex_t)); break;
+    switch (mdct_len) {
+        case 256:
+            m_ccft256.alloc();
+            cfft_select = m_ccft256.get();
+            m_work256.alloc_array(n * sizeof(complex_t));
+            break;
+        case 1024:
+            m_ccft1024.alloc();
+            cfft_select = m_ccft1024.get();
+            m_work1024.alloc_array(n * sizeof(complex_t));
+            break;
+        case 2048:
+            m_ccft2048.alloc();
+            cfft_select = m_ccft2048.get();
+            m_work2048.alloc_array(n * sizeof(complex_t));
+            break;
         default: log_e("wrong length");
     }
     cfft_select->n = n;
@@ -2261,23 +2294,18 @@ void xxx cffti(uint16_t mdct_len, uint16_t n) {
     return;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-drc_info* xxx drc_init(int32_t cut, int32_t boost) {
-    drc_info* drc = (drc_info*)faad_malloc(sizeof(drc_info));
-    memset(drc, 0, sizeof(drc_info));
-    drc->ctrl1 = cut;
-    drc->ctrl2 = boost;
-    drc->num_bands = 1;
-    drc->band_top[0] = 1024 / 4 - 1;
-    drc->dyn_rng_sgn[0] = 1;
-    drc->dyn_rng_ctl[0] = 0;
-    return drc;
+void xxx drc_init(int32_t cut, int32_t boost) {
+    m_drc_info.calloc(1);
+    m_drc_info->ctrl1 = cut;
+    m_drc_info->ctrl2 = boost;
+    m_drc_info->num_bands = 1;
+    m_drc_info->band_top[0] = 1024 / 4 - 1;
+    m_drc_info->dyn_rng_sgn[0] = 1;
+    m_drc_info->dyn_rng_ctl[0] = 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx drc_end(drc_info* drc) {
-    if (drc) faad_free(&drc);
-}
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx drc_decode(drc_info* drc, int32_t* spec) {
+void xxx drc_decode(int32_t* spec) {
+    drc_info* drc = m_drc_info.get();
     uint16_t i, bd, top;
 #ifdef FIXED_POINT
     int32_t exp, frac;
@@ -2479,11 +2507,11 @@ void xxx drm_ps_delta_decode(drm_ps_info* ps) {
 void xxx drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
     uint8_t   s, b, k;
     complex_t qfrac, tmp0, tmp, in, R0;
-    int32_t    peakdiff;
-    int32_t    nrg;
-    int32_t    power;
-    int32_t    transratio;
-    int32_t    new_delay_slopes[NUM_OF_LINKS];
+    int32_t   peakdiff;
+    int32_t   nrg;
+    int32_t   power;
+    int32_t   transratio;
+    int32_t   new_delay_slopes[NUM_OF_LINKS];
     uint8_t   temp_delay_ser[NUM_OF_LINKS];
     complex_t Phi_Fract;
     #ifdef FIXED_POINT
@@ -2559,8 +2587,8 @@ void xxx drm_calc_sa_side_signal(drm_ps_info* ps, qmf_t X[38][64]) {
 #ifdef DRM
 void xxx drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     uint8_t s, b, ifreq, qclass;
-    int32_t  sa_map[MAX_SA_BAND], sa_dir_map[MAX_SA_BAND], k_sa_map[MAX_SA_BAND], k_sa_dir_map[MAX_SA_BAND];
-    int32_t  new_dir_map, new_sa_map;
+    int32_t sa_map[MAX_SA_BAND], sa_dir_map[MAX_SA_BAND], k_sa_map[MAX_SA_BAND], k_sa_dir_map[MAX_SA_BAND];
+    int32_t new_dir_map, new_sa_map;
     if (ps->bs_enable_sa) {
         /* Instead of dequantization and mapping, we use an inverse mapping
            to look up all the values we need */
@@ -2603,9 +2631,9 @@ void xxx drm_add_ambiance(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[3
 #ifdef DRM
 void xxx drm_add_pan(drm_ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]) {
     uint8_t s, b, qclass, ifreq;
-    int32_t  tmp, coeff1, coeff2;
-    int32_t  pan_base[MAX_PAN_BAND];
-    int32_t  pan_delta[MAX_PAN_BAND];
+    int32_t tmp, coeff1, coeff2;
+    int32_t pan_base[MAX_PAN_BAND];
+    int32_t pan_delta[MAX_PAN_BAND];
     qmf_t   temp_l, temp_r;
     if (ps->bs_enable_pan) {
         for (b = 0; b < NUM_OF_QMF_CHANNELS; b++) {
@@ -2718,7 +2746,7 @@ void xxx ms_decode(ic_stream* ics, ic_stream* icsr, int32_t* l_spec, int32_t* r_
     uint8_t  group = 0;
     uint16_t nshort = frame_len / 8;
     uint16_t i, k;
-    int32_t   tmp;
+    int32_t  tmp;
     if (ics->ms_mask_present >= 1) {
         for (g = 0; g < ics->num_window_groups; g++) {
             for (b = 0; b < ics->window_group_length[g]; b++) {
@@ -3123,8 +3151,8 @@ void* xxx output_to_PCM(NeAACDecStruct* hDecoder, int32_t** input, void* sample_
 void xxx gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t size, uint8_t sub, uint32_t* __r1, uint32_t* __r2) {
 #ifndef FIXED_POINT
     uint16_t i;
-    int32_t   energy = 0.0;
-    int32_t   scale = (int32_t)1.0 / (int32_t)size;
+    int32_t  energy = 0.0;
+    int32_t  scale = (int32_t)1.0 / (int32_t)size;
     for (i = 0; i < size; i++) {
         int32_t tmp = scale * (int32_t)(int32_t)ne_rng(__r1, __r2);
         spec[i] = tmp;
@@ -3135,7 +3163,7 @@ void xxx gen_rand_vector(int32_t* spec, int16_t scale_factor, uint16_t size, uin
     for (i = 0; i < size; i++) { spec[i] *= scale; }
 #else
     uint16_t i;
-    int32_t   energy = 0, scale;
+    int32_t  energy = 0, scale;
     int32_t  exp, frac;
     for (i = 0; i < size; i++) {
         /* this can be replaced by a 16 bit random generator!!!! */
@@ -3693,10 +3721,19 @@ int32_t xxx fp_sqrt(int32_t value) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
-    switch(mdct_len){
-        case 256:  m_mdct256.alloc();  mdct_new = m_mdct256.get();  break;
-        case 1024: m_mdct1024.alloc(); mdct_new = m_mdct1024.get(); break;
-        case 2048: m_mdct2048.alloc(); mdct_new = m_mdct2048.get(); break;
+    switch (mdct_len) {
+        case 256:
+            m_mdct256.alloc();
+            mdct_new = m_mdct256.get();
+            break;
+        case 1024:
+            m_mdct1024.alloc();
+            mdct_new = m_mdct1024.get();
+            break;
+        case 2048:
+            m_mdct2048.alloc();
+            mdct_new = m_mdct2048.get();
+            break;
         default: log_e("wrong length");
     }
 
@@ -3726,7 +3763,7 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 #endif
     }
     /* initialise fft */
-    cffti (mdct_len, N / 4);
+    cffti(mdct_len, N / 4);
 #ifdef PROFILE
     mdct_new->cycles = 0;
     mdct_new->fft_cycles = 0;
@@ -3735,18 +3772,30 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_end(uint16_t mdct_len) {
-    switch(mdct_len){
-        case 256:  m_work256.reset();  m_ccft256.reset();  m_mdct256.reset();  break;
-        case 1024: m_work1024.reset(); m_ccft1024.reset(); m_mdct1024.reset();  break;
-        case 2048: m_work2048.reset(); m_ccft2048.reset(); m_mdct2048.reset();  break;
+    switch (mdct_len) {
+        case 256:
+            m_work256.reset();
+            m_ccft256.reset();
+            m_mdct256.reset();
+            break;
+        case 1024:
+            m_work1024.reset();
+            m_ccft1024.reset();
+            m_mdct1024.reset();
+            break;
+        case 2048:
+            m_work2048.reset();
+            m_ccft2048.reset();
+            m_mdct2048.reset();
+            break;
         default: log_e("wrong length");
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_info* mdct_select = nullptr;
-    switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
+    switch (mdct_len) {
+        case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
@@ -3834,8 +3883,8 @@ void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
 #ifdef LTP_DEC
 void xxx faad_mdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_info* mdct_select = nullptr;
-    switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
+    switch (mdct_len) {
+        case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
@@ -3981,10 +4030,10 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
     const int32_t* window_long_prev = NULL;
     const int32_t* window_short = NULL;
     const int32_t* window_short_prev = NULL;
-    uint16_t      nlong = frame_len;
-    uint16_t      nshort = frame_len / 8;
-    uint16_t      trans = nshort / 2;
-    uint16_t      nflat_ls = (nlong - nshort) / 2;
+    uint16_t       nlong = frame_len;
+    uint16_t       nshort = frame_len / 8;
+    uint16_t       trans = nshort / 2;
+    uint16_t       nflat_ls = (nlong - nshort) / 2;
 #ifdef PROFILE
     int64_t count = faad_get_ts();
 #endif
@@ -4116,9 +4165,9 @@ void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_sh
     const int32_t* window_long_prev = NULL;
     const int32_t* window_short = NULL;
     const int32_t* window_short_prev = NULL;
-    uint16_t      nlong = frame_len;
-    uint16_t      nshort = frame_len / 8;
-    uint16_t      nflat_ls = (nlong - nshort) / 2;
+    uint16_t       nlong = frame_len;
+    uint16_t       nshort = frame_len / 8;
+    uint16_t       nflat_ls = (nlong - nshort) / 2;
     assert(window_sequence != EIGHT_SHORT_SEQUENCE);
     #ifdef LD_DEC
     if (object_type == LD) {
@@ -6185,8 +6234,8 @@ void xxx DCT2_32_unscaled(int32_t* y, int32_t* x) {
     #ifndef SBR_LOW_POWER
 void xxx fft_dif(int32_t* Real, int32_t* Imag) {
     const uint8_t _n = 32;
-    int32_t        w_real, w_imag;                                     // For faster access
-    int32_t        point1_real, point1_imag, point2_real, point2_imag; // For faster access
+    int32_t       w_real, w_imag;                                     // For faster access
+    int32_t       point1_real, point1_imag, point2_real, point2_imag; // For faster access
     uint32_t      j, i, i2, w_index;                                  // Counters
     // First 2 stages of 32 point FFT decimation in frequency
     // 4*16*2=64*2=128 multiplications
@@ -6409,13 +6458,13 @@ float xxx inv_quant_pred(int16_t q) {
 void xxx ic_predict(pred_state* state, int32_t input, int32_t* output, uint8_t pred) {
     uint16_t tmp;
     int16_t  i, j;
-    int32_t   dr1;
+    int32_t  dr1;
     float    predictedvalue;
-    int32_t   e0, e1;
-    int32_t   k1, k2;
-    int32_t   r[2];
-    int32_t   COR[2];
-    int32_t   VAR[2];
+    int32_t  e0, e1;
+    int32_t  k1, k2;
+    int32_t  r[2];
+    int32_t  COR[2];
+    int32_t  VAR[2];
     r[0] = inv_quant_pred(state->r[0]);
     r[1] = inv_quant_pred(state->r[1]);
     COR[0] = inv_quant_pred(state->COR[0]);
@@ -6437,7 +6486,7 @@ void xxx ic_predict(pred_state* state, int32_t input, int32_t* output, uint8_t p
         #define B 0.953125
         int32_t c = COR[0];
         int32_t v = VAR[0];
-        float  tmp;
+        float   tmp;
         if (c == 0 || v <= 1) {
             k1 = 0;
         } else {
@@ -6462,7 +6511,7 @@ void xxx ic_predict(pred_state* state, int32_t input, int32_t* output, uint8_t p
         #define B 0.953125
         int32_t c = COR[1];
         int32_t v = VAR[1];
-        float  tmp;
+        float   tmp;
         if (c == 0 || v <= 1) {
             k2 = 0;
         } else {
@@ -6673,7 +6722,7 @@ int32_t xxx iquant(int16_t q, const int32_t* tab, uint8_t* error) {
      */
     #ifndef BIG_IQ_TABLE
     const int32_t errcorr[] = {REAL_CONST(0),         REAL_CONST(1.0 / 8.0), REAL_CONST(2.0 / 8.0), REAL_CONST(3.0 / 8.0), REAL_CONST(4.0 / 8.0),
-                              REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
+                               REAL_CONST(5.0 / 8.0), REAL_CONST(6.0 / 8.0), REAL_CONST(7.0 / 8.0), REAL_CONST(0)};
     int32_t       x1, x2;
     #endif
     int16_t sgn = 1;
@@ -6737,9 +6786,9 @@ uint8_t xxx quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* qua
         COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
     };
     const int32_t* tab = iq_table;
-    uint8_t       g, sfb, win;
-    uint16_t      width, bin, k, gindex, wa, wb;
-    uint8_t       error = 0; /* Init error flag */
+    uint8_t        g, sfb, win;
+    uint16_t       width, bin, k, gindex, wa, wb;
+    uint8_t        error = 0; /* Init error flag */
 #ifndef FIXED_POINT
     int32_t scf;
 #endif
@@ -6988,8 +7037,8 @@ uint8_t xxx allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uin
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics, element* sce, int16_t* spec_data) {
-    uint8_t retval = 0;
-    int     output_channels;
+    uint8_t  retval = 0;
+    int      output_channels;
     int32_t* spec_coef = (int32_t*)faad_malloc(1024 * sizeof(int32_t));
 #ifdef PROFILE
     int64_t count = faad_get_ts();
@@ -7083,8 +7132,8 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
     tns_decode_frame(ics, &(ics->tns), hDecoder->sf_index, hDecoder->object_type, spec_coef, hDecoder->frameLength);
     /* drc decoding */
 #ifdef APPLY_DRC
-    if (hDecoder->drc->present) {
-        if (!hDecoder->drc->exclude_mask[sce->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef);
+    if (m_drc_info->present) {
+        if (!m_drc_info->exclude_mask[sce->channel] || m_drc_info->excluded_chns_present) drc_decode(spec_coef);
     }
 #endif
     /* filter bank */
@@ -7256,8 +7305,8 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
     /* drc decoding */
 #if APPLY_DRC
     if (hDecoder->drc->present) {
-        if (!hDecoder->drc->exclude_mask[cpe->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef1);
-        if (!hDecoder->drc->exclude_mask[cpe->paired_channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef2);
+        if (!m_drc_info->exclude_mask[cpe->channel] || !m_drc_info->excluded_chns_present) drc_decode(spec_coef1);
+        if (!m_drc_info->exclude_mask[cpe->paired_channel] || !hm_drc_info > excluded_chns_present) drc_decode(spec_coef2);
     }
 #endif
     /* filter bank */
@@ -7321,7 +7370,7 @@ void xxx tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8
     int16_t  size;
     uint16_t bottom, top, start, end;
     uint16_t nshort = frame_len / 8;
-    int32_t   lpc[TNS_MAX_ORDER + 1];
+    int32_t  lpc[TNS_MAX_ORDER + 1];
     if (!ics->tns_data_present) return;
     for (w = 0; w < ics->num_windows; w++) {
         bottom = ics->num_swb;
@@ -7357,7 +7406,7 @@ void xxx tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8
     int16_t  size;
     uint16_t bottom, top, start, end;
     uint16_t nshort = frame_len / 8;
-    int32_t   lpc[TNS_MAX_ORDER + 1];
+    int32_t  lpc[TNS_MAX_ORDER + 1];
     if (!ics->tns_data_present) return;
     for (w = 0; w < ics->num_windows; w++) {
         bottom = ics->num_swb;
@@ -7389,7 +7438,7 @@ void xxx tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8
 /* Decoder transmitted coefficients for one TNS filter */
 void xxx tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, int32_t* a) {
     uint8_t i, m;
-    int32_t  tmp2[TNS_MAX_ORDER + 1], b[TNS_MAX_ORDER + 1];
+    int32_t tmp2[TNS_MAX_ORDER + 1], b[TNS_MAX_ORDER + 1];
     /* Conversion to signed integer */
     for (i = 0; i < order; i++) {
         if (coef_compress == 0) {
@@ -7426,10 +7475,10 @@ void xxx tns_ar_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lp
     */
     uint8_t  j;
     uint16_t i;
-    int32_t   y;
+    int32_t  y;
     /* state is stored as a double ringbuffer */
     int32_t state[2 * TNS_MAX_ORDER] = {0};
-    int8_t state_index = 0;
+    int8_t  state_index = 0;
     for (i = 0; i < size; i++) {
         y = *spectrum;
         for (j = 0; j < order; j++) y -= MUL_C(state[state_index + j], lpc[j + 1]);
@@ -7456,10 +7505,10 @@ void xxx tns_ma_filter(int32_t* spectrum, uint16_t size, int8_t inc, int32_t* lp
     */
     uint8_t  j;
     uint16_t i;
-    int32_t   y;
+    int32_t  y;
     /* state is stored as a double ringbuffer */
     int32_t state[2 * TNS_MAX_ORDER] = {0};
-    int8_t state_index = 0;
+    int8_t  state_index = 0;
     for (i = 0; i < size; i++) {
         y = *spectrum;
         for (j = 0; j < order; j++) y += MUL_C(state[state_index + j], lpc[j + 1]);
@@ -7675,7 +7724,8 @@ void xxx decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     hDecoder->fr_ch_ele++;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
+void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce) {
+    drc_info* drc = m_drc_info.get();
     uint8_t id_syn_ele;
     uint8_t ele_this_frame = 0;
     hDecoder->fr_channels = 0;
@@ -7856,7 +7906,7 @@ uint8_t xxx single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, ui
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((retval = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -7945,7 +7995,7 @@ uint8_t xxx channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t 
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((result = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((result = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -9458,8 +9508,8 @@ void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t
                     int32_t ipqf_buffer[SSR_BANDS][96 / 4], int32_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
-    int32_t   time_tmp[2048] = {0};
-    int32_t   output[1024] = {0};
+    int32_t  time_tmp[2048] = {0};
+    int32_t  output[1024] = {0};
     for (band = 0; band < SSR_BANDS; band++) {
         int16_t j;
         /* uneven bands have inverted frequency scale */
@@ -9484,7 +9534,7 @@ void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t
 #ifdef SSR_DEC
 void xxx ssr_gain_control(ssr_info* ssr, int32_t* data, int32_t* output, int32_t* overlap, int32_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len) {
     uint16_t i;
-    int32_t   gc_function[2 * 1024 / SSR_BANDS];
+    int32_t  gc_function[2 * 1024 / SSR_BANDS];
     if (window_sequence != EIGHT_SHORT_SEQUENCE) {
         ssr_gc_function(ssr, &prev_fmd[band * frame_len * 2], gc_function, window_sequence, frame_len);
         for (i = 0; i < frame_len * 2; i++) data[band * frame_len * 2 + i] *= gc_function[i];
@@ -9709,11 +9759,11 @@ void xxx imdct_ssr(fb_info* fb, int32_t* in_data, int32_t* out_data, uint16_t le
 void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, int32_t* freq_in, int32_t* time_out, uint16_t frame_len) {
     #define MUL_R_C(A, B) ((A) * (B))
     int16_t  i;
-    int32_t*  transf_buf;
-    int32_t*  window_long;
-    int32_t*  window_long_prev;
-    int32_t*  window_short;
-    int32_t*  window_short_prev;
+    int32_t* transf_buf;
+    int32_t* window_long;
+    int32_t* window_long_prev;
+    int32_t* window_short;
+    int32_t* window_short_prev;
     uint16_t nlong = frame_len;
     uint16_t nshort = frame_len / 8;
     uint16_t trans = nshort / 2;
@@ -9869,7 +9919,7 @@ int16_t xxx real_to_int16(int32_t sig_in) {
     return (int16_t)lrintf(sig_in);
 }
     #endif // FIXED_POINT
-#endif // LPT_DEC
+#endif     // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void xxx lt_update_state(int16_t* lt_pred_stat, int32_t* time, int32_t* overlap, uint16_t frame_len, uint8_t object_type) {
@@ -9985,7 +10035,7 @@ void xxx channel_filter2(hyb_info* hyb, uint8_t frame_len, const int32_t* filter
 /* complex filter, size 4 */
 void xxx channel_filter4(hyb_info* hyb, uint8_t frame_len, const int32_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i;
-    int32_t  input_re1[2], input_re2[2], input_im1[2], input_im2[2];
+    int32_t input_re1[2], input_re2[2], input_im1[2], input_im2[2];
     for (i = 0; i < frame_len; i++) {
         input_re1[0] = -MUL_F(filter[2], (QMF_RE(buffer[i + 2]) + QMF_RE(buffer[i + 10]))) + MUL_F(filter[6], QMF_RE(buffer[i + 6]));
         input_re1[1] = MUL_F(FRAC_CONST(-0.70710678118655), (MUL_F(filter[1], (QMF_RE(buffer[i + 1]) + QMF_RE(buffer[i + 11]))) + MUL_F(filter[3], (QMF_RE(buffer[i + 3]) + QMF_RE(buffer[i + 9]))) -
@@ -10038,8 +10088,8 @@ void xxx DCT3_4_unscaled(int32_t* y, int32_t* x) {
 /* complex filter, size 8 */
 void xxx channel_filter8(hyb_info* hyb, uint8_t frame_len, const int32_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i, n;
-    int32_t  input_re1[4], input_re2[4], input_im1[4], input_im2[4];
-    int32_t  x[4];
+    int32_t input_re1[4], input_re2[4], input_im1[4], input_im2[4];
+    int32_t x[4];
     for (i = 0; i < frame_len; i++) {
         input_re1[0] = MUL_F(filter[6], QMF_RE(buffer[6 + i]));
         input_re1[1] = MUL_F(filter[5], (QMF_RE(buffer[5 + i]) + QMF_RE(buffer[7 + i])));
@@ -10109,8 +10159,8 @@ void xxx DCT3_6_unscaled(int32_t* y, int32_t* x) {
 /* complex filter, size 12 */
 void xxx channel_filter12(hyb_info* hyb, uint8_t frame_len, const int32_t* filter, qmf_t* buffer, qmf_t** X_hybrid) {
     uint8_t i, n;
-    int32_t  input_re1[6], input_re2[6], input_im1[6], input_im2[6];
-    int32_t  out_re1[6], out_re2[6], out_im1[6], out_im2[6];
+    int32_t input_re1[6], input_re2[6], input_im1[6], input_im2[6];
+    int32_t out_re1[6], out_re2[6], out_im1[6], out_im2[6];
     for (i = 0; i < frame_len; i++) {
         for (n = 0; n < 6; n++) {
             if (n == 0) {
@@ -10551,11 +10601,11 @@ void xxx ps_decorrelate(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64]
     uint8_t          sb, maxsb;
     const complex_t* Phi_Fract_SubQmf;
     uint8_t          temp_delay_ser[NO_ALLPASS_LINKS] = {0};
-    int32_t           P_SmoothPeakDecayDiffNrg, nrg;
+    int32_t          P_SmoothPeakDecayDiffNrg, nrg;
     // int32_t           P[32][34];
-    int32_t(*P)[34] = (int32_t(*)[34])faad_malloc(32 * sizeof(int32_t[34]));
+    int32_t (*P)[34] = (int32_t (*)[34])faad_malloc(32 * sizeof(int32_t[34]));
     // int32_t           G_TransientRatio[32][34] = {{0}};
-    int32_t(*G_TransientRatio)[34] = (int32_t(*)[34])faad_calloc(32, sizeof(int32_t[34]));
+    int32_t (*G_TransientRatio)[34] = (int32_t (*)[34])faad_calloc(32, sizeof(int32_t[34]));
     complex_t inputLeft;
     /* chose hybrid filterbank: 20 or 34 band case */
     if (ps->use34hybrid_bands) {
@@ -10820,22 +10870,22 @@ int32_t xxx magnitude_c(complex_t c) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef PS_DEC
 void xxx ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], qmf_t X_hybrid_left[32][32], qmf_t X_hybrid_right[32][32]) {
-    uint8_t       n;
-    uint8_t       gr;
-    uint8_t       bk = 0;
-    uint8_t       sb, maxsb;
-    uint8_t       env;
-    uint8_t       nr_ipdopd_par;
-    complex_t     h11 = {0}, h12 = {0}, h21 = {0}, h22 = {0};
-    complex_t     H11 = {0}, H12 = {0}, H21 = {0}, H22 = {0};
-    complex_t     deltaH11 = {0}, deltaH12 = {0}, deltaH21 = {0}, deltaH22 = {0};
-    complex_t     tempLeft;
-    complex_t     tempRight;
-    complex_t     phaseLeft;
-    complex_t     phaseRight;
+    uint8_t        n;
+    uint8_t        gr;
+    uint8_t        bk = 0;
+    uint8_t        sb, maxsb;
+    uint8_t        env;
+    uint8_t        nr_ipdopd_par;
+    complex_t      h11 = {0}, h12 = {0}, h21 = {0}, h22 = {0};
+    complex_t      H11 = {0}, H12 = {0}, H21 = {0}, H22 = {0};
+    complex_t      deltaH11 = {0}, deltaH12 = {0}, deltaH21 = {0}, deltaH22 = {0};
+    complex_t      tempLeft;
+    complex_t      tempRight;
+    complex_t      phaseLeft;
+    complex_t      phaseRight;
     int32_t        L;
     const int32_t* sf_iid;
-    uint8_t       no_iid_steps;
+    uint8_t        no_iid_steps;
     if (ps->iid_mode >= 3) {
         no_iid_steps = 15;
         sf_iid = sf_iid_fine;
@@ -10963,7 +11013,7 @@ void xxx ps_mix_phase(ps_info* ps, qmf_t X_left[38][64], qmf_t X_right[38][64], 
             }
             /* calculate phase rotation parameters H_xy note that the imaginary part of these parameters are only calculated when IPD and OPD are enabled */
             if ((ps->enable_ipdopd) && (bk < nr_ipdopd_par)) {
-                int8_t i;
+                int8_t  i;
                 int32_t xy, pq, xypq;
                 /* ringbuffer index */
                 i = ps->phase_hist;
@@ -11410,7 +11460,7 @@ void xxx huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_
 #ifdef SSR_DEC
 void xxx ssr_ipqf(ssr_info* ssr, int32_t* in_data, int32_t* out_data, int32_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) {
     static int initFlag = 0;
-    int32_t     a_pqfproto[PQFTAPS];
+    int32_t    a_pqfproto[PQFTAPS];
     int        i;
     if (initFlag == 0) {
         gc_set_protopqf(a_pqfproto);
@@ -11635,7 +11685,7 @@ void xxx sbr_save_matrix(sbr_info* sbr, uint8_t ch) {
 uint8_t xxx sbr_process_channel(sbr_info* sbr, int32_t* channel_buf, qmf_t X[MAX_NTSR][64], uint8_t ch, uint8_t dont_process, const uint8_t downSampledSBR) {
     int16_t k, l;
     uint8_t ret = 0;
-    int32_t  deg[64];
+    int32_t deg[64];
     #ifdef DRM
     if (sbr->Is_DRM_SBR) {
         sbr->bsco = max((int32_t)sbr->maxAACLine * 32 / (int32_t)sbr->frame_len - (int32_t)sbr->kx, 0);
@@ -12138,7 +12188,7 @@ void xxx envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch) {
 #ifdef SBR_DEC
     #ifndef FIXED_POINT
 void xxx unmap_envelope_noise(sbr_info* sbr) {
-    int32_t  tmp;
+    int32_t tmp;
     int16_t exp0, exp1;
     uint8_t l, k;
     uint8_t amp0 = (sbr->amp_res[0]) ? 0 : 1;
@@ -12345,16 +12395,16 @@ int32_t xxx find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1) {
     #ifdef FIXED_POINT
     /* table with log2() values */
     const int32_t log2Table[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(1.0000000000), COEF_CONST(1.5849625007), COEF_CONST(2.0000000000), COEF_CONST(2.3219280949),
-                                  COEF_CONST(2.5849625007), COEF_CONST(2.8073549221), COEF_CONST(3.0000000000), COEF_CONST(3.1699250014), COEF_CONST(3.3219280949), COEF_CONST(3.4594316186),
-                                  COEF_CONST(3.5849625007), COEF_CONST(3.7004397181), COEF_CONST(3.8073549221), COEF_CONST(3.9068905956), COEF_CONST(4.0000000000), COEF_CONST(4.0874628413),
-                                  COEF_CONST(4.1699250014), COEF_CONST(4.2479275134), COEF_CONST(4.3219280949), COEF_CONST(4.3923174228), COEF_CONST(4.4594316186), COEF_CONST(4.5235619561),
-                                  COEF_CONST(4.5849625007), COEF_CONST(4.6438561898), COEF_CONST(4.7004397181), COEF_CONST(4.7548875022), COEF_CONST(4.8073549221), COEF_CONST(4.8579809951),
-                                  COEF_CONST(4.9068905956), COEF_CONST(4.9541963104), COEF_CONST(5.0000000000), COEF_CONST(5.0443941194), COEF_CONST(5.0874628413), COEF_CONST(5.1292830169),
-                                  COEF_CONST(5.1699250014), COEF_CONST(5.2094533656), COEF_CONST(5.2479275134), COEF_CONST(5.2854022189), COEF_CONST(5.3219280949), COEF_CONST(5.3575520046),
-                                  COEF_CONST(5.3923174228), COEF_CONST(5.4262647547), COEF_CONST(5.4594316186), COEF_CONST(5.4918530963), COEF_CONST(5.5235619561), COEF_CONST(5.5545888517),
-                                  COEF_CONST(5.5849625007), COEF_CONST(5.6147098441), COEF_CONST(5.6438561898), COEF_CONST(5.6724253420), COEF_CONST(5.7004397181), COEF_CONST(5.7279204546),
-                                  COEF_CONST(5.7548875022), COEF_CONST(5.7813597135), COEF_CONST(5.8073549221), COEF_CONST(5.8328900142), COEF_CONST(5.8579809951), COEF_CONST(5.8826430494),
-                                  COEF_CONST(5.9068905956), COEF_CONST(5.9307373376), COEF_CONST(5.9541963104), COEF_CONST(5.9772799235), COEF_CONST(6.0)};
+                                   COEF_CONST(2.5849625007), COEF_CONST(2.8073549221), COEF_CONST(3.0000000000), COEF_CONST(3.1699250014), COEF_CONST(3.3219280949), COEF_CONST(3.4594316186),
+                                   COEF_CONST(3.5849625007), COEF_CONST(3.7004397181), COEF_CONST(3.8073549221), COEF_CONST(3.9068905956), COEF_CONST(4.0000000000), COEF_CONST(4.0874628413),
+                                   COEF_CONST(4.1699250014), COEF_CONST(4.2479275134), COEF_CONST(4.3219280949), COEF_CONST(4.3923174228), COEF_CONST(4.4594316186), COEF_CONST(4.5235619561),
+                                   COEF_CONST(4.5849625007), COEF_CONST(4.6438561898), COEF_CONST(4.7004397181), COEF_CONST(4.7548875022), COEF_CONST(4.8073549221), COEF_CONST(4.8579809951),
+                                   COEF_CONST(4.9068905956), COEF_CONST(4.9541963104), COEF_CONST(5.0000000000), COEF_CONST(5.0443941194), COEF_CONST(5.0874628413), COEF_CONST(5.1292830169),
+                                   COEF_CONST(5.1699250014), COEF_CONST(5.2094533656), COEF_CONST(5.2479275134), COEF_CONST(5.2854022189), COEF_CONST(5.3219280949), COEF_CONST(5.3575520046),
+                                   COEF_CONST(5.3923174228), COEF_CONST(5.4262647547), COEF_CONST(5.4594316186), COEF_CONST(5.4918530963), COEF_CONST(5.5235619561), COEF_CONST(5.5545888517),
+                                   COEF_CONST(5.5849625007), COEF_CONST(5.6147098441), COEF_CONST(5.6438561898), COEF_CONST(5.6724253420), COEF_CONST(5.7004397181), COEF_CONST(5.7279204546),
+                                   COEF_CONST(5.7548875022), COEF_CONST(5.7813597135), COEF_CONST(5.8073549221), COEF_CONST(5.8328900142), COEF_CONST(5.8579809951), COEF_CONST(5.8826430494),
+                                   COEF_CONST(5.9068905956), COEF_CONST(5.9307373376), COEF_CONST(5.9541963104), COEF_CONST(5.9772799235), COEF_CONST(6.0)};
     int32_t       r0 = log2Table[a0]; /* coef */
     int32_t       r1 = log2Table[a1]; /* coef */
     int32_t       r2 = (r1 - r0);     /* coef */
@@ -12375,16 +12425,16 @@ int32_t xxx find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
     #ifdef FIXED_POINT
     /* table with log() values */
     const int32_t logTable[65] = {COEF_CONST(0.0),          COEF_CONST(0.0),          COEF_CONST(0.6931471806), COEF_CONST(1.0986122887), COEF_CONST(1.3862943611), COEF_CONST(1.6094379124),
-                                 COEF_CONST(1.7917594692), COEF_CONST(1.9459101491), COEF_CONST(2.0794415417), COEF_CONST(2.1972245773), COEF_CONST(2.3025850930), COEF_CONST(2.3978952728),
-                                 COEF_CONST(2.4849066498), COEF_CONST(2.5649493575), COEF_CONST(2.6390573296), COEF_CONST(2.7080502011), COEF_CONST(2.7725887222), COEF_CONST(2.8332133441),
-                                 COEF_CONST(2.8903717579), COEF_CONST(2.9444389792), COEF_CONST(2.9957322736), COEF_CONST(3.0445224377), COEF_CONST(3.0910424534), COEF_CONST(3.1354942159),
-                                 COEF_CONST(3.1780538303), COEF_CONST(3.2188758249), COEF_CONST(3.2580965380), COEF_CONST(3.2958368660), COEF_CONST(3.3322045102), COEF_CONST(3.3672958300),
-                                 COEF_CONST(3.4011973817), COEF_CONST(3.4339872045), COEF_CONST(3.4657359028), COEF_CONST(3.4965075615), COEF_CONST(3.5263605246), COEF_CONST(3.5553480615),
-                                 COEF_CONST(3.5835189385), COEF_CONST(3.6109179126), COEF_CONST(3.6375861597), COEF_CONST(3.6635616461), COEF_CONST(3.6888794541), COEF_CONST(3.7135720667),
-                                 COEF_CONST(3.7376696183), COEF_CONST(3.7612001157), COEF_CONST(3.7841896339), COEF_CONST(3.8066624898), COEF_CONST(3.8286413965), COEF_CONST(3.8501476017),
-                                 COEF_CONST(3.8712010109), COEF_CONST(3.8918202981), COEF_CONST(3.9120230054), COEF_CONST(3.9318256327), COEF_CONST(3.9512437186), COEF_CONST(3.9702919136),
-                                 COEF_CONST(3.9889840466), COEF_CONST(4.0073331852), COEF_CONST(4.0253516907), COEF_CONST(4.0430512678), COEF_CONST(4.0604430105), COEF_CONST(4.0775374439),
-                                 COEF_CONST(4.0943445622), COEF_CONST(4.1108738642), COEF_CONST(4.1271343850), COEF_CONST(4.1431347264), COEF_CONST(4.158883083)};
+                                  COEF_CONST(1.7917594692), COEF_CONST(1.9459101491), COEF_CONST(2.0794415417), COEF_CONST(2.1972245773), COEF_CONST(2.3025850930), COEF_CONST(2.3978952728),
+                                  COEF_CONST(2.4849066498), COEF_CONST(2.5649493575), COEF_CONST(2.6390573296), COEF_CONST(2.7080502011), COEF_CONST(2.7725887222), COEF_CONST(2.8332133441),
+                                  COEF_CONST(2.8903717579), COEF_CONST(2.9444389792), COEF_CONST(2.9957322736), COEF_CONST(3.0445224377), COEF_CONST(3.0910424534), COEF_CONST(3.1354942159),
+                                  COEF_CONST(3.1780538303), COEF_CONST(3.2188758249), COEF_CONST(3.2580965380), COEF_CONST(3.2958368660), COEF_CONST(3.3322045102), COEF_CONST(3.3672958300),
+                                  COEF_CONST(3.4011973817), COEF_CONST(3.4339872045), COEF_CONST(3.4657359028), COEF_CONST(3.4965075615), COEF_CONST(3.5263605246), COEF_CONST(3.5553480615),
+                                  COEF_CONST(3.5835189385), COEF_CONST(3.6109179126), COEF_CONST(3.6375861597), COEF_CONST(3.6635616461), COEF_CONST(3.6888794541), COEF_CONST(3.7135720667),
+                                  COEF_CONST(3.7376696183), COEF_CONST(3.7612001157), COEF_CONST(3.7841896339), COEF_CONST(3.8066624898), COEF_CONST(3.8286413965), COEF_CONST(3.8501476017),
+                                  COEF_CONST(3.8712010109), COEF_CONST(3.8918202981), COEF_CONST(3.9120230054), COEF_CONST(3.9318256327), COEF_CONST(3.9512437186), COEF_CONST(3.9702919136),
+                                  COEF_CONST(3.9889840466), COEF_CONST(4.0073331852), COEF_CONST(4.0253516907), COEF_CONST(4.0430512678), COEF_CONST(4.0604430105), COEF_CONST(4.0775374439),
+                                  COEF_CONST(4.0943445622), COEF_CONST(4.1108738642), COEF_CONST(4.1271343850), COEF_CONST(4.1431347264), COEF_CONST(4.158883083)};
     /* standard Taylor polynomial coefficients for exp(x) around 0 */
     /* a polynomial around x=1 is more precise, as most values are around 1.07,
        but this is just fine already */
@@ -12416,7 +12466,7 @@ uint8_t xxx master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_
     int32_t* vk0 = (int32_t*)faad_calloc(64, sizeof(int32_t));
     int32_t* vk1 = (int32_t*)faad_calloc(64, sizeof(int32_t));
     uint8_t  temp1[] = {6, 5, 4};
-    int32_t   q, qk;
+    int32_t  q, qk;
     int32_t  A_1;
     #ifdef FIXED_POINT
     int32_t rk2, rk0;
@@ -12781,9 +12831,9 @@ int32_t xxx find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static int32_t limGain[] = {-1.0, 0.0, 1.0, 33.219};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
+    uint8_t        m, l, k;
+    uint8_t        current_t_noise_band = 0;
+    uint8_t        S_mapped;
     int32_t        Q_M_lim[MAX_M];
     int32_t        G_lim[MAX_M];
     int32_t        G_boost;
@@ -12793,15 +12843,15 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-        int32_t  delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        int32_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
-            int32_t  Q_M = 0;
-            int32_t  G_max;
-            int32_t  den = 0;
-            int32_t  acc1 = 0;
-            int32_t  acc2 = 0;
+            int32_t Q_M = 0;
+            int32_t G_max;
+            int32_t den = 0;
+            int32_t acc1 = 0;
+            int32_t acc2 = 0;
             uint8_t current_res_band_size = 0;
             uint8_t Q_M_size = 0;
             uint8_t ml1, ml2;
@@ -12830,9 +12880,9 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             G_max = acc1 - QUANTISE2REAL(log2(_EPS + acc2)) + QUANTISE2REAL(limGain[sbr->bs_limiter_gains]);
             G_max = min(G_max, QUANTISE2REAL(limGain[3]));
             for (m = ml1; m < ml2; m++) {
-                int32_t  G;
-                int32_t  E_curr, E_orig;
-                int32_t  Q_orig, Q_orig_plus1;
+                int32_t G;
+                int32_t E_curr, E_orig;
+                int32_t Q_orig, Q_orig_plus1;
                 uint8_t S_index_mapped;
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
@@ -12955,9 +13005,9 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         #ifndef LOG2_TEST
 void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     static int32_t limGain[] = {0.5, 1.0, 2.0, 1e10};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
+    uint8_t        m, l, k;
+    uint8_t        current_t_noise_band = 0;
+    uint8_t        S_mapped;
     int32_t        Q_M_lim[MAX_M];
     int32_t        G_lim[MAX_M];
     int32_t        G_boost;
@@ -12967,14 +13017,14 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-        int32_t  delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        int32_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
-            int32_t  G_max;
-            int32_t  den = 0;
-            int32_t  acc1 = 0;
-            int32_t  acc2 = 0;
+            int32_t G_max;
+            int32_t den = 0;
+            int32_t acc1 = 0;
+            int32_t acc2 = 0;
             uint8_t current_res_band_size = 0;
             (void)current_res_band_size;
             uint8_t ml1, ml2;
@@ -12995,8 +13045,8 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             G_max = ((_EPS + acc1) / (_EPS + acc2)) * limGain[sbr->bs_limiter_gains];
             G_max = min(G_max, (int32_t)1e10);
             for (m = ml1; m < ml2; m++) {
-                int32_t  Q_M, G;
-                int32_t  Q_div, Q_div2;
+                int32_t Q_M, G;
+                int32_t Q_div, Q_div2;
                 uint8_t S_index_mapped;
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
@@ -13144,7 +13194,7 @@ void xxx calc_gain_groups(sbr_info* sbr, sbr_hfadj_info* adj, int32_t* deg, uint
     #ifdef SBR_LOW_POWER
 void xxx aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, int32_t* deg, uint8_t ch) {
     uint8_t l, k, m;
-    int32_t  E_total, E_total_est, G_target, acc;
+    int32_t E_total, E_total_est, G_target, acc;
     for (l = 0; l < sbr->L_E[ch]; l++) {
         for (k = 0; k < sbr->N_G[l]; k++) {
             E_total_est = E_total = 0;
@@ -13224,7 +13274,7 @@ void xxx aliasing_reduction(sbr_info* sbr, sbr_hfadj_info* adj, int32_t* deg, ui
 #ifdef SBR_DEC
 void xxx hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     int32_t h_smooth[] = {FRAC_CONST(0.03183050093751), FRAC_CONST(0.11516383427084), FRAC_CONST(0.21816949906249), FRAC_CONST(0.30150283239582), FRAC_CONST(0.33333333333333)};
-    int8_t phi_re[] = {1, 0, -1, 0};
+    int8_t  phi_re[] = {1, 0, -1, 0};
     (void)h_smooth;
     int8_t phi_im[] = {0, 1, 0, -1};
     (void)phi_im;
@@ -13232,7 +13282,7 @@ void xxx hf_assembly(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG]
     uint16_t fIndexNoise = 0;
     uint8_t  fIndexSine = 0;
     uint8_t  assembly_reset = 0;
-    int32_t   G_filt, Q_filt;
+    int32_t  G_filt, Q_filt;
     uint8_t  h_SL;
     (void)h_SL;
     if (sbr->Reset == 1) {
@@ -13382,9 +13432,9 @@ int32_t xxx find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     if (sbr->bs_coupling == 1) {
         int32_t amp0 = (sbr->amp_res[0]) ? 1.0 : 0.5;
         int32_t amp1 = (sbr->amp_res[1]) ? 1.0 : 0.5;
-        float  tmp = QUANTISE2REAL(7.0 + (int32_t)sbr->E[0][k][l] * amp0);
-        float  pan;
-        int    E = (int)(sbr->E[1][k][l] * amp1);
+        float   tmp = QUANTISE2REAL(7.0 + (int32_t)sbr->E[0][k][l] * amp0);
+        float   pan;
+        int     E = (int)(sbr->E[1][k][l] * amp1);
         if (ch == 0) {
             if (E > 12) {
                 /* negative */
@@ -14149,7 +14199,7 @@ uint8_t xxx get_S_mapped(sbr_info* sbr, uint8_t ch, uint8_t l, uint8_t current_b
 #ifdef SBR_DEC
 uint8_t xxx estimate_current_envelope(sbr_info* sbr, sbr_hfadj_info* adj, qmf_t Xsbr[MAX_NTSRHFG][64], uint8_t ch) {
     uint8_t m, l, j, k, k_l, k_h, p;
-    int32_t  nrg, div;
+    int32_t nrg, div;
     if (sbr->bs_interpol_freq == 1) {
         for (l = 0; l < sbr->L_E[ch]; l++) {
             uint8_t i, l_i, u_i;
@@ -14238,8 +14288,8 @@ int32_t xxx find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     if (sbr->bs_coupling == 1) {
         uint8_t amp0 = (sbr->amp_res[0]) ? 0 : 1;
         uint8_t amp1 = (sbr->amp_res[1]) ? 0 : 1;
-        int32_t  tmp = (7 << REAL_BITS) + (sbr->E[0][k][l] << (REAL_BITS - amp0));
-        int32_t  pan;
+        int32_t tmp = (7 << REAL_BITS) + (sbr->E[0][k][l] << (REAL_BITS - amp0));
+        int32_t pan;
         /* E[1] should always be even so shifting is OK */
         uint8_t E = sbr->E[1][k][l] >> amp1;
         if (ch == 0) {
@@ -14274,8 +14324,8 @@ int32_t xxx find_log2_E(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 int32_t xxx find_log2_Q(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
     /* check for coupled energy/noise data */
     if (sbr->bs_coupling == 1) {
-        int32_t  tmp = (7 << REAL_BITS) - (sbr->Q[0][k][l] << REAL_BITS);
-        int32_t  pan;
+        int32_t tmp = (7 << REAL_BITS) - (sbr->Q[0][k][l] << REAL_BITS);
+        int32_t pan;
         uint8_t Q = sbr->Q[1][k][l];
         if (ch == 0) {
             if (Q > 12) {
@@ -14333,9 +14383,9 @@ int32_t xxx find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8_t ch) {
 void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
     static int32_t limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
+    uint8_t        m, l, k;
+    uint8_t        current_t_noise_band = 0;
+    uint8_t        S_mapped;
     // int32_t Q_M_lim[MAX_M];
     // int32_t G_lim[MAX_M];
     // int32_t S_M[MAX_M];
@@ -14348,15 +14398,15 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
         uint8_t current_res_band = 0;
         uint8_t current_res_band2 = 0;
         uint8_t current_hi_res_band = 0;
-        int32_t  delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
+        int32_t delta = (l == sbr->l_A[ch] || l == sbr->prevEnvIsShort[ch]) ? 0 : 1;
         S_mapped = get_S_mapped(sbr, ch, l, current_res_band2);
         if (sbr->t_E[ch][l + 1] > sbr->t_Q[ch][current_t_noise_band + 1]) { current_t_noise_band++; }
         for (k = 0; k < sbr->N_L[sbr->bs_limiter_bands]; k++) {
-            int32_t  Q_M = 0;
-            int32_t  G_max;
-            int32_t  den = 0;
-            int32_t  acc1 = 0;
-            int32_t  acc2 = 0;
+            int32_t Q_M = 0;
+            int32_t G_max;
+            int32_t den = 0;
+            int32_t acc1 = 0;
+            int32_t acc2 = 0;
             uint8_t current_res_band_size = 0;
             uint8_t Q_M_size = 0;
             uint8_t ml1, ml2;
@@ -14388,9 +14438,9 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             G_max = acc1 - log2_int(acc2) + limGain[sbr->bs_limiter_gains];
             G_max = min(G_max, limGain[3]);
             for (m = ml1; m < ml2; m++) {
-                int32_t  G;
-                int32_t  E_curr, E_orig;
-                int32_t  Q_orig, Q_orig_plus1;
+                int32_t G;
+                int32_t E_curr, E_orig;
+                int32_t Q_orig, Q_orig_plus1;
                 uint8_t S_index_mapped;
                 /* check if m is on a noise band border */
                 if ((m + sbr->kx) == sbr->f_table_noise[current_f_noise_band + 1]) {
@@ -14555,7 +14605,7 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
             int32_t a0_r, a0_i, a1_r, a1_i;
             (void)a0_i;
             (void)a1_i;
-            int32_t  bw, bw2;
+            int32_t bw, bw2;
             uint8_t q, p, k, g;
             /* find the low and high band for patching */
             k = sbr->kx + x;
@@ -14628,12 +14678,12 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 void xxx auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHFG][64], uint8_t bd, uint8_t len) {
-    int32_t  r01 = 0, r02 = 0, r11 = 0;
+    int32_t r01 = 0, r02 = 0, r11 = 0;
     int8_t  j;
     uint8_t offset = sbr->tHFAdj;
         #ifdef FIXED_POINT
     const int32_t rel = FRAC_CONST(0.999999); // 1 / (1 + 1e-6f);
-    uint32_t     maxi = 0;
+    uint32_t      maxi = 0;
     (void)maxi;
     uint32_t pow2, exp;
     (void)pow2;
@@ -14687,7 +14737,7 @@ void xxx auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHF
     int32_t temp1_r, temp1_i, temp2_r, temp2_i, temp3_r, temp3_i, temp4_r, temp4_i, temp5_r, temp5_i;
         #ifdef FIXED_POINT
     const int32_t rel = FRAC_CONST(0.999999); // 1 / (1 + 1e-6f);
-    uint32_t     mask, exp;
+    uint32_t      mask, exp;
     int32_t       pow2_to_exp;
         #else
     const int32_t rel = 1 / (1 + 1e-6f);
@@ -14795,7 +14845,7 @@ void xxx auto_correlation(sbr_info* sbr, acorr_coef* ac, qmf_t buffer[MAX_NTSRHF
     #ifndef SBR_LOW_POWER
 /* calculate linear prediction coefficients using the covariance method */
 void xxx calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, uint8_t k) {
-    int32_t     tmp;
+    int32_t    tmp;
     acorr_coef ac;
     auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
     if (ac.det == 0) {
@@ -14843,7 +14893,7 @@ void xxx calc_prediction_coef(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], comple
     #ifdef SBR_LOW_POWER
 void xxx calc_prediction_coef_lp(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], complex_t* alpha_0, complex_t* alpha_1, int32_t* rxx) {
     uint8_t    k;
-    int32_t     tmp;
+    int32_t    tmp;
     acorr_coef ac;
     for (k = 1; k < sbr->f_master[0]; k++) {
         auto_correlation(sbr, &ac, Xlow, k, sbr->numTimeSlotsRate + 6);
@@ -15118,8 +15168,8 @@ void xxx qmfs_end(qmfs_info* qmfs) {
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 void xxx sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], int32_t* output) {
-    int32_t  x[16];
-    int32_t  y[16];
+    int32_t x[16];
+    int32_t y[16];
     int32_t n, k, out = 0;
     uint8_t l;
     /* qmf subsample l */
@@ -15167,8 +15217,8 @@ void xxx sbr_qmf_synthesis_32(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHF
 #ifdef SBR_DEC
     #ifdef SBR_LOW_POWER
 void xxx sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHFG][64], int32_t* output) {
-    int32_t  x[64];
-    int32_t  y[64];
+    int32_t x[64];
+    int32_t y[64];
     int32_t n, k, out = 0;
     uint8_t l;
     /* qmf subsample l */
@@ -15271,7 +15321,7 @@ void xxx sbr_qmf_synthesis_64(sbr_info* sbr, qmfs_info* qmfs, qmf_t X[MAX_NTSRHF
     int32_t in_real1[32], in_imag1[32], out_real1[32], out_imag1[32];
     int32_t in_real2[32], in_imag2[32], out_real2[32], out_imag2[32];
         #endif
-    qmf_t*  pX;
+    qmf_t*   pX;
     int32_t *pring_buffer_1, *pring_buffer_3;
         //    int32_t * ptemp_1, * ptemp_2;
         #ifdef PREFER_POINTERS
@@ -15524,15 +15574,15 @@ void xxx sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const int32_t* inpu
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx gc_set_protopqf(int32_t* p_proto) {
-    int           j;
+    int            j;
     static int32_t a_half[48] = {1.2206911375946939E-05,  1.7261986723798209E-05,  1.2300093657077942E-05,  -1.0833943097791965E-05, -5.7772498639901686E-05, -1.2764767618947719E-04,
-                                -2.0965186675013334E-04, -2.8166673689263850E-04, -3.1234860429017460E-04, -2.6738519958452353E-04, -1.1949424681824722E-04, 1.3965139412648678E-04,
-                                4.8864136409185725E-04,  8.7044629275148344E-04,  1.1949430269934793E-03,  1.3519708175026700E-03,  1.2346314373964412E-03,  7.6953209114159191E-04,
-                                -5.2242432579537141E-05, -1.1516092887213454E-03, -2.3538469841711277E-03, -3.4033123072127277E-03, -4.0028551071986133E-03, -3.8745415659693259E-03,
-                                -2.8321073426874310E-03, -8.5038892323704195E-04, 1.8856751185350931E-03,  4.9688741735340923E-03,  7.8056704536795926E-03,  9.7027909685901654E-03,
-                                9.9960423120166159E-03,  8.2019366335594487E-03,  4.1642072876103365E-03,  -1.8364453822737758E-03, -9.0384863094167686E-03, -1.6241528177129844E-02,
-                                -2.1939551286300665E-02, -2.4533179947088161E-02, -2.2591663337768787E-02, -1.5122066420044672E-02, -1.7971713448186293E-03, 1.6903413428575379E-02,
-                                3.9672315874127042E-02,  6.4487527248102796E-02,  8.8850025474701726E-02,  0.1101132906105560,      0.1258540205143761,      0.1342239368467012};
+                                 -2.0965186675013334E-04, -2.8166673689263850E-04, -3.1234860429017460E-04, -2.6738519958452353E-04, -1.1949424681824722E-04, 1.3965139412648678E-04,
+                                 4.8864136409185725E-04,  8.7044629275148344E-04,  1.1949430269934793E-03,  1.3519708175026700E-03,  1.2346314373964412E-03,  7.6953209114159191E-04,
+                                 -5.2242432579537141E-05, -1.1516092887213454E-03, -2.3538469841711277E-03, -3.4033123072127277E-03, -4.0028551071986133E-03, -3.8745415659693259E-03,
+                                 -2.8321073426874310E-03, -8.5038892323704195E-04, 1.8856751185350931E-03,  4.9688741735340923E-03,  7.8056704536795926E-03,  9.7027909685901654E-03,
+                                 9.9960423120166159E-03,  8.2019366335594487E-03,  4.1642072876103365E-03,  -1.8364453822737758E-03, -9.0384863094167686E-03, -1.6241528177129844E-02,
+                                 -2.1939551286300665E-02, -2.4533179947088161E-02, -2.2591663337768787E-02, -1.5122066420044672E-02, -1.7971713448186293E-03, 1.6903413428575379E-02,
+                                 3.9672315874127042E-02,  6.4487527248102796E-02,  8.8850025474701726E-02,  0.1101132906105560,      0.1258540205143761,      0.1342239368467012};
     for (j = 0; j < 48; ++j) { p_proto[j] = p_proto[95 - j] = a_half[j]; }
 }
 #endif

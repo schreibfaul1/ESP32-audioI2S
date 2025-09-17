@@ -561,7 +561,6 @@ typedef struct {
     uint8_t window_shape_prev[MAX_CHANNELS];
     uint16_t ltp_lag[MAX_CHANNELS];
     fb_info*  fb;
-    drc_info* drc;
     int32_t*   time_out[MAX_CHANNELS];
     int32_t*   fb_intermed[MAX_CHANNELS];
     int8_t sbr_present_flag;
