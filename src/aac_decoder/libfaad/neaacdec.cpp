@@ -1317,9 +1317,7 @@ uint8_t* xxx faad_getbitbuffer(bitfile* ld, int16_t bits, uint8_t* buffer) {
     int      i;
     int32_t  temp;
     int      bytes = bits >> 3;
-log_e("%i", bytes);
     int      remainder = bits & 0x7;
-    //uint8_t* buffer = (uint8_t*)faad_malloc((bytes + 1) * sizeof(uint8_t));
     for (i = 0; i < bytes; i++) { buffer[i] = (uint8_t)faad_getbits(ld, 8); }
     if (remainder) {
         temp = faad_getbits(ld, remainder) << (8 - remainder);
@@ -3783,8 +3781,8 @@ void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     int32_t scale, b_scale = 0;
     #endif
 #endif
-    // complex_t Z1[512];
-    complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
+    ps_ptr<complex_t>Z1;
+    Z1.alloc(512 * sizeof(complex_t));
     complex_t* sincos = mdct_select->sincos;
     uint16_t   N = mdct_select->N;
     uint16_t   N2 = N >> 1;
@@ -3810,7 +3808,7 @@ void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     count1 = faad_get_ts();
 #endif
     /* complex IFFT, any non-scaling FFT can be used here */
-    cfftb(mdct_len, Z1);
+    cfftb(mdct_len, Z1.get());
 #ifdef PROFILE
     count1 = faad_get_ts() - count1;
 #endif
@@ -3853,7 +3851,7 @@ void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
     mdct_select->fft_cycles += count1;
     mdct_select->cycles += (count2 - count1);
 #endif
-    faad_free(&Z1);
+    Z1.reset();
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
@@ -8343,15 +8341,15 @@ void xxx DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameIn
             return;
         }
         /* Reverse bit reading of SBR data in DRM audio frame */
-        revbuffer = (uint8_t*)faad_malloc(buffer_size * sizeof(uint8_t));
-        prevbufstart = revbuffer;
+        ps_ptr<uint8_t>revbuffer; revbuffer.alloc(buffer_size );
+        prevbufstart = revbuffer.get();
         pbufend = &buffer[buffer_size - 1];
         for (i = 0; i < buffer_size; i++) *prevbufstart++ = tabFlipbits[*pbufend--];
         /* Set SBR data */
         /* consider 8 bits from AAC-CRC */
         /* SBR buffer size is original buffer size minus AAC buffer size */
         count = (uint16_t)bit2byte(buffer_size * 8 - bitsconsumed);
-        faad_initbits(&ld_sbr, revbuffer, count);
+        faad_initbits(&ld_sbr, revbuffer.get(), count);
         hDecoder->sbr[0]->sample_rate = get_sample_rate(hDecoder->sf_index);
         hDecoder->sbr[0]->sample_rate *= 2;
         faad_getbits(&ld_sbr, 8); /* Skip 8-bit CRC */
@@ -8369,7 +8367,7 @@ void xxx DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameIn
         /* SBR data was corrupted, disable it until the next header */
         if (hDecoder->sbr[0]->ret != 0) { hDecoder->sbr[0]->header_count = 0; }
         faad_endbits(&ld_sbr);
-        if (revbuffer) faad_free(&revbuffer);
+        revbuffer.reset();
     }
         #endif
     #endif
