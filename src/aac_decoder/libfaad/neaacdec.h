@@ -244,10 +244,10 @@ void envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch);
 void unmap_envelope_noise(sbr_info* sbr);
 #endif
 void       ssr_ipqf(ssr_info* ssr, int32_t* in_data, int32_t* out_data, int32_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
-mdct_info* faad_mdct_init(uint16_t N);
-void       faad_mdct_end(mdct_info* mdct);
-void       faad_imdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out);
-void       faad_mdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out);
+void       faad_mdct_init(uint16_t mdct_len, uint16_t N);
+void       faad_mdct_end(uint16_t mdct_len);
+void       faad_imdct(uint16_t mdct_idx, int32_t* X_in, int32_t* X_out);
+void       faad_mdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out);
 #if (defined(PS_DEC) || defined(DRM_PS))
 uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, int32_t* left_channel, int32_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
 #endif

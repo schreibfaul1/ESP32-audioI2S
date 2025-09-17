@@ -3671,54 +3671,66 @@ int32_t xxx fp_sqrt(int32_t value) {
 }
 #endif /*FIXED_POINT*/
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-mdct_info* xxx faad_mdct_init(uint16_t N) {
-    mdct_info* mdct = (mdct_info*)faad_malloc(sizeof(mdct_info));
+void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
+    mdct_info* mdct_new = nullptr;
+    switch(mdct_len){
+        case 256:  m_mdct256  = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct256;  break;
+        case 1024: m_mdct1024 = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct1024; break;
+        case 2048: m_mdct2048 = (mdct_info*)faad_malloc(sizeof(mdct_info)); mdct_new = m_mdct2048; break;
+        default: log_e("wrong length");
+    }
+
     assert(N % 8 == 0);
-    mdct->N = N;
+    mdct_new->N = N;
     /* NOTE: For "small framelengths" in FIXED_POINT the coefficients need to be
      * scaled by sqrt("(nearest power of 2) > N" / N) */
-    /* RE(mdct->sincos[k]) = scale*(int32_t)(cos(2.0*M_PI*(k+1./8.) / (int32_t)N));
-     * IM(mdct->sincos[k]) = scale*(int32_t)(sin(2.0*M_PI*(k+1./8.) / (int32_t)N)); */
+    /* RE(mdct_new->sincos[k]) = scale*(int32_t)(cos(2.0*M_PI*(k+1./8.) / (int32_t)N));
+     * IM(mdct_new->sincos[k]) = scale*(int32_t)(sin(2.0*M_PI*(k+1./8.) / (int32_t)N)); */
     /* scale is 1 for fixed point, sqrt(N) for floating point */
     switch (N) {
-        case 2048: mdct->sincos = (complex_t*)mdct_tab_2048; break;
-        case 256: mdct->sincos = (complex_t*)mdct_tab_256; break;
+        case 2048: mdct_new->sincos = (complex_t*)mdct_tab_2048; break;
+        case 256: mdct_new->sincos = (complex_t*)mdct_tab_256; break;
 #ifdef LD_DEC
-        case 1024: mdct->sincos = (complex_t*)mdct_tab_1024; break;
+        case 1024: mdct_new->sincos = (complex_t*)mdct_tab_1024; break;
 #endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
-        case 1920: mdct->sincos = (complex_t*)mdct_tab_1920; break;
-        case 240: mdct->sincos = (complex_t*)mdct_tab_240; break;
+        case 1920: mdct_new->sincos = (complex_t*)mdct_tab_1920; break;
+        case 240: mdct_new->sincos = (complex_t*)mdct_tab_240; break;
     #ifdef LD_DEC
-        case 960: mdct->sincos = (complex_t*)mdct_tab_960; break;
+        case 960: mdct_new->sincos = (complex_t*)mdct_tab_960; break;
     #endif
 #endif
 #ifdef SSR_DEC
-        case 512: mdct->sincos = (complex_t*)mdct_tab_512; break;
-        case 64: mdct->sincos = (complex_t*)mdct_tab_64; break;
+        case 512: mdct_new->sincos = (complex_t*)mdct_tab_512; break;
+        case 64: mdct_new->sincos = (complex_t*)mdct_tab_64; break;
 #endif
     }
     /* initialise fft */
-    mdct->cfft = cffti(N / 4);
+    mdct_new->cfft = cffti(N / 4);
 #ifdef PROFILE
-    mdct->cycles = 0;
-    mdct->fft_cycles = 0;
+    mdct_new->cycles = 0;
+    mdct_new->fft_cycles = 0;
 #endif
-    return mdct;
+    return;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx faad_mdct_end(mdct_info* mdct) {
-    if (mdct != NULL) {
-#ifdef PROFILE
-        printf("MDCT[%.4d]:         %I64d cycles\n", mdct->N, mdct->cycles);
-        printf("CFFT[%.4d]:         %I64d cycles\n", mdct->N / 4, mdct->fft_cycles);
-#endif
-        cfftu(mdct->cfft);
-        faad_free(&mdct);
+void xxx faad_mdct_end(uint16_t mdct_len) {
+    switch(mdct_len){
+        case 256:  cfftu(m_mdct256->cfft); faad_free(&m_mdct256);  break;
+        case 1024: cfftu(m_mdct1024->cfft); faad_free(&m_mdct1024);  break;
+        case 2048: cfftu(m_mdct2048->cfft); faad_free(&m_mdct2048);  break;
+        default: log_e("wrong length");
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx faad_imdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
+void xxx faad_imdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
+    mdct_info* mdct_select = nullptr;
+    switch(mdct_len){
+        case 256: mdct_select = m_mdct256; break;
+        case 1024: mdct_select = m_mdct1024; break;
+        case 2048: mdct_select = m_mdct2048; break;
+        default: log_e("wrong length");
+    }
     uint16_t  k;
     complex_t x;
 #ifdef ALLOW_SMALL_FRAMELENGTH
@@ -3728,8 +3740,8 @@ void xxx faad_imdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
 #endif
     // complex_t Z1[512];
     complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
-    complex_t* sincos = mdct->sincos;
-    uint16_t   N = mdct->N;
+    complex_t* sincos = mdct_select->sincos;
+    uint16_t   N = mdct_select->N;
     uint16_t   N2 = N >> 1;
     uint16_t   N4 = N >> 2;
     uint16_t   N8 = N >> 3;
@@ -3753,7 +3765,7 @@ void xxx faad_imdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
     count1 = faad_get_ts();
 #endif
     /* complex IFFT, any non-scaling FFT can be used here */
-    cfftb(mdct->cfft, Z1);
+    cfftb(mdct_select->cfft, Z1);
 #ifdef PROFILE
     count1 = faad_get_ts() - count1;
 #endif
@@ -3793,20 +3805,27 @@ void xxx faad_imdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
     }
 #ifdef PROFILE
     count2 = faad_get_ts() - count2;
-    mdct->fft_cycles += count1;
-    mdct->cycles += (count2 - count1);
+    mdct_select->fft_cycles += count1;
+    mdct_select->cycles += (count2 - count1);
 #endif
     faad_free(&Z1);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx faad_mdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
+void xxx faad_mdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out) {
+    mdct_info* mdct_select = nullptr;
+    switch(mdct_len){
+        case 256: mdct_select = m_mdct256; break;
+        case 1024: mdct_select = m_mdct1024; break;
+        case 2048: mdct_select = m_mdct2048; break;
+        default: log_e("wrong length");
+    }
     uint16_t  k;
     complex_t x;
     // complex_t Z1[512];
     complex_t* Z1 = (complex_t*)ps_malloc(512 * sizeof(complex_t));
-    complex_t* sincos = mdct->sincos;
-    uint16_t   N = mdct->N;
+    complex_t* sincos = mdct_select->sincos;
+    uint16_t   N = mdct_select->N;
     uint16_t   N2 = N >> 1;
     uint16_t   N4 = N >> 2;
     uint16_t   N8 = N >> 3;
@@ -3840,7 +3859,7 @@ void xxx faad_mdct(mdct_info* mdct, int32_t* X_in, int32_t* X_out) {
         IM(Z1[k + N8]) = MUL_R(IM(Z1[k + N8]), scale);
     }
     /* complex FFT, any non-scaling FFT can be used here  */
-    cfftf(mdct->cfft, Z1);
+    cfftf(mdct_select->cfft, Z1);
     /* post-FFT complex multiplication */
     for (k = 0; k < N4; k++) {
         uint16_t n = k << 1;
@@ -3862,11 +3881,11 @@ fb_info* xxx filter_bank_init(uint16_t frame_len) {
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
     /* normal */
-    m_mdct256 = faad_mdct_init(2 * nshort);
-    m_mdct2048 = faad_mdct_init(2 * frame_len);
+    faad_mdct_init(256, 2 * nshort);
+    faad_mdct_init(2048, 2 * frame_len);
 #ifdef LD_DEC
     /* LD */
-    m_mdct1024 = faad_mdct_init(2 * frame_len_ld);
+    faad_mdct_init(1024, 2 * frame_len_ld);
 #endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
     if (frame_len == 1024) {
@@ -3899,10 +3918,10 @@ void xxx filter_bank_end(fb_info* fb) {
 #ifdef PROFILE
         printf("FB:                 %I64d cycles\n", fb->cycles);
 #endif
-        faad_mdct_end(m_mdct256);
-        faad_mdct_end(m_mdct2048);
+        faad_mdct_end(256);
+        faad_mdct_end(2048);
 #ifdef LD_DEC
-        faad_mdct_end(m_mdct1024);
+        faad_mdct_end(1024);
 #endif
         faad_free(&fb);
     }
@@ -3910,33 +3929,26 @@ void xxx filter_bank_end(fb_info* fb) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx imdct_long(fb_info* fb, int32_t* in_data, int32_t* out_data, uint16_t len) {
 #ifdef LD_DEC
-    mdct_info* mdct = NULL;
-    switch (len) {
-        case 2048:
-        case 1920: mdct = m_mdct2048; break;
-        case 1024:
-        case 960: mdct = m_mdct1024; break;
-    }
-    faad_imdct(mdct, in_data, out_data);
+    faad_imdct(len, in_data, out_data);
 #else
-    faad_imdct(m_mdct2048, in_data, out_data);
+    faad_imdct(2048, in_data, out_data);
 #endif
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void xxx mdct_init(fb_info* fb, int32_t* in_data, int32_t* out_data, uint16_t len) {
-    mdct_info* mdct = NULL;
+    uint16_t select = 0;
     switch (len) {
         case 2048:
-        case 1920: mdct = m_mdct2048; break;
+        case 1920: select = 2048; break;
         case 256:
-        case 240: mdct = m_mdct256; break;
+        case 240: select = 256; break;
     #ifdef LD_DEC
         case 1024:
-        case 960: mdct = m_mdct1024; break;
+        case 960: select = 1024; break;
     #endif
     }
-    faad_mdct(mdct, in_data, out_data);
+    faad_mdct(select, in_data, out_data);
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4016,14 +4028,14 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             break;
         case EIGHT_SHORT_SEQUENCE:
             /* perform iMDCT for each short block */
-            faad_imdct(m_mdct256, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0);
-            faad_imdct(m_mdct256, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1);
-            faad_imdct(m_mdct256, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2);
-            faad_imdct(m_mdct256, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3);
-            faad_imdct(m_mdct256, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4);
-            faad_imdct(m_mdct256, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5);
-            faad_imdct(m_mdct256, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6);
-            faad_imdct(m_mdct256, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7);
+            faad_imdct(256, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0);
+            faad_imdct(256, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1);
+            faad_imdct(256, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2);
+            faad_imdct(256, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3);
+            faad_imdct(256, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4);
+            faad_imdct(256, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5);
+            faad_imdct(256, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6);
+            faad_imdct(256, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nflat_ls; i++) time_out[i] = overlap[i];
             for (i = 0; i < nshort; i++) {
@@ -9643,8 +9655,8 @@ fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
     fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
     memset(fb, 0, sizeof(fb_info));
     /* normal */
-    m_mdct256 = faad_mdct_init(2 * nshort);
-    m_mdct2048 = faad_mdct_init(2 * frame_len);
+    faad_mdct_init(256, 2 * nshort);
+    faad_mdct_init(2048, 2 * frame_len);
     fb->long_window[0] = sine_long_256;
     fb->short_window[0] = sine_short_32;
     fb->long_window[1] = kbd_long_256;
@@ -9655,20 +9667,20 @@ fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx ssr_filter_bank_end(fb_info* fb) {
-    faad_mdct_end(m_mdct256);
-    faad_mdct_end(m_mdct2048);
+    faad_mdct_end(256);
+    faad_mdct_end(2048);
     if (fb) faad_free(&fb);
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx imdct_ssr(fb_info* fb, int32_t* in_data, int32_t* out_data, uint16_t len) {
-    mdct_info* mdct = {0};
+    int16_t mdct_select = 0;
     switch (len) {
-        case 512: mdct = m_mdct2048; break;
-        case 64: mdct = m_mdct256; break;
+        case 512: mdct_select = 2048; break;
+        case 64: mdct_select = 256; break;
     }
-    faad_imdct(mdct, in_data, out_data);
+    faad_imdct(mdct_select, in_data, out_data);
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
