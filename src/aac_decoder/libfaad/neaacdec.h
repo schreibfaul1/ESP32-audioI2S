@@ -75,7 +75,7 @@ uint32_t                 faad_get_processed_bits(bitfile* ld);
 void                     faad_flushbits_ex(bitfile* ld, uint32_t bits);
 void                     faad_rewindbits(bitfile* ld);
 void                     faad_resetbits(bitfile* ld, int bits);
-uint8_t*                 faad_getbitbuffer(bitfile* ld, uint32_t bits);
+uint8_t*                 faad_getbitbuffer(bitfile* ld, int16_t bits, uint8_t* buffer);
 void*                    faad_origbitbuffer(bitfile* ld);
 uint32_t                 faad_origbitbuffer_size(bitfile* ld);
 uint8_t                  faad_get1bit(bitfile* ld);

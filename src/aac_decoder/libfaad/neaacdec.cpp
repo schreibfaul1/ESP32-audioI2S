@@ -971,35 +971,6 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
     }
     /* initialize the bitstream */
     faad_initbits(&ld, buffer, buffer_size);
-#if 0
-    {
-        int i;
-        for (i = 0; i < ((buffer_size+3)>>2); i++)
-        {
-            uint8_t *buf;
-            uint32_t temp = 0;
-            buf = faad_getbitbuffer(&ld, 32);
-            //temp = getdword((void*)buf);
-            temp = *((uint32_t*)buf);
-            printf("0x%.8X\n", temp);
-            faad_free(&buf);
-        }
-        faad_endbits(&ld);
-        faad_initbits(&ld, buffer, buffer_size);
-    }
-#endif
-#if 0
-    if(hDecoder->latm_header_present)
-    {
-        payload_bits = faad_latm_frame(&hDecoder->latm_config, &ld);
-        startbit = faad_get_processed_bits(&ld);
-        if(payload_bits == -1U)
-        {
-            hInfo->error = 1;
-            goto error;
-        }
-    }
-#endif
 #ifdef DRM
     if (hDecoder->object_type == DRM_ER_LC) {
         /* We do not support stereo right now */
@@ -1342,12 +1313,13 @@ void xxx faad_resetbits(bitfile* ld, int bits) {
     //        ld->error = 1;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t* xxx faad_getbitbuffer(bitfile* ld, uint32_t bits) {
+uint8_t* xxx faad_getbitbuffer(bitfile* ld, int16_t bits, uint8_t* buffer) {
     int      i;
     int32_t  temp;
     int      bytes = bits >> 3;
+log_e("%i", bytes);
     int      remainder = bits & 0x7;
-    uint8_t* buffer = (uint8_t*)faad_malloc((bytes + 1) * sizeof(uint8_t));
+    //uint8_t* buffer = (uint8_t*)faad_malloc((bytes + 1) * sizeof(uint8_t));
     for (i = 0; i < bytes; i++) { buffer[i] = (uint8_t)faad_getbits(ld, 8); }
     if (remainder) {
         temp = faad_getbits(ld, remainder) << (8 - remainder);
@@ -9256,21 +9228,23 @@ uint8_t xxx rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
 uint8_t xxx rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
     uint8_t  result;
     uint8_t  intensity_used = 0;
-    uint8_t* rvlc_sf_buffer = NULL;
-    uint8_t* rvlc_esc_buffer = NULL;
+    ps_ptr<uint8_t>rvlc_sf_buffer;
+    ps_ptr<uint8_t>rvlc_esc_buffer;
     bitfile  ld_rvlc_sf, ld_rvlc_esc;
     //    bitfile ld_rvlc_sf_rev, ld_rvlc_esc_rev;
     if (ics->length_of_rvlc_sf > 0) {
         /* We read length_of_rvlc_sf bits here to put it in a seperate bitfile. */
-        rvlc_sf_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_sf);
-        faad_initbits(&ld_rvlc_sf, (void*)rvlc_sf_buffer, bit2byte(ics->length_of_rvlc_sf));
+        rvlc_sf_buffer.alloc(ics->length_of_rvlc_sf >> 3);
+        faad_getbitbuffer(ld, ics->length_of_rvlc_sf, rvlc_sf_buffer.get());
+        faad_initbits(&ld_rvlc_sf, rvlc_sf_buffer.get(), bit2byte(ics->length_of_rvlc_sf));
         //        faad_initbits_rev(&ld_rvlc_sf_rev, (void*)rvlc_sf_buffer,
         //            ics->length_of_rvlc_sf);
     }
     if (ics->sf_escapes_present) {
         /* We read length_of_rvlc_escapes bits here to put it in a seperate bitfile. */
-        rvlc_esc_buffer = faad_getbitbuffer(ld, ics->length_of_rvlc_escapes);
-        faad_initbits(&ld_rvlc_esc, (void*)rvlc_esc_buffer, bit2byte(ics->length_of_rvlc_escapes));
+        rvlc_esc_buffer.alloc(ics->length_of_rvlc_escapes >> 3);
+        faad_getbitbuffer(ld, (uint16_t)ics->length_of_rvlc_escapes, rvlc_esc_buffer.get());
+        faad_initbits(&ld_rvlc_esc, rvlc_esc_buffer.get(), bit2byte(ics->length_of_rvlc_escapes));
         //        faad_initbits_rev(&ld_rvlc_esc_rev, (void*)rvlc_esc_buffer,
         //            ics->length_of_rvlc_escapes);
     }
@@ -9278,8 +9252,8 @@ uint8_t xxx rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
     result = rvlc_decode_sf_forward(ics, &ld_rvlc_sf, &ld_rvlc_esc, &intensity_used);
     //    result = rvlc_decode_sf_reverse(ics, &ld_rvlc_sf_rev,
     //        &ld_rvlc_esc_rev, intensity_used);
-    if (rvlc_esc_buffer) faad_free(&rvlc_esc_buffer);
-    if (rvlc_sf_buffer) faad_free(&rvlc_sf_buffer);
+    rvlc_esc_buffer.reset();
+    rvlc_sf_buffer.reset();
     if (ics->length_of_rvlc_sf > 0) faad_endbits(&ld_rvlc_sf);
     if (ics->sf_escapes_present) faad_endbits(&ld_rvlc_esc);
     return result;
