@@ -46,6 +46,8 @@ ps_ptr<complex_t> m_work1024;
 ps_ptr<complex_t> m_work2048;
 ps_ptr<drc_info>  m_drc_info;
 ps_ptr<adif_header>m_adif;
+ps_ptr<adts_header>m_adts;
+ps_ptr<bitfile>m_ld;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -483,12 +485,12 @@ uint8_t xxx NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigura
 int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    // bitfile         ld;
-    // adif_header     adif;
-    // adts_header     adts;
-    adif_header*    adif = (adif_header*)faad_malloc(1 * sizeof(adif_header));
-    adts_header*    adts = (adts_header*)faad_malloc(1 * sizeof(adts_header));
-    bitfile*        ld = (bitfile*)faad_malloc(1 * sizeof(bitfile));
+    m_adif.alloc();
+    m_adts.alloc();
+    m_ld.alloc();
+    adif_header*    adif = m_adif.get();
+    adts_header*    adts = m_adts.get();
+    bitfile*        ld = m_ld.get();
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if ((hDecoder == NULL) || (samplerate == NULL) || (channels == NULL) || (buffer_size == 0)) {
         ret = -1;
@@ -568,9 +570,9 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     ret = bits;
     goto exit;
 exit:
-    faad_free(&ld);
-    faad_free(&adif);
-    faad_free(&adts);
+    m_ld.reset();
+    m_adif.reset();
+    m_adts.reset();
     return ret;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
