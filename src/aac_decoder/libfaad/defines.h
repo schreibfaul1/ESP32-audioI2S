@@ -2,7 +2,8 @@
 #include "Arduino.h"
 #include "settings.h"
 
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* defines if an object type can be decoded by this library or not */
 __unused static uint8_t ObjectTypesTable[32] = {
     0, /*  0 NULL */
@@ -81,7 +82,7 @@ __unused static uint8_t ObjectTypesTable[32] = {
     0, /* 30 (Reserved) */
     0  /* 31 (Reserved) */
 };
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 #define ZERO_HCB              0
 #define FIRST_PAIR_HCB        5
@@ -222,7 +223,7 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
 #endif // SBR_DEC
 
 #ifdef FIXED_POINT /* int32_t */
-    #define LOG2_MIN_INF   REAL_CONST(-10000)
+    #define LOG2_MIN_INF REAL_CONST(-10000)
     #define COEF_BITS      28
     #define COEF_PRECISION (1 << COEF_BITS)
     #define REAL_BITS      14 // MAXIMUM OF 14 FOR FIXED POINT SBR
@@ -232,7 +233,7 @@ typedef const int8_t (*drm_ps_huff_tab)[2];
     #define FRAC_BITS      31
     #define FRAC_PRECISION ((uint32_t)(1 << FRAC_BITS))
     #define FRAC_MAX       0x7FFFFFFF
-typedef int32_t real_t;
+    typedef int32_t real_t;
     #define REAL_CONST(A) (((A) >= 0) ? ((real_t)((A) * (REAL_PRECISION) + 0.5)) : ((real_t)((A) * (REAL_PRECISION) - 0.5)))
     #define COEF_CONST(A) (((A) >= 0) ? ((real_t)((A) * (COEF_PRECISION) + 0.5)) : ((real_t)((A) * (COEF_PRECISION) - 0.5)))
     #define FRAC_CONST(A) (((A) == 1.00) ? ((real_t)FRAC_MAX) : (((A) >= 0) ? ((real_t)((A) * (FRAC_PRECISION) + 0.5)) : ((real_t)((A) * (FRAC_PRECISION) - 0.5))))
@@ -253,10 +254,10 @@ typedef int32_t real_t;
     #define DIV_R(A, B)       (((int64_t)A << REAL_BITS) / B)
     #define DIV_C(A, B)       (((int64_t)A << COEF_BITS) / B)
 /*    Complex multiplication */
-static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
-    *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
-    *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
-}
+   static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) { // FIXED POINT
+       *y1 = (_MulHigh(x1, c1) + _MulHigh(x2, c2)) << (FRAC_SIZE - FRAC_BITS);
+       *y2 = (_MulHigh(x2, c1) - _MulHigh(x1, c2)) << (FRAC_SIZE - FRAC_BITS);
+   }
 // static inline void ComplexMult(int32_t* y1, int32_t* y2, int32_t x1, int32_t x2, int32_t c1, int32_t c2) { // only XTENSA chips
 //     asm volatile (
 //         //  y1 = (x1 * c1) + (x2 * c2)
@@ -277,6 +278,7 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
 //     );
 // }
 
+
     #define DIV(A, B) (((int64_t)A << REAL_BITS) / B)
     #define step(shift)                                  \
         if ((0x40000000l >> shift) + root <= value) {    \
@@ -286,17 +288,17 @@ static inline void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, rea
             root = root >> 1;                            \
         }
 
+
 real_t const pow2_table[] = {COEF_CONST(1.0), COEF_CONST(1.18920711500272), COEF_CONST(1.41421356237310), COEF_CONST(1.68179283050743)};
 #endif // FIXED_POINT
 #ifndef FIXED_POINT
     #ifdef MAIN_DEC
-        #define ALPHA REAL_CONST(0.90625)
-        #define A     REAL_CONST(0.953125)
+    #define ALPHA         REAL_CONST(0.90625)
+    #define A             REAL_CONST(0.953125)
     #endif
     #define IQ_TABLE_SIZE 8192
     #define DIV_R(A, B)   ((A) / (B))
     #define DIV_C(A, B)   ((A) / (B))
-
     #ifdef USE_DOUBLE_PRECISION /* double */
 typedef double real_t;
         #include <math.h>
@@ -321,14 +323,14 @@ typedef float real_t;
         #define COEF_CONST(A) ((real_t)(A))
         #define Q2_CONST(A)   ((real_t)(A))
         #define FRAC_CONST(A) ((real_t)(A)) /* pure fractional part */
-/* Complex multiplication */
-static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
-    *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
-    *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
-}
+    /* Complex multiplication */
+        static void ComplexMult(real_t* y1, real_t* y2, real_t x1, real_t x2, real_t c1, real_t c2) {
+            *y1 = MUL_F(x1, c1) + MUL_F(x2, c2);
+            *y2 = MUL_F(x2, c1) - MUL_F(x1, c2);
+        }
 
-    #endif // USE_DOUBLE_PRECISION
-#endif     // FIXED_POINT
+    #endif                                  /* USE_DOUBLE_PRECISION */
+#endif                                      // FIXED_POINT
 
 #ifdef SBR_LOW_POWER
     #define qmf_t     real_t
@@ -354,23 +356,23 @@ typedef real_t complex_t[2];
     #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 #ifndef FAAD2_VERSION
-    #define FAAD2_VERSION "unknown"
+  #define FAAD2_VERSION "unknown"
 #endif
 /* object types for AAC */
-#define MAIN      1
-#define LC        2
-#define SSR       3
-#define LTP       4
-#define HE_AAC    5
+#define MAIN       1
+#define LC         2
+#define SSR        3
+#define LTP        4
+#define HE_AAC     5
 #define ER_LC     17
 #define ER_LTP    19
 #define LD        23
 #define DRM_ER_LC 27 /* special object type for DRM */
 /* header types */
-#define RAW  0
-#define ADIF 1
-#define ADTS 2
-#define LATM 3
+#define RAW        0
+#define ADIF       1
+#define ADTS       2
+#define LATM       3
 /* SBR signalling */
 #define NO_SBR           0
 #define SBR_UPSAMPLED    1
@@ -384,12 +386,12 @@ typedef real_t complex_t[2];
 #define FAAD_FMT_FIXED  FAAD_FMT_FLOAT
 #define FAAD_FMT_DOUBLE 5
 /* Capabilities */
-#define LC_DEC_CAP           (1 << 0) /* Can decode LC */
-#define MAIN_DEC_CAP         (1 << 1) /* Can decode MAIN */
-#define LTP_DEC_CAP          (1 << 2) /* Can decode LTP */
-#define LD_DEC_CAP           (1 << 3) /* Can decode LD */
-#define ERROR_RESILIENCE_CAP (1 << 4) /* Can decode ER */
-#define FIXED_POINT_CAP      (1 << 5) /* Fixed point */
+#define LC_DEC_CAP           (1<<0) /* Can decode LC */
+#define MAIN_DEC_CAP         (1<<1) /* Can decode MAIN */
+#define LTP_DEC_CAP          (1<<2) /* Can decode LTP */
+#define LD_DEC_CAP           (1<<3) /* Can decode LD */
+#define ERROR_RESILIENCE_CAP (1<<4) /* Can decode ER */
+#define FIXED_POINT_CAP      (1<<5) /* Fixed point */
 /* Channel definitions */
 #define FRONT_CHANNEL_CENTER (1)
 #define FRONT_CHANNEL_LEFT   (2)
@@ -413,11 +415,11 @@ typedef real_t complex_t[2];
 
 #define MAX_CHANNELS        64
 #define MAX_SYNTAX_ELEMENTS 48
-#define MAX_WINDOW_GROUPS   8
+#define MAX_WINDOW_GROUPS    8
 #define MAX_SFB             51
 #define MAX_LTP_SFB         40
-#define MAX_LTP_SFB_S       8
-#define MAX_ASC_BYTES       64
+#define MAX_LTP_SFB_S        8
+#define MAX_ASC_BYTES 64
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifndef FIXED_POINT
@@ -440,6 +442,6 @@ typedef real_t complex_t[2];
     #endif
     #define CONV(a, b) ((a << 1) | (b & 0x1))
 #endif
-// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -35,27 +35,15 @@
 uint32_t __r1 __attribute__((unused)) = 1;
 uint32_t __r2 __attribute__((unused)) = 1;
 
-ps_ptr<mdct_info> m_mdct256;
-ps_ptr<mdct_info> m_mdct1024;
-ps_ptr<mdct_info> m_mdct2048;
-ps_ptr<cfft_info> m_ccft256;
-ps_ptr<cfft_info> m_ccft1024;
-ps_ptr<cfft_info> m_ccft2048;
-ps_ptr<complex_t> m_work256;
-ps_ptr<complex_t> m_work1024;
-ps_ptr<complex_t> m_work2048;
-ps_ptr<complex_t> m_tab256;
-ps_ptr<complex_t> m_tab1024;
-ps_ptr<complex_t> m_tab2048;
-ps_ptr<drc_info>  m_drc_info;
-ps_ptr<fb_info>   m_fb;
-ps_ptr<uint8_t>   m_sample_buffer;
-ps_ptr<pred_state>m_pred_stat[MAX_CHANNELS];
-ps_ptr<adif_header>m_adif;
-ps_ptr<adts_header>m_adts;
-ps_ptr<bitfile> m_ld;
-
-
+ps_ptr<mdct_info>m_mdct256;
+ps_ptr<mdct_info>m_mdct1024;
+ps_ptr<mdct_info>m_mdct2048;
+ps_ptr<cfft_info>m_ccft256;
+ps_ptr<cfft_info>m_ccft1024;
+ps_ptr<cfft_info>m_ccft2048;
+ps_ptr<complex_t>m_work256;
+ps_ptr<complex_t>m_work1024;
+ps_ptr<complex_t>m_work2048;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -428,7 +416,7 @@ NeAACDecHandle xxx NeAACDecOpen() {
 #endif
     hDecoder->frameLength = 1024;
     hDecoder->frame = 0;
-    m_sample_buffer.reset();
+    hDecoder->sample_buffer = NULL;
     hDecoder->__r1 = 1;
     hDecoder->__r2 = 1;
     for (i = 0; i < MAX_CHANNELS; i++) {
@@ -441,7 +429,7 @@ NeAACDecHandle xxx NeAACDecOpen() {
         hDecoder->prev_fmd[i] = NULL;
 #endif
 #ifdef MAIN_DEC
-        m_pred_stat[i].reset();
+        hDecoder->pred_stat[i] = NULL;
 #endif
 #ifdef LTP_DEC
         hDecoder->ltp_lag[i] = 0;
@@ -451,7 +439,7 @@ NeAACDecHandle xxx NeAACDecOpen() {
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) { hDecoder->sbr[i] = NULL; }
 #endif
-    drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
+    hDecoder->drc = drc_init(REAL_CONST(1.0), REAL_CONST(1.0));
     return hDecoder;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -493,10 +481,12 @@ uint8_t xxx NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigura
 int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    m_adif.alloc();
-    m_adts.alloc();
-    m_ld.alloc();
-    
+    // bitfile         ld;
+    // adif_header     adif;
+    // adts_header     adts;
+    adif_header*    adif = (adif_header*)faad_malloc(1 * sizeof(adif_header));
+    adts_header*    adts = (adts_header*)faad_malloc(1 * sizeof(adts_header));
+    bitfile*        ld = (bitfile*)faad_malloc(1 * sizeof(bitfile));
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if ((hDecoder == NULL) || (samplerate == NULL) || (channels == NULL) || (buffer_size == 0)) {
         ret = -1;
@@ -507,35 +497,35 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     *samplerate = get_sample_rate(hDecoder->sf_index);
     *channels = 1;
     if (buffer != NULL) {
-        faad_initbits(m_ld.get(), buffer, buffer_size);
+        faad_initbits(ld, buffer, buffer_size);
         /* Check if an ADIF header is present */
         if ((buffer[0] == 'A') && (buffer[1] == 'D') && (buffer[2] == 'I') && (buffer[3] == 'F')) {
             hDecoder->adif_header_present = 1;
-            get_adif_header(m_adif.get(), m_ld.get());
-            faad_byte_align(m_ld.get());
-            hDecoder->sf_index = m_adif->pce[0].sf_index;
-            hDecoder->object_type = m_adif->pce[0].object_type + 1;
+            get_adif_header(adif, ld);
+            faad_byte_align(ld);
+            hDecoder->sf_index = adif->pce[0].sf_index;
+            hDecoder->object_type = adif->pce[0].object_type + 1;
             *samplerate = get_sample_rate(hDecoder->sf_index);
-            *channels = m_adif->pce[0].channels;
-            memcpy(&(hDecoder->pce), &(m_adif->pce[0]), sizeof(program_config));
+            *channels = adif->pce[0].channels;
+            memcpy(&(hDecoder->pce), &(adif->pce[0]), sizeof(program_config));
             hDecoder->pce_set = 1;
-            bits = bit2byte(faad_get_processed_bits(m_ld.get()));
+            bits = bit2byte(faad_get_processed_bits(ld));
             /* Check if an ADTS header is present */
-        } else if (faad_showbits(m_ld.get(), 12) == 0xfff) {
+        } else if (faad_showbits(ld, 12) == 0xfff) {
             hDecoder->adts_header_present = 1;
-            m_adts->old_format = hDecoder->config.useOldADTSFormat;
-            adts_frame(m_adts.get(), m_ld.get());
-            hDecoder->sf_index = m_adts->sf_index;
-            hDecoder->object_type = m_adts->profile + 1;
+            adts->old_format = hDecoder->config.useOldADTSFormat;
+            adts_frame(adts, ld);
+            hDecoder->sf_index = adts->sf_index;
+            hDecoder->object_type = adts->profile + 1;
             *samplerate = get_sample_rate(hDecoder->sf_index);
-            *channels = (m_adts->channel_configuration > 6) ? 2 : m_adts->channel_configuration;
+            *channels = (adts->channel_configuration > 6) ? 2 : adts->channel_configuration;
         }
-        if (m_ld->error) {
-            faad_endbits(m_ld.get());
+        if (ld->error) {
+            faad_endbits(ld);
             ret = -1;
             goto exit;
         }
-        faad_endbits(m_ld.get());
+        faad_endbits(ld);
     }
     if (!*samplerate) {
         ret = -1;
@@ -562,10 +552,10 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     /* must be done before frameLength is divided by 2 for LD */
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
+        hDecoder->fb = ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
     else
 #endif
-        filter_bank_init(hDecoder->frameLength);
+        hDecoder->fb = filter_bank_init(hDecoder->frameLength);
 #ifdef LD_DEC
     if (hDecoder->object_type == LD) hDecoder->frameLength >>= 1;
 #endif
@@ -576,9 +566,9 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     ret = bits;
     goto exit;
 exit:
-    m_ld.reset();
-    m_adif.reset();
-    m_adts.reset();
+    faad_free(&ld);
+    faad_free(&adif);
+    faad_free(&adts);
     return ret;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -635,10 +625,10 @@ char xxx NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t Size
     /* must be done before frameLength is divided by 2 for LD */
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
+        hDecoder->fb = ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
     else
 #endif
-        filter_bank_init(hDecoder->frameLength);
+        hDecoder->fb = filter_bank_init(hDecoder->frameLength);
 #ifdef LD_DEC
     if (hDecoder->object_type == LD) hDecoder->frameLength >>= 1;
 #endif
@@ -672,7 +662,7 @@ char xxx NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, uint8_t
     else
         (*hDecoder)->sbr_present_flag = 1;
     #endif
-    filter_bank_init((*hDecoder)->frameLength);
+    (*hDecoder)->fb = filter_bank_init((*hDecoder)->frameLength);
     return 0;
 }
 #endif
@@ -696,7 +686,7 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
         if (hDecoder->prev_fmd[i]) faad_free(&hDecoder->prev_fmd[i]);
 #endif
 #ifdef MAIN_DEC
-        if (m_pred_stat[i]) m_pred_stat[i].reset();
+        if (hDecoder->pred_stat[i]) faad_free(&hDecoder->pred_stat[i]);
 #endif
 #ifdef LTP_DEC
         if (hDecoder->lt_pred_stat[i]) faad_free(&hDecoder->lt_pred_stat[i]);
@@ -704,12 +694,12 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
     }
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        ssr_filter_bank_end();
+        ssr_filter_bank_end(hDecoder->fb);
     else
 #endif
-        filter_bank_end();
-    m_drc_info.reset();
-    if (m_sample_buffer.valid()) m_sample_buffer.reset();
+        filter_bank_end(hDecoder->fb);
+    drc_end(hDecoder->drc);
+    if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
         if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i]);
@@ -1031,10 +1021,10 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
     /* decode the complete bitstream */
 #ifdef DRM
     if (/*(hDecoder->object_type == 6) ||*/ (hDecoder->object_type == DRM_ER_LC)) {
-        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, m_drc_info.get());
+        DRM_aac_scalable_main_element(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
     } else {
 #endif
-        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce);
+        raw_data_block(hDecoder, hInfo, &ld, &hDecoder->pce, hDecoder->drc);
 #ifdef DRM
     }
 #endif
@@ -1102,7 +1092,7 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
         return NULL;
     }
     /* allocate the buffer for the final samples */
-    if ((!m_sample_buffer.valid()) || (hDecoder->alloced_channels != output_channels)) {
+    if ((hDecoder->sample_buffer == NULL) || (hDecoder->alloced_channels != output_channels)) {
         const uint8_t str[] = {sizeof(int16_t), sizeof(int32_t), sizeof(int32_t), sizeof(float), sizeof(double), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), 0, 0, 0};
         uint8_t       stride = str[hDecoder->config.outputFormat - 1];
 #ifdef SBR_DEC
@@ -1110,8 +1100,9 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
 #endif
         /* check if we want to use internal sample_buffer */
         if (sample_buffer_size == 0) {
-            if (m_sample_buffer.valid()) m_sample_buffer.reset();
-            m_sample_buffer.alloc(frame_len * output_channels * stride);
+            if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
+            hDecoder->sample_buffer = NULL;
+            hDecoder->sample_buffer = faad_malloc(frame_len * output_channels * stride);
         } else if (sample_buffer_size < frame_len * output_channels * stride) {
             /* provided sample buffer is not big enough */
             hInfo->error = 27;
@@ -1120,7 +1111,7 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
         hDecoder->alloced_channels = output_channels;
     }
     if (sample_buffer_size == 0) {
-        sample_buffer = m_sample_buffer.get();
+        sample_buffer = hDecoder->sample_buffer;
     } else {
         sample_buffer = *sample_buffer2;
     }
@@ -2143,19 +2134,10 @@ void xxx cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac
 void xxx cfftf(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch (mdct_len) {
-        case 256:
-            cfft_select = m_ccft256.get();
-            work_select = m_work256.get();
-            break;
-        case 1024:
-            cfft_select = m_ccft1024.get();
-            work_select = m_work1024.get();
-            break;
-        case 2048:
-            cfft_select = m_ccft2048.get();
-            work_select = m_work2048.get();
-            break;
+    switch(mdct_len){
+        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
+        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
+        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
         default: log_e("wrong length");
     }
     cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
@@ -2163,22 +2145,14 @@ void xxx cfftf(uint16_t mdct_len, complex_t* c) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cfftb(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
-    switch (mdct_len) {
-        case 256:
-            cfft_select = m_ccft256.get();
-            cfft_select->work = m_work256.get();
-            break;
-        case 1024:
-            cfft_select = m_ccft1024.get();
-            cfft_select->work = m_work1024.get();
-            break;
-        case 2048:
-            cfft_select = m_ccft2048.get();
-            cfft_select->work = m_work2048.get();
-            break;
+    complex_t* work_select = nullptr;
+    switch(mdct_len){
+        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
+        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
+        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
         default: log_e("wrong length");
     }
-    cfftf1pos(cfft_select->n, c, cfft_select->work, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
+    cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti1(uint16_t n, complex_t* wa, uint16_t* ifac) {
@@ -2258,32 +2232,17 @@ startloop:
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx cffti(uint16_t mdct_len, uint16_t n) {
     cfft_info* cfft_select = nullptr;
-    switch (mdct_len) {
-        case 256:
-            m_ccft256.alloc();
-            cfft_select = m_ccft256.get();
-            m_work256.alloc_array(n);
-            m_tab256.alloc_array(n);
-            cfft_select->tab = m_tab256.get();
-            break;
-        case 1024:
-            m_ccft1024.alloc();
-            cfft_select = m_ccft1024.get();
-            m_work1024.alloc_array(n);
-            m_tab1024.alloc_array(n);
-            cfft_select->tab = m_tab1024.get();
-            break;
-        case 2048:
-            m_ccft2048.alloc();
-            cfft_select = m_ccft2048.get();
-            m_work2048.alloc_array(n);
-            m_tab2048.alloc_array(n);
-            cfft_select->tab = m_tab2048.get();
-            break;
+
+    switch(mdct_len){
+        case 256:  m_ccft256.alloc();  cfft_select = m_ccft256.get();  m_work256.alloc_array(n * sizeof(complex_t));  break;
+        case 1024: m_ccft1024.alloc(); cfft_select = m_ccft1024.get(); m_work1024.alloc_array(n * sizeof(complex_t)); break;
+        case 2048: m_ccft2048.alloc(); cfft_select = m_ccft2048.get(); m_work2048.alloc_array(n * sizeof(complex_t)); break;
         default: log_e("wrong length");
     }
     cfft_select->n = n;
+
 #ifndef FIXED_POINT
+    cfft_select->tab = (complex_t*)faad_malloc(n * sizeof(complex_t));
     cffti1(n, cfft_select->tab, cfft_select->ifac);
 #else
     cffti1(n, NULL, cfft_select->ifac);
@@ -2306,22 +2265,23 @@ void xxx cffti(uint16_t mdct_len, uint16_t n) {
     return;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx drc_init(real_t cut, real_t boost) {
-    m_drc_info.calloc(1);
-    m_drc_info->ctrl1 = cut;
-    m_drc_info->ctrl2 = boost;
-    m_drc_info->num_bands = 1;
-    m_drc_info->band_top[0] = 1024 / 4 - 1;
-    m_drc_info->dyn_rng_sgn[0] = 1;
-    m_drc_info->dyn_rng_ctl[0] = 0;
+drc_info* xxx drc_init(real_t cut, real_t boost) {
+    drc_info* drc = (drc_info*)faad_malloc(sizeof(drc_info));
+    memset(drc, 0, sizeof(drc_info));
+    drc->ctrl1 = cut;
+    drc->ctrl2 = boost;
+    drc->num_bands = 1;
+    drc->band_top[0] = 1024 / 4 - 1;
+    drc->dyn_rng_sgn[0] = 1;
+    drc->dyn_rng_ctl[0] = 0;
+    return drc;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx drc_end(drc_info* drc) {
     if (drc) faad_free(&drc);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx drc_decode(real_t* spec) {
-    drc_info* drc = m_drc_info.get();
+void xxx drc_decode(drc_info* drc, real_t* spec) {
     uint16_t i, bd, top;
 #ifdef FIXED_POINT
     int32_t exp, frac;
@@ -3737,22 +3697,12 @@ real_t xxx fp_sqrt(real_t value) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
-    switch (mdct_len) {
-        case 256:
-            m_mdct256.alloc();
-            mdct_new = m_mdct256.get();
-            break;
-        case 1024:
-            m_mdct1024.alloc();
-            mdct_new = m_mdct1024.get();
-            break;
-        case 2048:
-            m_mdct2048.alloc();
-            mdct_new = m_mdct2048.get();
-            break;
+    switch(mdct_len){
+        case 256:  m_mdct256.alloc();  mdct_new = m_mdct256.get();  break;
+        case 1024: m_mdct1024.alloc(); mdct_new = m_mdct1024.get(); break;
+        case 2048: m_mdct2048.alloc(); mdct_new = m_mdct2048.get(); break;
         default: log_e("wrong length");
     }
-
     assert(N % 8 == 0);
     mdct_new->N = N;
     /* NOTE: For "small framelengths" in FIXED_POINT the coefficients need to be
@@ -3779,7 +3729,7 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 #endif
     }
     /* initialise fft */
-    cffti(mdct_len, N / 4);
+    cffti (mdct_len, N / 4);
 #ifdef PROFILE
     mdct_new->cycles = 0;
     mdct_new->fft_cycles = 0;
@@ -3788,32 +3738,18 @@ void xxx faad_mdct_init(uint16_t mdct_len, uint16_t N) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_mdct_end(uint16_t mdct_len) {
-    switch (mdct_len) {
-        case 256:
-            m_work256.reset();
-            m_ccft256.reset();
-            m_mdct256.reset();
-            m_tab256.reset();
-            break;
-        case 1024:
-            m_work1024.reset();
-            m_ccft1024.reset();
-            m_mdct1024.reset();
-            m_tab1024.reset();
-            break;
-        case 2048:
-            m_work2048.reset();
-            m_ccft2048.reset();
-            m_mdct2048.reset();
-            m_tab2048.reset();
-            break;
-        default: log_e("wrong length");}
+    switch(mdct_len){
+        case 256:  m_work256.reset();  m_ccft256.reset();  m_mdct256.reset();  break;
+        case 1024: m_work1024.reset(); m_ccft1024.reset(); m_mdct1024.reset();  break;
+        case 2048: m_work2048.reset(); m_ccft2048.reset(); m_mdct2048.reset();  break;
+        default: log_e("wrong length");
+    }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void xxx faad_imdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
     mdct_info* mdct_select = nullptr;
     switch(mdct_len){
-        case 256:  mdct_select = m_mdct256.get(); break;
+        case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
         default: log_e("wrong length");
@@ -3960,12 +3896,13 @@ void xxx faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx filter_bank_init(uint16_t frame_len) {
+fb_info* xxx filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
 #ifdef LD_DEC
     uint16_t frame_len_ld = frame_len / 2;
 #endif
-    m_fb.calloc(1);
+    fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
+    memset(fb, 0, sizeof(fb_info));
     /* normal */
     faad_mdct_init(256, 2 * nshort);
     faad_mdct_init(2048, 2 * frame_len);
@@ -3976,31 +3913,31 @@ void xxx filter_bank_init(uint16_t frame_len) {
 #ifdef ALLOW_SMALL_FRAMELENGTH
     if (frame_len == 1024) {
 #endif
-        m_fb->long_window[0] = sine_long_1024;
-        m_fb->short_window[0] = sine_short_128;
-        m_fb->long_window[1] = kbd_long_1024;
-        m_fb->short_window[1] = kbd_short_128;
+        fb->long_window[0] = sine_long_1024;
+        fb->short_window[0] = sine_short_128;
+        fb->long_window[1] = kbd_long_1024;
+        fb->short_window[1] = kbd_short_128;
 #ifdef LD_DEC
-        m_fb->ld_window[0] = sine_mid_512;
-        m_fb->ld_window[1] = ld_mid_512;
+        fb->ld_window[0] = sine_mid_512;
+        fb->ld_window[1] = ld_mid_512;
 #endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
     } else /* (frame_len == 960) */ {
-        m_fb->long_window[0] = sine_long_960;
-        m_fb->short_window[0] = sine_short_120;
-        m_fb->long_window[1] = kbd_long_960;
-        m_fb->short_window[1] = kbd_short_120;
+        fb->long_window[0] = sine_long_960;
+        fb->short_window[0] = sine_short_120;
+        fb->long_window[1] = kbd_long_960;
+        fb->short_window[1] = kbd_short_120;
     #ifdef LD_DEC
-        m_fb->ld_window[0] = sine_mid_480;
-        m_fb->ld_window[1] = ld_mid_480;
+        fb->ld_window[0] = sine_mid_480;
+        fb->ld_window[1] = ld_mid_480;
     #endif
     }
 #endif
-    return;
+    return fb;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx filter_bank_end() {
-    if (m_fb.valid()) {
+void xxx filter_bank_end(fb_info* fb) {
+    if (fb != NULL) {
 #ifdef PROFILE
         printf("FB:                 %I64d cycles\n", fb->cycles);
 #endif
@@ -4009,11 +3946,11 @@ void xxx filter_bank_end() {
 #ifdef LD_DEC
         faad_mdct_end(1024);
 #endif
-        m_fb.reset();
+        faad_free(&fb);
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx imdct_long(real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
 #ifdef LD_DEC
     faad_imdct(len, in_data, out_data);
 #else
@@ -4022,7 +3959,7 @@ void xxx imdct_long(real_t* in_data, real_t* out_data, uint16_t len) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx mdct_init(real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     uint16_t select = 0;
     switch (len) {
         case 2048:
@@ -4038,7 +3975,7 @@ void xxx mdct_init(real_t* in_data, real_t* out_data, uint16_t len) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
+void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
                       uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
@@ -4057,21 +3994,30 @@ void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t win
     /* select windows of current frame and previous frame (Sine or KBD) */
 #ifdef LD_DEC
     if (object_type == LD) {
-        window_long = m_fb->ld_window[window_shape];
-        window_long_prev = m_fb->ld_window[window_shape_prev];
+        window_long = fb->ld_window[window_shape];
+        window_long_prev = fb->ld_window[window_shape_prev];
     } else {
 #endif
-        window_long = m_fb->long_window[window_shape];
-        window_long_prev = m_fb->long_window[window_shape_prev];
-        window_short = m_fb->short_window[window_shape];
-        window_short_prev = m_fb->short_window[window_shape_prev];
+        window_long = fb->long_window[window_shape];
+        window_long_prev = fb->long_window[window_shape_prev];
+        window_short = fb->short_window[window_shape];
+        window_short_prev = fb->short_window[window_shape_prev];
 #ifdef LD_DEC
     }
+#endif
+#if 0
+    for (i = 0; i < 1024; i++)
+    {
+        printf("%d\n", freq_in[i]);
+    }
+#endif
+#if 0
+    printf("%d %d\n", window_sequence, window_shape);
 #endif
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(freq_in, transf_buf, 2 * nlong);
+            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nlong; i += 4) {
                 time_out[i] = overlap[i] + MUL_F(transf_buf[i], window_long_prev[i]);
@@ -4089,7 +4035,7 @@ void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t win
             break;
         case LONG_START_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(freq_in, transf_buf, 2 * nlong);
+            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nlong; i += 4) {
                 time_out[i] = overlap[i] + MUL_F(transf_buf[i], window_long_prev[i]);
@@ -4139,7 +4085,7 @@ void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t win
             break;
         case LONG_STOP_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(freq_in, transf_buf, 2 * nlong);
+            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             /* construct first half window using padding with 1's and 0's */
             for (i = 0; i < nflat_ls; i++) time_out[i] = overlap[i];
@@ -4165,7 +4111,7 @@ void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t win
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 /* only works for LTP -> no overlapping, no short blocks */
-void xxx filter_bank_ltp(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
+void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     // real_t windowed_buf[2*1024] = {0};
     real_t*       windowed_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -4179,14 +4125,14 @@ void xxx filter_bank_ltp(uint8_t window_sequence, uint8_t window_shape, uint8_t 
     assert(window_sequence != EIGHT_SHORT_SEQUENCE);
     #ifdef LD_DEC
     if (object_type == LD) {
-        window_long = m_fb->ld_window[window_shape];
-        window_long_prev = m_fb->ld_window[window_shape_prev];
+        window_long = fb->ld_window[window_shape];
+        window_long_prev = fb->ld_window[window_shape_prev];
     } else {
     #endif
-        window_long = m_fb->long_window[window_shape];
-        window_long_prev = m_fb->long_window[window_shape_prev];
-        window_short = m_fb->short_window[window_shape];
-        window_short_prev = m_fb->short_window[window_shape_prev];
+        window_long = fb->long_window[window_shape];
+        window_long_prev = fb->long_window[window_shape_prev];
+        window_short = fb->short_window[window_shape];
+        window_short_prev = fb->short_window[window_shape_prev];
     #ifdef LD_DEC
     }
     #endif
@@ -4196,21 +4142,21 @@ void xxx filter_bank_ltp(uint8_t window_sequence, uint8_t window_shape, uint8_t 
                 windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
                 windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
             }
-            mdct_init(windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_START_SEQUENCE:
             for (i = 0; i < nlong; i++) windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong] = in_data[i + nlong];
             for (i = 0; i < nshort; i++) windowed_buf[i + nlong + nflat_ls] = MUL_F(in_data[i + nlong + nflat_ls], window_short[nshort - 1 - i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong + nflat_ls + nshort] = 0;
-            mdct_init(windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_STOP_SEQUENCE:
             for (i = 0; i < nflat_ls; i++) windowed_buf[i] = 0;
             for (i = 0; i < nshort; i++) windowed_buf[i + nflat_ls] = MUL_F(in_data[i + nflat_ls], window_short_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nflat_ls + nshort] = in_data[i + nflat_ls + nshort];
             for (i = 0; i < nlong; i++) windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
-            mdct_init(windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
             break;
     }
     faad_free(&windowed_buf);
@@ -4483,8 +4429,7 @@ exit:
 #ifdef SBR_DEC
 void xxx DCT4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE "\n");
-    ps_ptr<int32_t>f;
-    f.alloc_array(397);
+    int32_t* f = (int32_t*)faad_malloc(397 * sizeof(int32_t));
     f[0] = x[15] - x[16];
     f[1] = x[15] + x[16];
     f[2] = MUL_F(FRAC_CONST(0.7071067811865476), f[1]);
@@ -4885,15 +4830,14 @@ void xxx DCT4_32(real_t* y, real_t* x) {
     f[397] = MUL_C(COEF_CONST(1.0708550202783576), f[300]);
     y[30] = f[395] + f[396];
     y[1] = f[397] - f[396];
-    f.reset();
+    if (f) { faad_free(&f); }
 }
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 void xxx DST4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "DST4_32" ANSI_ESC_WHITE "\n");
-    ps_ptr<int32_t>f;
-    f.alloc_array(336);
+    int32_t* f = (int32_t*)faad_malloc(336 * sizeof(int32_t));
     f[0] = x[0] - x[1];
     f[1] = x[2] - x[1];
     f[2] = x[2] - x[3];
@@ -5262,7 +5206,7 @@ void xxx DST4_32(real_t* y, real_t* x) {
     y[2] = MUL_C(COEF_CONST(4.0846110781292477), f[308]);
     y[1] = MUL_C(COEF_CONST(6.7967507116736332), f[306]);
     y[0] = MUL_R(REAL_CONST(20.3738781672314530), f[304]);
-    f.reset();
+    if (f) { faad_free(&f); }
 }
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6899,11 +6843,12 @@ uint8_t xxx allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel, u
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* allocate the state only when needed */
-        if (m_pred_stat[channel].valid()) {
-            m_pred_stat[channel].reset();
+        if (hDecoder->pred_stat[channel] != NULL) {
+            faad_free(&hDecoder->pred_stat[channel]);
+            hDecoder->pred_stat[channel] = NULL;
         }
-        m_pred_stat->alloc(hDecoder->frameLength);
-        reset_all_predictors(m_pred_stat[channel].get(), hDecoder->frameLength);
+        hDecoder->pred_stat[channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
+        reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
     }
 #endif
 #ifdef LTP_DEC
@@ -6972,13 +6917,13 @@ uint8_t xxx allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uin
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* allocate the state only when needed */
-        if (!m_pred_stat[channel].valid()) {
-            m_pred_stat[channel].alloc(hDecoder->frameLength);
-            reset_all_predictors(m_pred_stat[channel].get(), hDecoder->frameLength);
+        if (hDecoder->pred_stat[channel] == NULL) {
+            hDecoder->pred_stat[channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
+            reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
         }
-        if (!m_pred_stat[paired_channel].valid()) {
-            m_pred_stat[paired_channel].alloc(hDecoder->frameLength);
-            reset_all_predictors(m_pred_stat[paired_channel].get(), hDecoder->frameLength);
+        if (hDecoder->pred_stat[paired_channel] == NULL) {
+            hDecoder->pred_stat[paired_channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
+            reset_all_predictors(hDecoder->pred_stat[paired_channel], hDecoder->frameLength);
         }
     }
 #endif
@@ -7109,17 +7054,17 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
-        if (!m_pred_stat[sce->channel].valid()) {
+        if (!hDecoder->pred_stat[sce->channel]) {
             retval = 33;
             goto exit;
         } // return 33;
         /* intra channel prediction */
-        ic_prediction(ics, spec_coef, m_pred_stat[sce->channel].get(), hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics, spec_coef, hDecoder->pred_stat[sce->channel], hDecoder->frameLength, hDecoder->sf_index);
         /* In addition, for scalefactor bands coded by perceptual
            noise substitution the predictors belonging to the
            corresponding spectral coefficients are reset.
         */
-        pns_reset_pred_state(ics, m_pred_stat[sce->channel].get());
+        pns_reset_pred_state(ics, hDecoder->pred_stat[sce->channel]);
     }
 #endif
 #ifdef LTP_DEC
@@ -7133,7 +7078,7 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
         }
     #endif
         /* long term prediction */
-        lt_prediction(ics, &(ics->ltp), spec_coef, hDecoder->lt_pred_stat[sce->channel], ics->window_shape, hDecoder->window_shape_prev[sce->channel], hDecoder->sf_index,
+        lt_prediction(ics, &(ics->ltp), spec_coef, hDecoder->lt_pred_stat[sce->channel], hDecoder->fb, ics->window_shape, hDecoder->window_shape_prev[sce->channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
     }
 #endif
@@ -7141,19 +7086,19 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
     tns_decode_frame(ics, &(ics->tns), hDecoder->sf_index, hDecoder->object_type, spec_coef, hDecoder->frameLength);
     /* drc decoding */
 #ifdef APPLY_DRC
-    if (m_drc_info->present) {
-        if (!m_drc_info->exclude_mask[sce->channel] || m_drc_info->excluded_chns_present) drc_decode(spec_coef);
+    if (hDecoder->drc->present) {
+        if (!hDecoder->drc->exclude_mask[sce->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef);
     }
 #endif
     /* filter bank */
 #ifdef SSR_DEC
     if (hDecoder->object_type != SSR) {
 #endif
-        ifilter_bank(ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel], hDecoder->fb_intermed[sce->channel],
+        ifilter_bank(hDecoder->fb, ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel], hDecoder->fb_intermed[sce->channel],
                      hDecoder->object_type, hDecoder->frameLength);
 #ifdef SSR_DEC
     } else {
-        ssr_decode(&(ics->ssr), ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel],
+        ssr_decode(&(ics->ssr), hDecoder->fb, ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel],
                    hDecoder->ssr_overlap[sce->channel], hDecoder->ipqf_buffer[sce->channel], hDecoder->prev_fmd[sce->channel], hDecoder->frameLength);
     }
 #endif
@@ -7275,14 +7220,14 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* intra channel prediction */
-        ic_prediction(ics1, spec_coef1, m_pred_stat[cpe->channel].get(), hDecoder->frameLength, hDecoder->sf_index);
-        ic_prediction(ics2, spec_coef2, m_pred_stat[cpe->paired_channel].get(), hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics1, spec_coef1, hDecoder->pred_stat[cpe->channel], hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics2, spec_coef2, hDecoder->pred_stat[cpe->paired_channel], hDecoder->frameLength, hDecoder->sf_index);
         /* In addition, for scalefactor bands coded by perceptual
            noise substitution the predictors belonging to the
            corresponding spectral coefficients are reset.
         */
-        pns_reset_pred_state(ics1, m_pred_stat[cpe->channel].get());
-        pns_reset_pred_state(ics2, m_pred_stat[cpe->paired_channel].get());
+        pns_reset_pred_state(ics1, hDecoder->pred_stat[cpe->channel]);
+        pns_reset_pred_state(ics2, hDecoder->pred_stat[cpe->paired_channel]);
     }
 #endif
 #ifdef LTP_DEC
@@ -7302,9 +7247,9 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
         }
     #endif
         /* long term prediction */
-        lt_prediction(ics1, ltp1, spec_coef1, hDecoder->lt_pred_stat[cpe->channel], ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], hDecoder->sf_index,
+        lt_prediction(ics1, ltp1, spec_coef1, hDecoder->lt_pred_stat[cpe->channel], hDecoder->fb, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
-        lt_prediction(ics2, ltp2, spec_coef2, hDecoder->lt_pred_stat[cpe->paired_channel], ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], hDecoder->sf_index,
+        lt_prediction(ics2, ltp2, spec_coef2, hDecoder->lt_pred_stat[cpe->paired_channel], hDecoder->fb, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
     }
 #endif
@@ -7313,23 +7258,24 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
     tns_decode_frame(ics2, &(ics2->tns), hDecoder->sf_index, hDecoder->object_type, spec_coef2, hDecoder->frameLength);
     /* drc decoding */
 #if APPLY_DRC
-        if (!m_drc_info->exclude_mask[cpe->channel] || !m_drc_info->excluded_chns_present) drc_decode(spec_coef1);
-        if (!m_drc_info->exclude_mask[cpe->paired_channel] || !hm_drc_info > excluded_chns_present) drc_decode(spec_coef2);
+    if (hDecoder->drc->present) {
+        if (!hDecoder->drc->exclude_mask[cpe->channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef1);
+        if (!hDecoder->drc->exclude_mask[cpe->paired_channel] || !hDecoder->drc->excluded_chns_present) drc_decode(hDecoder->drc, spec_coef2);
     }
 #endif
     /* filter bank */
 #ifdef SSR_DEC
     if (hDecoder->object_type != SSR) {
 #endif
-        ifilter_bank(ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
+        ifilter_bank(hDecoder->fb, ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
                      hDecoder->fb_intermed[cpe->channel], hDecoder->object_type, hDecoder->frameLength);
-        ifilter_bank(ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
+        ifilter_bank(hDecoder->fb, ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
                      hDecoder->fb_intermed[cpe->paired_channel], hDecoder->object_type, hDecoder->frameLength);
 #ifdef SSR_DEC
     } else {
-        ssr_decode(&(ics1->ssr), ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
+        ssr_decode(&(ics1->ssr), hDecoder->fb, ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
                    hDecoder->ssr_overlap[cpe->channel], hDecoder->ipqf_buffer[cpe->channel], hDecoder->prev_fmd[cpe->channel], hDecoder->frameLength);
-        ssr_decode(&(ics2->ssr), ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
+        ssr_decode(&(ics2->ssr), hDecoder->fb, ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
                    hDecoder->ssr_overlap[cpe->paired_channel], hDecoder->ipqf_buffer[cpe->paired_channel], hDecoder->prev_fmd[cpe->paired_channel], hDecoder->frameLength);
     }
 #endif
@@ -7732,8 +7678,7 @@ void xxx decode_cpe(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile*
     hDecoder->fr_ch_ele++;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce) {
-    drc_info* drc = m_drc_info.get();
+void xxx raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc) {
     uint8_t id_syn_ele;
     uint8_t ele_this_frame = 0;
     hDecoder->fr_channels = 0;
@@ -7914,7 +7859,7 @@ uint8_t xxx single_lfe_channel_element(NeAACDecStruct* hDecoder, bitfile* ld, ui
     if (faad_showbits(ld, LEN_SE_ID) == ID_FIL) {
         faad_flushbits(ld, LEN_SE_ID);
         /* one sbr_info describes a channel_element not a channel! */
-        if ((retval = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
+        if ((retval = fill_element(hDecoder, ld, hDecoder->drc, hDecoder->fr_ch_ele)) > 0) { goto exit; }
     }
 #endif
     /* noiseless coding is done, spectral reconstruction is done now */
@@ -7996,7 +7941,7 @@ uint8_t xxx channel_pair_element(NeAACDecStruct* hDecoder, bitfile* ld, uint8_t 
         }
     }
 #endif
-    if ((result = fill_element(hDecoder, ld, m_drc_info.get(), hDecoder->fr_ch_ele)) > 0) { goto exit; }
+    if ((result = individual_channel_stream(hDecoder, cpe, ld, ics2, 0, spec_data2)) > 0) { goto exit; }
 #ifdef SBR_DEC
     /* check if next bitstream element is a fill element */
     /* if so, read it now so SBR decoding can be done in case of a file with SBR */
@@ -9512,7 +9457,7 @@ int8_t xxx rvlc_huffman_esc(bitfile* ld, int8_t direction) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx ssr_decode(ssr_info* ssr, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
+void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
                     real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
@@ -9530,7 +9475,7 @@ void xxx ssr_decode(ssr_info* ssr, uint8_t window_sequence, uint8_t window_shape
             }
         }
         /* non-overlapping inverse filterbank for SSR */
-        ssr_ifilter_bank(window_sequence, window_shape, window_shape_prev, freq_in + band * ssr_frame_len, time_tmp + band * ssr_frame_len, ssr_frame_len);
+        ssr_ifilter_bank(fb, window_sequence, window_shape, window_shape_prev, freq_in + band * ssr_frame_len, time_tmp + band * ssr_frame_len, ssr_frame_len);
         /* gain control */
         ssr_gain_control(ssr, time_tmp, output, overlap, prev_fmd, band, window_sequence, ssr_frame_len);
     }
@@ -9728,30 +9673,31 @@ int8_t xxx AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4Audio
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx ssr_filter_bank_init(uint16_t frame_len) {
+fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
-    m_fb.calloc(1);
+    fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
+    memset(fb, 0, sizeof(fb_info));
     /* normal */
     faad_mdct_init(256, 2 * nshort);
     faad_mdct_init(2048, 2 * frame_len);
-    m_fb->long_window[0] = sine_long_256;
-    m_fb->short_window[0] = sine_short_32;
-    m_fb->long_window[1] = kbd_long_256;
-    m_fb->short_window[1] = kbd_short_32;
-    return;
+    fb->long_window[0] = sine_long_256;
+    fb->short_window[0] = sine_short_32;
+    fb->long_window[1] = kbd_long_256;
+    fb->short_window[1] = kbd_short_32;
+    return fb;
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx ssr_filter_bank_end() {
+void xxx ssr_filter_bank_end(fb_info* fb) {
     faad_mdct_end(256);
     faad_mdct_end(2048);
-    m_fb.reset();
+    if (fb) faad_free(&fb);
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx imdct_ssr(real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
     int16_t mdct_select = 0;
     switch (len) {
         case 512: mdct_select = 2048; break;
@@ -9763,7 +9709,7 @@ void xxx imdct_ssr(real_t* in_data, real_t* out_data, uint16_t len) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 /* NON-overlapping inverse filterbank for use with SSR */
-void xxx ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
+void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
     #define MUL_R_C(A, B) ((A) * (B))
     int16_t  i;
     real_t*  transf_buf;
@@ -9777,34 +9723,34 @@ void xxx ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t
     (void)trans;
     uint16_t nflat_ls = (nlong - nshort) / 2;
     transf_buf = (real_t*)faad_malloc(2 * nlong * sizeof(real_t));
-    window_long = (real_t*)m_fb->long_window[window_shape];
-    window_long_prev = (real_t*)m_fb->long_window[window_shape_prev];
-    window_short = (real_t*)m_fb->short_window[window_shape];
-    window_short_prev = (real_t*)m_fb->short_window[window_shape_prev];
+    window_long = (real_t*)fb->long_window[window_shape];
+    window_long_prev = (real_t*)fb->long_window[window_shape_prev];
+    window_short = (real_t*)fb->short_window[window_shape];
+    window_short_prev = (real_t*)fb->short_window[window_shape_prev];
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
-            imdct_ssr(freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
             for (i = nlong - 1; i >= 0; i--) {
                 time_out[i] = MUL_R_C(transf_buf[i], window_long_prev[i]);
                 time_out[nlong + i] = MUL_R_C(transf_buf[nlong + i], window_long[nlong - 1 - i]);
             }
             break;
         case LONG_START_SEQUENCE:
-            imdct_ssr(freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nlong; i++) time_out[i] = MUL_R_C(transf_buf[i], window_long_prev[i]);
             for (i = 0; i < nflat_ls; i++) time_out[nlong + i] = transf_buf[nlong + i];
             for (i = 0; i < nshort; i++) time_out[nlong + nflat_ls + i] = MUL_R_C(transf_buf[nlong + nflat_ls + i], window_short[nshort - i - 1]);
             for (i = 0; i < nflat_ls; i++) time_out[nlong + nflat_ls + nshort + i] = 0;
             break;
         case EIGHT_SHORT_SEQUENCE:
-            imdct_ssr(freq_in + 0 * nshort, transf_buf + 2 * nshort * 0, 2 * nshort);
-            imdct_ssr(freq_in + 1 * nshort, transf_buf + 2 * nshort * 1, 2 * nshort);
-            imdct_ssr(freq_in + 2 * nshort, transf_buf + 2 * nshort * 2, 2 * nshort);
-            imdct_ssr(freq_in + 3 * nshort, transf_buf + 2 * nshort * 3, 2 * nshort);
-            imdct_ssr(freq_in + 4 * nshort, transf_buf + 2 * nshort * 4, 2 * nshort);
-            imdct_ssr(freq_in + 5 * nshort, transf_buf + 2 * nshort * 5, 2 * nshort);
-            imdct_ssr(freq_in + 6 * nshort, transf_buf + 2 * nshort * 6, 2 * nshort);
-            imdct_ssr(freq_in + 7 * nshort, transf_buf + 2 * nshort * 7, 2 * nshort);
+            imdct_ssr(fb, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0, 2 * nshort);
+            imdct_ssr(fb, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1, 2 * nshort);
+            imdct_ssr(fb, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2, 2 * nshort);
+            imdct_ssr(fb, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3, 2 * nshort);
+            imdct_ssr(fb, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4, 2 * nshort);
+            imdct_ssr(fb, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5, 2 * nshort);
+            imdct_ssr(fb, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6, 2 * nshort);
+            imdct_ssr(fb, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7, 2 * nshort);
             for (i = nshort - 1; i >= 0; i--) {
                 time_out[i + 0 * nshort] = MUL_R_C(transf_buf[nshort * 0 + i], window_short_prev[i]);
                 time_out[i + 1 * nshort] = MUL_R_C(transf_buf[nshort * 1 + i], window_short[i]);
@@ -9825,7 +9771,7 @@ void xxx ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t
             }
             break;
         case LONG_STOP_SEQUENCE:
-            imdct_ssr(freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nflat_ls; i++) time_out[i] = 0;
             for (i = 0; i < nshort; i++) time_out[nflat_ls + i] = MUL_R_C(transf_buf[nflat_ls + i], window_short_prev[i]);
             for (i = 0; i < nflat_ls; i++) time_out[nflat_ls + nshort + i] = transf_buf[nflat_ls + nshort + i];
@@ -9856,7 +9802,7 @@ uint8_t xxx is_ltp_ot(uint8_t object_type) {
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
+void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                        uint16_t frame_len) {
     uint8_t  sfb;
     uint16_t bin, i, num_samples;
@@ -9881,7 +9827,7 @@ void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_
                 x_est[i] = (real_t)lt_pred_stat[num_samples + i - ltp->lag] * codebook[ltp->coef];
     #endif
             }
-            filter_bank_ltp(ics->window_sequence, win_shape, win_shape_prev, x_est, X_est, object_type, frame_len);
+            filter_bank_ltp(fb, ics->window_sequence, win_shape, win_shape_prev, x_est, X_est, object_type, frame_len);
             tns_encode_frame(ics, &(ics->tns), sr_index, object_type, X_est, frame_len);
             for (sfb = 0; sfb < ltp->last_band; sfb++) {
                 if (ltp->long_used[sfb]) {
@@ -11466,8 +11412,8 @@ void xxx huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par, ps_huff_
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void xxx ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) {
+    static int initFlag = 0;
     real_t **pp_q0, **pp_t0, **pp_t1;
-    int initFlag = 0;
     real_t     a_pqfproto[PQFTAPS];
     int        i;
     if (initFlag == 0) {
@@ -14432,11 +14378,13 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t       m, l, k;
     uint8_t       current_t_noise_band = 0;
     uint8_t       S_mapped;
-    ps_ptr<real_t>Q_M_lim; Q_M_lim.alloc_array(MAX_M);
-    ps_ptr<real_t>G_lim;   G_lim.alloc_array(MAX_M);
-    ps_ptr<real_t>S_M;     S_M.alloc_array(MAX_M);
+    // real_t Q_M_lim[MAX_M];
+    // real_t G_lim[MAX_M];
+    // real_t S_M[MAX_M];
     real_t  G_boost;
-
+    real_t* Q_M_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
+    real_t* G_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
+    real_t* S_M = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14597,9 +14545,9 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
         }
     }
-    Q_M_lim.reset();
-    G_lim.reset();
-    S_M.reset();
+    if (Q_M_lim) free(Q_M_lim);
+    if (G_lim) free(G_lim);
+    if (S_M) free(S_M);
 }
     #endif // FIXED_POINT
 #endif     // SBR_DEC
@@ -14624,13 +14572,11 @@ float QUANTISE2INT(float val) { return floor(val); }
 void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t* deg, uint8_t ch) {
     uint8_t l, i, x;
     //    complex_t alpha_0[64], alpha_1[64];
-    ps_ptr<complex_t>alpha_0;
-    ps_ptr<complex_t>alpha_1;
-    alpha_0.alloc_array(64);
-    alpha_1.alloc_array(64);
+    complex_t* alpha_0 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
+    complex_t* alpha_1 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
     #ifdef SBR_LOW_POWER
-    ps_ptr<real_t>rxx;
-    rxx.alloc_array(64);
+    // real_t rxx[64];
+    real_t* rxx = faad_malloc(64 * sizeof(real_t));
     #endif
     uint8_t offset = sbr->tHFAdj;
     uint8_t first = sbr->t_E[ch][0];
@@ -14642,8 +14588,8 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
     if ((ch == 0) && (sbr->Reset)) patch_construction(sbr);
     /* calculate the prediction coefficients */
     #ifdef SBR_LOW_POWER
-    calc_prediction_coef_lp(sbr, Xlow, alpha_0.get(), alpha_1.get(), rxx.get());
-    calc_aliasing_degree(sbr, rxx.get(), deg);
+    calc_prediction_coef_lp(sbr, Xlow, alpha_0, alpha_1, rxx);
+    calc_aliasing_degree(sbr, rxx, deg);
     #endif
     /* actual HF generation */
     for (i = 0; i < sbr->noPatches; i++) {
@@ -14672,7 +14618,7 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
                 real_t temp1_r, temp2_r, temp3_r;
     #ifndef SBR_LOW_POWER
                 real_t temp1_i, temp2_i, temp3_i;
-                calc_prediction_coef(sbr, Xlow, alpha_0.get(), alpha_1.get(), p);
+                calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
     #endif
                 a0_r = MUL_C(RE(alpha_0[p]), bw);
                 a1_r = MUL_C(RE(alpha_1[p]), bw2);
@@ -14713,10 +14659,10 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
         }
     }
     if (sbr->Reset) { limiter_frequency_table(sbr); }
-    alpha_0.reset();
-    alpha_1.reset();
+    faad_free(&alpha_0);
+    faad_free(&alpha_1);
     #ifdef SBR_LOW_POWER
-    rxx.reset();
+    faad_free(&rxx);
     #endif
 }
 #endif // SBR_DEC

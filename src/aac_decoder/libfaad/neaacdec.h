@@ -57,7 +57,10 @@ uint32_t                          get_sample_rate(const uint8_t sr_index);
 int8_t                            can_decode_ot(const uint8_t object_type);
 void*                             faad_malloc(size_t size);
 template <typename freeType> void faad_free(freeType** b);
-void                     drc_decode(real_t* spec);
+
+drc_info*                drc_init(real_t cut, real_t boost);
+void                     drc_end(drc_info* drc);
+void                     drc_decode(drc_info* drc, real_t* spec);
 sbr_info*                sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
 void                     sbrDecodeEnd(sbr_info* sbr);
 void                     sbrReset(sbr_info* sbr);
@@ -105,6 +108,7 @@ void                     NeAACDecClose(NeAACDecHandle hpDecoder);
 NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
 void*                    aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size);
 void                     create_channel_config(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo);
+void                     ssr_filter_bank_end(fb_info* fb);
 void                     passf2pos(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
 void                     passf2neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa);
 void                     passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign);
@@ -112,14 +116,13 @@ void                     passf4pos(const uint16_t ido, const uint16_t l1, const 
 void                     passf4neg(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3);
 void      passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign);
 void      cffti1(uint16_t n, complex_t* wa, uint16_t* ifac);
-void      drc_init(real_t cut, real_t boost);
+drc_info* drc_init(real_t cut, real_t boost);
 void      drc_end(drc_info* drc);
-void      imdct_long(real_t* in_data, real_t* out_data, uint16_t len);
-void  filter_bank_init(uint16_t frame_len);
-void      filter_bank_end();
-void      filter_bank_ltp(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len);
-void   ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len);
-void ssr_filter_bank_end();
+void      drc_decode(drc_info* drc, real_t* spec);
+fb_info*  filter_bank_init(uint16_t frame_len);
+void      filter_bank_end(fb_info* fb);
+void      filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len);
+void   ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type, uint16_t frame_len);
 void   ms_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len);
 void   is_decode(ic_stream* ics, ic_stream* icsr, real_t* l_spec, real_t* r_spec, uint16_t frame_len);
 int8_t is_intensity(ic_stream* ics, uint8_t group, uint8_t sfb);
@@ -150,9 +153,9 @@ uint8_t      drm_ps_decode(drm_ps_info* ps, uint8_t guess, qmf_t X_left[38][64],
 int8_t       huffman_scale_factor(bitfile* ld);
 uint8_t      huffman_spectral_data(uint8_t cb, bitfile* ld, int16_t* sp);
 int8_t       huffman_spectral_data_2(uint8_t cb, bits_t* ld, int16_t* sp);
-void         ssr_filter_bank_init(uint16_t frame_len);
-void         ssr_filter_bank_end();
-void         ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
+fb_info*     ssr_filter_bank_init(uint16_t frame_len);
+void         ssr_filter_bank_end(fb_info* fb);
+void         ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
 int8_t       AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint8_t short_form);
 int8_t       AudioSpecificConfigFromBitfile(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce, uint32_t bsize, uint8_t short_form);
 void         pns_reset_pred_state(ic_stream* ics, pred_state* state);
@@ -165,7 +168,7 @@ uint8_t      reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics
 void         tns_decode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len);
 void         tns_encode_frame(ic_stream* ics, tns_info* tns, uint8_t sr_index, uint8_t object_type, real_t* spec, uint16_t frame_len);
 uint8_t      is_ltp_ot(uint8_t object_type);
-void         lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
+void         lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                            uint16_t frame_len);
 void         lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type);
 void         tns_decode_coef(uint8_t order, uint8_t coef_res_bits, uint8_t coef_compress, uint8_t* coef, real_t* a);
@@ -206,7 +209,7 @@ uint8_t side_info(NeAACDecStruct* hDecoder, element* ele, bitfile* ld, ic_stream
 int8_t  GASpecificConfig(bitfile* ld, mp4AudioSpecificConfig* mp4ASC, program_config* pce);
 uint8_t adts_frame(adts_header* adts, bitfile* ld);
 void    get_adif_header(adif_header* adif, bitfile* ld);
-void    raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce);
+void    raw_data_block(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, bitfile* ld, program_config* pce, drc_info* drc);
 uint8_t reordered_spectral_data(NeAACDecStruct* hDecoder, ic_stream* ics, bitfile* ld, int16_t* spectral_data);
 #ifdef DRM
 int8_t DRM_aac_scalable_main_header(NeAACDecStruct* hDecoder, ic_stream* ics1, ic_stream* ics2, bitfile* ld, uint8_t this_layer_stereo);
@@ -229,10 +232,10 @@ void DRM_aac_scalable_main_element(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* 
 #endif
 uint32_t faad_latm_frame(latm_header* latm, bitfile* ld);
 #ifdef SSR_DEC
-void ssr_decode(ssr_info* ssr, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
+void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
                 real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len);
-void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
 void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len);
+void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
 #endif
 void extract_envelope_data(sbr_info* sbr, uint8_t ch);
 void extract_noise_floor_data(sbr_info* sbr, uint8_t ch);
@@ -241,7 +244,6 @@ void envelope_noise_dequantisation(sbr_info* sbr, uint8_t ch);
 void unmap_envelope_noise(sbr_info* sbr);
 #endif
 void       ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
-void       mdct_init(real_t* in_data, real_t* out_data, uint16_t len);
 void       faad_mdct_init(uint16_t mdct_len, uint16_t N);
 void       faad_mdct_end(uint16_t mdct_len);
 void       faad_imdct(uint16_t mdct_idx, real_t* X_in, real_t* X_out);
@@ -253,8 +255,9 @@ void     unmap_envelope_noise(sbr_info* sbr);
 int16_t  real_to_int16(real_t sig_in);
 uint8_t  sbr_save_prev_data(sbr_info* sbr, uint8_t ch);
 void     sbr_save_matrix(sbr_info* sbr, uint8_t ch);
-void     ssr_filter_bank_end();
-void     ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
+fb_info* ssr_filter_bank_init(uint16_t frame_len);
+void     ssr_filter_bank_end(fb_info* fb);
+void     ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len);
 int32_t  find_bands(uint8_t warp, uint8_t bands, uint8_t a0, uint8_t a1);
 void     sbr_header(bitfile* ld, sbr_info* sbr);
 uint8_t  calc_sbr_tables(sbr_info* sbr, uint8_t start_freq, uint8_t stop_freq, uint8_t samplerate_mode, uint8_t freq_scale, uint8_t alter_scale, uint8_t xover_band);
@@ -307,9 +310,8 @@ void       sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch);
 void       sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch);
 uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 #ifdef SSR_DEC
-void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
-void gc_set_protopqf(real_t* p_proto);
-void gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
+void            ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+void  gc_set_protopqf(real_t* p_proto)
 #endif
 #ifdef PS_DEC
 void      ps_data_decode(ps_info* ps);
