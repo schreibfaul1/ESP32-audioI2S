@@ -230,8 +230,8 @@ uint32_t faad_latm_frame(latm_header* latm, bitfile* ld);
 #ifdef SSR_DEC
 void ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
                 real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len);
-ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len);
-ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
+void ssr_gc_function(ssr_info* ssr, real_t* prev_fmd, real_t* gc_function, uint8_t window_sequence, uint16_t frame_len);
+void ssr_gain_control(ssr_info* ssr, real_t* data, real_t* output, real_t* overlap, real_t* prev_fmd, uint8_t band, uint8_t window_sequence, uint16_t frame_len);
 #endif
 void extract_envelope_data(sbr_info* sbr, uint8_t ch);
 void extract_noise_floor_data(sbr_info* sbr, uint8_t ch);
@@ -242,8 +242,8 @@ void unmap_envelope_noise(sbr_info* sbr);
 void       ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
 void       faad_mdct_init(uint16_t mdct_len, uint16_t N);
 void       faad_mdct_end(uint16_t mdct_len);
-void       faad_imdct(uint16_t mdct_idx, int32_t* X_in, int32_t* X_out);
-void       faad_mdct(uint16_t mdct_len, int32_t* X_in, int32_t* X_out);
+void       faad_imdct(uint16_t mdct_idx, real_t* X_in, real_t* X_out);
+void       faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out);
 #if (defined(PS_DEC) || defined(DRM_PS))
 uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
 #endif
@@ -306,9 +306,9 @@ void       sbr_envelope(bitfile* ld, sbr_info* sbr, uint8_t ch);
 void       sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch);
 uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 #ifdef SSR_DEC
-real_t **pp_q0, **pp_t0, **pp_t1;
-void            ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
-void  gc_set_protopqf(real_t* p_proto)
+void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+void gc_set_protopqf(real_t* p_proto);
+void gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
 #endif
 #ifdef PS_DEC
 void      ps_data_decode(ps_info* ps);
