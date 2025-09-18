@@ -4467,7 +4467,8 @@ exit:
 #ifdef SBR_DEC
 void xxx DCT4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "dct4_32" ANSI_ESC_WHITE "\n");
-    int32_t* f = (int32_t*)faad_malloc(397 * sizeof(int32_t));
+    ps_ptr<int32_t>f;
+    f.alloc_array(397);
     f[0] = x[15] - x[16];
     f[1] = x[15] + x[16];
     f[2] = MUL_F(FRAC_CONST(0.7071067811865476), f[1]);
@@ -4868,14 +4869,15 @@ void xxx DCT4_32(real_t* y, real_t* x) {
     f[397] = MUL_C(COEF_CONST(1.0708550202783576), f[300]);
     y[30] = f[395] + f[396];
     y[1] = f[397] - f[396];
-    if (f) { faad_free(&f); }
+    f.reset();
 }
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
 void xxx DST4_32(real_t* y, real_t* x) {
     // printf(ANSI_ESC_YELLOW "DST4_32" ANSI_ESC_WHITE "\n");
-    int32_t* f = (int32_t*)faad_malloc(336 * sizeof(int32_t));
+    ps_ptr<int32_t>f;
+    f.alloc_array(336);
     f[0] = x[0] - x[1];
     f[1] = x[2] - x[1];
     f[2] = x[2] - x[3];
@@ -5244,7 +5246,7 @@ void xxx DST4_32(real_t* y, real_t* x) {
     y[2] = MUL_C(COEF_CONST(4.0846110781292477), f[308]);
     y[1] = MUL_C(COEF_CONST(6.7967507116736332), f[306]);
     y[0] = MUL_R(REAL_CONST(20.3738781672314530), f[304]);
-    if (f) { faad_free(&f); }
+    f.reset();
 }
 #endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
