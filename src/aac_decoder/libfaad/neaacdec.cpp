@@ -45,6 +45,7 @@ ps_ptr<complex_t> m_work256;
 ps_ptr<complex_t> m_work1024;
 ps_ptr<complex_t> m_work2048;
 ps_ptr<drc_info>  m_drc_info;
+ps_ptr<fb_info>   m_fb;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -482,9 +483,6 @@ uint8_t xxx NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigura
 int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    // bitfile         ld;
-    // adif_header     adif;
-    // adts_header     adts;
     adif_header*    adif = (adif_header*)faad_malloc(1 * sizeof(adif_header));
     adts_header*    adts = (adts_header*)faad_malloc(1 * sizeof(adts_header));
     bitfile*        ld = (bitfile*)faad_malloc(1 * sizeof(bitfile));
@@ -553,10 +551,10 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     /* must be done before frameLength is divided by 2 for LD */
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        hDecoder->fb = ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
+        ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
     else
 #endif
-        hDecoder->fb = filter_bank_init(hDecoder->frameLength);
+        filter_bank_init(hDecoder->frameLength);
 #ifdef LD_DEC
     if (hDecoder->object_type == LD) hDecoder->frameLength >>= 1;
 #endif
@@ -626,10 +624,10 @@ char xxx NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t Size
     /* must be done before frameLength is divided by 2 for LD */
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        hDecoder->fb = ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
+        ssr_filter_bank_init(hDecoder->frameLength / SSR_BANDS);
     else
 #endif
-        hDecoder->fb = filter_bank_init(hDecoder->frameLength);
+        filter_bank_init(hDecoder->frameLength);
 #ifdef LD_DEC
     if (hDecoder->object_type == LD) hDecoder->frameLength >>= 1;
 #endif
@@ -695,10 +693,10 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
     }
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR)
-        ssr_filter_bank_end(hDecoder->fb);
+        ssr_filter_bank_end();
     else
 #endif
-        filter_bank_end(hDecoder->fb);
+        filter_bank_end();
     m_drc_info.reset();
     if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
@@ -3946,13 +3944,12 @@ void xxx faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-fb_info* xxx filter_bank_init(uint16_t frame_len) {
+void xxx filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
 #ifdef LD_DEC
     uint16_t frame_len_ld = frame_len / 2;
 #endif
-    fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
-    memset(fb, 0, sizeof(fb_info));
+    m_fb.calloc(1);
     /* normal */
     faad_mdct_init(256, 2 * nshort);
     faad_mdct_init(2048, 2 * frame_len);
@@ -3963,31 +3960,31 @@ fb_info* xxx filter_bank_init(uint16_t frame_len) {
 #ifdef ALLOW_SMALL_FRAMELENGTH
     if (frame_len == 1024) {
 #endif
-        fb->long_window[0] = sine_long_1024;
-        fb->short_window[0] = sine_short_128;
-        fb->long_window[1] = kbd_long_1024;
-        fb->short_window[1] = kbd_short_128;
+        m_fb->long_window[0] = sine_long_1024;
+        m_fb->short_window[0] = sine_short_128;
+        m_fb->long_window[1] = kbd_long_1024;
+        m_fb->short_window[1] = kbd_short_128;
 #ifdef LD_DEC
-        fb->ld_window[0] = sine_mid_512;
-        fb->ld_window[1] = ld_mid_512;
+        m_fb->ld_window[0] = sine_mid_512;
+        m_fb->ld_window[1] = ld_mid_512;
 #endif
 #ifdef ALLOW_SMALL_FRAMELENGTH
     } else /* (frame_len == 960) */ {
-        fb->long_window[0] = sine_long_960;
-        fb->short_window[0] = sine_short_120;
-        fb->long_window[1] = kbd_long_960;
-        fb->short_window[1] = kbd_short_120;
+        m_fb->long_window[0] = sine_long_960;
+        m_fb->short_window[0] = sine_short_120;
+        m_fb->long_window[1] = kbd_long_960;
+        m_fb->short_window[1] = kbd_short_120;
     #ifdef LD_DEC
-        fb->ld_window[0] = sine_mid_480;
-        fb->ld_window[1] = ld_mid_480;
+        m_fb->ld_window[0] = sine_mid_480;
+        m_fb->ld_window[1] = ld_mid_480;
     #endif
     }
 #endif
-    return fb;
+    return;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx filter_bank_end(fb_info* fb) {
-    if (fb != NULL) {
+void xxx filter_bank_end() {
+    if (m_fb.valid()) {
 #ifdef PROFILE
         printf("FB:                 %I64d cycles\n", fb->cycles);
 #endif
@@ -3996,11 +3993,11 @@ void xxx filter_bank_end(fb_info* fb) {
 #ifdef LD_DEC
         faad_mdct_end(1024);
 #endif
-        faad_free(&fb);
+        m_fb.reset();
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_long(real_t* in_data, real_t* out_data, uint16_t len) {
 #ifdef LD_DEC
     faad_imdct(len, in_data, out_data);
 #else
@@ -4009,7 +4006,7 @@ void xxx imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx mdct_init(real_t* in_data, real_t* out_data, uint16_t len) {
     uint16_t select = 0;
     switch (len) {
         case 2048:
@@ -4025,7 +4022,7 @@ void xxx mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len)
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
+void xxx ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
                       uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
@@ -4044,21 +4041,21 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
     /* select windows of current frame and previous frame (Sine or KBD) */
 #ifdef LD_DEC
     if (object_type == LD) {
-        window_long = fb->ld_window[window_shape];
-        window_long_prev = fb->ld_window[window_shape_prev];
+        window_long = m_fb->ld_window[window_shape];
+        window_long_prev = m_fb->ld_window[window_shape_prev];
     } else {
 #endif
-        window_long = fb->long_window[window_shape];
-        window_long_prev = fb->long_window[window_shape_prev];
-        window_short = fb->short_window[window_shape];
-        window_short_prev = fb->short_window[window_shape_prev];
+        window_long = m_fb->long_window[window_shape];
+        window_long_prev = m_fb->long_window[window_shape_prev];
+        window_short = m_fb->short_window[window_shape];
+        window_short_prev = m_fb->short_window[window_shape_prev];
 #ifdef LD_DEC
     }
 #endif
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_long(freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nlong; i += 4) {
                 time_out[i] = overlap[i] + MUL_F(transf_buf[i], window_long_prev[i]);
@@ -4076,7 +4073,7 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             break;
         case LONG_START_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_long(freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             for (i = 0; i < nlong; i += 4) {
                 time_out[i] = overlap[i] + MUL_F(transf_buf[i], window_long_prev[i]);
@@ -4126,7 +4123,7 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
             break;
         case LONG_STOP_SEQUENCE:
             /* perform iMDCT */
-            imdct_long(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_long(freq_in, transf_buf, 2 * nlong);
             /* add second half output of previous frame to windowed output of current frame */
             /* construct first half window using padding with 1's and 0's */
             for (i = 0; i < nflat_ls; i++) time_out[i] = overlap[i];
@@ -4152,7 +4149,7 @@ void xxx ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 /* only works for LTP -> no overlapping, no short blocks */
-void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
+void xxx filter_bank_ltp(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* in_data, real_t* out_mdct, uint8_t object_type, uint16_t frame_len) {
     int16_t i;
     // real_t windowed_buf[2*1024] = {0};
     real_t*       windowed_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -4166,14 +4163,14 @@ void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_sh
     assert(window_sequence != EIGHT_SHORT_SEQUENCE);
     #ifdef LD_DEC
     if (object_type == LD) {
-        window_long = fb->ld_window[window_shape];
-        window_long_prev = fb->ld_window[window_shape_prev];
+        window_long = m_fb->ld_window[window_shape];
+        window_long_prev = m_fb->ld_window[window_shape_prev];
     } else {
     #endif
-        window_long = fb->long_window[window_shape];
-        window_long_prev = fb->long_window[window_shape_prev];
-        window_short = fb->short_window[window_shape];
-        window_short_prev = fb->short_window[window_shape_prev];
+        window_long = m_fb->long_window[window_shape];
+        window_long_prev = m_fb->long_window[window_shape_prev];
+        window_short = m_fb->short_window[window_shape];
+        window_short_prev = m_fb->short_window[window_shape_prev];
     #ifdef LD_DEC
     }
     #endif
@@ -4183,21 +4180,21 @@ void xxx filter_bank_ltp(fb_info* fb, uint8_t window_sequence, uint8_t window_sh
                 windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
                 windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
             }
-            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_START_SEQUENCE:
             for (i = 0; i < nlong; i++) windowed_buf[i] = MUL_F(in_data[i], window_long_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong] = in_data[i + nlong];
             for (i = 0; i < nshort; i++) windowed_buf[i + nlong + nflat_ls] = MUL_F(in_data[i + nlong + nflat_ls], window_short[nshort - 1 - i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nlong + nflat_ls + nshort] = 0;
-            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(windowed_buf, out_mdct, 2 * nlong);
             break;
         case LONG_STOP_SEQUENCE:
             for (i = 0; i < nflat_ls; i++) windowed_buf[i] = 0;
             for (i = 0; i < nshort; i++) windowed_buf[i + nflat_ls] = MUL_F(in_data[i + nflat_ls], window_short_prev[i]);
             for (i = 0; i < nflat_ls; i++) windowed_buf[i + nflat_ls + nshort] = in_data[i + nflat_ls + nshort];
             for (i = 0; i < nlong; i++) windowed_buf[i + nlong] = MUL_F(in_data[i + nlong], window_long[nlong - 1 - i]);
-            mdct_init(fb, windowed_buf, out_mdct, 2 * nlong);
+            mdct_init(windowed_buf, out_mdct, 2 * nlong);
             break;
     }
     faad_free(&windowed_buf);
@@ -7119,7 +7116,7 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
         }
     #endif
         /* long term prediction */
-        lt_prediction(ics, &(ics->ltp), spec_coef, hDecoder->lt_pred_stat[sce->channel], hDecoder->fb, ics->window_shape, hDecoder->window_shape_prev[sce->channel], hDecoder->sf_index,
+        lt_prediction(ics, &(ics->ltp), spec_coef, hDecoder->lt_pred_stat[sce->channel], ics->window_shape, hDecoder->window_shape_prev[sce->channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
     }
 #endif
@@ -7135,11 +7132,11 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
 #ifdef SSR_DEC
     if (hDecoder->object_type != SSR) {
 #endif
-        ifilter_bank(hDecoder->fb, ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel], hDecoder->fb_intermed[sce->channel],
+        ifilter_bank(ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel], hDecoder->fb_intermed[sce->channel],
                      hDecoder->object_type, hDecoder->frameLength);
 #ifdef SSR_DEC
     } else {
-        ssr_decode(&(ics->ssr), hDecoder->fb, ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel],
+        ssr_decode(&(ics->ssr), ics->window_sequence, ics->window_shape, hDecoder->window_shape_prev[sce->channel], spec_coef, hDecoder->time_out[sce->channel],
                    hDecoder->ssr_overlap[sce->channel], hDecoder->ipqf_buffer[sce->channel], hDecoder->prev_fmd[sce->channel], hDecoder->frameLength);
     }
 #endif
@@ -7288,9 +7285,9 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
         }
     #endif
         /* long term prediction */
-        lt_prediction(ics1, ltp1, spec_coef1, hDecoder->lt_pred_stat[cpe->channel], hDecoder->fb, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], hDecoder->sf_index,
+        lt_prediction(ics1, ltp1, spec_coef1, hDecoder->lt_pred_stat[cpe->channel], ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
-        lt_prediction(ics2, ltp2, spec_coef2, hDecoder->lt_pred_stat[cpe->paired_channel], hDecoder->fb, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], hDecoder->sf_index,
+        lt_prediction(ics2, ltp2, spec_coef2, hDecoder->lt_pred_stat[cpe->paired_channel], ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], hDecoder->sf_index,
                       hDecoder->object_type, hDecoder->frameLength);
     }
 #endif
@@ -7307,15 +7304,15 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
 #ifdef SSR_DEC
     if (hDecoder->object_type != SSR) {
 #endif
-        ifilter_bank(hDecoder->fb, ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
+        ifilter_bank(ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
                      hDecoder->fb_intermed[cpe->channel], hDecoder->object_type, hDecoder->frameLength);
-        ifilter_bank(hDecoder->fb, ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
+        ifilter_bank(ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
                      hDecoder->fb_intermed[cpe->paired_channel], hDecoder->object_type, hDecoder->frameLength);
 #ifdef SSR_DEC
     } else {
-        ssr_decode(&(ics1->ssr), hDecoder->fb, ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
+        ssr_decode(&(ics1->ssr), ics1->window_sequence, ics1->window_shape, hDecoder->window_shape_prev[cpe->channel], spec_coef1, hDecoder->time_out[cpe->channel],
                    hDecoder->ssr_overlap[cpe->channel], hDecoder->ipqf_buffer[cpe->channel], hDecoder->prev_fmd[cpe->channel], hDecoder->frameLength);
-        ssr_decode(&(ics2->ssr), hDecoder->fb, ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
+        ssr_decode(&(ics2->ssr), ics2->window_sequence, ics2->window_shape, hDecoder->window_shape_prev[cpe->paired_channel], spec_coef2, hDecoder->time_out[cpe->paired_channel],
                    hDecoder->ssr_overlap[cpe->paired_channel], hDecoder->ipqf_buffer[cpe->paired_channel], hDecoder->prev_fmd[cpe->paired_channel], hDecoder->frameLength);
     }
 #endif
@@ -9498,7 +9495,7 @@ int8_t xxx rvlc_huffman_esc(bitfile* ld, int8_t direction) {
 #endif // ERROR_RESILIENCE
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
+void xxx ssr_decode(ssr_info* ssr, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
                     real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
@@ -9516,7 +9513,7 @@ void xxx ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t
             }
         }
         /* non-overlapping inverse filterbank for SSR */
-        ssr_ifilter_bank(fb, window_sequence, window_shape, window_shape_prev, freq_in + band * ssr_frame_len, time_tmp + band * ssr_frame_len, ssr_frame_len);
+        ssr_ifilter_bank(window_sequence, window_shape, window_shape_prev, freq_in + band * ssr_frame_len, time_tmp + band * ssr_frame_len, ssr_frame_len);
         /* gain control */
         ssr_gain_control(ssr, time_tmp, output, overlap, prev_fmd, band, window_sequence, ssr_frame_len);
     }
@@ -9714,31 +9711,30 @@ int8_t xxx AudioSpecificConfig2(uint8_t* pBuffer, uint32_t buffer_size, mp4Audio
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-fb_info* xxx ssr_filter_bank_init(uint16_t frame_len) {
+void xxx ssr_filter_bank_init(uint16_t frame_len) {
     uint16_t nshort = frame_len / 8;
-    fb_info* fb = (fb_info*)faad_malloc(sizeof(fb_info));
-    memset(fb, 0, sizeof(fb_info));
+    m_fb.calloc(1);
     /* normal */
     faad_mdct_init(256, 2 * nshort);
     faad_mdct_init(2048, 2 * frame_len);
-    fb->long_window[0] = sine_long_256;
-    fb->short_window[0] = sine_short_32;
-    fb->long_window[1] = kbd_long_256;
-    fb->short_window[1] = kbd_short_32;
-    return fb;
+    m_fb->long_window[0] = sine_long_256;
+    m_fb->short_window[0] = sine_short_32;
+    m_fb->long_window[1] = kbd_long_256;
+    m_fb->short_window[1] = kbd_short_32;
+    return;
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx ssr_filter_bank_end(fb_info* fb) {
+void xxx ssr_filter_bank_end() {
     faad_mdct_end(256);
     faad_mdct_end(2048);
-    if (fb) faad_free(&fb);
+    m_fb.reset();
 }
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
-void xxx imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len) {
+void xxx imdct_ssr(real_t* in_data, real_t* out_data, uint16_t len) {
     int16_t mdct_select = 0;
     switch (len) {
         case 512: mdct_select = 2048; break;
@@ -9750,7 +9746,7 @@ void xxx imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len)
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 /* NON-overlapping inverse filterbank for use with SSR */
-void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
+void xxx ssr_ifilter_bank(uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, uint16_t frame_len) {
     #define MUL_R_C(A, B) ((A) * (B))
     int16_t  i;
     real_t*  transf_buf;
@@ -9764,34 +9760,34 @@ void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_s
     (void)trans;
     uint16_t nflat_ls = (nlong - nshort) / 2;
     transf_buf = (real_t*)faad_malloc(2 * nlong * sizeof(real_t));
-    window_long = (real_t*)fb->long_window[window_shape];
-    window_long_prev = (real_t*)fb->long_window[window_shape_prev];
-    window_short = (real_t*)fb->short_window[window_shape];
-    window_short_prev = (real_t*)fb->short_window[window_shape_prev];
+    window_long = (real_t*)m_fb->long_window[window_shape];
+    window_long_prev = (real_t*)m_fb->long_window[window_shape_prev];
+    window_short = (real_t*)m_fb->short_window[window_shape];
+    window_short_prev = (real_t*)m_fb->short_window[window_shape_prev];
     switch (window_sequence) {
         case ONLY_LONG_SEQUENCE:
-            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(freq_in, transf_buf, 2 * nlong);
             for (i = nlong - 1; i >= 0; i--) {
                 time_out[i] = MUL_R_C(transf_buf[i], window_long_prev[i]);
                 time_out[nlong + i] = MUL_R_C(transf_buf[nlong + i], window_long[nlong - 1 - i]);
             }
             break;
         case LONG_START_SEQUENCE:
-            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nlong; i++) time_out[i] = MUL_R_C(transf_buf[i], window_long_prev[i]);
             for (i = 0; i < nflat_ls; i++) time_out[nlong + i] = transf_buf[nlong + i];
             for (i = 0; i < nshort; i++) time_out[nlong + nflat_ls + i] = MUL_R_C(transf_buf[nlong + nflat_ls + i], window_short[nshort - i - 1]);
             for (i = 0; i < nflat_ls; i++) time_out[nlong + nflat_ls + nshort + i] = 0;
             break;
         case EIGHT_SHORT_SEQUENCE:
-            imdct_ssr(fb, freq_in + 0 * nshort, transf_buf + 2 * nshort * 0, 2 * nshort);
-            imdct_ssr(fb, freq_in + 1 * nshort, transf_buf + 2 * nshort * 1, 2 * nshort);
-            imdct_ssr(fb, freq_in + 2 * nshort, transf_buf + 2 * nshort * 2, 2 * nshort);
-            imdct_ssr(fb, freq_in + 3 * nshort, transf_buf + 2 * nshort * 3, 2 * nshort);
-            imdct_ssr(fb, freq_in + 4 * nshort, transf_buf + 2 * nshort * 4, 2 * nshort);
-            imdct_ssr(fb, freq_in + 5 * nshort, transf_buf + 2 * nshort * 5, 2 * nshort);
-            imdct_ssr(fb, freq_in + 6 * nshort, transf_buf + 2 * nshort * 6, 2 * nshort);
-            imdct_ssr(fb, freq_in + 7 * nshort, transf_buf + 2 * nshort * 7, 2 * nshort);
+            imdct_ssr(freq_in + 0 * nshort, transf_buf + 2 * nshort * 0, 2 * nshort);
+            imdct_ssr(freq_in + 1 * nshort, transf_buf + 2 * nshort * 1, 2 * nshort);
+            imdct_ssr(freq_in + 2 * nshort, transf_buf + 2 * nshort * 2, 2 * nshort);
+            imdct_ssr(freq_in + 3 * nshort, transf_buf + 2 * nshort * 3, 2 * nshort);
+            imdct_ssr(freq_in + 4 * nshort, transf_buf + 2 * nshort * 4, 2 * nshort);
+            imdct_ssr(freq_in + 5 * nshort, transf_buf + 2 * nshort * 5, 2 * nshort);
+            imdct_ssr(freq_in + 6 * nshort, transf_buf + 2 * nshort * 6, 2 * nshort);
+            imdct_ssr(freq_in + 7 * nshort, transf_buf + 2 * nshort * 7, 2 * nshort);
             for (i = nshort - 1; i >= 0; i--) {
                 time_out[i + 0 * nshort] = MUL_R_C(transf_buf[nshort * 0 + i], window_short_prev[i]);
                 time_out[i + 1 * nshort] = MUL_R_C(transf_buf[nshort * 1 + i], window_short[i]);
@@ -9812,7 +9808,7 @@ void xxx ssr_ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_s
             }
             break;
         case LONG_STOP_SEQUENCE:
-            imdct_ssr(fb, freq_in, transf_buf, 2 * nlong);
+            imdct_ssr(freq_in, transf_buf, 2 * nlong);
             for (i = 0; i < nflat_ls; i++) time_out[i] = 0;
             for (i = 0; i < nshort; i++) time_out[nflat_ls + i] = MUL_R_C(transf_buf[nflat_ls + i], window_short_prev[i]);
             for (i = 0; i < nflat_ls; i++) time_out[nflat_ls + nshort + i] = transf_buf[nflat_ls + nshort + i];
@@ -9843,7 +9839,7 @@ uint8_t xxx is_ltp_ot(uint8_t object_type) {
 #endif // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
-void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
+void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
                        uint16_t frame_len) {
     uint8_t  sfb;
     uint16_t bin, i, num_samples;
@@ -9868,7 +9864,7 @@ void xxx lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_
                 x_est[i] = (real_t)lt_pred_stat[num_samples + i - ltp->lag] * codebook[ltp->coef];
     #endif
             }
-            filter_bank_ltp(fb, ics->window_sequence, win_shape, win_shape_prev, x_est, X_est, object_type, frame_len);
+            filter_bank_ltp(ics->window_sequence, win_shape, win_shape_prev, x_est, X_est, object_type, frame_len);
             tns_encode_frame(ics, &(ics->tns), sr_index, object_type, X_est, frame_len);
             for (sfb = 0; sfb < ltp->last_band; sfb++) {
                 if (ltp->long_used[sfb]) {
