@@ -14624,11 +14624,13 @@ float QUANTISE2INT(float val) { return floor(val); }
 void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[MAX_NTSRHFG][64], real_t* deg, uint8_t ch) {
     uint8_t l, i, x;
     //    complex_t alpha_0[64], alpha_1[64];
-    complex_t* alpha_0 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
-    complex_t* alpha_1 = (complex_t*)faad_malloc(64 * sizeof(complex_t));
+    ps_ptr<complex_t>alpha_0;
+    ps_ptr<complex_t>alpha_1;
+    alpha_0.alloc_array(64);
+    alpha_1.alloc_array(64);
     #ifdef SBR_LOW_POWER
-    // real_t rxx[64];
-    real_t* rxx = faad_malloc(64 * sizeof(real_t));
+    ps_ptr<real_t>rxx;
+    rxx.alloc_array(64);
     #endif
     uint8_t offset = sbr->tHFAdj;
     uint8_t first = sbr->t_E[ch][0];
@@ -14640,8 +14642,8 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
     if ((ch == 0) && (sbr->Reset)) patch_construction(sbr);
     /* calculate the prediction coefficients */
     #ifdef SBR_LOW_POWER
-    calc_prediction_coef_lp(sbr, Xlow, alpha_0, alpha_1, rxx);
-    calc_aliasing_degree(sbr, rxx, deg);
+    calc_prediction_coef_lp(sbr, Xlow, alpha_0.get(), alpha_1.get(), rxx.get());
+    calc_aliasing_degree(sbr, rxx.get(), deg);
     #endif
     /* actual HF generation */
     for (i = 0; i < sbr->noPatches; i++) {
@@ -14670,7 +14672,7 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
                 real_t temp1_r, temp2_r, temp3_r;
     #ifndef SBR_LOW_POWER
                 real_t temp1_i, temp2_i, temp3_i;
-                calc_prediction_coef(sbr, Xlow, alpha_0, alpha_1, p);
+                calc_prediction_coef(sbr, Xlow, alpha_0.get(), alpha_1.get(), p);
     #endif
                 a0_r = MUL_C(RE(alpha_0[p]), bw);
                 a1_r = MUL_C(RE(alpha_1[p]), bw2);
@@ -14711,10 +14713,10 @@ void xxx hf_generation(sbr_info* sbr, qmf_t Xlow[MAX_NTSRHFG][64], qmf_t Xhigh[M
         }
     }
     if (sbr->Reset) { limiter_frequency_table(sbr); }
-    faad_free(&alpha_0);
-    faad_free(&alpha_1);
+    alpha_0.reset();
+    alpha_1.reset();
     #ifdef SBR_LOW_POWER
-    faad_free(&rxx);
+    rxx.reset();
     #endif
 }
 #endif // SBR_DEC
