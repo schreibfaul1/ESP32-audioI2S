@@ -4,7 +4,7 @@
 #define PREFER_POINTERS // Use if target platform has address generators with autoincrement
 // #define BIG_IQ_TABLE
 // #define USE_DOUBLE_PRECISION // use double precision (needs big stack)
-// #define FIXED_POINT          // use fixed point reals, undefs MAIN_DEC and SSR_DEC
+#define FIXED_POINT          // use fixed point reals, undefs MAIN_DEC and SSR_DEC
 #define ERROR_RESILIENCE 2
 #define MAIN_DEC // Allow decoding of MAIN profile AAC
 // #define SSR_DEC // Allow decoding of SSR profile AAC

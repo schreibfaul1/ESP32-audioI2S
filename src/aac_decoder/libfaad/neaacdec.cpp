@@ -55,6 +55,8 @@ ps_ptr<adif_header>m_adif;
 ps_ptr<adts_header>m_adts;
 ps_ptr<bitfile> m_ld;
 
+
+
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t xxx get_sr_index(const uint32_t samplerate) {
@@ -14430,13 +14432,11 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     uint8_t       m, l, k;
     uint8_t       current_t_noise_band = 0;
     uint8_t       S_mapped;
-    // real_t Q_M_lim[MAX_M];
-    // real_t G_lim[MAX_M];
-    // real_t S_M[MAX_M];
+    ps_ptr<real_t>Q_M_lim; Q_M_lim.alloc_array(MAX_M);
+    ps_ptr<real_t>G_lim;   G_lim.alloc_array(MAX_M);
+    ps_ptr<real_t>S_M;     S_M.alloc_array(MAX_M);
     real_t  G_boost;
-    real_t* Q_M_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
-    real_t* G_lim = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
-    real_t* S_M = (real_t*)faad_malloc(MAX_M * sizeof(real_t));
+
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14597,9 +14597,9 @@ void xxx calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
             }
         }
     }
-    if (Q_M_lim) free(Q_M_lim);
-    if (G_lim) free(G_lim);
-    if (S_M) free(S_M);
+    Q_M_lim.reset();
+    G_lim.reset();
+    S_M.reset();
 }
     #endif // FIXED_POINT
 #endif     // SBR_DEC
