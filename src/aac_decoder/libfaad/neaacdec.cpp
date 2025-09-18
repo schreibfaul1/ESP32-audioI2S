@@ -51,7 +51,9 @@ ps_ptr<drc_info>  m_drc_info;
 ps_ptr<fb_info>   m_fb;
 ps_ptr<uint8_t>   m_sample_buffer;
 ps_ptr<pred_state>m_pred_stat[MAX_CHANNELS];
-
+ps_ptr<adif_header>m_adif;
+ps_ptr<adts_header>m_adts;
+ps_ptr<bitfile> m_ld;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -489,9 +491,10 @@ uint8_t xxx NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDecConfigura
 int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    adif_header*    adif = (adif_header*)faad_malloc(1 * sizeof(adif_header));
-    adts_header*    adts = (adts_header*)faad_malloc(1 * sizeof(adts_header));
-    bitfile*        ld = (bitfile*)faad_malloc(1 * sizeof(bitfile));
+    m_adif.alloc();
+    m_adts.alloc();
+    m_ld.alloc();
+    
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if ((hDecoder == NULL) || (samplerate == NULL) || (channels == NULL) || (buffer_size == 0)) {
         ret = -1;
@@ -502,35 +505,35 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     *samplerate = get_sample_rate(hDecoder->sf_index);
     *channels = 1;
     if (buffer != NULL) {
-        faad_initbits(ld, buffer, buffer_size);
+        faad_initbits(m_ld.get(), buffer, buffer_size);
         /* Check if an ADIF header is present */
         if ((buffer[0] == 'A') && (buffer[1] == 'D') && (buffer[2] == 'I') && (buffer[3] == 'F')) {
             hDecoder->adif_header_present = 1;
-            get_adif_header(adif, ld);
-            faad_byte_align(ld);
-            hDecoder->sf_index = adif->pce[0].sf_index;
-            hDecoder->object_type = adif->pce[0].object_type + 1;
+            get_adif_header(m_adif.get(), m_ld.get());
+            faad_byte_align(m_ld.get());
+            hDecoder->sf_index = m_adif->pce[0].sf_index;
+            hDecoder->object_type = m_adif->pce[0].object_type + 1;
             *samplerate = get_sample_rate(hDecoder->sf_index);
-            *channels = adif->pce[0].channels;
-            memcpy(&(hDecoder->pce), &(adif->pce[0]), sizeof(program_config));
+            *channels = m_adif->pce[0].channels;
+            memcpy(&(hDecoder->pce), &(m_adif->pce[0]), sizeof(program_config));
             hDecoder->pce_set = 1;
-            bits = bit2byte(faad_get_processed_bits(ld));
+            bits = bit2byte(faad_get_processed_bits(m_ld.get()));
             /* Check if an ADTS header is present */
-        } else if (faad_showbits(ld, 12) == 0xfff) {
+        } else if (faad_showbits(m_ld.get(), 12) == 0xfff) {
             hDecoder->adts_header_present = 1;
-            adts->old_format = hDecoder->config.useOldADTSFormat;
-            adts_frame(adts, ld);
-            hDecoder->sf_index = adts->sf_index;
-            hDecoder->object_type = adts->profile + 1;
+            m_adts->old_format = hDecoder->config.useOldADTSFormat;
+            adts_frame(m_adts.get(), m_ld.get());
+            hDecoder->sf_index = m_adts->sf_index;
+            hDecoder->object_type = m_adts->profile + 1;
             *samplerate = get_sample_rate(hDecoder->sf_index);
-            *channels = (adts->channel_configuration > 6) ? 2 : adts->channel_configuration;
+            *channels = (m_adts->channel_configuration > 6) ? 2 : m_adts->channel_configuration;
         }
-        if (ld->error) {
-            faad_endbits(ld);
+        if (m_ld->error) {
+            faad_endbits(m_ld.get());
             ret = -1;
             goto exit;
         }
-        faad_endbits(ld);
+        faad_endbits(m_ld.get());
     }
     if (!*samplerate) {
         ret = -1;
@@ -571,9 +574,9 @@ int32_t xxx NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buf
     ret = bits;
     goto exit;
 exit:
-    faad_free(&ld);
-    faad_free(&adif);
-    faad_free(&adts);
+    m_ld.reset();
+    m_adif.reset();
+    m_adts.reset();
     return ret;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
