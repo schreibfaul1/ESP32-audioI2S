@@ -47,6 +47,7 @@ ps_ptr<complex_t> m_work2048;
 ps_ptr<drc_info>  m_drc_info;
 ps_ptr<fb_info>   m_fb;
 ps_ptr<uint8_t>   m_sample_buffer;
+ps_ptr<pred_state>m_pred_stat[MAX_CHANNELS];
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -432,7 +433,7 @@ NeAACDecHandle xxx NeAACDecOpen() {
         hDecoder->prev_fmd[i] = NULL;
 #endif
 #ifdef MAIN_DEC
-        hDecoder->pred_stat[i] = NULL;
+        m_pred_stat[i].reset();
 #endif
 #ifdef LTP_DEC
         hDecoder->ltp_lag[i] = 0;
@@ -686,7 +687,7 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
         if (hDecoder->prev_fmd[i]) faad_free(&hDecoder->prev_fmd[i]);
 #endif
 #ifdef MAIN_DEC
-        if (hDecoder->pred_stat[i]) faad_free(&hDecoder->pred_stat[i]);
+        if (m_pred_stat[i]) m_pred_stat[i].reset();
 #endif
 #ifdef LTP_DEC
         if (hDecoder->lt_pred_stat[i]) faad_free(&hDecoder->lt_pred_stat[i]);
@@ -6883,12 +6884,11 @@ uint8_t xxx allocate_single_channel(NeAACDecStruct* hDecoder, uint8_t channel, u
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* allocate the state only when needed */
-        if (hDecoder->pred_stat[channel] != NULL) {
-            faad_free(&hDecoder->pred_stat[channel]);
-            hDecoder->pred_stat[channel] = NULL;
+        if (m_pred_stat[channel].valid()) {
+            m_pred_stat[channel].reset();
         }
-        hDecoder->pred_stat[channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
-        reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
+        m_pred_stat->alloc(hDecoder->frameLength);
+        reset_all_predictors(m_pred_stat[channel].get(), hDecoder->frameLength);
     }
 #endif
 #ifdef LTP_DEC
@@ -6957,13 +6957,13 @@ uint8_t xxx allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t channel, uin
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* allocate the state only when needed */
-        if (hDecoder->pred_stat[channel] == NULL) {
-            hDecoder->pred_stat[channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
-            reset_all_predictors(hDecoder->pred_stat[channel], hDecoder->frameLength);
+        if (!m_pred_stat[channel].valid()) {
+            m_pred_stat[channel].alloc(hDecoder->frameLength);
+            reset_all_predictors(m_pred_stat[channel].get(), hDecoder->frameLength);
         }
-        if (hDecoder->pred_stat[paired_channel] == NULL) {
-            hDecoder->pred_stat[paired_channel] = (pred_state*)faad_malloc(hDecoder->frameLength * sizeof(pred_state));
-            reset_all_predictors(hDecoder->pred_stat[paired_channel], hDecoder->frameLength);
+        if (!m_pred_stat[paired_channel].valid()) {
+            m_pred_stat[paired_channel].alloc(hDecoder->frameLength);
+            reset_all_predictors(m_pred_stat[paired_channel].get(), hDecoder->frameLength);
         }
     }
 #endif
@@ -7094,17 +7094,17 @@ uint8_t xxx reconstruct_single_channel(NeAACDecStruct* hDecoder, ic_stream* ics,
 #ifdef MAIN_DEC
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
-        if (!hDecoder->pred_stat[sce->channel]) {
+        if (!m_pred_stat[sce->channel].valid()) {
             retval = 33;
             goto exit;
         } // return 33;
         /* intra channel prediction */
-        ic_prediction(ics, spec_coef, hDecoder->pred_stat[sce->channel], hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics, spec_coef, m_pred_stat[sce->channel].get(), hDecoder->frameLength, hDecoder->sf_index);
         /* In addition, for scalefactor bands coded by perceptual
            noise substitution the predictors belonging to the
            corresponding spectral coefficients are reset.
         */
-        pns_reset_pred_state(ics, hDecoder->pred_stat[sce->channel]);
+        pns_reset_pred_state(ics, m_pred_stat[sce->channel].get());
     }
 #endif
 #ifdef LTP_DEC
@@ -7260,14 +7260,14 @@ uint8_t xxx reconstruct_channel_pair(NeAACDecStruct* hDecoder, ic_stream* ics1, 
     /* MAIN object type prediction */
     if (hDecoder->object_type == MAIN) {
         /* intra channel prediction */
-        ic_prediction(ics1, spec_coef1, hDecoder->pred_stat[cpe->channel], hDecoder->frameLength, hDecoder->sf_index);
-        ic_prediction(ics2, spec_coef2, hDecoder->pred_stat[cpe->paired_channel], hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics1, spec_coef1, m_pred_stat[cpe->channel].get(), hDecoder->frameLength, hDecoder->sf_index);
+        ic_prediction(ics2, spec_coef2, m_pred_stat[cpe->paired_channel].get(), hDecoder->frameLength, hDecoder->sf_index);
         /* In addition, for scalefactor bands coded by perceptual
            noise substitution the predictors belonging to the
            corresponding spectral coefficients are reset.
         */
-        pns_reset_pred_state(ics1, hDecoder->pred_stat[cpe->channel]);
-        pns_reset_pred_state(ics2, hDecoder->pred_stat[cpe->paired_channel]);
+        pns_reset_pred_state(ics1, m_pred_stat[cpe->channel].get());
+        pns_reset_pred_state(ics2, m_pred_stat[cpe->paired_channel].get());
     }
 #endif
 #ifdef LTP_DEC
