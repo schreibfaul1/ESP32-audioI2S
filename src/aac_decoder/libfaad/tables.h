@@ -1251,7 +1251,7 @@ static const real_t  peak_decay = FRAC_CONST(0.76592833836465);
 static const real_t  smooth_coeff = FRAC_CONST(0.25);
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef DRM
+#if defined(DRM) || defined(PS_DEC)
 /* Please note that these are the same tables as in plain PS */
 static const complex_t Q_Fract_allpass_Qmf[][3] = {
     {{FRAC_CONST(0.7804303765), FRAC_CONST(0.6252426505)}, {FRAC_CONST(0.3826834261), FRAC_CONST(0.9238795042)}, {FRAC_CONST(0.8550928831), FRAC_CONST(0.5184748173)}},

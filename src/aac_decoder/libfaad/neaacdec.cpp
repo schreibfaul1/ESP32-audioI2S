@@ -46,6 +46,7 @@ ps_ptr<complex_t> m_work1024;
 ps_ptr<complex_t> m_work2048;
 ps_ptr<drc_info>  m_drc_info;
 ps_ptr<fb_info>   m_fb;
+ps_ptr<uint8_t>   m_sample_buffer;
 
 #define xxx
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -418,7 +419,7 @@ NeAACDecHandle xxx NeAACDecOpen() {
 #endif
     hDecoder->frameLength = 1024;
     hDecoder->frame = 0;
-    hDecoder->sample_buffer = NULL;
+    m_sample_buffer.reset();
     hDecoder->__r1 = 1;
     hDecoder->__r2 = 1;
     for (i = 0; i < MAX_CHANNELS; i++) {
@@ -698,7 +699,7 @@ void xxx NeAACDecClose(NeAACDecHandle hpDecoder) {
 #endif
         filter_bank_end();
     m_drc_info.reset();
-    if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
+    if (m_sample_buffer.valid()) m_sample_buffer.reset();
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
         if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i]);
@@ -1091,7 +1092,7 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
         return NULL;
     }
     /* allocate the buffer for the final samples */
-    if ((hDecoder->sample_buffer == NULL) || (hDecoder->alloced_channels != output_channels)) {
+    if ((!m_sample_buffer.valid()) || (hDecoder->alloced_channels != output_channels)) {
         const uint8_t str[] = {sizeof(int16_t), sizeof(int32_t), sizeof(int32_t), sizeof(float), sizeof(double), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), sizeof(int16_t), 0, 0, 0};
         uint8_t       stride = str[hDecoder->config.outputFormat - 1];
 #ifdef SBR_DEC
@@ -1099,9 +1100,8 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
 #endif
         /* check if we want to use internal sample_buffer */
         if (sample_buffer_size == 0) {
-            if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
-            hDecoder->sample_buffer = NULL;
-            hDecoder->sample_buffer = faad_malloc(frame_len * output_channels * stride);
+            if (m_sample_buffer.valid()) m_sample_buffer.reset();
+            m_sample_buffer.alloc(frame_len * output_channels * stride);
         } else if (sample_buffer_size < frame_len * output_channels * stride) {
             /* provided sample buffer is not big enough */
             hInfo->error = 27;
@@ -1110,7 +1110,7 @@ void* xxx aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, u
         hDecoder->alloced_channels = output_channels;
     }
     if (sample_buffer_size == 0) {
-        sample_buffer = hDecoder->sample_buffer;
+        sample_buffer = m_sample_buffer.get();
     } else {
         sample_buffer = *sample_buffer2;
     }
