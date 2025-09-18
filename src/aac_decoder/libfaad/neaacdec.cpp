@@ -398,7 +398,7 @@ uint32_t xxx NeAACDecGetCapabilities(void) {
     return cap;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-NeAACDecHandle xxx NeAACDecOpen(void) {
+NeAACDecHandle xxx NeAACDecOpen() {
     uint8_t         i;
     NeAACDecStruct* hDecoder = NULL;
     if ((hDecoder = (NeAACDecStruct*)faad_calloc(1, sizeof(NeAACDecStruct))) == NULL) return NULL;
@@ -639,7 +639,7 @@ char xxx NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, uint8_t
     NeAACDecStruct** hDecoder = (NeAACDecStruct**)hpDecoder;
     if (hDecoder == NULL) return 1; /* error */
     NeAACDecClose(*hDecoder);
-    *hDecoder = NeAACDecOpen();
+    *hpDecoder = NeAACDecOpen();
     /* Special object type defined for DRM */
     (*hDecoder)->config.defObjectType = DRM_ER_LC;
     (*hDecoder)->config.defSampleRate = samplerate;
@@ -661,7 +661,7 @@ char xxx NeAACDecInitDRM(NeAACDecHandle* hpDecoder, uint32_t samplerate, uint8_t
     else
         (*hDecoder)->sbr_present_flag = 1;
     #endif
-    (*hDecoder)->fb = filter_bank_init((*hDecoder)->frameLength);
+    filter_bank_init((*hDecoder)->frameLength);
     return 0;
 }
 #endif
@@ -2404,7 +2404,7 @@ void xxx drm_ps_pan_element(drm_ps_info* ps, bitfile* ld) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* binary search huffman decoding */
-int8_txxx huff_dec(bitfile* ld, drm_ps_huff_tab huff) {
+int8_t xxx huff_dec(bitfile* ld, drm_ps_huff_tab huff) {
     uint8_t bit;
     int16_t index = 0;
     while (index >= 0) {
@@ -11717,7 +11717,7 @@ uint8_t xxx sbr_process_channel(sbr_info* sbr, real_t* channel_buf, qmf_t X[MAX_
     real_t  deg[64];
     #ifdef DRM
     if (sbr->Is_DRM_SBR) {
-        sbr->bsco = max((int32_t)sbr->maxAACLine * 32 / (int32_t)sbr->frame_len - (int32_t)sbr->kx, 0);
+        sbr->bsco = max((int32_t)sbr->maxAACLine * 32 / (int32_t)sbr->frame_len - (int32_t)sbr->kx, (int32_t)0);
     } else {
     #endif
         sbr->bsco = 0;
