@@ -5219,12 +5219,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             break;
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
                             break;
-        case CODEC_AAC:     m_validSamples = AACGetOutputSamps() / getChannels();
-                            if(!m_sbyt.isPS && AACGetParametricStereo()){ // only change 0 -> 1
-                                m_sbyt.isPS = 1;
-                                info(*this, evt_info, "Parametric Stereo");
-                            }
-                            else m_sbyt.isPS = AACGetParametricStereo();
+        case CODEC_AAC:     m_validSamples = m_decoder->getOutputSamples() / getChannels();
                             break;
         case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
                             break;
