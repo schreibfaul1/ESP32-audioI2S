@@ -238,7 +238,8 @@ std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
     }
     if (type == "flac") return std::make_unique<FlacDecoder>(*this);
     if (type == "opus")  return std::make_unique<OpusDecoder>(*this);
-    // hier AAC, Vorbis, Opus ergänzen …
+    if (type == "aac")  return std::make_unique<AACDecoder>(*this);
+    // hier Vorbis, Opus ergänzen …
     return nullptr;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -278,7 +279,7 @@ void Audio::setDefaults() {
     InBuff.resetBuffer();
     MP3Decoder_FreeBuffers();
     // m_decoder->reset(); // flac
-    AACDecoder_FreeBuffers();
+    // AACDecoder_FreeBuffers();
     // OPUSDecoder_FreeBuffers();
     VORBISDecoder_FreeBuffers();
     m_outBuff.clear(); // Clear OutputBuffer
@@ -2901,8 +2902,8 @@ uint32_t Audio::stopSong() {
         }
         memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
         if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
-        if(m_codec == CODEC_AAC) AACDecoder_FreeBuffers();
-        if(m_codec == CODEC_M4A) AACDecoder_FreeBuffers();
+        if(m_codec == CODEC_AAC) m_decoder->reset();
+        if(m_codec == CODEC_M4A) m_decoder->reset();
         if(m_codec == CODEC_FLAC) m_decoder->reset();
         if(m_codec == CODEC_OPUS) m_decoder->reset();
         if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
@@ -4612,24 +4613,16 @@ bool Audio::initializeDecoder(uint8_t codec) {
             }
             break;
         case CODEC_AAC:
-            if(!AACDecoder_IsInit()) {
-                if(!AACDecoder_AllocateBuffers()) {
-                    AUDIO_LOG_ERROR("The AACDecoder could not be initialized");
-                    goto exit;
-                }
-                info(*this, evt_info, "AACDecoder has been initialized");
-                InBuff.changeMaxBlockSize(m_frameSizeAAC);
-            }
+            m_decoder = createDecoder("aac");
+            if (!m_decoder || !m_decoder->init()) {AUDIO_LOG_ERROR("The AACDecoder could not be initialized"); goto exit;}
+            InBuff.changeMaxBlockSize(m_frameSizeAAC);
+            info(*this, evt_info, "AACDecoder has been initialized");
             break;
         case CODEC_M4A:
-            if(!AACDecoder_IsInit()) {
-                if(!AACDecoder_AllocateBuffers()) {
-                    AUDIO_LOG_ERROR("The AACDecoder could not be initialized");
-                    goto exit;
-                }
-                info(*this, evt_info, "AACDecoder has been initialized");
-                InBuff.changeMaxBlockSize(m_frameSizeAAC);
-            }
+            m_decoder = createDecoder("aac");
+            if (!m_decoder || !m_decoder->init()) {AUDIO_LOG_ERROR("The AACDecoder could not be initialized"); goto exit;}
+            InBuff.changeMaxBlockSize(m_frameSizeAAC);
+            info(*this, evt_info, "AACDecoder has been initialized");
             break;
         case CODEC_FLAC:
             m_decoder = createDecoder("flac");
@@ -4971,12 +4964,8 @@ void Audio::showCodecParams() {
     // else { info(*this, evt_info, "BitRate (b/s): N/A"); }
 
     if(m_codec == CODEC_AAC) {
-        uint8_t answ = AACGetFormat();
-        if(answ < 3) {
-            const char hf[4][8] = {"unknown", "ADIF", "ADTS"};
-            info(*this, evt_info, "AAC HeaderFormat: %s", hf[answ]);
-        }
-        answ = AACGetSBR();
+        info(*this, evt_info, m_decoder->arg2()); // AAC Format
+        uint8_t answ = m_decoder->val2(); // SBR
         if(answ > 0 && answ < 4) {
             const char sbr[4][50] = {"without SBR", "upsampled SBR", "downsampled SBR", "no SBR used, but file is upsampled by a factor 2"};
             info(*this, evt_info, "Spectral band replication: %s", sbr[answ]);
@@ -5003,12 +4992,12 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         if(m_fnsy.nextSync == -1) return len; // syncword not found, search next block
         MP3Decoder_ClearBuffer();
     }
-    if(m_codec == CODEC_AAC) { m_fnsy.nextSync = AACFindSyncWord(data, len); }
+    if(m_codec == CODEC_AAC) { m_fnsy.nextSync = m_decoder->findSyncWord(data, (int32_t)len);}
     if(m_codec == CODEC_M4A) {
         if(!m_M4A_chConfig)m_M4A_chConfig = 2; // guard
         if(!m_M4A_sampleRate)m_M4A_sampleRate = 44100;
         if(!m_M4A_objectType)m_M4A_objectType = 2;
-        AACSetRawBlockParams(m_M4A_chConfig, m_M4A_sampleRate, m_M4A_objectType);
+        m_decoder->setRawBlockParams(m_M4A_chConfig, m_M4A_sampleRate, 0, m_M4A_objectType, 0);
         m_f_playing = true;
         m_fnsy.nextSync = 0;
     }
@@ -5053,10 +5042,9 @@ void Audio::setDecoderItems() {
         info(*this, evt_info, "%s %s", MP3GetMPEGVersion(), MP3GetLayer());
     }
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
-        setChannels(AACGetChannels());
-        setSampleRate(AACGetSampRate());
-        setBitsPerSample(AACGetBitsPerSample());
-    //    setBitrate(AACGetBitrate());
+        setChannels(m_decoder->getChannels());
+        setSampleRate(m_decoder->getSampleRate());
+        setBitsPerSample(m_decoder->getBitsPerSample());
     }
     if(m_codec == CODEC_FLAC) {
         setChannels(m_decoder->getChannels());
@@ -5128,10 +5116,11 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded){
                     info(*this, evt_info, "AAC channel config changed to %d", m_sbyt.channels);
                 }
             }
-            AACDecoder_FreeBuffers();
-            AACDecoder_AllocateBuffers();
+            m_decoder->reset();
+            m_decoder->init();
             return 0;
         }
+        if(m_codec == CODEC_AAC) AUDIO_LOG_ERROR("%s", m_decoder->getErrorMessage(res));
         m_f_playing = false; // seek for new syncword
         if(bytesDecoded == 0) return 1; // skip one byte and seek for the next sync word
         return bytesDecoded;
@@ -5172,8 +5161,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     switch(m_codec) {
         case CODEC_WAV:    res = 0; m_sbyt.bytesLeft = 0; break;
         case CODEC_MP3:    res = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_AAC:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_M4A:    res = AACDecode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_AAC:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_M4A:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_FLAC:   res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_OPUS:   res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_VORBIS: res = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
@@ -5220,8 +5209,13 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
                             break;
         case CODEC_AAC:     m_validSamples = m_decoder->getOutputSamples() / getChannels();
+                            if(!m_sbyt.isPS && m_decoder->val1()){ // only change 0 -> 1
+                                m_sbyt.isPS = 1;
+                                info(*this, evt_info, "Parametric Stereo");
+                            }
+                            else m_sbyt.isPS = m_decoder->val1();
                             break;
-        case CODEC_M4A:     m_validSamples = AACGetOutputSamps() / getChannels();
+        case CODEC_M4A:     m_validSamples = m_decoder->getOutputSamples() / getChannels();
                             break;
         case CODEC_FLAC:    m_validSamples = m_decoder->getOutputSamples();
                             st = m_decoder->getStreamTitle();

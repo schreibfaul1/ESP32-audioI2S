@@ -47,11 +47,14 @@ public:
     uint32_t         getAudioDataStart() override;
     uint32_t         getAudioFileDuration() override;
     const char*      getStreamTitle() override;
+    const char*      getErrorMessage(int8_t err) override;
     int32_t          decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
     void             setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
     const char*      arg1() override;
     const char*      arg2() override;
+    virtual int32_t  val1() override;
+    virtual int32_t  val2() override;
 
     enum : int8_t  {FLAC_PARSE_OGG_DONE = 100,
                     FLAC_DECODE_FRAMES_LOOP = 100,
