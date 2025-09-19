@@ -1,7 +1,7 @@
 
 #pragma once
-//#pragma GCC optimize ("O3")
-//#pragma GCC diagnostic ignored "-Wnarrowing"
+// #pragma GCC optimize ("O3")
+// #pragma GCC diagnostic ignored "-Wnarrowing"
 
 /********************************************************************
  *                                                                  *
@@ -23,13 +23,157 @@
  *  Updated on: 19.06.2025
  */
 
+#include "../psram_unique_ptr.hpp"
+#include "Arduino.h"
 #include "Audio.h"
 
-using namespace std;
-#define VI_FLOORB       2
-#define VIF_POSIT      63
+    typedef struct _codebook {
+        uint8_t          dim;          /* codebook dimensions (elements per vector) */
+        int16_t          entries;      /* codebook entries */
+        uint16_t         used_entries; /* populated codebook entries */
+        uint32_t         dec_maxlength;
+        ps_ptr<uint16_t> dec_table;
+        uint32_t         dec_nodeb;
+        uint32_t         dec_leafw;
+        uint32_t         dec_type; /* 0 = entry number
+                                      1 = packed vector of values
+                                      2 = packed vector of column offsets, maptype 1
+                                      3 = scalar offset into value array,  maptype 2  */
+        int32_t          q_min;
+        int32_t          q_minp;
+        int32_t          q_del;
+        int32_t          q_delp;
+        int32_t          q_seq;
+        int32_t          q_bits;
+        uint8_t          q_pack;
+        ps_ptr<uint16_t> q_val;
+    } codebook_t;
 
-#define LSP_FRACBITS   14
+    typedef struct {
+        char    class_dim;        /* 1 to 8 */
+        char    class_subs;       /* 0,1,2,3 (bits: 1<<n poss) */
+        uint8_t class_book;       /* subs ^ dim entries */
+        uint8_t class_subbook[8]; /* [VIF_CLASS][subs] */
+    } floor1class_t;
+
+    typedef struct _vorbis_info_floor {
+        int32_t               order;
+        int32_t               rate;
+        int32_t               barkmap;
+        int32_t               ampbits;
+        int32_t               ampdB;
+        int32_t               numbooks; /* <= 16 */
+        char                  books[16];
+        ps_ptr<floor1class_t> _class;         /* [VIF_CLASS] */
+        ps_ptr<uint8_t>       partitionclass; /* [VIF_PARTS]; 0 to 15 */
+        ps_ptr<uint16_t>      postlist;       /* [VIF_POSIT+2]; first two implicit */
+        ps_ptr<uint8_t>       forward_index;  /* [VIF_POSIT+2]; */
+        ps_ptr<uint8_t>       hineighbor;     /* [VIF_POSIT]; */
+        ps_ptr<uint8_t>       loneighbor;     /* [VIF_POSIT]; */
+        int32_t               partitions;     /* 0 to 31 */
+        int32_t               posts;
+        int32_t               mult; /* 1 2 3 or 4 */
+    } vorbis_info_floor_t;
+
+    typedef struct _vorbis_info_residue {
+        int32_t         type;
+        ps_ptr<uint8_t> stagemasks;
+        ps_ptr<uint8_t> stagebooks;
+        /* block-partitioned VQ coded straight residue */
+        uint32_t begin;
+        uint32_t end;
+        /* first stage (lossless partitioning) */
+        uint32_t grouping;   /* group n vectors per partition */
+        char     partitions; /* possible codebooks for a partition */
+        uint8_t  groupbook;  /* huffbook for partitioning */
+        char     stages;
+    } vorbis_info_residue_t;
+
+    typedef struct _submap {
+        char floor;
+        char residue;
+    } submap_t;
+
+    typedef struct _coupling_step { // Mapping backend generic
+        uint8_t mag;
+        uint8_t ang;
+    } coupling_step_t;
+
+    typedef struct _vorbis_info_mapping {
+        int32_t                 submaps;
+        ps_ptr<uint8_t>         chmuxlist;
+        ps_ptr<submap_t>        submaplist;
+        int32_t                 coupling_steps;
+        ps_ptr<coupling_step_t> coupling;
+    } vorbis_info_mapping_t;
+
+    typedef struct { // mode
+        uint8_t blockflag;
+        uint8_t mapping;
+    } vorbis_info_mode_t;
+
+    typedef struct _vorbis_dsp_state { // vorbis_dsp_state buffers the current vorbis audio analysis/synthesis state.
+        ps_ptr<ps_ptr<int32_t>> work;
+        ps_ptr<ps_ptr<int32_t>> mdctright;
+        int32_t                 lW = 0; // last window
+        int32_t                 W = 0;  // window
+        int32_t                 out_begin = -1;
+        int32_t                 out_end = -1;
+    } vorbis_dsp_state_t;
+
+    typedef struct _bitreader {
+        uint8_t* data;
+        uint8_t  length;
+        uint16_t headbit;
+        uint8_t* headptr;
+        int32_t  headend;
+    } bitReader_t;
+
+    union magic {
+        struct {
+            int32_t lo;
+            int32_t hi;
+        } halves;
+        int64_t whole;
+    };
+
+
+class VorbisDecoder : public Decoder {
+
+  public:
+    VorbisDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
+    ~VorbisDecoder() { reset(); }
+    bool                  init() override;
+    void                  clear() override;
+    void                  reset() override;
+    bool                  isValid() override;
+    int32_t               findSyncWord(uint8_t* buf, int32_t nBytes) override;
+    uint8_t               getChannels() override;
+    uint32_t              getSampleRate() override;
+    uint32_t              getOutputSamples();
+    uint8_t               getBitsPerSample() override;
+    uint32_t              getBitRate() override;
+    uint32_t              getAudioDataStart() override;
+    uint32_t              getAudioFileDuration() override;
+    const char*           getStreamTitle() override;
+    const char*           getErrorMessage(int8_t err) override;
+    int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
+    void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
+    std::vector<uint32_t> getMetadataBlockPicture() override;
+    const char*           arg1() override;
+    const char*           arg2() override;
+    virtual int32_t       val1() override;
+    virtual int32_t       val2() override;
+
+    enum : int8_t { VORBIS_CONTINUE = 110, VORBIS_PARSE_OGG_DONE = 100, VORBIS_NONE = 0, VORBIS_ERR = -1 };
+
+  private:
+    Audio& audio;
+
+#define VI_FLOORB 2
+#define VIF_POSIT 63
+
+#define LSP_FRACBITS 14
 
 #define OV_EREAD      -128
 #define OV_EFAULT     -129
@@ -53,331 +197,190 @@ using namespace std;
 #define cPI2_8 (0x5a82799a)
 #define cPI1_8 (0x7641af3d)
 
-enum : int8_t  {VORBIS_CONTINUE = 110,
-                VORBIS_PARSE_OGG_DONE = 100,
-                VORBIS_NONE = 0,
-                VORBIS_ERR = -1
-                // ERR_VORBIS_CHANNELS_OUT_OF_RANGE = -1,
-                // ERR_VORBIS_INVALID_SAMPLERATE = -2,
-                // ERR_VORBIS_EXTRA_CHANNELS_UNSUPPORTED = -3,
-                // ERR_VORBIS_DECODER_ASYNC = -4,
-                // ERR_VORBIS_OGG_SYNC_NOT_FOUND = - 5,
-                // ERR_VORBIS_BAD_HEADER = -6,
-                // ERR_VORBIS_NOT_AUDIO = -7,
-                // ERR_VORBIS_BAD_PACKET = -8
-            };
-
-typedef struct _codebook{
-    uint8_t  dim;          /* codebook dimensions (elements per vector) */
-    int16_t  entries;      /* codebook entries */
-    uint16_t used_entries; /* populated codebook entries */
-    uint32_t dec_maxlength;
-    ps_ptr<uint16_t>  dec_table;
-    uint32_t dec_nodeb;
-    uint32_t dec_leafw;
-    uint32_t dec_type; /* 0 = entry number
-                          1 = packed vector of values
-                          2 = packed vector of column offsets, maptype 1
-                          3 = scalar offset into value array,  maptype 2  */
-    int32_t     q_min;
-    int32_t     q_minp;
-    int32_t     q_del;
-    int32_t     q_delp;
-    int32_t     q_seq;
-    int32_t     q_bits;
-    uint8_t     q_pack;
-    ps_ptr<uint16_t> q_val;
-} codebook_t;
-
-typedef struct{
-    char           class_dim;        /* 1 to 8 */
-    char           class_subs;       /* 0,1,2,3 (bits: 1<<n poss) */
-    uint8_t        class_book;       /* subs ^ dim entries */
-    uint8_t        class_subbook[8]; /* [VIF_CLASS][subs] */
-} floor1class_t;
-
-typedef struct{
-    int32_t        order;
-    int32_t        rate;
-    int32_t        barkmap;
-    int32_t        ampbits;
-    int32_t        ampdB;
-    int32_t        numbooks; /* <= 16 */
-    char           books[16];
-    ps_ptr<floor1class_t> _class;         /* [VIF_CLASS] */
-    ps_ptr<uint8_t>       partitionclass; /* [VIF_PARTS]; 0 to 15 */
-    ps_ptr<uint16_t>      postlist;       /* [VIF_POSIT+2]; first two implicit */
-    ps_ptr<uint8_t>       forward_index;  /* [VIF_POSIT+2]; */
-    ps_ptr<uint8_t>       hineighbor;     /* [VIF_POSIT]; */
-    ps_ptr<uint8_t>       loneighbor;     /* [VIF_POSIT]; */
-    int32_t        partitions;     /* 0 to 31 */
-    int32_t        posts;
-    int32_t        mult;           /* 1 2 3 or 4 */
-} vorbis_info_floor_t;
-
-typedef struct _vorbis_info_residue {
-    int32_t         type;
-    ps_ptr<uint8_t> stagemasks;
-    ps_ptr<uint8_t> stagebooks;
-    /* block-partitioned VQ coded straight residue */
-    uint32_t        begin;
-    uint32_t        end;
-    /* first stage (lossless partitioning) */
-    uint32_t        grouping;   /* group n vectors per partition */
-    char            partitions; /* possible codebooks for a partition */
-    uint8_t         groupbook;  /* huffbook for partitioning */
-    char            stages;
-} vorbis_info_residue_t;
-
-typedef struct _submap{
-    char floor;
-    char residue;
-} submap_t;
-
-typedef struct _coupling_step{  // Mapping backend generic
-    uint8_t mag;
-    uint8_t ang;
-} coupling_step_t;
-
-typedef struct _vorbis_info_mapping{
-    int32_t                 submaps;
-    ps_ptr<uint8_t>         chmuxlist;
-    ps_ptr<submap_t>        submaplist;
-    int32_t                 coupling_steps;
-    ps_ptr<coupling_step_t> coupling;
-} vorbis_info_mapping_t;
-
-typedef struct {  // mode
-    uint8_t blockflag;
-    uint8_t mapping;
-} vorbis_info_mode_t;
-
-typedef struct _vorbis_dsp_state{  // vorbis_dsp_state buffers the current vorbis audio analysis/synthesis state.
-    ps_ptr<ps_ptr<int32_t>> work;
-    ps_ptr<ps_ptr<int32_t>> mdctright;
-    int32_t    lW = 0; // last window
-    int32_t    W = 0;  // window
-    int32_t    out_begin = -1;
-    int32_t    out_end = -1;
-} vorbis_dsp_state_t;
-
-typedef struct _bitreader{
-    uint8_t   *data;
-    uint8_t    length;
-    uint16_t   headbit;
-    uint8_t   *headptr;
-    int32_t    headend;
-} bitReader_t;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-union magic{
-    struct{
-        int32_t lo;
-        int32_t hi;
-    } halves;
-    int64_t whole;
-};
-
-inline int32_t MULT32(int32_t x, int32_t y) {
-    union magic magic;
-    magic.whole = (int64_t)x * y;
-    return magic.halves.hi;
-}
-
-inline int32_t MULT31_SHIFT15(int32_t x, int32_t y) {
-    union magic magic;
-    magic.whole = (int64_t)x * y;
-    return ((uint32_t)(magic.halves.lo) >> 15) | ((magic.halves.hi) << 17);
-}
-
-inline int32_t MULT31(int32_t x, int32_t y) { return MULT32(x, y) << 1; }
-
-inline void XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t *x, int32_t *y) {
-    *x = MULT31(a, t) + MULT31(b, v);
-    *y = MULT31(b, t) - MULT31(a, v);
-}
-
-inline void XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t *x, int32_t *y) {
-    *x = MULT31(a, t) - MULT31(b, v);
-    *y = MULT31(b, t) + MULT31(a, v);
-}
-
-inline int32_t CLIP_TO_15(int32_t x) {
-    int32_t ret = x;
-    ret -= ((x <= 32767) - 1) & (x - 32767);
-    ret -= ((x >= -32768) - 1) & (x + 32768);
-    return (ret);
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-
-// ogg impl
-bool                  VORBISDecoder_AllocateBuffers();
-void                  VORBISDecoder_FreeBuffers();
-void                  VORBISDecoder_ClearBuffers();
-void                  VORBISsetDefaults();
-void                  clearGlobalConfigurations();
-int32_t               VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf);
-uint8_t               VORBISGetChannels();
-uint32_t              VORBISGetSampRate();
-uint32_t              VORBISGetAudioDataStart();
-uint8_t               VORBISGetBitsPerSample();
-uint32_t              VORBISGetBitRate();
-uint16_t              VORBISGetOutputSamps();
-char*                 VORBISgetStreamTitle();
-vector<uint32_t>      VORBISgetMetadataBlockPicture();
-int32_t               VORBISFindSyncWord(unsigned char* buf, int32_t nBytes);
-int32_t               VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft);
-int32_t               vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
-int32_t               vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
-int32_t               vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
-int32_t               vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf);
-int32_t               parseVorbisComment(uint8_t* inbuf, int16_t nBytes);
-int32_t               parseVorbisCodebook();
-int32_t               parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
-uint16_t              continuedOggPackets(uint8_t* inbuf);
-int32_t               vorbis_book_unpack(codebook_t* s);
-uint32_t              decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype);
-int32_t               oggpack_eop();
-ps_ptr<vorbis_info_floor_t> floor0_info_unpack();
-ps_ptr<vorbis_info_floor_t> floor1_info_unpack();
-void                  vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n);
-int32_t               res_unpack(vorbis_info_residue_t* info);
-int32_t               mapping_info_unpack(vorbis_info_mapping_t* info);
-
-// vorbis decoder impl
-int32_t               vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
-ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
-void                  vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t> &v);
-void                  vorbis_book_clear(ps_ptr<codebook_t> &v);
-void                  mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
-int32_t               mapping_inverse(vorbis_info_mapping_t* info);
-int32_t               floor0_memosize(ps_ptr<vorbis_info_floor_t>& i);
-int32_t               floor1_memosize(ps_ptr<vorbis_info_floor_t>& i);
-int32_t*              floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp);
-int32_t*              floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value);
-int32_t               vorbis_book_decode(codebook_t* book);
-int32_t               decode_packed_entry_number(codebook_t* book);
-int32_t               render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x);
-int32_t               vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point);
-int32_t               decode_map(codebook_t* s, int32_t* v, int32_t point);
-int32_t               res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch);
-int32_t               vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
-int32_t               vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
-int32_t               floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out);
-int32_t               floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out);
-void                  render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d);
-void                  vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp, int32_t m, int32_t amp, int32_t ampoffset, int32_t nyq);
-int32_t               toBARK(int32_t n);
-int32_t               vorbis_coslook_i(int32_t a);
-int32_t               vorbis_coslook2_i(int32_t a);
-int32_t               vorbis_fromdBlook_i(int32_t a);
-int32_t               vorbis_invsqlook_i(int32_t a, int32_t e);
-void                  mdct_backward(int32_t n, int32_t* in);
-void                  presymmetry(int32_t* in, int32_t n2, int32_t step);
-void                  mdct_butterflies(int32_t* x, int32_t points, int32_t shift);
-void                  mdct_butterfly_generic(int32_t* x, int32_t points, int32_t step);
-void                  mdct_butterfly_32(int32_t* x);
-void                  mdct_butterfly_16(int32_t* x);
-void                  mdct_butterfly_8(int32_t* x);
-void                  mdct_bitreverse(int32_t* x, int32_t n, int32_t shift);
-int32_t               bitrev12(int32_t x);
-void                  mdct_step7(int32_t* x, int32_t n, int32_t step);
-void                  mdct_step8(int32_t* x, int32_t n, int32_t step);
-int32_t               vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point);
-int32_t               vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize);
-void                  mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, int16_t* out, int32_t step, int32_t start, /* samples, this frame */
-                                int32_t end /* samples, this frame */);
-
-// some helper functions
-int32_t  VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
-void     bitReader_clear();
-void     bitReader_setData(uint8_t *buff, uint16_t buffSize);
-int32_t  bitReader(uint16_t bits);
-int32_t  bitReader_look(uint16_t nBits);
-int8_t   bitReader_adv(uint16_t bits);
-uint8_t  _ilog(uint32_t v);
-int32_t  ilog(uint32_t v);
-int32_t  _float32_unpack(int32_t val, int32_t *point);
-int32_t  _determine_node_bytes(uint32_t used, uint8_t leafwidth);
-int32_t  _determine_leaf_words(int32_t nodeb, int32_t leafwidth);
-int32_t  _make_decode_table(codebook_t *s, char *lengthlist, uint8_t quantvals, int32_t maptype);
-int32_t  _make_words(char *l, uint16_t n, uint32_t *r, uint8_t quantvals, codebook_t *b, int32_t maptype);
-uint8_t  _book_maptype1_quantvals(codebook_t *b);
-int32_t *_vorbis_window(int32_t left);
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  L O G G I N G   📌📌📌
-extern __attribute__((weak)) bool audio_info(const char*);
+    const uint32_t mask[33] = {0x00000000, 0x00000001, 0x00000003, 0x00000007, 0x0000000f, 0x0000001f, 0x0000003f, 0x0000007f, 0x000000ff, 0x000001ff, 0x000003ff,
+                               0x000007ff, 0x00000fff, 0x00001fff, 0x00003fff, 0x00007fff, 0x0000ffff, 0x0001ffff, 0x0003ffff, 0x0007ffff, 0x000fffff, 0x001fffff,
+                               0x003fffff, 0x007fffff, 0x00ffffff, 0x01ffffff, 0x03ffffff, 0x07ffffff, 0x0fffffff, 0x1fffffff, 0x3fffffff, 0x7fffffff, 0xffffffff};
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    const uint16_t barklook[54] = {0,    51,   102,  154,  206,  258,  311,  365,  420,  477,   535,   594,   656,   719,   785,   854,   926,   1002,
+                                   1082, 1166, 1256, 1352, 1454, 1564, 1683, 1812, 1953, 2107,  2276,  2463,  2670,  2900,  3155,  3440,  3756,  4106,
+                                   4493, 4919, 5387, 5901, 6466, 7094, 7798, 8599, 9528, 10623, 11935, 13524, 15453, 17775, 20517, 23667, 27183, 31004};
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    const uint8_t MLOOP_1[64] = {
+        0,  10, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+    };
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    const uint8_t MLOOP_2[64] = {
+        0, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+    };
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    const uint8_t MLOOP_3[8] = {0, 1, 2, 2, 3, 3, 3, 3};
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    /* interpolated 1./sqrt(p) where .5 <= a < 1. (.100000... to .111111...) in 16.16 format returns in m.8 format */
+    int32_t ADJUST_SQRT2[2] = {8192, 5792};
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // global vars
+    bool     m_f_vorbisNewSteamTitle = false; // streamTitle
+    bool     m_f_vorbisNewMetadataBlockPicture = false;
+    bool     m_f_oggFirstPage = false;
+    bool     m_f_oggContinuedPage = false;
+    bool     m_f_oggLastPage = false;
+    bool     m_f_parseOggDone = true;
+    bool     m_f_lastSegmentTable = false;
+    bool     m_f_vorbisStr_found = false;
+    bool     m_f_isValid = false;
+    uint16_t m_identificatonHeaderLength = 0;
+    uint16_t m_vorbisCommentHeaderLength = 0;
+    uint16_t m_setupHeaderLength = 0;
+    uint8_t  m_pageNr = 0;
+    uint16_t m_oggHeaderSize = 0;
+    uint8_t  m_vorbisChannels = 0;
+    uint16_t m_vorbisSamplerate = 0;
+    uint16_t m_lastSegmentTableLen = 0;
 
-template <typename... Args>
-void VORBIS_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
-    #define ANSI_ESC_RESET          "\033[0m"
-    #define ANSI_ESC_BLACK          "\033[30m"
-    #define ANSI_ESC_RED            "\033[31m"
-    #define ANSI_ESC_GREEN          "\033[32m"
-    #define ANSI_ESC_YELLOW         "\033[33m"
-    #define ANSI_ESC_BLUE           "\033[34m"
-    #define ANSI_ESC_MAGENTA        "\033[35m"
-    #define ANSI_ESC_CYAN           "\033[36m"
-    #define ANSI_ESC_WHITE          "\033[37m"
+    uint32_t m_vorbisBitRate = 0;
+    uint32_t m_vorbisSegmentLength = 0;
+    uint32_t m_vorbisBlockPicLenUntilFrameEnd = 0;
+    uint32_t m_vorbisCurrentFilePos = 0;
+    uint32_t m_vorbisAudioDataStart = 0;
 
-    ps_ptr<char> result("result");
-    ps_ptr<char> file;
-    bool res = false;
+    int32_t  m_vorbisValidSamples = 0;
+    int32_t  m_commentBlockSegmentSize = 0;
+    uint8_t  m_vorbisOldMode = 0;
+    uint32_t m_blocksizes[2];
+    uint32_t m_vorbisBlockPicPos = 0;
+    uint32_t m_vorbisBlockPicLen = 0;
+    int32_t  m_vorbisRemainBlockPicLen = 0;
+    int32_t  m_commentLength = 0;
 
-    file.copy_from(path);
-    while(file.contains("/")){
-        file.remove_before('/', false);
-    }
+    uint8_t m_nrOfCodebooks = 0;
+    uint8_t m_nrOfFloors = 0;
+    uint8_t m_nrOfResidues = 0;
+    uint8_t m_nrOfMaps = 0;
+    uint8_t m_nrOfModes = 0;
 
-    // First run: determine size
-    int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-    if (len <= 0) return;
+    uint16_t m_oggPage3Len = 0; // length of the current audio segment
+    uint8_t  m_vorbisSegmentTableSize = 0;
+    int16_t  m_vorbisSegmentTableRdPtr = -1;
+    int8_t   m_vorbisError = 0;
+    float    m_vorbisCompressionRatio = 0;
 
-    result.alloc(len + 1);
-    char* dst = result.get();
-    if (!dst) return;
-    std::snprintf(dst, len + 1, fmt, std::forward<Args>(args)...);
+    bitReader_t m_bitReader;
 
-    // build a final string with file/line prefix
-    ps_ptr<char> final;
-    int total_len = std::snprintf(nullptr, 0, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    if (total_len <= 0) return;
-    final.calloc(total_len + 1, "final");
-    final.clear();
-    char* dest = final.get();
-    if (!dest) return;  // Or error treatment
+    ps_ptr<char>                        m_vorbisChbuf;
+    ps_ptr<uint8_t>                     m_lastSegmentTable;
+    ps_ptr<uint16_t>                    m_vorbisSegmentTable;
+    ps_ptr<codebook_t>                  m_codebooks;
+    ps_ptr<ps_ptr<vorbis_info_floor_t>> m_floor_param;
+    ps_ptr<int8_t>                      m_floor_type;
+    ps_ptr<vorbis_info_residue_t>       m_residue_param;
+    ps_ptr<vorbis_info_mapping_t>       m_map_param;
+    ps_ptr<vorbis_info_mode_t>          m_mode_param;
+    ps_ptr<vorbis_dsp_state_t>          m_dsp_state;
 
-    if     (level == 1 && CORE_DEBUG_LEVEL >= 1) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_RED " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    else if(level == 2 && CORE_DEBUG_LEVEL >= 2) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_YELLOW " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    else if(level == 3 && CORE_DEBUG_LEVEL >= 3) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_GREEN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    else if(level == 4 && CORE_DEBUG_LEVEL >= 4) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_CYAN " %s" ANSI_ESC_RESET, file.c_get(), line, dst);
-    else              if( CORE_DEBUG_LEVEL >= 5) snprintf(dest, total_len + 1, "%s:%d:" ANSI_ESC_WHITE" %s" ANSI_ESC_RESET, file.c_get(), line, dst);
+    std::vector<uint32_t> m_vorbisBlockPicItem;
 
-    if(final.strlen()){
-        res = audio_info(final.get());
+    //----------------------------------------------------------------------------------------------------------------------
 
-        if(!res){
-            std::snprintf(dest, total_len + 1, "%s:%d: %s", file.c_get(), line, dst);
-            if     (level == 1) log_e("%s", final.c_get());
-            else if(level == 2) log_w("%s", final.c_get());
-            else if(level == 3) log_i("%s", final.c_get());
-            else if(level == 4) log_d("%s", final.c_get());
-            else                log_v("%s", final.c_get());
-        }
-    }
+    // ogg impl
 
-    final.reset();
-    result.reset();
-}
+    ps_ptr<vorbis_info_floor_t> floor0_info_unpack();
+    void                        VORBISsetDefaults();
+    void                        clearGlobalConfigurations();
+    int32_t                     VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft);
+    int32_t                     vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
+    int32_t                     vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
+    int32_t                     vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
+    int32_t                     vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf);
+    int32_t                     parseVorbisComment(uint8_t* inbuf, int16_t nBytes);
+    int32_t                     parseVorbisCodebook();
+    int32_t                     parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
+    uint16_t                    continuedOggPackets(uint8_t* inbuf);
+    int32_t                     vorbis_book_unpack(codebook_t* s);
+    uint32_t                    decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype);
+    int32_t                     oggpack_eop();
+    ps_ptr<vorbis_info_floor_t> floor1_info_unpack();
+    void                        vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
+    int32_t                     res_unpack(vorbis_info_residue_t* info);
+    int32_t                     mapping_info_unpack(vorbis_info_mapping_t* info);
 
+    // vorbis decoder impl
+    int32_t                    vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
+    ps_ptr<vorbis_dsp_state_t> vorbis_dsp_create();
+    void                       vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v);
+    void                       vorbis_book_clear(ps_ptr<codebook_t>& v);
+    void                       mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
+    int32_t                    mapping_inverse(vorbis_info_mapping_t* info);
+    int32_t                    floor0_memosize(ps_ptr<vorbis_info_floor_t>& i);
+    int32_t                    floor1_memosize(ps_ptr<vorbis_info_floor_t>& i);
+    int32_t*                   floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp);
+    int32_t*                   floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value);
+    int32_t                    vorbis_book_decode(codebook_t* book);
+    int32_t                    decode_packed_entry_number(codebook_t* book);
+    int32_t                    render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x);
+    int32_t                    vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                    decode_map(codebook_t* s, int32_t* v, int32_t point);
+    int32_t                    res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch);
+    int32_t                    vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                    vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                    floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out);
+    int32_t                    floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out);
+    void                       render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d);
+    void                       vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp, int32_t m, int32_t amp, int32_t ampoffset, int32_t nyq);
+    int32_t                    toBARK(int32_t n);
+    int32_t                    vorbis_coslook_i(int32_t a);
+    int32_t                    vorbis_coslook2_i(int32_t a);
+    int32_t                    vorbis_fromdBlook_i(int32_t a);
+    int32_t                    vorbis_invsqlook_i(int32_t a, int32_t e);
+    void                       mdct_backward(int32_t n, int32_t* in);
+    void                       presymmetry(int32_t* in, int32_t n2, int32_t step);
+    void                       mdct_butterflies(int32_t* x, int32_t points, int32_t shift);
+    void                       mdct_butterfly_generic(int32_t* x, int32_t points, int32_t step);
+    void                       mdct_butterfly_32(int32_t* x);
+    void                       mdct_butterfly_16(int32_t* x);
+    void                       mdct_butterfly_8(int32_t* x);
+    void                       mdct_bitreverse(int32_t* x, int32_t n, int32_t shift);
+    int32_t                    bitrev12(int32_t x);
+    void                       mdct_step7(int32_t* x, int32_t n, int32_t step);
+    void                       mdct_step8(int32_t* x, int32_t n, int32_t step);
+    int32_t                    vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point);
+    int32_t                    vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize);
+    void                       mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, int16_t* out, int32_t step,
+                                               int32_t start, /* samples, this frame */
+                                               int32_t end /* samples, this frame */);
+
+    // some helper functions
+    int32_t  VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    void     bitReader_clear();
+    void     bitReader_setData(uint8_t* buff, uint16_t buffSize);
+    int32_t  bitReader(uint16_t bits);
+    int32_t  bitReader_look(uint16_t nBits);
+    int8_t   bitReader_adv(uint16_t bits);
+    uint8_t  _ilog(uint32_t v);
+    int32_t  ilog(uint32_t v);
+    int32_t  _float32_unpack(int32_t val, int32_t* point);
+    int32_t  _determine_node_bytes(uint32_t used, uint8_t leafwidth);
+    int32_t  _determine_leaf_words(int32_t nodeb, int32_t leafwidth);
+    int32_t  _make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype);
+    int32_t  _make_words(char* l, uint16_t n, uint32_t* r, uint8_t quantvals, codebook_t* b, int32_t maptype);
+    uint8_t  _book_maptype1_quantvals(codebook_t* b);
+    int32_t* _vorbis_window(int32_t left);
+
+    int32_t MULT32(int32_t x, int32_t y);
+    int32_t MULT31_SHIFT15(int32_t x, int32_t y);
+    int32_t MULT31(int32_t x, int32_t y);
+    void    XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
+    void    XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
+    int32_t CLIP_TO_15(int32_t x);
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Macro for comfortable calls
-#define VORBIS_LOG_ERROR(fmt, ...)   VORBIS_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define VORBIS_LOG_WARN(fmt, ...)    VORBIS_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define VORBIS_LOG_INFO(fmt, ...)    VORBIS_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define VORBIS_LOG_DEBUG(fmt, ...)   VORBIS_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define VORBIS_LOG_VERBOSE(fmt, ...) VORBIS_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
+#define VORBIS_LOG_ERROR(fmt, ...)   Audio::AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define VORBIS_LOG_WARN(fmt, ...)    Audio::AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define VORBIS_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define VORBIS_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define VORBIS_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+};

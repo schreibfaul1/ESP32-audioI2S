@@ -25,102 +25,17 @@
 #include "alloca.h"
 #include "lookup.h"
 #include <vector>
-using namespace std;
-
-#define xxx 
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const uint32_t mask[] = {0x00000000, 0x00000001, 0x00000003, 0x00000007, 0x0000000f, 0x0000001f, 0x0000003f, 0x0000007f, 0x000000ff, 0x000001ff, 0x000003ff,
-                         0x000007ff, 0x00000fff, 0x00001fff, 0x00003fff, 0x00007fff, 0x0000ffff, 0x0001ffff, 0x0003ffff, 0x0007ffff, 0x000fffff, 0x001fffff,
-                         0x003fffff, 0x007fffff, 0x00ffffff, 0x01ffffff, 0x03ffffff, 0x07ffffff, 0x0fffffff, 0x1fffffff, 0x3fffffff, 0x7fffffff, 0xffffffff};
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const uint16_t barklook[54] = {0,    51,   102,  154,  206,  258,  311,  365,  420,  477,   535,   594,   656,   719,   785,   854,   926,   1002,
-                               1082, 1166, 1256, 1352, 1454, 1564, 1683, 1812, 1953, 2107,  2276,  2463,  2670,  2900,  3155,  3440,  3756,  4106,
-                               4493, 4919, 5387, 5901, 6466, 7094, 7798, 8599, 9528, 10623, 11935, 13524, 15453, 17775, 20517, 23667, 27183, 31004};
-
-const uint8_t MLOOP_1[64] = {
-    0,  10, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,
-    15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
-};
-
-const uint8_t MLOOP_2[64] = {
-    0, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-};
-
-const uint8_t MLOOP_3[8] = {0, 1, 2, 2, 3, 3, 3, 3};
-
-/* interpolated 1./sqrt(p) where .5 <= a < 1. (.100000... to .111111...) in 16.16 format returns in m.8 format */
-int32_t ADJUST_SQRT2[2] = {8192, 5792};
-
-// global vars
-bool     m_f_vorbisNewSteamTitle = false; // streamTitle
-bool     m_f_vorbisNewMetadataBlockPicture = false;
-bool     m_f_oggFirstPage = false;
-bool     m_f_oggContinuedPage = false;
-bool     m_f_oggLastPage = false;
-bool     m_f_parseOggDone = true;
-bool     m_f_lastSegmentTable = false;
-bool     m_f_vorbisStr_found = false;
-uint16_t m_identificatonHeaderLength = 0;
-uint16_t m_vorbisCommentHeaderLength = 0;
-uint16_t m_setupHeaderLength = 0;
-uint8_t  m_pageNr = 0;
-uint16_t m_oggHeaderSize = 0;
-uint8_t  m_vorbisChannels = 0;
-uint16_t m_vorbisSamplerate = 0;
-uint16_t m_lastSegmentTableLen = 0;
-
-uint32_t m_vorbisBitRate = 0;
-uint32_t m_vorbisSegmentLength = 0;
-uint32_t m_vorbisBlockPicLenUntilFrameEnd = 0;
-uint32_t m_vorbisCurrentFilePos = 0;
-uint32_t m_vorbisAudioDataStart = 0;
-
-int32_t  m_vorbisValidSamples = 0;
-int32_t  m_commentBlockSegmentSize = 0;
-uint8_t  m_vorbisOldMode = 0;
-uint32_t m_blocksizes[2];
-uint32_t m_vorbisBlockPicPos = 0;
-uint32_t m_vorbisBlockPicLen = 0;
-int32_t  m_vorbisRemainBlockPicLen = 0;
-int32_t  m_commentLength = 0;
-
-uint8_t m_nrOfCodebooks = 0;
-uint8_t m_nrOfFloors = 0;
-uint8_t m_nrOfResidues = 0;
-uint8_t m_nrOfMaps = 0;
-uint8_t m_nrOfModes = 0;
-
-uint16_t m_oggPage3Len = 0; // length of the current audio segment
-uint8_t  m_vorbisSegmentTableSize = 0;
-int16_t  m_vorbisSegmentTableRdPtr = -1;
-int8_t   m_vorbisError = 0;
-float    m_vorbisCompressionRatio = 0;
-
-bitReader_t m_bitReader;
-
-ps_ptr<char>                        m_vorbisChbuf;
-ps_ptr<uint8_t>                     m_lastSegmentTable;
-ps_ptr<uint16_t>                    m_vorbisSegmentTable;
-ps_ptr<codebook_t>                  m_codebooks;
-ps_ptr<ps_ptr<vorbis_info_floor_t>> m_floor_param;
-ps_ptr<int8_t>                      m_floor_type;
-ps_ptr<vorbis_info_residue_t>       m_residue_param;
-ps_ptr<vorbis_info_mapping_t>       m_map_param;
-ps_ptr<vorbis_info_mode_t>          m_mode_param;
-ps_ptr<vorbis_dsp_state_t>          m_dsp_state;
-
-vector<uint32_t> m_vorbisBlockPicItem;
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool xxx VORBISDecoder_AllocateBuffers() {
-    m_vorbisSegmentTable.alloc(256 * sizeof(uint16_t));
-    m_vorbisSegmentTable.clear();
-    m_lastSegmentTable.alloc(4096);
+bool VorbisDecoder::init() {
+    m_vorbisSegmentTable.calloc(256 * sizeof(uint16_t), "m_vorbisSegmentTable");
+    m_lastSegmentTable.alloc(4096, "m_lastSegmentTable");
     VORBISsetDefaults();
+    m_f_isValid = true;
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx VORBISDecoder_FreeBuffers() {
+void VorbisDecoder::reset() {
     clearGlobalConfigurations();
     if (m_vorbisChbuf.valid()) m_vorbisChbuf.reset();
     if (m_lastSegmentTable.valid()) m_lastSegmentTable.reset();
@@ -132,17 +47,23 @@ void xxx VORBISDecoder_FreeBuffers() {
     if (m_map_param.valid()) m_map_param.reset();
     if (m_mode_param.valid()) m_mode_param.reset();
     if (m_dsp_state.valid()) m_dsp_state.reset();
+    m_f_isValid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx VORBISDecoder_ClearBuffers() {
+void VorbisDecoder::clear() {
     bitReader_clear();
     m_lastSegmentTable.clear();
     m_vorbisSegmentTable.clear();
+    m_vorbisBlockPicItem.clear();
     m_vorbisSegmentTableSize = 0;
     m_vorbisSegmentTableRdPtr = -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx VORBISsetDefaults() {
+bool VorbisDecoder::isValid() {
+    return m_f_isValid;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::VORBISsetDefaults() {
     m_pageNr = 0;
     m_f_vorbisNewSteamTitle = false; // streamTitle
     m_f_vorbisNewMetadataBlockPicture = false;
@@ -169,13 +90,11 @@ void xxx VORBISsetDefaults() {
     m_vorbisBlockPicLen = 0;
     m_vorbisBlockPicLenUntilFrameEnd = 0;
     m_commentBlockSegmentSize = 0;
-    m_vorbisBlockPicItem.clear();
     m_vorbisBlockPicItem.shrink_to_fit();
-
-    VORBISDecoder_ClearBuffers();
+    clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx clearGlobalConfigurations() { // mode, mapping, floor etc
+void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
     vorbis_book_clear(m_codebooks);
     vorbis_dsp_destroy(m_dsp_state);
 
@@ -218,7 +137,7 @@ void xxx clearGlobalConfigurations() { // mode, mapping, floor etc
     if (m_mode_param.valid()) m_mode_param.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 
     int32_t ret = 0;
     int32_t segmentLength = 0;
@@ -246,7 +165,6 @@ int32_t xxx VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         }
         return VORBIS_PARSE_OGG_DONE;
     }
-
     if (!m_vorbisSegmentTableSize) {
         m_vorbisSegmentTableRdPtr = -1; // back to the parking position
         ret = VORBISparseOGG(inbuf, bytesLeft);
@@ -256,7 +174,6 @@ int32_t xxx VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
         }
         return ret;
     }
-
     // With the last segment of a table, we don't know whether it will be continued in the next Ogg page.
     // So the last segment is saved. m_lastSegmentTableLen specifies the size of the last saved segment.
     // If the next Ogg Page does not contain a 'continuedPage', the last segment is played first. However,
@@ -296,7 +213,7 @@ int32_t xxx VORBISDecode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
-int32_t xxx vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+int32_t VorbisDecoder::vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
     int32_t ret = VORBIS_PARSE_OGG_DONE;
     clearGlobalConfigurations(); // if a new codebook is required, delete the old one
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
@@ -314,7 +231,7 @@ int32_t xxx vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segme
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
-int32_t xxx vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+int32_t VorbisDecoder::vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
     int32_t ret = VORBIS_PARSE_OGG_DONE;
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     if (idx == 1) {
@@ -344,7 +261,7 @@ int32_t xxx vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segme
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
-int32_t xxx vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
+int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength) {
     int32_t ret = VORBIS_PARSE_OGG_DONE;
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
     m_oggPage3Len = segmentLength;
@@ -379,7 +296,7 @@ int32_t xxx vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segme
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
-int32_t xxx vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
+int32_t VorbisDecoder::vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf) {
 
     if (m_vorbisAudioDataStart == 0) { m_vorbisAudioDataStart = m_vorbisCurrentFilePos; }
 
@@ -451,31 +368,35 @@ int32_t xxx vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segme
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t xxx VORBISGetChannels() {
+uint8_t VorbisDecoder::getChannels() {
     return m_vorbisChannels;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t xxx VORBISGetSampRate() {
+uint32_t VorbisDecoder::getSampleRate() {
     return m_vorbisSamplerate;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t xxx VORBISGetBitsPerSample() {
+uint8_t VorbisDecoder::getBitsPerSample() {
     return 16;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t xxx VORBISGetBitRate() {
+uint32_t VorbisDecoder::getBitRate() {
     return m_vorbisBitRate;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t xxx VORBISGetAudioDataStart() {
+uint32_t VorbisDecoder::getAudioDataStart() {
     return m_vorbisAudioDataStart;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint16_t xxx VORBISGetOutputSamps() {
+uint32_t VorbisDecoder::getOutputSamples() {
     return m_vorbisValidSamples; // 1024
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-char* xxx VORBISgetStreamTitle() {
+uint32_t VorbisDecoder::getAudioFileDuration() {
+    return 0;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const char* VorbisDecoder::getStreamTitle() {
     if (m_f_vorbisNewSteamTitle) {
         m_f_vorbisNewSteamTitle = false;
         return m_vorbisChbuf.get();
@@ -483,7 +404,7 @@ char* xxx VORBISgetStreamTitle() {
     return NULL;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-vector<uint32_t> xxx VORBISgetMetadataBlockPicture() {
+std::vector<uint32_t> VorbisDecoder::getMetadataBlockPicture() {
     if (m_f_vorbisNewMetadataBlockPicture) {
         m_f_vorbisNewMetadataBlockPicture = false;
         return m_vorbisBlockPicItem;
@@ -495,8 +416,24 @@ vector<uint32_t> xxx VORBISgetMetadataBlockPicture() {
     return m_vorbisBlockPicItem;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4.2.2. Identification header
-                                                                 // https://xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-820005
+const char* VorbisDecoder::arg1() {
+    return ""; // nothing todo
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+const char* VorbisDecoder::arg2() {
+    return ""; // nothing todo
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::val1() {
+    return 0; // nothing todo
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::val2() {
+    return 0; // nothing todo
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4.2.2. Identification header
+                                                                                // https://xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-820005
     // first bytes are: '.vorbis'
     uint16_t pos = 7;
     uint32_t version = *(inbuf + pos);
@@ -562,7 +499,7 @@ int32_t xxx parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4.2.2. I
     return VORBIS_PARSE_OGG_DONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx parseVorbisComment(uint8_t* inbuf, int16_t nBytes) { // reference https://xiph.org/vorbis/doc/v-comment.html
+int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes) { // reference https://xiph.org/vorbis/doc/v-comment.html
 
     // first bytes are: '.vorbis'
     uint32_t pos = 7;
@@ -637,7 +574,7 @@ int32_t xxx parseVorbisComment(uint8_t* inbuf, int16_t nBytes) { // reference ht
     return VORBIS_PARSE_OGG_DONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx parseVorbisCodebook() {
+int32_t VorbisDecoder::parseVorbisCodebook() {
 
     m_bitReader.headptr += 7;
     m_bitReader.length = m_oggPage3Len;
@@ -646,7 +583,7 @@ int32_t xxx parseVorbisCodebook() {
     int32_t ret = 0;
 
     m_nrOfCodebooks = bitReader(8) + 1;
-    m_codebooks.alloc(m_nrOfCodebooks * sizeof(codebook_t));
+    m_codebooks.alloc(m_nrOfCodebooks * sizeof(codebook_t), "m_codebooks");
 
     for (i = 0; i < m_nrOfCodebooks; i++) {
         ret = vorbis_book_unpack(m_codebooks.get() + i);
@@ -665,8 +602,8 @@ int32_t xxx parseVorbisCodebook() {
     }
     /* floor backend settings */
     m_nrOfFloors = bitReader(6) + 1;
-    m_floor_param.alloc_array(m_nrOfFloors);
-    m_floor_type.alloc(sizeof(int8_t) * m_nrOfFloors);
+    m_floor_param.alloc_array(m_nrOfFloors, "m_floor_param");
+    m_floor_type.alloc(sizeof(int8_t) * m_nrOfFloors, "m_floor_type");
     for (i = 0; i < m_nrOfFloors; i++) {
         m_floor_type[i] = bitReader(16);
         if (m_floor_type[i] < 0 || m_floor_type[i] >= VI_FLOORB) {
@@ -686,7 +623,7 @@ int32_t xxx parseVorbisCodebook() {
 
     /* residue backend settings */
     m_nrOfResidues = bitReader(6) + 1;
-    m_residue_param.alloc(sizeof(vorbis_info_residue_t) * m_nrOfResidues);
+    m_residue_param.alloc(sizeof(vorbis_info_residue_t) * m_nrOfResidues, "m_residue_param");
     for (i = 0; i < m_nrOfResidues; i++) {
         if (res_unpack(m_residue_param.get() + i)) {
             VORBIS_LOG_ERROR("err while unpacking residues");
@@ -696,7 +633,7 @@ int32_t xxx parseVorbisCodebook() {
 
     // /* map backend settings */
     m_nrOfMaps = bitReader(6) + 1;
-    m_map_param.alloc(sizeof(vorbis_info_mapping_t) * m_nrOfMaps);
+    m_map_param.alloc(sizeof(vorbis_info_mapping_t) * m_nrOfMaps, "m_map_param");
     for (i = 0; i < m_nrOfMaps; i++) {
         if (bitReader(16) != 0) goto err_out;
         if (mapping_info_unpack(m_map_param.get() + i)) {
@@ -707,7 +644,7 @@ int32_t xxx parseVorbisCodebook() {
 
     /* mode settings */
     m_nrOfModes = bitReader(6) + 1;
-    m_mode_param.alloc(sizeof(vorbis_info_mode_t) * m_nrOfModes);
+    m_mode_param.alloc(sizeof(vorbis_info_mode_t) * m_nrOfModes, "m_mode_param");
     for (i = 0; i < m_nrOfModes; i++) {
         m_mode_param[i].blockflag = bitReader(1);
         if (bitReader(16)) goto err_out;
@@ -737,11 +674,10 @@ err_out:
     return (OV_EBADHEADER);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
+int32_t VorbisDecoder::VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     // reference https://www.xiph.org/ogg/doc/rfc3533.txt
     int32_t ret = 0;
     (void)ret;
-
     int32_t idx = VORBIS_specialIndexOf(inbuf, "OggS", 8192);
     if (idx != 0) {
         if (m_f_oggContinuedPage) {
@@ -752,7 +688,6 @@ int32_t xxx VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
         *bytesLeft -= idx;
         m_vorbisCurrentFilePos += idx;
     }
-
     int16_t segmentTableWrPtr = -1;
 
     uint8_t version = *(inbuf + 4);
@@ -784,7 +719,6 @@ int32_t xxx VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     CRCchecksum += *(inbuf + 22);
     (void)CRCchecksum;
     uint8_t pageSegments = *(inbuf + 26); // giving the number of segment entries
-
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
     m_vorbisSegmentLength = 0;
@@ -830,7 +764,7 @@ int32_t xxx VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     return VORBIS_PARSE_OGG_DONE; // no error
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint16_t xxx continuedOggPackets(uint8_t* inbuf) {
+uint16_t VorbisDecoder::continuedOggPackets(uint8_t* inbuf) {
 
     // skip OggS header to pageSegments
     // VORBIS_LOG_INFO("%c%c%c%c", *(inbuf+0), *(inbuf+1), *(inbuf+2), *(inbuf+3));
@@ -865,7 +799,7 @@ uint16_t xxx continuedOggPackets(uint8_t* inbuf) {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx VORBISFindSyncWord(unsigned char* buf, int32_t nBytes) {
+int32_t VorbisDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     // assume we have a ogg wrapper
     int32_t idx = VORBIS_specialIndexOf(buf, "OggS", nBytes);
     if (idx >= 0) { // Magic Word found
@@ -877,7 +811,15 @@ int32_t xxx VORBISFindSyncWord(unsigned char* buf, int32_t nBytes) {
     return VORBIS_ERR;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx vorbis_book_unpack(codebook_t* s) {
+const char* VorbisDecoder::getErrorMessage(int8_t err) {
+    return "";
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {
+    return; // nothing todo
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
     ps_ptr<char> lengthlist;
     uint8_t      quantvals = 0;
     int32_t      i, j;
@@ -907,7 +849,7 @@ int32_t xxx vorbis_book_unpack(codebook_t* s) {
     switch (bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist.alloc(sizeof(char) * s->entries);
+            lengthlist.alloc(sizeof(char) * s->entries, "lengthlist");
 
             /* allocated but unused entries? */
             if (bitReader(1)) {
@@ -941,7 +883,7 @@ int32_t xxx vorbis_book_unpack(codebook_t* s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist.alloc(sizeof(char) * s->entries);
+                lengthlist.alloc(sizeof(char) * s->entries, "lengthlist");
 
                 for (i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
@@ -995,7 +937,7 @@ int32_t xxx vorbis_book_unpack(codebook_t* s) {
                 if (total1 <= 4 && total1 <= total2) {
                     /* use dec_type 1: vector of packed values */
                     /* need quantized values before  */
-                    s->q_val.alloc(sizeof(uint16_t) * quantvals);
+                    s->q_val.alloc(sizeof(uint16_t) * quantvals, "q_val");
                     for (i = 0; i < quantvals; i++) ((uint16_t*)s->q_val.get())[i] = bitReader(s->q_bits);
 
                     if (oggpack_eop()) { goto _eofout; }
@@ -1009,10 +951,10 @@ int32_t xxx vorbis_book_unpack(codebook_t* s) {
                     /* use dec_type 2: packed vector of column offsets */
                     /* need quantized values before */
                     if (s->q_bits <= 8) {
-                        s->q_val.alloc(quantvals);
+                        s->q_val.alloc(quantvals, "q_val");
                         for (i = 0; i < quantvals; i++) ((uint8_t*)s->q_val.get())[i] = bitReader(s->q_bits);
                     } else {
-                        s->q_val.alloc(quantvals * 2);
+                        s->q_val.alloc(quantvals * 2, "q_val");
                         for (i = 0; i < quantvals; i++) ((uint16_t*)s->q_val.get())[i] = bitReader(s->q_bits);
                     }
 
@@ -1050,7 +992,7 @@ int32_t xxx vorbis_book_unpack(codebook_t* s) {
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
-                s->q_val.alloc(s->q_pack * s->used_entries);
+                s->q_val.alloc(s->q_pack * s->used_entries, "q_val");
 
                 if (s->q_bits <= 8) {
                     for (i = 0; i < s->used_entries * s->dim; i++) ((uint8_t*)(s->q_val.get()))[i] = bitReader(s->q_bits);
@@ -1069,7 +1011,7 @@ _eofout:
     return VORBIS_ERR; // error
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
+int32_t VorbisDecoder::VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
     int32_t result = -1;                  // seek for str in buffer or in header up to baselen, not nullterninated
     if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
     for (int32_t i = 0; i < baselen - strlen(str); i++) {
@@ -1085,7 +1027,7 @@ int32_t xxx VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t basele
     return result;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx bitReader_clear() {
+void VorbisDecoder::bitReader_clear() {
     m_bitReader.data = NULL;
     m_bitReader.headptr = NULL;
     m_bitReader.length = 0;
@@ -1093,7 +1035,7 @@ void xxx bitReader_clear() {
     m_bitReader.headbit = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx bitReader_setData(uint8_t* buff, uint16_t buffSize) {
+void VorbisDecoder::bitReader_setData(uint8_t* buff, uint16_t buffSize) {
     m_bitReader.data = buff;
     m_bitReader.headptr = buff;
     m_bitReader.length = buffSize;
@@ -1102,7 +1044,7 @@ void xxx bitReader_setData(uint8_t* buff, uint16_t buffSize) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Read in bits without advancing the bitptr; bits <= 32 */
-int32_t xxx bitReader_look(uint16_t nBits) {
+int32_t VorbisDecoder::bitReader_look(uint16_t nBits) {
     uint32_t m = mask[nBits];
     int32_t  ret = 0;
 
@@ -1143,14 +1085,14 @@ int32_t xxx bitReader_look(uint16_t nBits) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* bits <= 32 */
-int32_t xxx bitReader(uint16_t nBits) {
+int32_t VorbisDecoder::bitReader(uint16_t nBits) {
     int32_t ret = bitReader_look(nBits);
     if (bitReader_adv(nBits) < 0) return -1;
     return (ret);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* limited to 32 at a time */
-int8_t xxx bitReader_adv(uint16_t nBits) {
+int8_t VorbisDecoder::bitReader_adv(uint16_t nBits) {
     nBits += m_bitReader.headbit;
     m_bitReader.headbit = nBits & 7;
     m_bitReader.headend -= (nBits >> 3);
@@ -1162,7 +1104,7 @@ int8_t xxx bitReader_adv(uint16_t nBits) {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx ilog(uint32_t v) {
+int32_t VorbisDecoder::ilog(uint32_t v) {
     int32_t ret = 0;
     if (v) --v;
     while (v) {
@@ -1172,7 +1114,7 @@ int32_t xxx ilog(uint32_t v) {
     return (ret);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t xxx _ilog(uint32_t v) {
+uint8_t VorbisDecoder::_ilog(uint32_t v) {
     uint8_t ret = 0;
     while (v) {
         ret++;
@@ -1184,7 +1126,7 @@ uint8_t xxx _ilog(uint32_t v) {
 /* 32 bit float (not IEEE; nonnormalized mantissa + biased exponent) : neeeeeee eeemmmmm mmmmmmmm mmmmmmmm
  Why not IEEE?  It's just not that important here. */
 
-int32_t xxx _float32_unpack(int32_t val, int32_t* point) {
+int32_t VorbisDecoder::_float32_unpack(int32_t val, int32_t* point) {
     int32_t mant = val & 0x1fffff;
     bool    sign = val < 0;
 
@@ -1203,7 +1145,7 @@ int32_t xxx _float32_unpack(int32_t val, int32_t* point) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* choose the smallest supported node size that fits our decode table. Legal bytewidths are 1/1 1/2 2/2 2/4 4/4 */
-int32_t xxx _determine_node_bytes(uint32_t used, uint8_t leafwidth) {
+int32_t VorbisDecoder::_determine_node_bytes(uint32_t used, uint8_t leafwidth) {
     /* special case small books to size 4 to avoid multiple special cases in repack */
     if (used < 2) return 4;
 
@@ -1213,27 +1155,27 @@ int32_t xxx _determine_node_bytes(uint32_t used, uint8_t leafwidth) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* convenience/clarity; leaves are specified as multiple of node word size (1 or 2) */
-int32_t xxx _determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
+int32_t VorbisDecoder::_determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
     if (leafwidth > nodeb) return 2;
     return 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx _make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype) {
+int32_t VorbisDecoder::_make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype) {
     ps_ptr<uint32_t> work;
 
     if (s->dec_nodeb == 4) {
-        s->dec_table.alloc((s->used_entries * 2 + 1) * sizeof(*work));
+        s->dec_table.alloc((s->used_entries * 2 + 1) * sizeof(*work), "dec_table");
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
         if (_make_words(lengthlist, s->entries, (uint32_t*)s->dec_table.get(), quantvals, s, maptype)) return 1;
 
         return 0;
     }
 
-    work.alloc((s->used_entries * 2 - 2) * sizeof(uint32_t));
+    work.alloc((s->used_entries * 2 - 2) * sizeof(uint32_t), "work");
     work.clear();
 
     if (_make_words(lengthlist, s->entries, work.get(), quantvals, s, maptype)) { return 1; }
-    s->dec_table.alloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    s->dec_table.alloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb, "dec_table");
     if (s->dec_leafw == 1) {
         switch (s->dec_nodeb) {
             case 1:
@@ -1313,7 +1255,7 @@ int32_t xxx _make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantval
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* given a list of word lengths, number of used entries, and byte width of a leaf, generate the decode table */
-int32_t xxx _make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook_t* b, int32_t maptype) {
+int32_t VorbisDecoder::_make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook_t* b, int32_t maptype) {
 
     int32_t  i, j, count = 0;
     uint32_t top = 0;
@@ -1376,7 +1318,7 @@ int32_t xxx _make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, 
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t xxx decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype) {
+uint32_t VorbisDecoder::decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype) {
     uint32_t ret = 0;
 
     switch (b->dec_type) {
@@ -1424,7 +1366,7 @@ uint32_t xxx decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codeb
 /* most of the time, entries%dimensions == 0, but we need to be well defined.  We define that the possible vales at each scalar is values == entries/dim.  If entries%dim != 0, we'll have 'too few'
  values (values*dim<entries), which means that we'll have 'left over' entries; left over entries use zeroed values (and are wasted).  So don't generate codebooks like that */
 /* there might be a straightforward one-line way to do the below that's portable and totally safe against roundoff, but I haven't thought of it.  Therefore, we opt on the side of caution */
-uint8_t xxx _book_maptype1_quantvals(codebook_t* b) {
+uint8_t VorbisDecoder::_book_maptype1_quantvals(codebook_t* b) {
     /* get us a starting hint, we'll polish it below */
     uint8_t bits = _ilog(b->entries);
     uint8_t vals = b->entries >> ((bits - 1) * (b->dim - 1) / b->dim);
@@ -1449,7 +1391,7 @@ uint8_t xxx _book_maptype1_quantvals(codebook_t* b) {
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx oggpack_eop() {
+int32_t VorbisDecoder::oggpack_eop() {
     if (m_bitReader.headptr - m_bitReader.data > m_setupHeaderLength) {
         VORBIS_LOG_INFO("s_bitReader.headptr %i, m_setupHeaderLength %i", m_bitReader.headptr, m_setupHeaderLength);
         VORBIS_LOG_INFO("ogg package 3 overflow");
@@ -1458,12 +1400,12 @@ int32_t xxx oggpack_eop() {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_info_floor_t> xxx floor0_info_unpack() {
+ps_ptr<vorbis_info_floor_t> VorbisDecoder::floor0_info_unpack() {
 
     int32_t j;
 
     ps_ptr<vorbis_info_floor_t> info;
-    info.alloc(sizeof(vorbis_info_floor_t));
+    info.alloc(sizeof(vorbis_info_floor_t), "info");
     info.clear();
 
     info->order = bitReader(8);
@@ -1489,24 +1431,24 @@ err_out:
     return {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_info_floor_t> xxx floor1_info_unpack() {
+ps_ptr<vorbis_info_floor_t> VorbisDecoder::floor1_info_unpack() {
 
     ps_ptr<uint8_t> B;
     int32_t         j, k, count = 0, maxclass = -1, rangebits;
 
     ps_ptr<vorbis_info_floor_t> info;
-    info.alloc(sizeof(vorbis_info_floor_t));
+    info.alloc(sizeof(vorbis_info_floor_t), "info");
     info.clear();
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
-    info->partitionclass.alloc(info->partitions * sizeof(uint8_t));
+    info->partitionclass.alloc(info->partitions * sizeof(uint8_t), "partitionclass");
     for (j = 0; j < info->partitions; j++) {
         info->partitionclass[j] = bitReader(4); /* only 0 to 15 legal */
         if (maxclass < info->partitionclass[j]) maxclass = info->partitionclass[j];
     }
 
     /* read partition classes */
-    info->_class.alloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t));
+    info->_class.alloc((uint32_t)(maxclass + 1) * sizeof(floor1class_t), "_class");
     for (j = 0; j < maxclass + 1; j++) {
         info->_class[j].class_dim = bitReader(3) + 1; /* 1 to 8 */
         info->_class[j].class_subs = bitReader(2);    /* 0,1,2,3 bits */
@@ -1528,10 +1470,10 @@ ps_ptr<vorbis_info_floor_t> xxx floor1_info_unpack() {
     rangebits = bitReader(4);
 
     for (j = 0, k = 0; j < info->partitions; j++) count += info->_class[info->partitionclass[j]].class_dim;
-    info->postlist.alloc((count + 2) * sizeof(uint16_t));
-    info->forward_index.alloc((count + 2) * sizeof(uint8_t));
-    info->loneighbor.alloc(count * sizeof(uint8_t));
-    info->hineighbor.alloc(count * sizeof(uint8_t));
+    info->postlist.alloc((count + 2) * sizeof(uint16_t), "postlist");
+    info->forward_index.alloc((count + 2) * sizeof(uint8_t), "forward_index");
+    info->loneighbor.alloc(count * sizeof(uint8_t), "loneighbor");
+    info->hineighbor.alloc(count * sizeof(uint8_t), "hineighbor");
 
     count = 0;
     for (j = 0, k = 0; j < info->partitions; j++) {
@@ -1581,7 +1523,7 @@ err_out:
     return {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
+void VorbisDecoder::vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
     uint16_t        i, j;
     ps_ptr<uint8_t> B_mem;
     B_mem.alloc(n * sizeof(uint8_t));
@@ -1620,7 +1562,7 @@ void xxx vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* vorbis_info is for range checking */
-int32_t xxx res_unpack(vorbis_info_residue_t* info) {
+int32_t VorbisDecoder::res_unpack(vorbis_info_residue_t* info) {
     int32_t j, k;
     memset(info, 0, sizeof(*info));
 
@@ -1662,7 +1604,7 @@ errout:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* also responsible for range checking */
-int32_t xxx mapping_info_unpack(vorbis_info_mapping_t* info) {
+int32_t VorbisDecoder::mapping_info_unpack(vorbis_info_mapping_t* info) {
     int32_t i;
     memset(info, 0, sizeof(*info));
 
@@ -1713,7 +1655,7 @@ err_out:
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_dsp_state_t> xxx vorbis_dsp_create() {
+ps_ptr<vorbis_dsp_state_t> VorbisDecoder::vorbis_dsp_create() {
     ps_ptr<vorbis_dsp_state_t> v;
     v.alloc(sizeof(vorbis_dsp_state_t));
     v.clear();
@@ -1743,7 +1685,7 @@ ps_ptr<vorbis_dsp_state_t> xxx vorbis_dsp_create() {
     return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v) {
+void VorbisDecoder::vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v) {
     if (!v.valid()) return;
 
     for (uint8_t i = 0; i < m_vorbisChannels; ++i) {
@@ -1755,7 +1697,7 @@ void xxx vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v) {
     v.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx vorbis_book_clear(ps_ptr<codebook_t>& v) {
+void VorbisDecoder::vorbis_book_clear(ps_ptr<codebook_t>& v) {
     if (!v.valid()) return;
     int s = 0;
     for (int i = 0; i < m_nrOfCodebooks; i++) {
@@ -1782,7 +1724,7 @@ void xxx vorbis_book_clear(ps_ptr<codebook_t>& v) {
     // VORBIS_LOG_INFO("free codebook_t %i bytes", s);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
+int32_t VorbisDecoder::vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) {
 
     int32_t mode, i;
 
@@ -1823,7 +1765,7 @@ int32_t xxx vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf) 
     return (0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_shift_right(int32_t n, int32_t* in, int32_t* right) {
+void VorbisDecoder::mdct_shift_right(int32_t n, int32_t* in, int32_t* right) {
     int32_t i;
     n >>= 2;
     in += 1;
@@ -1831,7 +1773,7 @@ void xxx mdct_shift_right(int32_t n, int32_t* in, int32_t* right) {
     for (i = 0; i < n; i++) right[i] = in[i << 1];
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx mapping_inverse(vorbis_info_mapping_t* info) {
+int32_t VorbisDecoder::mapping_inverse(vorbis_info_mapping_t* info) {
 
     int32_t i, j;
     int32_t n = m_blocksizes[m_dsp_state->W];
@@ -1961,15 +1903,15 @@ int32_t xxx mapping_inverse(vorbis_info_mapping_t* info) {
     return (0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx floor0_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+int32_t VorbisDecoder::floor0_memosize(ps_ptr<vorbis_info_floor_t>& i) {
     return i.get()->order + 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx floor1_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+int32_t VorbisDecoder::floor1_memosize(ps_ptr<vorbis_info_floor_t>& i) {
     return i.get()->posts;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t* xxx floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp) {
+int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp) {
     vorbis_info_floor_t* info = (vorbis_info_floor_t*)i.get();
     int32_t              j;
 
@@ -1998,7 +1940,7 @@ eop:
     return (NULL);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t* xxx floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value) {
+int32_t* VorbisDecoder::floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value) {
     vorbis_info_floor_t* info = (vorbis_info_floor_t*)in.get();
 
     int32_t     quant_look[4] = {256, 128, 86, 64};
@@ -2079,12 +2021,12 @@ eop:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* returns the [original, not compacted] entry number or -1 on eof *********/
-int32_t xxx vorbis_book_decode(codebook_t* book) {
+int32_t VorbisDecoder::vorbis_book_decode(codebook_t* book) {
     if (book->dec_type) return -1;
     return decode_packed_entry_number(book);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx decode_packed_entry_number(codebook_t* book) {
+int32_t VorbisDecoder::decode_packed_entry_number(codebook_t* book) {
     uint32_t chase = 0;
     int32_t  read = book->dec_maxlength;
     int32_t  lok = bitReader_look(read), i;
@@ -2163,7 +2105,7 @@ int32_t xxx decode_packed_entry_number(codebook_t* book) {
     return (VORBIS_ERR);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x) {
+int32_t VorbisDecoder::render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x) {
     y0 &= 0x7fff; /* mask off flag */
     y1 &= 0x7fff;
 
@@ -2181,7 +2123,7 @@ int32_t xxx render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* unlike the others, we guard against n not being an integer number * of <dim> internally rather than in the upper
  layer (called only by * floor0) */
-int32_t xxx vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         int32_t  i;
@@ -2199,7 +2141,7 @@ int32_t xxx vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx decode_map(codebook_t* s, int32_t* v, int32_t point) {
+int32_t VorbisDecoder::decode_map(codebook_t* s, int32_t* v, int32_t point) {
 
     uint32_t entry = decode_packed_entry_number(s);
 
@@ -2263,7 +2205,7 @@ int32_t xxx decode_map(codebook_t* s, int32_t* v, int32_t point) {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch) {
+int32_t VorbisDecoder::res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch) {
     int32_t     j, k, s;
     uint8_t     m = 0, n = 0;
     uint8_t     used = 0;
@@ -2383,7 +2325,7 @@ eopbreak:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t xxx vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         uint32_t i;
@@ -2398,7 +2340,7 @@ int32_t xxx vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* returns 0 on OK or -1 on eof */
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t xxx vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t  step = n / book->dim;
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
@@ -2412,7 +2354,7 @@ int32_t xxx vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, in
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out) {
+int32_t VorbisDecoder::floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out) {
     vorbis_info_floor_t* info = (vorbis_info_floor_t*)i.get();
 
     if (lsp) {
@@ -2427,7 +2369,7 @@ int32_t xxx floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out) {
+int32_t VorbisDecoder::floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out) {
     vorbis_info_floor_t* info = (vorbis_info_floor_t*)in.get();
 
     int32_t n = m_blocksizes[m_dsp_state->W] / 2;
@@ -2459,7 +2401,7 @@ int32_t xxx floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value,
     return (0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d) {
+void VorbisDecoder::render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d) {
     int32_t dy = y1 - y0;
     int32_t adx = x1 - x0;
     int32_t ady = abs(dy);
@@ -2486,7 +2428,7 @@ void xxx render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, 
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp, int32_t m, int32_t amp, int32_t ampoffset, int32_t nyq) {
+void VorbisDecoder::vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp, int32_t m, int32_t amp, int32_t ampoffset, int32_t nyq) {
     /* 0 <= m < 256 */
 
     /* set up for using all int32_t later */
@@ -2587,11 +2529,11 @@ void xxx vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp
         /* we've let the normalization drift because it wasn't important; however, for the lookup, things must be
      normalized again. We need at most one right shift or a number of left shifts */
 
-        if (qi & 0xffff0000) { /* checks for 1.xxxxxxxxxxxxxxxx */
+        if (qi & 0xffff0000) { /* checks for 1.VorbisDecoderVorbisDecoderVorbisDecoderVorbisDecoderVorbisDecoderx */
             qi >>= 1;
             qexp++;
         } else
-            while (qi && !(qi & 0x8000)) { /* checks for 0.0xxxxxxxxxxxxxxx or less*/
+            while (qi && !(qi & 0x8000)) { /* checks for 0.0VorbisDecoderVorbisDecoderVorbisDecoderVorbisDecoderVorbisDecoder::or less*/
                 qi <<= 1;
                 qexp--;
             }
@@ -2638,7 +2580,7 @@ void xxx vorbis_lsp_to_curve(int32_t* curve, int32_t n, int32_t ln, int32_t* lsp
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* used in init only; interpolate the int32_t way */
-int32_t xxx toBARK(int32_t n) {
+int32_t VorbisDecoder::toBARK(int32_t n) {
     int32_t i;
     for (i = 0; i < 54; i++)
         if (n >= barklook[i] && n < barklook[i + 1]) break;
@@ -2652,7 +2594,7 @@ int32_t xxx toBARK(int32_t n) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* interpolated lookup based cos function, domain 0 to PI only */
 /* a is in 0.16 format, where 0==0, 2^^16-1==PI, return 0.14 */
-int32_t xxx vorbis_coslook_i(int32_t a) {
+int32_t VorbisDecoder::vorbis_coslook_i(int32_t a) {
     int32_t i = a >> COS_LOOKUP_I_SHIFT;
     int32_t d = a & COS_LOOKUP_I_MASK;
     return COS_LOOKUP_I[i] - ((d * (COS_LOOKUP_I[i] - COS_LOOKUP_I[i + 1])) >> COS_LOOKUP_I_SHIFT);
@@ -2660,7 +2602,7 @@ int32_t xxx vorbis_coslook_i(int32_t a) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* interpolated half-wave lookup based cos function */
 /* a is in 0.16 format, where 0==0, 2^^16==PI, return .LSP_FRACBITS */
-int32_t xxx vorbis_coslook2_i(int32_t a) {
+int32_t VorbisDecoder::vorbis_coslook2_i(int32_t a) {
     int32_t i = a >> COS_LOOKUP_I_SHIFT;
     int32_t d = a & COS_LOOKUP_I_MASK;
     return ((COS_LOOKUP_I[i] << COS_LOOKUP_I_SHIFT) - d * (COS_LOOKUP_I[i] - COS_LOOKUP_I[i + 1])) >> (COS_LOOKUP_I_SHIFT - LSP_FRACBITS + 14);
@@ -2669,13 +2611,13 @@ int32_t xxx vorbis_coslook2_i(int32_t a) {
 /* interpolated lookup based fromdB function, domain -140dB to 0dB only */
 /* a is in n.12 format */
 
-int32_t xxx vorbis_fromdBlook_i(int32_t a) {
+int32_t VorbisDecoder::vorbis_fromdBlook_i(int32_t a) {
     if (a > 0) return 0x7fffffff;
     if (a < -573440) return 0; // replacement for if(a < (-140 << 12)) return 0;
     return FLOOR_fromdB_LOOKUP[((a + (140 << 12)) * 467) >> 20];
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx vorbis_invsqlook_i(int32_t a, int32_t e) {
+int32_t VorbisDecoder::vorbis_invsqlook_i(int32_t a, int32_t e) {
     int32_t i = (a & 0x7fff) >> (INVSQ_LOOKUP_I_SHIFT - 1);
     int32_t d = a & INVSQ_LOOKUP_I_MASK;                                /*  0.10 */
     int32_t val = INVSQ_LOOKUP_I[i] -                                   /*  1.16 */
@@ -2686,7 +2628,7 @@ int32_t xxx vorbis_invsqlook_i(int32_t a, int32_t e) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* partial; doesn't perform last-step deinterleave/unrolling. That can be done more efficiently during pcm output */
-void xxx mdct_backward(int32_t n, int32_t* in) {
+void VorbisDecoder::mdct_backward(int32_t n, int32_t* in) {
     int32_t shift;
     int32_t step;
 
@@ -2701,7 +2643,7 @@ void xxx mdct_backward(int32_t n, int32_t* in) {
     mdct_step8(in, n, step);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx presymmetry(int32_t* in, int32_t n2, int32_t step) {
+void VorbisDecoder::presymmetry(int32_t* in, int32_t n2, int32_t step) {
     int32_t*       aX;
     int32_t*       bX;
     const int32_t* T;
@@ -2743,7 +2685,7 @@ void xxx presymmetry(int32_t* in, int32_t n2, int32_t step) {
     } while (aX >= in + n4);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_butterflies(int32_t* x, int32_t points, int32_t shift) {
+void VorbisDecoder::mdct_butterflies(int32_t* x, int32_t points, int32_t shift) {
     int32_t stages = 8 - shift;
     int32_t i, j;
 
@@ -2755,7 +2697,7 @@ void xxx mdct_butterflies(int32_t* x, int32_t points, int32_t shift) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* N/stage point generic N stage butterfly (in place, 2 register) */
-void xxx mdct_butterfly_generic(int32_t* x, int32_t points, int32_t step) {
+void VorbisDecoder::mdct_butterfly_generic(int32_t* x, int32_t points, int32_t step) {
     const int32_t* T = sincos_lookup0;
     int32_t*       x1 = x + points - 4;
     int32_t*       x2 = x + (points >> 1) - 4;
@@ -2794,7 +2736,7 @@ void xxx mdct_butterfly_generic(int32_t* x, int32_t points, int32_t step) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* 32 point butterfly (in place, 4 register) */
-void xxx mdct_butterfly_32(int32_t* x) {
+void VorbisDecoder::mdct_butterfly_32(int32_t* x) {
     int32_t r0, r1, r2, r3;
 
     r0 = x[16] - x[17];
@@ -2850,7 +2792,7 @@ void xxx mdct_butterfly_32(int32_t* x) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* 16 point butterfly (in place, 4 register) */
-void xxx mdct_butterfly_16(int32_t* x) {
+void VorbisDecoder::mdct_butterfly_16(int32_t* x) {
     int32_t r0, r1, r2, r3;
 
     r0 = x[8] - x[9];
@@ -2884,7 +2826,7 @@ void xxx mdct_butterfly_16(int32_t* x) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* 8 point butterfly (in place) */
-void xxx mdct_butterfly_8(int32_t* x) {
+void VorbisDecoder::mdct_butterfly_8(int32_t* x) {
     int32_t r0 = x[0] + x[1];
     int32_t r1 = x[0] - x[1];
     int32_t r2 = x[2] + x[3];
@@ -2904,7 +2846,7 @@ void xxx mdct_butterfly_8(int32_t* x) {
     x[7] = r6 + r2;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_bitreverse(int32_t* x, int32_t n, int32_t shift) {
+void VorbisDecoder::mdct_bitreverse(int32_t* x, int32_t n, int32_t shift) {
     int32_t  bit = 0;
     int32_t* w = x + (n >> 1);
 
@@ -2927,12 +2869,12 @@ void xxx mdct_bitreverse(int32_t* x, int32_t n, int32_t shift) {
     } while (w > x);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t xxx bitrev12(int32_t x) {
+int32_t VorbisDecoder::bitrev12(int32_t x) {
     uint8_t bitrev[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
     return bitrev[x >> 8] | (bitrev[(x & 0x0f0) >> 4] << 4) | (((int32_t)bitrev[x & 0x00f]) << 8);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_step7(int32_t* x, int32_t n, int32_t step) {
+void VorbisDecoder::mdct_step7(int32_t* x, int32_t n, int32_t step) {
     int32_t*       w0 = x;
     int32_t*       w1 = x + (n >> 1);
     const int32_t* T = (step >= 4) ? (sincos_lookup0 + (step >> 1)) : sincos_lookup1;
@@ -2977,7 +2919,7 @@ void xxx mdct_step7(int32_t* x, int32_t n, int32_t step) {
     } while (w0 < w1);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_step8(int32_t* x, int32_t n, int32_t step) {
+void VorbisDecoder::mdct_step8(int32_t* x, int32_t n, int32_t step) {
     const int32_t* T;
     const int32_t* V;
     int32_t*       iX = x + (n >> 1);
@@ -3062,7 +3004,7 @@ void xxx mdct_step8(int32_t* x, int32_t n, int32_t step) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t xxx vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         int32_t  i;
@@ -3085,7 +3027,7 @@ int32_t xxx vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offs
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* pcm==0 indicates we just want the pending samples, no more */
-int32_t xxx vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize) {
+int32_t VorbisDecoder::vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize) {
     if (m_dsp_state->out_begin > -1 && m_dsp_state->out_begin < m_dsp_state->out_end) {
         int32_t n = m_dsp_state->out_end - m_dsp_state->out_begin;
 
@@ -3105,7 +3047,7 @@ int32_t xxx vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize) {
     return (0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t* xxx _vorbis_window(int32_t left) {
+int32_t* VorbisDecoder::_vorbis_window(int32_t left) {
     switch (left) {
         case 32: return (int32_t*)vwin64;
         case 64: return (int32_t*)vwin128;
@@ -3119,9 +3061,9 @@ int32_t* xxx _vorbis_window(int32_t left) {
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void xxx mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, int16_t* out, int32_t step,
-                     int32_t start, /* samples, this frame */
-                     int32_t end /* samples, this frame */) {
+void VorbisDecoder::mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, int16_t* out, int32_t step,
+                                    int32_t start, /* samples, this frame */
+                                    int32_t end /* samples, this frame */) {
     int32_t*       l = in + (W && lW ? n1 >> 1 : n0 >> 1);
     int32_t*       r = right + (lW ? n1 >> 2 : n0 >> 2);
     int32_t*       post;
@@ -3190,5 +3132,38 @@ void xxx mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t*
             l += 2;
         }
     }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::MULT32(int32_t x, int32_t y) {
+    union magic magic;
+    magic.whole = (int64_t)x * y;
+    return magic.halves.hi;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::MULT31_SHIFT15(int32_t x, int32_t y) {
+    union magic magic;
+    magic.whole = (int64_t)x * y;
+    return ((uint32_t)(magic.halves.lo) >> 15) | ((magic.halves.hi) << 17);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::MULT31(int32_t x, int32_t y) {
+    return MULT32(x, y) << 1;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y) {
+    *x = MULT31(a, t) + MULT31(b, v);
+    *y = MULT31(b, t) - MULT31(a, v);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void VorbisDecoder::XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y) {
+    *x = MULT31(a, t) - MULT31(b, v);
+    *y = MULT31(b, t) + MULT31(a, v);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::CLIP_TO_15(int32_t x) {
+    int32_t ret = x;
+    ret -= ((x <= 32767) - 1) & (x - 32767);
+    ret -= ((x >= -32768) - 1) & (x + 32768);
+    return (ret);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

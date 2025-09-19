@@ -239,7 +239,8 @@ std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
     if (type == "flac") return std::make_unique<FlacDecoder>(*this);
     if (type == "opus")  return std::make_unique<OpusDecoder>(*this);
     if (type == "aac")  return std::make_unique<AACDecoder>(*this);
-    // hier Vorbis, Opus ergänzen …
+    if (type == "vorbis")  return std::make_unique<VorbisDecoder>(*this);
+    // hier mp3 ergänzen …
     return nullptr;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -281,7 +282,7 @@ void Audio::setDefaults() {
     // m_decoder->reset(); // flac
     // AACDecoder_FreeBuffers();
     // OPUSDecoder_FreeBuffers();
-    VORBISDecoder_FreeBuffers();
+    // VORBISDecoder_FreeBuffers();
     m_outBuff.clear(); // Clear OutputBuffer
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
@@ -2906,7 +2907,7 @@ uint32_t Audio::stopSong() {
         if(m_codec == CODEC_M4A) m_decoder->reset();
         if(m_codec == CODEC_FLAC) m_decoder->reset();
         if(m_codec == CODEC_OPUS) m_decoder->reset();
-        if(m_codec == CODEC_VORBIS) VORBISDecoder_FreeBuffers();
+        if(m_codec == CODEC_VORBIS) m_decoder->reset();
         m_validSamples = 0;
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4637,10 +4638,8 @@ bool Audio::initializeDecoder(uint8_t codec) {
             InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
-            if(!VORBISDecoder_AllocateBuffers()) {
-                AUDIO_LOG_ERROR("The VORBISDecoder could not be initialized");
-                goto exit;
-            }
+            m_decoder = createDecoder("vorbis");
+            if (!m_decoder || !m_decoder->init()) {AUDIO_LOG_ERROR("The VORBISDecoder could not be initialized"); goto exit;}
             info(*this, evt_info, "VORBISDecoder has been initialized");
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
@@ -5010,7 +5009,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_codec == CODEC_VORBIS) {
-        m_fnsy.nextSync = VORBISFindSyncWord(data, len);
+        m_fnsy.nextSync = m_decoder->findSyncWord(data, len);
         if(m_fnsy.nextSync == -1) return len; // OggS not found, search next block
     }
     if(m_fnsy.nextSync == -1) {
@@ -5072,12 +5071,12 @@ void Audio::setDecoderItems() {
         }
     }
     if(m_codec == CODEC_VORBIS) {
-        setChannels(VORBISGetChannels());
-        setSampleRate(VORBISGetSampRate());
-        setBitsPerSample(VORBISGetBitsPerSample());
+        setChannels(m_decoder->getChannels());
+        setSampleRate(m_decoder->getSampleRate());
+        setBitsPerSample(m_decoder->getBitsPerSample());
     //    setBitrate(VORBISGetBitRate());
-        if(VORBISGetAudioDataStart() > 0){
-            m_audioDataStart = VORBISGetAudioDataStart();
+        if(m_decoder->getAudioDataStart()> 0){
+            m_audioDataStart = m_decoder->getAudioDataStart();
             if(m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
         }
         if(m_lastGranulePosition && m_audioFileSize && m_sampleRate){
@@ -5132,7 +5131,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded){
                                 if(res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;} // nothing to play
     if(m_codec == CODEC_OPUS){  if(res == OpusDecoder::OPUS_PARSE_OGG_DONE)     return bytesDecoded;  // nothing to play
                                 if(res == OpusDecoder::OPUS_END)                return bytesDecoded;} // nothing to play
-    if(m_codec == CODEC_VORBIS){if(res == VORBIS_PARSE_OGG_DONE)   return bytesDecoded;} // nothing to play
+    if(m_codec == CODEC_VORBIS){if(res == VorbisDecoder::VORBIS_PARSE_OGG_DONE) return bytesDecoded;} // nothing to play
     return 0;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -5165,7 +5164,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_M4A:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_FLAC:   res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_OPUS:   res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_VORBIS: res = VORBISDecode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_VORBIS: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         default: {
             AUDIO_LOG_ERROR("no valid codec found codec = %d", m_codec);
             stopSong();
@@ -5252,12 +5251,12 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                             }
                             break;
 
-        case CODEC_VORBIS:  m_validSamples = VORBISGetOutputSamps();
-                            st = VORBISgetStreamTitle();
+        case CODEC_VORBIS:  m_validSamples = m_decoder->getOutputSamples();
+                            st = m_decoder->getStreamTitle();
                             if(st) {
                                 info(*this, evt_streamtitle, st);
                             }
-                            vec = VORBISgetMetadataBlockPicture();
+                            vec = m_decoder->getMetadataBlockPicture();
                             if(vec.size() > 0){ // get blockpic data
                                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
                                 // AUDIO_LOG_INFO("ogg metadata blockpicture found:");
@@ -6521,7 +6520,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
             if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
             if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
             if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; m_decoder.reset();}
-            if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; VORBISDecoder_ClearBuffers();}
+            if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; m_decoder.reset();}
             if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; m_decoder.reset();}
 
             InBuff.bytesWasRead(offset);
