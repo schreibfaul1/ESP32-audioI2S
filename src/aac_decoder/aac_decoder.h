@@ -17,7 +17,7 @@
 class AACDecoder : public Decoder {
 
 public:
-    AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
+    AACDecoder(Audio& audioRef);
     ~AACDecoder() {reset();}
     bool             init() override;
     void             clear() override;
@@ -61,16 +61,13 @@ uint16_t validSamples = 0;
 clock_t before;
 float compressionRatio = 1;
 mp4AudioSpecificConfig* mp4ASC;
+std::unique_ptr<NeaacDecoder> neaacdec;
 
 struct AudioSpecificConfig {
     uint8_t audioObjectType;
     uint8_t samplingFrequencyIndex;
     uint8_t channelConfiguration;
 };
-
-
-uint8_t     AACGetSBR();
-const char* AACGetErrorMessage(int8_t err);
 
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Macro for comfortable calls

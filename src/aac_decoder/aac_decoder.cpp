@@ -14,7 +14,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-auto neaacdec = std::make_unique<NeaacDecoder>();
+
+AACDecoder::AACDecoder(Audio& audioRef)
+    : Decoder(audioRef), audio(audioRef), neaacdec(std::make_unique<NeaacDecoder>()) {}
 
 //----------------------------------------------------------------------------------------------------------------------
 bool AACDecoder::init() {
