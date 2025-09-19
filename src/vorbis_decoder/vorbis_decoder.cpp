@@ -583,7 +583,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
     int32_t ret = 0;
 
     m_nrOfCodebooks = bitReader(8) + 1;
-    m_codebooks.alloc(m_nrOfCodebooks * sizeof(codebook_t), "m_codebooks");
+    m_codebooks.alloc(m_nrOfCodebooks * sizeof(codebook), "m_codebooks");
 
     for (i = 0; i < m_nrOfCodebooks; i++) {
         ret = vorbis_book_unpack(m_codebooks.get() + i);
@@ -623,7 +623,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
 
     /* residue backend settings */
     m_nrOfResidues = bitReader(6) + 1;
-    m_residue_param.alloc(sizeof(vorbis_info_residue_t) * m_nrOfResidues, "m_residue_param");
+    m_residue_param.alloc(sizeof(vorbis_info_residue) * m_nrOfResidues, "m_residue_param");
     for (i = 0; i < m_nrOfResidues; i++) {
         if (res_unpack(m_residue_param.get() + i)) {
             VORBIS_LOG_ERROR("err while unpacking residues");
@@ -633,7 +633,7 @@ int32_t VorbisDecoder::parseVorbisCodebook() {
 
     // /* map backend settings */
     m_nrOfMaps = bitReader(6) + 1;
-    m_map_param.alloc(sizeof(vorbis_info_mapping_t) * m_nrOfMaps, "m_map_param");
+    m_map_param.alloc(sizeof(vorbis_info_mapping) * m_nrOfMaps, "m_map_param");
     for (i = 0; i < m_nrOfMaps; i++) {
         if (bitReader(16) != 0) goto err_out;
         if (mapping_info_unpack(m_map_param.get() + i)) {
@@ -819,7 +819,7 @@ void VorbisDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uin
     return; // nothing todo
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
+int32_t VorbisDecoder::vorbis_book_unpack(codebook* s) {
     ps_ptr<char> lengthlist;
     uint8_t      quantvals = 0;
     int32_t      i, j;
@@ -1160,7 +1160,7 @@ int32_t VorbisDecoder::_determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
     return 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::_make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype) {
+int32_t VorbisDecoder::_make_decode_table(codebook* s, char* lengthlist, uint8_t quantvals, int32_t maptype) {
     ps_ptr<uint32_t> work;
 
     if (s->dec_nodeb == 4) {
@@ -1255,7 +1255,7 @@ int32_t VorbisDecoder::_make_decode_table(codebook_t* s, char* lengthlist, uint8
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* given a list of word lengths, number of used entries, and byte width of a leaf, generate the decode table */
-int32_t VorbisDecoder::_make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook_t* b, int32_t maptype) {
+int32_t VorbisDecoder::_make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook* b, int32_t maptype) {
 
     int32_t  i, j, count = 0;
     uint32_t top = 0;
@@ -1318,7 +1318,7 @@ int32_t VorbisDecoder::_make_words(char* l, uint16_t n, uint32_t* work, uint8_t 
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t VorbisDecoder::decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype) {
+uint32_t VorbisDecoder::decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook* b, int32_t maptype) {
     uint32_t ret = 0;
 
     switch (b->dec_type) {
@@ -1366,7 +1366,7 @@ uint32_t VorbisDecoder::decpack(int32_t entry, int32_t used_entry, uint8_t quant
 /* most of the time, entries%dimensions == 0, but we need to be well defined.  We define that the possible vales at each scalar is values == entries/dim.  If entries%dim != 0, we'll have 'too few'
  values (values*dim<entries), which means that we'll have 'left over' entries; left over entries use zeroed values (and are wasted).  So don't generate codebooks like that */
 /* there might be a straightforward one-line way to do the below that's portable and totally safe against roundoff, but I haven't thought of it.  Therefore, we opt on the side of caution */
-uint8_t VorbisDecoder::_book_maptype1_quantvals(codebook_t* b) {
+uint8_t VorbisDecoder::_book_maptype1_quantvals(codebook* b) {
     /* get us a starting hint, we'll polish it below */
     uint8_t bits = _ilog(b->entries);
     uint8_t vals = b->entries >> ((bits - 1) * (b->dim - 1) / b->dim);
@@ -1400,12 +1400,12 @@ int32_t VorbisDecoder::oggpack_eop() {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_info_floor_t> VorbisDecoder::floor0_info_unpack() {
+ps_ptr<VorbisDecoder::vorbis_info_floor> VorbisDecoder::floor0_info_unpack() {
 
     int32_t j;
 
-    ps_ptr<vorbis_info_floor_t> info;
-    info.alloc(sizeof(vorbis_info_floor_t), "info");
+    ps_ptr<vorbis_info_floor> info;
+    info.alloc(sizeof(vorbis_info_floor), "info");
     info.clear();
 
     info->order = bitReader(8);
@@ -1431,13 +1431,13 @@ err_out:
     return {};
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_info_floor_t> VorbisDecoder::floor1_info_unpack() {
+ps_ptr<VorbisDecoder::vorbis_info_floor> VorbisDecoder::floor1_info_unpack() {
 
     ps_ptr<uint8_t> B;
     int32_t         j, k, count = 0, maxclass = -1, rangebits;
 
-    ps_ptr<vorbis_info_floor_t> info;
-    info.alloc(sizeof(vorbis_info_floor_t), "info");
+    ps_ptr<vorbis_info_floor> info;
+    info.alloc(sizeof(vorbis_info_floor), "info");
     info.clear();
     /* read partitions */
     info->partitions = bitReader(5); /* only 0 to 31 legal */
@@ -1562,7 +1562,7 @@ void VorbisDecoder::vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n)
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* vorbis_info is for range checking */
-int32_t VorbisDecoder::res_unpack(vorbis_info_residue_t* info) {
+int32_t VorbisDecoder::res_unpack(vorbis_info_residue* info) {
     int32_t j, k;
     memset(info, 0, sizeof(*info));
 
@@ -1604,7 +1604,7 @@ errout:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* also responsible for range checking */
-int32_t VorbisDecoder::mapping_info_unpack(vorbis_info_mapping_t* info) {
+int32_t VorbisDecoder::mapping_info_unpack(vorbis_info_mapping* info) {
     int32_t i;
     memset(info, 0, sizeof(*info));
 
@@ -1655,9 +1655,9 @@ err_out:
 //      ⏫⏫⏫    O G G      I M P L     A B O V E  ⏫⏫⏫
 //      ⏬⏬⏬ V O R B I S   I M P L     B E L O W  ⏬⏬⏬
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-ps_ptr<vorbis_dsp_state_t> VorbisDecoder::vorbis_dsp_create() {
-    ps_ptr<vorbis_dsp_state_t> v;
-    v.alloc(sizeof(vorbis_dsp_state_t));
+ps_ptr<VorbisDecoder::vorbis_dsp_state> VorbisDecoder::vorbis_dsp_create() {
+    ps_ptr<vorbis_dsp_state> v;
+    v.alloc(sizeof(vorbis_dsp_state));
     v.clear();
 
     v->work.alloc(m_vorbisChannels * sizeof(ps_ptr<int32_t>));
@@ -1685,7 +1685,7 @@ ps_ptr<vorbis_dsp_state_t> VorbisDecoder::vorbis_dsp_create() {
     return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void VorbisDecoder::vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v) {
+void VorbisDecoder::vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state>& v) {
     if (!v.valid()) return;
 
     for (uint8_t i = 0; i < m_vorbisChannels; ++i) {
@@ -1697,7 +1697,7 @@ void VorbisDecoder::vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state_t>& v) {
     v.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void VorbisDecoder::vorbis_book_clear(ps_ptr<codebook_t>& v) {
+void VorbisDecoder::vorbis_book_clear(ps_ptr<codebook>& v) {
     if (!v.valid()) return;
     int s = 0;
     for (int i = 0; i < m_nrOfCodebooks; i++) {
@@ -1773,7 +1773,7 @@ void VorbisDecoder::mdct_shift_right(int32_t n, int32_t* in, int32_t* right) {
     for (i = 0; i < n; i++) right[i] = in[i << 1];
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::mapping_inverse(vorbis_info_mapping_t* info) {
+int32_t VorbisDecoder::mapping_inverse(vorbis_info_mapping* info) {
 
     int32_t i, j;
     int32_t n = m_blocksizes[m_dsp_state->W];
@@ -1903,16 +1903,16 @@ int32_t VorbisDecoder::mapping_inverse(vorbis_info_mapping_t* info) {
     return (0);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::floor0_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+int32_t VorbisDecoder::floor0_memosize(ps_ptr<vorbis_info_floor>& i) {
     return i.get()->order + 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::floor1_memosize(ps_ptr<vorbis_info_floor_t>& i) {
+int32_t VorbisDecoder::floor1_memosize(ps_ptr<vorbis_info_floor>& i) {
     return i.get()->posts;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp) {
-    vorbis_info_floor_t* info = (vorbis_info_floor_t*)i.get();
+int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor>& i, int32_t* lsp) {
+    vorbis_info_floor* info = (vorbis_info_floor*)i.get();
     int32_t              j;
 
     int32_t ampraw = bitReader(info->ampbits);
@@ -1923,7 +1923,7 @@ int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor_t>& i, int32_t*
         int32_t booknum = bitReader(_ilog(info->numbooks));
 
         if (booknum != -1 && booknum < info->numbooks) { /* be paranoid */
-            codebook_t* b = m_codebooks.get() + info->books[booknum];
+            codebook* b = m_codebooks.get() + info->books[booknum];
             int32_t     last = 0;
 
             if (vorbis_book_decodev_set(b, lsp, info->order, -24) == -1) goto eop;
@@ -1940,13 +1940,13 @@ eop:
     return (NULL);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t* VorbisDecoder::floor1_inverse1(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value) {
-    vorbis_info_floor_t* info = (vorbis_info_floor_t*)in.get();
+int32_t* VorbisDecoder::floor1_inverse1(ps_ptr<vorbis_info_floor>& in, int32_t* fit_value) {
+    vorbis_info_floor* info = (vorbis_info_floor*)in.get();
 
     int32_t     quant_look[4] = {256, 128, 86, 64};
     int32_t     i, j, k;
     int32_t     quant_q = quant_look[info->mult - 1];
-    codebook_t* books = m_codebooks.get();
+    codebook* books = m_codebooks.get();
 
     /* unpack wrapped/predicted values from stream */
     if (bitReader(1) == 1) {
@@ -2021,12 +2021,12 @@ eop:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* returns the [original, not compacted] entry number or -1 on eof *********/
-int32_t VorbisDecoder::vorbis_book_decode(codebook_t* book) {
+int32_t VorbisDecoder::vorbis_book_decode(codebook* book) {
     if (book->dec_type) return -1;
     return decode_packed_entry_number(book);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::decode_packed_entry_number(codebook_t* book) {
+int32_t VorbisDecoder::decode_packed_entry_number(codebook* book) {
     uint32_t chase = 0;
     int32_t  read = book->dec_maxlength;
     int32_t  lok = bitReader_look(read), i;
@@ -2123,7 +2123,7 @@ int32_t VorbisDecoder::render_point(int32_t x0, int32_t x1, int32_t y0, int32_t 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* unlike the others, we guard against n not being an integer number * of <dim> internally rather than in the upper
  layer (called only by * floor0) */
-int32_t VorbisDecoder::vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodev_set(codebook* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         int32_t  i;
@@ -2141,7 +2141,7 @@ int32_t VorbisDecoder::vorbis_book_decodev_set(codebook_t* book, int32_t* a, int
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::decode_map(codebook_t* s, int32_t* v, int32_t point) {
+int32_t VorbisDecoder::decode_map(codebook* s, int32_t* v, int32_t point) {
 
     uint32_t entry = decode_packed_entry_number(s);
 
@@ -2205,11 +2205,11 @@ int32_t VorbisDecoder::decode_map(codebook_t* s, int32_t* v, int32_t point) {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::res_inverse(vorbis_info_residue_t* info, int32_t** in, int32_t* nonzero, uint8_t ch) {
+int32_t VorbisDecoder::res_inverse(vorbis_info_residue* info, int32_t** in, int32_t* nonzero, uint8_t ch) {
     int32_t     j, k, s;
     uint8_t     m = 0, n = 0;
     uint8_t     used = 0;
-    codebook_t* phrasebook = m_codebooks.get() + info->groupbook;
+    codebook* phrasebook = m_codebooks.get() + info->groupbook;
     uint32_t    samples_per_partition = info->grouping;
     uint8_t     partitions_per_word = phrasebook->dim;
     uint32_t    pcmend = m_blocksizes[m_dsp_state->W];
@@ -2258,7 +2258,7 @@ int32_t VorbisDecoder::res_inverse(vorbis_info_residue_t* info, int32_t** in, in
                             for (j = 0; j < ch; j++) {
                                 uint32_t offset = info->begin + i * samples_per_partition;
                                 if (info->stagemasks[(int32_t)partword[j][i]] & (1 << s)) {
-                                    codebook_t* stagebook = m_codebooks.get() + info->stagebooks[(partword[j][i] << 3) + s];
+                                    codebook* stagebook = m_codebooks.get() + info->stagebooks[(partword[j][i] << 3) + s];
                                     if (info->type) {
                                         if (vorbis_book_decodev_add(stagebook, in[j] + offset, samples_per_partition, -8) == -1) goto eopbreak;
                                     } else {
@@ -2312,7 +2312,7 @@ int32_t VorbisDecoder::res_inverse(vorbis_info_residue_t* info, int32_t** in, in
                     /* now we decode residual values for the partitions */
                     for (k = 0; k < partitions_per_word && i < partvals; k++, i++)
                         if (info->stagemasks[(int32_t)partword[i]] & (1 << s)) {
-                            codebook_t* stagebook = m_codebooks.get() + info->stagebooks[(partword[i] << 3) + s];
+                            codebook* stagebook = m_codebooks.get() + info->stagebooks[(partword[i] << 3) + s];
                             if (vorbis_book_decodevv_add(stagebook, in, i * samples_per_partition + beginoff, ch, samples_per_partition, -8) == -1) goto eopbreak;
                         }
                 }
@@ -2325,7 +2325,7 @@ eopbreak:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t VorbisDecoder::vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodev_add(codebook* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         uint32_t i;
@@ -2340,7 +2340,7 @@ int32_t VorbisDecoder::vorbis_book_decodev_add(codebook_t* book, int32_t* a, int
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* returns 0 on OK or -1 on eof */
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t VorbisDecoder::vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodevs_add(codebook* book, int32_t* a, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t  step = n / book->dim;
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
@@ -2354,8 +2354,8 @@ int32_t VorbisDecoder::vorbis_book_decodevs_add(codebook_t* book, int32_t* a, in
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* lsp, int32_t* out) {
-    vorbis_info_floor_t* info = (vorbis_info_floor_t*)i.get();
+int32_t VorbisDecoder::floor0_inverse2(ps_ptr<vorbis_info_floor>& i, int32_t* lsp, int32_t* out) {
+    vorbis_info_floor* info = (vorbis_info_floor*)i.get();
 
     if (lsp) {
         int32_t amp = lsp[info->order];
@@ -2369,8 +2369,8 @@ int32_t VorbisDecoder::floor0_inverse2(ps_ptr<vorbis_info_floor_t>& i, int32_t* 
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::floor1_inverse2(ps_ptr<vorbis_info_floor_t>& in, int32_t* fit_value, int32_t* out) {
-    vorbis_info_floor_t* info = (vorbis_info_floor_t*)in.get();
+int32_t VorbisDecoder::floor1_inverse2(ps_ptr<vorbis_info_floor>& in, int32_t* fit_value, int32_t* out) {
+    vorbis_info_floor* info = (vorbis_info_floor*)in.get();
 
     int32_t n = m_blocksizes[m_dsp_state->W] / 2;
     int32_t j;
@@ -3004,7 +3004,7 @@ void VorbisDecoder::mdct_step8(int32_t* x, int32_t n, int32_t step) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* decode vector / dim granularity guarding is done in the upper layer */
-int32_t VorbisDecoder::vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point) {
+int32_t VorbisDecoder::vorbis_book_decodevv_add(codebook* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point) {
     if (book->used_entries > 0) {
         int32_t* v = (int32_t*)alloca(sizeof(*v) * book->dim);
         int32_t  i;
