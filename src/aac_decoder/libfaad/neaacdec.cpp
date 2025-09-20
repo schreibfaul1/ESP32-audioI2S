@@ -467,12 +467,12 @@ uint8_t NeaacDecoder::NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDe
 int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    // bitfile         ld;
-    // adif_header     adif;
-    // adts_header     adts;
-    adif_header*    adif = (adif_header*)faad_malloc(1 * sizeof(adif_header));
-    adts_header*    adts = (adts_header*)faad_malloc(1 * sizeof(adts_header));
-    bitfile*        ld = (bitfile*)faad_malloc(1 * sizeof(bitfile));
+    m_ld.alloc_array(1, "m_ld");
+    m_adif.alloc_array(1, "m_adif");
+    m_adts.alloc_array(1, "m_adts");
+    adif_header*    adif = m_adif.get();
+    adts_header*    adts = m_adts.get();
+    bitfile*        ld = m_ld.get();
     NeAACDecStruct* hDecoder = (NeAACDecStruct*)hpDecoder;
     if ((hDecoder == NULL) || (samplerate == NULL) || (channels == NULL) || (buffer_size == 0)) {
         ret = -1;
@@ -552,9 +552,9 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
     ret = bits;
     goto exit;
 exit:
-    faad_free(&ld);
-    faad_free(&adif);
-    faad_free(&adts);
+    m_ld.reset();
+    m_adif.reset();
+    m_adts.reset();
     return ret;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -685,7 +685,7 @@ void NeaacDecoder::NeAACDecClose(NeAACDecHandle hpDecoder) {
 #endif
         filter_bank_end(hDecoder->fb);
     drc_end(hDecoder->drc);
-    if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
+    if (hDecoder->sample_buffer) {m_sample_buffer.reset(); hDecoder->sample_buffer = NULL;}
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
         if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i], i);
@@ -1088,9 +1088,8 @@ void* NeaacDecoder::aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo
 #endif
         /* check if we want to use internal sample_buffer */
         if (sample_buffer_size == 0) {
-            if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
-            hDecoder->sample_buffer = NULL;
-            hDecoder->sample_buffer = faad_malloc(frame_len * output_channels * stride);
+            m_sample_buffer.alloc(frame_len * output_channels * stride);
+            hDecoder->sample_buffer = m_sample_buffer.get();
         } else if (sample_buffer_size < frame_len * output_channels * stride) {
             /* provided sample buffer is not big enough */
             hInfo->error = 27;
@@ -1629,10 +1628,10 @@ void NeaacDecoder::passf2neg(const uint16_t ido, const uint16_t l1, const comple
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign) {
-    real_t taur = FRAC_CONST(-0.5);
-    real_t taui = FRAC_CONST(0.866025403784439);
-    uint16_t      i, k, ac, ah;
-    complex_t     c2, c3, d2, d3, t2;
+    real_t    taur = FRAC_CONST(-0.5);
+    real_t    taui = FRAC_CONST(0.866025403784439);
+    uint16_t  i, k, ac, ah;
+    complex_t c2, c3, d2, d3, t2;
     if (ido == 1) {
         if (isign == 1) {
             for (k = 0; k < l1; k++) {
@@ -3448,7 +3447,7 @@ int16_t NeaacDecoder::huffman_codebook(uint8_t i) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::vcb11_check_LAV(uint8_t cb, int16_t* sp) {
     const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
-    uint16_t              max = 0;
+    uint16_t       max = 0;
     if (cb < 16 || cb > 31) return;
     max = vcb11_LAV_tab[cb - 16];
     if ((abs(sp[0]) > max) || (abs(sp[1]) > max)) {

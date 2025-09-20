@@ -68,6 +68,10 @@ class NeaacDecoder {
     ps_ptr<complex_t> m_work2048;
     ps_ptr<real_t> m_G_temp_prev[48][2][5];
     ps_ptr<real_t> m_Q_temp_prev[48][2][5];
+    ps_ptr<adif_header>m_adif;
+    ps_ptr<adts_header>m_adts;
+    ps_ptr<bitfile>m_ld;
+    ps_ptr<uint8_t>m_sample_buffer;
 
     uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
     uint32_t wl_min_lzc(uint32_t x);
