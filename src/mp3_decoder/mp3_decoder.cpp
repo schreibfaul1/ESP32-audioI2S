@@ -7,23 +7,118 @@
  */
 #include "mp3_decoder.h"
 
-MP3FrameInfo_t*      m_MP3FrameInfo;
 SFBandTable_t        m_SFBandTable;
 StereoMode_t         m_sMode;       /* mono/stereo mode */
 MPEGVersion_t        m_MPEGVersion; /* version ID */
-FrameHeader_t*       m_FrameHeader;
 SideInfoSub_t        m_SideInfoSub[MAX_NGRAN][MAX_NCHAN];
-SideInfo_t*          m_SideInfo;
 CriticalBandInfo_t   m_CriticalBandInfo[MAX_NCHAN]; /* filled in dequantizer, used in joint stereo reconstruction */
-DequantInfo_t*       m_DequantInfo;
-HuffmanInfo_t*       m_HuffmanInfo;
-IMDCTInfo_t*         m_IMDCTInfo;
 ScaleFactorInfoSub_t m_ScaleFactorInfoSub[MAX_NGRAN][MAX_NCHAN];
-ScaleFactorJS_t*     m_ScaleFactorJS;
-SubbandInfo_t*       m_SubbandInfo;
-MP3DecInfo_t*        m_MP3DecInfo;
+
+ps_ptr<MP3DecInfo_t>    m_MP3DecInfo;
+ps_ptr<FrameHeader_t>   m_FrameHeader;
+ps_ptr<SideInfo_t>      m_SideInfo;
+ps_ptr<ScaleFactorJS_t> m_ScaleFactorJS;
+ps_ptr<HuffmanInfo_t>   m_HuffmanInfo;
+ps_ptr<DequantInfo_t>   m_DequantInfo;
+ps_ptr<IMDCTInfo_t>     m_IMDCTInfo;
+ps_ptr<SubbandInfo_t>   m_SubbandInfo;
+ps_ptr<MP3FrameInfo_t>  m_MP3FrameInfo;
 
 #define xxx
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*
+ * Function:    MP3Decoder_AllocateBuffers
+ *
+ * Description: allocate all the memory needed for the MP3 decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      pointer to MP3DecInfo structure (initialized with pointers to all
+ *                the internal buffers needed for decoding)
+ *
+ * Notes:       if one or more mallocs fail, function frees any buffers already
+ *                allocated before returning
+ *
+ */
+
+bool xxx MP3Decoder_AllocateBuffers() {
+    m_MP3DecInfo.alloc("m_MP3DecInfo");
+    m_FrameHeader.alloc("m_FrameHeader");
+    m_SideInfo.alloc("m_SideInfo");
+    m_ScaleFactorJS.alloc("m_ScaleFactorJS");
+    m_HuffmanInfo.alloc("m_HuffmanInfo");
+    m_DequantInfo.alloc("m_DequantInfo");
+    m_IMDCTInfo.alloc("m_IMDCTInfo");
+    m_SubbandInfo.alloc("m_SubbandInfo");
+    m_MP3FrameInfo.alloc("m_MP3FrameInfo");
+
+    if (!m_MP3DecInfo.valid() || !m_FrameHeader.valid() || !m_SideInfo.valid() || !m_ScaleFactorJS.valid() || !m_HuffmanInfo.valid() || !m_DequantInfo.valid() || !m_IMDCTInfo.valid() ||
+        !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid()) {
+        MP3Decoder_FreeBuffers();
+        MP3_LOG_ERROR("not enough memory to allocate mp3decoder buffers");
+        return false;
+    }
+    MP3Decoder_ClearBuffer();
+    return true;
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*
+ * Function:    MP3Decoder_FreeBuffers
+ *
+ * Description: frees all the memory used by the MP3 decoder
+ *
+ * Inputs:      pointer to initialized MP3DecInfo structure
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+ *
+ * Notes:       safe to call even if some buffers were not allocated
+ */
+void xxx MP3Decoder_FreeBuffers() {
+    m_MP3DecInfo.reset();
+    m_FrameHeader.reset();
+    m_SideInfo.reset();
+    m_ScaleFactorJS.reset();
+    m_HuffmanInfo.reset();
+    m_DequantInfo.reset();
+    m_IMDCTInfo.reset();
+    m_SubbandInfo.reset();
+    m_MP3FrameInfo.reset();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*
+ * Function:    MP3Decoder_ClearBuffer
+ *
+ * Description: clear all the memory needed for the MP3 decoder
+ *
+ * Inputs:      none
+ *
+ * Outputs:     none
+ *
+ * Return:      none
+ *
+ */
+void xxx MP3Decoder_ClearBuffer(void xxx) {
+    /* important to do this - DSP primitives assume a bunch of state variables are 0 on first use */
+    m_MP3DecInfo.clear();
+    m_FrameHeader.clear();
+    m_SideInfo.clear();
+    m_ScaleFactorJS.clear();
+    m_HuffmanInfo.clear();
+    m_DequantInfo.clear();
+    m_IMDCTInfo.clear();
+    m_SubbandInfo.clear();
+    m_MP3FrameInfo.clear();
+    memset(&m_SFBandTable, 0, sizeof(SFBandTable_t));                                         // Clear SFBandTable
+    memset(&m_ScaleFactorInfoSub, 0, sizeof(ScaleFactorInfoSub_t) * (MAX_NGRAN * MAX_NCHAN)); // Clear ScaleFactorInfo
+    memset(&m_CriticalBandInfo, 0, sizeof(CriticalBandInfo_t) * MAX_NCHAN);                   // Clear CriticalBandInfo
+    memset(&m_SideInfoSub, 0, sizeof(SideInfoSub_t) * (MAX_NGRAN * MAX_NCHAN));               // Clear SideInfoSub
+    return;
+}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* B I T S T R E A M */
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -472,7 +567,7 @@ int32_t xxx UnpackScaleFactors(uint8_t* buf, int32_t* bitOffset, int32_t bitsAva
     if (m_MPEGVersion == MPEG1)
         UnpackSFMPEG1(bsi, &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch], m_SideInfo->scfsi[ch], gr, &m_ScaleFactorInfoSub[0][ch]);
     else
-        UnpackSFMPEG2(bsi, &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch], gr, ch, m_FrameHeader->modeExt, m_ScaleFactorJS);
+        UnpackSFMPEG2(bsi, &m_SideInfoSub[gr][ch], &m_ScaleFactorInfoSub[gr][ch], gr, ch, m_FrameHeader->modeExt, m_ScaleFactorJS.get());
 
     m_MP3DecInfo->part23Length[gr][ch] = m_SideInfoSub[gr][ch].part23Length;
 
@@ -1102,83 +1197,6 @@ int32_t xxx MP3Decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*
- * Function:    MP3Decoder_ClearBuffer
- *
- * Description: clear all the memory needed for the MP3 decoder
- *
- * Inputs:      none
- *
- * Outputs:     none
- *
- * Return:      none
- *
- */
-void xxx MP3Decoder_ClearBuffer(void xxx) {
-
-    /* important to do this - DSP primitives assume a bunch of state variables are 0 on first use */
-    memset(m_MP3DecInfo, 0, sizeof(MP3DecInfo_t));                                            // Clear MP3DecInfo
-    memset(&m_ScaleFactorInfoSub, 0, sizeof(ScaleFactorInfoSub_t) * (MAX_NGRAN * MAX_NCHAN)); // Clear ScaleFactorInfo
-    memset(m_SideInfo, 0, sizeof(SideInfo_t));                                                // Clear SideInfo
-    memset(m_FrameHeader, 0, sizeof(FrameHeader_t));                                          // Clear FrameHeader
-    memset(m_HuffmanInfo, 0, sizeof(HuffmanInfo_t));                                          // Clear HuffmanInfo
-    memset(m_DequantInfo, 0, sizeof(DequantInfo_t));                                          // Clear DequantInfo
-    memset(m_IMDCTInfo, 0, sizeof(IMDCTInfo_t));                                              // Clear IMDCTInfo
-    memset(m_SubbandInfo, 0, sizeof(SubbandInfo_t));                                          // Clear SubbandInfo
-    memset(&m_CriticalBandInfo, 0, sizeof(CriticalBandInfo_t) * MAX_NCHAN);                   // Clear CriticalBandInfo
-    memset(m_ScaleFactorJS, 0, sizeof(ScaleFactorJS_t));                                      // Clear ScaleFactorJS
-    memset(&m_SideInfoSub, 0, sizeof(SideInfoSub_t) * (MAX_NGRAN * MAX_NCHAN));               // Clear SideInfoSub
-    memset(&m_SFBandTable, 0, sizeof(SFBandTable_t));                                         // Clear SFBandTable
-    memset(m_MP3FrameInfo, 0, sizeof(MP3FrameInfo_t));                                        // Clear MP3FrameInfo
-
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/*
- * Function:    MP3Decoder_AllocateBuffers
- *
- * Description: allocate all the memory needed for the MP3 decoder
- *
- * Inputs:      none
- *
- * Outputs:     none
- *
- * Return:      pointer to MP3DecInfo structure (initialized with pointers to all
- *                the internal buffers needed for decoding)
- *
- * Notes:       if one or more mallocs fail, function frees any buffers already
- *                allocated before returning
- *
- */
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    // ESP32-S3: If there is PSRAM, prefer it
-    #define __malloc_heap_psram(size) heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL)
-#else
-    // ESP32, PSRAM is too slow, prefer SRAM
-    #define __malloc_heap_psram(size) heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL, MALLOC_CAP_DEFAULT | MALLOC_CAP_SPIRAM)
-#endif
-
-bool xxx MP3Decoder_AllocateBuffers(void xxx) {
-    if (!m_MP3DecInfo) { m_MP3DecInfo = (MP3DecInfo_t*)__malloc_heap_psram(sizeof(MP3DecInfo_t)); }
-    if (!m_FrameHeader) { m_FrameHeader = (FrameHeader_t*)__malloc_heap_psram(sizeof(FrameHeader_t)); }
-    if (!m_SideInfo) { m_SideInfo = (SideInfo_t*)__malloc_heap_psram(sizeof(SideInfo_t)); }
-    if (!m_ScaleFactorJS) { m_ScaleFactorJS = (ScaleFactorJS_t*)__malloc_heap_psram(sizeof(ScaleFactorJS_t)); }
-    if (!m_HuffmanInfo) { m_HuffmanInfo = (HuffmanInfo_t*)__malloc_heap_psram(sizeof(HuffmanInfo_t)); }
-    if (!m_DequantInfo) { m_DequantInfo = (DequantInfo_t*)__malloc_heap_psram(sizeof(DequantInfo_t)); }
-    if (!m_IMDCTInfo) { m_IMDCTInfo = (IMDCTInfo_t*)__malloc_heap_psram(sizeof(IMDCTInfo_t)); }
-    if (!m_SubbandInfo) { m_SubbandInfo = (SubbandInfo_t*)__malloc_heap_psram(sizeof(SubbandInfo_t)); }
-    if (!m_MP3FrameInfo) { m_MP3FrameInfo = (MP3FrameInfo_t*)__malloc_heap_psram(sizeof(MP3FrameInfo_t)); }
-
-    if (!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo || !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) {
-        MP3Decoder_FreeBuffers();
-        MP3_LOG_ERROR("not enough memory to allocate mp3decoder buffers");
-        return false;
-    }
-    MP3Decoder_ClearBuffer();
-    return true;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/*
  * Function:    MP3Decoder_IsInit
  *
  * Description: returns MP3 decoder initialization status
@@ -1194,62 +1212,7 @@ bool xxx MP3Decoder_IsInit(void xxx) {
     if (!m_MP3DecInfo || !m_FrameHeader || !m_SideInfo || !m_ScaleFactorJS || !m_HuffmanInfo || !m_DequantInfo || !m_IMDCTInfo || !m_SubbandInfo || !m_MP3FrameInfo) { return false; }
     return true;
 }
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/*
- * Function:    MP3Decoder_FreeBuffers
- *
- * Description: frees all the memory used by the MP3 decoder
- *
- * Inputs:      pointer to initialized MP3DecInfo structure
- *
- * Outputs:     none
- *
- * Return:      none
- *
- * Notes:       safe to call even if some buffers were not allocated
- */
-void xxx MP3Decoder_FreeBuffers() {
-    //    uint32_t i = ESP.getFreeHeap();
 
-    if (m_MP3DecInfo) {
-        free(m_MP3DecInfo);
-        m_MP3DecInfo = NULL;
-    }
-    if (m_FrameHeader) {
-        free(m_FrameHeader);
-        m_FrameHeader = NULL;
-    }
-    if (m_SideInfo) {
-        free(m_SideInfo);
-        m_SideInfo = NULL;
-    }
-    if (m_ScaleFactorJS) {
-        free(m_ScaleFactorJS);
-        m_ScaleFactorJS = NULL;
-    }
-    if (m_HuffmanInfo) {
-        free(m_HuffmanInfo);
-        m_HuffmanInfo = NULL;
-    }
-    if (m_DequantInfo) {
-        free(m_DequantInfo);
-        m_DequantInfo = NULL;
-    }
-    if (m_IMDCTInfo) {
-        free(m_IMDCTInfo);
-        m_IMDCTInfo = NULL;
-    }
-    if (m_SubbandInfo) {
-        free(m_SubbandInfo);
-        m_SubbandInfo = NULL;
-    }
-    if (m_MP3FrameInfo) {
-        free(m_MP3FrameInfo);
-        m_MP3FrameInfo = NULL;
-    }
-
-    //    MP3_LOG_DEBUG("MP3Decoder: %lu bytes memory was freed", ESP.getFreeHeap() - i);
-}
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*
  * H U F F M A N N
@@ -1773,7 +1736,7 @@ int32_t xxx MP3Dequantize(int32_t gr) {
         if (m_MPEGVersion == MPEG1) {
             IntensityProcMPEG1(m_HuffmanInfo->huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0], m_FrameHeader->modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock, mOut);
         } else {
-            IntensityProcMPEG2(m_HuffmanInfo->huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0], m_ScaleFactorJS, m_FrameHeader->modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock,
+            IntensityProcMPEG2(m_HuffmanInfo->huffDecBuf, nSamps, &m_ScaleFactorInfoSub[gr][1], &m_CriticalBandInfo[0], m_ScaleFactorJS.get(), m_FrameHeader->modeExt >> 1, m_SideInfoSub[gr][1].mixedBlock,
                                mOut);
         }
     }
