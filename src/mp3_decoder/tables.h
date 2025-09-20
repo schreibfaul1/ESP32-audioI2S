@@ -658,3 +658,5 @@ static const char* layer_table[] = {
     "Layer II",  // 2
     "Layer III"  // 3
 };
+
+static const uint8_t FDCT32s1s2[16] = {5, 3, 3, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 4};

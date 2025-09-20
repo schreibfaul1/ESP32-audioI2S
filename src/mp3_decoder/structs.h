@@ -40,6 +40,23 @@
         if (y > x) y = x;   \
     }
 
+#define D32FP(i, s1, s2)                                    \
+    {                                                       \
+        a0 = buf[i];                                        \
+        a3 = buf[31 - i];                                   \
+        a1 = buf[15 - i];                                   \
+        a2 = buf[16 + i];                                   \
+        b0 = a0 + a3;                                       \
+        b3 = MULSHIFT32(*cptr++, a0 - a3) << 1;             \
+        b1 = a1 + a2;                                       \
+        b2 = MULSHIFT32(*cptr++, a1 - a2) << (s1);          \
+        buf[i] = b0 + b1;                                   \
+        buf[15 - i] = MULSHIFT32(*cptr, b0 - b1) << (s2);   \
+        buf[16 + i] = b2 + b3;                              \
+        buf[31 - i] = MULSHIFT32(*cptr++, b3 - b2) << (s2); \
+    }
+
+
 typedef struct MP3FrameInfo {
     int32_t bitrate;
     int32_t nChans;
