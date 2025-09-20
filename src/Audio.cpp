@@ -2280,7 +2280,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
         if(atom_name.equals("mdat")){
             if(!m_m4aHdr.progressive){
-                AUDIO_LOG_DEBUG("non progressive file can't be played yet"); // mdat before moov, todo: skip mdat
+                AUDIO_LOG_ERROR("non progressive file can't be played yet"); // mdat before moov, todo: skip mdat
                 stopSong();
                 return -1;
             }
@@ -2904,6 +2904,7 @@ uint32_t Audio::stopSong() {
         if(m_codec == CODEC_FLAC) m_decoder->reset();
         if(m_codec == CODEC_OPUS) m_decoder->reset();
         if(m_codec == CODEC_VORBIS) m_decoder->reset();
+        m_decoder.reset();
         m_validSamples = 0;
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4599,6 +4600,7 @@ return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool Audio::initializeDecoder(uint8_t codec) {
+    if(m_decoder) return true; // stopSong first
     switch(codec) {
         case CODEC_MP3:
             m_decoder = createDecoder("mp3");
