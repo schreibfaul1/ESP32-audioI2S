@@ -127,8 +127,8 @@ class NeaacDecoder {
     void      drc_end(drc_info* drc);
     void      drc_decode(drc_info* drc, real_t* spec);
     sbr_info* sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint32_t sample_rate, uint8_t downSampledSBR, uint8_t IsDRM);
-    void      sbrDecodeEnd(sbr_info* sbr);
-    void      sbrReset(sbr_info* sbr);
+    void      sbrDecodeEnd(sbr_info* sbr, uint8_t i);
+    void      sbrReset(sbr_info* sbr, uint8_t i);
     uint8_t   sbrDecodeCoupleFrame(sbr_info* sbr, real_t* left_chan, real_t* right_chan, const uint8_t just_seeked, const uint8_t downSampledSBR);
     uint8_t   sbrDecodeSingleFrame(sbr_info* sbr, real_t* channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
     uint16_t  ps_data(ps_info* ps, bitfile* ld, uint8_t* header);

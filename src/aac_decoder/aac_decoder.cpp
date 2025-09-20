@@ -142,7 +142,10 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     m_validSamples = m_frameInfo.samples;
     int8_t err = 0 - m_frameInfo.error;
     m_compressionRatio = (float)m_frameInfo.samples * 2 / m_frameInfo.bytesconsumed;
-    if (err < 0) AAC_LOG_INFO(getErrorMessage(abs(err)));
+    if (err < 0){
+        if(err == -21) AAC_LOG_INFO(getErrorMessage(abs(err)));
+        else AAC_LOG_ERROR(getErrorMessage(abs(err)));
+    }
     return err;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

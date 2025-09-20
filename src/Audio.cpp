@@ -5112,7 +5112,6 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded){
             m_decoder->init();
             return 0;
         }
-        if(m_codec == CODEC_AAC) AUDIO_LOG_ERROR("%s", m_decoder->getErrorMessage(res));
         m_f_playing = false; // seek for new syncword
         if(bytesDecoded == 0) return 1; // skip one byte and seek for the next sync word
         return bytesDecoded;

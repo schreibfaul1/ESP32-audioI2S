@@ -690,7 +690,7 @@ void NeaacDecoder::NeAACDecClose(NeAACDecHandle hpDecoder) {
     if (hDecoder->sample_buffer) faad_free(&hDecoder->sample_buffer);
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
-        if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i]);
+        if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i], i);
     }
 #endif
     if (hDecoder) faad_free(&hDecoder);
@@ -1164,7 +1164,7 @@ error:
     }
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
-        if (hDecoder->sbr[i] != NULL) { sbrReset(hDecoder->sbr[i]); }
+        if (hDecoder->sbr[i] != NULL) { sbrReset(hDecoder->sbr[i], i); }
     }
 #endif
     faad_endbits(&ld);
@@ -11553,7 +11553,7 @@ sbr_info* NeaacDecoder::sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void NeaacDecoder::sbrDecodeEnd(sbr_info* sbr) {
+void NeaacDecoder::sbrDecodeEnd(sbr_info* sbr, uint8_t i) {
     uint8_t j;
     if (sbr) {
         qmfa_end(sbr->qmfa[0]);
@@ -11580,7 +11580,7 @@ void NeaacDecoder::sbrDecodeEnd(sbr_info* sbr) {
 #endif // #ifdef SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SBR_DEC
-void NeaacDecoder::sbrReset(sbr_info* sbr) {
+void NeaacDecoder::sbrReset(sbr_info* sbr, uint8_t i) {
     uint8_t j;
     if (sbr->qmfa[0] != NULL) memset(sbr->qmfa[0]->x, 0, 2 * sbr->qmfa[0]->channels * 10 * sizeof(real_t));
     if (sbr->qmfa[1] != NULL) memset(sbr->qmfa[1]->x, 0, 2 * sbr->qmfa[1]->channels * 10 * sizeof(real_t));
