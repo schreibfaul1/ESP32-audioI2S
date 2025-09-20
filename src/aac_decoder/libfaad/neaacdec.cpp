@@ -32,8 +32,6 @@
 #include <stdint-gcc.h>
 #include <stdlib.h>
 
-
-
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t NeaacDecoder::get_sr_index(const uint32_t samplerate) {
     if (92017 <= samplerate) return 0;
@@ -906,7 +904,9 @@ void* NeaacDecoder::NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo*
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
     #define ERROR_STATE_INIT 6
-void NeaacDecoder::conceal_output(NeAACDecStruct* hDecoder, uint16_t frame_len, uint8_t out_ch, void* sample_buffer) { return; }
+void NeaacDecoder::conceal_output(NeAACDecStruct* hDecoder, uint16_t frame_len, uint8_t out_ch, void* sample_buffer) {
+    return;
+}
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void* NeaacDecoder::aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer2, uint32_t sample_buffer_size) {
@@ -1235,7 +1235,9 @@ void NeaacDecoder::faad_endbits(bitfile* ld) {
     // void
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t NeaacDecoder::faad_get_processed_bits(bitfile* ld) { return (uint32_t)(8 * (4 * (ld->tail - ld->start) - 4) - (ld->bits_left)); }
+uint32_t NeaacDecoder::faad_get_processed_bits(bitfile* ld) {
+    return (uint32_t)(8 * (4 * (ld->tail - ld->start) - 4) - (ld->bits_left));
+}
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t NeaacDecoder::faad_byte_align(bitfile* ld) {
     int remainder = (32 - ld->bits_left) & 0x7;
@@ -1341,12 +1343,16 @@ uint8_t* NeaacDecoder::faad_getbitbuffer(bitfile* ld, uint32_t bits) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* return the original data buffer */
-void* NeaacDecoder::faad_origbitbuffer(bitfile* ld) { return (void*)ld->start; }
+void* NeaacDecoder::faad_origbitbuffer(bitfile* ld) {
+    return (void*)ld->start;
+}
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* return the original data buffer size */
-uint32_t NeaacDecoder::faad_origbitbuffer_size(bitfile* ld) { return ld->buffer_size; }
+uint32_t NeaacDecoder::faad_origbitbuffer_size(bitfile* ld) {
+    return ld->buffer_size;
+}
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* reversed bit reading routines, used for RVLC and HCR */
@@ -1623,8 +1629,8 @@ void NeaacDecoder::passf2neg(const uint16_t ido, const uint16_t l1, const comple
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::passf3(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const int8_t isign) {
-    static real_t taur = FRAC_CONST(-0.5);
-    static real_t taui = FRAC_CONST(0.866025403784439);
+    real_t taur = FRAC_CONST(-0.5);
+    real_t taui = FRAC_CONST(0.866025403784439);
     uint16_t      i, k, ac, ah;
     complex_t     c2, c3, d2, d3, t2;
     if (ido == 1) {
@@ -1840,7 +1846,8 @@ void NeaacDecoder::passf4neg(const uint16_t ido, const uint16_t l1, const comple
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void NeaacDecoder::passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4, const int8_t isign) {
+void NeaacDecoder::passf5(const uint16_t ido, const uint16_t l1, const complex_t* cc, complex_t* ch, const complex_t* wa1, const complex_t* wa2, const complex_t* wa3, const complex_t* wa4,
+                          const int8_t isign) {
     real_t    tr11 = FRAC_CONST(0.309016994374947);
     real_t    ti11 = FRAC_CONST(0.951056516295154);
     real_t    tr12 = FRAC_CONST(-0.809016994374947);
@@ -2122,11 +2129,20 @@ void NeaacDecoder::cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint
 void NeaacDecoder::cfftf(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
-        default: log_e("wrong length");
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
 }
@@ -2134,11 +2150,20 @@ void NeaacDecoder::cfftf(uint16_t mdct_len, complex_t* c) {
 void NeaacDecoder::cfftb(uint16_t mdct_len, complex_t* c) {
     cfft_info* cfft_select = nullptr;
     complex_t* work_select = nullptr;
-    switch(mdct_len){
-        case 256:  cfft_select = m_ccft256.get();  work_select = m_work256.get();  break;
-        case 1024: cfft_select = m_ccft1024.get(); work_select = m_work1024.get(); break;
-        case 2048: cfft_select = m_ccft2048.get(); work_select = m_work2048.get(); break;
-        default: log_e("wrong length");
+    switch (mdct_len) {
+        case 256:
+            cfft_select = m_ccft256.get();
+            work_select = m_work256.get();
+            break;
+        case 1024:
+            cfft_select = m_ccft1024.get();
+            work_select = m_work1024.get();
+            break;
+        case 2048:
+            cfft_select = m_ccft2048.get();
+            work_select = m_work2048.get();
+            break;
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
 }
@@ -2221,11 +2246,23 @@ startloop:
 void NeaacDecoder::cffti(uint16_t mdct_len, uint16_t n) {
     cfft_info* cfft_select = nullptr;
 
-    switch(mdct_len){
-        case 256:  m_ccft256.alloc();  cfft_select = m_ccft256.get();  m_work256.alloc_array(n * sizeof(complex_t));  break;
-        case 1024: m_ccft1024.alloc(); cfft_select = m_ccft1024.get(); m_work1024.alloc_array(n * sizeof(complex_t)); break;
-        case 2048: m_ccft2048.alloc(); cfft_select = m_ccft2048.get(); m_work2048.alloc_array(n * sizeof(complex_t)); break;
-        default: log_e("wrong length");
+    switch (mdct_len) {
+        case 256:
+            m_ccft256.alloc();
+            cfft_select = m_ccft256.get();
+            m_work256.alloc_array(n * sizeof(complex_t));
+            break;
+        case 1024:
+            m_ccft1024.alloc();
+            cfft_select = m_ccft1024.get();
+            m_work1024.alloc_array(n * sizeof(complex_t));
+            break;
+        case 2048:
+            m_ccft2048.alloc();
+            cfft_select = m_ccft2048.get();
+            m_work2048.alloc_array(n * sizeof(complex_t));
+            break;
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     cfft_select->n = n;
 
@@ -2318,8 +2355,8 @@ void NeaacDecoder::drc_decode(drc_info* drc, real_t* spec) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
 /* function declarations */
-void NeaacDecoder::  drm_ps_sa_element(drm_ps_info* ps, bitfile* ld);
-void NeaacDecoder::  drm_ps_pan_element(drm_ps_info* ps, bitfile* ld);
+void   NeaacDecoder::drm_ps_sa_element(drm_ps_info* ps, bitfile* ld);
+void   NeaacDecoder::drm_ps_pan_element(drm_ps_info* ps, bitfile* ld);
 int8_t NeaacDecoder::huff_dec(bitfile* ld, drm_ps_huff_tab huff);
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -2658,7 +2695,9 @@ drm_ps_info* NeaacDecoder::drm_ps_init(void) {
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
-void NeaacDecoder::drm_ps_free(drm_ps_info* ps) { faad_free(&ps); }
+void NeaacDecoder::drm_ps_free(drm_ps_info* ps) {
+    faad_free(&ps);
+}
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef DRM
@@ -3157,7 +3196,7 @@ void NeaacDecoder::gen_rand_vector(real_t* spec, int16_t scale_factor, uint16_t 
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::pns_decode(ic_stream* ics_left, ic_stream* ics_right, real_t* spec_left, real_t* spec_right, uint16_t frame_len, uint8_t channel_pair, uint8_t object_type,
-                    /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
+                              /* RNG states */ uint32_t* __r1, uint32_t* __r2) {
     uint8_t  g, sfb, b;
     uint16_t size, offs;
     uint8_t  group = 0;
@@ -3400,7 +3439,7 @@ uint8_t NeaacDecoder::huffman_binary_pair_sign(uint8_t cb, bitfile* ld, int16_t*
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int16_t NeaacDecoder::huffman_codebook(uint8_t i) {
-    static const uint32_t data = 16428320;
+    const uint32_t data = 16428320;
     if (i == 0)
         return (int16_t)(data >> 16) & 0xFFFF;
     else
@@ -3408,7 +3447,7 @@ int16_t NeaacDecoder::huffman_codebook(uint8_t i) {
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::vcb11_check_LAV(uint8_t cb, int16_t* sp) {
-    static const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
+    const uint16_t vcb11_LAV_tab[] = {16, 31, 47, 63, 95, 127, 159, 191, 223, 255, 319, 383, 511, 767, 1023, 2047};
     uint16_t              max = 0;
     if (cb < 16 || cb > 31) return;
     max = vcb11_LAV_tab[cb - 16];
@@ -3685,12 +3724,20 @@ real_t NeaacDecoder::fp_sqrt(real_t value) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
-log_e("%i", mdct_len);
-    switch(mdct_len){
-        case 256:  m_mdct256.alloc();  mdct_new = m_mdct256.get();  break;
-        case 1024: m_mdct1024.alloc(); mdct_new = m_mdct1024.get(); break;
-        case 2048: m_mdct2048.alloc(); mdct_new = m_mdct2048.get(); break;
-        default: log_e("wrong length");
+    switch (mdct_len) {
+        case 256:
+            m_mdct256.alloc();
+            mdct_new = m_mdct256.get();
+            break;
+        case 1024:
+            m_mdct1024.alloc();
+            mdct_new = m_mdct1024.get();
+            break;
+        case 2048:
+            m_mdct2048.alloc();
+            mdct_new = m_mdct2048.get();
+            break;
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     assert(N % 8 == 0);
     mdct_new->N = N;
@@ -3718,7 +3765,7 @@ log_e("%i", mdct_len);
 #endif
     }
     /* initialise fft */
-    cffti (mdct_len, N / 4);
+    cffti(mdct_len, N / 4);
 #ifdef PROFILE
     mdct_new->cycles = 0;
     mdct_new->fft_cycles = 0;
@@ -3727,21 +3774,33 @@ log_e("%i", mdct_len);
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::faad_mdct_end(uint16_t mdct_len) {
-    switch(mdct_len){
-        case 256:  m_work256.reset();  m_ccft256.reset();  m_mdct256.reset();  break;
-        case 1024: m_work1024.reset(); m_ccft1024.reset(); m_mdct1024.reset();  break;
-        case 2048: m_work2048.reset(); m_ccft2048.reset(); m_mdct2048.reset();  break;
-        default: log_e("wrong length");
+    switch (mdct_len) {
+        case 256:
+            m_work256.reset();
+            m_ccft256.reset();
+            m_mdct256.reset();
+            break;
+        case 1024:
+            m_work1024.reset();
+            m_ccft1024.reset();
+            m_mdct1024.reset();
+            break;
+        case 2048:
+            m_work2048.reset();
+            m_ccft2048.reset();
+            m_mdct2048.reset();
+            break;
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::faad_imdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
     mdct_info* mdct_select = nullptr;
-    switch(mdct_len){
+    switch (mdct_len) {
         case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
-        default: log_e("wrong length");
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     uint16_t  k;
     complex_t x;
@@ -3826,11 +3885,11 @@ void NeaacDecoder::faad_imdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
 #ifdef LTP_DEC
 void NeaacDecoder::faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
     mdct_info* mdct_select = nullptr;
-    switch(mdct_len){
-        case 256:  mdct_select =  m_mdct256.get(); break;
+    switch (mdct_len) {
+        case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
-        default: log_e("wrong length");
+        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
     uint16_t  k;
     complex_t x;
@@ -3965,7 +4024,7 @@ void NeaacDecoder::mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uin
 #endif
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void NeaacDecoder::ifilter_bank(fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap, uint8_t object_type,
-                      uint16_t frame_len) {
+                                uint16_t frame_len) {
     int16_t i;
     //    real_t transf_buf[2*1024] = {0};
     real_t*       transf_buf = (real_t*)faad_calloc(2 * 1024, sizeof(real_t));
@@ -6723,7 +6782,7 @@ real_t NeaacDecoder::iquant(int16_t q, const real_t* tab, uint8_t* error) {
   - Within a scalefactor window band, the coefficients are in ascending spectral order.
 */
 uint8_t NeaacDecoder::quant_to_spec(NeAACDecStruct* hDecoder, ic_stream* ics, int16_t* quant_data, real_t* spec_data, uint16_t frame_len) {
-    static const real_t pow2_table[] = {
+    const real_t pow2_table[] = {
         COEF_CONST(1.0), COEF_CONST(1.1892071150027210667174999705605), /* 2^0.25 */
         COEF_CONST(1.4142135623730950488016887242097),                  /* 2^0.5 */
         COEF_CONST(1.6817928305074290860622509524664)                   /* 2^0.75 */
@@ -9447,7 +9506,7 @@ int8_t NeaacDecoder::rvlc_huffman_esc(bitfile* ld, int8_t direction) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void NeaacDecoder::ssr_decode(ssr_info* ssr, fb_info* fb, uint8_t window_sequence, uint8_t window_shape, uint8_t window_shape_prev, real_t* freq_in, real_t* time_out, real_t* overlap,
-                    real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
+                              real_t ipqf_buffer[SSR_BANDS][96 / 4], real_t* prev_fmd, uint16_t frame_len) {
     uint8_t  band;
     uint16_t ssr_frame_len = frame_len / SSR_BANDS;
     real_t   time_tmp[2048] = {0};
@@ -9794,7 +9853,7 @@ uint8_t NeaacDecoder::is_ltp_ot(uint8_t object_type) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void NeaacDecoder::lt_prediction(ic_stream* ics, ltp_info* ltp, real_t* spec, int16_t* lt_pred_stat, fb_info* fb, uint8_t win_shape, uint8_t win_shape_prev, uint8_t sr_index, uint8_t object_type,
-                       uint16_t frame_len) {
+                                 uint16_t frame_len) {
     uint8_t  sfb;
     uint16_t bin, i, num_samples;
     // real_t x_est[2048];
@@ -9863,7 +9922,7 @@ int16_t NeaacDecoder::real_to_int16(real_t sig_in) {
     return (int16_t)lrintf(sig_in);
 }
     #endif // FIXED_POINT
-#endif // LPT_DEC
+#endif     // LPT_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef LTP_DEC
 void NeaacDecoder::lt_update_state(int16_t* lt_pred_stat, real_t* time, real_t* overlap, uint16_t frame_len, uint8_t object_type) {
@@ -11403,14 +11462,14 @@ void NeaacDecoder::huff_data(bitfile* ld, const uint8_t dt, const uint8_t nr_par
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void NeaacDecoder::ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands) {
-    static int initFlag = 0;
-    real_t **pp_q0, **pp_t0, **pp_t1;
-    real_t     a_pqfproto[PQFTAPS];
-    int        i;
-    if (initFlag == 0) {
+
+    real_t **pp_q0 = NULL, **pp_t0 = NULL, **pp_t1 = NULL;
+    real_t   a_pqfproto[PQFTAPS];
+    int      i;
+    if (m_initFlag == 0) {
         gc_set_protopqf(a_pqfproto);
         gc_setcoef_eff_pqfsyn(SSR_BANDS, PQFTAPS / (2 * SSR_BANDS), a_pqfproto, &pp_q0, &pp_t0, &pp_t1);
-        initFlag = 1;
+        m_initFlag = 1;
     }
     for (i = 0; i < frame_len / SSR_BANDS; i++) {
         int l, n, k;
@@ -11529,10 +11588,14 @@ sbr_info* NeaacDecoder::sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint
         sbr->qmfs[0] = qmfs_init((downSampledSBR) ? 32 : 64);
         sbr->qmfs[1] = qmfs_init((downSampledSBR) ? 32 : 64);
         for (j = 0; j < 5; j++) {
-            sbr->G_temp_prev[0][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
-            sbr->G_temp_prev[1][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
-            sbr->Q_temp_prev[0][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
-            sbr->Q_temp_prev[1][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
+            m_G_temp_prev[id_aac][0][j].alloc_array(64);
+            sbr->G_temp_prev[0][j] = m_G_temp_prev[id_aac][0][j].get();
+            m_G_temp_prev[id_aac][1][j].alloc_array(64);
+            sbr->G_temp_prev[1][j] = m_G_temp_prev[id_aac][1][j].get();
+            m_Q_temp_prev[id_aac][0][j].alloc_array(64);
+            sbr->Q_temp_prev[0][j] = m_Q_temp_prev[id_aac][0][j].get();
+            m_Q_temp_prev[id_aac][1][j].alloc_array(64);
+            sbr->Q_temp_prev[1][j] = m_Q_temp_prev[id_aac][1][j].get();
         }
         memset(sbr->Xsbr[0], 0, (sbr->numTimeSlotsRate + sbr->tHFGen) * 64 * sizeof(qmf_t));
         memset(sbr->Xsbr[1], 0, (sbr->numTimeSlotsRate + sbr->tHFGen) * 64 * sizeof(qmf_t));
@@ -11543,8 +11606,10 @@ sbr_info* NeaacDecoder::sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint
         sbr->qmfs[0] = qmfs_init((downSampledSBR) ? 32 : 64);
         sbr->qmfs[1] = NULL;
         for (j = 0; j < 5; j++) {
-            sbr->G_temp_prev[0][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
-            sbr->Q_temp_prev[0][j] = (real_t*)faad_malloc(64 * sizeof(real_t));
+            m_G_temp_prev[id_aac][0][j].alloc_array(64);
+            sbr->G_temp_prev[0][j] = m_G_temp_prev[id_aac][0][j].get();
+            m_Q_temp_prev[id_aac][0][j].alloc_array(64);
+            sbr->Q_temp_prev[0][j] = m_Q_temp_prev[id_aac][0][j].get();
         }
         memset(sbr->Xsbr[0], 0, (sbr->numTimeSlotsRate + sbr->tHFGen) * 64 * sizeof(qmf_t));
     }
@@ -11563,10 +11628,14 @@ void NeaacDecoder::sbrDecodeEnd(sbr_info* sbr, uint8_t i) {
             qmfs_end(sbr->qmfs[1]);
         }
         for (j = 0; j < 5; j++) {
-            if (sbr->G_temp_prev[0][j]) faad_free(&sbr->G_temp_prev[0][j]);
-            if (sbr->Q_temp_prev[0][j]) faad_free(&sbr->Q_temp_prev[0][j]);
-            if (sbr->G_temp_prev[1][j]) faad_free(&sbr->G_temp_prev[1][j]);
-            if (sbr->Q_temp_prev[1][j]) faad_free(&sbr->Q_temp_prev[1][j]);
+            m_G_temp_prev[i][0][j].reset();
+            sbr->G_temp_prev[0][j] = NULL;
+            m_Q_temp_prev[i][0][j].reset();
+            sbr->Q_temp_prev[0][j] = NULL;
+            m_G_temp_prev[i][1][j].reset();
+            sbr->G_temp_prev[1][j] = NULL;
+            m_Q_temp_prev[i][1][j].reset();
+            sbr->Q_temp_prev[1][j] = NULL;
         }
     #ifdef PS_DEC
         if (sbr->ps != NULL) ps_free(sbr->ps);
@@ -11587,8 +11656,8 @@ void NeaacDecoder::sbrReset(sbr_info* sbr, uint8_t i) {
     if (sbr->qmfs[0] != NULL) memset(sbr->qmfs[0]->v, 0, 2 * sbr->qmfs[0]->channels * 20 * sizeof(real_t));
     if (sbr->qmfs[1] != NULL) memset(sbr->qmfs[1]->v, 0, 2 * sbr->qmfs[1]->channels * 20 * sizeof(real_t));
     for (j = 0; j < 5; j++) {
-        if (sbr->G_temp_prev[0][j] != NULL) memset(sbr->G_temp_prev[0][j], 0, 64 * sizeof(real_t));
-        if (sbr->G_temp_prev[1][j] != NULL) memset(sbr->G_temp_prev[1][j], 0, 64 * sizeof(real_t));
+        m_G_temp_prev[i][0][j].clear();
+        m_G_temp_prev[i][1][j].clear();
         if (sbr->Q_temp_prev[0][j] != NULL) memset(sbr->Q_temp_prev[0][j], 0, 64 * sizeof(real_t));
         if (sbr->Q_temp_prev[1][j] != NULL) memset(sbr->Q_temp_prev[1][j], 0, 64 * sizeof(real_t));
     }
@@ -12268,8 +12337,6 @@ uint8_t NeaacDecoder::qmf_start_channel(uint8_t bs_start_freq, uint8_t bs_sample
 /* parameter is also called k2 */
 uint8_t NeaacDecoder::qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rate, uint8_t k0) {
 
-    auto longcmp = [](const void* a, const void* b) ->int { return ((int)(*(int32_t*)a - *(int32_t*)b)); };
-
     if (bs_stop_freq == 15) {
         return min(64, k0 * 3);
     } else if (bs_stop_freq == 14) {
@@ -12295,25 +12362,6 @@ uint8_t NeaacDecoder::qmf_stop_channel(uint8_t bs_stop_freq, uint32_t sample_rat
         } else {
             stopMin = (uint8_t)((8000.*128.)/(float)sample_rate + 0.5);
         }
-    #endif
-    #if 0 /* replaced by table lookup */
-        /* diverging power series */
-        for (i = 0; i <= 13; i++)
-        {
-            stopDk_t[i] = (int32_t)(stopMin*pow(64.0/stopMin, i/13.0) + 0.5);
-        }
-        for (i = 0; i < 13; i++)
-        {
-            stopDk[i] = stopDk_t[i+1] - stopDk_t[i];
-        }
-        /* needed? */
-        qsort(stopDk, 13, sizeof(stopDk[0]), longcmp);
-        k2 = stopMin;
-        for (i = 0; i < bs_stop_freq; i++)
-        {
-            k2 += stopDk[i];
-        }
-        return min(64, k2);
     #endif
         /* bs_stop_freq <= 13 */
         return min(64, stopMin + offset[get_sr_index(sample_rate)][min(bs_stop_freq, (uint8_t)13)]);
@@ -12424,14 +12472,14 @@ real_t NeaacDecoder::find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
     /* standard Taylor polynomial coefficients for exp(x) around 0 */
     /* a polynomial around x=1 is more precise, as most values are around 1.07,
        but this is just fine already */
-    static const real_t c1 = COEF_CONST(1.0);
-    static const real_t c2 = COEF_CONST(1.0 / 2.0);
-    static const real_t c3 = COEF_CONST(1.0 / 6.0);
-    static const real_t c4 = COEF_CONST(1.0 / 24.0);
-    real_t              r0 = logTable[a0];      /* coef */
-    real_t              r1 = logTable[a1];      /* coef */
-    real_t              r2 = (r1 - r0) / bands; /* coef */
-    real_t              rexp = c1 + MUL_C((c1 + MUL_C((c2 + MUL_C((c3 + MUL_C(c4, r2)), r2)), r2)), r2);
+    const real_t c1 = COEF_CONST(1.0);
+    const real_t c2 = COEF_CONST(1.0 / 2.0);
+    const real_t c3 = COEF_CONST(1.0 / 6.0);
+    const real_t c4 = COEF_CONST(1.0 / 24.0);
+    real_t       r0 = logTable[a0];      /* coef */
+    real_t       r1 = logTable[a1];      /* coef */
+    real_t       r2 = (r1 - r0) / bands; /* coef */
+    real_t       rexp = c1 + MUL_C((c1 + MUL_C((c2 + MUL_C((c3 + MUL_C(c4, r2)), r2)), r2)), r2);
     return (rexp >> (COEF_BITS - REAL_BITS)); /* real */
     #else
     return (real_t)pow((real_t)a1 / (real_t)a0, 1.0 / (real_t)bands);
@@ -12443,7 +12491,7 @@ real_t NeaacDecoder::find_initial_power(uint8_t bands, uint8_t a0, uint8_t a1) {
 /*   version for bs_freq_scale > 0*/
 uint8_t NeaacDecoder::master_frequency_table(sbr_info* sbr, uint8_t k0, uint8_t k2, uint8_t bs_freq_scale, uint8_t bs_alter_scale) {
 
-    auto longcmp = [](const void* a, const void* b) ->int { return ((int)(*(int32_t*)a - *(int32_t*)b)); };
+    auto longcmp = [](const void* a, const void* b) -> int { return ((int)(*(int32_t*)a - *(int32_t*)b)); };
 
     uint8_t k, bands, twoRegions;
     uint8_t k1, ret = 0;
@@ -12683,14 +12731,10 @@ uint8_t NeaacDecoder::derived_frequency_table(sbr_info* sbr, uint8_t bs_xover_ba
  * This reduces the number calls to this functions needed (now only on header reset) */
 void NeaacDecoder::limiter_frequency_table(sbr_info* sbr) {
 
-    auto longcmp = [](const void* a, const void* b) ->int { return ((int)(*(int32_t*)a - *(int32_t*)b)); };
+    auto longcmp = [](const void* a, const void* b) -> int { return ((int)(*(int32_t*)a - *(int32_t*)b)); };
 
-    #if 0
-    static const real_t limiterBandsPerOctave[] = { REAL_CONST(1.2),
-        REAL_CONST(2), REAL_CONST(3) };
-    #else
-    static const real_t limiterBandsCompare[] = {REAL_CONST(1.327152), REAL_CONST(1.185093), REAL_CONST(1.119872)};
-    #endif
+    const real_t limiterBandsCompare[] = {REAL_CONST(1.327152), REAL_CONST(1.185093), REAL_CONST(1.119872)};
+
     uint8_t k, s;
     int8_t  nrLim;
     #if 0
@@ -12828,14 +12872,14 @@ real_t NeaacDecoder::find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8
         #ifdef LOG2_TEST
 void NeaacDecoder::calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
-    static real_t limGain[] = {-1.0, 0.0, 1.0, 33.219};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
-    real_t        Q_M_lim[MAX_M];
-    real_t        G_lim[MAX_M];
-    real_t        G_boost;
-    real_t        S_M[MAX_M];
+    real_t  limGain[] = {-1.0, 0.0, 1.0, 33.219};
+    uint8_t m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
+    real_t  Q_M_lim[MAX_M];
+    real_t  G_lim[MAX_M];
+    real_t  G_boost;
+    real_t  S_M[MAX_M];
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -13002,14 +13046,14 @@ void NeaacDecoder::calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch
     #ifndef FIXED_POINT
         #ifndef LOG2_TEST
 void NeaacDecoder::calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
-    static real_t limGain[] = {0.5, 1.0, 2.0, 1e10};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
-    real_t        Q_M_lim[MAX_M];
-    real_t        G_lim[MAX_M];
-    real_t        G_boost;
-    real_t        S_M[MAX_M];
+    real_t  limGain[] = {0.5, 1.0, 2.0, 1e10};
+    uint8_t m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
+    real_t  Q_M_lim[MAX_M];
+    real_t  G_lim[MAX_M];
+    real_t  G_boost;
+    real_t  S_M[MAX_M];
     for (l = 0; l < sbr->L_E[ch]; l++) {
         uint8_t current_f_noise_band = 0;
         uint8_t current_res_band = 0;
@@ -14379,10 +14423,10 @@ real_t NeaacDecoder::find_log2_Qplus1(sbr_info* sbr, uint8_t k, uint8_t l, uint8
     #ifdef FIXED_POINT
 void NeaacDecoder::calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch) {
     /* log2 values of limiter gains */
-    static real_t limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
-    uint8_t       m, l, k;
-    uint8_t       current_t_noise_band = 0;
-    uint8_t       S_mapped;
+    real_t  limGain[] = {REAL_CONST(-1.0), REAL_CONST(0.0), REAL_CONST(1.0), REAL_CONST(33.219)};
+    uint8_t m, l, k;
+    uint8_t current_t_noise_band = 0;
+    uint8_t S_mapped;
     // real_t Q_M_lim[MAX_M];
     // real_t G_lim[MAX_M];
     // real_t S_M[MAX_M];
@@ -14561,14 +14605,20 @@ void NeaacDecoder::calculate_gain(sbr_info* sbr, sbr_hfadj_info* adj, uint8_t ch
     #ifndef FIXED_POINT
         #ifdef LOG2_TEST
             #define LOG2_MIN_INF -100000
-float NeaacDecoder::pow2(float val) { return pow(2.0, val); }
-float NeaacDecoder::log2(float val) { return log(val) / log(2.0); }
+float NeaacDecoder::pow2(float val) {
+    return pow(2.0, val);
+}
+float NeaacDecoder::log2(float val) {
+    return log(val) / log(2.0);
+}
             #define RB 14
 float QUANTISE2REAL(float val) {
     __int32 ival = (__int32)(val * (1 << RB));
     return (float)ival / (float)((1 << RB));
 }
-float QUANTISE2INT(float val) { return floor(val); }
+float QUANTISE2INT(float val) {
+    return floor(val);
+}
         #endif // LOG2_TEST
     #endif     // FIXED_POINT
 #endif         // SBR_DEC
@@ -15571,15 +15621,14 @@ void NeaacDecoder::sbr_qmf_analysis_32(sbr_info* sbr, qmfa_info* qmfa, const rea
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef SSR_DEC
 void NeaacDecoder::gc_set_protopqf(real_t* p_proto) {
-    int           j;
-    static real_t a_half[48] = {1.2206911375946939E-05,  1.7261986723798209E-05,  1.2300093657077942E-05,  -1.0833943097791965E-05, -5.7772498639901686E-05, -1.2764767618947719E-04,
-                                -2.0965186675013334E-04, -2.8166673689263850E-04, -3.1234860429017460E-04, -2.6738519958452353E-04, -1.1949424681824722E-04, 1.3965139412648678E-04,
-                                4.8864136409185725E-04,  8.7044629275148344E-04,  1.1949430269934793E-03,  1.3519708175026700E-03,  1.2346314373964412E-03,  7.6953209114159191E-04,
-                                -5.2242432579537141E-05, -1.1516092887213454E-03, -2.3538469841711277E-03, -3.4033123072127277E-03, -4.0028551071986133E-03, -3.8745415659693259E-03,
-                                -2.8321073426874310E-03, -8.5038892323704195E-04, 1.8856751185350931E-03,  4.9688741735340923E-03,  7.8056704536795926E-03,  9.7027909685901654E-03,
-                                9.9960423120166159E-03,  8.2019366335594487E-03,  4.1642072876103365E-03,  -1.8364453822737758E-03, -9.0384863094167686E-03, -1.6241528177129844E-02,
-                                -2.1939551286300665E-02, -2.4533179947088161E-02, -2.2591663337768787E-02, -1.5122066420044672E-02, -1.7971713448186293E-03, 1.6903413428575379E-02,
-                                3.9672315874127042E-02,  6.4487527248102796E-02,  8.8850025474701726E-02,  0.1101132906105560,      0.1258540205143761,      0.1342239368467012};
+    int    j;
+    real_t a_half[48] = {1.2206911375946939E-05,  1.7261986723798209E-05,  1.2300093657077942E-05,  -1.0833943097791965E-05, -5.7772498639901686E-05, -1.2764767618947719E-04, -2.0965186675013334E-04,
+                         -2.8166673689263850E-04, -3.1234860429017460E-04, -2.6738519958452353E-04, -1.1949424681824722E-04, 1.3965139412648678E-04,  4.8864136409185725E-04,  8.7044629275148344E-04,
+                         1.1949430269934793E-03,  1.3519708175026700E-03,  1.2346314373964412E-03,  7.6953209114159191E-04,  -5.2242432579537141E-05, -1.1516092887213454E-03, -2.3538469841711277E-03,
+                         -3.4033123072127277E-03, -4.0028551071986133E-03, -3.8745415659693259E-03, -2.8321073426874310E-03, -8.5038892323704195E-04, 1.8856751185350931E-03,  4.9688741735340923E-03,
+                         7.8056704536795926E-03,  9.7027909685901654E-03,  9.9960423120166159E-03,  8.2019366335594487E-03,  4.1642072876103365E-03,  -1.8364453822737758E-03, -9.0384863094167686E-03,
+                         -1.6241528177129844E-02, -2.1939551286300665E-02, -2.4533179947088161E-02, -2.2591663337768787E-02, -1.5122066420044672E-02, -1.7971713448186293E-03, 1.6903413428575379E-02,
+                         3.9672315874127042E-02,  6.4487527248102796E-02,  8.8850025474701726E-02,  0.1101132906105560,      0.1258540205143761,      0.1342239368467012};
     for (j = 0; j < 48; ++j) { p_proto[j] = p_proto[95 - j] = a_half[j]; }
 }
 #endif

@@ -25,6 +25,7 @@
 #pragma once
 #include "../../psram_unique_ptr.hpp"
 #include "Arduino.h"
+#include "Audio.h"
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -40,7 +41,7 @@
 
 class NeaacDecoder {
   public:
-    NeaacDecoder() = default;
+    NeaacDecoder(){ m_initFlag = 0;}
     ~NeaacDecoder() = default;
     NeAACDecHandle           NeAACDecOpen(void);
     NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
@@ -65,9 +66,12 @@ class NeaacDecoder {
     ps_ptr<complex_t> m_work256;
     ps_ptr<complex_t> m_work1024;
     ps_ptr<complex_t> m_work2048;
+    ps_ptr<real_t> m_G_temp_prev[48][2][5];
+    ps_ptr<real_t> m_Q_temp_prev[48][2][5];
 
     uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
     uint32_t wl_min_lzc(uint32_t x);
+    uint8_t m_initFlag = 0;
 #ifdef FIXED_POINT
     int32_t log2_int(uint32_t val);
     int32_t log2_fix(uint32_t val);
@@ -85,7 +89,30 @@ class NeaacDecoder {
     void*     NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size);
     void      cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
     void      cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
+#ifdef FIXED_POINT
     real_t    get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel);
+#endif
+#ifndef FIXED_POINT
+    real_t    get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t* internal_channel);
+    void      to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer);
+    void      to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
+    void      to_PCM_32bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
+    void      to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float** sample_buffer);
+    void      to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer);
+#endif
+#ifdef SSR_DEC
+    void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
+    void gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
+    real_t calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
+    real_t calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
+#endif
+#ifdef MAIN_DEC
+    void flt_round(float* pf);
+    int16_t quant_pred(float x);
+    float inv_quant_pred(int16_t q);
+    void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t pred);
+    void reset_pred_state(pred_state* state);
+#endif
     void      imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
     void      mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
     uint32_t  rewrev_word(uint32_t v, const uint8_t len);
@@ -301,7 +328,7 @@ class NeaacDecoder {
 #if (defined(PS_DEC) || defined(DRM_PS))
     uint8_t sbrDecodeSingleFramePS(sbr_info* sbr, real_t* left_channel, real_t* right_channel, const uint8_t just_seeked, const uint8_t downSampledSBR);
 #endif
-    void     unmap_envelope_noise(sbr_info* sbr);
+    // void     unmap_envelope_noise(sbr_info* sbr);
     int16_t  real_to_int16(real_t sig_in);
     uint8_t  sbr_save_prev_data(sbr_info* sbr, uint8_t ch);
     void     sbr_save_matrix(sbr_info* sbr, uint8_t ch);
@@ -360,8 +387,8 @@ class NeaacDecoder {
     void       sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch);
     uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 #ifdef SSR_DEC
-    void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
-    void gc_set_protopqf(real_t* p_proto)
+   // void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+    void gc_set_protopqf(real_t* p_proto);
 #endif
 #ifdef PS_DEC
         hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
@@ -388,4 +415,11 @@ class NeaacDecoder {
 #endif //  PS_DEC
     typedef const int8_t (*sbr_huff_tab)[2];
     int16_t sbr_huff_dec(bitfile* ld, sbr_huff_tab t_huff);
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//  Macro for comfortable calls
+#define AAC_LOG_ERROR(fmt, ...)   Audio::AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define AAC_LOG_WARN(fmt, ...)    Audio::AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define AAC_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define AAC_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define AAC_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 };
