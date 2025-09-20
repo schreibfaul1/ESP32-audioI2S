@@ -236,6 +236,7 @@ std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
         m_decoder->reset();
         m_decoder.reset();
     }
+    if (type == "mp3") return std::make_unique<MP3Decoder>(*this);
     if (type == "flac") return std::make_unique<FlacDecoder>(*this);
     if (type == "opus")  return std::make_unique<OpusDecoder>(*this);
     if (type == "aac")  return std::make_unique<AACDecoder>(*this);
@@ -278,11 +279,6 @@ void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.resetBuffer();
-    MP3Decoder_FreeBuffers();
-    // m_decoder->reset(); // flac
-    // AACDecoder_FreeBuffers();
-    // OPUSDecoder_FreeBuffers();
-    // VORBISDecoder_FreeBuffers();
     m_outBuff.clear(); // Clear OutputBuffer
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
@@ -2902,7 +2898,7 @@ uint32_t Audio::stopSong() {
             }
         }
         memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
-        if(m_codec == CODEC_MP3) MP3Decoder_FreeBuffers();
+        if(m_codec == CODEC_MP3) m_decoder->reset();
         if(m_codec == CODEC_AAC) m_decoder->reset();
         if(m_codec == CODEC_M4A) m_decoder->reset();
         if(m_codec == CODEC_FLAC) m_decoder->reset();
@@ -4605,14 +4601,10 @@ return true;
 bool Audio::initializeDecoder(uint8_t codec) {
     switch(codec) {
         case CODEC_MP3:
-            if(!MP3Decoder_IsInit()){
-                if(!MP3Decoder_AllocateBuffers()) {
-                    AUDIO_LOG_ERROR("The MP3Decoder could not be initialized");
-                    goto exit;
-                }
-                info(*this, evt_info, "MP3Decoder has been initialized");
-                InBuff.changeMaxBlockSize(m_frameSizeMP3);
-            }
+            m_decoder = createDecoder("mp3");
+            if (!m_decoder || !m_decoder->init()) {AUDIO_LOG_ERROR("The MP3Decoder could not be initialized"); goto exit;}
+            InBuff.changeMaxBlockSize(m_frameSizeMP3);
+            info(*this, evt_info, "MP3Decoder has been initialized");
             break;
         case CODEC_AAC:
             m_decoder = createDecoder("aac");
@@ -4988,9 +4980,9 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
         m_fnsy.nextSync = 0;
     }
     if(m_codec == CODEC_MP3) {
-        m_fnsy.nextSync = MP3FindSyncWord(data, len);
+        m_fnsy.nextSync = m_decoder->findSyncWord(data, (int32_t)len);
         if(m_fnsy.nextSync == -1) return len; // syncword not found, search next block
-        MP3Decoder_ClearBuffer();
+        m_decoder->clear();
     }
     if(m_codec == CODEC_AAC) { m_fnsy.nextSync = m_decoder->findSyncWord(data, (int32_t)len);}
     if(m_codec == CODEC_M4A) {
@@ -5035,11 +5027,11 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void Audio::setDecoderItems() {
     if(m_codec == CODEC_MP3) {
-        setChannels(MP3GetChannels());
-        setSampleRate(MP3GetSampRate());
-        setBitsPerSample(MP3GetBitsPerSample());
+        setChannels(m_decoder->getChannels());
+        setSampleRate(m_decoder->getSampleRate());
+        setBitsPerSample(m_decoder->getBitsPerSample());
     //    setBitrate(MP3GetBitrate());
-        info(*this, evt_info, "%s %s", MP3GetMPEGVersion(), MP3GetLayer());
+        info(*this, evt_info, "%s", m_decoder->arg1());
     }
     if(m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
         setChannels(m_decoder->getChannels());
@@ -5160,7 +5152,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
 
     switch(m_codec) {
         case CODEC_WAV:    res = 0; m_sbyt.bytesLeft = 0; break;
-        case CODEC_MP3:    res = MP3Decode(   data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
+        case CODEC_MP3:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_AAC:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_M4A:    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
         case CODEC_FLAC:   res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
@@ -5206,7 +5198,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
                                 m_validSamples = len;
                             }
                             break;
-        case CODEC_MP3:     m_validSamples = MP3GetOutputSamps();
+        case CODEC_MP3:     m_validSamples = m_decoder->getOutputSamples();
                             break;
         case CODEC_AAC:     m_validSamples = m_decoder->getOutputSamples() / getChannels();
                             if(!m_sbyt.isPS && m_decoder->val1()){ // only change 0 -> 1
@@ -6519,7 +6511,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos){
             offset = 0;
             if(m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {if(InBuff.bufferFilled() < 0xFFFF) return - 1;} // ogg frame <= 64kB
             if(m_codec == CODEC_WAV)   {while((m_resumeFilePos % 4) != 0){m_resumeFilePos++; offset++; if(m_resumeFilePos >= m_audioFileSize) goto exit;}}  // must divisible by four
-            if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; MP3Decoder_ClearBuffer();}
+            if(m_codec == CODEC_MP3)   {offset = mp3_correctResumeFilePos();  if(offset == -1) goto exit; m_decoder.reset();}
             if(m_codec == CODEC_FLAC)  {offset = flac_correctResumeFilePos(); if(offset == -1) goto exit; m_decoder.reset();}
             if(m_codec == CODEC_VORBIS){offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; m_decoder.reset();}
             if(m_codec == CODEC_OPUS)  {offset = ogg_correctResumeFilePos();  if(offset == -1) goto exit; m_decoder.reset();}
@@ -6684,7 +6676,7 @@ int32_t Audio::mp3_correctResumeFilePos() {
     if(av < InBuff.getMaxBlockSize()) return -1; // guard
 
     while(true) {
-        steps = MP3FindSyncWord(pos, av);
+        steps = m_decoder->findSyncWord(pos, av);
         if(steps == 0)break;
         if(steps == -1) return -1;
         pos += steps;
