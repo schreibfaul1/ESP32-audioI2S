@@ -3780,6 +3780,7 @@ void Audio::processWebStream() {
     // chunked data tramsfer
     if(m_f_chunked && m_pwst.availableBytes){
         if(m_pwst.chunkSize == 0) {
+            vTaskDelay(1);
             int chunkLen = getChunkSize(&m_pwst.readedBytes);
             if(chunkLen < 0) return;
             if(chunkLen == 0) m_f_allDataReceived = true;
