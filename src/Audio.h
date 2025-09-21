@@ -275,7 +275,7 @@ class Audio {
     bool                     parseContentType(char* ct);
     bool                     parseHttpResponseHeader();
     bool                     parseHttpRangeHeader();
-    bool                     initializeDecoder(uint8_t codec);
+    bool                     initializeDecoder();
     esp_err_t                I2Sstart();
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
@@ -309,7 +309,7 @@ class Audio {
     uint32_t ogg_correctResumeFilePos();
     int32_t  flac_correctResumeFilePos();
     int32_t  mp3_correctResumeFilePos();
-    uint8_t  determineOggCodec(uint8_t* data, uint16_t len);
+    uint8_t  determineOggCodec();
 
     //++++ implement several function with respect to the index of string ++++
     void strlower(char* str) {

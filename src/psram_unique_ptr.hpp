@@ -1833,7 +1833,12 @@ void unicodeToUTF8(const char* src) {
         };
         char* buff = get();
         int i = 0;
-        printf("%s dumping %u bytes:\n", name, n);
+        if(!name){
+            printf("dumping %u bytes:\n", n);
+        }
+        else{
+            printf("%s dumping %u bytes:\n", name, n);
+        }
         while (i < n) {
             int m = std::min(static_cast<int>(n), i + items_per_line); // max items_per_line, but not > n
             int s = 0;
