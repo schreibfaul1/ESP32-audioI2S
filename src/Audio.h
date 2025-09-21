@@ -225,67 +225,67 @@ class Audio {
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
     std::unique_ptr<Decoder> createDecoder(const std::string& type);
-
-    bool         fsRange(uint32_t range);
-    void         latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
-    void         htmlToUTF8(char* str);
-    void         setDefaults(); // free buffers and set defaults
-    int32_t      audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
-    int32_t      audioFileSeek(uint32_t position, size_t len = 0);
-    void         initInBuff();
-    bool         httpPrint(const char* host);
-    bool         httpRange(uint32_t range, uint32_t length = UINT32_MAX);
-    void         processLocalFile();
-    void         processWebStream();
-    void         processWebFile();
-    void         processWebStreamTS();
-    void         processWebStreamHLS();
-    void         playAudioData();
-    bool         readPlayListData();
-    const char*  parsePlaylist_M3U();
-    const char*  parsePlaylist_PLS();
-    const char*  parsePlaylist_ASX();
-    ps_ptr<char> parsePlaylist_M3U8();
-    uint16_t     accomplish_m3u8_url();
-    int16_t      prepare_first_m3u8_url(ps_ptr<char>& playlistBuff);
-    ps_ptr<char> m3u8redirection(uint8_t* codec);
-    void         showCodecParams();
-    int          findNextSync(uint8_t* data, size_t len);
-    uint32_t     decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded);
-    uint32_t     decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded);
-    int          sendBytes(uint8_t* data, size_t len);
-    void         setDecoderItems();
-    void         calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
-    void         showID3Tag(const char* tag, const char* val);
-    size_t       readAudioHeader(uint32_t bytes);
-    int          read_WAV_Header(uint8_t* data, size_t len);
-    int          read_FLAC_Header(uint8_t* data, size_t len);
-    int          read_ID3_Header(uint8_t* data, size_t len);
-    int          read_M4A_Header(uint8_t* data, size_t len);
-    size_t       process_m3u8_ID3_Header(uint8_t* packet);
-    bool         setSampleRate(uint32_t hz);
-    bool         setBitsPerSample(int bits);
-    bool         setChannels(int channels);
-    size_t       resampleTo48kStereo(const int16_t* input, size_t inputFrames);
-    void         playChunk();
-    void         computeVUlevel(int16_t sample[2]);
-    void         computeLimit();
-    void         Gain(int16_t* sample);
-    void         showstreamtitle(char* ml);
-    bool         parseContentType(char* ct);
-    bool         parseHttpResponseHeader();
-    bool         parseHttpRangeHeader();
-    bool         initializeDecoder(uint8_t codec);
-    esp_err_t    I2Sstart();
-    esp_err_t    I2Sstop();
-    void         zeroI2Sbuff();
-    void         IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-    void         IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-    void         IIR_filterChain2(int16_t iir_in[2], bool clear = false);
-    uint32_t     streamavail() { return m_client ? m_client->available() : 0; }
-    void         IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
-    bool         ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
-    uint64_t     getLastGranulePosition();
+    void                     destroy_decoder();
+    bool                     fsRange(uint32_t range);
+    void                     latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
+    void                     htmlToUTF8(char* str);
+    void                     setDefaults(); // free buffers and set defaults
+    int32_t                  audioFileRead(uint8_t* buff = nullptr, size_t len = 0);
+    int32_t                  audioFileSeek(uint32_t position, size_t len = 0);
+    void                     initInBuff();
+    bool                     httpPrint(const char* host);
+    bool                     httpRange(uint32_t range, uint32_t length = UINT32_MAX);
+    void                     processLocalFile();
+    void                     processWebStream();
+    void                     processWebFile();
+    void                     processWebStreamTS();
+    void                     processWebStreamHLS();
+    void                     playAudioData();
+    bool                     readPlayListData();
+    const char*              parsePlaylist_M3U();
+    const char*              parsePlaylist_PLS();
+    const char*              parsePlaylist_ASX();
+    ps_ptr<char>             parsePlaylist_M3U8();
+    uint16_t                 accomplish_m3u8_url();
+    int16_t                  prepare_first_m3u8_url(ps_ptr<char>& playlistBuff);
+    ps_ptr<char>             m3u8redirection(uint8_t* codec);
+    void                     showCodecParams();
+    int                      findNextSync(uint8_t* data, size_t len);
+    uint32_t                 decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded);
+    uint32_t                 decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded);
+    int                      sendBytes(uint8_t* data, size_t len);
+    void                     setDecoderItems();
+    void                     calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
+    void                     showID3Tag(const char* tag, const char* val);
+    size_t                   readAudioHeader(uint32_t bytes);
+    int                      read_WAV_Header(uint8_t* data, size_t len);
+    int                      read_FLAC_Header(uint8_t* data, size_t len);
+    int                      read_ID3_Header(uint8_t* data, size_t len);
+    int                      read_M4A_Header(uint8_t* data, size_t len);
+    size_t                   process_m3u8_ID3_Header(uint8_t* packet);
+    bool                     setSampleRate(uint32_t hz);
+    bool                     setBitsPerSample(int bits);
+    bool                     setChannels(int channels);
+    size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
+    void                     playChunk();
+    void                     computeVUlevel(int16_t sample[2]);
+    void                     computeLimit();
+    void                     Gain(int16_t* sample);
+    void                     showstreamtitle(char* ml);
+    bool                     parseContentType(char* ct);
+    bool                     parseHttpResponseHeader();
+    bool                     parseHttpRangeHeader();
+    bool                     initializeDecoder(uint8_t codec);
+    esp_err_t                I2Sstart();
+    esp_err_t                I2Sstop();
+    void                     zeroI2Sbuff();
+    void                     IIR_filterChain0(int16_t iir_in[2], bool clear = false);
+    void                     IIR_filterChain1(int16_t iir_in[2], bool clear = false);
+    void                     IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+    uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
+    void                     IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
+    bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
+    uint64_t                 getLastGranulePosition();
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -860,7 +860,9 @@ class Audio {
 #define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 };
-//----------------------------------------------------------------------------------------------------------------------
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  D E C O D E R  📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 class Decoder {
   public:
     virtual ~Decoder() = default;
@@ -879,7 +881,7 @@ class Decoder {
     virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) = 0;
     virtual void                  setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
     virtual const char*           getStreamTitle();
-    virtual const char*           getErrorMessage(int8_t err);
+    virtual const char*           whoIsIt();
     virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
     virtual const char*           arg1() = 0; // decoder specific
     virtual const char*           arg2() = 0; // decoder specific

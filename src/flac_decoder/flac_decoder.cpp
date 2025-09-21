@@ -202,8 +202,8 @@ const char* FlacDecoder::getStreamTitle(){
     return NULL;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* FlacDecoder::getErrorMessage(int8_t err){
-    return "";
+const char* FlacDecoder::whoIsIt(){
+    return "FLAC";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::parseOGG(uint8_t *inbuf, int32_t *bytesLeft){  // reference https://www.xiph.org/ogg/doc/rfc3533.txt

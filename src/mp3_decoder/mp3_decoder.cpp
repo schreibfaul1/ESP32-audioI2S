@@ -943,8 +943,8 @@ const char* MP3Decoder::getStreamTitle() {
     return nullptr; // nothing todo
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* MP3Decoder::getErrorMessage(int8_t err) {
-    return nullptr; // nothing todo
+const char* MP3Decoder::whoIsIt() {
+    return "MP3";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void MP3Decoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {

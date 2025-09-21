@@ -30,7 +30,7 @@ class AACDecoder : public Decoder {
     uint32_t              getAudioDataStart() override;
     uint32_t              getAudioFileDuration() override;
     const char*           getStreamTitle() override;
-    const char*           getErrorMessage(int8_t err) override;
+    const char*           whoIsIt() override;
     int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
     void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
@@ -43,6 +43,7 @@ class AACDecoder : public Decoder {
     Audio&       audio;
     ps_ptr<char> m_arg1;
     void         createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t samplingFrequencyIndex, uint8_t channelConfiguration);
+    const char*  getErrorMessage(int8_t err);
 
     NeAACDecHandle                m_hAac;
     NeAACDecFrameInfo             m_frameInfo;

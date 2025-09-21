@@ -811,8 +811,8 @@ int32_t VorbisDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     return VORBIS_ERR;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* VorbisDecoder::getErrorMessage(int8_t err) {
-    return "";
+const char* VorbisDecoder::whoIsIt() {
+    return "VORBIS";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void VorbisDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {

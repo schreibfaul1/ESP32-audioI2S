@@ -9252,6 +9252,7 @@ uint8_t NeaacDecoder::rvlc_scale_factor_data(ic_stream* ics, bitfile* ld) {
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef ERROR_RESILIENCE
 uint8_t NeaacDecoder::rvlc_decode_scale_factors(ic_stream* ics, bitfile* ld) {
+
     uint8_t  result;
     uint8_t  intensity_used = 0;
     uint8_t* rvlc_sf_buffer = NULL;
