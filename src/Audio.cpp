@@ -1437,6 +1437,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             stopSong();
             return -1; // false;
         }
+        m_decoder->setRawBlockParams(nic, sr, bps, 0, 0);
         setBitsPerSample(bps);
         setChannels(nic);
         setSampleRate(sr);
@@ -3859,8 +3860,6 @@ void Audio::processLocalFile() {
             }
             return;
         } else {
-            log_e("codec %i", m_codec);
-
             m_f_stream = true;
             info(*this, evt_info, "stream ready");
         }
@@ -4650,7 +4649,6 @@ exit: // termination condition
     return false;
 
 lastToDo:
-    AUDIO_LOG_ERROR("m_audioFileSize %i", m_audioFileSize);
     m_streamType = ST_WEBSTREAM;
     if (m_audioFileSize > 0) m_streamType = ST_WEBFILE; // content length found
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
@@ -5177,11 +5175,16 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setDecoderItems() {
+        if (m_codec == CODEC_WAV) {
+        setChannels(m_decoder->getChannels());
+        setSampleRate(m_decoder->getSampleRate());
+        setBitsPerSample(m_decoder->getBitsPerSample());
+        info(*this, evt_info, "%s", m_decoder->arg1());
+    }
     if (m_codec == CODEC_MP3) {
         setChannels(m_decoder->getChannels());
         setSampleRate(m_decoder->getSampleRate());
         setBitsPerSample(m_decoder->getBitsPerSample());
-        //    setBitrate(MP3GetBitrate());
         info(*this, evt_info, "%s", m_decoder->arg1());
     }
     if (m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
@@ -5309,22 +5312,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
-    switch (m_codec) {
-        case CODEC_WAV:
-            res = 0;
-            m_sbyt.bytesLeft = 0;
-            break;
-        case CODEC_MP3: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_AAC: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_M4A: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_FLAC: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_OPUS: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        case CODEC_VORBIS: res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get()); break;
-        default: {
-            AUDIO_LOG_ERROR("no valid codec found codec = %d", m_codec);
-            stopSong();
-        }
-    }
+    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
     bytesDecoded = len - m_sbyt.bytesLeft;
 
     // res - possible values are:
@@ -5346,20 +5334,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     const char*           st = NULL;
     std::vector<uint32_t> vec;
     switch (m_codec) {
-        case CODEC_WAV:
-            if (getBitsPerSample() == 16) {
-                memmove(m_outBuff.get(), data, len); // copy len data in outbuff and set validsamples and bytesdecoded=len
-                m_validSamples = len / (2 * getChannels());
-            } else {
-                for (int i = 0; i < len; i++) {
-                    int16_t sample1 = (data[i] & 0x00FF) - 128;
-                    int16_t sample2 = (data[i] & 0xFF00 >> 8) - 128;
-                    m_outBuff[i * 2 + 0] = sample1 << 8;
-                    m_outBuff[i * 2 + 1] = sample2 << 8;
-                }
-                m_validSamples = len;
-            }
-            break;
+        case CODEC_WAV: m_validSamples = m_decoder->getOutputSamples(); break;
         case CODEC_MP3: m_validSamples = m_decoder->getOutputSamples(); break;
         case CODEC_AAC:
             m_validSamples = m_decoder->getOutputSamples() / getChannels();
