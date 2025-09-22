@@ -300,269 +300,36 @@ class Audio {
     void        performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
-    bool     readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
-    int32_t  getChunkSize(uint16_t* readedBytes, bool first = false);
-    bool     readID3V1Tag();
-    int32_t  newInBuffStart(int32_t m_resumeFilePos);
-    boolean  streamDetection(uint32_t bytesAvail);
-    uint32_t m4a_correctResumeFilePos();
-    uint32_t ogg_correctResumeFilePos();
-    int32_t  flac_correctResumeFilePos();
-    int32_t  mp3_correctResumeFilePos();
-    uint8_t  determineOggCodec();
-
-    //++++ implement several function with respect to the index of string ++++
-    void strlower(char* str) {
-        unsigned char* p = (unsigned char*)str;
-        while (*p) {
-            *p = tolower((unsigned char)*p);
-            p++;
-        }
-    }
-
-    void trim(char* str) {
-        char* start = str; // keep the original pointer
-        char* end;
-        while (isspace((unsigned char)*start)) start++; // find the first non-space character
-
-        if (*start == 0) { // all characters were spaces
-            str[0] = '\0'; // return a empty string
-            return;
-        }
-
-        end = start + strlen(start) - 1; // find the end of the string
-
-        while (end > start && isspace((unsigned char)*end)) end--;
-        end[1] = '\0'; // Null-terminate the string after the last non-space character
-
-        // Move the trimmed string to the beginning of the memory area
-        memmove(str, start, strlen(start) + 1); // +1 for '\0'
-    }
-
-    bool startsWith(const char* base, const char* str) {
-        // fb
-        char c;
-        while ((c = *str++) != '\0')
-            if (c != *base++) return false;
-        return true;
-    }
-
-    bool endsWith(const char* base, const char* searchString) {
-        int32_t slen = strlen(searchString);
-        if (slen == 0) return false;
-        const char* p = base + strlen(base);
-        //  while(p > base && isspace(*p)) p--;  // rtrim
-        p -= slen;
-        if (p < base) return false;
-        return (strncmp(p, searchString, slen) == 0);
-    }
-
-    int indexOf(const char* base, const char* str, int startIndex = 0) {
-        // fbi
-        const char* p = base;
-        for (; startIndex > 0; startIndex--)
-            if (*p++ == '\0') return -1;
-        char* pos = strstr(p, str);
-        if (pos == nullptr) return -1;
-        return pos - base;
-    }
-
-    int indexOf(const char* base, char ch, int startIndex = 0) {
-        // fb
-        const char* p = base;
-        for (; startIndex > 0; startIndex--)
-            if (*p++ == '\0') return -1;
-        char* pos = strchr(p, ch);
-        if (pos == nullptr) return -1;
-        return pos - base;
-    }
-
-    int lastIndexOf(const char* haystack, const char* needle) {
-        // fb
-        int nlen = strlen(needle);
-        if (nlen == 0) return -1;
-        const char* p = haystack - nlen + strlen(haystack);
-        while (p >= haystack) {
-            int i = 0;
-            while (needle[i] == p[i])
-                if (++i == nlen) return p - haystack;
-            p--;
-        }
-        return -1;
-    }
-
-    int lastIndexOf(const char* haystack, const char needle) {
-        // fb
-        const char* p = strrchr(haystack, needle);
-        return (p ? p - haystack : -1);
-    }
-
-    int specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false) {
-        int result = 0;                       // seek for str in buffer or in header up to baselen, not nullterninated
-        if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
-        for (int i = 0; i < baselen - strlen(str); i++) {
-            result = i;
-            for (int j = 0; j < strlen(str) + exact; j++) {
-                if (*(base + i + j) != *(str + j)) {
-                    result = -1;
-                    break;
-                }
-            }
-            if (result >= 0) break;
-        }
-        return result;
-    }
-
-    // Find the last instance of Str in the buffer backwards and checks end-of-stream-bit
-    int specialIndexOfLast(uint8_t* base, const char* str, int baselen) {
-        int result = -1;
-        if (strlen(str) > baselen) return -1; // too short buffer
-
-        for (int i = baselen - strlen(str); i >= 0; i--) { // search backwards, start at the end of the buffer
-            int match = 1;
-            for (int j = 0; j < strlen(str); j++) {
-                if (base[i + j] != str[j]) {
-                    match = 0;
-                    break;
-                }
-            }
-            if (match) return i;
-        }
-        return result;
-    }
-
-    int find_utf16_null_terminator(const uint8_t* buf, int start, int max) {
-        for (int i = start; i + 1 < max; i += 2) {
-            if (buf[i] == 0x00 && buf[i + 1] == 0x00) return i; // Index to the first zero-byte
-        }
-        return -1; // not found
-    }
-
-    int32_t min3(int32_t a, int32_t b, int32_t c) {
-        uint32_t min_val = a;
-        if (b < min_val) min_val = b;
-        if (c < min_val) min_val = c;
-        return min_val;
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    //  some other functions
-    uint64_t bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8) {
-        uint64_t result = 0; // Use uint64_t for greater caching
-        if (numBytes < 1 || numBytes > 8) return 0;
-        for (int i = 0; i < numBytes; i++) {
-            result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); // Make sure the calculation is done correctly
-        }
-        if (result > SIZE_MAX) {
-            log_e("range overflow");
-            return 0;
-        }
-        return result;
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    bool b64encode(const char* source, uint16_t sourceLength, char* dest) {
-        size_t size = base64_encode_expected_len(sourceLength) + 1;
-        char*  buffer = (char*)malloc(size);
-        if (buffer) {
-            base64_encodestate _state;
-            base64_init_encodestate(&_state);
-            int len = base64_encode_block(&source[0], sourceLength, &buffer[0], &_state);
-            base64_encode_blockend((buffer + len), &_state);
-            memcpy(dest, buffer, strlen(buffer));
-            dest[strlen(buffer)] = '\0';
-            free(buffer);
-            return true;
-        }
-        return false;
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec) {
-        for (int i = 0; i < vec.size(); i++) vec[i].reset();
-        vec.clear();         // unique_ptr takes care of free()
-        vec.shrink_to_fit(); // put back memory
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    void deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq) {
-        for (int i = 0; i < deq.size(); i++) deq[i].reset();
-        deq.clear();         // unique_ptr takes care of free()
-        deq.shrink_to_fit(); // put back memory
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    uint32_t simpleHash(const char* str) {
-        if (str == NULL) return 0;
-        uint32_t hash = 0;
-        for (int i = 0; i < strlen(str); i++) {
-            if (str[i] < 32) continue; // ignore control sign
-            hash += (str[i] - 31) * i * 32;
-        }
-        return hash;
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    ps_ptr<char> urlencode(const char* str, bool spacesOnly) {
-        if (!str) { return {}; } // Enter is zero
-
-        // Reserve memory for the result (3x the length of the input string, worst-case)
-        size_t       inputLength = strlen(str);
-        size_t       bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
-        ps_ptr<char> encoded;
-        encoded.alloc(bufferSize);
-        if (!encoded.valid()) { return {}; } // memory allocation failed
-
-        const char* p_input = str;               // Copy of the input pointer
-        char*       p_encoded = encoded.get();   // pointer of the output buffer
-        size_t      remainingSpace = bufferSize; // remaining space in the output buffer
-
-        while (*p_input) {
-            if (isalnum((unsigned char)*p_input)) {
-                // adopt alphanumeric characters directly
-                if (remainingSpace > 1) {
-                    *p_encoded++ = *p_input;
-                    remainingSpace--;
-                } else {
-                    return {}; // security check failed
-                }
-            } else if (spacesOnly && *p_input != 0x20) {
-                // Nur Leerzeichen nicht kodieren
-                if (remainingSpace > 1) {
-                    *p_encoded++ = *p_input;
-                    remainingSpace--;
-                } else {
-                    return {}; // security check failed
-                }
-            } else {
-                // encode unsafe characters as '%XX'
-                if (remainingSpace > 3) {
-                    int written = snprintf(p_encoded, remainingSpace, "%%%02X", (unsigned char)*p_input);
-                    if (written < 0 || written >= (int)remainingSpace) {
-                        return {}; // error writing to buffer
-                    }
-                    p_encoded += written;
-                    remainingSpace -= written;
-                } else {
-                    return {}; // security check failed
-                }
-            }
-            p_input++;
-        }
-
-        // Null-terminieren
-        if (remainingSpace > 0) {
-            *p_encoded = '\0';
-        } else {
-            return {}; // security check failed
-        }
-        encoded.shrink_to_fit();
-        return encoded;
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    //  Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
-    uint32_t bswap32(uint32_t x) { return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) | ((x & 0x0000FF00) << 8) | ((x & 0x000000FF) << 24); }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    //  Function to reverse the byte order of a 64-bit value (big-endian to little-endian)
-    uint64_t bswap64(uint64_t x) {
-        return ((x & 0xFF00000000000000ULL) >> 56) | ((x & 0x00FF000000000000ULL) >> 40) | ((x & 0x0000FF0000000000ULL) >> 24) | ((x & 0x000000FF00000000ULL) >> 8) |
-               ((x & 0x00000000FF000000ULL) << 8) | ((x & 0x0000000000FF0000ULL) << 24) | ((x & 0x000000000000FF00ULL) << 40) | ((x & 0x00000000000000FFULL) << 56);
-    }
-    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    bool         readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
+    int32_t      getChunkSize(uint16_t* readedBytes, bool first = false);
+    bool         readID3V1Tag();
+    int32_t      newInBuffStart(int32_t m_resumeFilePos);
+    boolean      streamDetection(uint32_t bytesAvail);
+    uint32_t     m4a_correctResumeFilePos();
+    uint32_t     ogg_correctResumeFilePos();
+    int32_t      flac_correctResumeFilePos();
+    int32_t      mp3_correctResumeFilePos();
+    uint8_t      determineOggCodec();
+    void         strlower(char* str);
+    void         trim(char* str);
+    bool         startsWith(const char* base, const char* str);
+    bool         endsWith(const char* base, const char* searchString);
+    int          indexOf(const char* base, const char* str, int startIndex = 0);
+    int          indexOf(const char* base, char ch, int startIndex = 0);
+    int          lastIndexOf(const char* haystack, const char* needle);
+    int          lastIndexOf(const char* haystack, const char needle);
+    int          specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
+    int          specialIndexOfLast(uint8_t* base, const char* str, int baselen);
+    int          find_utf16_null_terminator(const uint8_t* buf, int start, int max);
+    int32_t      min3(int32_t a, int32_t b, int32_t c);
+    uint64_t     bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
+    bool         b64encode(const char* source, uint16_t sourceLength, char* dest);
+    void         vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec);
+    void         deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
+    uint32_t     simpleHash(const char* str);
+    ps_ptr<char> urlencode(const char* str, bool spacesOnly);
+    uint32_t     bswap32(uint32_t x);
+    uint64_t     bswap64(uint64_t x);
 
   private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -592,7 +359,7 @@ class Audio {
         M4A_META = 16,
         M4A_MDHD = 17,
         M4A_AMRDY = 99,
-        M4A_OKAY = 100
+        M4A_OKAY = 100,
     };
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5, CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8, CODEC_VORBIS = 9 };
     const char* codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS"};

@@ -25,13 +25,13 @@ char audioI2SVers[] = "\
 #include "wav_decoder/wav_decoder.h"
 
 // constants
-constexpr size_t m_frameSizeWav = 4096;
+constexpr size_t m_frameSizeWav = 2048;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600;
 constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
 constexpr size_t m_frameSizeOPUS = 2048;
 constexpr size_t m_frameSizeVORBIS = 4096 * 2;
-constexpr size_t m_outbuffSize = 4096 * 2;
+constexpr size_t m_outbuffSize = 4096 * 4;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
 constexpr size_t AUDIO_STACK_SIZE = 3300;
@@ -3106,7 +3106,6 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
-    int16_t* outBuff_ptr = nullptr;
 
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
@@ -3157,34 +3156,43 @@ void IRAM_ATTR Audio::playChunk() {
     }
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
-    m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_validSamples);
-    m_validSamples = m_plCh.samples48K;
-    outBuff_ptr = m_samplesBuff48K.get();
+    if (m_plCh.count == 0) {
+        m_plCh.validSamples = m_validSamples;
+        m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
+        m_validSamples = m_plCh.samples48K;
 
-    if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
-        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-        i2s_channel_disable(m_i2s_tx_handle);
-        i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-        i2s_channel_enable(m_i2s_tx_handle);
-    };
-#else
-    outBuff_ptr = m_outBuff.get();
+        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
+            m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+            i2s_channel_disable(m_i2s_tx_handle);
+            i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+            i2s_channel_enable(m_i2s_tx_handle);
+        }
+    }
 #endif
 
+    //------------------------------------------------------------------------------------------------------
     if (audio_process_i2s) {
         // processing the audio samples from external before forwarding them to i2s
         bool continueI2S = false;
-        audio_process_i2s((int16_t*)outBuff_ptr, m_validSamples, &continueI2S); // 48KHz stereo 16bps
+#ifdef SR_48K
+        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
+#else
+        audio_process_i2s(m_outBuff.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
+#endif
         if (!continueI2S) {
             m_validSamples = 0;
             m_plCh.count = 0;
             return;
         }
     }
+    //------------------------------------------------------------------------------------------------------
 
 i2swrite:
-
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, outBuff_ptr + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
+#ifdef SR_48K
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
+#else
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
+#endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
     m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
@@ -3845,7 +3853,7 @@ void Audio::processLocalFile() {
 
     if (!m_f_stream) {
         if (m_controlCounter != 100) {
-            if (m_codec == CODEC_OGG) { m_controlCounter = 100; }
+            if (m_f_ogg) { m_controlCounter = 100; }
             if ((millis() - m_prlf.ctime) > m_prlf.timeout) {
                 AUDIO_LOG_ERROR("audioHeader reading timeout");
                 m_f_running = false;
@@ -3975,7 +3983,7 @@ void Audio::processWebStream() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebFile() {
-    AUDIO_LOG_INFO("pwf");
+
     if (!m_lastHost.valid()) {
         AUDIO_LOG_ERROR("m_lastHost is empty");
         return;
@@ -4024,17 +4032,17 @@ void Audio::processWebFile() {
 
     if (!m_f_stream) {
         if (m_controlCounter != 100) {
-            if (m_codec == CODEC_OGG) { m_controlCounter = 100; }
-            if ((millis() - m_prlf.ctime) > m_prlf.timeout) {
+            if (m_f_ogg) { m_controlCounter = 100; }
+            if ((millis() - m_pwf.ctime) > m_pwf.timeout) {
                 AUDIO_LOG_ERROR("audioHeader reading timeout");
                 m_f_running = false;
                 goto exit;
             }
-            if (InBuff.bufferFilled() > m_prlf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
+            if (InBuff.bufferFilled() > m_pwf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
                 InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
             }
             if (m_controlCounter == 100) {
-                if (m_audioDataStart > 0) { m_prlf.audioHeaderFound = true; }
+                if (m_audioDataStart > 0) { m_pwf.audioHeaderFound = true; }
                 if (!m_audioDataSize) m_audioDataSize = m_audioFileSize;
             }
             return;
@@ -5175,73 +5183,34 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setDecoderItems() {
-        if (m_codec == CODEC_WAV) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-        info(*this, evt_info, "%s", m_decoder->arg1());
+    setChannels(m_decoder->getChannels());
+    setSampleRate(m_decoder->getSampleRate());
+    setBitsPerSample(m_decoder->getBitsPerSample());
+    info(*this, evt_info, "%s", m_decoder->arg1());
+
+    if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
+        m_audioDataStart = m_decoder->getAudioDataStart();
+        if (m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
     }
-    if (m_codec == CODEC_MP3) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-        info(*this, evt_info, "%s", m_decoder->arg1());
+
+    if (m_lastGranulePosition && m_audioFileSize && m_sampleRate) {
+        m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
+        m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
+        info(*this, evt_bitrate, "%i", m_nominal_bitrate);
+        info(*this, evt_info, "Duration (s): %lu", m_audioFileDuration);
+        info(*this, evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
     }
-    if (m_codec == CODEC_AAC || m_codec == CODEC_M4A) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-    }
-    if (m_codec == CODEC_FLAC) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-        if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
-            m_audioDataStart = m_decoder->getAudioDataStart();
-            if (m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
-        }
-    }
-    if (m_codec == CODEC_OPUS) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-        if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
-            m_audioDataStart = m_decoder->getAudioDataStart();
-            if (m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
-        }
-        if (m_lastGranulePosition && m_audioFileSize && m_sampleRate) {
-            m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
-            m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
-            info(*this, evt_bitrate, "%i", m_nominal_bitrate);
-            info(*this, evt_info, "Duration (s): %lu", m_audioFileDuration);
-            info(*this, evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
-        }
-    }
-    if (m_codec == CODEC_VORBIS) {
-        setChannels(m_decoder->getChannels());
-        setSampleRate(m_decoder->getSampleRate());
-        setBitsPerSample(m_decoder->getBitsPerSample());
-        //    setBitrate(VORBISGetBitRate());
-        if (m_decoder->getAudioDataStart() > 0) {
-            m_audioDataStart = m_decoder->getAudioDataStart();
-            if (m_audioFileSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
-        }
-        if (m_lastGranulePosition && m_audioFileSize && m_sampleRate) {
-            m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
-            m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
-            info(*this, evt_bitrate, "%i", m_nominal_bitrate);
-            info(*this, evt_info, "Duration (s): %lu", m_audioFileDuration);
-            info(*this, evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
-        }
-    }
+
     if (getBitsPerSample() != 8 && getBitsPerSample() != 16) {
         AUDIO_LOG_ERROR("Bits per sample must be 8 or 16, found %i", getBitsPerSample());
         stopSong();
     }
+
     if (getChannels() != 1 && getChannels() != 2) {
         AUDIO_LOG_ERROR("Num of channels must be 1 or 2, found %i", getChannels());
         stopSong();
     }
+
     memset(m_filterBuff, 0, sizeof(m_filterBuff));        // Clear FilterBuffer
     IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
     showCodecParams();
@@ -5312,8 +5281,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
+    //-----------------------------------------------------------------
     res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
     bytesDecoded = len - m_sbyt.bytesLeft;
+    //-----------------------------------------------------------------
 
     // res - possible values are:
     //          0: okay, no error
@@ -5493,7 +5464,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
 
-    m_outBuff.alloc(m_outbuffSize * sizeof(int16_t), "m_outBuff");
+    m_outBuff.alloc(m_outbuffSize, "m_outBuff");
     m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
 
     esp_err_t result = ESP_OK;
@@ -6932,6 +6903,260 @@ uint8_t Audio::determineOggCodec() {
     }
     return res;
 }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::strlower(char* str) {
+    unsigned char* p = (unsigned char*)str;
+    while (*p) {
+        *p = tolower((unsigned char)*p);
+        p++;
+    }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::trim(char* str) {
+    char* start = str; // keep the original pointer
+    char* end;
+    while (isspace((unsigned char)*start)) start++; // find the first non-space character
+
+    if (*start == 0) { // all characters were spaces
+        str[0] = '\0'; // return a empty string
+        return;
+    }
+
+    end = start + strlen(start) - 1; // find the end of the string
+
+    while (end > start && isspace((unsigned char)*end)) end--;
+    end[1] = '\0'; // Null-terminate the string after the last non-space character
+
+    // Move the trimmed string to the beginning of the memory area
+    memmove(str, start, strlen(start) + 1); // +1 for '\0'
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::startsWith(const char* base, const char* str) {
+    // fb
+    char c;
+    while ((c = *str++) != '\0')
+        if (c != *base++) return false;
+    return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::endsWith(const char* base, const char* searchString) {
+    int32_t slen = strlen(searchString);
+    if (slen == 0) return false;
+    const char* p = base + strlen(base);
+    //  while(p > base && isspace(*p)) p--;  // rtrim
+    p -= slen;
+    if (p < base) return false;
+    return (strncmp(p, searchString, slen) == 0);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::indexOf(const char* base, const char* str, int startIndex) {
+    // fbi
+    const char* p = base;
+    for (; startIndex > 0; startIndex--)
+        if (*p++ == '\0') return -1;
+    char* pos = strstr(p, str);
+    if (pos == nullptr) return -1;
+    return pos - base;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::indexOf(const char* base, char ch, int startIndex) {
+    // fb
+    const char* p = base;
+    for (; startIndex > 0; startIndex--)
+        if (*p++ == '\0') return -1;
+    char* pos = strchr(p, ch);
+    if (pos == nullptr) return -1;
+    return pos - base;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::lastIndexOf(const char* haystack, const char* needle) {
+    // fb
+    int nlen = strlen(needle);
+    if (nlen == 0) return -1;
+    const char* p = haystack - nlen + strlen(haystack);
+    while (p >= haystack) {
+        int i = 0;
+        while (needle[i] == p[i])
+            if (++i == nlen) return p - haystack;
+        p--;
+    }
+    return -1;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::lastIndexOf(const char* haystack, const char needle) {
+    // fb
+    const char* p = strrchr(haystack, needle);
+    return (p ? p - haystack : -1);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact) {
+    int result = 0;                       // seek for str in buffer or in header up to baselen, not nullterninated
+    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
+    for (int i = 0; i < baselen - strlen(str); i++) {
+        result = i;
+        for (int j = 0; j < strlen(str) + exact; j++) {
+            if (*(base + i + j) != *(str + j)) {
+                result = -1;
+                break;
+            }
+        }
+        if (result >= 0) break;
+    }
+    return result;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// Find the last instance of Str in the buffer backwards and checks end-of-stream-bit
+int Audio::specialIndexOfLast(uint8_t* base, const char* str, int baselen) {
+    int result = -1;
+    if (strlen(str) > baselen) return -1; // too short buffer
+
+    for (int i = baselen - strlen(str); i >= 0; i--) { // search backwards, start at the end of the buffer
+        int match = 1;
+        for (int j = 0; j < strlen(str); j++) {
+            if (base[i + j] != str[j]) {
+                match = 0;
+                break;
+            }
+        }
+        if (match) return i;
+    }
+    return result;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int Audio::find_utf16_null_terminator(const uint8_t* buf, int start, int max) {
+    for (int i = start; i + 1 < max; i += 2) {
+        if (buf[i] == 0x00 && buf[i + 1] == 0x00) return i; // Index to the first zero-byte
+    }
+    return -1; // not found
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t Audio::min3(int32_t a, int32_t b, int32_t c) {
+    uint32_t min_val = a;
+    if (b < min_val) min_val = b;
+    if (c < min_val) min_val = c;
+    return min_val;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//  some other functions
+uint64_t Audio::bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft) {
+    uint64_t result = 0; // Use uint64_t for greater caching
+    if (numBytes < 1 || numBytes > 8) return 0;
+    for (int i = 0; i < numBytes; i++) {
+        result |= (uint64_t)(*(base + i)) << ((numBytes - i - 1) * shiftLeft); // Make sure the calculation is done correctly
+    }
+    if (result > SIZE_MAX) {
+        log_e("range overflow");
+        return 0;
+    }
+    return result;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::b64encode(const char* source, uint16_t sourceLength, char* dest) {
+    size_t size = base64_encode_expected_len(sourceLength) + 1;
+    char*  buffer = (char*)malloc(size);
+    if (buffer) {
+        base64_encodestate _state;
+        base64_init_encodestate(&_state);
+        int len = base64_encode_block(&source[0], sourceLength, &buffer[0], &_state);
+        base64_encode_blockend((buffer + len), &_state);
+        memcpy(dest, buffer, strlen(buffer));
+        dest[strlen(buffer)] = '\0';
+        free(buffer);
+        return true;
+    }
+    return false;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec) {
+    for (int i = 0; i < vec.size(); i++) vec[i].reset();
+    vec.clear();         // unique_ptr takes care of free()
+    vec.shrink_to_fit(); // put back memory
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq) {
+    for (int i = 0; i < deq.size(); i++) deq[i].reset();
+    deq.clear();         // unique_ptr takes care of free()
+    deq.shrink_to_fit(); // put back memory
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t Audio::simpleHash(const char* str) {
+    if (str == NULL) return 0;
+    uint32_t hash = 0;
+    for (int i = 0; i < strlen(str); i++) {
+        if (str[i] < 32) continue; // ignore control sign
+        hash += (str[i] - 31) * i * 32;
+    }
+    return hash;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+ps_ptr<char> Audio::urlencode(const char* str, bool spacesOnly) {
+    if (!str) { return {}; } // Enter is zero
+
+    // Reserve memory for the result (3x the length of the input string, worst-case)
+    size_t       inputLength = strlen(str);
+    size_t       bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
+    ps_ptr<char> encoded;
+    encoded.alloc(bufferSize);
+    if (!encoded.valid()) { return {}; } // memory allocation failed
+
+    const char* p_input = str;               // Copy of the input pointer
+    char*       p_encoded = encoded.get();   // pointer of the output buffer
+    size_t      remainingSpace = bufferSize; // remaining space in the output buffer
+
+    while (*p_input) {
+        if (isalnum((unsigned char)*p_input)) {
+            // adopt alphanumeric characters directly
+            if (remainingSpace > 1) {
+                *p_encoded++ = *p_input;
+                remainingSpace--;
+            } else {
+                return {}; // security check failed
+            }
+        } else if (spacesOnly && *p_input != 0x20) {
+            // Nur Leerzeichen nicht kodieren
+            if (remainingSpace > 1) {
+                *p_encoded++ = *p_input;
+                remainingSpace--;
+            } else {
+                return {}; // security check failed
+            }
+        } else {
+            // encode unsafe characters as '%XX'
+            if (remainingSpace > 3) {
+                int written = snprintf(p_encoded, remainingSpace, "%%%02X", (unsigned char)*p_input);
+                if (written < 0 || written >= (int)remainingSpace) {
+                    return {}; // error writing to buffer
+                }
+                p_encoded += written;
+                remainingSpace -= written;
+            } else {
+                return {}; // security check failed
+            }
+        }
+        p_input++;
+    }
+
+    // Null-terminieren
+    if (remainingSpace > 0) {
+        *p_encoded = '\0';
+    } else {
+        return {}; // security check failed
+    }
+    encoded.shrink_to_fit();
+    return encoded;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//  Function to reverse the byte order of a 32-bit value (big-endian to little-endian)
+uint32_t Audio::bswap32(uint32_t x) {
+    return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) | ((x & 0x0000FF00) << 8) | ((x & 0x000000FF) << 24);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+//  Function to reverse the byte order of a 64-bit value (big-endian to little-endian)
+uint64_t Audio::bswap64(uint64_t x) {
+    return ((x & 0xFF00000000000000ULL) >> 56) | ((x & 0x00FF000000000000ULL) >> 40) | ((x & 0x0000FF0000000000ULL) >> 24) | ((x & 0x000000FF00000000ULL) >> 8) | ((x & 0x00000000FF000000ULL) << 8) |
+           ((x & 0x0000000000FF0000ULL) << 24) | ((x & 0x000000000000FF00ULL) << 40) | ((x & 0x00000000000000FFULL) << 56);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // separate task for decoding and outputting the data. 'playAudioData()' is started periodically and fetches the data from the InBuffer. This ensures
 // that the I2S-DMA is always sufficiently filled, even if the Arduino 'loop' is stuck.
