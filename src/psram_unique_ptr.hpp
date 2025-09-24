@@ -780,12 +780,13 @@ class ps_ptr {
         va_list args_copy;
         va_copy(args_copy, args);
 
-        // result is written in here
+        // Ergebnis wird hier reingeschrieben
         int total_written = 0;
 
         const char* p = fmt;
         while (*p) {
             if (*p == '%') {
+                [[maybe_unused]] const char* start = p++;
                 if (*p == '%') {
                     // Escaped "%%"
                     if (total_written < (int)size) {
@@ -796,7 +797,7 @@ class ps_ptr {
                     continue;
                 }
 
-                // Jetzt kompletten Format-Token einsammeln (z.B. "%02d", "%-15.8s" ...)
+                // collect complete format tokens now(e.g. "%02d", "%-15.8s" ...)
                 char  fmt_token[64];
                 char* f = fmt_token;
                 *f++ = '%';
@@ -857,7 +858,7 @@ class ps_ptr {
             }
         }
 
-        // zero termination if space
+        // Nullterminierung falls Platz
         if (buf && total_written < (int)size) {
             buf[total_written] = '\0';
         } else if (buf && size > 0) {
@@ -881,7 +882,7 @@ class ps_ptr {
         if (add_len < 0) return;
         std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
         std::size_t new_len = old_len + static_cast<std::size_t>(add_len) + 1;
-        // Reserve the memory
+        // Speicher neu reservieren
         char* old_data = static_cast<char*>(mem.release());
         reset();
         alloc(new_len);
@@ -890,7 +891,7 @@ class ps_ptr {
             if (old_data) free(old_data);
             return;
         }
-       // copy previous content
+        // Vorherigen Inhalt kopieren
         if (old_data) {
             std::memcpy(mem.get(), old_data, old_len);
             free(old_data);
