@@ -170,57 +170,7 @@ class Audio {
     const char*      getCodecname() { return codecname[m_codec]; }
     const char*      getVersion() { return audioI2SVers; }
 
-    template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
-        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-        auto                        extract_last_number = [&](std::string_view s) -> int32_t {
-            auto it = s.end(); // search from back to the front
-            while (it != s.begin()) {
-                --it;
-                if (std::isdigit(static_cast<unsigned char>(*it))) {
-                    auto end = it + 1;                                                                   // end of the number found
-                    while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) --it; // go back to the beginning of the number
-                    std::string_view number{it, static_cast<size_t>(end - it)};
-                    uint32_t         value{};
-                    auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
-                    if (ec == std::errc{}) return static_cast<int32_t>(value); // break if errc is invalid_argument or esult_out_of_range
-                    break;
-                }
-            }
-            return -1; // no number found
-        };
-        if (!audio_info_callback) return false;
-        ps_ptr<char> result(__LINE__);
-        // First run: determine size
-        int len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (len <= 0) return false;
-        result.calloc(len + 1);
-        char* p = result.get();
-        if (!p) return false;
-        std::snprintf(p, len + 1, fmt, std::forward<Args>(args)...);
-        msg_t i = {0};
-        i.msg = result.c_get();
-        i.e = e;
-        i.s = eventStr[e];
-        i.arg1 = extract_last_number(result.c_get());
-        i.i2s_num = instance.m_i2s_num;
-        audio_info_callback(i);
-        result.reset();
-        return true;
-    }
-
-    static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
-        if (!audio_info_callback) return false;
-        ps_ptr<char> apic;
-        apic.assignf("APIC found at pos %lu", v[0]);
-        msg_t i;
-        i.msg = apic.c_get();
-        i.e = e;
-        i.s = eventStr[e];
-        i.i2s_num = instance.m_i2s_num;
-        i.vec = v;
-        audio_info_callback(i);
-        return true;
-    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
@@ -558,8 +508,89 @@ class Audio {
     audiolib::sdet_t    m_sdet;
     audiolib::fnsy_t    m_fnsy;
 
-    //----------------------------------------------------------------------------------------------------------------------
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
+    template <typename T> static auto safe_arg(T&& v) -> decltype(auto) {
+        using U = std::decay_t<T>;
+
+        // case 2: char arrays (string literals, fixed buffers)
+        if constexpr (std::is_array_v<U> && std::is_same_v<std::remove_cv_t<std::remove_extent_t<U>>, char>) {
+            return v; // Arrays sind niemals nullptr
+        }
+        // case 3: std::string
+        else if constexpr (std::is_same_v<U, std::string>) {
+            return v.c_str();
+        }
+        // case 4: std::string_view
+        else if constexpr (std::is_same_v<U, std::string_view>) {
+            return v.data(); // Achtung: nicht nullterminiert!
+        }
+        // default: alles andere unverändert
+        else {
+            return std::forward<T>(v);
+        }
+    }
+
+    template <size_t N> static const char* safe_arg(const char (&v)[N]) {
+        // Arrays sind niemals null → direkter Pointer
+        return v;
+    }
+
+    template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
+        // -------------------------------------------------------------------------------------------------------------------
+        auto extract_last_number = [&](std::string_view s) -> int32_t {
+            auto it = s.end(); // search from back to the front
+            while (it != s.begin()) {
+                --it;
+                if (std::isdigit(static_cast<unsigned char>(*it))) {
+                    auto end = it + 1;                                                                   // end of the number found
+                    while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) --it; // go back to the beginning of the number
+                    std::string_view number{it, static_cast<size_t>(end - it)};
+                    uint32_t         value{};
+                    auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
+                    if (ec == std::errc{}) return static_cast<int32_t>(value);
+                    break;
+                }
+            }
+            return -1; // no number found
+        };
+        // -------------------------------------------------------------------------------------------------------------------
+        if (!audio_info_callback) return false;
+        ps_ptr<char> result(__LINE__);
+        // First run: determine size
+        int len = std::snprintf(nullptr, 0, fmt, safe_arg(std::forward<Args>(args))...);
+        if (len <= 0) return false;
+        result.calloc(len + 1);
+        char* p = result.get();
+        if (!p) return false;
+        std::snprintf(p, len + 1, fmt, safe_arg(std::forward<Args>(args))...);
+        msg_t i = {0};
+        i.msg = result.c_get();
+        i.e = e;
+        i.s = eventStr[e];
+        i.arg1 = extract_last_number(result.c_get());
+        i.i2s_num = instance.m_i2s_num;
+        audio_info_callback(i);
+        result.reset();
+        return true;
+    }
+
+    static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
+        if (!audio_info_callback) return false;
+        ps_ptr<char> apic;
+        apic.assignf("APIC found at pos %lu", v[0]);
+        msg_t i;
+        i.msg = apic.c_get();
+        i.e = e;
+        i.s = eventStr[e];
+        i.i2s_num = instance.m_i2s_num;
+        i.vec = v;
+        audio_info_callback(i);
+        return true;
+    }
+    //----------------------------------------------------------------------------------------------------------------------
+
     template <typename... Args> static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
 
 #define ANSI_ESC_RESET   "\033[0m"

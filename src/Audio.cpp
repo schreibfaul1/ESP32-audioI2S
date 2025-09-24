@@ -7233,3 +7233,7 @@ uint32_t Audio::getHighWatermark() {
     UBaseType_t highWaterMark = uxTaskGetStackHighWaterMark(m_audioTaskHandle);
     return highWaterMark; // dwords
 }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+
