@@ -34,7 +34,7 @@ constexpr size_t m_frameSizeVORBIS = 4096 * 2;
 constexpr size_t m_outbuffSize = 4096 * 4;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
-constexpr size_t AUDIO_STACK_SIZE = 3500;
+constexpr size_t AUDIO_STACK_SIZE = 3300;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
