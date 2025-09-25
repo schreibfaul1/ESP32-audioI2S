@@ -5603,6 +5603,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
         while (len > 0) {
             if (m_dataMode == AUDIO_LOCALFILE) {
                 readed_bytes = m_audiofile.read(buff + offset, len);
+
                 if (readed_bytes >= 0) {
                     m_audioFilePosition += readed_bytes;
                     len -= readed_bytes;
@@ -6491,11 +6492,13 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
     // skip CRLF from the previous chunk (only http-chunked)
     if (m_gchs.f_skipCRLF) {
         uint32_t t = millis();
+
         if (m_client->available() == 1 && !m_gchs.oneByteOfTwo) {
             int a = audioFileRead();
             m_gchs.oneByteOfTwo = true;
             *readedBytes = 1;
             if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
+
 
             return -1;
         }
