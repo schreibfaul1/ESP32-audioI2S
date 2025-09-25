@@ -5186,7 +5186,7 @@ void Audio::setDecoderItems() {
     setChannels(m_decoder->getChannels());
     setSampleRate(m_decoder->getSampleRate());
     setBitsPerSample(m_decoder->getBitsPerSample());
-    info(*this, evt_info, "%s", m_decoder->arg1());
+    if(m_decoder->arg1()) info(*this, evt_info, "%s", m_decoder->arg1());
 
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();

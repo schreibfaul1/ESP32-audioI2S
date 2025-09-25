@@ -110,7 +110,9 @@ const uint32_t mask[33] = {0x00000000, 0x00000001, 0x00000003, 0x00000007, 0x000
         uint8_t temp = *(m_flacInptr + m_rIndex);
         m_rIndex++;
         (*bytesLeft)--;
-        if(*bytesLeft < 0) { FLAC_LOG_ERROR("error in bitreader"); m_f_bitReaderError = true; break;}
+        if(*bytesLeft < 0) {
+            FLAC_LOG_ERROR("error in bitreader"); m_f_bitReaderError = true; break;
+        }
         m_flac_bitBuffer = (m_flac_bitBuffer << 8) | temp;
         m_flacBitBufferLen += 8;
     }
@@ -527,12 +529,13 @@ int32_t FlacDecoder::decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf)
 
     int32_t                ret = 0;
     uint32_t           segmLen = 0;
-    static uint32_t segmLenTmp = 0;
+
+    m_segmLenTmp = 0;
 
     if(m_f_flacFirstCall){ // determine if ogg or flag
         m_f_flacFirstCall = false;
         m_nBytes = 0;
-        segmLenTmp = 0;
+        m_segmLenTmp = 0;
         if(specialIndexOf(inbuf, "OggS", 5) == 0){
             m_f_oggWrapper = true;
             m_f_flacParseOgg = true;
@@ -541,16 +544,16 @@ int32_t FlacDecoder::decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf)
 
     if(m_f_oggWrapper){
 
-        if(segmLenTmp){ // can't skip more than 16K
-            if(segmLenTmp > FLAC_MAX_BLOCKSIZE){
+        if(m_segmLenTmp){ // can't skip more than 16K
+            if(m_segmLenTmp > FLAC_MAX_BLOCKSIZE){
                 m_flacCurrentFilePos += FLAC_MAX_BLOCKSIZE;
                 *bytesLeft -= FLAC_MAX_BLOCKSIZE;
-                segmLenTmp -= FLAC_MAX_BLOCKSIZE;
+                m_segmLenTmp -= FLAC_MAX_BLOCKSIZE;
             }
             else{
-                m_flacCurrentFilePos += segmLenTmp;
-                *bytesLeft -= segmLenTmp;
-                segmLenTmp  = 0;
+                m_flacCurrentFilePos += m_segmLenTmp;
+                *bytesLeft -= m_segmLenTmp;
+                m_segmLenTmp  = 0;
             }
             return FLAC_PARSE_OGG_DONE;
         }
@@ -628,7 +631,7 @@ int32_t FlacDecoder::decode(uint8_t *inbuf, int32_t *bytesLeft, int16_t *outbuf)
                 break;
         }
         if(segmLen > FLAC_MAX_BLOCKSIZE){
-            segmLenTmp = segmLen;
+            m_segmLenTmp = segmLen;
             return FLAC_PARSE_OGG_DONE;
         }
         *bytesLeft -= segmLen;
@@ -1024,5 +1027,5 @@ int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t base
     return result;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* FlacDecoder::arg1() {return "";} // virtual method
+const char* FlacDecoder::arg1() {return nullptr;} // virtual method
 const char* FlacDecoder::arg2() {return "";} // virtual method

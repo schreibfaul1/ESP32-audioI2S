@@ -184,6 +184,7 @@ private:
     uint32_t         m_flacBlockPicLen = 0;
     uint32_t         m_flacAudioDataStart = 0;
     int32_t          m_flacRemainBlockPicLen = 0;
+    uint32_t         m_segmLenTmp = 0;
     const uint16_t   m_flacOutBuffSize = 2048;
     uint16_t         m_numOfOutSamples = 0;
     uint16_t         m_flacValidSamples = 0;

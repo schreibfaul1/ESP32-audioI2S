@@ -510,32 +510,26 @@ class Audio {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
-    template <typename T> static auto safe_arg(T&& v) -> decltype(auto) {
-        using U = std::decay_t<T>;
+    // 🎯 overload for char*-Pointer (maybe nullptr)
+    static const char* safe_arg(const char* v) { return v ? v : "(null)"; }
+    static char*       safe_arg(char* v) { return v ? v : (char*)"(null)"; }
 
-        // case 2: char arrays (string literals, fixed buffers)
-        if constexpr (std::is_array_v<U> && std::is_same_v<std::remove_cv_t<std::remove_extent_t<U>>, char>) {
-            return v; // Arrays sind niemals nullptr
-        }
-        // case 3: std::string
-        else if constexpr (std::is_same_v<U, std::string>) {
-            if (!v) v = (char*)"(null)";
-            return v.c_str();
-        }
-        // case 4: std::string_view
-        else if constexpr (std::is_same_v<U, std::string_view>) {
-            return v.data(); // Attention: not zero -terminated!
-        }
-        // default: everything else unchanged
-        else {
-            return std::forward<T>(v);
-        }
+    // 🎯 overload for char-Arrays (necer nullptr)
+    template <size_t N> static const char* safe_arg(const char (&v)[N]) { return v; }
+
+    // 🎯 overload for string
+    static const char* safe_arg(const std::string& v) { return v.c_str(); }
+
+    // 🎯 overload for string_view
+    static const char* safe_arg(std::string_view v) {
+        return v.data(); // Achtung: evtl. nicht nullterminiert
     }
 
-    template <size_t N> static const char* safe_arg(const char (&v)[N]) {
-        // Arrays sind niemals null → direkter Pointer
-        return v;
-    }
+    // 🎯 Catch-all for all other types
+    template <typename T> static auto safe_arg(T&& v) -> decltype(auto) { return std::forward<T>(v); }
+
+    // specialization für nullptr / NULL
+    static const char* safe_arg(std::nullptr_t) { return "(null)"; }
 
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
@@ -557,7 +551,7 @@ class Audio {
             return -1; // no number found
         };
         // -------------------------------------------------------------------------------------------------------------------
-        if(!fmt) return false;
+        if (!fmt) return false;
         if (!audio_info_callback) return false;
         ps_ptr<char> result(__LINE__);
         // First run: determine size
