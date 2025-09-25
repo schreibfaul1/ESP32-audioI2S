@@ -1089,7 +1089,7 @@ int32_t SilkDecoder::silk_Decode(                                   /* O    Retu
 
     uint8_t n = 0;
     int32_t  i, decode_only_middle = 0, ret = SILK_NO_ERROR;
-    int32_t  nSamplesOutDec, LBRR_symbol;
+    int32_t  nSamplesOutDec = 0, LBRR_symbol;
     int16_t* samplesOut1_tmp[2];
     int32_t MS_pred_Q13[2] = {0};
     int16_t *resample_out_ptr;
