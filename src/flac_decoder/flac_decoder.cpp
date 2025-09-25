@@ -3,8 +3,8 @@
  * Java source code from https://www.nayuki.io/page/simple-flac-implementation
  * adapted to ESP32
  *
- * Created on: Jul 03,2020
- * Updated on: Aug 28,2025
+ * Created on: 03.07,2020
+ * Updated on: 25.09,2025
  *
  * Author: Wolle
  *

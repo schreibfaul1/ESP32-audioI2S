@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 09.07.2025
+ *  Updated on: 25.09.2025
  */
 #include "mp3_decoder.h"
 

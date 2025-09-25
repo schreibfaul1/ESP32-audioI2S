@@ -175,6 +175,7 @@ private:
     std::vector<uint32_t> m_flacSegmTableVec;
     std::vector<int32_t>  coefs;
     std::vector<uint32_t> m_flacBlockPicItem;
+
     uint64_t         m_flac_bitBuffer = 0;
     uint32_t         m_flacBitrate = 0;
     uint32_t         m_flacBlockPicLenUntilFrameEnd = 0;
