@@ -111,10 +111,24 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
         uint8_t temp = *(m_flacInptr + m_rIndex);
         m_rIndex++;
         (*bytesLeft)--;
-        if (*bytesLeft < 0) {
-            FLAC_LOG_ERROR("error in bitreader");
-            m_f_bitReaderError = true;
-            break;
+        if (*bytesLeft == -1) {
+            if (m_f_oggWrapper) {
+                m_rIndex--;
+                (*bytesLeft)++;
+                // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
+                if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
+                    parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG an set segment tables, bytesLeft is now negative
+                    m_segmLength = m_flacSegmTableVec.back();                 // read the first table
+                    m_flacSegmTableVec.pop_back();                            // and remove them
+                    m_f_flacParseOgg = false;                                 // no next OGG parse necessary
+                    m_rIndex += abs(*bytesLeft);                              // increase m_rIndex
+                    continue;                                                 // go ahead
+                } else {
+                    FLAC_LOG_ERROR("error in bitreader");
+                    m_f_bitReaderError = true;
+                    break;
+                }
+            }
         }
         m_flac_bitBuffer = (m_flac_bitBuffer << 8) | temp;
         m_flacBitBufferLen += 8;
@@ -569,6 +583,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
             diff -= m_nBytes;
             m_flacCurrentFilePos += diff;
             *bytesLeft -= diff;
+            if (m_nBytes < 0) m_nBytes = 0; // When the FLAC frame is larger than the OGG frame m_nbytes becomes negative
             return ret;
         }
         if (m_nBytes < 0) {
@@ -587,6 +602,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
         //-------------------------------------------------------
         if (!m_flacSegmTableVec.size()) FLAC_LOG_ERROR("size is 0");
         segmLen = m_flacSegmTableVec.back();
+        m_segmLength = segmLen;
         m_flacSegmTableVec.pop_back();
         if (!m_flacSegmTableVec.size()) m_f_flacParseOgg = true;
         //-------------------------------------------------------
@@ -711,7 +727,6 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
 
     alignToByte();
     readUint(16, bytesLeft);
-
     //    m_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
     //    FLAC_LOG_INFO("s_flacCompressionRatio % f", m_flacCompressionRatio);
     m_flacStatus = DECODE_FRAME;
@@ -803,7 +818,7 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     readUint(8, bytesLeft);
 
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
-        if(m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
+        if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
         m_samplesBuffer[i].alloc_array(m_numOfOutSamples);
         if (!m_samplesBuffer[i].valid()) { // ps_ptr<T> should overload operator bool()
             FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffers");
@@ -813,14 +828,13 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         }
     }
 
-
     m_flacStatus = DECODE_SUBFRAMES;
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t FlacDecoder::getOutputSamples() {
     if (!FLACMetadataBlock->numChannels) return 0;
-    return  m_flacValidSamples;
+    return m_flacValidSamples;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint64_t FlacDecoder::getTotoalSamplesInStream() {
@@ -1010,11 +1024,11 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, std::vector<int>coefs) {
+void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, std::vector<int> coefs) {
 
     for (int32_t i = coefs.size(); i < m_numOfOutSamples; i++) {
         int32_t sum = 0;
-        for (uint32_t j = 0; j < coefs.size(); j++) { sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j];}
+        for (uint32_t j = 0; j < coefs.size(); j++) { sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j]; }
         sum = m_samplesBuffer[ch][i] + (sum >> shift);
         m_samplesBuffer[ch][i] = sum;
     }
