@@ -28,15 +28,57 @@
 ** $Id: structs.h,v 1.49 2009/01/26 23:51:15 menno Exp $
 **/
 #pragma once
-#include "neaacdec.h"
+#include "Arduino.h"
+#include "settings.h"
+#include "defines.h"
 
-#define MAX_CHANNELS        64
-#define MAX_SYNTAX_ELEMENTS 48
-#define MAX_WINDOW_GROUPS    8
-#define MAX_SFB             51
-#define MAX_LTP_SFB         40
-#define MAX_LTP_SFB_S        8
-#define MAX_ASC_BYTES 64
+
+
+typedef void *NeAACDecHandle;
+typedef struct mp4AudioSpecificConfig
+{
+    /* Audio Specific Info */
+    unsigned char objectTypeIndex;
+    unsigned char samplingFrequencyIndex;
+    uint32_t samplingFrequency;
+    unsigned char channelsConfiguration;
+    /* GA Specific Info */
+    unsigned char frameLengthFlag;
+    unsigned char dependsOnCoreCoder;
+    unsigned short coreCoderDelay;
+    unsigned char extensionFlag;
+    unsigned char aacSectionDataResilienceFlag;
+    unsigned char aacScalefactorDataResilienceFlag;
+    unsigned char aacSpectralDataResilienceFlag;
+    unsigned char epConfig;
+    char sbr_present_flag;
+    char forceUpSampling;
+    char downSampledSBR;
+} mp4AudioSpecificConfig;
+typedef struct NeAACDecFrameInfo
+{
+    uint32_t bytesconsumed;
+    uint32_t samples;
+    unsigned char channels;
+    unsigned char error;
+    uint32_t samplerate;
+    /* SBR: 0: off, 1: on; upsample, 2: on; downsampled, 3: off; upsampled */
+    unsigned char sbr;
+    /* MPEG-4 ObjectType */
+    unsigned char object_type;
+    /* AAC header type; MP4 will be signalled as RAW also */
+    unsigned char header_type;
+    /* multichannel configuration */
+    unsigned char num_front_channels;
+    unsigned char num_side_channels;
+    unsigned char num_back_channels;
+    unsigned char num_lfe_channels;
+    unsigned char channel_position[64];
+    /* PS: 0: off, 1: on */
+    unsigned char ps;
+    uint8_t  isPS;
+} NeAACDecFrameInfo;
+
 /* used to save the prediction state */
 typedef struct {
     uint16_t   n;
@@ -60,9 +102,6 @@ typedef struct {
     const real_t* long_window[2];
     const real_t* short_window[2];
     const real_t* ld_window[2];
-    mdct_info* mdct256;
-    mdct_info* mdct1024;
-    mdct_info* mdct2048;
     int64_t cycles;
 } fb_info;
 typedef struct {
@@ -551,7 +590,7 @@ typedef struct {
     int64_t scalefac_cycles;
     int64_t requant_cycles;
     latm_header          latm_config;
-    const unsigned char* cmes;
+    const uint8_t* cmes;
     uint8_t              isPS;
 } NeAACDecStruct;
 /* 1st step table */
@@ -594,9 +633,6 @@ typedef struct _bitfile {
     const void* buffer;
 } bitfile;
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef ERROR_RESILIENCE
-/* Modified bit reading functions for HCR */
-#endif /*ERROR_RESILIENCE*/
 typedef struct {
     /* bit input */
     uint32_t bufa;
@@ -616,7 +652,6 @@ typedef struct
     uint32_t cw;
 } rvlc_huff_table;
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
 /* type definitions */
 typedef struct {
     uint8_t frame_len;
@@ -626,14 +661,13 @@ typedef struct {
     qmf_t** buffer;
     qmf_t** temp;
 } hyb_info;
-#endif //  PS_DEC
+
 typedef struct {
     real_t G_lim_boost[MAX_L_E][MAX_M];
     real_t Q_M_lim_boost[MAX_L_E][MAX_M];
     real_t S_M_boost[MAX_L_E][MAX_M];
 } sbr_hfadj_info;
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef SBR_DEC
 typedef struct {
     complex_t r01;
     complex_t r02;
@@ -642,4 +676,5 @@ typedef struct {
     complex_t r22;
     real_t    det;
 } acorr_coef;
-#endif // SBR_DEC
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+typedef const int8_t (*ps_huff_tab)[2];
