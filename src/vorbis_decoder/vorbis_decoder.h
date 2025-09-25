@@ -23,9 +23,9 @@
  *  Updated on: 19.06.2025
  */
 
+#include "../Audio.h"
 #include "../psram_unique_ptr.hpp"
-#include "Arduino.h"
-#include "Audio.h"
+
 
 class VorbisDecoder : public Decoder {
 

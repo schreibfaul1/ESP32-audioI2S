@@ -1024,5 +1024,5 @@ int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t base
     return result;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* FlacDecoder::arg1() {return nullptr;} // virtual method
-const char* FlacDecoder::arg2() {return nullptr;} // virtual method
+const char* FlacDecoder::arg1() {return "";} // virtual method
+const char* FlacDecoder::arg2() {return "";} // virtual method

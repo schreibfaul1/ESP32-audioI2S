@@ -1,5 +1,5 @@
 #pragma once
-#include "Audio.h"
+#include "../Audio.h"
 
 class WavDecoder : public Decoder {
 

@@ -6891,12 +6891,11 @@ uint8_t Audio::determineOggCodec() {
     uint8_t res = CODEC_NONE;
     int     idx = -1;
     idx = specialIndexOf(InBuff.getReadPtr(), "OggS", 127);
-    AUDIO_LOG_ERROR("idx %i", idx);
+    AUDIO_LOG_DEBUG("idx %i", idx);
     if (idx == 0) {
         idx = specialIndexOf(InBuff.getReadPtr(), "OpusHead", 127);
         if (idx >= 28) { res = CODEC_OPUS; }
         idx = specialIndexOf(InBuff.getReadPtr(), "fLaC", 127);
-        AUDIO_LOG_ERROR("idx %i", idx);
         if (idx >= 28) { res = CODEC_FLAC; }
         idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
         if (idx >= 28) { res = CODEC_VORBIS; }

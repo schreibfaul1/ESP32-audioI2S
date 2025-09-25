@@ -23,9 +23,7 @@
 // updated:      10.05.2025
 
 #pragma once
-#include "../../psram_unique_ptr.hpp"
-#include "Arduino.h"
-#include "Audio.h"
+#include "../../Audio.h"
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -38,6 +36,7 @@
 #include "structs.h"
 #include "tables.h"
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
 
 class NeaacDecoder {
   public:
@@ -72,6 +71,7 @@ class NeaacDecoder {
     ps_ptr<adts_header>m_adts;
     ps_ptr<bitfile>m_ld;
     ps_ptr<uint8_t>m_sample_buffer;
+	
 
     uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
     uint32_t wl_min_lzc(uint32_t x);

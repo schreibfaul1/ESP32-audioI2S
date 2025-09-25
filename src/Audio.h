@@ -519,13 +519,14 @@ class Audio {
         }
         // case 3: std::string
         else if constexpr (std::is_same_v<U, std::string>) {
+            if (!v) v = (char*)"(null)";
             return v.c_str();
         }
         // case 4: std::string_view
         else if constexpr (std::is_same_v<U, std::string_view>) {
-            return v.data(); // Achtung: nicht nullterminiert!
+            return v.data(); // Attention: not zero -terminated!
         }
-        // default: alles andere unverändert
+        // default: everything else unchanged
         else {
             return std::forward<T>(v);
         }
@@ -556,6 +557,7 @@ class Audio {
             return -1; // no number found
         };
         // -------------------------------------------------------------------------------------------------------------------
+        if(!fmt) return false;
         if (!audio_info_callback) return false;
         ps_ptr<char> result(__LINE__);
         // First run: determine size

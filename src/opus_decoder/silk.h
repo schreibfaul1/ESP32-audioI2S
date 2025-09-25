@@ -31,7 +31,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "opus_decoder.h"
 #include "silk_defines.h"
 #include "silk_tables.h"
-#include "silk_structs"
+#include "silk_structs.h"
 #include "range_decoder.h"
 
 extern const int16_t silk_LSFCosTab_FIX_Q12[LSF_COS_TAB_SZ_FIX + 1];

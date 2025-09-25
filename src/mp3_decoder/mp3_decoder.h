@@ -1,7 +1,7 @@
 // based om helix mp3 decoder
 #pragma once
 
-#include "Audio.h"
+#include "../Audio.h"
 #include "structs.h"
 #include "tables.h"
 

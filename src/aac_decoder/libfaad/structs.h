@@ -633,9 +633,6 @@ typedef struct _bitfile {
     const void* buffer;
 } bitfile;
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef ERROR_RESILIENCE
-/* Modified bit reading functions for HCR */
-#endif /*ERROR_RESILIENCE*/
 typedef struct {
     /* bit input */
     uint32_t bufa;
@@ -655,7 +652,6 @@ typedef struct
     uint32_t cw;
 } rvlc_huff_table;
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef PS_DEC
 /* type definitions */
 typedef struct {
     uint8_t frame_len;
@@ -665,14 +661,13 @@ typedef struct {
     qmf_t** buffer;
     qmf_t** temp;
 } hyb_info;
-#endif //  PS_DEC
+
 typedef struct {
     real_t G_lim_boost[MAX_L_E][MAX_M];
     real_t Q_M_lim_boost[MAX_L_E][MAX_M];
     real_t S_M_boost[MAX_L_E][MAX_M];
 } sbr_hfadj_info;
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-#ifdef SBR_DEC
 typedef struct {
     complex_t r01;
     complex_t r02;
@@ -681,6 +676,5 @@ typedef struct {
     complex_t r22;
     real_t    det;
 } acorr_coef;
-#endif // SBR_DEC
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 typedef const int8_t (*ps_huff_tab)[2];

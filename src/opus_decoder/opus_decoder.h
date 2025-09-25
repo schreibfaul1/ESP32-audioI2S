@@ -1,8 +1,7 @@
 // based on Xiph.Org Foundation celt decoder
 #pragma once
 
-#include "Arduino.h"
-#include "Audio.h"
+#include "../Audio.h"
 #include "../psram_unique_ptr.hpp"
 #include <vector>
 #include "range_decoder.h"

@@ -16,7 +16,7 @@
 #pragma once
 #pragma GCC optimize ("Ofast")
 
-#include "Audio.h"
+#include "../Audio.h"
 #include <vector>
 
 #define ANSI_ESC_RESET          "\033[0m"

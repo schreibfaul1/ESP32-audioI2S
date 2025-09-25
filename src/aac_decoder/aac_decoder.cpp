@@ -169,8 +169,9 @@ std::vector<uint32_t> AACDecoder::getMetadataBlockPicture() {
 const char* AACDecoder::arg1() { // AAC format
     m_arg1.assign("AAC HeaderFormat: ");
     if (m_frameInfo.header_type == 0) m_arg1.append("RAW");
-    if (m_frameInfo.header_type == 1) m_arg1.append("ADIF"); /* single ADIF header at the beginning of the file */
-    if (m_frameInfo.header_type == 2) m_arg1.append("ADTS"); /* ADTS header at the beginning of each frame */
+    else if (m_frameInfo.header_type == 1) m_arg1.append("ADIF"); /* single ADIF header at the beginning of the file */
+    else if (m_frameInfo.header_type == 2) m_arg1.append("ADTS"); /* ADTS header at the beginning of each frame */
+    else m_arg1.append("unknown");
     return m_arg1.c_get();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
