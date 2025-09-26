@@ -18,6 +18,7 @@
 
 #include "../Audio.h"
 #include <vector>
+#include <deque>
 
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_BLACK   "\033[30m"
@@ -170,7 +171,7 @@ class FlacDecoder : public Decoder {
         uint32_t bitrate;         // bitrate
     } FLACFrameHeader_t;
 
-    const std::vector<std::vector<int>> FIXED_PREDICTION_COEFFICIENTS = {
+    const std::deque<std::deque<int>> FIXED_PREDICTION_COEFFICIENTS = {
         {},            // {}
         {1},           // {1}
         {2, -1},       // {2, -1}
@@ -178,7 +179,7 @@ class FlacDecoder : public Decoder {
         {4, -6, 4, -1} // {4, -6, 4, -1}
     };
 
-    std::vector<int> coefs;
+    std::deque<int> coefs;
 
     ps_ptr<FLACFrameHeader_t>   FLACFrameHeader;
     ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
@@ -238,7 +239,7 @@ class FlacDecoder : public Decoder {
     int8_t   decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft);
     int8_t   decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDepth, uint8_t ch, int32_t* bytesLeft);
     int8_t   decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft);
-    void     restoreLinearPrediction(uint8_t ch, uint8_t shift, std::vector<int>coefs);
+    void     restoreLinearPrediction(uint8_t ch, uint8_t shift, std::deque<int>coefs);
     int32_t  specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

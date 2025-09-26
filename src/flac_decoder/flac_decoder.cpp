@@ -40,7 +40,6 @@ void FlacDecoder::clear() {
     m_samplesBuffer[1].clear();
 
     m_flacSegmTableVec.clear();
-    m_flacSegmTableVec.shrink_to_fit();
     m_flacStatus = DECODE_FRAME;
     return;
 }
@@ -54,21 +53,15 @@ void FlacDecoder::reset() {
     m_samplesBuffer[0].reset();
     m_samplesBuffer[1].reset();
     coefs.clear();
-    coefs.shrink_to_fit();
     m_flacSegmTableVec.clear();
-    m_flacSegmTableVec.shrink_to_fit();
     m_flacBlockPicItem.clear();
-    m_flacBlockPicItem.shrink_to_fit();
     m_valid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void FlacDecoder::setDefaults() {
     coefs.clear();
-    coefs.shrink_to_fit();
     m_flacSegmTableVec.clear();
-    m_flacSegmTableVec.shrink_to_fit();
     m_flacBlockPicItem.clear();
-    m_flacBlockPicItem.shrink_to_fit();
     m_flac_bitBuffer = 0;
     m_flacBitrate = 0;
     m_flacBlockPicLenUntilFrameEnd = 0;
@@ -269,7 +262,6 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     // read the segment table (contains pageSegments bytes),  1...251: Length of the frame in bytes,
     // 255: A second byte is needed.  The total length is first_byte + second byte
     m_flacSegmTableVec.clear();
-    m_flacSegmTableVec.shrink_to_fit();
     for (int32_t i = 0; i < pageSegments; i++) {
         int32_t n = *(inbuf + 27 + i);
         while (*(inbuf + 27 + i) == 255) {
@@ -303,10 +295,6 @@ std::vector<uint32_t> FlacDecoder::getMetadataBlockPicture() {
     if (m_f_flacNewMetadataBlockPicture) {
         m_f_flacNewMetadataBlockPicture = false;
         return m_flacBlockPicItem;
-    }
-    if (m_flacBlockPicItem.size() > 0) {
-        m_flacBlockPicItem.clear();
-        m_flacBlockPicItem.shrink_to_fit();
     }
     return m_flacBlockPicItem;
 }
@@ -509,8 +497,6 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                         // FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd %i, m_flacRemainBlockPicLen %i", m_flacBlockPicLenUntilFrameEnd, m_flacRemainBlockPicLen);
                         if (m_flacRemainBlockPicLen <= 0) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                         if (m_flacBlockPicLen) {
-                            m_flacBlockPicItem.clear();
-                            m_flacBlockPicItem.shrink_to_fit();
                             m_flacBlockPicItem.push_back(m_flacBlockPicPos);
                             m_flacBlockPicItem.push_back(m_flacBlockPicLenUntilFrameEnd);
                         }
@@ -882,6 +868,7 @@ int32_t FlacDecoder::val2() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
+
     if (FLACFrameHeader->chanAsgn <= 7) {
         for (int32_t ch = 0; ch < FLACMetadataBlock->numChannels; ch++) decodeSubframe(FLACMetadataBlock->bitsPerSample, ch, bytesLeft);
     } else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
@@ -910,6 +897,7 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
+
     int8_t ret = 0;
     readUint(1, bytesLeft);                // Zero bit padding, to prevent sync-fooling string of 1s
     uint8_t type = readUint(6, bytesLeft); // Subframe type: 000000 : SUBFRAME_CONSTANT
@@ -968,7 +956,6 @@ int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32
     int32_t precision = readUint(4, bytesLeft) + 1; // (Quantized linear predictor coefficients' precision in bits)-1 (1111 = invalid).
     int32_t shift = readSignedInt(5, bytesLeft);    // Quantized linear predictor coefficient shift needed in bits (NOTE: this number is signed two's-complement).
     coefs.clear();
-    coefs.shrink_to_fit();
     for (uint8_t i = 0; i < lpcOrder; i++) {
         coefs.push_back(readSignedInt(precision, bytesLeft)); // Unencoded predictor coefficients (n = qlp coeff precision * lpc order) (NOTE: the coefficients are signed two's-complement).
     }
@@ -988,6 +975,7 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
         FLAC_LOG_ERROR("Flac reserved residual coding, method: %i", method);
         return FLAC_ERR;
     }
+
     uint8_t paramBits = method == 0 ? 4 : 5; // RESIDUAL_CODING_METHOD_PARTITIONED_RICE || RESIDUAL_CODING_METHOD_PARTITIONED_RICE2
     int32_t escapeParam = (method == 0 ? 0xF : 0x1E);
     int32_t partitionOrder = readUint(4, bytesLeft); // Partition order
@@ -997,6 +985,7 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
         FLAC_LOG_ERROR("Flac, wrong rice partition number");
         return FLAC_ERR; // Error: Block size not divisible by number of Rice partitions
     }
+
     int32_t partitionSize = m_numOfOutSamples / numPartitions;
 
     for (int32_t i = 0; i < numPartitions; i++) {
@@ -1024,13 +1013,14 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, std::vector<int> coefs) {
+void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, std::deque<int> coefs) {
 
     for (int32_t i = coefs.size(); i < m_numOfOutSamples; i++) {
         int32_t sum = 0;
-        for (uint32_t j = 0; j < coefs.size(); j++) { sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j]; }
-        sum = m_samplesBuffer[ch][i] + (sum >> shift);
-        m_samplesBuffer[ch][i] = sum;
+        for (int32_t j = 0; j < coefs.size(); j++){
+            sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j];
+        }
+        m_samplesBuffer[ch][i] += (sum >> shift);
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1054,5 +1044,5 @@ const char* FlacDecoder::arg1() {
     return nullptr;
 } // virtual method
 const char* FlacDecoder::arg2() {
-    return "";
+    return nullptr;
 } // virtual method
