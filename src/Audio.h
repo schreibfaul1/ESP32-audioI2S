@@ -432,6 +432,7 @@ class Audio {
     bool     m_f_ssl = false;
     bool     m_f_running = false;
     bool     m_f_firstCall = false;         // InitSequence for processWebstream and processLokalFile
+    bool     m_f_firstLoop = false;         // InitSequence in loop()
     bool     m_f_firstCurTimeCall = false;  // InitSequence for calculateAudioTime
     bool     m_f_firstPlayCall = false;     // InitSequence for playAudioData
     bool     m_f_firstM3U8call = false;     // InitSequence for m3u8 parsing

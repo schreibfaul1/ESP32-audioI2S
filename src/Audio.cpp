@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3                                                                                                                              ";
+    Version 3.4.3a                                                                                                                              ";
 /*  Updated on: Sep 25.2025
 
     Author: Wolle (schreibfaul1)
@@ -314,11 +314,12 @@ void Audio::setDefaults() {
     m_f_firstCurTimeCall = true; // InitSequence for calculateAudioTime
     m_f_firstM3U8call = true;    // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;    // InitSequence for playAudioData
-                                 //    m_f_running = false;       // already done in stopSong
-    m_f_unsync = false;          // set within ID3 tag but not used
-    m_f_exthdr = false;          // ID3 extended header
-    m_f_rtsp = false;            // RTSP (m3u8)stream
-    m_f_m3u8data = false;        // set again in processM3U8entries() if necessary
+    //    m_f_running = false;       // already done in stopSong
+    m_f_firstLoop = true;
+    m_f_unsync = false;   // set within ID3 tag but not used
+    m_f_exthdr = false;   // ID3 extended header
+    m_f_rtsp = false;     // RTSP (m3u8)stream
+    m_f_m3u8data = false; // set again in processM3U8entries() if necessary
     m_f_continue = false;
     m_f_ts = false;
     m_f_ogg = false;
@@ -1487,7 +1488,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
-    
+
     if (m_rflh.retvalue) {
         if (m_rflh.retvalue > len) { // if returnvalue > bufferfillsize
             if (len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
@@ -1547,7 +1548,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_audioDataSize = m_audioFileSize - m_audioDataStart;
         m_decoder->setRawBlockParams(m_rflh.numChannels, m_rflh.sampleRate, m_rflh.bitsPerSample, m_rflh.totalSamplesInStream, (uint32_t)m_audioDataSize);
         if (m_rflh.picLen) {
-            size_t                pos = m_audioFilePosition;
+            size_t pos = m_audioFilePosition;
             info(*this, evt_image, m_rflh.picVec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
@@ -3228,6 +3229,11 @@ exit:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
     if (!m_f_running) return;
+
+    if (m_f_firstLoop) {
+        m_f_firstLoop = false;
+        memset(&m_lVar, 0, sizeof(m_lVar));
+    }
 
     if (m_playlistFormat != FORMAT_M3U8) { // normal process
         switch (m_dataMode) {
@@ -5185,7 +5191,7 @@ void Audio::setDecoderItems() {
     setChannels(m_decoder->getChannels());
     setSampleRate(m_decoder->getSampleRate());
     setBitsPerSample(m_decoder->getBitsPerSample());
-    if(m_decoder->arg1()) info(*this, evt_info, "%s", m_decoder->arg1());
+    if (m_decoder->arg1()) info(*this, evt_info, "%s", m_decoder->arg1());
 
     if (m_decoder->getAudioDataStart() > 0) { // only flac-ogg, native flac sets audioDataStart in readFlacHeader()
         m_audioDataStart = m_decoder->getAudioDataStart();
@@ -6498,7 +6504,6 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             *readedBytes = 1;
             if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x%02X", a);
 
-
             return -1;
         }
         if (!m_gchs.oneByteOfTwo) {
@@ -7235,6 +7240,3 @@ uint32_t Audio::getHighWatermark() {
     return highWaterMark; // dwords
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-
-
