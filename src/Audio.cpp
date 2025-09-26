@@ -1487,7 +1487,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
-
+    
     if (m_rflh.retvalue) {
         if (m_rflh.retvalue > len) { // if returnvalue > bufferfillsize
             if (len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
@@ -1504,6 +1504,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == FLAC_BEGIN) { // init
         memset(&m_rflh, 0, sizeof(audiolib::rflh_t));
         m_controlCounter = FLAC_MAGIC;
+        m_rflh.picVec.clear();
         return 0;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1547,12 +1548,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_decoder->setRawBlockParams(m_rflh.numChannels, m_rflh.sampleRate, m_rflh.bitsPerSample, m_rflh.totalSamplesInStream, (uint32_t)m_audioDataSize);
         if (m_rflh.picLen) {
             size_t                pos = m_audioFilePosition;
-            std::vector<uint32_t> vec;
-            vec.push_back(m_rflh.picPos);
-            vec.push_back(m_rflh.picLen);
-            info(*this, evt_image, vec);
+            info(*this, evt_image, m_rflh.picVec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
-            vec.clear();
         }
         info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
         if (m_rflh.duration) {
@@ -1735,7 +1732,9 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == FLAC_PICTURE) { /* PICTURE */
         m_rflh.picLen = bigEndian(data, 3);
         m_rflh.picPos = m_rflh.headerSize;
-        // AUDIO_LOG_INFO("FLAC PICTURE, size %i, pos %i", picLen, picPos);
+        m_rflh.picVec.push_back(m_rflh.picPos);
+        m_rflh.picVec.push_back(m_rflh.picLen);
+        AUDIO_LOG_INFO("FLAC PICTURE, size %i, pos %i", m_rflh.picLen, m_rflh.picPos);
         m_controlCounter = FLAC_MBH;
         m_rflh.retvalue = m_rflh.picLen + 3;
         m_rflh.headerSize += m_rflh.retvalue;
