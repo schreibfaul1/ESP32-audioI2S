@@ -87,9 +87,9 @@ bool OpusDecoder::isValid() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::OPUSsetDefaults() {
-    memset(&m_ofp2, 0, sizeof(m_ofp2));
-    memset(&m_ofp3, 0, sizeof(m_ofp3));
-    memset(&m_odp3, 0, sizeof(m_odp3));
+    m_ofp2.reset();
+    m_ofp3.reset();
+    m_odp3.reset();
     m_ofp3.firstCall = true;
     m_f_opusParseOgg = false;
     m_f_newSteamTitle = false; // streamTitle

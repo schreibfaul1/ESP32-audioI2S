@@ -26,7 +26,6 @@
 #include "../Audio.h"
 #include "../psram_unique_ptr.hpp"
 
-
 class VorbisDecoder : public Decoder {
 
   public:
@@ -157,25 +156,33 @@ class VorbisDecoder : public Decoder {
     };
 
     struct vorbis_info_mapping {
-        int32_t                 submaps;
-        ps_ptr<uint8_t>         chmuxlist;
-        ps_ptr<submap_t>        submaplist;
-        int32_t                 coupling_steps;
-        ps_ptr<coupling_step_t> coupling;
+        int32_t                 submaps{};
+        ps_ptr<uint8_t>         chmuxlist{};
+        ps_ptr<submap_t>        submaplist{};
+        int32_t                 coupling_steps{};
+        ps_ptr<coupling_step_t> coupling{};
+
+        void reset() {
+            *this = vorbis_info_mapping{}; // sauber neu initialisieren
+        }
     };
 
     struct vorbis_info_residue {
-        int32_t         type;
-        ps_ptr<uint8_t> stagemasks;
-        ps_ptr<uint8_t> stagebooks;
+        int32_t         type{};
+        ps_ptr<uint8_t> stagemasks{};
+        ps_ptr<uint8_t> stagebooks{};
         /* block-partitioned VQ coded straight residue */
-        uint32_t begin;
-        uint32_t end;
+        uint32_t begin{};
+        uint32_t end{};
         /* first stage (lossless partitioning) */
-        uint32_t grouping;   /* group n vectors per partition */
-        char     partitions; /* possible codebooks for a partition */
-        uint8_t  groupbook;  /* huffbook for partitioning */
-        char     stages;
+        uint32_t grouping{};   /* group n vectors per partition */
+        char     partitions{}; /* possible codebooks for a partition */
+        uint8_t  groupbook{};  /* huffbook for partitioning */
+        char     stages{};
+
+        void reset() {
+            *this = vorbis_info_residue{}; // sauber neu initialisieren
+        }
     };
 
     struct vorbis_info_floor {
@@ -198,25 +205,29 @@ class VorbisDecoder : public Decoder {
     };
 
     struct codebook {
-        uint8_t          dim;          /* codebook dimensions (elements per vector) */
-        int16_t          entries;      /* codebook entries */
-        uint16_t         used_entries; /* populated codebook entries */
-        uint32_t         dec_maxlength;
-        ps_ptr<uint16_t> dec_table;
-        uint32_t         dec_nodeb;
-        uint32_t         dec_leafw;
-        uint32_t         dec_type; /* 0 = entry number
+        uint8_t          dim{};          /* codebook dimensions (elements per vector) */
+        int16_t          entries{};      /* codebook entries */
+        uint16_t         used_entries{}; /* populated codebook entries */
+        uint32_t         dec_maxlength{};
+        ps_ptr<uint16_t> dec_table{};
+        uint32_t         dec_nodeb{};
+        uint32_t         dec_leafw{};
+        uint32_t         dec_type{}; /* 0 = entry number
                                       1 = packed vector of values
                                       2 = packed vector of column offsets, maptype 1
                                       3 = scalar offset into value array,  maptype 2  */
-        int32_t          q_min;
-        int32_t          q_minp;
-        int32_t          q_del;
-        int32_t          q_delp;
-        int32_t          q_seq;
-        int32_t          q_bits;
-        uint8_t          q_pack;
-        ps_ptr<uint16_t> q_val;
+        int32_t          q_min{};
+        int32_t          q_minp{};
+        int32_t          q_del{};
+        int32_t          q_delp{};
+        int32_t          q_seq{};
+        int32_t          q_bits{};
+        uint8_t          q_pack{};
+        ps_ptr<uint16_t> q_val{};
+
+        void reset() {
+            *this = codebook{}; // cleanly reinitialize
+        }
     };
 
     // global vars
@@ -271,7 +282,7 @@ class VorbisDecoder : public Decoder {
     ps_ptr<uint8_t>                   m_lastSegmentTable;
     ps_ptr<uint16_t>                  m_vorbisSegmentTable;
     ps_ptr<codebook>                  m_codebooks;
-    ps_ptr<ps_ptr<vorbis_info_floor>> m_floor_param;
+    ps_ptr<ps_ptr<vorbis_info_floor>> m_floor_param{};
     ps_ptr<int8_t>                    m_floor_type;
     ps_ptr<vorbis_info_residue>       m_residue_param;
     ps_ptr<vorbis_info_mapping>       m_map_param;

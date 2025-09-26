@@ -3245,13 +3245,29 @@ void MP3Decoder::FDCT32(int32_t* buf, int32_t* dest, int32_t offset, int32_t odd
  * P O L Y P H A S E
  */
 int16_t MP3Decoder::ClipToShort(int32_t x, int32_t fracBits) {
+#if(defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32S3)
+    /* assumes you've already rounded (x += (1 << (fracBits-1))) */
+    x >>= fracBits;
+    // this is better on xtensa (fb)
+    asm("clamps %0, %1, 15" : "=a"(x) : "a"(x) :);
+    return x;
+#endif
+
+#if (defined CONFIG_IDF_TARGET_ESP32P4)
+    int32_t sign;
 
     /* assumes you've already rounded (x += (1 << (fracBits-1))) */
     x >>= fracBits;
 
-    // this is better on xtensa (fb)
-    asm("clamps %0, %1, 15" : "=a"(x) : "a"(x) :);
-    return x;
+    /* Ken's trick: clips to [-32768, 32767] */
+    sign = x >> 31;
+    if (sign != (x >> 15)) {
+        x = sign ^ ((1 << 15) - 1);
+    }
+
+    return (int16_t)x;
+#endif
+
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*

@@ -265,22 +265,27 @@ struct rwh_t { // used in read_WAV_Header
     uint8_t  bts = 0;
 };
 
-struct rflh_t { // used in read_FLAC_Header
-    std::vector<uint32_t> picVec;
-    size_t                headerSize;
-    size_t                retvalue;
-    bool                  f_lastMetaBlock;
-    uint32_t              picPos;
-    uint32_t              picLen;
-    uint32_t              duration;
-    uint32_t              nominalBitrate;
-    uint8_t               numChannels;
-    uint8_t               bitsPerSample;
-    uint32_t              sampleRate;
-    uint32_t              maxFrameSize;
-    uint32_t              maxBlockSize;
-    uint32_t              totalSamplesInStream;
-};
+typedef struct _rflh { // used in read_FLAC_Header
+    std::vector<uint32_t> picVec{};
+    size_t                headerSize{};
+    size_t                retvalue{};
+    bool                  f_lastMetaBlock{};
+    uint32_t              picPos{};
+    uint32_t              picLen{};
+    uint32_t              duration{};
+    uint32_t              nominalBitrate{};
+    uint8_t               numChannels{};
+    uint8_t               bitsPerSample{};
+    uint32_t              sampleRate{};
+    uint32_t              maxFrameSize{};
+    uint32_t              maxBlockSize{};
+    uint32_t              totalSamplesInStream{};
+
+    void reset() {
+        // Default-initialize alles neu (inklusive Array)
+        *this = _rflh{};
+    }
+} rflh_t;
 
 struct phreh_t { // used in parseHttpResponseHeader
     uint32_t ctime;

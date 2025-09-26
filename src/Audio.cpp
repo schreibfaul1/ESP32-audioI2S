@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3a                                                                                                                              ";
+    Version 3.4.3b                                                                                                                              ";
 /*  Updated on: Sep 25.2025
 
     Author: Wolle (schreibfaul1)
@@ -1503,7 +1503,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == FLAC_BEGIN) { // init
-        memset(&m_rflh, 0, sizeof(audiolib::rflh_t));
+        m_rflh.reset();
         m_controlCounter = FLAC_MAGIC;
         m_rflh.picVec.clear();
         return 0;
