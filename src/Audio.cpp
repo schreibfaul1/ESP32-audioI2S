@@ -1734,7 +1734,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_rflh.picPos = m_rflh.headerSize;
         m_rflh.picVec.push_back(m_rflh.picPos);
         m_rflh.picVec.push_back(m_rflh.picLen);
-        AUDIO_LOG_INFO("FLAC PICTURE, size %i, pos %i", m_rflh.picLen, m_rflh.picPos);
+        // AUDIO_LOG_INFO("FLAC PICTURE, size %i, pos %i", m_rflh.picLen, m_rflh.picPos);
         m_controlCounter = FLAC_MBH;
         m_rflh.retvalue = m_rflh.picLen + 3;
         m_rflh.headerSize += m_rflh.retvalue;
