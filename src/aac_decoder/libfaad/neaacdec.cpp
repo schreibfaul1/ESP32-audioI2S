@@ -484,6 +484,7 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
     *channels = 1;
     if (buffer != NULL) {
         faad_initbits(ld, buffer, buffer_size);
+        /* Check if an ADIF header is present */
         if ((buffer[0] == 'A') && (buffer[1] == 'D') && (buffer[2] == 'I') && (buffer[3] == 'F')) {
             hDecoder->adif_header_present = 1;
             get_adif_header(adif, ld);
@@ -497,6 +498,7 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
             bits = bit2byte(faad_get_processed_bits(ld));
             /* Check if an ADTS header is present */
         } else if (faad_showbits(ld, 12) == 0xfff) {
+            /* Check if an ADTS header is present */
             hDecoder->adts_header_present = 1;
             adts->old_format = hDecoder->config.useOldADTSFormat;
             adts_frame(adts, ld);
@@ -684,7 +686,10 @@ void NeaacDecoder::NeAACDecClose(NeAACDecHandle hpDecoder) {
 #endif
         filter_bank_end(hDecoder->fb);
     drc_end(hDecoder->drc);
-    if (hDecoder->sample_buffer) {m_sample_buffer.reset(); hDecoder->sample_buffer = NULL;}
+    if (hDecoder->sample_buffer) {
+        m_sample_buffer.reset();
+        hDecoder->sample_buffer = NULL;
+    }
 #ifdef SBR_DEC
     for (i = 0; i < MAX_SYNTAX_ELEMENTS; i++) {
         if (hDecoder->sbr[i]) sbrDecodeEnd(hDecoder->sbr[i], i);
@@ -9038,7 +9043,8 @@ void NeaacDecoder::get_adif_header(adif_header* adif, bitfile* ld) {
 /* Table 1.A.5 */
 uint8_t NeaacDecoder::adts_frame(adts_header* adts, bitfile* ld) {
     /* faad_byte_align(ld); */
-    if (adts_fixed_header(adts, ld)) return 5;
+    uint8_t ret = adts_fixed_header(adts, ld);
+    if(ret) return ret;
     adts_variable_header(adts, ld);
     adts_error_check(adts, ld);
     return 0;
@@ -9047,11 +9053,17 @@ uint8_t NeaacDecoder::adts_frame(adts_header* adts, bitfile* ld) {
 /* Table 1.A.6 */
 uint8_t NeaacDecoder::adts_fixed_header(adts_header* adts, bitfile* ld) {
     uint16_t i;
+    uint8_t id3[3] = {0};
     uint8_t  sync_err = 1;
     /* try to recover from sync errors */
     for (i = 0; i < 768; i++) {
         adts->syncword = (uint16_t)faad_showbits(ld, 12);
+
         if (adts->syncword != 0xFFF) {
+        if(i < 3 )id3[i] = (uint8_t)faad_showbits(ld, 8);
+        if(i == 3){
+            if(id3[0] == 73 && id3[1] == 68 && id3[2] == 51) {return 100;} // ID3 header found
+        }
             faad_getbits(ld, 8);
         } else {
             sync_err = 0;

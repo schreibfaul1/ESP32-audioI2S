@@ -202,7 +202,7 @@ class Audio {
     void                     showCodecParams();
     int                      findNextSync(uint8_t* data, size_t len);
     uint32_t                 decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded);
-    uint32_t                 decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded);
+    uint32_t                 decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, int32_t* bytesLeft);
     int                      sendBytes(uint8_t* data, size_t len);
     void                     setDecoderItems();
     void                     calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);

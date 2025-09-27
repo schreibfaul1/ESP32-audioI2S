@@ -15,6 +15,12 @@
 class AACDecoder : public Decoder {
 
   public:
+    enum : int8_t {
+        AAC_ID3_HDR = 100,
+        AAC_NONE = 0,
+        AAC_ERR = -1,
+    };
+
     AACDecoder(Audio& audioRef);
     ~AACDecoder() { reset(); }
     bool                  init() override;

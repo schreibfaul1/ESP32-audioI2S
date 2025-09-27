@@ -147,6 +147,7 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     int8_t err = 0 - m_frameInfo.error;
     m_compressionRatio = (float)m_frameInfo.samples * 2 / m_frameInfo.bytesconsumed;
     if (err < 0){
+        if(err == -100) return AAC_ID3_HDR; // ID3 header found
         if(err == -21) AAC_LOG_INFO(getErrorMessage(abs(err)));
         else AAC_LOG_ERROR(getErrorMessage(abs(err)));
     }

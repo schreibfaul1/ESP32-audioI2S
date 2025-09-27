@@ -4,8 +4,8 @@
 
     Created on: Oct 28.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3b                                                                                                                              ";
-/*  Updated on: Sep 25.2025
+    Version 3.4.3c                                                                                                                              ";
+/*  Updated on: Sep 27.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -27,7 +27,7 @@ char audioI2SVers[] = "\
 // constants
 constexpr size_t m_frameSizeWav = 2048;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
-constexpr size_t m_frameSizeAAC = 1600;
+constexpr size_t m_frameSizeAAC = 1600 * 2;
 constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
 constexpr size_t m_frameSizeOPUS = 2048;
 constexpr size_t m_frameSizeVORBIS = 4096 * 2;
@@ -1078,7 +1078,7 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if (!strcmp(tag, "TDRC")) id3tag.appendf("Publication date: %s", value, "id3tag");
     if (!strcmp(tag, "TDRL")) id3tag.appendf("ReleaseTime: %s", value, "id3tag");
     if (!strcmp(tag, "TENC")) id3tag.appendf("Encoded by: %s", value, "id3tag");
-    if (!strcmp(tag, "TEXT")) id3tag.appendf("Lyricist: %s", value, "id3tag");
+    if (!strcmp(tag, "TEXT")) {} // id3tag.appendf("Lyricist: %s", value, "id3tag");
     if (!strcmp(tag, "TGID")) id3tag.appendf("PodcastID: %s", value, "id3tag");
     if (!strcmp(tag, "TIME")) id3tag.appendf("Time: %s", value, "id3tag");
     if (!strcmp(tag, "TIT1")) id3tag.appendf("Grouping: %s", value, "id3tag");
@@ -1125,6 +1125,11 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     }
     latinToUTF8(id3tag);
     if (id3tag.contains("?xml")) {
+        showstreamtitle(id3tag.get());
+        return;
+    }
+    latinToUTF8(id3tag);
+    if (id3tag.starts_with("Grouping")) {
         showstreamtitle(id3tag.get());
         return;
     }
@@ -1768,7 +1773,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         memset(m_ID3Hdr.APIC_pos, 0, sizeof(m_ID3Hdr.APIC_pos));
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
 
-        info(*this, evt_info, "File-Size: %lu", m_audioFileSize);
+        if (!m_f_m3u8data) info(*this, evt_info, "File-Size: %lu", m_audioFileSize);
 
         m_ID3Hdr.remainingHeaderBytes = 0;
         m_ID3Hdr.ehsz = 0;
@@ -4939,26 +4944,26 @@ bool Audio::parseContentType(char* ct) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::showstreamtitle(char* ml) {
+void Audio::showstreamtitle(char* st) {
+    if (!st) return;
     // example for ml:
     // StreamTitle='Oliver Frank - Mega Hitmix';StreamUrl='www.radio-welle-woerthersee.at';
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
     // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
 
-    if (!ml) return;
+    ps_ptr<char> ml("ml");
     ps_ptr<char> title("title");
     ps_ptr<char> artist("artist");
     ps_ptr<char> streamTitle("streamTitle");
     ps_ptr<char> sUrl("sUrl");
-
-    htmlToUTF8(ml); // convert to UTF-8
+    ml.htmlToUTF8(st); // convert to UTF-8
 
     int16_t idx1 = 0, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0, titleStart = 0, artistStart = 0;
 
     // if(idx1 < 0) idx1 = indexOf(ml, "Title:", 0); // Title found (e.g. https://stream-hls.bauermedia.pt/comercial.aac/playlist.m3u8)
     // if(idx1 < 0) idx1 = indexOf(ml, "title:", 0); // Title found (e.g. #EXTINF:10,title="The Dan Patrick Show (M-F 9a-12p ET)",artist="zc1401"
 
-    if (indexOf(ml, "StreamTitle='<?xml version=", 0) == 0) {
+    if (ml.index_of("StreamTitle='<?xml version=", 0) == 0) {
         /* e.g. xmlStreamTitle
               StreamTitle='<?xml version="1.0" encoding="utf-8"?><RadioInfo><Table><DB_ALBUM_ID>37364</DB_ALBUM_ID>
               <DB_ALBUM_IMAGE>00000037364.jpg</DB_ALBUM_IMAGE><DB_ALBUM_NAME>Boyfriend</DB_ALBUM_NAME>
@@ -4972,10 +4977,10 @@ void Audio::showstreamtitle(char* ml) {
               </END_TIME_UTC><SHOW_NAME>Cidade</SHOW_NAME><SHOW_HOURS>22h às 07h</SHOW_HOURS><SHOW_PANEL>0</SHOW_PANEL>
               </AnimadorInfo></RadioInfo>';StreamUrl='';
         */
-        idx4 = indexOf(ml, "<DB_DALET_TITLE_NAME>");
-        idx5 = indexOf(ml, "</DB_DALET_TITLE_NAME>");
-        idx6 = indexOf(ml, "<DB_LEAD_ARTIST_NAME>");
-        idx7 = indexOf(ml, "</DB_LEAD_ARTIST_NAME>");
+        idx4 = ml.index_of("<DB_DALET_TITLE_NAME>");
+        idx5 = ml.index_of("</DB_DALET_TITLE_NAME>");
+        idx6 = ml.index_of("<DB_LEAD_ARTIST_NAME>");
+        idx7 = ml.index_of("</DB_LEAD_ARTIST_NAME>");
         if (idx4 == -1 || idx5 == -1) return;
         titleStart = idx4 + 21; // <DB_DALET_TITLE_NAME>
         titleLen = idx5 - titleStart;
@@ -4984,8 +4989,8 @@ void Audio::showstreamtitle(char* ml) {
             artistStart = idx6 + 21; // <DB_LEAD_ARTIST_NAME>
             artistLen = idx7 - artistStart;
         }
-        if (titleLen) title.assign(ml + titleStart, titleLen);
-        if (artistLen) artist.assign(ml + artistStart, artistLen);
+        if (titleLen) title.assign(ml.get() + titleStart, titleLen);
+        if (artistLen) artist.assign(ml.get() + artistStart, artistLen);
 
         if (title.valid() && artist.valid()) {
             streamTitle.assign(title.get());
@@ -4998,46 +5003,50 @@ void Audio::showstreamtitle(char* ml) {
         }
     }
 
-    else if (indexOf(ml, "StreamTitle='") == 0) {
+    else if (ml.index_of("StreamTitle='") == 0) {
         titleStart = 13;
-        idx2 = indexOf(ml, ";", 12);
+        idx2 = ml.index_of(";", 12);
         if (idx2 > titleStart + 1) {
             titleLen = idx2 - 1 - titleStart;
-            streamTitle.assign(ml + 13, titleLen);
+            streamTitle.assign(ml.get() + 13, titleLen);
         }
     }
 
-    else if (startsWith(ml, "#EXTINF")) {
+    else if (ml.starts_with("Grouping:")){
+        streamTitle.assign(ml.get() + 9);
+    }
+
+    else if (ml.starts_with("#EXTINF")) {
         // extraxt StreamTitle from m3u #EXTINF line to icy-format
         // orig: #EXTINF:10,title="text="TitleName",artist="ArtistName"
         // conv: StreamTitle=TitleName - ArtistName
         // orig: #EXTINF:10,title="text=\"Spot Block End\" amgTrackId=\"9876543\"",artist=" ",url="length=\"00:00:00\""
         // conv: StreamTitle=text=\"Spot Block End\" amgTrackId=\"9876543\" -
 
-        idx1 = indexOf(ml, "title=\"");
-        idx2 = indexOf(ml, "artist=\"");
+        idx1 = ml.index_of("title=\"");
+        idx2 = ml.index_of("artist=\"");
         if (idx1 > 0) {
             int titleStart = idx1 + 7;
-            int idx3 = indexOf(ml, "\"", titleStart);
+            int idx3 = ml.index_of("\"", titleStart);
             if (idx3 > titleStart) {
                 int titleLength = idx3 - titleStart;
-                title.assign(ml + titleStart, titleLength);
+                title.assign(ml.get() + titleStart, titleLength);
                 if (title.starts_with("text=\\")) { // #EXTINF:10,title="text=\"Spot Block End\"",artist=" ",
                     titleStart += 7;
-                    idx3 = indexOf(ml, "\\", titleStart);
+                    idx3 = ml.index_of( "\\", titleStart);
                     if (idx3 > titleStart) {
                         int titleLength = idx3 - titleStart;
-                        title.assign(ml + titleStart, titleLength);
+                        title.assign(ml.get() + titleStart, titleLength);
                     }
                 }
             }
         }
         if (idx2 > 0) {
             int artistStart = idx2 + 8;
-            int idx3 = indexOf(ml, "\"", artistStart);
+            int idx3 = ml.index_of( "\"", artistStart);
             if (idx3 > artistStart) {
                 int artistLength = idx3 - artistStart;
-                artist.assign(ml + artistStart, artistLength);
+                artist.assign(ml.get() + artistStart, artistLength);
                 if (strcmp(artist.get(), " ") == 0) artist.reset();
             }
         }
@@ -5054,25 +5063,25 @@ void Audio::showstreamtitle(char* ml) {
         ;
     }
 
-    if (indexOf(ml, "StreamUrl=", 0) > 0) {
-        idx1 = indexOf(ml, "StreamUrl=", 0);
-        idx2 = indexOf(ml, ";", idx1);
+    if (ml.index_of("StreamUrl=", 0) > 0) {
+        idx1 = ml.index_of("StreamUrl=", 0);
+        idx2 = ml.index_of(";", idx1);
         if (idx1 >= 0 && idx2 > idx1) { // StreamURL found
             uint16_t len = idx2 - idx1;
-            sUrl.assign(ml + idx1, len);
+            sUrl.assign(ml.get() + idx1, len);
             if (sUrl.valid()) { info(*this, evt_info, "Stream URL; %s", sUrl.get()); }
         }
     }
 
-    if (indexOf(ml, "adw_ad=", 0) > 0) {
-        idx1 = indexOf(ml, "adw_ad=", 0);
+    if (ml.index_of("adw_ad=", 0) > 0) {
+        idx1 = ml.index_of("adw_ad=", 0);
         if (idx1 >= 0) { // Advertisement found
-            idx1 = indexOf(ml, "durationMilliseconds=", 0);
-            idx2 = indexOf(ml, ";", idx1);
+            idx1 = ml.index_of("durationMilliseconds=", 0);
+            idx2 = ml.index_of(";", idx1);
             if (idx1 >= 0 && idx2 > idx1) {
                 uint16_t     len = idx2 - idx1;
                 ps_ptr<char> sAdv("sAdv");
-                sAdv.assign(ml + idx1, len + 1);
+                sAdv.assign(ml.get() + idx1, len + 1);
                 // info(*this, evt_info, "Adveritsement: %s", sAdv.get());
                 uint8_t pos = 21;                                                              // remove "StreamTitle="
                 if (sAdv[pos] == '\'') pos++;                                                  // remove leading  \'
@@ -5248,8 +5257,17 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
     return bytesDecoded;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded) {
+uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, int32_t* bytesLeft) {
     // if(m_codec == CODEC_MP3){   if(res == MAD_ERROR_CONTINUE)    return bytesDecoded;} // nothing to play, mybe eof
+    if (m_codec == CODEC_AAC) {
+        if (res == AACDecoder::AAC_ID3_HDR) {
+            uint32_t size = ((data[6 + bytesDecoded] & 0x7F) << 21) | ((data[7 + bytesDecoded] & 0x7F) << 14) | ((data[8 + bytesDecoded] & 0x7F) << 7) | (data[9 + bytesDecoded] & 0x7F);
+            size += 10; // skip payload
+            return bytesDecoded + size;
+            if(bytesDecoded >  *bytesLeft) AUDIO_LOG_ERROR("AAC input data too small bytesDecoded %i,> bytesLeft %i", bytesDecoded, *bytesLeft);
+        }
+    }
+
     if (m_codec == CODEC_FLAC) {
         if (res == FlacDecoder::FLAC_PARSE_OGG_DONE) return bytesDecoded;
         if (res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;
@@ -5297,8 +5315,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     //        < 0: there has been an error
     //       -100: serious error, stop song
 
-    if (res < 0) { return decodeError(res, data, bytesDecoded); }     // Error, skip the frame...
-    if (res > 99) { return decodeContinue(res, data, bytesDecoded); } // decoder needs more data...
+    if (res < 0) { return decodeError(res, data, bytesDecoded); }                        // Error, skip the frame...
+    if (res > 99) { return decodeContinue(res, data, bytesDecoded, &m_sbyt.bytesLeft); } // decoder needs more data...
 
     if ((bytesDecoded == 0) && (m_codec != CODEC_VORBIS && m_codec != CODEC_FLAC)) { // unlikely framesize, exept VORBIS decodes lastSegmentTable
         info(*this, evt_info, "framesize is 0, start decoding again");
