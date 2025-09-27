@@ -186,25 +186,25 @@ class VorbisDecoder : public Decoder {
     };
 
     struct vorbis_info_floor {
-        int32_t               order;
-        int32_t               rate;
-        int32_t               barkmap;
-        int32_t               ampbits;
-        int32_t               ampdB;
-        int32_t               numbooks; /* <= 16 */
-        char                  books[16];
-        ps_ptr<floor1class_t> _class;         /* [VIF_CLASS] */
-        ps_ptr<uint8_t>       partitionclass; /* [VIF_PARTS]; 0 to 15 */
-        ps_ptr<uint16_t>      postlist;       /* [VIF_POSIT+2]; first two implicit */
-        ps_ptr<uint8_t>       forward_index;  /* [VIF_POSIT+2]; */
-        ps_ptr<uint8_t>       hineighbor;     /* [VIF_POSIT]; */
-        ps_ptr<uint8_t>       loneighbor;     /* [VIF_POSIT]; */
-        int32_t               partitions;     /* 0 to 31 */
-        int32_t               posts;
-        int32_t               mult; /* 1 2 3 or 4 */
+        int32_t               order{};
+        int32_t               rate{};
+        int32_t               barkmap{};
+        int32_t               ampbits{};
+        int32_t               ampdB{};
+        int32_t               numbooks{}; /* <= 16 */
+        char                  books[16]{};
+        ps_ptr<floor1class_t> _class{};         /* [VIF_CLASS] */
+        ps_ptr<uint8_t>       partitionclass{}; /* [VIF_PARTS]; 0 to 15 */
+        ps_ptr<uint16_t>      postlist{};       /* [VIF_POSIT+2]; first two implicit */
+        ps_ptr<uint8_t>       forward_index{};  /* [VIF_POSIT+2]; */
+        ps_ptr<uint8_t>       hineighbor{};     /* [VIF_POSIT]; */
+        ps_ptr<uint8_t>       loneighbor{};     /* [VIF_POSIT]; */
+        int32_t               partitions{};     /* 0 to 31 */
+        int32_t               posts{};
+        int32_t               mult{}; /* 1 2 3 or 4 */
     };
 
-    struct codebook {
+    typedef struct _codebook {
         uint8_t          dim{};          /* codebook dimensions (elements per vector) */
         int16_t          entries{};      /* codebook entries */
         uint16_t         used_entries{}; /* populated codebook entries */
@@ -224,11 +224,7 @@ class VorbisDecoder : public Decoder {
         int32_t          q_bits{};
         uint8_t          q_pack{};
         ps_ptr<uint16_t> q_val{};
-
-        void reset() {
-            *this = codebook{}; // cleanly reinitialize
-        }
-    };
+    }codebook_t;
 
     // global vars
     bool     m_f_vorbisNewSteamTitle = false; // streamTitle
@@ -281,7 +277,7 @@ class VorbisDecoder : public Decoder {
     ps_ptr<char>                      m_vorbisChbuf;
     ps_ptr<uint8_t>                   m_lastSegmentTable;
     ps_ptr<uint16_t>                  m_vorbisSegmentTable;
-    ps_ptr<codebook>                  m_codebooks;
+    ps_ptr<codebook_t>                m_codebooks;
     ps_ptr<ps_ptr<vorbis_info_floor>> m_floor_param{};
     ps_ptr<int8_t>                    m_floor_type;
     ps_ptr<vorbis_info_residue>       m_residue_param;
@@ -307,8 +303,8 @@ class VorbisDecoder : public Decoder {
     int32_t                   parseVorbisCodebook();
     int32_t                   parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
     uint16_t                  continuedOggPackets(uint8_t* inbuf);
-    int32_t                   vorbis_book_unpack(codebook* s);
-    uint32_t                  decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook* b, int32_t maptype);
+    int32_t                   vorbis_book_unpack(codebook_t* s);
+    uint32_t                  decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype);
     int32_t                   oggpack_eop();
     ps_ptr<vorbis_info_floor> floor1_info_unpack();
     void                      vorbis_mergesort(uint8_t* index, uint16_t* vals, uint16_t n);
@@ -319,21 +315,21 @@ class VorbisDecoder : public Decoder {
     int32_t                  vorbis_dsp_synthesis(uint8_t* inbuf, uint16_t len, int16_t* outbuf);
     ps_ptr<vorbis_dsp_state> vorbis_dsp_create();
     void                     vorbis_dsp_destroy(ps_ptr<vorbis_dsp_state>& v);
-    void                     vorbis_book_clear(ps_ptr<codebook>& v);
+    void                     vorbis_book_clear(ps_ptr<codebook_t>& v);
     void                     mdct_shift_right(int32_t n, int32_t* in, int32_t* right);
     int32_t                  mapping_inverse(vorbis_info_mapping* info);
     int32_t                  floor0_memosize(ps_ptr<vorbis_info_floor>& i);
     int32_t                  floor1_memosize(ps_ptr<vorbis_info_floor>& i);
     int32_t*                 floor0_inverse1(ps_ptr<vorbis_info_floor>& i, int32_t* lsp);
     int32_t*                 floor1_inverse1(ps_ptr<vorbis_info_floor>& in, int32_t* fit_value);
-    int32_t                  vorbis_book_decode(codebook* book);
-    int32_t                  decode_packed_entry_number(codebook* book);
+    int32_t                  vorbis_book_decode(codebook_t* book);
+    int32_t                  decode_packed_entry_number(codebook_t* book);
     int32_t                  render_point(int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t x);
-    int32_t                  vorbis_book_decodev_set(codebook* book, int32_t* a, int32_t n, int32_t point);
-    int32_t                  decode_map(codebook* s, int32_t* v, int32_t point);
+    int32_t                  vorbis_book_decodev_set(codebook_t* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                  decode_map(codebook_t* s, int32_t* v, int32_t point);
     int32_t                  res_inverse(vorbis_info_residue* info, int32_t** in, int32_t* nonzero, uint8_t ch);
-    int32_t                  vorbis_book_decodev_add(codebook* book, int32_t* a, int32_t n, int32_t point);
-    int32_t                  vorbis_book_decodevs_add(codebook* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                  vorbis_book_decodev_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
+    int32_t                  vorbis_book_decodevs_add(codebook_t* book, int32_t* a, int32_t n, int32_t point);
     int32_t                  floor0_inverse2(ps_ptr<vorbis_info_floor>& i, int32_t* lsp, int32_t* out);
     int32_t                  floor1_inverse2(ps_ptr<vorbis_info_floor>& in, int32_t* fit_value, int32_t* out);
     void                     render_line(int32_t n, int32_t x0, int32_t x1, int32_t y0, int32_t y1, int32_t* d);
@@ -354,7 +350,7 @@ class VorbisDecoder : public Decoder {
     int32_t                  bitrev12(int32_t x);
     void                     mdct_step7(int32_t* x, int32_t n, int32_t step);
     void                     mdct_step8(int32_t* x, int32_t n, int32_t step);
-    int32_t                  vorbis_book_decodevv_add(codebook* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point);
+    int32_t                  vorbis_book_decodevv_add(codebook_t* book, int32_t** a, int32_t offset, uint8_t ch, int32_t n, int32_t point);
     int32_t                  vorbis_dsp_pcmout(int16_t* outBuff, int32_t outBuffSize);
     void                     mdct_unroll_lap(int32_t n0, int32_t n1, int32_t lW, int32_t W, int32_t* in, int32_t* right, const int32_t* w0, const int32_t* w1, int16_t* out, int32_t step,
                                              int32_t start, /* samples, this frame */
@@ -372,9 +368,9 @@ class VorbisDecoder : public Decoder {
     int32_t  _float32_unpack(int32_t val, int32_t* point);
     int32_t  _determine_node_bytes(uint32_t used, uint8_t leafwidth);
     int32_t  _determine_leaf_words(int32_t nodeb, int32_t leafwidth);
-    int32_t  _make_decode_table(codebook* s, char* lengthlist, uint8_t quantvals, int32_t maptype);
-    int32_t  _make_words(char* l, uint16_t n, uint32_t* r, uint8_t quantvals, codebook* b, int32_t maptype);
-    uint8_t  _book_maptype1_quantvals(codebook* b);
+    int32_t  _make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype);
+    int32_t  _make_words(char* l, uint16_t n, uint32_t* r, uint8_t quantvals, codebook_t* b, int32_t maptype);
+    uint8_t  _book_maptype1_quantvals(codebook_t* b);
     int32_t* _vorbis_window(int32_t left);
 
     int32_t MULT32(int32_t x, int32_t y);

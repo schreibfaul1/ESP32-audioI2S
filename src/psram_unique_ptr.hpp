@@ -209,7 +209,7 @@ class ps_ptr {
     bool alloc_array(std::size_t count, const char* alloc_name = nullptr) {
         if (alloc_name) { set_name(alloc_name); }
         bool res = alloc(sizeof(T) * count);
-        clear();
+    //    clear();
         return res;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
