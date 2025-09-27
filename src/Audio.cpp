@@ -4427,7 +4427,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         return false;
     }
 
-    memset(&m_phreh, 0, sizeof(m_phreh));
+    m_phreh.reset();
     m_phreh.ctime = millis();
     m_phreh.timeout = 4500; // ms
 
@@ -6217,7 +6217,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 
     if (packet == NULL) {
         if (log) AUDIO_LOG_WARN("parseTS reset");
-        memset(&m_tspp, 0, sizeof(audiolib::tspp_t));
+        m_tspp.reset();
         return true;
     }
 

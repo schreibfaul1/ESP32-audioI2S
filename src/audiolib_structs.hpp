@@ -182,13 +182,18 @@ struct ifCh_t { // used in IIR_filterChain0, 1, 2
     int16_t iir_out2[2];
 };
 
-struct tspp_t { // used in ts_parsePacket
-    int     pidNumber = 0;
-    int     pids[4]; // PID_ARRAY_LEN
-    int     PES_DataLength = 0;
-    int     pidOfAAC = 0;
-    uint8_t fillData = 0;
-};
+typedef struct _tspp { // used in ts_parsePacket
+    int     pidNumber{};
+    int     pids[4]{}; // PID_ARRAY_LEN
+    int     PES_DataLength{};
+    int     pidOfAAC{};
+    uint8_t fillData{};
+
+    void reset() {
+        // Default-initialize alles neu (inklusive Array)
+        *this = _tspp{};
+    }
+}tspp_t;
 
 struct pwst_t { // used in processWebStream
     uint16_t maxFrameSize;
@@ -287,14 +292,19 @@ typedef struct _rflh { // used in read_FLAC_Header
     }
 } rflh_t;
 
-struct phreh_t { // used in parseHttpResponseHeader
-    uint32_t ctime;
-    uint32_t timeout;
-    uint32_t stime;
-    uint32_t bitrate;
-    bool     f_time = false;
-    bool     f_icy_data = false;
-};
+typedef struct _phreh { // used in parseHttpResponseHeader
+    uint32_t ctime{};
+    uint32_t timeout{};
+    uint32_t stime{};
+    uint32_t bitrate{};
+    bool     f_time{};
+    bool     f_icy_data{};
+
+    void reset() {
+        // Default-initialize alles neu (inklusive Array)
+        *this = _phreh{};
+    }
+} phreh_t;
 
 struct phrah_t { // used in parseHttpRangeHeader
     uint32_t ctime;
