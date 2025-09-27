@@ -484,7 +484,6 @@ int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, ui
     *channels = 1;
     if (buffer != NULL) {
         faad_initbits(ld, buffer, buffer_size);
-        /* Check if an ADIF header is present */
         if ((buffer[0] == 'A') && (buffer[1] == 'D') && (buffer[2] == 'I') && (buffer[3] == 'F')) {
             hDecoder->adif_header_present = 1;
             get_adif_header(adif, ld);
