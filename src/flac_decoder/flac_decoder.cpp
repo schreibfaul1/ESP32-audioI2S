@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 26.09,2025
+ * Updated on: 27.09,2025
  *
  * Author: Wolle
  *
@@ -805,7 +805,7 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
 
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
         if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
-        m_samplesBuffer[i].alloc_array(m_numOfOutSamples);
+        m_samplesBuffer[i].calloc_array(m_numOfOutSamples);
         if (!m_samplesBuffer[i].valid()) { // ps_ptr<T> should overload operator bool()
             FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffers");
             m_samplesBuffer[i].reset();
