@@ -272,7 +272,6 @@ private:
     void silk_PLC_update(uint8_t n);
     void silk_PLC_energy(int32_t *energy1, int32_t *shift1, int32_t *energy2, int32_t *shift2, const int32_t *exc_Q14, const int32_t *prevGain_Q10, int subfr_length, int nb_subfr);
     void silk_PLC_conceal(uint8_t n, int16_t frame[]);
-    void silk_resampler_down2_3(int32_t *S, int16_t *out, const int16_t *in, int32_t inLen);
     void silk_resampler_down2(int32_t *S, int16_t *out, const int16_t *in, int32_t inLen);
     void silk_resampler_private_AR2(int32_t S[], int32_t out_Q8[], const int16_t in[], const int16_t A_Q14[], int32_t len);
     int16_t *silk_resampler_private_down_FIR_INTERPOL(int16_t *out, int32_t *buf, const int16_t *FIR_Coefs, int32_t FIR_Order, int32_t FIR_Fracs, int32_t max_index_Q16, int32_t index_increment_Q16);

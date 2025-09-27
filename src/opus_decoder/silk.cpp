@@ -2787,66 +2787,6 @@ void SilkDecoder::silk_PLC_glue_frames(uint8_t n, int16_t frame[], int32_t lengt
     }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* Downsample by a factor 2/3, low quality */
-void SilkDecoder::silk_resampler_down2_3(int32_t*       S,    /* I/O  State vector [ 6 ]                                          */
-                            int16_t*       out,  /* O    Output signal [ floor(2*inLen/3) ]                          */
-                            const int16_t* in,   /* I    Input signal [ inLen ]                                      */
-                            int32_t        inLen /* I    Number of input samples                                     */
-) {
-    int32_t nSamplesIn, counter, res_Q6;
-    int32_t* buf_ptr;
-
-    ps_ptr<int32_t>buf; buf.alloc_array(RESAMPLER_MAX_BATCH_SIZE_IN + ORDER_FIR);
-
-    /* Copy buffered samples to start of buffer */
-    memcpy(buf.get(), S, ORDER_FIR * sizeof(int32_t));
-
-    /* Iterate over blocks of frameSizeIn input samples */
-    while(1) {
-        nSamplesIn = silk_min(inLen, RESAMPLER_MAX_BATCH_SIZE_IN);
-
-        /* Second-order AR filter (output in Q8) */
-        silk_resampler_private_AR2(&S[ORDER_FIR], &buf[ORDER_FIR], in, silk_Resampler_2_3_COEFS_LQ, nSamplesIn);
-
-        /* Interpolate filtered signal */
-        buf_ptr = buf.get();
-        counter = nSamplesIn;
-        while(counter > 2) {
-            /* Inner product */
-            res_Q6 = silk_SMULWB(buf_ptr[0], silk_Resampler_2_3_COEFS_LQ[2]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[1], silk_Resampler_2_3_COEFS_LQ[3]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[2], silk_Resampler_2_3_COEFS_LQ[5]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[3], silk_Resampler_2_3_COEFS_LQ[4]);
-
-            /* Scale down, saturate and store in output array */
-            *out++ = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(res_Q6, 6));
-
-            res_Q6 = silk_SMULWB(buf_ptr[1], silk_Resampler_2_3_COEFS_LQ[4]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[2], silk_Resampler_2_3_COEFS_LQ[5]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[3], silk_Resampler_2_3_COEFS_LQ[3]);
-            res_Q6 = silk_SMLAWB(res_Q6, buf_ptr[4], silk_Resampler_2_3_COEFS_LQ[2]);
-
-            /* Scale down, saturate and store in output array */
-            *out++ = (int16_t)silk_SAT16(silk_RSHIFT_ROUND(res_Q6, 6));
-
-            buf_ptr += 3;
-            counter -= 3;
-        }
-
-        in += nSamplesIn;
-        inLen -= nSamplesIn;
-
-        if(inLen > 0) {
-            /* More iterations to do; copy last part of filtered signal to beginning of buffer */
-            memcpy(buf.get(), &buf[nSamplesIn], ORDER_FIR * sizeof(int32_t));
-        }
-        else { break; }
-    }
-
-    /* Copy last part of filtered signal to the state for the next call */
-    memcpy(S, &buf[nSamplesIn], ORDER_FIR * sizeof(int32_t));
-}
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Downsample by a factor 2 */
 void SilkDecoder::silk_resampler_down2(int32_t*       S,    /* I/O  State vector [ 2 ]                                          */
                           int16_t*       out,  /* O    Output signal [ floor(len/2) ]                              */
@@ -3084,7 +3024,11 @@ void SilkDecoder::silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Re
     int32_t                      nSamplesIn;
     int32_t                      max_index_Q16, index_increment_Q16;
 
-    ps_ptr<int16_t>buf; buf.alloc_array(2 * S->batchSize + RESAMPLER_ORDER_FIR_12);
+    ps_ptr<int16_t> buf;
+    int32_t buf_size = 2 * S->batchSize + RESAMPLER_ORDER_FIR_12;
+    if (!buf.alloc_array(buf_size)) {
+        return; // Allocation failed
+    }
 
     /* Copy buffered samples to start of buffer */
     memcpy(buf.get(), S->sFIR.i16, RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
@@ -3095,7 +3039,7 @@ void SilkDecoder::silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Re
         nSamplesIn = silk_min(inLen, S->batchSize);
 
         /* Upsample 2x */
-        silk_resampler_private_up2_HQ(S->sIIR, &buf[RESAMPLER_ORDER_FIR_12], in, nSamplesIn);
+        silk_resampler_private_up2_HQ(S->sIIR, buf.get() + RESAMPLER_ORDER_FIR_12, in, nSamplesIn);
 
         max_index_Q16 = silk_LSHIFT32(nSamplesIn, 16 + 1); /* + 1 because 2x upsampling */
         out = silk_resampler_private_IIR_FIR_INTERPOL(out, buf.get(), max_index_Q16, index_increment_Q16);
@@ -3104,13 +3048,19 @@ void SilkDecoder::silk_resampler_private_IIR_FIR(void*         SS,    /* I/O  Re
 
         if(inLen > 0) {
             /* More iterations to do; copy last part of filtered signal to beginning of buffer */
-            memcpy(buf.get(), &buf[nSamplesIn << 1], RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
+            int32_t src_offset = nSamplesIn << 1;
+            if (src_offset + RESAMPLER_ORDER_FIR_12 <= buf_size) {
+                memcpy(buf.get(), buf.get() + src_offset, RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
+            }
         }
         else { break; }
     }
 
     /* Copy last part of filtered signal to the state for the next call */
-    memcpy(S->sFIR.i16, &buf[nSamplesIn << 1], RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
+    int32_t src_offset = nSamplesIn << 1;
+    if (src_offset + RESAMPLER_ORDER_FIR_12 <= buf_size) {
+        memcpy(S->sFIR.i16, buf.get() + src_offset, RESAMPLER_ORDER_FIR_12 * sizeof(int16_t));
+    }
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* Upsample by a factor 2, high quality. Uses 2nd order allpass filters for the 2x upsampling, followed by a      */
