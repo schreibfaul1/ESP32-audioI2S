@@ -18,8 +18,8 @@
 bool FlacDecoder::init() {
     if (!FLACFrameHeader.alloc()) {
         m_valid = false;
-        return false;
-    }
+            return false;
+        }
     if (!FLACMetadataBlock.alloc()) {
         m_valid = false;
         return false;
@@ -152,7 +152,7 @@ void FlacDecoder::alignToByte() {
 //              F L A C - D E C O D E R
 //----------------------------------------------------------------------------------------------------------------------
 void FlacDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {
-    log_w("channels %i, sampleRate %i, BPS %i, tsis %i, AuDaLength %i", channels, sampleRate, BPS, tsis, AuDaLength);
+log_w("channels %i, sampleRate %i, BPS %i, tsis %i, AuDaLength %i", channels, sampleRate, BPS, tsis, AuDaLength);
     FLACMetadataBlock->numChannels = channels;
     FLACMetadataBlock->sampleRate = sampleRate;
     FLACMetadataBlock->bitsPerSample = BPS;
@@ -177,11 +177,11 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         m_f_bitReaderError = false;
         return i;
     } else {
-        /* find byte-aligned sync code - need 14 matching bits */
+         /* find byte-aligned sync code - need 14 matching bits */
         for (i = 0; i < nBytes - 1; i++) {
             if ((buf[i + 0] & 0xFF) == 0xFF && (buf[i + 1] & 0xFC) == 0xF8) { // <14> Sync code '11111111111110xx'
                 if (i) decoderReset();
-                //    m_f_bitReaderError = false;
+            //    m_f_bitReaderError = false;
                 return i;
             }
         }
@@ -351,7 +351,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
             case 0: bt = streamInfo; break;
             case 1:
                 bt = padding;
-                //  FLAC_LOG_ERROR("padding");
+            //  FLAC_LOG_ERROR("padding");
                 return FLAC_NONE;
                 break;
             case 2:
@@ -703,7 +703,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
             sbl = 0;
             m_flacBitrate = FLACMetadataBlock->sampleRate * FLACMetadataBlock->bitsPerSample * FLACMetadataBlock->numChannels;
             m_flacBitrate /= m_flacCompressionRatio;
-            //      FLAC_LOG_INFO("s_flacBitrate %i, m_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", m_flacBitrate, m_flacCompressionRatio, FLACMetadataBlock->sampleRate);
+      //      FLAC_LOG_INFO("s_flacBitrate %i, m_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", m_flacBitrate, m_flacCompressionRatio, FLACMetadataBlock->sampleRate);
         }
 
         if (m_offset != m_numOfOutSamples) return GIVE_NEXT_LOOP;
@@ -713,8 +713,8 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
 
     alignToByte();
     readUint(16, bytesLeft);
-    //    m_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
-    //    FLAC_LOG_INFO("s_flacCompressionRatio % f", m_flacCompressionRatio);
+//    m_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
+//    FLAC_LOG_INFO("s_flacCompressionRatio % f", m_flacCompressionRatio);
     m_flacStatus = DECODE_FRAME;
     return FLAC_NONE;
 }
@@ -909,8 +909,8 @@ int8_t FlacDecoder::decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* byt
                                            //                1xxxxx : SUBFRAME_LPC, xxxxx=order-1
 
     int32_t shift = readUint(1, bytesLeft); // Wasted bits-per-sample' flag:
-                                            // 0 : no wasted bits-per-sample in source subblock, k=0
-                                            // 1 : k wasted bits-per-sample in source subblock, k-1 follows, unary coded; e.g. k=3 => 001 follows, k=7 => 0000001 follows.
+                                           // 0 : no wasted bits-per-sample in source subblock, k=0
+                                           // 1 : k wasted bits-per-sample in source subblock, k-1 follows, unary coded; e.g. k=3 => 001 follows, k=7 => 0000001 follows.
     if (shift == 1) {
         while (readUint(1, bytesLeft) == 0) { shift++; }
     }
@@ -937,13 +937,20 @@ int8_t FlacDecoder::decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* byt
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t FlacDecoder::decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) { // SUBFRAME_FIXED
+int8_t FlacDecoder::decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {     // SUBFRAME_FIXED
 
     uint8_t ret = 0;
     for (uint8_t i = 0; i < predOrder; i++) m_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft); // Unencoded warm-up samples (n = frame's bits-per-sample * predictor order).
     ret = decodeResiduals(predOrder, ch, bytesLeft);
-    if (ret) return ret;
-    restoreLinearPrediction(ch, 0, FIXED_PREDICTION_COEFFICIENTS[predOrder]);
+    if(ret) return ret;
+    coefs.clear(); coefs.shrink_to_fit();
+    if(predOrder == 0) coefs.resize(0);
+    if(predOrder == 1) coefs.push_back(1);  // FIXED_PREDICTION_COEFFICIENTS
+    if(predOrder == 2){coefs.push_back(2); coefs.push_back(-1);}
+    if(predOrder == 3){coefs.push_back(3); coefs.push_back(-3); coefs.push_back(1);}
+    if(predOrder == 4){coefs.push_back(4); coefs.push_back(-6); coefs.push_back(4); coefs.push_back(-1);}
+    if(predOrder > 4) {FLAC_LOG_ERROR("Flac preorder too big: %i", predOrder); return FLAC_ERR;} // Error: preorder > 4"
+    restoreLinearPrediction(ch, 0);
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -961,16 +968,16 @@ int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32
     }
     ret = decodeResiduals(lpcOrder, ch, bytesLeft);
     if (ret) return ret;
-    restoreLinearPrediction(ch, shift, coefs);
+    restoreLinearPrediction(ch, shift);
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
 
     int32_t method = readUint(2, bytesLeft); // Residual coding method:
-                                             // 00 : partitioned Rice coding with 4-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE follows
-                                             // 01 : partitioned Rice coding with 5-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE2 follows
-                                             // 10-11 : reserved
+                                                                  // 00 : partitioned Rice coding with 4-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE follows
+                                                                  // 01 : partitioned Rice coding with 5-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE2 follows
+                                                                  // 10-11 : reserved
     if (method >= 2) {
         FLAC_LOG_ERROR("Flac reserved residual coding, method: %i", method);
         return FLAC_ERR;
@@ -1013,7 +1020,7 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
     return FLAC_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift, std::deque<int> coefs) {
+void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 
     for (int32_t i = coefs.size(); i < m_numOfOutSamples; i++) {
         int32_t sum = 0;

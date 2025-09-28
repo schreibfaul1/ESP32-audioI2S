@@ -31,7 +31,7 @@ constexpr size_t m_frameSizeAAC = 1600 * 2;
 constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
 constexpr size_t m_frameSizeOPUS = 2048;
 constexpr size_t m_frameSizeVORBIS = 4096 * 2;
-constexpr size_t m_outbuffSize = 4096 * 4;
+constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
 constexpr size_t AUDIO_STACK_SIZE = 3300;
@@ -3196,7 +3196,7 @@ i2swrite:
 #ifdef SR_48K
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
 #else
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 100);
 #endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
@@ -5284,6 +5284,13 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_running) return 0; // guard
+    int res = 0;
+    int bytesDecoded = 0;
+    const char*           st = NULL;
+    std::vector<uint32_t> vec;
+    uint16_t bytesDecoderOut;
+    if(m_validSamples){goto exit;} // nothing to decode, next round
+
     m_sbyt.bytesLeft = 0;
     m_sbyt.nextSync = 0;
 
@@ -5297,9 +5304,9 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         if (m_sbyt.nextSync > 0) return m_sbyt.nextSync;
     }
     // m_f_playing is true at this pos
-    int res = 0;
+
     m_sbyt.bytesLeft = len;
-    int bytesDecoded = 0;
+
 
     if (m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
     if (!m_f_decode_ready) return 0;                                        // find sync first
@@ -5325,8 +5332,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         return 1;
     }
     // status: bytesDecoded > 0 and res >= 0
-    const char*           st = NULL;
-    std::vector<uint32_t> vec;
+
     switch (m_codec) {
         case CODEC_WAV: m_validSamples = m_decoder->getOutputSamples(); break;
         case CODEC_MP3: m_validSamples = m_decoder->getOutputSamples(); break;
@@ -5392,11 +5398,11 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     if (!m_validSamples) return bytesDecoded; // nothing to play
 
-    uint16_t bytesDecoderOut = m_validSamples;
+     bytesDecoderOut = m_validSamples;
     if (m_channels == 2) bytesDecoderOut /= 2;
     if (m_bitsPerSample == 16) bytesDecoderOut *= 2;
     calculateAudioTime(bytesDecoded, bytesDecoderOut);
-
+exit:
     m_curSample = 0;
     if (m_validSamples) { playChunk(); }
     return bytesDecoded;
