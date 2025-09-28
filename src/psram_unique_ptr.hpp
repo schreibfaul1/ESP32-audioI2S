@@ -15,11 +15,52 @@
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // PSRAM Deleter (ps_malloc → free)
+// Deleter for PSRAM
+
+// single objekt (int -> PSRAM)
+// auto pint = ps_make_unique<int>(123);
+// Serial.printf("Wert: %d\n", *pint);
+
+// single objekt (std::string -> PSRAM)
+// auto pstr = ps_make_unique<std::string>("Hallo PSRAM");
+// Serial.printf("String: %s\n", pstr->c_str());
+
+// array (char-Buffer)
+// auto buf = ps_make_unique<char>(256);
+// std::strcpy(buf.get(), "Text im PSRAM");
+
+// array (int-Buffer)
+//  auto iarr = ps_make_unique<int>(64);
+//  iarr[0] = 42
+
 struct PsramDeleter {
-    void operator()(void* ptr) const {
-        if (ptr) { free(ptr); }
+    void operator()(void* ptr) const noexcept {
+        if (ptr) {
+            free(ptr); // PSRAM freigeben
+        }
     }
 };
+
+// create individual object in PSRAM
+template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make_unique(Args&&... args) {
+    // rohen Speicher im PSRAM holen
+    void* raw = ps_malloc(sizeof(T));
+    if (!raw) { throw std::bad_alloc(); }
+
+    // Objekt mit placement-new konstruieren
+    T* obj = new (raw) T(std::forward<Args>(args)...);
+
+    // unique_ptr mit eigenem Deleter zurückgeben
+    return std::unique_ptr<T, PsramDeleter>(obj);
+}
+
+// create an array of objects in PSRAM
+template <typename T> std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
+    T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
+    if (!raw) { throw std::bad_alloc(); }
+    // Array wird nicht konstruiert → für POD-Typen wie char, int ok
+    return std::unique_ptr<T[], PsramDeleter>(raw);
+}
 
 // Auxiliary function: Comparison of two strings case inensitive, only up to n characters
 inline int strncasecmp_local(const char* s1, const char* s2, std::size_t n) {
@@ -73,6 +114,15 @@ class ps_ptr {
         char nr[8];
         ltoa(line, nr, 10);
         set_name(nr);
+    }
+
+    ps_ptr(const char* src, size_t len) {
+        if (src && len > 0) {
+            allocated_size = len + 1;
+            mem = ps_make_unique<char>(allocated_size); // sauber!
+            std::memcpy(mem.get(), src, len);
+            mem[len] = '\0';
+        }
     }
 
     ~ps_ptr() { // destructor
