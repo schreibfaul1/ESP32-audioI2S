@@ -110,11 +110,11 @@ class ps_ptr {
         set_name(name_str);
     }
 
-    explicit ps_ptr(uint16_t line) { // named constructor
-        char nr[8];
-        ltoa(line, nr, 10);
-        set_name(nr);
-    }
+    // explicit ps_ptr(uint16_t line) { // named constructor
+    //     char nr[8];
+    //     ltoa(line, nr, 10);
+    //     set_name(nr);
+    // }
 
     ps_ptr(const char* src, size_t len) {
         if (src && len > 0) {

@@ -4,8 +4,8 @@
 
     Created on: Oct 28.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3c                                                                                                                              ";
-/*  Updated on: Sep 27.2025
+    Version 3.4.3d                                                                                                                              ";
+/*  Updated on: Sep 30.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -388,7 +388,7 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
 bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
-    ps_ptr<char> host(__LINE__);
+    ps_ptr<char> host("host, openai_speech");
     host.assign("api.openai.com");
     char path[] = "/v1/audio/speech";
 
@@ -1689,8 +1689,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             idx += commentLength;
             if (idx > vendorLength + 3) { AUDIO_LOG_ERROR("VORBIS COMMENT section is too long"); }
         }
-        ps_ptr<char> tmp(__LINE__);
-        ps_ptr<char> timestamp(__LINE__);
+        ps_ptr<char> tmp("tmp, read_FLAC_Header");
+        ps_ptr<char> timestamp("timestamp, read_FLAC_Header");
         timestamp.alloc(12);
         if (lyricsBuffer.valid()) {
             lyricsBuffer.remove_prefix("LYRICS=");
@@ -1929,8 +1929,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         if (m_ID3Hdr.framesize == 0) return 0;
 
-        ps_ptr<char> tmp(__LINE__);
-        ps_ptr<char> content_descriptor(__LINE__);
+        ps_ptr<char> tmp("tmp, read_ID3_Header");
+        ps_ptr<char> content_descriptor("content_descriptor, read_ID3_Header");
         size_t       fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
         size_t       bytesToCopy = fs;
         size_t       textDataLength = 0;
@@ -1997,8 +1997,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == 7) { // SYLT
         m_controlCounter = 5;
         if (m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges)) {
-            ps_ptr<char> tmp(__LINE__);
-            ps_ptr<char> content_descriptor(__LINE__);
+            ps_ptr<char> tmp("tmp, content_descriptor");
+            ps_ptr<char> content_descriptor("content_descriptor");
             ps_ptr<char> syltBuff("syltBuff");
             bool         isBigEndian = true;
             size_t       len = 0;
@@ -2101,8 +2101,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
 
-                ps_ptr<char> tmp(__LINE__);
-                ps_ptr<char> content_descriptor(__LINE__);
+                ps_ptr<char> tmp("tmp");
+                ps_ptr<char> content_descriptor("content_descriptor");
                 ps_ptr<char> syltBuff("syltBuff");
                 bool         isBigEndian = true;
                 size_t       len = 0;
@@ -2832,8 +2832,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             if (m_m4aHdr.sizeof_ilst <= m_m4aHdr.ilst_pos) {
 
-                ps_ptr<char> tmp(__LINE__); // last todo if we have lyrics
-                ps_ptr<char> timestamp(__LINE__);
+                ps_ptr<char> tmp("tmp"); // last todo if we have lyrics
+                ps_ptr<char> timestamp("timestamp");
                 timestamp.alloc(12);
                 if (lyricsBuffer.valid()) {
                     lyricsBuffer.remove_prefix("LYRICS=");
@@ -3570,7 +3570,7 @@ uint16_t Audio::accomplish_m3u8_url() {
 
     for (uint16_t i = 0; i < m_linesWithURL.size(); i++) {
 
-        ps_ptr<char> tmp(__LINE__);
+        ps_ptr<char> tmp("tmp, accomplish_m3u8_url");
 
         if (!m_linesWithURL[i].starts_with("http")) { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                                                       //  chunklist:  http://station.com/aaa/bbb/ddd.aac
@@ -6442,7 +6442,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
-    ps_ptr<char> buff(__LINE__);
+    ps_ptr<char> buff("buff, readMetadata");
     buff.alloc(4096);
     buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6599,7 +6599,7 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readID3V1Tag() {
     if (m_codec != CODEC_MP3) return false;
-    ps_ptr<char> chBuff(__LINE__);
+    ps_ptr<char> chBuff("cBuff, readID3V1Tag");
     chBuff.alloc(256);
 
     const uint8_t* p = InBuff.getReadPtr();

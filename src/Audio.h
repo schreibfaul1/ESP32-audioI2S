@@ -554,7 +554,7 @@ class Audio {
         // -------------------------------------------------------------------------------------------------------------------
         if (!fmt) return false;
         if (!audio_info_callback) return false;
-        ps_ptr<char> result(__LINE__);
+        ps_ptr<char> result("result");
         // First run: determine size
         int len = std::snprintf(nullptr, 0, fmt, safe_arg(std::forward<Args>(args))...);
         if (len <= 0) return false;
@@ -600,7 +600,7 @@ class Audio {
 #define ANSI_ESC_CYAN    "\033[36m"
 #define ANSI_ESC_WHITE   "\033[37m"
 
-        ps_ptr<char> logStr(__LINE__);
+        ps_ptr<char> logStr("logStr");
         logStr.copy_from(path);
         while (logStr.contains("/")) { logStr.remove_before('/', false); }
         logStr.appendf(":%i ", line);
