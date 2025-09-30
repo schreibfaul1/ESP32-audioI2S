@@ -4,7 +4,7 @@
 
     Created on: Oct 28.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3d                                                                                                                              ";
+    Version 3.4.3e                                                                                                                              ";
 /*  Updated on: Sep 30.2025
 
     Author: Wolle (schreibfaul1)
@@ -1320,7 +1320,7 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
     }
     if (m_codec == CODEC_MP3) {
         int res = read_ID3_Header(InBuff.getReadPtr(), bytes);
-        if (res >= 0)
+        if (res > 0 || m_controlCounter < 100)
             bytesReaded = res;
         else { // error, skip header
             m_controlCounter = 100;
