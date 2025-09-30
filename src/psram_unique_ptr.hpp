@@ -55,10 +55,13 @@ template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make
 }
 
 // create an array of objects in PSRAM
-template <typename T> std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
+template <typename T>
+std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
     T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
-    if (!raw) { throw std::bad_alloc(); }
-    // Array wird nicht konstruiert → für POD-Typen wie char, int ok
+    if (!raw) {
+        printf("OOM: ps_malloc failed (%zu bytes)\n", sizeof(T) * count);
+        return std::unique_ptr<T[], PsramDeleter>(nullptr);  // kein throw
+    }
     return std::unique_ptr<T[], PsramDeleter>(raw);
 }
 
