@@ -515,7 +515,7 @@ class Audio {
     static const char* safe_arg(const char* v) { return v ? v : "(null)"; }
     static char*       safe_arg(char* v) { return v ? v : (char*)"(null)"; }
 
-    // 🎯 overload for char-Arrays (necer nullptr)
+    // 🎯 overload for char-Arrays (never nullptr)
     template <size_t N> static const char* safe_arg(const char (&v)[N]) { return v; }
 
     // 🎯 overload for string
@@ -529,27 +529,32 @@ class Audio {
     // 🎯 Catch-all for all other types
     template <typename T> static auto safe_arg(T&& v) -> decltype(auto) { return std::forward<T>(v); }
 
-    // specialization für nullptr / NULL
+    // specialization for nullptr / NULL
     static const char* safe_arg(std::nullptr_t) { return "(null)"; }
 
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-        // -------------------------------------------------------------------------------------------------------------------
-        auto extract_last_number = [&](std::string_view s) -> int32_t {
-            auto it = s.end(); // search from back to the front
-            while (it != s.begin()) {
-                --it;
-                if (std::isdigit(static_cast<unsigned char>(*it))) {
-                    auto end = it + 1;                                                                   // end of the number found
-                    while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) --it; // go back to the beginning of the number
-                    std::string_view number{it, static_cast<size_t>(end - it)};
-                    uint32_t         value{};
-                    auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
-                    if (ec == std::errc{}) return static_cast<int32_t>(value);
-                    break;
-                }
+                                                               // -------------------------------------------------------------------------------------------------------------------
+        auto extract_last_number = [](std::string_view s) -> int32_t {
+            // von hinten anfangen
+            auto it = s.end();
+            // skip whitespaces at the end (if available)
+            while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
+
+            auto end = it; // potentielles Ende der Zahl
+
+            // Now only search digits backwards
+            while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
+
+            // Prüfen: steht davor ein Leerzeichen?
+            if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
+                std::string_view number{it, static_cast<size_t>(end - it)};
+                uint32_t         value{};
+                auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
+                if (ec == std::errc{}) { return static_cast<int32_t>(value); }
             }
-            return -1; // no number found
+
+            return -1; // no number found in the end
         };
         // -------------------------------------------------------------------------------------------------------------------
         if (!fmt) return false;

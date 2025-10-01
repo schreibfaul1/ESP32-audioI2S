@@ -16,11 +16,11 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 bool FlacDecoder::init() {
-    if (!FLACFrameHeader.alloc()) {
+    if (!FLACFrameHeader.alloc_array(1)) {
         m_valid = false;
         return false;
     }
-    if (!FLACMetadataBlock.alloc()) {
+    if (!FLACMetadataBlock.alloc_array(1)) {
         m_valid = false;
         return false;
     }
@@ -38,7 +38,7 @@ void FlacDecoder::clear() {
 
     m_samplesBuffer[0].clear();
     m_samplesBuffer[1].clear();
-
+    coefs.clear();
     m_flacSegmTableVec.clear();
     m_flacStatus = DECODE_FRAME;
     return;

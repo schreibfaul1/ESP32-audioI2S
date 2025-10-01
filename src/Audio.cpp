@@ -2,10 +2,10 @@
 /*****************************************************************************************************************************************************
     audio.cpp
 
-    Created on: Oct 28.2018                                                                                                  */
+    Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3e                                                                                                                              ";
-/*  Updated on: Sep 30.2025
+    Version 3.4.3f                                                                                                                              ";
+/*  Updated on: 01.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -677,7 +677,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
         m_currentHost.clone_from(c_host);
         m_lastHost.clone_from(c_host);
-        info(*this, evt_lasthost, m_lastHost.get());
+        info(*this, evt_lasthost, "%s", m_lastHost.c_get());
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
     } else {
@@ -1133,7 +1133,7 @@ void Audio::showID3Tag(const char* tag, const char* value) {
         showstreamtitle(id3tag.get());
         return;
     }
-    if (id3tag.strlen()) { info(*this, evt_id3data, id3tag.get()); }
+    if (id3tag.strlen()) { info(*this, evt_id3data, "%s", id3tag.get()); }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
@@ -1554,7 +1554,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_decoder->setRawBlockParams(m_rflh.numChannels, m_rflh.sampleRate, m_rflh.bitsPerSample, m_rflh.totalSamplesInStream, (uint32_t)m_audioDataSize);
         if (m_rflh.picLen) {
             size_t pos = m_audioFilePosition;
-            info(*this, evt_image, m_rflh.picVec);
+            info(*this, evt_image, "%lu", m_rflh.picVec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
         info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
@@ -1666,7 +1666,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         if (vendorStringLength > 495) vendorStringLength = 495; // guard
         vendorString.assign((const char*)data, vendorStringLength);
         vendorString.insert("VENDOR_STRING: ", 0);
-        info(*this, evt_id3data, vendorString.get());
+        info(*this, evt_id3data, "%s", vendorString.get());
         data += vendorStringLength;
         idx += vendorStringLength;
         size_t commentListLength = data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24);
@@ -1683,7 +1683,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
                 if (commentString.starts_with("LYRICS="))
                     lyricsBuffer.clone_from(commentString);
                 else
-                    info(*this, evt_id3data, commentString.get());
+                    info(*this, evt_id3data, "%s", commentString.get());
             }
             data += commentLength;
             idx += commentLength;
@@ -2816,7 +2816,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                             if (memcmp(tags[i].tag, "pgap", 4) == 0) { break; } // Gapless Playback
                             if (memcmp(tags[i].tag, "rtng", 4) == 0) { break; } // Evaluation
                         }
-                        if (id3tag.valid()) { info(*this, evt_id3data, id3tag.get()); }
+                        if (id3tag.valid()) { info(*this, evt_id3data, "%s", id3tag.get()); }
                         if (strcmp(tags[i].descr, "Songtext") == 0) { lyricsBuffer.copy_from(&sa[24]); }
                         break;
                     }
@@ -3004,6 +3004,7 @@ uint32_t Audio::stopSong() {
         if (m_audiofile) {
             info(*this, evt_info, "Closing audio file \"%s\"", m_audiofile.name());
             m_audiofile.close();
+            m_client->stop();
         }
     }
     memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
@@ -3456,7 +3457,7 @@ const char* Audio::parsePlaylist_M3U() {
             pos = m_playlistContent[i].index_of(",");    // Comma in this line?
             if (pos > 0) {
                 // Show artist and title if present in metadata
-                info(*this, evt_id3data, m_playlistContent[i].get() + pos + 1);
+                info(*this, evt_id3data, "%s", m_playlistContent[i].get() + pos + 1);
             }
             continue;
         }
@@ -3507,7 +3508,7 @@ const char* Audio::parsePlaylist_PLS() {
         }
         if (m_playlistContent[i].starts_with("Title1")) { // Title1=Antenne Tirol
             const char* plsStationName = (m_playlistContent[i].get() + 7);
-            info(*this, evt_name, plsStationName);
+            info(*this, evt_name, "%s", plsStationName);
             continue;
         }
         if (m_playlistContent[i].starts_with("Length1")) { continue; }
@@ -3555,7 +3556,7 @@ const char* Audio::parsePlaylist_ASX() { // Advanced Stream Redirector
             if (pos >= 0) {
                 *(plsStationName + pos) = 0; // remove </Title>
             }
-            info(*this, evt_name, plsStationName);
+            info(*this, evt_name, "%s", plsStationName);
         }
 
         if (m_playlistContent[i].starts_with("http") && !f_entry) { // url only in asx
@@ -3904,7 +3905,7 @@ void Audio::processLocalFile() {
         m_codec = CODEC_NONE;
         stopSong();
 
-        if (afn.valid()) { info(*this, evt_eof, afn.c_get()); }
+        if (afn.valid()) { info(*this, evt_eof, "%s", afn.c_get()); }
         return;
     }
 }
@@ -3987,7 +3988,7 @@ void Audio::processWebStream() {
     }
 
     if (m_f_eof) {
-        info(*this, evt_eof, m_lastHost.c_get());
+        info(*this, evt_eof, "%s", m_lastHost.c_get());
         stopSong();
     }
 }
@@ -4075,7 +4076,7 @@ void Audio::processWebFile() {
         if (m_f_ID3v1TagFound) readID3V1Tag();
     exit:
         stopSong();
-        info(*this, evt_eof, m_lastHost.c_get());
+        info(*this, evt_eof, "%s", m_lastHost.c_get());
 
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4504,7 +4505,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
             if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                info(*this, evt_streamtitle, rhl.get());
+                info(*this, evt_streamtitle, "%s", rhl.get());
                 goto exit;
             }
         } else if (rhl.starts_with_icase("content-type:")) { // content-type: text/html; charset=UTF-8
@@ -4547,7 +4548,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if (rhl.starts_with_icase("content-encoding:")) {
-            info(*this, evt_info, rhl.get());
+            info(*this, evt_info, "%s", rhl.get());
             if (rhl.contains("gzip")) {
                 AUDIO_LOG_ERROR("can't extract gzip");
                 goto exit;
@@ -4576,7 +4577,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             icyLogo.trim();
             if (icyLogo.strlen() > 0) {
                 info(*this, evt_info, "icy-logo: %s", icyLogo.get());
-                info(*this, evt_icylogo, icyLogo.get());
+                info(*this, evt_icylogo, "%s", icyLogo.get());
             }
         }
 
@@ -4606,7 +4607,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             ps_ptr<char> icyName("icyName");
             icyName.assign(rhl.get() + 9); // Get station name
             icyName.trim();
-            if (icyName.strlen() > 0) { info(*this, evt_name, icyName.get()); }
+            if (icyName.strlen() > 0) { info(*this, evt_name, "%s", icyName.get()); }
         }
 
         else if (rhl.starts_with_icase("content-length:")) {
@@ -4624,7 +4625,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                 AUDIO_LOG_INFO("icy-description: %s has to be 8 or 16", c_idesc);
                 stopSong();
             }
-            info(*this, evt_icydescription, c_idesc);
+            info(*this, evt_icydescription, "%s", c_idesc);
         }
 
         else if (rhl.starts_with_icase("transfer-encoding:")) {
@@ -4647,7 +4648,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if (rhl.starts_with_icase("icy-url:")) {
             char* icyurl = (rhl.get() + 8);
             trim(icyurl);
-            info(*this, evt_icyurl, icyurl);
+            info(*this, evt_icyurl, "%s", icyurl);
         }
 
         else if (rhl.starts_with_icase("www-authenticate:")) {
@@ -4757,7 +4758,7 @@ bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
             if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
-                info(*this, evt_name, rhl.get());
+                info(*this, evt_name, "%s", rhl.get());
                 goto exit;
             }
         }
@@ -5012,7 +5013,7 @@ void Audio::showstreamtitle(char* st) {
         }
     }
 
-    else if (ml.starts_with("Grouping:")){
+    else if (ml.starts_with("Grouping:")) {
         streamTitle.assign(ml.get() + 9);
     }
 
@@ -5033,7 +5034,7 @@ void Audio::showstreamtitle(char* st) {
                 title.assign(ml.get() + titleStart, titleLength);
                 if (title.starts_with("text=\\")) { // #EXTINF:10,title="text=\"Spot Block End\"",artist=" ",
                     titleStart += 7;
-                    idx3 = ml.index_of( "\\", titleStart);
+                    idx3 = ml.index_of("\\", titleStart);
                     if (idx3 > titleStart) {
                         int titleLength = idx3 - titleStart;
                         title.assign(ml.get() + titleStart, titleLength);
@@ -5043,7 +5044,7 @@ void Audio::showstreamtitle(char* st) {
         }
         if (idx2 > 0) {
             int artistStart = idx2 + 8;
-            int idx3 = ml.index_of( "\"", artistStart);
+            int idx3 = ml.index_of("\"", artistStart);
             if (idx3 > artistStart) {
                 int artistLength = idx3 - artistStart;
                 artist.assign(ml.get() + artistStart, artistLength);
@@ -5115,7 +5116,7 @@ void Audio::showstreamtitle(char* st) {
         m_streamTitle.unicodeToUTF8(jsonIn.c_get());
     }
 
-    info(*this, evt_streamtitle, m_streamTitle.c_get());
+    info(*this, evt_streamtitle, "%s", m_streamTitle.c_get());
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::showCodecParams() {
@@ -5127,8 +5128,8 @@ void Audio::showCodecParams() {
     // else { info(*this, evt_info, "BitRate (b/s): N/A"); }
 
     if (m_codec == CODEC_AAC) {
-        info(*this, evt_info, m_decoder->arg2()); // AAC Format
-        uint8_t answ = m_decoder->val2();         // SBR
+        info(*this, evt_info, "%s", m_decoder->arg2()); // AAC Format
+        uint8_t answ = m_decoder->val2();               // SBR
         if (answ > 0 && answ < 4) {
             const char sbr[4][50] = {"without SBR", "upsampled SBR", "downsampled SBR", "no SBR used, but file is upsampled by a factor 2"};
             info(*this, evt_info, "Spectral band replication: %s", sbr[answ]);
@@ -5264,7 +5265,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
             uint32_t size = ((data[6 + bytesDecoded] & 0x7F) << 21) | ((data[7 + bytesDecoded] & 0x7F) << 14) | ((data[8 + bytesDecoded] & 0x7F) << 7) | (data[9 + bytesDecoded] & 0x7F);
             size += 10; // skip payload
             return bytesDecoded + size;
-            if(bytesDecoded >  *bytesLeft) AUDIO_LOG_ERROR("AAC input data too small bytesDecoded %i,> bytesLeft %i", bytesDecoded, *bytesLeft);
+            if (bytesDecoded > *bytesLeft) AUDIO_LOG_ERROR("AAC input data too small bytesDecoded %i,> bytesLeft %i", bytesDecoded, *bytesLeft);
         }
     }
 
@@ -5284,12 +5285,12 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_running) return 0; // guard
-    int res = 0;
-    int bytesDecoded = 0;
+    int                   res = 0;
+    int                   bytesDecoded = 0;
     const char*           st = NULL;
     std::vector<uint32_t> vec;
-    uint16_t bytesDecoderOut;
-    if(m_validSamples){goto exit;} // nothing to decode, next round
+    uint16_t              bytesDecoderOut;
+    if (m_validSamples) { goto exit; } // nothing to decode, next round
 
     m_sbyt.bytesLeft = 0;
     m_sbyt.nextSync = 0;
@@ -5306,7 +5307,6 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     // m_f_playing is true at this pos
 
     m_sbyt.bytesLeft = len;
-
 
     if (m_codec == CODEC_NONE && m_playlistFormat == FORMAT_M3U8) return 0; // can happen when the m3u8 playlist is loaded
     if (!m_f_decode_ready) return 0;                                        // find sync first
@@ -5348,7 +5348,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
         case CODEC_FLAC:
             m_validSamples = m_decoder->getOutputSamples();
             st = m_decoder->getStreamTitle();
-            if (st) { info(*this, evt_streamtitle, st); }
+            if (st) { info(*this, evt_streamtitle, "%s", st); }
             vec = m_decoder->getMetadataBlockPicture();
             if (vec.size() > 0) { // get blockpic data
                 // AUDIO_LOG_INFO("---------------------------------------------------------------------------");
@@ -5398,7 +5398,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     if (!m_validSamples) return bytesDecoded; // nothing to play
 
-     bytesDecoderOut = m_validSamples;
+    bytesDecoderOut = m_validSamples;
     if (m_channels == 2) bytesDecoderOut /= 2;
     if (m_bitsPerSample == 16) bytesDecoderOut *= 2;
     calculateAudioTime(bytesDecoded, bytesDecoderOut);
@@ -6612,7 +6612,7 @@ bool Audio::readID3V1Tag() {
         latinToUTF8(field);
         if (field.strlen() > 0 && label) {
             field.insert(label, 0);
-            info(*this, evt_id3data, field.get());
+            info(*this, evt_id3data, "%s", field.get());
         }
     };
 
@@ -6633,12 +6633,12 @@ bool Audio::readID3V1Tag() {
 
         if (zeroByte == 0) {
             sprintf(chBuff.get(), "Track Number: %d", track);
-            info(*this, evt_id3data, chBuff.get());
+            info(*this, evt_id3data, "%s", chBuff.get());
         }
 
         if (genre8 < 192) {
             sprintf(chBuff.get(), "Genre: %d", genre8);
-            info(*this, evt_id3data, chBuff.get());
+            info(*this, evt_id3data, "%s", chBuff.get());
         }
 
         return true;
@@ -6692,9 +6692,11 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
         m_f_allDataReceived = false;
 
         /* process before */
-        if (m_codec == CODEC_M4A) {
-            m_resumeFilePos += m4a_correctResumeFilePos();
-            if (m_resumeFilePos == -1) goto exit;
+        if (m_controlCounter == 100) {
+            if (m_codec == CODEC_M4A) {
+                m_resumeFilePos += m4a_correctResumeFilePos();
+                if (m_resumeFilePos == -1) goto exit;
+            }
         }
 
         /* skip to position */
@@ -6706,35 +6708,40 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
 
         /* process after */
         offset = 0;
-        if (m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {
-            if (InBuff.bufferFilled() < 0xFFFF) return -1;
-        } // ogg frame <= 64kB
-        if (m_codec == CODEC_WAV) {
-            while ((m_resumeFilePos % 4) != 0) {
-                m_resumeFilePos++;
-                offset++;
-                if (m_resumeFilePos >= m_audioFileSize) goto exit;
+        if (m_controlCounter == 100) {
+            if (m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {
+                if (InBuff.bufferFilled() < 0xFFFF) return -1;
+            } // ogg frame <= 64kB
+            if (m_codec == CODEC_WAV) {
+                while ((m_resumeFilePos % 4) != 0) {
+                    m_resumeFilePos++;
+                    offset++;
+                    if (m_resumeFilePos >= m_audioFileSize) goto exit;
+                }
+            } // must divisible by four
+            if (m_codec == CODEC_MP3) {
+                offset = mp3_correctResumeFilePos();
+                if (offset == -1) goto exit;
+                m_decoder->clear();
             }
-        } // must divisible by four
-        if (m_codec == CODEC_MP3) {
-            offset = mp3_correctResumeFilePos();
-            if (offset == -1) goto exit;
-            m_decoder->clear();
+            if (m_codec == CODEC_FLAC) {
+                offset = flac_correctResumeFilePos();
+                if (offset == -1) goto exit;
+                m_decoder->clear();
+            }
+            if (m_codec == CODEC_VORBIS) {
+                offset = ogg_correctResumeFilePos();
+                if (offset == -1) goto exit;
+                m_decoder->clear();
+            }
+            if (m_codec == CODEC_OPUS) {
+                offset = ogg_correctResumeFilePos();
+                if (offset == -1) goto exit;
+                m_decoder->clear();
+            }
         }
-        if (m_codec == CODEC_FLAC) {
-            offset = flac_correctResumeFilePos();
-            if (offset == -1) goto exit;
-            m_decoder->clear();
-        }
-        if (m_codec == CODEC_VORBIS) {
-            offset = ogg_correctResumeFilePos();
-            if (offset == -1) goto exit;
-            m_decoder->clear();
-        }
-        if (m_codec == CODEC_OPUS) {
-            offset = ogg_correctResumeFilePos();
-            if (offset == -1) goto exit;
-            m_decoder->clear();
+        else{
+            m_resumeFilePos = -1;
         }
 
         InBuff.bytesWasRead(offset);
