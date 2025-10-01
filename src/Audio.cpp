@@ -1343,9 +1343,8 @@ size_t Audio::readAudioHeader(uint32_t bytes) {
         int res = read_FLAC_Header(InBuff.getReadPtr(), bytes);
         if (res >= 0)
             bytesReaded = res;
-        else { // error, skip header
+        else { // error
             stopSong();
-            m_controlCounter = 100;
         }
     }
     if (m_codec == CODEC_OPUS) { m_controlCounter = 100; }
@@ -1479,7 +1478,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         } else { // sometimes there is nothing here
             m_audioDataSize = m_audioFileSize - m_rwh.headerSize;
         }
-        info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
+
         m_audioFileDuration = m_audioDataSize / (getSampleRate() * getChannels());
         if (getBitsPerSample() == 16) m_audioFileDuration /= 2;
         info(*this, evt_info, "Duration (s): %u", m_audioFileDuration);
@@ -1489,6 +1488,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     }
     m_controlCounter = 100; // header succesfully read
     m_audioDataStart = m_rwh.headerSize;
+    info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
+    info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1534,29 +1535,33 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == FLAC_MBH) { /* METADATA_BLOCK_HEADER */
         uint8_t blockType = *data;
+
         if (!m_rflh.f_lastMetaBlock) {
-            if (blockType & 128) { m_rflh.f_lastMetaBlock = true; }
-            blockType &= 127;
-            if (blockType == 0) m_controlCounter = FLAC_SINFO;
-            if (blockType == 1) m_controlCounter = FLAC_PADDING;
-            if (blockType == 2) m_controlCounter = FLAC_APP;
-            if (blockType == 3) m_controlCounter = FLAC_SEEK;
-            if (blockType == 4) m_controlCounter = FLAC_VORBIS;
-            if (blockType == 5) m_controlCounter = FLAC_CUESHEET;
-            if (blockType == 6) m_controlCounter = FLAC_PICTURE;
+            if ((blockType & 127) == 0) m_controlCounter = FLAC_SINFO;
+            if ((blockType & 127) == 1) m_controlCounter = FLAC_PADDING;
+            if ((blockType & 127) == 2) m_controlCounter = FLAC_APP;
+            if ((blockType & 127) == 3) m_controlCounter = FLAC_SEEK;
+            if ((blockType & 127) == 4) m_controlCounter = FLAC_VORBIS;
+            if ((blockType & 127) == 5) m_controlCounter = FLAC_CUESHEET;
+            if ((blockType & 127) == 6) m_controlCounter = FLAC_PICTURE;
+            if ((blockType & 128)) { m_rflh.f_lastMetaBlock = true; }
             m_rflh.headerSize += 1;
             m_rflh.retvalue = 1;
             return 0;
         }
+
         m_controlCounter = FLAC_OKAY;
+
         m_audioDataStart = m_rflh.headerSize;
         m_audioDataSize = m_audioFileSize - m_audioDataStart;
         m_decoder->setRawBlockParams(m_rflh.numChannels, m_rflh.sampleRate, m_rflh.bitsPerSample, m_rflh.totalSamplesInStream, (uint32_t)m_audioDataSize);
         if (m_rflh.picLen) {
-            size_t pos = m_audioFilePosition;
-            info(*this, evt_image, "%lu", m_rflh.picVec);
+            size_t pos = m_audioDataStart;
+            info(*this, evt_image, m_rflh.picVec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
+
+        info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
         info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
         if (m_rflh.duration) {
             m_rflh.nominalBitrate = (m_audioDataSize * 8) / m_rflh.duration;
@@ -1740,7 +1745,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         m_rflh.picPos = m_rflh.headerSize;
         m_rflh.picVec.push_back(m_rflh.picPos);
         m_rflh.picVec.push_back(m_rflh.picLen);
-        AUDIO_LOG_INFO("FLAC PICTURE, size %i, pos %i", m_rflh.picLen, m_rflh.picPos);
+        AUDIO_LOG_DEBUG("FLAC PICTURE, pos %i, size %i", m_rflh.picPos, m_rflh.picLen);
         m_controlCounter = FLAC_MBH;
         m_rflh.retvalue = m_rflh.picLen + 3;
         m_rflh.headerSize += m_rflh.retvalue;
@@ -2210,6 +2215,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else {
             m_controlCounter = 100; // ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
+            if (!m_f_m3u8data) info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
             if (!m_f_m3u8data) info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
 
             uint32_t hdr = bigEndian(data, 4);
@@ -2901,9 +2907,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             m_audioDataSize = bigEndian(data + 8, 8);
             m_audioDataSize -= 16;
             extLen = 8;
-        } else
+        } else {
             m_audioDataSize -= 8;
-        info(*this, evt_info, "Audio-Length: %i", m_audioDataSize);
+        }
         m_m4aHdr.retvalue = extLen;
         m_m4aHdr.headerSize += extLen;
         m_controlCounter = M4A_AMRDY; // last step before starting the audio
@@ -2923,6 +2929,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
         m_stsz_position = m_m4aHdr.stsz_table_pos;
+        info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
+        info(*this, evt_info, "Audio-Length: %i", m_audioDataSize);
         if (m_audioFileDuration) {
             m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
             info(*this, evt_info, "Duration (s): %u", m_audioFileDuration);
@@ -6685,7 +6693,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
 
     if (m_resumeFilePos < (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
     buffFillValue = min((uint32_t)(m_audioDataSize - m_resumeFilePos), (uint32_t)UINT16_MAX);
-
+    AUDIO_LOG_WARN("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
     m_f_lockInBuffer = true; // lock the buffer, the InBuffer must not be re-entered in playAudioData()
     {
         while (m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
@@ -6739,8 +6747,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
                 if (offset == -1) goto exit;
                 m_decoder->clear();
             }
-        }
-        else{
+        } else {
             m_resumeFilePos = -1;
         }
 

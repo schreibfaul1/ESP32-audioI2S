@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 27.09,2025
+ * Updated on: 01.10,2025
  *
  * Author: Wolle
  *
@@ -586,7 +586,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
                 return ret; // error
         }
         //-------------------------------------------------------
-        if (!m_flacSegmTableVec.size()) FLAC_LOG_ERROR("size is 0");
+        if (!m_flacSegmTableVec.size()) { FLAC_LOG_ERROR("size is 0"); }
         segmLen = m_flacSegmTableVec.back();
         m_segmLength = segmLen;
         m_flacSegmTableVec.pop_back();
@@ -725,6 +725,15 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         m_flacPageNr = 2;
         return FLAC_OGG_SYNC_FOUND;
     }
+    if (inbuf[0] != 0xFF || inbuf[1] != 0xF8) {
+        FLAC_LOG_ERROR("Sync 0xFFF8 not found");
+        return FLAC_ERR;
+    }
+
+    m_rIndex = 0;
+    m_flac_bitBuffer = 0;
+    coefs.clear();
+
     readUint(14 + 1, bytesLeft); // synccode + reserved bit
     FLACFrameHeader->blockingStrategy = readUint(1, bytesLeft);
     FLACFrameHeader->blockSizeCode = readUint(4, bytesLeft);
