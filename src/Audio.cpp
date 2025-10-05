@@ -388,7 +388,7 @@ void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
 bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
-    ps_ptr<char> host("host, openai_speech");
+    ps_ptr<char> host;
     host.assign("api.openai.com");
     char path[] = "/v1/audio/speech";
 
@@ -567,13 +567,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint16_t authLen = 0;   // length of authorization
     uint32_t timestamp = 0; // timeout surveillance
 
-    ps_ptr<char> c_host("c_host_connecttohost");             // copy of host
-    ps_ptr<char> hwoe("hwoe_connecttohost");                 // host without extension
-    ps_ptr<char> rqh_host("rqh_host_connecttohost");         // host for request header
-    ps_ptr<char> extension("extension_connecttohost");       // extension
-    ps_ptr<char> query_string("query_string_connecttohost"); // parameter
-    ps_ptr<char> path("path_connecttohost");                 // extension + '?' + parameter
-    ps_ptr<char> rqh("rqh_connecttohost");                   // request header
+    ps_ptr<char> c_host;             // copy of host
+    ps_ptr<char> hwoe;                 // host without extension
+    ps_ptr<char> rqh_host;         // host for request header
+    ps_ptr<char> extension;       // extension
+    ps_ptr<char> query_string; // parameter
+    ps_ptr<char> path;                 // extension + '?' + parameter
+    ps_ptr<char> rqh;                   // request header
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
@@ -608,8 +608,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     // optional basic authorization
     if (user && pwd) authLen = strlen(user) + strlen(pwd);
-    ps_ptr<char> authorization("authorization");
-    ps_ptr<char> toEncode("toEncode");
+    ps_ptr<char> authorization;
+    ps_ptr<char> toEncode;
     authorization.alloc(base64_encode_expected_len(authLen + 1) + 1);
     authorization.clear();
     if (authLen > 0) {
@@ -1003,7 +1003,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::showID3Tag(const char* tag, const char* value) {
-    ps_ptr<char> id3tag("id3tag");
+    ps_ptr<char> id3tag;
     // V2.2
     if (!strcmp(tag, "CNT")) id3tag.appendf("Play counter: %s", value, "id3tag");
     if (!strcmp(tag, "COM")) id3tag.appendf("Comments: %s", value, "id3tag");
@@ -1181,7 +1181,7 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
         }
         if (isUTF8) return; // is UTF-8, do nothing
     }
-    ps_ptr<char> iso8859_1("iso8859_1");
+    ps_ptr<char> iso8859_1;
     iso8859_1.assign(buff.get());
 
     // Worst-case: all chars are latin1 > 0x7F became 2 Bytes → max length is twice +1
@@ -1656,9 +1656,9 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             return -1;
         };
 
-        ps_ptr<char> vendorString("vendorString");
-        ps_ptr<char> commentString("commentString");
-        ps_ptr<char> lyricsBuffer("lyricsBuffer");
+        ps_ptr<char> vendorString;
+        ps_ptr<char> commentString;
+        ps_ptr<char> lyricsBuffer;
         size_t       vendorLength = bigEndian(data, 3);
         size_t       idx = 0;
         data += 3;
@@ -1694,8 +1694,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             idx += commentLength;
             if (idx > vendorLength + 3) { AUDIO_LOG_ERROR("VORBIS COMMENT section is too long"); }
         }
-        ps_ptr<char> tmp("tmp, read_FLAC_Header");
-        ps_ptr<char> timestamp("timestamp, read_FLAC_Header");
+        ps_ptr<char> tmp;
+        ps_ptr<char> timestamp;
         timestamp.alloc(12);
         if (lyricsBuffer.valid()) {
             lyricsBuffer.remove_prefix("LYRICS=");
@@ -1934,8 +1934,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
         if (m_ID3Hdr.framesize == 0) return 0;
 
-        ps_ptr<char> tmp("tmp, read_ID3_Header");
-        ps_ptr<char> content_descriptor("content_descriptor, read_ID3_Header");
+        ps_ptr<char> tmp;
+        ps_ptr<char> content_descriptor;
         size_t       fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
         size_t       bytesToCopy = fs;
         size_t       textDataLength = 0;
@@ -2002,9 +2002,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == 7) { // SYLT
         m_controlCounter = 5;
         if (m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges)) {
-            ps_ptr<char> tmp("tmp, content_descriptor");
-            ps_ptr<char> content_descriptor("content_descriptor");
-            ps_ptr<char> syltBuff("syltBuff");
+            ps_ptr<char> tmp;
+            ps_ptr<char> content_descriptor;
+            ps_ptr<char> syltBuff;
             bool         isBigEndian = true;
             size_t       len = 0;
             int          idx = 0;
@@ -2106,9 +2106,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
 
-                ps_ptr<char> tmp("tmp");
-                ps_ptr<char> content_descriptor("content_descriptor");
-                ps_ptr<char> syltBuff("syltBuff");
+                ps_ptr<char> tmp;
+                ps_ptr<char> content_descriptor;
+                ps_ptr<char> syltBuff;
                 bool         isBigEndian = true;
                 size_t       len = 0;
                 int          idx = 0;
@@ -2273,8 +2273,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
-    ps_ptr<char> atom_name("atom_name");
-    ps_ptr<char> atom_size("atom_size");
+    ps_ptr<char> atom_name;
+    ps_ptr<char> atom_size;
     uint32_t     idx = 0;
 
     /*
@@ -2506,7 +2506,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        ps_ptr<char> mdhd_buffer("mdhd_buffer");                  // read ESDS content in a buffer
+        ps_ptr<char> mdhd_buffer;                  // read ESDS content in a buffer
         mdhd_buffer.copy_from((char*)data, m_m4aHdr.sizeof_mdhd); // read MDHD content (without header)
                                                                   //    mdhd_buffer.hex_dump(m_m4aHdr.sizeof_mdhd);
                                                                   /* version;           1 Byte  offset 0   0 -> 32 bit, 1 -> 64 bit
@@ -2698,7 +2698,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == M4A_ESDS) {                           // Elementary Stream Descriptor
-        ps_ptr<char> esds_buffer("esds_buffer");                  // read ESDS content in a buffer
+        ps_ptr<char> esds_buffer;                  // read ESDS content in a buffer
         esds_buffer.copy_from((char*)data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
@@ -2721,7 +2721,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             AUDIO_LOG_DEBUG("DecoderSpecificInfo found at offset %d, length: %u", dec_specific_offset, dec_specific_length);
 
             // extract decoderSpecificInfo-data
-            ps_ptr<char> dec_specific_data("dec_specific_data");
+            ps_ptr<char> dec_specific_data;
             dec_specific_data.alloc(dec_specific_length);
             memcpy(dec_specific_data.get(), (uint8_t*)esds_buffer.get() + dec_specific_offset + 5, dec_specific_length);
             m_m4aHdr.aac_profile = (uint8_t)dec_specific_data.get()[0] >> 3;
@@ -2774,8 +2774,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         };
         const size_t tags_count = sizeof(tags) / sizeof(tags[0]); // Number of tags
 
-        ps_ptr<char> id3tag("id3tag");
-        ps_ptr<char> lyricsBuffer("lyricsBuffer");
+        ps_ptr<char> id3tag;
+        ps_ptr<char> lyricsBuffer;
         uint32_t     pos = m_m4aHdr.headerSize;
         uint32_t     consumed = 0;
         while (true) {
@@ -2790,7 +2790,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             // 0x00, 0x00, 0x00, 0x1C, 0xA9, 0x64, 0x61, 0x79, 0x00, 0x00, 0x00, 0x14, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x32, 0x30, 0x32, 0x32,
             //     sub atom length   |   ©    d     a     y  |  sub sub atom length  |  d     a     t     a  | data type   1->UTF-8  |   reserved            |  2     0     2     2
 
-            ps_ptr<char> sa("sa"); // sub atom
+            ps_ptr<char> sa; // sub atom
             sa.copy_from((const char*)data + consumed - as, min(as, (uint32_t)1024));
 
             char san[5] = {0};  // aub atom name
@@ -2838,8 +2838,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             if (m_m4aHdr.sizeof_ilst <= m_m4aHdr.ilst_pos) {
 
-                ps_ptr<char> tmp("tmp"); // last todo if we have lyrics
-                ps_ptr<char> timestamp("timestamp");
+                ps_ptr<char> tmp; // last todo if we have lyrics
+                ps_ptr<char> timestamp;
                 timestamp.alloc(12);
                 if (lyricsBuffer.valid()) {
                     lyricsBuffer.remove_prefix("LYRICS=");
@@ -3275,7 +3275,7 @@ void Audio::loop() {
                 break;
         }
     } else { // m3u8 datastream only
-        ps_ptr<char> host("host");
+        ps_ptr<char> host;
         if (m_lVar.no_host_timer > millis()) { return; }
         switch (m_dataMode) {
             case HTTP_RESPONSE_HEADER:
@@ -3348,7 +3348,7 @@ bool Audio::readPlayListData() {
 
     uint32_t     chunksize = 0;
     uint16_t     readedBytes = 0;
-    ps_ptr<char> pl("pl");
+    ps_ptr<char> pl;
     uint32_t     ctl = 0;
     uint16_t     plSize = 0;
 
@@ -3579,7 +3579,7 @@ uint16_t Audio::accomplish_m3u8_url() {
 
     for (uint16_t i = 0; i < m_linesWithURL.size(); i++) {
 
-        ps_ptr<char> tmp("tmp, accomplish_m3u8_url");
+        ps_ptr<char> tmp;
 
         if (!m_linesWithURL[i].starts_with("http")) { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                                                       //  chunklist:  http://station.com/aaa/bbb/ddd.aac
@@ -3796,7 +3796,7 @@ ps_ptr<char> Audio::m3u8redirection(uint8_t* codec) {
 
     choosenLine++; // next line is the redirection url
 
-    ps_ptr<char> result("result");
+    ps_ptr<char> result;
     ps_ptr<char> line;
     line.clone_from(m_playlistContent[choosenLine]);
 
@@ -3904,7 +3904,7 @@ void Audio::processLocalFile() {
     if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if (m_f_ID3v1TagFound) readID3V1Tag();
     exit:
-        ps_ptr<char> afn("afn");                         // audio file name
+        ps_ptr<char> afn;                         // audio file name
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4566,7 +4566,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         else if (rhl.starts_with_icase("content-disposition:")) { // e.g we have this headerline:  content-disposition: attachment; filename=stream.asx
             int idx = rhl.index_of_icase("filename=");
             if (idx >= 0) {
-                ps_ptr<char> fn("fn");
+                ps_ptr<char> fn;
                 fn.assign(rhl.get() + idx + 9); // Position directly after "filename="
                 fn.replace("\"", "");           // remove '\"' around filename if present
                 info(*this, evt_info, "Filename is %s", fn.get());
@@ -4580,7 +4580,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if (rhl.starts_with_icase("icy-logo:")) {
-            ps_ptr<char> icyLogo("icyLogo");
+            ps_ptr<char> icyLogo;
             icyLogo.assign(rhl.get() + 9); // Get logo URL
             icyLogo.trim();
             if (icyLogo.strlen() > 0) {
@@ -4590,7 +4590,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
         }
 
         else if (rhl.starts_with_icase("icy-br:")) {
-            ps_ptr<char> c_bitRate("c_bitRate");
+            ps_ptr<char> c_bitRate;
             c_bitRate.assign(rhl.get() + 7);
             c_bitRate.trim();
             c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
@@ -4612,7 +4612,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if (rhl.starts_with_icase("icy-name:")) {
             //  AUDIO_LOG_INFO("%s", rhl.get());
-            ps_ptr<char> icyName("icyName");
+            ps_ptr<char> icyName;
             icyName.assign(rhl.get() + 9); // Get station name
             icyName.trim();
             if (icyName.strlen() > 0) { info(*this, evt_name, "%s", icyName.get()); }
@@ -4698,7 +4698,7 @@ lastToDo:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
 
-    ps_ptr<char> rhl("rhl");
+    ps_ptr<char> rhl;
     rhl.alloc(1024); // responseHeaderline
     bool ct_seen = false;
 
@@ -4960,11 +4960,11 @@ void Audio::showstreamtitle(char* st) {
     // or adw_ad='true';durationMilliseconds='10135';adId='34254';insertionType='preroll';
     // html: 'Bielszy odcie&#324; bluesa 682 cz.1' --> 'Bielszy odcień bluesa 682 cz.1'
 
-    ps_ptr<char> ml("ml");
-    ps_ptr<char> title("title");
-    ps_ptr<char> artist("artist");
-    ps_ptr<char> streamTitle("streamTitle");
-    ps_ptr<char> sUrl("sUrl");
+    ps_ptr<char> ml;
+    ps_ptr<char> title;
+    ps_ptr<char> artist;
+    ps_ptr<char> streamTitle;
+    ps_ptr<char> sUrl;
     ml.htmlToUTF8(st); // convert to UTF-8
 
     int16_t idx1 = 0, idx2, idx4, idx5, idx6, idx7, titleLen = 0, artistLen = 0, titleStart = 0, artistStart = 0;
@@ -5089,7 +5089,7 @@ void Audio::showstreamtitle(char* st) {
             idx2 = ml.index_of(";", idx1);
             if (idx1 >= 0 && idx2 > idx1) {
                 uint16_t     len = idx2 - idx1;
-                ps_ptr<char> sAdv("sAdv");
+                ps_ptr<char> sAdv;
                 sAdv.assign(ml.get() + idx1, len + 1);
                 // info(*this, evt_info, "Adveritsement: %s", sAdv.get());
                 uint8_t pos = 21;                                                              // remove "StreamTitle="
@@ -5112,7 +5112,7 @@ void Audio::showstreamtitle(char* st) {
         // "{\"status\":0,\"error\":{\"info\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438
         // \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\",\"code\":201},\"result\":\"\\u042d\\u0442\\u043e \\u0440\\u0435\\u043a\\u043b\\u0430\\u043c\\u0430 \\u0438\\u043b\\u0438
         // \\u0434\\u0436\\u0438\\u043d\\u0433\\u043b\"}\n0";
-        ps_ptr<char> jsonIn("jsonIn");
+        ps_ptr<char> jsonIn;
         jsonIn.clone_from(m_streamTitle);
         jsonIn.truncate_at('\n'); // can be '{"status":1,"message":"Ok","result":"Ok","errorCode":0}\n0'
         if (!jsonIn.isJson()) return;
@@ -6450,7 +6450,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
-    ps_ptr<char> buff("buff, readMetadata");
+    ps_ptr<char> buff;
     buff.alloc(4096);
     buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6607,7 +6607,7 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readID3V1Tag() {
     if (m_codec != CODEC_MP3) return false;
-    ps_ptr<char> chBuff("cBuff, readID3V1Tag");
+    ps_ptr<char> chBuff;
     chBuff.alloc(256);
 
     const uint8_t* p = InBuff.getReadPtr();
@@ -6625,7 +6625,7 @@ bool Audio::readID3V1Tag() {
     };
 
     if (InBuff.bufferFilled() == 128 && startsWith((const char*)p, "TAG")) {
-        ps_ptr<char> title("title"), artist("artist"), album("album"), year("year"), comment("comment");
+        ps_ptr<char> title, artist, album, year, comment;
 
         readID3Field(title, p + 3, 30, "Title: ");
         readID3Field(artist, p + 33, 30, "Artist: ");
@@ -6655,7 +6655,7 @@ bool Audio::readID3V1Tag() {
     if (InBuff.bufferFilled() == 227 && startsWith((const char*)p, "TAG+")) { // "TAG+" "can exist as an extension, does not overwrite" TAG"
         info(*this, evt_info, "ID3 version: 1 - Enhanced TAG");
 
-        ps_ptr<char> title("title"), artist("artist"), album("album"), genre("genre");
+        ps_ptr<char> title, artist, album, genre;
 
         readID3Field(title, p + 4, 60, "Title: ");
         readID3Field(artist, p + 64, 60, "Artist: ");

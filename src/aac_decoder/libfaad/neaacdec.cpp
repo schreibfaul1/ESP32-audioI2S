@@ -467,8 +467,8 @@ uint8_t NeaacDecoder::NeAACDecSetConfiguration(NeAACDecHandle hpDecoder, NeAACDe
 int32_t NeaacDecoder::NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels) {
     uint32_t bits = 0;
     int32_t  ret = 0;
-    m_ld.alloc_array(1, "m_ld");
-    m_adif.alloc_array(1, "m_adif");
+    m_ld.calloc_array(1, "m_ld");
+    m_adif.calloc_array(1, "m_adif");
     m_adts.alloc_array(1, "m_adts");
     adif_header*    adif = m_adif.get();
     adts_header*    adts = m_adts.get();

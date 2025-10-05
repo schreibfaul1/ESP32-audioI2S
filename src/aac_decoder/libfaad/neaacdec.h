@@ -20,7 +20,7 @@
 **/
 
 // ESP32 Version 29.07.2024
-// updated:      10.05.2025
+// updated:      05.10.2025
 
 #pragma once
 #include "../../Audio.h"
@@ -104,12 +104,10 @@ class NeaacDecoder {
     void      to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float** sample_buffer);
     void      to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer);
 #endif
-#ifdef SSR_DEC
     void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
     void gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
     real_t calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
     real_t calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
-#endif
 #ifdef MAIN_DEC
     void flt_round(float* pf);
     int16_t quant_pred(float x);

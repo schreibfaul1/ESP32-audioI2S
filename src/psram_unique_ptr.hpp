@@ -55,12 +55,11 @@ template <typename T, typename... Args> std::unique_ptr<T, PsramDeleter> ps_make
 }
 
 // create an array of objects in PSRAM
-template <typename T>
-std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
+template <typename T> std::unique_ptr<T[], PsramDeleter> ps_make_unique(size_t count) {
     T* raw = static_cast<T*>(ps_malloc(sizeof(T) * count));
     if (!raw) {
         printf("OOM: ps_malloc failed (%zu bytes)\n", sizeof(T) * count);
-        return std::unique_ptr<T[], PsramDeleter>(nullptr);  // kein throw
+        return std::unique_ptr<T[], PsramDeleter>(nullptr); // kein throw
     }
     return std::unique_ptr<T[], PsramDeleter>(raw);
 }
@@ -109,16 +108,6 @@ class ps_ptr {
   public:
     ps_ptr() = default; // default constructor
 
-    explicit ps_ptr(const char* name_str) { // named constructor
-        set_name(name_str);
-    }
-
-    // explicit ps_ptr(uint16_t line) { // named constructor
-    //     char nr[8];
-    //     ltoa(line, nr, 10);
-    //     set_name(nr);
-    // }
-
     ps_ptr(const char* src, size_t len) {
         if (src && len > 0) {
             allocated_size = len + 1;
@@ -142,6 +131,37 @@ class ps_ptr {
 
     explicit operator bool() const {
         return mem.get() != nullptr; // Or just 'return (bool) mem;'if unique_ptr :: operator bool () is used
+    }
+
+    // Konstruktor für C-Strings (nur aktiv, wenn T == char)
+    ps_ptr(const char* src) {
+        if constexpr (std::is_same_v<T, char>) {
+            assign(src);
+        } else {
+            static_assert(!std::is_same_v<T, char>, "This constructor is only available for ps_ptr<char>");
+        }
+    }
+
+    // Copy-Konstruktor (nur für char sinnvoll, tiefe Kopie)
+    ps_ptr(const ps_ptr& other) {
+        if constexpr (std::is_same_v<T, char>) {
+            assign(other.get());
+        } else {
+            // Für Nicht-Char-Typen: Kopieren verboten (wie vorher)
+            static_assert(!std::is_same_v<T, T>, "Copy constructor disabled for this type");
+        }
+    }
+
+    // Copy-Assignment (nur für char sinnvoll)
+    ps_ptr& operator=(const ps_ptr& other) {
+        if (this != &other) {
+            if constexpr (std::is_same_v<T, char>) {
+                assign(other.get());
+            } else {
+                static_assert(!std::is_same_v<T, T>, "Copy assignment disabled for this type");
+            }
+        }
+        return *this;
     }
 
     ps_ptr(ps_ptr&& other) noexcept { // move-constructor
@@ -168,9 +188,22 @@ class ps_ptr {
         return *this;
     }
 
+    // C++20: Spaceship-Operator — erzeugt automatisch alle Vergleichsoperatoren
+    auto operator<=>(const ps_ptr& other) const noexcept {
+        if constexpr (std::is_same_v<T, char>) {
+            const char* s1 = get();
+            const char* s2 = other.get();
+            int         result = std::strcmp(s1 ? s1 : "", s2 ? s2 : "");
+            return (result < 0) ? std::strong_ordering::less : (result > 0) ? std::strong_ordering::greater : std::strong_ordering::equal;
+        } else {
+            // Für Nicht-String-Typen: Vergleich der Pointeradresse
+            return mem.get() <=> other.mem.get();
+        }
+    }
+
     // Optional: Explicitly prohibit copy constructor (helpful in troubleshooting)
-    ps_ptr(const ps_ptr&) = delete;
-    ps_ptr& operator=(const ps_ptr&) = delete;
+    //  ps_ptr(const ps_ptr&) = delete;
+    //  ps_ptr& operator=(const ps_ptr&) = delete;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // Prototypes:
@@ -328,15 +361,18 @@ class ps_ptr {
     // my_str1.get()[3] = 'x';
     // printf("%s\n", my_str1.get());
 
-    void assign(const char* src) { // Only for T = char: Is similar to strdup (full copy)
-        static_assert(std::is_same_v<T, char>, "assign(const char*) is only valid for ps_ptr<char>");
-        if (!src) {
-            reset();
-            return;
+    void assign(const char* src) {
+        if constexpr (std::is_same_v<T, char>) {
+            if (!src) {
+                reset();
+                return;
+            }
+            std::size_t len = std::strlen(src) + 1;
+            alloc(len);
+            if (mem) { std::memcpy(mem.get(), src, len); }
+        } else {
+            static_assert(std::is_same_v<T, char>, "assign(const char*) is only valid for ps_ptr<char>");
         }
-        std::size_t len = std::strlen(src) + 1;
-        alloc(len);
-        if (mem) { std::memcpy(mem.get(), src, len); }
     }
 
     // ps_ptr <char> my_str2;
@@ -358,6 +394,7 @@ class ps_ptr {
             static_cast<char*>(mem.get())[actual_len] = '\0';
         }
     }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  C O P Y _ F R O M   📌📌📌
     // Counted Count elements from the external pointer to the PSRAM, similar to memcpy
