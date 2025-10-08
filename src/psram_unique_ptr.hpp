@@ -133,7 +133,7 @@ class ps_ptr {
         return mem.get() != nullptr; // Or just 'return (bool) mem;'if unique_ptr :: operator bool () is used
     }
 
-    // Konstruktor für C-Strings (nur aktiv, wenn T == char)
+    // constructor for C-strings (only active if t == char)
     ps_ptr(const char* src) {
         if constexpr (std::is_same_v<T, char>) {
             assign(src);
@@ -142,7 +142,7 @@ class ps_ptr {
         }
     }
 
-    // Copy-Konstruktor (nur für char sinnvoll, tiefe Kopie)
+    // copy constructor (only for Char sensible, deep copy)
     ps_ptr(const ps_ptr& other) {
         if constexpr (std::is_same_v<T, char>) {
             assign(other.get());
@@ -152,7 +152,7 @@ class ps_ptr {
         }
     }
 
-    // Copy-Assignment (nur für char sinnvoll)
+    // Copy-Assignment (only for char sensible)
     ps_ptr& operator=(const ps_ptr& other) {
         if (this != &other) {
             if constexpr (std::is_same_v<T, char>) {
@@ -188,7 +188,7 @@ class ps_ptr {
         return *this;
     }
 
-    // C++20: Spaceship-Operator — erzeugt automatisch alle Vergleichsoperatoren
+    // C++20: Spaceship-Operator — Automatically creates all comparison operators
     auto operator<=>(const ps_ptr& other) const noexcept {
         if constexpr (std::is_same_v<T, char>) {
             const char* s1 = get();
@@ -196,7 +196,7 @@ class ps_ptr {
             int         result = std::strcmp(s1 ? s1 : "", s2 ? s2 : "");
             return (result < 0) ? std::strong_ordering::less : (result > 0) ? std::strong_ordering::greater : std::strong_ordering::equal;
         } else {
-            // Für Nicht-String-Typen: Vergleich der Pointeradresse
+            // for non-string types: Compare the pointer address
             return mem.get() <=> other.mem.get();
         }
     }
@@ -1210,6 +1210,19 @@ class ps_ptr {
         }
 
         return -1;
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  S U B S T R  📌📌📌
+    ps_ptr<char> substr(size_t pos, size_t count = std::string::npos) const {
+        const char* src = mem.get();
+        if (!src) return ps_ptr<char>{};
+
+        size_t len = std::strlen(src);
+        if (pos >= len) return ps_ptr<char>{}; // leer zurück
+
+        size_t n = (count == std::string::npos || pos + count > len) ? (len - pos) : count;
+
+        return ps_ptr<char>(src + pos, n);
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T R L E N  📌📌📌
