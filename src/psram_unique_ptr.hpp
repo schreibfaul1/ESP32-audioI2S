@@ -137,15 +137,15 @@ class ps_ptr {
         if (src && len > 0) {
             allocated_size = len + 1;
             mem = ps_make_unique<char>(allocated_size); // sauber!
-            if (mem.get() && allocated_size > len) {  // additional bounds check
+            if (mem.get() && allocated_size > len) {    // additional bounds check
                 std::memcpy(mem.get(), src, len);
-                // suppress warning: We know that allocated_size = len + 1 and therefore index [len] is valid
-                #pragma GCC diagnostic push
-                #pragma GCC diagnostic ignored "-Wstringop-overflow"
+    // suppress warning: We know that allocated_size = len + 1 and therefore index [len] is valid
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wstringop-overflow"
                 mem.get()[len] = '\0';
-                #pragma GCC diagnostic pop
+    #pragma GCC diagnostic pop
             } else {
-                allocated_size = 0;  // Reset if allocation fails
+                allocated_size = 0; // Reset if allocation fails
             }
         }
     }
@@ -168,6 +168,8 @@ class ps_ptr {
         }
     }
 
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R    📌📌📌
     // Copy-Assignment (only for char sensible)
     ps_ptr& operator=(const ps_ptr& other) {
         if (this != &other) {
@@ -235,6 +237,22 @@ class ps_ptr {
             // for non-string types: Compare the pointer address
             return mem.get() <=> other.mem.get();
         }
+    }
+
+    // ps_ptr<char> a = "Hallo"; a += " Welt";
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    ps_ptr<char>& operator+=(const char* rhs) {
+        append(rhs);
+        return *this;
+    }
+
+    // ps_ptr<char> a = "Hallo", b = " Welt"; a += b;
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    ps_ptr<char>& operator+=(const ps_ptr<char>& rhs) {
+        append(rhs);
+        return *this;
     }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -679,7 +697,7 @@ class ps_ptr {
             free(old_data);
         }
 
-        // Suffix anhängen
+        // Append suffix
         std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, add_len + 1);
         allocated_size = new_len;
         static_cast<char*>(mem.get())[old_len + add_len] = '\0';
@@ -717,6 +735,40 @@ class ps_ptr {
 
         std::memcpy(static_cast<char*>(mem.get()) + old_len, suffix, len);
         static_cast<char*>(mem.get())[old_len + len] = '\0';
+    }
+
+    // example: ps_ptr<char> a="Hello "; ps_ptr<char> b="World"; a.append(b);
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void append(const ps_ptr<char>& other) {
+        const char* suffix = other.get();
+        if (!suffix || !*suffix) return; // append nothing if empty
+
+        size_t add_len = std::strlen(suffix);
+        size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
+        size_t new_len = old_len + add_len + 1;
+
+        char* old_data = static_cast<char*>(mem.release());
+
+        if (psramFound()) {
+            mem.reset(static_cast<T*>(ps_malloc(new_len)));
+        } else {
+            mem.reset(static_cast<T*>(malloc(new_len)));
+        }
+
+        if (!mem) {
+            printf("OOM: append(ps_ptr) failed for %zu bytes\n", new_len);
+            if (old_data) free(old_data);
+            return;
+        }
+
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
+
+        std::memcpy(mem.get() + old_len, suffix, add_len + 1);
+        allocated_size = new_len;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S T A R T S _ W I T H   📌📌📌
@@ -2134,6 +2186,161 @@ class ps_ptr {
         printf("\n");
     }
 };
+
+// ps_ptr<char> a = "Hello "; ps_ptr<char> b = "World"; ps_ptr<char> c = a + b;  // results in new string
+template <typename T>
+    requires std::is_same_v<T, char>
+ps_ptr<char> operator+(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    ps_ptr<char> result(lhs);
+    result.append(rhs);
+    return result;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+ps_ptr<char> operator+(const ps_ptr<T>& lhs, const char* rhs) {
+    ps_ptr<char> result(lhs);
+    result.append(rhs);
+    return result;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+ps_ptr<char> operator+(const char* lhs, const ps_ptr<T>& rhs) {
+    ps_ptr<char> result(lhs);
+    result.append(rhs);
+    return result;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator==(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    const char* a = lhs.get();
+    const char* b = rhs.get();
+    if (!a || !b) return a == b; // beide nullptr → true
+    return std::strcmp(a, b) == 0;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator==(const ps_ptr<T>& lhs, const char* rhs) {
+    const char* a = lhs.get();
+    if (!a || !rhs) return a == rhs;
+    return std::strcmp(a, rhs) == 0;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator==(const char* lhs, const ps_ptr<T>& rhs) {
+    return rhs == lhs;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator!=(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    return !(lhs == rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator!=(const ps_ptr<T>& lhs, const char* rhs) {
+    return !(lhs == rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator!=(const char* lhs, const ps_ptr<T>& rhs) {
+    return !(lhs == rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    const char* a = lhs.get();
+    const char* b = rhs.get();
+    if (!a || !b) return a < b; // nullptr kleiner als nicht-null
+    return std::strcmp(a, b) < 0;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<(const ps_ptr<T>& lhs, const char* rhs) {
+    const char* a = lhs.get();
+    if (!a || !rhs) return a < rhs;
+    return std::strcmp(a, rhs) < 0;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<(const char* lhs, const ps_ptr<T>& rhs) {
+    const char* b = rhs.get();
+    if (!lhs || !b) return lhs < b;
+    return std::strcmp(lhs, b) < 0;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    return rhs < lhs;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>(const ps_ptr<T>& lhs, const char* rhs) {
+    return rhs && (std::strcmp(lhs.get(), rhs) > 0);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>(const char* lhs, const ps_ptr<T>& rhs) {
+    return rhs < lhs;
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<=(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    return !(rhs < lhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<=(const ps_ptr<T>& lhs, const char* rhs) {
+    return !(lhs > rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator<=(const char* lhs, const ps_ptr<T>& rhs) {
+    return !(rhs < lhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>=(const ps_ptr<T>& lhs, const ps_ptr<T>& rhs) {
+    return !(lhs < rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>=(const ps_ptr<T>& lhs, const char* rhs) {
+    return !(lhs < rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+bool operator>=(const char* lhs, const ps_ptr<T>& rhs) {
+    return !(lhs < rhs);
+}
+
+template <typename T>
+    requires std::is_same_v<T, char>
+std::ostream& operator<<(std::ostream& os, const ps_ptr<T>& str) {
+    const char* s = str.get();
+    if (s) os << s;
+    return os;
+}
+
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  S T R U C T U R E S    📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
