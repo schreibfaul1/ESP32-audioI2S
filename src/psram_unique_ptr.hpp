@@ -108,15 +108,6 @@ class ps_ptr {
   public:
     ps_ptr() = default; // default constructor
 
-    ps_ptr(const char* src, size_t len) {
-        if (src && len > 0) {
-            allocated_size = len + 1;
-            mem = ps_make_unique<char>(allocated_size); // sauber!
-            std::memcpy(mem.get(), src, len);
-            mem[len] = '\0';
-        }
-    }
-
     ~ps_ptr() { // destructor
         if (mem) {
             // log_w("Destructor called for %s: Freeing %zu bytes at %p", name ? name : "unnamed", allocated_size * sizeof(T), mem.get());
@@ -142,6 +133,31 @@ class ps_ptr {
         }
     }
 
+    ps_ptr(const char* src, size_t len) {
+        if (src && len > 0) {
+            allocated_size = len + 1;
+            mem = ps_make_unique<char>(allocated_size); // sauber!
+            if (mem.get() && allocated_size > len) {  // additional bounds check
+                std::memcpy(mem.get(), src, len);
+                // suppress warning: We know that allocated_size = len + 1 and therefore index [len] is valid
+                #pragma GCC diagnostic push
+                #pragma GCC diagnostic ignored "-Wstringop-overflow"
+                mem.get()[len] = '\0';
+                #pragma GCC diagnostic pop
+            } else {
+                allocated_size = 0;  // Reset if allocation fails
+            }
+        }
+    }
+
+    ps_ptr(ps_ptr&& other) noexcept { // move-constructor
+        mem = std::move(other.mem);
+        allocated_size = other.allocated_size;
+        name = other.name;
+        other.allocated_size = 0;
+        other.name = nullptr;
+    }
+
     // copy constructor (only for Char sensible, deep copy)
     ps_ptr(const ps_ptr& other) {
         if constexpr (std::is_same_v<T, char>) {
@@ -164,12 +180,32 @@ class ps_ptr {
         return *this;
     }
 
-    ps_ptr(ps_ptr&& other) noexcept { // move-constructor
-        mem = std::move(other.mem);
-        allocated_size = other.allocated_size;
-        name = other.name;
-        other.allocated_size = 0;
-        other.name = nullptr;
+    T* operator->() const { return get(); }
+    T& operator*() const { return *get(); }
+
+    // Sicherer operator[] mit Logging
+    T& operator[](std::size_t index) {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy; // Access allowed, but ineffective
+        }
+        return mem[index];
+    }
+
+    const T& operator[](std::size_t index) const {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy;
+        }
+        return mem[index];
+    }
+
+    ps_ptr<T>& operator=(T* raw_ptr) {
+        if (mem.get() != raw_ptr) {
+            mem.reset(raw_ptr);
+            allocated_size = 0; // (raw_ptr != nullptr) ? /* Berechne Größe hier */ : 0;
+        }
+        return *this;
     }
 
     // Move-Assignment-Operator
@@ -200,10 +236,6 @@ class ps_ptr {
             return mem.get() <=> other.mem.get();
         }
     }
-
-    // Optional: Explicitly prohibit copy constructor (helpful in troubleshooting)
-    //  ps_ptr(const ps_ptr&) = delete;
-    //  ps_ptr& operator=(const ps_ptr&) = delete;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // Prototypes:
@@ -1626,71 +1658,6 @@ class ps_ptr {
             mem.reset(ptr);
             allocated_size = size;
         }
-    }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  O P E R A T O R   📌📌📌
-
-    // struct MyStruct {
-    //     int x;
-    //     void hello() const {log_w("Hello, x = %i", x);}
-    // };
-    // ps_ptr<MyStruct> ptr;
-    // ptr.alloc(sizeof(MyStruct));
-    // ptr.clear();  // optional, setzt x auf 0
-    // ptr->x = 123;         // 👈 uses operator->()
-    // ptr->hello();         // 👈 uses operator->()
-    // (*ptr).x = 456;       // 👈 uses operator*()
-    // std::cout << (*ptr).x << "\n";
-    T* operator->() const { return get(); }
-    T& operator*() const { return *get(); }
-
-    // //ps_ptr<int32_t> p;
-    // //int32_t x = p[5];
-    // T& operator[](size_t index) {return get()[index];}
-
-    // // ps_ptr<ps_ptr<int32_t>> array_of_ptrs;
-    // // array_of_ptrs[0].alloc(...);
-    // template <typename U = T>
-    // typename std::enable_if<
-    //     std::is_class<U>::value &&
-    //     std::is_same<decltype(std::declval<U>().alloc(0)), void>::value,
-    //     U&>::type
-    // operator[](std::size_t index) const {
-    //     return get()[index];
-    // }
-
-    // Sicherer operator[] mit Logging
-    T& operator[](std::size_t index) {
-        if (index >= allocated_size) {
-            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
-            return dummy; // Access allowed, but ineffective
-        }
-        return mem[index];
-    }
-
-    const T& operator[](std::size_t index) const {
-        if (index >= allocated_size) {
-            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
-            return dummy;
-        }
-        return mem[index];
-    }
-
-    // struct MyStruct {
-    //     int value;
-    // };
-    // ps_ptr<MyStruct> smart_ptr;
-    //
-    // MyStruct* raw = (MyStruct*)malloc(sizeof(MyStruct));// Manually allocated raw memory
-    // raw->value = 123;
-    // smart_ptr = raw; // Smart_PTR is now taking over the property
-    // std::cout << smart_ptr->value << std::endl;  // access as usual gives: 123
-    ps_ptr<T>& operator=(T* raw_ptr) {
-        if (mem.get() != raw_ptr) {
-            mem.reset(raw_ptr);
-            allocated_size = 0; // (raw_ptr != nullptr) ? /* Berechne Größe hier */ : 0;
-        }
-        return *this;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌   A T    📌📌📌
