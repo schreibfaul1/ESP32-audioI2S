@@ -1363,50 +1363,59 @@ class ps_ptr {
         return count;
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  U T F 8 _ V A L I D   📌📌📌
+    // 📌📌📌  I S _ U T F 8   📌📌📌
 
-    // if (utf8_valid("Beyoncé – Déjà Vu")) {
-    //     printf("Gültiges UTF-8\n");
-    // } else {
-    //     printf("Ungültige UTF-8-Sequenz!\n");
-    // }
+    // ps_ptr<char> a = "Hello";    // ASCII → valid UTF-8
+    // ps_ptr<char> b = u8"Привет"; // Russian → valid UTF-8
+    // ps_ptr<char> c = "\xC3\x28"; // invalid (bad UTF-8 sequence)
 
-    bool utf8_valid(const char* s) {
+    // if (is_utf8(a)) printf("a is UTF-8\n");
+    // if (is_utf8(b)) printf("b is UTF-8\n");
+    // if (!is_utf8(c)) printf("c is not UTF-8\n");
+
+    bool is_utf8() const {
+        const unsigned char* s = reinterpret_cast<const unsigned char*>(mem.get());
         if (!s) return false;
 
-        const unsigned char* bytes = reinterpret_cast<const unsigned char*>(s);
-        while (*bytes) {
-            if (*bytes <= 0x7F) {
-                // 1-byte ASCII
-                bytes++;
-            } else if ((*bytes >> 5) == 0x6) {
-                // 2-byte sequence: 110xxxxx 10xxxxxx
-                if ((bytes[1] & 0xC0) != 0x80) return false;
-                if (*bytes < 0xC2) return false; // overlong encoding
-                bytes += 2;
-            } else if ((*bytes >> 4) == 0xE) {
-                // 3-byte sequence: 1110xxxx 10xxxxxx 10xxxxxx
-                if ((bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80) return false;
+        while (*s) {
+            unsigned char c = *s++;
 
-                unsigned char first = *bytes;
-                if (first == 0xE0 && bytes[1] < 0xA0) return false;  // overlong
-                if (first == 0xED && bytes[1] >= 0xA0) return false; // UTF-16 surrogate
+            // 1-byte ASCII (0xxxxxxx)
+            if (c < 0x80) continue;
 
-                bytes += 3;
-            } else if ((*bytes >> 3) == 0x1E) {
-                // 4-byte sequence: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-                if ((bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80 || (bytes[3] & 0xC0) != 0x80) return false;
-
-                unsigned char first = *bytes;
-                if (first > 0xF4) return false;                      // > U+10FFFF
-                if (first == 0xF0 && bytes[1] < 0x90) return false;  // overlong
-                if (first == 0xF4 && bytes[1] >= 0x90) return false; // out of range
-
-                bytes += 4;
-            } else {
-                // Invalid first byte
-                return false;
+            // 2-byte-sequence (110xxxxx 10xxxxxx)
+            if ((c >> 5) == 0x6) {
+                if ((s[0] & 0xC0) != 0x80) return false;
+                s += 1;
+                continue;
             }
+
+            // 3-byte-sequence (1110xxxx 10xxxxxx 10xxxxxx)
+            if ((c >> 4) == 0xE) {
+                if ((s[0] & 0xC0) != 0x80 || (s[1] & 0xC0) != 0x80) return false;
+
+                unsigned int cp = ((c & 0x0F) << 12) | ((s[0] & 0x3F) << 6) | (s[1] & 0x3F);
+                // Excessive coding or surrogate?
+                if (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF)) return false;
+
+                s += 2;
+                continue;
+            }
+
+            // 4-byte-sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+            if ((c >> 3) == 0x1E) {
+                if ((s[0] & 0xC0) != 0x80 || (s[1] & 0xC0) != 0x80 || (s[2] & 0xC0) != 0x80) return false;
+
+                unsigned int cp = ((c & 0x07) << 18) | ((s[0] & 0x3F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
+                // Overlong or out of Unicode range
+                if (cp < 0x10000 || cp > 0x10FFFF) return false;
+
+                s += 3;
+                continue;
+            }
+
+            // Invalid starting byte
+            return false;
         }
 
         return true;
@@ -2339,7 +2348,6 @@ std::ostream& operator<<(std::ostream& os, const ps_ptr<T>& str) {
     if (s) os << s;
     return os;
 }
-
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  S T R U C T U R E S    📌📌📌
