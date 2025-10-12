@@ -167,97 +167,6 @@ class ps_ptr {
             static_assert(!std::is_same_v<T, T>, "Copy constructor disabled for this type");
         }
     }
-
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  O P E R A T O R    📌📌📌
-    // Copy-Assignment (only for char sensible)
-    ps_ptr& operator=(const ps_ptr& other) {
-        if (this != &other) {
-            if constexpr (std::is_same_v<T, char>) {
-                assign(other.get());
-            } else {
-                static_assert(!std::is_same_v<T, T>, "Copy assignment disabled for this type");
-            }
-        }
-        return *this;
-    }
-
-    T* operator->() const { return get(); }
-    T& operator*() const { return *get(); }
-
-    // Sicherer operator[] mit Logging
-    T& operator[](std::size_t index) {
-        if (index >= allocated_size) {
-            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
-            return dummy; // Access allowed, but ineffective
-        }
-        return mem[index];
-    }
-
-    const T& operator[](std::size_t index) const {
-        if (index >= allocated_size) {
-            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
-            return dummy;
-        }
-        return mem[index];
-    }
-
-    ps_ptr<T>& operator=(T* raw_ptr) {
-        if (mem.get() != raw_ptr) {
-            mem.reset(raw_ptr);
-            allocated_size = 0; // (raw_ptr != nullptr) ? /* Berechne Größe hier */ : 0;
-        }
-        return *this;
-    }
-
-    // Move-Assignment-Operator
-    ps_ptr& operator=(ps_ptr&& other) noexcept {
-        if (this != &other) {
-            if (name) {
-                free(name);
-                name = nullptr;
-            }
-            mem = std::move(other.mem);
-            allocated_size = other.allocated_size;
-            name = other.name;
-            other.allocated_size = 0;
-            other.name = nullptr;
-        }
-        return *this;
-    }
-
-    // C++20: Spaceship-Operator — Automatically creates all comparison operators
-    auto operator<=>(const ps_ptr& other) const noexcept {
-        if constexpr (std::is_same_v<T, char>) {
-            const char* s1 = get();
-            const char* s2 = other.get();
-            int         result = std::strcmp(s1 ? s1 : "", s2 ? s2 : "");
-            return (result < 0) ? std::strong_ordering::less : (result > 0) ? std::strong_ordering::greater : std::strong_ordering::equal;
-        } else {
-            // for non-string types: Compare the pointer address
-            return mem.get() <=> other.mem.get();
-        }
-    }
-
-    // ps_ptr<char> a = "Hallo"; a += " Welt";
-    template <typename U = T>
-        requires std::is_same_v<U, char>
-    ps_ptr<char>& operator+=(const char* rhs) {
-        append(rhs);
-        return *this;
-    }
-
-    // ps_ptr<char> a = "Hallo", b = " Welt"; a += b;
-    template <typename U = T>
-        requires std::is_same_v<U, char>
-    ps_ptr<char>& operator+=(const ps_ptr<char>& rhs) {
-        append(rhs);
-        return *this;
-    }
-
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Prototypes:
-
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A L L O C  📌📌📌
 
@@ -2194,7 +2103,107 @@ class ps_ptr {
         }
         printf("\n");
     }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  O P E R A T O R  📌📌📌 (within class)
+    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    // Copy-Assignment (only for char sensible)
+    ps_ptr& operator=(const ps_ptr& other) {
+        if (this != &other) {
+            if constexpr (std::is_same_v<T, char>) {
+                assign(other.get());
+            } else {
+                static_assert(!std::is_same_v<T, T>, "Copy assignment disabled for this type");
+            }
+        }
+        return *this;
+    }
+
+    ps_ptr<T>& operator=(const T* raw_ptr) { // e.g.  ps_ptr<char> h; h = "123";
+        if constexpr (std::is_same_v<T, char>) {
+            assign(raw_ptr);
+        } else {
+            static_assert(!std::is_same_v<T, T>, "Assignment from const pointer disabled for this type");
+        }
+        return *this;
+    }
+
+    ps_ptr<T>& operator=(T* raw_ptr) {
+        if (mem.get() != raw_ptr) {
+            mem.reset(raw_ptr);
+            allocated_size = 0; // (raw_ptr != nullptr) ? /* Calculate size here */ : 0;
+        }
+        return *this;
+    }
+
+    // Move-Assignment-Operator
+    ps_ptr& operator=(ps_ptr&& other) noexcept {
+        if (this != &other) {
+            if (name) {
+                free(name);
+                name = nullptr;
+            }
+            mem = std::move(other.mem);
+            allocated_size = other.allocated_size;
+            name = other.name;
+            other.allocated_size = 0;
+            other.name = nullptr;
+        }
+        return *this;
+    }
+
+    T* operator->() const { return get(); }
+    T& operator*() const { return *get(); }
+
+    // Safe operator[] with logging
+    T& operator[](std::size_t index) {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy; // Access allowed, but ineffective
+        }
+        return mem[index];
+    }
+
+    const T& operator[](std::size_t index) const {
+        if (index >= allocated_size) {
+            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
+            return dummy;
+        }
+        return mem[index];
+    }
+
+    // C++20: Spaceship-Operator — Automatically creates all comparison operators
+    auto operator<=>(const ps_ptr& other) const noexcept {
+        if constexpr (std::is_same_v<T, char>) {
+            const char* s1 = get();
+            const char* s2 = other.get();
+            int         result = std::strcmp(s1 ? s1 : "", s2 ? s2 : "");
+            return (result < 0) ? std::strong_ordering::less : (result > 0) ? std::strong_ordering::greater : std::strong_ordering::equal;
+        } else {
+            // for non-string types: Compare the pointer address
+            return mem.get() <=> other.mem.get();
+        }
+    }
+
+    // ps_ptr<char> a = "Hallo"; a += " Welt";
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    ps_ptr<char>& operator+=(const char* rhs) {
+        append(rhs);
+        return *this;
+    }
+
+    // ps_ptr<char> a = "Hallo", b = " Welt"; a += b;
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    ps_ptr<char>& operator+=(const ps_ptr<char>& rhs) {
+        append(rhs);
+        return *this;
+    }
 };
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  O P E R A T O R  📌📌📌 (witout class)
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 // ps_ptr<char> a = "Hello "; ps_ptr<char> b = "World"; ps_ptr<char> c = a + b;  // results in new string
 template <typename T>

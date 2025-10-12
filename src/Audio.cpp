@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3f                                                                                                                              ";
-/*  Updated on: 01.10.2025
+    Version 3.4.3g                                                                                                                              ";
+/*  Updated on: 12.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -951,6 +951,7 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
     m_dataMode = AUDIO_LOCALFILE;
     m_audioFileSize = m_audiofile.size();
     m_f_running = true;
+    res = true;
 
 exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
