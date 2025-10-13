@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3g                                                                                                                              ";
+    Version 3.4.3h                                                                                                                              ";
 /*  Updated on: 12.10.2025
 
     Author: Wolle (schreibfaul1)
@@ -1560,6 +1560,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             size_t pos = m_audioDataStart;
             info(*this, evt_image, m_rflh.picVec);
             audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
+            m_resumeFilePos = pos;
         }
 
         info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
@@ -1743,7 +1744,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == FLAC_PICTURE) { /* PICTURE */
         m_rflh.picLen = bigEndian(data, 3);
-        m_rflh.picPos = m_rflh.headerSize;
+        m_rflh.picPos = m_rflh.headerSize + 3;
         m_rflh.picVec.push_back(m_rflh.picPos);
         m_rflh.picVec.push_back(m_rflh.picLen);
         AUDIO_LOG_DEBUG("FLAC PICTURE, pos %i, size %i", m_rflh.picPos, m_rflh.picLen);
@@ -6694,7 +6695,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
 
     if (m_resumeFilePos < (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
     buffFillValue = min((uint32_t)(m_audioDataSize - m_resumeFilePos), (uint32_t)UINT16_MAX);
-    AUDIO_LOG_WARN("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
+    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
     m_f_lockInBuffer = true; // lock the buffer, the InBuffer must not be re-entered in playAudioData()
     {
         while (m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
