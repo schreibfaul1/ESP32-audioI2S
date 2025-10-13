@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3h                                                                                                                              ";
+    Version 3.4.3i                                                                                                                              ";
 /*  Updated on: 12.10.2025
 
     Author: Wolle (schreibfaul1)
@@ -192,7 +192,7 @@ Audio::Audio(uint8_t i2sPort) {
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;     // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = 16;          // number of DMA buffer
+    m_i2s_chan_cfg.dma_desc_num = 32;          // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 512;        // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear = true;          // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
@@ -1496,7 +1496,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 
-    if (m_rflh.retvalue) {
+    if (m_rflh.retvalue && m_controlCounter != 0) {
         if (m_rflh.retvalue > len) { // if returnvalue > bufferfillsize
             if (len > InBuff.getMaxBlockSize()) len = InBuff.getMaxBlockSize();
             m_rflh.retvalue -= len; // and wait for more bufferdata
@@ -1559,8 +1559,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         if (m_rflh.picLen) {
             size_t pos = m_audioDataStart;
             info(*this, evt_image, m_rflh.picVec);
-            //    audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
-            m_resumeFilePos = pos; // includes file seek
         }
 
         info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
@@ -2003,7 +2001,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == 7) { // SYLT
         m_controlCounter = 5;
-        if (m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE && m_f_acceptRanges)) {
+        if (m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE)) {
             ps_ptr<char> tmp;
             ps_ptr<char> content_descriptor;
             ps_ptr<char> syltBuff;
@@ -2012,16 +2010,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             int          idx = 0;
             m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-            syltBuff.alloc(m_ID3Hdr.SYLT.size + 1);
-            if ((m_streamType == ST_WEBFILE && m_f_acceptRanges) || (m_dataMode == AUDIO_LOCALFILE)) {
-                uint32_t pos = m_audioFilePosition;
-                //    AUDIO_LOG_INFO("m_audioFilePosition %i, m_ID3Hdr.SYLT.pos %i", pos, m_ID3Hdr.SYLT.pos);
-                audioFileSeek(m_ID3Hdr.SYLT.pos, m_ID3Hdr.SYLT.pos + m_ID3Hdr.SYLT.size);
-                uint16_t bytesWritten = 0;
-                while (bytesWritten < m_ID3Hdr.SYLT.size) { bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size); }
-                audioFileSeek(pos);
-            }
-            //    syltBuff.hex_dump(10);
+            if (m_ID3Hdr.SYLT.size < len) return 0;
+            syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
             m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
             if (m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
             if (m_ID3Hdr.SYLT.text_encoding > 3) {
@@ -2117,12 +2107,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
                 m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
-                syltBuff.alloc(m_ID3Hdr.SYLT.size);
-                uint32_t pos = m_audioFilePosition;
-                audioFileSeek(m_ID3Hdr.SYLT.pos);
-                uint16_t bytesWritten = 0;
-                while (bytesWritten < m_ID3Hdr.SYLT.size) { bytesWritten += audioFileRead((uint8_t*)syltBuff.get() + bytesWritten, m_ID3Hdr.SYLT.size); }
-                audioFileSeek(pos);
+                if (m_ID3Hdr.SYLT.size < len) return 0;
+                syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
                 memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
                 m_ID3Hdr.SYLT.lang[3] = '\0';
@@ -2258,9 +2244,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 vec.push_back(m_ID3Hdr.APIC_size[0]);
                 info(*this, evt_image, vec);
                 vec.clear();
-
-                size_t pos = m_audioFilePosition;
-                audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
+                AUDIO_LOG_DEBUG("m_ID3Hdr.id3Size %i, m_audioDataStart %i", m_ID3Hdr.id3Size, m_audioDataStart);
+                if (m_ID3Hdr.id3Size != m_audioDataStart) audioFileSeek(m_audioDataStart);
             }
             m_ID3Hdr.numID3Header = 0;
             m_ID3Hdr.totalId3Size = 0;
@@ -3207,7 +3192,7 @@ i2swrite:
 #ifdef SR_48K
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
 #else
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 100);
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
 #endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
