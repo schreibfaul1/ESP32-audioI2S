@@ -567,13 +567,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint16_t authLen = 0;   // length of authorization
     uint32_t timestamp = 0; // timeout surveillance
 
-    ps_ptr<char> c_host;             // copy of host
-    ps_ptr<char> hwoe;                 // host without extension
-    ps_ptr<char> rqh_host;         // host for request header
-    ps_ptr<char> extension;       // extension
+    ps_ptr<char> c_host;       // copy of host
+    ps_ptr<char> hwoe;         // host without extension
+    ps_ptr<char> rqh_host;     // host for request header
+    ps_ptr<char> extension;    // extension
     ps_ptr<char> query_string; // parameter
-    ps_ptr<char> path;                 // extension + '?' + parameter
-    ps_ptr<char> rqh;                   // request header
+    ps_ptr<char> path;         // extension + '?' + parameter
+    ps_ptr<char> rqh;          // request header
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
@@ -1559,8 +1559,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         if (m_rflh.picLen) {
             size_t pos = m_audioDataStart;
             info(*this, evt_image, m_rflh.picVec);
-            audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
-            m_resumeFilePos = pos;
+            //    audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
+            m_resumeFilePos = pos; // includes file seek
         }
 
         info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
@@ -2508,7 +2508,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         } // go back
 
-        ps_ptr<char> mdhd_buffer;                  // read ESDS content in a buffer
+        ps_ptr<char> mdhd_buffer;                                 // read ESDS content in a buffer
         mdhd_buffer.copy_from((char*)data, m_m4aHdr.sizeof_mdhd); // read MDHD content (without header)
                                                                   //    mdhd_buffer.hex_dump(m_m4aHdr.sizeof_mdhd);
                                                                   /* version;           1 Byte  offset 0   0 -> 32 bit, 1 -> 64 bit
@@ -2700,7 +2700,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == M4A_ESDS) {                           // Elementary Stream Descriptor
-        ps_ptr<char> esds_buffer;                  // read ESDS content in a buffer
+        ps_ptr<char> esds_buffer;                                 // read ESDS content in a buffer
         esds_buffer.copy_from((char*)data, m_m4aHdr.sizeof_esds); // read ESDS content (without header)
         // esds_buffer.hex_dump(m_m4aHdr.sizeof_esds);
 
@@ -3857,7 +3857,6 @@ void Audio::processLocalFile() {
     }
 
     m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
-
     m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_prlf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_prlf.bytesAddedToBuffer); }
     if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
@@ -3906,7 +3905,7 @@ void Audio::processLocalFile() {
     if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
         if (m_f_ID3v1TagFound) readID3V1Tag();
     exit:
-        ps_ptr<char> afn;                         // audio file name
+        ps_ptr<char> afn;                                // audio file name
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
         m_audioCurrentTime = 0;
         m_audioFileDuration = 0;
@@ -4017,6 +4016,7 @@ void Audio::processWebFile() {
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
+        m_controlCounter = 0;
         m_pwf.audioHeaderFound = false;
         m_pwf.newFilePos = 0;
         m_pwf.ctime = millis();
@@ -4068,8 +4068,10 @@ void Audio::processWebFile() {
             }
             return;
         } else {
-            m_f_stream = true;
-            info(*this, evt_info, "stream ready");
+            if (m_resumeFilePos == -1) {
+                m_f_stream = true;
+                info(*this, evt_info, "stream ready");
+            }
         }
     }
 
@@ -4402,6 +4404,8 @@ void Audio::playAudioData() {
     if (m_pad.lastFrames) {
         m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
     } else {
+        ps_ptr<char> hd;
+        hd.copy_from((const char*)InBuff.getReadPtr(), 30);
         if (InBuff.bufferFilled() >= InBuff.getMaxBlockSize())
             m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
         else
@@ -5650,17 +5654,17 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
                     res = offset;
                     t = millis();
                 }
-                if (readed_bytes <= 0) break;
+                if (readed_bytes <= 0) vTaskDelay(5);
             } else {
                 readed_bytes = m_client->read(buff + offset, len);
-                if (readed_bytes >= 0) {
+                if (readed_bytes > 0) {
                     m_audioFilePosition += readed_bytes;
                     len -= readed_bytes;
                     offset += readed_bytes;
                     res = offset;
                     t = millis();
                 }
-                if (readed_bytes <= 0) break; // vTaskDelay(5);
+                if (readed_bytes <= 0) vTaskDelay(5);
             }
             if (t + 3000 < millis()) {
                 AUDIO_LOG_ERROR("timeout");
@@ -6713,7 +6717,8 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
         res = audioFileSeek(m_resumeFilePos);
         InBuff.resetBuffer();
         offset = 0;
-        audioFileRead(InBuff.getReadPtr() + offset, buffFillValue);
+
+        audioFileRead(InBuff.getWritePtr() + offset, buffFillValue);
         InBuff.bytesWritten(buffFillValue);
 
         /* process after */
