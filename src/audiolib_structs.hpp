@@ -154,6 +154,7 @@ struct prlf_t { // used in processLocalFile
     uint32_t maxFrameSize;
     uint32_t availableBytes;
     int32_t  bytesAddedToBuffer;
+    int32_t  bytesLeft;
 };
 
 struct cat_t { // used in calculateAudioTime
