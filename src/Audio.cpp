@@ -112,22 +112,25 @@ size_t AudioBuffer::bufferFilled() {
             m_dataLength = 0;
         else
             m_dataLength = m_buffSize;
-    }
+        return m_dataLength;
+    };
     if (m_readPtr < m_writePtr) { m_dataLength = m_writePtr - m_readPtr; }
     if (m_readPtr > m_writePtr) { m_dataLength = (m_endPtr - m_readPtr) + (m_writePtr - m_buffer.get()); }
     return m_dataLength;
 }
 
-size_t AudioBuffer::getMaxAvailableBytes() {
+size_t AudioBuffer::getMaxReadBytes() {
     if (m_readPtr == m_writePtr) {
         //   if(m_f_start)m_dataLength = 0;
-        if (m_f_isEmpty == true)
+        if (m_f_isEmpty == true) {
             m_dataLength = 0;
-        else
+        } else {
             m_dataLength = (m_endPtr - m_readPtr);
+        }
+        return m_dataLength;
     }
     if (m_readPtr < m_writePtr) { m_dataLength = m_writePtr - m_readPtr; }
-    if (m_readPtr > m_writePtr) { m_dataLength = (m_endPtr - m_readPtr); }
+    if (m_readPtr > m_writePtr) { m_dataLength = (m_endPtr - m_readPtr) + max((size_t)(m_writePtr - m_buffer.get()), m_maxBlockSize); }
     return m_dataLength;
 }
 
@@ -239,7 +242,7 @@ Audio::~Audio() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::destroy_decoder() {
     if (m_decoder && m_decoder->isValid()) {
-        info(*this, evt_info, "%sDecoder has been destroyed", m_decoder->whoIsIt());
+        info(*this, evt_info, "%sDecoder has been suspended", m_decoder->whoIsIt());
         m_decoder->reset();
         m_decoder.reset();
     }
@@ -2272,31 +2275,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
            |
          mdat contains the audio data                                                      */
 
-    if (m_m4aHdr.retvalue) {
-        if (m_m4aHdr.retvalue > UINT16_MAX) {
-            int res = audioFileSeek(m_m4aHdr.headerSize);
-            if (res >= 0) {
-                AUDIO_LOG_INFO("skip %li bytes", m_m4aHdr.retvalue);
-                InBuff.resetBuffer();
-                m_m4aHdr.retvalue = 0;
-                return 0;
-            }
-        }
-        if (m_m4aHdr.retvalue > len) {
-            m_m4aHdr.retvalue -= len;
-            m_m4aHdr.cnt += len;
-            return len;
-        } else {
-            size_t tmp = m_m4aHdr.retvalue;
-            m_m4aHdr.retvalue = 0;
-            m_m4aHdr.cnt += tmp;
-            return tmp;
-        }
+    if (m_controlCounter == M4A_INIT) { // init
+        m_m4aHdr.reset();
+        m_controlCounter = M4A_BEGIN;
     }
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_controlCounter == M4A_BEGIN) { // init
-        memset(&m_m4aHdr, 0, sizeof(audiolib::m4aHdr_t));
-
+    if (m_controlCounter == M4A_BEGIN) {
         atom_size.big_endian(data, 4);
         atom_name.copy_from((const char*)data + 4, 4);
 
@@ -2311,6 +2294,23 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if (m_m4aHdr.retvalue) {
+        if (m_m4aHdr.retvalue > len) {
+            int res = audioFileSeek(m_m4aHdr.headerSize);
+            if (res >= 0) {
+                AUDIO_LOG_INFO("skip %li bytes", m_m4aHdr.retvalue);
+                InBuff.resetBuffer();
+                m_m4aHdr.retvalue = 0;
+                return 0;
+            }
+        } else {
+            size_t tmp = m_m4aHdr.retvalue;
+            m_m4aHdr.retvalue = 0;
+            return tmp;
+        }
+    }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     if (m_controlCounter == M4A_FTYP) { /* check_m4a_file */
 
         int m4a = specialIndexOf(data, "M4A ", 20);
@@ -2334,7 +2334,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         atom_name.copy_from((const char*)data + 4, 4);
 
         if (atom_name.equals("moov")) {
-            m_m4aHdr.progressive = true;
+            if (!m_m4aHdr.pos_of_mdat) m_m4aHdr.progressive = true; // mdat after moov
             AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
             m_m4aHdr.sizeof_moov = atom_size.to_uint32(16) - 8;
             m_m4aHdr.retvalue += 8;
@@ -2344,10 +2344,18 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
 
         if (atom_name.equals("mdat")) {
-            if (!m_m4aHdr.progressive) {
-                AUDIO_LOG_ERROR("non progressive file can't be played yet"); // mdat before moov, todo: skip mdat
-                stopSong();
-                return -1;
+            if (!m_m4aHdr.progressive) {                       // means mdat before moov
+                AUDIO_LOG_ERROR("non progressive m4a header"); // mdat before moov, todo: skip mdat
+                // stopSong();
+                //  return -1;
+                m_m4aHdr.pos_of_mdat = m_m4aHdr.headerSize; // save mdat pos
+                m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16) - 8;
+                m_m4aHdr.retvalue += 8;
+                m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
+                m_m4aHdr.headerSize += 8;
+                m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
+                AUDIO_LOG_ERROR("pos mdat; %X, pos moov; %X", m_m4aHdr.pos_of_mdat, m_m4aHdr.headerSize);
+                return 0; // skip mdat
             }
             AUDIO_LOG_DEBUG("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16));
             m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16) - 8;
@@ -2815,9 +2823,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                     }
                 }
             } else
-                AUDIO_LOG_DEBUG("%s tag not supported", san);
+                AUDIO_LOG_WARN("%s tag not supported", san);
 
             if (consumed > len) {
+                AUDIO_LOG_ERROR("consumed  %i, len %i", consumed, len);
                 m_m4aHdr.retvalue = consumed;
                 m_m4aHdr.headerSize += consumed;
                 return 0;
@@ -2857,12 +2866,21 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                     //     info(*this, evt_lyrics, "%07i ms,   %s", m_syltTimeStamp[i], m_syltLines[i].c_get());
                     // }
                 }
-
                 m_m4aHdr.retvalue = consumed;
                 m_m4aHdr.headerSize += consumed;
                 m_controlCounter = M4A_META;
                 break;
             }
+        }
+        AUDIO_LOG_ERROR("progressive %i", m_m4aHdr.progressive);
+        if (m_m4aHdr.progressive == false) {
+            AUDIO_LOG_WARN("start again as progressivet");
+            m_m4aHdr.progressive = true;
+            m_m4aHdr.headerSize = 0;
+            audioFileSeek(0);
+            InBuff.resetBuffer();
+            m_controlCounter = M4A_BEGIN;
+            m_m4aHdr.retvalue = 0;
         }
         return 0;
     }
@@ -2906,13 +2924,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == M4A_AMRDY) { // almost ready
         m_audioDataStart = m_m4aHdr.headerSize;
         if (m_m4aHdr.picLen) {
-            size_t                pos = m_audioFilePosition;
             std::vector<uint32_t> vec;
             vec.push_back(m_m4aHdr.picPos);
             vec.push_back(m_m4aHdr.picLen);
             info(*this, evt_image, vec);
             vec.clear();
-            audioFileSeek(pos); // the filepointer could have been changed by the user, set it back
         }
         m_stsz_numEntries = m_m4aHdr.stsz_num_entries;
         m_stsz_position = m_m4aHdr.stsz_table_pos;
@@ -3814,8 +3830,22 @@ ps_ptr<char> Audio::m3u8redirection(uint8_t* codec) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processLocalFile() {
+    /*
+            |                               m_audioFileSize (contentLength)                                                  |
+            |----------------------------------------------------------------------------------------------------------------|
+            0   audioHeader     |                     m_audioDataSize                                 |    aux data          n
+            |-------------------|---------------------------------------------------------------------|----------------------|
+            |                   ^                                        ^                                                   |
+            |            m_audioDataStart                       m_audioFilePosition                                          |
+    */
+
     if (!(m_audiofile && m_f_running && m_dataMode == AUDIO_LOCALFILE)) return; // guard
-    m_prlf.maxFrameSize = InBuff.getMaxBlockSize();                             // every mp3/aac frame is not bigger maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
+    if (m_f_eof) {
+        AUDIO_LOG_DEBUG("eof found");
+        // if (m_f_ID3v1TagFound) readID3V1Tag(); // todo
+        goto exit;
+    }
+    m_prlf.maxFrameSize = InBuff.getMaxBlockSize();   // every mp3/aac frame is not larger than maxFrameSize = InBuff.getMaxBlockSize();
     m_prlf.availableBytes = 0;
     m_prlf.bytesAddedToBuffer = 0;
 
@@ -3841,19 +3871,12 @@ void Audio::processLocalFile() {
         return;
     }
 
-    m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioFileSize - m_audioFilePosition));
+    m_prlf.availableBytes = min(InBuff.writeSpace(), (size_t)(m_audioDataSize + m_audioDataStart - m_audioFilePosition));
     m_prlf.bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_prlf.availableBytes, (uint32_t)UINT16_MAX));
     if (m_prlf.bytesAddedToBuffer > 0) { InBuff.bytesWritten(m_prlf.bytesAddedToBuffer); }
-    if (m_audioDataSize && m_audioFilePosition >= m_audioDataSize) {
-        if (!m_f_allDataReceived) m_f_allDataReceived = true;
-    }
-    if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
-        if (!m_f_allDataReceived) m_f_allDataReceived = true;
-    }
-    AUDIO_LOG_DEBUG("m_audioFilePosition %u >= m_audioDataSize %u, m_f_allDataReceived % i", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
 
     if (!m_decoder && InBuff.bufferFilled() > 127) {
-        if (!initializeDecoder()) return;
+        if (!initializeDecoder()) goto exit;;
     }
 
     if (!m_f_stream) {
@@ -3864,10 +3887,11 @@ void Audio::processLocalFile() {
                 m_f_running = false;
                 goto exit;
             }
-            if (InBuff.bufferFilled() > m_prlf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
-                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
+            if (InBuff.bufferFilled() > m_prlf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize)) { // at least one complete frame or the file is smaller
+                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxReadBytes()));
             }
             if (m_controlCounter == 100) {
+                m_bytesToPlay = m_audioDataSize;
                 if (m_audioDataStart > 0) { m_prlf.audioHeaderFound = true; }
                 if (!m_audioDataSize) m_audioDataSize = m_audioFileSize;
             }
@@ -3886,9 +3910,9 @@ void Audio::processLocalFile() {
         m_fileStartTime = -1;
     }
 
-    // end of file reached? - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_eof) { // m_f_eof and m_f_ID3v1TagFound will be set in playAudioData()
-        if (m_f_ID3v1TagFound) readID3V1Tag();
+    return;
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     exit:
         ps_ptr<char> afn;                                // audio file name
         if (m_audiofile) afn.assign(m_audiofile.name()); // store temporary the name
@@ -3899,9 +3923,8 @@ void Audio::processLocalFile() {
         m_codec = CODEC_NONE;
         stopSong();
 
-        if (afn.valid()) { info(*this, evt_eof, "%s", afn.c_get()); }
+        if (m_f_eof && afn.valid()) { info(*this, evt_eof, "%s", afn.c_get()); }
         return;
-    }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 void Audio::processWebStream() {
@@ -4045,7 +4068,7 @@ void Audio::processWebFile() {
                 goto exit;
             }
             if (InBuff.bufferFilled() > m_pwf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
-                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
+                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxReadBytes()));
             }
             if (m_controlCounter == 100) {
                 if (m_audioDataStart > 0) { m_pwf.audioHeaderFound = true; }
@@ -4343,7 +4366,7 @@ void Audio::playAudioData() {
     } // guard, play samples first
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
-    m_pad.bytesToDecode = InBuff.bufferFilled();
+    m_pad.bytesToDecode = InBuff.getMaxReadBytes();
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
@@ -4365,64 +4388,50 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled()), (uint32_t)InBuff.getMaxBlockSize());
-
-        if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
-        if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode
-            m_pad.lastFrames = true;
-        }
-        if (m_pad.bytesToDecode == 0) {
-            m_f_eof = true;
-            goto exit;
-        } // file end reached
-
-        if (m_codec == CODEC_MP3 && m_pad.lastFrames && m_pad.bytesToDecode == 128) {
-            m_f_ID3v1TagFound = true;
-            m_f_eof = true;
-            goto exit;
-        }
-    } else {
-        if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
+        if (m_bytesToPlay < InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
         m_pad.bytesToDecode = min(InBuff.bufferFilled(), (size_t)InBuff.getMaxBlockSize());
-    }
+        if (!m_pad.lastFrames && m_pad.bytesToDecode < InBuff.getMaxBlockSize()) {
+            AUDIO_LOG_ERROR("exit, m_pad.bytesToDecode %i , MaxBlockSize() %i", m_pad.bytesToDecode, InBuff.getMaxBlockSize());
+            goto delay_exit;
+        }
 
-    if (m_pad.lastFrames) {
-        m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
     } else {
-        ps_ptr<char> hd;
-        hd.copy_from((const char*)InBuff.getReadPtr(), 30);
-        if (InBuff.bufferFilled() >= InBuff.getMaxBlockSize())
-            m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
-        else
-            m_pad.bytesDecoded = 0; // Inbuff not filled enough
+        if (InBuff.getMaxReadBytes() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
+        m_pad.bytesToDecode = min(InBuff.bufferFilled(), (size_t)InBuff.getMaxBlockSize());
+        if (!m_pad.lastFrames && m_pad.bytesToDecode < InBuff.getMaxBlockSize()) {
+            AUDIO_LOG_ERROR("exit, m_pad.bytesToDecode %i , MaxBlockSize() %i", m_pad.bytesToDecode, InBuff.getMaxBlockSize());
+            goto delay_exit;
+        }
     }
 
-    if (m_pad.bytesDecoded <= 0) {
-        if (m_pad.lastFrames) {
-            m_f_eof = true;
-            goto exit;
-        } // end of file reached
-        m_pad.count++;
-        vTaskDelay(50); // wait for data
-        if (m_pad.count == 10) {
-            if (m_f_allDataReceived) m_f_eof = true;
-        } // maybe slow stream
-        goto exit; // syncword at pos0
-    }
-    m_pad.count = 0;
+    m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
 
     if (m_pad.bytesDecoded > 0) {
         InBuff.bytesWasRead(m_pad.bytesDecoded);
-
-        if (m_f_allDataReceived && InBuff.bufferFilled() == 0) {
-            m_f_eof = true; // end of file reached
-        }
+        m_bytesToPlay -= m_pad.bytesDecoded;
     }
+
+    AUDIO_LOG_DEBUG(" m_bytesToPlay %i", m_bytesToPlay);
+    if(m_pad.lastFrames)   AUDIO_LOG_WARN(" m_bytesToPlay %i", m_bytesToPlay);
+
+    if (m_bytesToPlay == 0) {
+        m_f_eof = true;
+           AUDIO_LOG_WARN(" eof set");
+        goto exit;
+    } // file end reached
+
+
 
 exit:
     m_f_audioTaskIsDecoding = false;
     return;
+
+delay_exit:
+    m_f_audioTaskIsDecoding = false;
+    vTaskDelay(100);
+    return;
 }
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
@@ -6863,7 +6872,7 @@ uint32_t Audio::ogg_correctResumeFilePos() {
     };
 
     uint8_t* readPtr = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.getMaxReadBytes();
     int32_t  steps = 0;
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
@@ -6892,7 +6901,7 @@ int32_t Audio::flac_correctResumeFilePos() {
     };
 
     uint8_t* readPtr = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.getMaxReadBytes();
     int32_t  steps = 0;
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
@@ -6907,7 +6916,7 @@ int32_t Audio::mp3_correctResumeFilePos() {
     int32_t  steps = 0;
     int32_t  sumSteps = 0;
     uint8_t* pos = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.getMaxReadBytes();
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
 

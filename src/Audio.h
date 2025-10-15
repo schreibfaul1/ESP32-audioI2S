@@ -81,7 +81,7 @@ class AudioBuffer {
     size_t   freeSpace();                      // number of free bytes to overwrite
     size_t   writeSpace();                     // space fom writepointer to bufferend
     size_t   bufferFilled();                   // returns the number of filled bytes
-    size_t   getMaxAvailableBytes();           // max readable bytes in one block
+    size_t   getMaxReadBytes();           // max readable bytes in one block
     void     bytesWritten(size_t bw);          // update writepointer
     void     bytesWasRead(size_t br);          // update readpointer
     uint8_t* getWritePtr();                    // returns the current writepointer
@@ -290,26 +290,27 @@ class Audio {
     const char* dataModeStr[8] = {"AUDIO_NONE", "HTTP_RESPONSE_HEADER", "HTTP_RANGE_HEADER", "AUDIO_DATA", "AUDIO_LOCALFILE", "AUDIO_PLAYLISTINIT", "AUDIO_PLAYLISTHEADER", "AUDIO_PLAYLISTDATA"};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH = 2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5, FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100 };
     enum : int {
-        M4A_BEGIN = 0,
-        M4A_FTYP = 1,
-        M4A_CHK = 2,
-        M4A_MOOV = 3,
-        M4A_FREE = 4,
-        M4A_TRAK = 5,
-        M4A_MDAT = 6,
-        M4A_ILST = 7,
-        M4A_MP4A = 8,
-        M4A_ESDS = 9,
-        M4A_MDIA = 10,
-        M4A_MINF = 11,
-        M4A_STBL = 12,
-        M4A_STSD = 13,
-        M4A_UDTA = 14,
-        M4A_STSZ = 15,
-        M4A_META = 16,
-        M4A_MDHD = 17,
+        M4A_INIT = 0,
+        M4A_BEGIN = 1,
+        M4A_FTYP = 2,
+        M4A_CHK = 3,
+        M4A_MOOV = 4,
+        M4A_FREE = 5,
+        M4A_TRAK = 6,
+        M4A_MDAT = 7,
+        M4A_ILST = 8,
+        M4A_MP4A = 9,
+        M4A_ESDS = 10,
+        M4A_MDIA = 11,
+        M4A_MINF = 12,
+        M4A_STBL = 13,
+        M4A_STSD = 14,
+        M4A_UDTA = 15,
+        M4A_STSZ = 16,
+        M4A_META = 17,
+        M4A_MDHD = 18,
         M4A_AMRDY = 99,
-        M4A_OKAY = 100,
+        M4A_OKAY = 100
     };
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5, CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8, CODEC_VORBIS = 9 };
     const char* codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS"};
@@ -379,6 +380,7 @@ class Audio {
     uint32_t       m_avr_bitrate = 0;       // average bitrate, median calculated by VBR
     uint32_t       m_nominal_bitrate = 0;   // given br from header
     uint32_t       m_audioFilePosition = 0; // current position, counts every readed byte
+    uint32_t       m_bytesToPlay = 0;       // e.g audioDatalenght, counts down every byte to decode
     uint32_t       m_audioFileSize = 0;     // local and web files
     int            m_readbytes = 0;         // bytes read
     uint32_t       m_metacount = 0;         // counts down bytes between metadata

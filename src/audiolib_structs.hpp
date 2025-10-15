@@ -70,48 +70,54 @@ struct pplM3u8_t { // used in parsePlaylist_M3U8
     bool     f_mediaSeq_found;
 };
 
-struct m4aHdr_t { // used in read_M4A_Header
-    size_t   headerSize;
-    size_t   retvalue;
-    size_t   atomsize;
-    size_t   sizeof_ftyp;
-    size_t   sizeof_moov;
-    size_t   sizeof_free;
-    size_t   sizeof_mdat;
-    size_t   sizeof_trak;
-    size_t   sizeof_ilst;
-    size_t   sizeof_esds;
-    size_t   sizeof_mdia;
-    size_t   sizeof_minf;
-    size_t   sizeof_mdhd;
-    size_t   sizeof_stbl;
-    size_t   sizeof_stsd;
-    size_t   sizeof_stsz;
-    size_t   sizeof_mp4a;
-    size_t   sizeof_udta;
-    size_t   sizeof_meta;
-    size_t   audioDataPos;
-    size_t   cnt;
-    size_t   offset;
-    uint32_t picPos;
-    uint32_t picLen;
-    uint32_t ilst_pos;
-    uint8_t  channel_count;
-    uint8_t  sample_size;         // bps
-    uint8_t  objectTypeIndicator; // esds
-    uint8_t  streamType;          // esds
-    uint32_t bufferSizeDB;        // esds
-    uint32_t maxBitrate;          // esds
-    uint32_t nomBitrate;          // esds
-    uint32_t timescale;           // mdhd
-    uint32_t duration;            // mdhd
-    uint16_t sample_rate;
-    uint8_t  aac_profile;
-    uint32_t stsz_num_entries;
-    uint32_t stsz_table_pos;
-    bool     progressive; // Progressive (moov before mdat)
-    bool     version_flags;
-};
+typedef struct _m4aHdr { // used in read_M4A_Header
+    size_t   headerSize{};
+    size_t   retvalue{};
+    size_t   atomsize{};
+    size_t   sizeof_ftyp{};
+    size_t   sizeof_moov{};
+    size_t   sizeof_free{};
+    size_t   sizeof_mdat{};
+    size_t   pos_of_mdat{};
+    size_t   sizeof_trak{};
+    size_t   sizeof_ilst{};
+    size_t   sizeof_esds{};
+    size_t   sizeof_mdia{};
+    size_t   sizeof_minf{};
+    size_t   sizeof_mdhd{};
+    size_t   sizeof_stbl{};
+    size_t   sizeof_stsd{};
+    size_t   sizeof_stsz{};
+    size_t   sizeof_mp4a{};
+    size_t   sizeof_udta{};
+    size_t   sizeof_meta{};
+    size_t   audioDataPos{};
+    size_t   cnt{};
+    size_t   offset{};
+    uint32_t picPos{};
+    uint32_t picLen{};
+    uint32_t ilst_pos{};
+    uint8_t  channel_count{};
+    uint8_t  sample_size{};         // bps
+    uint8_t  objectTypeIndicator{}; // esds
+    uint8_t  streamType{};          // esds
+    uint32_t bufferSizeDB{};        // esds
+    uint32_t maxBitrate{};          // esds
+    uint32_t nomBitrate{};          // esds
+    uint32_t timescale{};           // mdhd
+    uint32_t duration{};            // mdhd
+    uint16_t sample_rate{};
+    uint8_t  aac_profile{};
+    uint32_t stsz_num_entries{};
+    uint32_t stsz_table_pos{};
+    bool     progressive{}; // Progressive (moov before mdat)
+    bool     version_flags{};
+
+    void reset() {
+        // Default-initialize all
+        *this = _m4aHdr{};
+    }
+}m4aHdr_t;
 
 struct plCh_t { // used in playChunk
     int32_t   validSamples;
