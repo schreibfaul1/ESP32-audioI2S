@@ -16,40 +16,39 @@ struct sylt_t {
 };
 
 struct ID3Hdr_t { // used only in readID3header()
-    size_t       retvalue;
-    size_t       headerSize;
-    size_t       tagSize;
-    size_t       cnt;
-    size_t       id3Size;
-    size_t       totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-    size_t       remainingHeaderBytes;
-    size_t       universal_tmp;
-    uint8_t      ID3version;
-    uint8_t      ID3revision;
-    uint8_t      flags;
-    bool         unsync;
-    bool         extended_header;
-    bool         experimental_indicator;
-    bool         footer_present;
-    size_t       offset;
-    size_t       currentPosition;
-    int          ehsz;
-    char         tag[5];
-    char         frameid[5];
-    char         lang[5];
-    size_t       framesize;
-    bool         compressed;
-    size_t       APIC_size[3];
-    uint32_t     APIC_pos[3];
-    sylt_t       SYLT;
-    uint8_t      numID3Header;
-    uint16_t     iBuffSize;
-    uint8_t      contentDescriptorTerminator_0;
-    uint8_t      contentDescriptorTerminator_1;
-    uint8_t      textStringTerminator_0;
-    uint8_t      textStringTerminator_1;
-    bool         byteOrderMark;
-    ps_ptr<char> iBuff;
+    size_t                retvalue;
+    size_t                headerSize;
+    size_t                tagSize;
+    size_t                cnt;
+    size_t                id3Size;
+    size_t                totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
+    size_t                remainingHeaderBytes;
+    size_t                universal_tmp;
+    uint8_t               ID3version;
+    uint8_t               ID3revision;
+    uint8_t               flags;
+    bool                  unsync;
+    bool                  extended_header;
+    bool                  experimental_indicator;
+    bool                  footer_present;
+    size_t                offset;
+    size_t                currentPosition;
+    int                   ehsz;
+    char                  tag[5];
+    char                  frameid[5];
+    char                  lang[5];
+    size_t                framesize;
+    bool                  compressed;
+    std::vector<uint32_t> APIC_vec;
+    sylt_t                SYLT;
+    uint8_t               numID3Header;
+    uint16_t              iBuffSize;
+    uint8_t               contentDescriptorTerminator_0;
+    uint8_t               contentDescriptorTerminator_1;
+    uint8_t               textStringTerminator_0;
+    uint8_t               textStringTerminator_1;
+    bool                  byteOrderMark;
+    ps_ptr<char>          iBuff;
 };
 
 struct pwsHLS_t { // used in processWebStreamHLS()

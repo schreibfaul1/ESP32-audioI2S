@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3i                                                                                                                              ";
-/*  Updated on: 12.10.2025
+    Version 3.4.3j                                                                                                                              ";
+/*  Updated on: 16.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1761,7 +1761,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_controlCounter++;
 
         m_ID3Hdr.id3Size = 0;
-        m_ID3Hdr.totalId3Size = 0; // if we have more header, id3_1_size + id3_2_size + ....
+    //    m_ID3Hdr.totalId3Size = 0; // if we have more header, id3_1_size + id3_2_size + ....
         m_ID3Hdr.remainingHeaderBytes = 0;
         m_ID3Hdr.universal_tmp = 0;
         m_ID3Hdr.ID3version = 0;
@@ -1770,12 +1770,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.compressed = false;
         m_ID3Hdr.SYLT.size = 0;
         m_ID3Hdr.SYLT.pos = 0;
-        m_ID3Hdr.numID3Header = 0;
         m_ID3Hdr.iBuffSize = 4096;
         m_ID3Hdr.iBuff.alloc(m_ID3Hdr.iBuffSize + 10, "m_ID3Hdr.iBuff");
-        memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
-        memset(m_ID3Hdr.APIC_size, 0, sizeof(m_ID3Hdr.APIC_size));
-        memset(m_ID3Hdr.APIC_pos, 0, sizeof(m_ID3Hdr.APIC_pos));
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
 
         if (!m_f_m3u8data) info(*this, evt_info, "File-Size: %lu", m_audioFileSize);
@@ -1811,8 +1807,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if (m_ID3Hdr.ID3version == 2) { m_controlCounter = 10; }
         m_ID3Hdr.remainingHeaderBytes = m_ID3Hdr.id3Size;
         m_ID3Size = m_ID3Hdr.id3Size;
-        m_ID3Hdr.remainingHeaderBytes -= 10;
 
+        m_ID3Hdr.remainingHeaderBytes -= 10;
         return 10;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1821,8 +1817,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if (m_f_exthdr) {
             info(*this, evt_info, "ID3 extended header");
             m_ID3Hdr.ehsz = bigEndian(data, 4);
-            m_ID3Hdr.remainingHeaderBytes -= 4;
             m_ID3Hdr.ehsz -= 4;
+            m_ID3Hdr.remainingHeaderBytes -= 4;
             return 4;
         } else {
             // if(!m_f_m3u8data) info(*this, evt_info, "ID3 normal frames");
@@ -1856,11 +1852,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.frameid[4] = 0;
         for (uint8_t i = 0; i < 4; i++) m_ID3Hdr.tag[i] = m_ID3Hdr.frameid[i]; // tag = frameid
 
-        m_ID3Hdr.remainingHeaderBytes -= 4;
         if (m_ID3Hdr.frameid[0] == 0 && m_ID3Hdr.frameid[1] == 0 && m_ID3Hdr.frameid[2] == 0 && m_ID3Hdr.frameid[3] == 0) {
             // We're in padding
             m_controlCounter = 98; // all ID3 metadata processed
         }
+        m_ID3Hdr.remainingHeaderBytes -= 4;
         return 4;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1872,22 +1868,20 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else {
             m_ID3Hdr.framesize = bigEndian(data, 4); // << 8
         }
-        m_ID3Hdr.remainingHeaderBytes -= 4;
         uint8_t frameFlag_0 = *(data + 4);
         uint8_t frameFlag_1 = *(data + 5);
         (void)frameFlag_0;
-        m_ID3Hdr.remainingHeaderBytes--;
         m_ID3Hdr.compressed = frameFlag_1 & 0x80; // Frame is compressed using [#ZLIB zlib] with 4 bytes for 'decompressed
-        m_ID3Hdr.remainingHeaderBytes--;
         uint32_t decompsize = 0;
         if (m_ID3Hdr.compressed) {
             // AUDIO_LOG_INFO("iscompressed");
             decompsize = bigEndian(data + 6, 4);
-            m_ID3Hdr.remainingHeaderBytes -= 4;
             (void)decompsize;
             // AUDIO_LOG_INFO("decompsize=%u", decompsize);
+            m_ID3Hdr.remainingHeaderBytes -= 6 + 4;
             return 6 + 4;
         }
+        m_ID3Hdr.remainingHeaderBytes -= 6;
         return 6;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1913,11 +1907,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         // $03 – UTF-8 encoded Unicode, in ID3v2.4.
 
         if (startsWith(m_ID3Hdr.tag, "APIC")) { // a image embedded in file, passing it to external function
-                                                //    if(m_dataMode == AUDIO_LOCALFILE) {
-            m_ID3Hdr.APIC_pos[m_ID3Hdr.numID3Header] = m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-            m_ID3Hdr.APIC_size[m_ID3Hdr.numID3Header] = m_ID3Hdr.framesize;
-            //    AUDIO_LOG_ERROR("APIC_pos %i APIC_size %i", APIC_pos[numID3Header], APIC_size[numID3Header]);
-            //    }
+            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes);
+            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.framesize);
+            AUDIO_LOG_DEBUG("APIC_pos %i, APIC_size %i", m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header], m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header + 1]);
             return 0;
         }
 
@@ -1955,7 +1947,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
 
         m_ID3Hdr.framesize -= fs;
-        m_ID3Hdr.remainingHeaderBytes -= fs;
+
         uint16_t dataLength = fs - 1;
         bool     isBigEndian = (textEncodingByte == 2);
 
@@ -1980,22 +1972,20 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             if (cd_len > 2) info(*this, evt_info, "Comment: text encoding; %s, language %s, content_descriptor: %s", encodingTab[textEncodingByte], m_ID3Hdr.lang, content_descriptor.c_get());
 
             idx += cd_len;
+            // AUDIO_LOG_INFO("Tag: %s, Length: %i, Format: %s", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
+        } else {
+            if (textEncodingByte == 0) {
+                tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx);
+            } // ISO-8859-1
+            else if (textEncodingByte == 1 || textEncodingByte == 2) {
+                tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian);
+            } // UTF-16LE oder UTF-16BE
+            else if (textEncodingByte == 3) {
+                tmp.copy_from(m_ID3Hdr.iBuff.get() + idx);
+            } // UTF-8 copy directly because no conversion is necessary
         }
-
-        // AUDIO_LOG_INFO("Tag: %s, Length: %i, Format: %s", m_ID3Hdr.tag, textDataLength, encodingTab[textEncodingByte]);
-
-        if (textEncodingByte == 0) {
-            tmp.copy_from_iso8859_1((const uint8_t*)m_ID3Hdr.iBuff.get() + idx);
-        } // ISO-8859-1
-        else if (textEncodingByte == 1 || textEncodingByte == 2) {
-            tmp.copy_from_utf16((const uint8_t*)m_ID3Hdr.iBuff.get() + idx, isBigEndian);
-        } // UTF-16LE oder UTF-16BE
-        else if (textEncodingByte == 3) {
-            tmp.copy_from(m_ID3Hdr.iBuff.get() + idx);
-        } // UTF-8 copy directly because no conversion is necessary
-
         showID3Tag(m_ID3Hdr.tag, tmp.c_get());
-
+        m_ID3Hdr.remainingHeaderBytes -= fs;
         return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2090,11 +2080,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         memcpy(value, (data + 7), dataLen);
         value[dataLen + 1] = 0;
         if (startsWith(m_ID3Hdr.tag, "PIC")) { // image embedded in header
-            if (m_dataMode == AUDIO_LOCALFILE) {
-                m_ID3Hdr.APIC_pos[m_ID3Hdr.numID3Header] = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.APIC_size[m_ID3Hdr.numID3Header] = m_ID3Hdr.universal_tmp;
-                // AUDIO_LOG_INFO("Attached picture seen at pos %d length %d", APIC_pos[0], APIC_size[0]);
-            }
+            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes);
+            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.framesize);
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
 
@@ -2194,11 +2181,12 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                                                     /* V1   */ {0, 1152, 1152, 384}};
 
         m_audioDataStart += m_ID3Hdr.id3Size;
+        m_ID3Hdr.totalId3Size += m_ID3Hdr.id3Size;
+        m_ID3Hdr.id3Size = 0;
         //    vTaskDelay(30);
         if ((*(data + 0) == 'I') && (*(data + 1) == 'D') && (*(data + 2) == '3')) {
             m_controlCounter = 0;
             m_ID3Hdr.numID3Header++;
-            m_ID3Hdr.totalId3Size += m_ID3Hdr.id3Size;
             return 0;
         } else {
             m_controlCounter = 100; // ok
@@ -2238,19 +2226,14 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 info(*this, evt_bitrate, "%i", m_nominal_bitrate);
             }
 
-            if (m_ID3Hdr.APIC_pos[0]) { // if we have more than one APIC, output the first only
-                std::vector<uint32_t> vec;
-                vec.push_back(m_ID3Hdr.APIC_pos[0]);
-                vec.push_back(m_ID3Hdr.APIC_size[0]);
-                info(*this, evt_image, vec);
-                vec.clear();
-                AUDIO_LOG_DEBUG("m_ID3Hdr.id3Size %i, m_audioDataStart %i", m_ID3Hdr.id3Size, m_audioDataStart);
-                if (m_ID3Hdr.id3Size != m_audioDataStart) audioFileSeek(m_audioDataStart);
+            if (m_ID3Hdr.APIC_vec.size()) { // if we have a APIC
+                info(*this, evt_image, m_ID3Hdr.APIC_vec);
+                m_ID3Hdr.APIC_vec.clear();
+                AUDIO_LOG_DEBUG("m_ID3Hdr.totalId3Size %i, m_audioDataStart %i", m_ID3Hdr.totalId3Size, m_audioDataStart);
+                if (m_ID3Hdr.totalId3Size != m_audioDataStart) audioFileSeek(m_audioDataStart);
             }
             m_ID3Hdr.numID3Header = 0;
             m_ID3Hdr.totalId3Size = 0;
-            for (int i = 0; i < 3; i++) m_ID3Hdr.APIC_pos[i] = 0;  // delete all
-            for (int i = 0; i < 3; i++) m_ID3Hdr.APIC_size[i] = 0; // delete all
             m_ID3Hdr.iBuff.reset();
             return 0;
         }
