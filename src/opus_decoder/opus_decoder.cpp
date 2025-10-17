@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 25.09.2025
+ *  Updated on: 17.10.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -51,6 +51,7 @@ bool OpusDecoder::init() {
     (void)silkDecSizeBytes;
     silkdec->silk_InitDecoder();
     m_isValid = true;
+    m_comment.save_oob.set_name("save_oob");
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -80,6 +81,8 @@ void OpusDecoder::clear() {
     m_opusOggHeaderSize = 0;
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
+    m_opusCurrentFilePos = 0;
+    m_comment.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool OpusDecoder::isValid() {
@@ -127,43 +130,27 @@ void OpusDecoder::OPUSsetDefaults() {
 int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     int32_t ret = OPUS_NONE;
     int32_t segmLen = 0;
-
-    if (m_opusCommentBlockSize) {
-        if (m_opusCommentBlockSize > 8192) {
-            m_opusRemainBlockPicLen -= 8192;
-            *bytesLeft -= 8192;
-            m_opusCurrentFilePos += 8192;
-            m_opusCommentBlockSize -= 8192;
-        } else {
-            m_opusRemainBlockPicLen -= m_opusCommentBlockSize;
-            *bytesLeft -= m_opusCommentBlockSize;
-            m_opusCurrentFilePos += m_opusCommentBlockSize;
-            m_opusCommentBlockSize = 0;
-        }
-        if (m_opusRemainBlockPicLen <= 0) {
-            if (m_opusBlockPicItem.size() > 0) { // get blockpic data
-                // OPUS_LOG_INFO("---------------------------------------------------------------------------");
-                // OPUS_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", m_opusBlockPicPos, m_opusBlockPicItem);
-                // for(int32_t i = 0; i < m_opusBlockPicItem.size(); i += 2) { OPUS_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, m_opusBlockPicItem[i], m_opusBlockPicItem[i + 1]); }
-                // OPUS_LOG_INFO("---------------------------------------------------------------------------");
-                m_f_opusNewMetadataBlockPicture = true;
-            }
-        }
-        return OPUS_PARSE_OGG_DONE;
-    }
+    int32_t bytesLeft_begin = *bytesLeft;
+    int32_t bytes_consumed = 0;
 
     if (m_f_lastPage && m_opusSegmentTableSize == 0) {
         *bytesLeft = segmLen;
         ret = OPUS_END;
         return ret;
     }
-    if (m_frameCount > 0) return opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf); // decode audio, next part
+
+    if (m_frameCount > 0) { // decode audio, next part
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf);
+        goto exit;
+    }
+
     if (!m_opusSegmentTableSize) {
         m_f_opusParseOgg = false;
         m_opusCountCode = 0;
         ret = OPUSparseOGG(inbuf, bytesLeft);
-        if (ret != OPUS_NONE) return ret; // error
-        inbuf += m_opusOggHeaderSize;
+        bytes_consumed = bytesLeft_begin - (*bytesLeft);
+        if (ret != OPUS_NONE) goto exit; // error
+        inbuf += m_opusOggHeaderSize;    // no return, fall through
     }
 
     if (m_opusSegmentTableSize > 0) {
@@ -174,31 +161,39 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
 
     if (m_opusPageNr == 0) { // OpusHead
         ret = opusDecodePage0(inbuf, bytesLeft, segmLen);
-    } else if (m_opusPageNr == 1) { // OpusComment
-        ret = parseOpusComment(inbuf, segmLen);
-        if (ret == 0) {
-            OPUS_LOG_ERROR("Opus comment page not found");
-            return OPUS_ERR;
-        }
-        m_opusRemainBlockPicLen = m_opusBlockPicLen;
-        *bytesLeft -= (segmLen - m_blockPicLenUntilFrameEnd);
-        m_opusCommentBlockSize = m_blockPicLenUntilFrameEnd;
-        m_opusPageNr++;
-        ret = OPUS_PARSE_OGG_DONE;
-    } else if (m_opusPageNr == 2) { // OpusComment Subsequent Pages
-        m_opusCommentBlockSize = segmLen;
-        if (m_opusRemainBlockPicLen <= segmLen) m_opusPageNr++;
-        ;
-        ret = OPUS_PARSE_OGG_DONE;
-    } else if (m_opusPageNr == 3) {
-        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf); // decode audio
-    } else {
-        ;
+        goto exit;
     }
 
+    else if (m_opusPageNr == 1) { // OpusComment Subsequent Pages
+        ret = parseOpusComment(inbuf, segmLen, m_opusCurrentFilePos + bytes_consumed);
+        if (ret == OPUS_COMMENT_INVALID) {
+            OPUS_LOG_ERROR("Error in Opus comment page");
+            return OPUS_ERR;
+        } else if (ret == OPUS_COMMENT_NEED_MORE) { // more comment pages follows
+            *bytesLeft -= segmLen;
+            ret = OPUS_PARSE_OGG_DONE;
+        } else { // OPUS_COMMENT_DONE
+            *bytesLeft -= segmLen;
+            m_opusPageNr = 3; // all comments are consumed
+            ret = OPUS_PARSE_OGG_DONE;
+        }
+        goto exit;
+    }
+
+    else if (m_opusPageNr == 3) {
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf); // decode audio
+        goto exit;
+    }
+
+    else {
+    }
+
+exit:
     if (m_opusSegmentTableSize == 0) {
         m_opusSegmentTableRdPtr = -1; // back to the parking position
     }
+
+    if (ret >= 0) { m_opusCurrentFilePos += bytesLeft_begin - (*bytesLeft); }
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -206,7 +201,7 @@ int32_t OpusDecoder::opusDecodePage0(uint8_t* inbuf, int32_t* bytesLeft, uint32_
     int32_t ret = 0;
     ret = parseOpusHead(inbuf, segmentLength);
     *bytesLeft -= segmentLength;
-    m_opusCurrentFilePos += segmentLength;
+    //   m_opusCurrentFilePos += segmentLength;
     if (ret == 1) { m_opusPageNr++; }
     if (ret == 0) {
         OPUS_LOG_ERROR("Opus head not found");
@@ -446,7 +441,7 @@ int8_t OpusDecoder::opus_FramePacking_Code0(uint8_t* inbuf, int32_t* bytesLeft, 
     */
     int32_t ret = 0;
     *bytesLeft -= packetLen;
-    m_opusCurrentFilePos += packetLen;
+    //   m_opusCurrentFilePos += packetLen;
     packetLen--;
     inbuf++;
     ret = opus_decode_frame(inbuf, outbuf, packetLen, samplesPerFrame);
@@ -484,7 +479,7 @@ int8_t OpusDecoder::opus_FramePacking_Code1(uint8_t* inbuf, int32_t* bytesLeft, 
         packetLen--;
         inbuf++;
         *bytesLeft -= 1;
-        m_opusCurrentFilePos += 1;
+        //    m_opusCurrentFilePos += 1;
         m_ofp3.c1fs = packetLen / 2;
         // OPUS_LOG_WARN("OPUS countCode 1 len %i, c1fs %i", len, c1fs);
         *frameCount = 2;
@@ -498,7 +493,7 @@ int8_t OpusDecoder::opus_FramePacking_Code1(uint8_t* inbuf, int32_t* bytesLeft, 
         }
         m_opusValidSamples = ret;
         *bytesLeft -= m_ofp3.c1fs;
-        m_opusCurrentFilePos += m_ofp3.c1fs;
+        //    m_opusCurrentFilePos += m_ofp3.c1fs;
     }
     *frameCount -= 1;
     return OPUS_NONE;
@@ -541,13 +536,13 @@ int8_t OpusDecoder::opus_FramePacking_Code2(uint8_t* inbuf, int32_t* bytesLeft, 
             m_ofp2.firstFrameLength = b1;
             packetLen -= 2;
             *bytesLeft -= 2;
-            m_opusCurrentFilePos += 2;
+            //     m_opusCurrentFilePos += 2;
             inbuf += 2;
         } else {
             m_ofp2.firstFrameLength = b1 + (b2 * 4);
             packetLen -= 3;
             *bytesLeft -= 3;
-            m_opusCurrentFilePos += 3;
+            //     m_opusCurrentFilePos += 3;
             inbuf += 3;
         }
         m_ofp2.secondFrameLength = packetLen - m_ofp2.firstFrameLength;
@@ -562,7 +557,7 @@ int8_t OpusDecoder::opus_FramePacking_Code2(uint8_t* inbuf, int32_t* bytesLeft, 
         }
         m_opusValidSamples = ret;
         *bytesLeft -= m_ofp2.firstFrameLength;
-        m_opusCurrentFilePos += m_ofp2.firstFrameLength;
+        //    m_opusCurrentFilePos += m_ofp2.firstFrameLength;
     }
     if (*frameCount == 1) {
         ret = opus_decode_frame(inbuf, outbuf, m_ofp2.secondFrameLength, samplesPerFrame);
@@ -573,7 +568,7 @@ int8_t OpusDecoder::opus_FramePacking_Code2(uint8_t* inbuf, int32_t* bytesLeft, 
         }
         m_opusValidSamples = ret;
         *bytesLeft -= m_ofp2.secondFrameLength;
-        m_opusCurrentFilePos += m_ofp2.secondFrameLength;
+        //    m_opusCurrentFilePos += m_ofp2.secondFrameLength;
     }
     *frameCount -= 1;
     return OPUS_NONE;
@@ -696,7 +691,7 @@ int8_t OpusDecoder::opus_FramePacking_Code3(uint8_t* inbuf, int32_t* bytesLeft, 
         // Ensure vfs is cleared or handled appropriately if it's a static member
         // memset(m_ofp3.vfs, 0, sizeof(m_ofp3.vfs)); // Only if m_ofp3.vfs is part of m_ofp3
 
-        m_opusCurrentFilePos += packetLen;
+        //   m_opusCurrentFilePos += packetLen;
         m_ofp3.idx = 1; // Start reading after TOC byte (inbuf[0])
         m_ofp3.spf = samplesPerFrame;
 
@@ -988,13 +983,10 @@ const char* OpusDecoder::arg1() { // mode CELT, SILK or HYBRID
 std::vector<uint32_t> OpusDecoder::getMetadataBlockPicture() {
     if (m_f_opusNewMetadataBlockPicture) {
         m_f_opusNewMetadataBlockPicture = false;
-        return m_opusBlockPicItem;
+        return m_comment.pic_vec;
     }
-    if (m_opusBlockPicItem.size() > 0) {
-        m_opusBlockPicItem.clear();
-        m_opusBlockPicItem.shrink_to_fit();
-    }
-    return m_opusBlockPicItem;
+    std::vector<uint32_t>v;
+    return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t OpusDecoder::parseOpusTOC(uint8_t TOC_Byte) { // https://www.rfc-editor.org/rfc/rfc6716  page 16 ff
@@ -1042,71 +1034,175 @@ int8_t OpusDecoder::parseOpusTOC(uint8_t TOC_Byte) { // https://www.rfc-editor.o
     return configNr;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes) { // reference https://exiftool.org/TagNames/Vorbis.html#Comments
-                                                                        // reference https://www.rfc-editor.org/rfc/rfc7845#section-5
-    int32_t idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
-    if (idx != 0) return 0; // is not OpusTags
+int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t current_file_pos) {
 
-    ps_ptr<char> artist = {};
-    ps_ptr<char> title = {};
+    /* reference https://www.rfc-editor.org/rfc/rfc7845#section-5
+       returns:
+           OPUS_COMMENT_INVALID  (-1) → "OpusTags" not found
+           OPUS_COMMENT_NEED_MORE (1) → needs more data (comment continues)
+           OPUS_COMMENT_DONE      (2) → all comments consumed
+    */
+#define BIG_COMMENT_SIZE 1024
 
-    uint16_t pos = 8;
-    nBytes -= 8;
-    uint32_t vendorLength = *(inbuf + 11) << 24; // lengt of vendor string, e.g. Lavf58.65.101
-    vendorLength += *(inbuf + 10) << 16;
-    vendorLength += *(inbuf + 9) << 8;
-    vendorLength += *(inbuf + 8);
-    pos += vendorLength + 4;
-    nBytes -= (vendorLength + 4);
-    uint32_t commentListLength = *(inbuf + 3 + pos) << 24; // nr. of comment entries
-    commentListLength += *(inbuf + 2 + pos) << 16;
-    commentListLength += *(inbuf + 1 + pos) << 8;
-    commentListLength += *(inbuf + 0 + pos);
-    pos += 4;
-    nBytes -= 4;
-    for (int32_t i = 0; i < commentListLength; i++) {
-        uint32_t commentStringLen = *(inbuf + 3 + pos) << 24;
-        commentStringLen += *(inbuf + 2 + pos) << 16;
-        commentStringLen += *(inbuf + 1 + pos) << 8;
-        commentStringLen += *(inbuf + 0 + pos);
-        pos += 4;
-        nBytes -= 4;
-        idx = OPUS_specialIndexOf(inbuf + pos, "artist=", 10);
-        if (idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "ARTIST=", 10);
-        if (idx == 0) { artist.append((char*)inbuf + pos + 7, commentStringLen - 7); }
-        idx = OPUS_specialIndexOf(inbuf + pos, "title=", 10);
-        if (idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "TITLE=", 10);
-        if (idx == 0) { title.append((char*)inbuf + pos + 6, commentStringLen - 6); }
-        idx = OPUS_specialIndexOf(inbuf + pos, "metadata_block_picture=", 25);
-        if (idx == -1) idx = OPUS_specialIndexOf(inbuf + pos, "METADATA_BLOCK_PICTURE=", 25);
-        if (idx == 0) {
-            m_opusBlockPicLen = commentStringLen - 23;
-            m_opusCurrentFilePos += pos + 23;
-            m_opusBlockPicPos += m_opusCurrentFilePos;
-            m_blockPicLenUntilFrameEnd = nBytes - 23;
-            //  OPUS_LOG_INFO("metadata block picture found at pos %i, length %i", m_opusBlockPicPos, m_opusBlockPicLen);
-            uint32_t pLen = _min(m_blockPicLenUntilFrameEnd, m_opusBlockPicLen);
-            if (pLen) {
-                m_opusBlockPicItem.push_back(m_opusBlockPicPos);
-                m_opusBlockPicItem.push_back(pLen);
+    auto parse_comment = [&](ps_ptr<char> comment) -> void {
+        int idx = comment.index_of("=");
+        if (idx <= 0) return;
+
+        ps_ptr<char> key = comment.substr(0, idx);
+        ps_ptr<char> val = comment.substr(idx + 1);
+
+        if (key.starts_with_icase("metadata_block_picture")) {
+            m_comment.pic_vec = m_comment.item_vec; // copy 1:1
+            m_comment.item_vec.clear();
+            m_f_opusNewMetadataBlockPicture = true;
+
+            // for (int i = 0; i < m_comment.pic_vec.size(); i += 2) { OPUS_LOG_INFO("Segment %i   %i - %i", i / 2, m_comment.pic_vec[i], m_comment.pic_vec[i + 1]); }
+            OPUS_LOG_DEBUG("Skipping embedded picture (%d bytes)", val.size());
+            return;
+        }
+        if (key.starts_with_icase("artist")) {
+            if (!m_comment.stream_title.valid()) {
+                m_comment.stream_title.assign(val.c_get());
+            } else {
+                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(val.c_get());
             }
         }
-        pos += commentStringLen;
-        nBytes -= commentStringLen;
+
+        if (key.starts_with_icase("title")) {
+            if (!m_comment.stream_title.valid()) {
+                m_comment.stream_title.assign(val.c_get());
+            } else {
+                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(val.c_get());
+            }
+        }
+
+        // comment.println(); // optional output
+        m_comment.item_vec.clear();
+    };
+
+    // 🔹 1. If the previous comment block was incomplete → continue now
+    if (m_comment.oob) {
+        size_t missing = m_comment.comment_expected - m_comment.save_len;
+        size_t copy = std::min<size_t>(missing, nBytes);
+
+        if (m_comment.big_comment) {
+            if (m_comment.big_comment_filled < BIG_COMMENT_SIZE) {
+                uint32_t free_space = BIG_COMMENT_SIZE - m_comment.big_comment_filled;
+                if (copy < free_space) free_space = copy;
+                memcpy(m_comment.save_oob.get() + m_comment.big_comment_filled, inbuf, free_space);
+                m_comment.big_comment_filled += free_space;
+            }
+        } else {
+            memcpy(m_comment.save_oob.get() + m_comment.save_len, inbuf, copy);
+        }
+        m_comment.save_len += copy;
+
+        if (m_comment.save_len >= m_comment.comment_expected) {
+            // comment fully assembled
+            uint32_t     comment_size = little_endian(m_comment.save_oob.get());
+            ps_ptr<char> comment_content;
+            if (comment_size > BIG_COMMENT_SIZE) comment_size = BIG_COMMENT_SIZE;
+            comment_content.copy_from((const char*)m_comment.save_oob.get() + 4, comment_size);
+
+            OPUS_LOG_DEBUG("partial_start %i", current_file_pos);
+            m_comment.item_vec.push_back(current_file_pos);
+            m_comment.end_pos = current_file_pos + copy;
+            OPUS_LOG_DEBUG("end %i", m_comment.end_pos);
+            m_comment.item_vec.push_back(m_comment.end_pos);
+            parse_comment(comment_content);
+            m_comment.oob = false;
+            m_comment.list_length--;
+            m_comment.pointer = copy - (missing - copy);
+
+        } else {
+            OPUS_LOG_DEBUG("partial_start %i", current_file_pos);
+            m_comment.item_vec.push_back(current_file_pos);
+            OPUS_LOG_DEBUG("partial_end %i", current_file_pos + nBytes);
+            m_comment.item_vec.push_back(current_file_pos + nBytes);
+            return OPUS_COMMENT_NEED_MORE;
+        }
     }
-    if (artist.valid() && title.valid()) {
-        m_streamTitle.clone_from(artist);
-        m_streamTitle.append(" - ");
-        m_streamTitle.append(title.c_get());
-        m_f_newSteamTitle = true;
-    } else if (artist.valid()) {
-        m_streamTitle.clone_from(artist);
-        m_f_newSteamTitle = true;
-    } else if (title.valid()) {
-        m_streamTitle.clone_from(title);
-        m_f_newSteamTitle = true;
+
+    // 🔹 2. If this is the first page → read header
+    bool first_call = (m_comment.pointer == 0 && m_comment.list_length == 0);
+    if (first_call) {
+        int32_t idx = OPUS_specialIndexOf(inbuf, "OpusTags", 10);
+        if (idx != 0) return OPUS_COMMENT_INVALID;
+
+        m_comment.pointer = 8; // skip "OpusTags"
+
+        uint32_t vendorLength = little_endian(inbuf + m_comment.pointer);
+        m_comment.pointer += 4 + vendorLength; // skip vendor string
+
+        if (m_comment.pointer + 4 > (uint32_t)nBytes) return OPUS_COMMENT_NEED_MORE;
+
+        m_comment.list_length = little_endian(inbuf + m_comment.pointer);
+        m_comment.pointer += 4;
+
+        OPUS_LOG_DEBUG("VendorLen=%u, CommentCount=%u", vendorLength, m_comment.list_length);
     }
-    return 1;
+
+    // 🔹 3. read comments
+    while (m_comment.list_length > 0) {
+        if (m_comment.pointer + 4 > (uint32_t)nBytes) {
+            m_comment.oob = true;
+            break;
+        }
+
+        uint32_t comment_size = little_endian(inbuf + m_comment.pointer);
+        if (comment_size > BIG_COMMENT_SIZE) m_comment.big_comment = true;
+        m_comment.pointer += 4;
+        m_comment.start_pos = current_file_pos + m_comment.pointer;
+        m_comment.end_pos = m_comment.start_pos + comment_size;
+
+        OPUS_LOG_DEBUG("start %i", m_comment.start_pos);
+        m_comment.item_vec.push_back(m_comment.start_pos);
+
+        if (m_comment.pointer + comment_size > (uint32_t)nBytes) {
+            // comment about block boundary → save for later
+            m_comment.oob = true;
+            m_comment.comment_expected = comment_size + 4;
+            m_comment.save_len = nBytes - (m_comment.pointer - 4);
+
+            if (m_comment.big_comment) { // save the first bytes only
+                m_comment.save_oob.alloc(BIG_COMMENT_SIZE);
+                uint32_t sl = m_comment.save_len;
+                if (sl > BIG_COMMENT_SIZE) sl = BIG_COMMENT_SIZE;
+                memcpy(m_comment.save_oob.get(), inbuf + m_comment.pointer - 4, sl);
+                m_comment.big_comment_filled = sl;
+            } else { // save completely
+                m_comment.save_oob.alloc(m_comment.comment_expected);
+                memcpy(m_comment.save_oob.get(), inbuf + m_comment.pointer - 4, m_comment.save_len);
+            }
+
+            OPUS_LOG_DEBUG("Partial comment, saved %u/%u bytes", m_comment.save_len, m_comment.comment_expected);
+            OPUS_LOG_DEBUG("partial_end %i", m_comment.start_pos + m_comment.save_len - 4);
+            m_comment.item_vec.push_back(m_comment.start_pos + m_comment.save_len - 4);
+            break;
+        }
+        OPUS_LOG_DEBUG("end %i", m_comment.end_pos);
+        m_comment.item_vec.push_back(m_comment.end_pos);
+
+        ps_ptr<char> comment_content;
+        if (comment_size > BIG_COMMENT_SIZE) {
+            comment_content.copy_from((const char*)inbuf + m_comment.pointer, BIG_COMMENT_SIZE);
+        } else {
+            comment_content.copy_from((const char*)inbuf + m_comment.pointer, comment_size);
+        }
+        m_comment.pointer += comment_size;
+
+        parse_comment(comment_content);
+        m_comment.list_length--;
+    }
+
+    // 🔹 4. Return status
+    if (m_comment.oob) { return OPUS_COMMENT_NEED_MORE; }
+
+    if (m_comment.list_length == 0) { return OPUS_COMMENT_DONE; }
+
+    return OPUS_COMMENT_NEED_MORE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::parseOpusHead(uint8_t* inbuf, int32_t nBytes) { // reference https://wiki.xiph.org/OggOpus
@@ -1229,7 +1325,7 @@ int32_t OpusDecoder::OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // refer
 
     uint16_t headerSize = pageSegments + 27;
     *bytesLeft -= headerSize;
-    m_opusCurrentFilePos += headerSize;
+    //   m_opusCurrentFilePos += headerSize;
     m_opusOggHeaderSize = headerSize;
 
     int32_t pLen = _min((int32_t)m_opusSegmentLength, m_opusRemainBlockPicLen);
@@ -1268,5 +1364,25 @@ int32_t OpusDecoder::OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t
         if (result >= 0) break;
     }
     return result;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::OPUS_specialIndexOf_icase(uint8_t* base, const char* str, int32_t baselen, bool exact) {
+    int32_t result = -1;                  // seek for str in buffer or in header up to baselen, not nullterninated
+    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
+    for (int32_t i = 0; i < baselen - strlen(str); i++) {
+        result = i;
+        for (int32_t j = 0; j < strlen(str) + exact; j++) {
+            if (tolower(*(base + i + j)) != tolower(*(str + j))) {
+                result = -1;
+                break;
+            }
+        }
+        if (result >= 0) break;
+    }
+    return result;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint32_t OpusDecoder::little_endian(uint8_t* data) {
+    return (uint32_t(data[0]) | (uint32_t(data[1]) << 8) | (uint32_t(data[2]) << 16) | (uint32_t(data[3]) << 24));
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

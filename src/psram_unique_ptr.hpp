@@ -83,7 +83,7 @@ class ps_ptr {
     size_t                             allocated_size = 0;
     char*                              name = nullptr; // member for object name
     static inline T                    dummy{};        // For invalid accesses
-
+  public:
     // Auxiliary function for setting the name
     void set_name(const char* new_name) {
         if (name) {
@@ -105,7 +105,6 @@ class ps_ptr {
         }
     }
 
-  public:
     ps_ptr() = default; // default constructor
 
     ~ps_ptr() { // destructor
@@ -2063,43 +2062,46 @@ class ps_ptr {
             printf("hex_dump: invalid buffer\n");
             return;
         }
+
         if (allocated_size < n) n = allocated_size;
         if (n == 0) {
             printf("hex_dump: no data\n");
             return;
         }
+
         uint8_t items_per_line = 30;
 
-        char  sym[32][5] = {"NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL", "BS ", "TAB", "LF ", "VT ", "FF ", "CR ", "SO ", "SI ",
-                            "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB", "CAN", "EM ", "SUB", "ESC", "FS ", "GS ", "RS ", "US "};
-        char* buff = get();
-        int   i = 0;
-        if (!name) {
+        static const char* sym[32] = {"NUL", "SOH", "STX", "ETX", "EOT", "ENQ", "ACK", "BEL", "BS ", "TAB", "LF ", "VT ", "FF ", "CR ", "SO ", "SI ",
+                                      "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB", "CAN", "EM ", "SUB", "ESC", "FS ", "GS ", "RS ", "US "};
+
+        const uint8_t* buff = reinterpret_cast<const uint8_t*>(get());
+        if (!name)
             printf("dumping %u bytes:\n", n);
-        } else {
+        else
             printf("%s dumping %u bytes:\n", name, n);
-        }
-        while (i < n) {
-            int m = std::min(static_cast<int>(n), i + items_per_line); // max items_per_line, but not > n
-            int s = 0;
-            for (int j = i; j < m; j++) {
-                printf("0x%02X ", static_cast<unsigned char>(buff[j]));
-                s++;
-                if (s % 10 == 0) printf("   ");
+
+        for (uint16_t i = 0; i < n; i += items_per_line) {
+            uint16_t m = std::min<uint16_t>(n, i + items_per_line);
+            uint8_t  s = 0;
+
+            // Hex view
+            for (uint16_t j = i; j < m; j++) {
+                printf("0x%02X ", buff[j]);
+                if (++s % 10 == 0) printf("   ");
             }
             printf("\n");
+
+            // ASCII / symbolic view
             s = 0;
-            for (int j = i; j < m; j++) {
-                if (buff[j] >= 32) {
-                    printf("%c    ", buff[j]);
-                } else {
-                    printf("%s  ", sym[static_cast<unsigned char>(buff[j])]);
-                }
-                s++;
-                if (s % 10 == 0) printf("   ");
+            for (uint16_t j = i; j < m; j++) {
+                uint8_t c = buff[j];
+                if (c >= 32)
+                    printf("%c    ", c);
+                else
+                    printf("%s  ", sym[c]);
+                if (++s % 10 == 0) printf("   ");
             }
             printf("\n");
-            i += items_per_line;
         }
         printf("\n");
     }

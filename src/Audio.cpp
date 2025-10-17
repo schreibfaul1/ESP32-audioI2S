@@ -5,7 +5,7 @@
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
     Version 3.4.3j                                                                                                                              ";
-/*  Updated on: 16.10.2025
+/*  Updated on: 17.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4768,6 +4768,7 @@ bool Audio::initializeDecoder() {
     if (m_codec == CODEC_OGG) {
         m_codec = determineOggCodec();
         m_lastGranulePosition = getLastGranulePosition();
+        audioFileSeek(0);
         AUDIO_LOG_DEBUG("lastGranulePosition %llu", m_lastGranulePosition);
     }
     const char* type = nullptr;

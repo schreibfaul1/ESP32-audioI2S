@@ -99,6 +99,7 @@ class OpusDecoder : public Decoder {
 #define CELT_GET_MODE_REQUEST            10015
 
     enum { OPUS_BANDWIDTH_NARROWBAND = 1101, OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103, OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105 };
+    enum ParseResult { OPUS_COMMENT_INVALID = -1, OPUS_COMMENT_NEED_MORE = 1, OPUS_COMMENT_DONE = 2 };
 
     uint8_t  m_opusChannels = 0;
     uint8_t  m_opusCountCode = 0;
@@ -135,6 +136,35 @@ class OpusDecoder : public Decoder {
     int32_t  m_opusCommentBlockSize = 0;
     float    m_opusCompressionRatio = 0;
 
+    struct picture_segment_t {
+        uint32_t start_page_index{};
+        uint32_t start_offset{};
+        uint32_t end_page_index{};
+        uint32_t end_offset{};
+        bool     in_progress{};
+    };
+
+    typedef struct _comment {
+        uint32_t              pointer{};
+        uint32_t              list_length{};
+        bool                  subsequent_page{};
+        bool                  oob{}; // out of bounds (block overflow)
+        bool                  big_comment{};
+        uint32_t              big_comment_filled{};
+        uint32_t              oob_len{};
+        uint32_t              save_len{};
+        uint32_t              comment_expected{};
+        uint32_t              start_pos{}; // comment start file position
+        uint32_t              end_pos{}; // comment end file position
+        ps_ptr<uint8_t>       save_oob{};
+        ps_ptr<char>          stream_title{};
+        std::vector<uint32_t> item_vec;
+        std::vector<uint32_t> pic_vec;
+
+        void reset() { *this = _comment{}; }
+    } comment_t;
+    comment_t m_comment;
+
     ps_ptr<char>     m_streamTitle;
     ps_ptr<uint16_t> m_opusSegmentTable;
 
@@ -153,13 +183,15 @@ class OpusDecoder : public Decoder {
     int8_t  opus_FramePacking_Code3(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
     int32_t OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t parseOpusHead(uint8_t* inbuf, int32_t nBytes);
-    int32_t parseOpusComment(uint8_t* inbuf, int32_t nBytes);
+    int32_t parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t current_file_pos);
     int8_t  parseOpusTOC(uint8_t TOC_Byte);
     int32_t opus_packet_get_samples_per_frame(const uint8_t* data, int32_t Fs);
     int32_t opus_decode_frame(uint8_t* inbuf, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame);
 
     // some helper functions
-    int32_t OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    int32_t  OPUS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    int32_t  OPUS_specialIndexOf_icase(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    uint32_t little_endian(uint8_t* data);
     enum { MODE_NONE = 0, MODE_SILK_ONLY = 1000, MODE_HYBRID = 1001, MODE_CELT_ONLY = 1002 };
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
