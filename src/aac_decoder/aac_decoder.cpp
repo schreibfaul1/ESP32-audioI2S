@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 25.09.2025
+ *  Updated on: 17.10.2025
  */
 
 #include "aac_decoder.h"
@@ -15,8 +15,7 @@
 #include <time.h>
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-AACDecoder::AACDecoder(Audio& audioRef)
-    : Decoder(audioRef), audio(audioRef), m_neaacdec(std::make_unique<NeaacDecoder>()) {}
+AACDecoder::AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef), m_neaacdec(std::make_unique<NeaacDecoder>()) {}
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool AACDecoder::init() {
@@ -146,10 +145,12 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     m_validSamples = m_frameInfo.samples;
     int8_t err = 0 - m_frameInfo.error;
     m_compressionRatio = (float)m_frameInfo.samples * 2 / m_frameInfo.bytesconsumed;
-    if (err < 0){
-        if(err == -100) return AAC_ID3_HDR; // ID3 header found
-        if(err == -21) AAC_LOG_INFO(getErrorMessage(abs(err)));
-        else AAC_LOG_ERROR(getErrorMessage(abs(err)));
+    if (err < 0) {
+        if (err == -100) return AAC_ID3_HDR; // ID3 header found
+        if (err == -21)
+            AAC_LOG_INFO(getErrorMessage(abs(err)));
+        else
+            AAC_LOG_ERROR(getErrorMessage(abs(err)));
     }
     return err;
 }
@@ -169,26 +170,33 @@ std::vector<uint32_t> AACDecoder::getMetadataBlockPicture() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* AACDecoder::arg1() { // AAC format
     m_arg1.assign("AAC HeaderFormat: ");
-    if (m_frameInfo.header_type == 0) m_arg1.append("RAW");
-    else if (m_frameInfo.header_type == 1) m_arg1.append("ADIF"); /* single ADIF header at the beginning of the file */
-    else if (m_frameInfo.header_type == 2) m_arg1.append("ADTS"); /* ADTS header at the beginning of each frame */
-    else m_arg1.append("unknown");
+    if (m_frameInfo.header_type == 0)
+        m_arg1.append("RAW");
+    else if (m_frameInfo.header_type == 1)
+        m_arg1.append("ADIF"); /* single ADIF header at the beginning of the file */
+    else if (m_frameInfo.header_type == 2)
+        m_arg1.append("ADTS"); /* ADTS header at the beginning of each frame */
+    else
+        m_arg1.append("unknown");
     return m_arg1.c_get();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* AACDecoder::arg2() {
-    return "arg2";
+    if (m_frameInfo.sbr == 1) return "upsampled SBR";
+    if (m_frameInfo.sbr == 2) return "downsampled SBR";
+    if (m_frameInfo.sbr == 3) return "no SBR used, but file is upsampled by a factor 2";
+    return "without SBR";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t AACDecoder::val1() { //Parametric Stereo
+int32_t AACDecoder::val1() { // Parametric Stereo
     return m_frameInfo.isPS;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t AACDecoder::val2() { // Spectral Band Replication
-    return m_frameInfo.sbr; // NO_SBR           0 /* no SBR used in this file */
-                          // SBR_UPSAMPLED    1 /* upsampled SBR used */
-                          // SBR_DOWNSAMPLED  2 /* downsampled SBR used */
-                          // NO_SBR_UPSAMPLED 3 /* no SBR used, but file is upsampled by a factor 2 anyway */
+    return m_frameInfo.sbr;  // NO_SBR           0 /* no SBR used in this file */
+                             // SBR_UPSAMPLED    1 /* upsampled SBR used */
+                             // SBR_DOWNSAMPLED  2 /* downsampled SBR used */
+                             // NO_SBR_UPSAMPLED 3 /* no SBR used, but file is upsampled by a factor 2 anyway */
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void AACDecoder::createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t samplingFrequencyIndex, uint8_t channelConfiguration) {
