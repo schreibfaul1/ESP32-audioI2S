@@ -1052,7 +1052,10 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
         ps_ptr<char> val = comment.substr(idx + 1);
 
         if (key.starts_with_icase("metadata_block_picture")) {
-            m_comment.pic_vec = m_comment.item_vec; // copy 1:1
+            for (int i = 0; i < m_comment.item_vec.size(); i += 2){
+                m_comment.pic_vec.push_back(m_comment.item_vec[i]); // start pos
+                m_comment.pic_vec.push_back(m_comment.item_vec[i + 1] - m_comment.item_vec[i]); // len = end pos - start pos
+            }
             m_comment.item_vec.clear();
             m_f_opusNewMetadataBlockPicture = true;
 
