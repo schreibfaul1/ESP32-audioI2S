@@ -54,6 +54,7 @@ class VorbisDecoder : public Decoder {
     virtual int32_t       val2() override;
 
     enum : int8_t { VORBIS_CONTINUE = 110, VORBIS_PARSE_OGG_DONE = 100, VORBIS_NONE = 0, VORBIS_ERR = -1 };
+    enum ParseResult { VORBIS_COMMENT_INVALID = -1, VORBIS_COMMENT_NEED_MORE = 1, VORBIS_COMMENT_DONE = 2 };
 
   private:
     Audio& audio;
@@ -224,7 +225,28 @@ class VorbisDecoder : public Decoder {
         int32_t          q_bits{};
         uint8_t          q_pack{};
         ps_ptr<uint16_t> q_val{};
-    }codebook_t;
+    } codebook_t;
+
+    typedef struct _comment {
+        uint32_t              pointer{};
+        uint32_t              list_length{};
+        bool                  subsequent_page{};
+        bool                  oob{}; // out of bounds (block overflow)
+        bool                  big_comment{};
+        uint32_t              big_comment_filled{};
+        uint32_t              oob_len{};
+        uint32_t              save_len{};
+        uint32_t              comment_expected{};
+        uint32_t              start_pos{}; // comment start file position
+        uint32_t              end_pos{};   // comment end file position
+        ps_ptr<uint8_t>       save_oob{};
+        ps_ptr<char>          stream_title{};
+        std::vector<uint32_t> item_vec;
+        std::vector<uint32_t> pic_vec;
+
+        void reset() { *this = _comment{}; }
+    } comment_t;
+    comment_t m_comment;
 
     // global vars
     bool     m_f_vorbisNewSteamTitle = false; // streamTitle
@@ -236,6 +258,7 @@ class VorbisDecoder : public Decoder {
     bool     m_f_lastSegmentTable = false;
     bool     m_f_vorbisStr_found = false;
     bool     m_f_isValid = false;
+    bool     m_f_comment_done = false;
     uint16_t m_identificatonHeaderLength = 0;
     uint16_t m_vorbisCommentHeaderLength = 0;
     uint16_t m_setupHeaderLength = 0;
@@ -296,10 +319,10 @@ class VorbisDecoder : public Decoder {
     void                      clearGlobalConfigurations();
     int32_t                   VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t                   vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
-    int32_t                   vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
+    int32_t                   vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, uint32_t current_file_pos);
     int32_t                   vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
     int32_t                   vorbisDecodePage4(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, int16_t* outbuf);
-    int32_t                   parseVorbisComment(uint8_t* inbuf, int16_t nBytes);
+    int32_t                   parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32_t current_file_pos);
     int32_t                   parseVorbisCodebook();
     int32_t                   parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
     uint16_t                  continuedOggPackets(uint8_t* inbuf);
@@ -373,12 +396,15 @@ class VorbisDecoder : public Decoder {
     uint8_t  _book_maptype1_quantvals(codebook_t* b);
     int32_t* _vorbis_window(int32_t left);
 
-    int32_t MULT32(int32_t x, int32_t y);
-    int32_t MULT31_SHIFT15(int32_t x, int32_t y);
-    int32_t MULT31(int32_t x, int32_t y);
-    void    XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
-    void    XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
-    int32_t CLIP_TO_15(int32_t x);
+    int32_t  MULT32(int32_t x, int32_t y);
+    int32_t  MULT31_SHIFT15(int32_t x, int32_t y);
+    int32_t  MULT31(int32_t x, int32_t y);
+    void     XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
+    void     XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t* x, int32_t* y);
+    int32_t  CLIP_TO_15(int32_t x);
+    int32_t  specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    int32_t  specialIndexOf_icase(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
+    uint32_t little_endian(uint8_t* data);
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // Macro for comfortable calls
