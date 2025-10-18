@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 01.10,2025
+ * Updated on: 18.10,2025
  *
  * Author: Wolle
  *
@@ -130,19 +130,6 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
     uint32_t result = m_flac_bitBuffer >> m_flacBitBufferLen;
     if (nBits < 32) result &= mask[nBits];
     return result;
-}
-
-int32_t FlacDecoder::readSignedInt(int32_t nBits, int32_t* bytesLeft) {
-    int32_t temp = readUint(nBits, bytesLeft) << (32 - nBits);
-    temp = temp >> (32 - nBits); // The C++ compiler uses the sign bit to fill vacated bit positions
-    return temp;
-}
-
-int64_t FlacDecoder::readRiceSignedInt(uint8_t param, int32_t* bytesLeft) {
-    long val = 0;
-    while (readUint(1, bytesLeft) == 0) val++;
-    val = (val << param) | readUint(param, bytesLeft);
-    return (val >> 1) ^ -(val & 1);
 }
 
 void FlacDecoder::alignToByte() {
@@ -683,17 +670,44 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
         if (m_numOfOutSamples - m_offset > FLAC_MAX_OUTBUFFSIZE) {
             blockSize = FLAC_MAX_OUTBUFFSIZE;
             m_flacValidSamples = FLAC_MAX_OUTBUFFSIZE;
-
         } else {
             blockSize = m_numOfOutSamples - m_offset;
             m_flacValidSamples = blockSize;
         }
 
-        for (int32_t i = 0; i < blockSize; i++) {
-            for (int32_t j = 0; j < FLACMetadataBlock->numChannels; j++) {
-                int32_t val = m_samplesBuffer[j][i + m_offset];
-                if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
-                outbuf[FLACMetadataBlock->numChannels * i + j] = val;
+        // for (int32_t i = 0; i < blockSize; i++) {
+        //     for (int32_t j = 0; j < FLACMetadataBlock->numChannels; j++) {
+        //         int32_t val = m_samplesBuffer[j][i + m_offset];
+        //         if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
+        //         outbuf[FLACMetadataBlock->numChannels * i + j] = val;
+        //     }
+        // }
+
+        if (FLACMetadataBlock->numChannels == 1) {
+            const int32_t* src = m_samplesBuffer[0].get() + m_offset;
+            int16_t*       dst = outbuf;
+
+            for (int32_t i = 0; i < blockSize; i++) {
+                int32_t val = *src++;
+                if (FLACMetadataBlock->bitsPerSample == 8) { val += 128; }
+                *dst++ = val;
+            }
+        }
+
+        if (FLACMetadataBlock->numChannels == 2) {
+            const int32_t* left = m_samplesBuffer[0].get() + m_offset;
+            const int32_t* right = m_samplesBuffer[1].get() + m_offset;
+            int16_t*       dst = outbuf;
+
+            for (int32_t i = 0; i < blockSize; i++) {
+                int32_t l = *left++;
+                int32_t r = *right++;
+                if (FLACMetadataBlock->bitsPerSample == 8) {
+                    l += 128;
+                    r += 128;
+                }
+                *dst++ = l;
+                *dst++ = r;
             }
         }
 
@@ -883,21 +897,48 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
     } else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
-        if (FLACFrameHeader->chanAsgn == 8) {
-            for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[1][i] = (m_samplesBuffer[0][i] - m_samplesBuffer[1][i]);
-        } else if (FLACFrameHeader->chanAsgn == 9) {
-            for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[0][i] += m_samplesBuffer[1][i];
-        } else if (FLACFrameHeader->chanAsgn == 10) {
-            for (int32_t i = 0; i < m_numOfOutSamples; i++) {
-                int32_t side = m_samplesBuffer[1][i];
-                int32_t right = m_samplesBuffer[0][i] - (side >> 1);
-                m_samplesBuffer[1][i] = right;
-                m_samplesBuffer[0][i] = right + side;
-            }
-        } else {
-            FLAC_LOG_ERROR("Flac, unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
-            return FLAC_ERR;
+
+        // if (FLACFrameHeader->chanAsgn == 8) {
+        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[1][i] = (m_samplesBuffer[0][i] - m_samplesBuffer[1][i]);
+        // } else if (FLACFrameHeader->chanAsgn == 9) {
+        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[0][i] += m_samplesBuffer[1][i];
+        // } else if (FLACFrameHeader->chanAsgn == 10) {
+        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) {
+        //         int32_t side = m_samplesBuffer[1][i];
+        //         int32_t right = m_samplesBuffer[0][i] - (side >> 1);
+        //         m_samplesBuffer[1][i] = right;
+        //         m_samplesBuffer[0][i] = right + side;
+        //     }
+        // } else {
+        //     FLAC_LOG_ERROR("Flac, unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
+        //     return FLAC_ERR;
+        // }
+
+        int32_t*      ch0 = m_samplesBuffer[0].get();
+        int32_t*      ch1 = m_samplesBuffer[1].get();
+        const int32_t n = m_numOfOutSamples;
+
+        switch (FLACFrameHeader->chanAsgn) { // 8, 9 or 10
+            case 8:                          // left + side → right
+                for (int32_t i = 0; i < n; i++) ch1[i] = ch0[i] - ch1[i];
+                break;
+
+            case 9: // right + side → left
+                for (int32_t i = 0; i < n; i++) ch0[i] += ch1[i];
+                break;
+
+            case 10: // mid + side → left/right
+                for (int32_t i = 0; i < n; i++) {
+                    int32_t s = ch1[i];
+                    int32_t r = ch0[i] - (s >> 1);
+                    ch1[i] = r;
+                    ch0[i] = r + s;
+                }
+                break;
+
+            default: break;
         }
+
     } else {
         FLAC_LOG_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
         return FLAC_ERR;
@@ -1020,24 +1061,120 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
 
     int32_t partitionSize = m_numOfOutSamples / numPartitions;
 
+    // for (int32_t i = 0; i < numPartitions; i++) {
+    //     int32_t start = i * partitionSize + (i == 0 ? warmup : 0);
+    //     int32_t end = (i + 1) * partitionSize;
+
+    //     int32_t param = readUint(paramBits, bytesLeft);
+    //     if (param < escapeParam) {
+    //         for (int32_t j = start; j < end; j++) {
+    //             if (m_f_bitReaderError) break;
+    //             m_samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
+    //         }
+    //     } else {
+    //         int32_t numBits = readUint(5, bytesLeft); // Escape code, meaning the partition is in unencoded binary form using n bits per sample; n follows as a 5-bit number.
+    //         for (int32_t j = start; j < end; j++) {
+    //             if (m_f_bitReaderError) break;
+    //             m_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
+    //         }
+    //     }
+    // }
+
     for (int32_t i = 0; i < numPartitions; i++) {
         int32_t start = i * partitionSize + (i == 0 ? warmup : 0);
         int32_t end = (i + 1) * partitionSize;
 
         int32_t param = readUint(paramBits, bytesLeft);
+
+        // Lokale Bitpuffer-Variablen für Performance
+        uint32_t bitbuf = m_flac_bitBuffer;
+        int32_t  bitlen = m_flacBitBufferLen;
+        uint8_t* ptr = m_flacInptr + m_rIndex;
+        int32_t  bytes = *bytesLeft;
+
         if (param < escapeParam) {
+            // --- Rice-encoded Partition ---
             for (int32_t j = start; j < end; j++) {
                 if (m_f_bitReaderError) break;
-                m_samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
+
+                uint32_t bit;
+                int64_t  val = 0;
+
+                // 1. Präfix lesen (Rice)
+                while (true) {
+                    if (bitlen == 0) {
+                        if (bytes <= 0) {
+                            m_f_bitReaderError = true;
+                            goto rice_done;
+                        }
+                        bitbuf = (bitbuf << 8) | *ptr++;
+                        bytes--;
+                        bitlen = 8;
+                    }
+                    bitlen--;
+                    bit = (bitbuf >> bitlen) & 1u;
+                    if (bit) break;
+                    val++;
+                }
+
+                // 2. Restbits lesen
+                if (param > 0) {
+                    while (bitlen < param) {
+                        if (bytes <= 0) {
+                            m_f_bitReaderError = true;
+                            goto rice_done;
+                        }
+                        bitbuf = (bitbuf << 8) | *ptr++;
+                        bytes--;
+                        bitlen += 8;
+                    }
+                    bitlen -= param;
+                    val = (val << param) | ((bitbuf >> bitlen) & ((1u << param) - 1u));
+                }
+
+                // 3. In signed umwandeln
+                val = (val >> 1) ^ -(val & 1);
+                m_samplesBuffer[ch][j] = val;
             }
+
         } else {
-            int32_t numBits = readUint(5, bytesLeft); // Escape code, meaning the partition is in unencoded binary form using n bits per sample; n follows as a 5-bit number.
+            // --- Escape code: unencoded binary samples ---
+            int32_t numBits = readUint(5, bytesLeft);
+
             for (int32_t j = start; j < end; j++) {
                 if (m_f_bitReaderError) break;
-                m_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
+
+                // 1. Sicherstellen, dass genügend Bits im Puffer sind
+                while (bitlen < numBits) {
+                    if (bytes <= 0) {
+                        m_f_bitReaderError = true;
+                        goto rice_done;
+                    }
+                    bitbuf = (bitbuf << 8) | *ptr++;
+                    bytes--;
+                    bitlen += 8;
+                }
+
+                // 2. Bits extrahieren
+                bitlen -= numBits;
+                uint32_t raw = (bitbuf >> bitlen) & ((1u << numBits) - 1u);
+
+                // 3. Signed-Umwandlung (wie dein readSignedInt)
+                int32_t val = (int32_t)(raw << (32 - numBits)) >> (32 - numBits);
+                m_samplesBuffer[ch][j] = val;
             }
         }
+
+    rice_done:
+        // Lokale Zustände zurückschreiben
+        m_flac_bitBuffer = bitbuf;
+        m_flacBitBufferLen = bitlen;
+        m_rIndex = ptr - m_flacInptr;
+        *bytesLeft = bytes;
+
+        if (m_f_bitReaderError) break;
     }
+
     if (m_f_bitReaderError) {
         FLAC_LOG_ERROR("Flac bitreader underflow");
         return FLAC_ERR;

@@ -17,8 +17,8 @@
 #pragma GCC optimize("Ofast")
 
 #include "../Audio.h"
-#include <vector>
 #include <deque>
+#include <vector>
 
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_BLACK   "\033[30m"
@@ -32,7 +32,7 @@
 
 class FlacDecoder : public Decoder {
 
-public:
+  public:
     FlacDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef) {}
     ~FlacDecoder() { reset(); }
     bool                  init() override;
@@ -59,25 +59,25 @@ public:
 
     enum : int8_t {
         FLAC_PARSE_OGG_DONE = 100,
-                    FLAC_DECODE_FRAMES_LOOP = 100,
-                    FLAC_OGG_SYNC_FOUND = +2,
-                    GIVE_NEXT_LOOP = +1,
-                    FLAC_NONE = 0,
-                    FLAC_ERR = -1,
-                    FLAC_STOP = -100,
+        FLAC_DECODE_FRAMES_LOOP = 100,
+        FLAC_OGG_SYNC_FOUND = +2,
+        GIVE_NEXT_LOOP = +1,
+        FLAC_NONE = 0,
+        FLAC_ERR = -1,
+        FLAC_STOP = -100,
     };
 
-private:
+  private:
     Audio& audio;
 #define FLAC_MAX_CHANNELS    2
 #define FLAC_MAX_BLOCKSIZE   24576 // 24 * 1024
-    #define FLAC_MAX_OUTBUFFSIZE 4096 * 2
+#define FLAC_MAX_OUTBUFFSIZE 4096 * 2
 
     enum : uint8_t { FLACDECODER_INIT, FLACDECODER_READ_IN, FLACDECODER_WRITE_OUT };
     enum : uint8_t { DECODE_FRAME, DECODE_SUBFRAMES, OUT_SAMPLES };
 
     typedef struct FLACMetadataBlock_t {
-                                  // METADATA_BLOCK_STREAMINFO
+        // METADATA_BLOCK_STREAMINFO
         uint16_t minblocksize;    // The minimum block size (in samples) used in the stream.
                                   //----------------------------------------------------------------------------------------
                                   // The maximum block size (in samples) used in the stream.
@@ -114,7 +114,7 @@ private:
     } FLACMetadataBlock_t;
 
     typedef struct FLACFrameHeader_t {
-                                  // 0 : fixed-blocksize stream; frame header encodes the frame number
+        // 0 : fixed-blocksize stream; frame header encodes the frame number
         uint8_t blockingStrategy; // 1 : variable-blocksize stream; frame header encodes the sample number
                                   //----------------------------------------------------------------------------------------
                                   // Block size in inter-channel samples:
@@ -179,7 +179,7 @@ private:
         {4, -6, 4, -1} // {4, -6, 4, -1}
     };
 
-//    std::deque<int> coefs;
+    //    std::deque<int> coefs;
 
     ps_ptr<FLACFrameHeader_t>   FLACFrameHeader;
     ps_ptr<FLACMetadataBlock_t> FLACMetadataBlock;
@@ -232,8 +232,6 @@ private:
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
     uint64_t getTotoalSamplesInStream();
     uint32_t readUint(uint8_t nBits, int32_t* bytesLeft);
-    int32_t  readSignedInt(int32_t nBits, int32_t* bytesLeft);
-    int64_t  readRiceSignedInt(uint8_t param, int32_t* bytesLeft);
     void     alignToByte();
     int8_t   decodeSubframes(int32_t* bytesLeft);
     int8_t   decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* bytesLeft);
@@ -243,12 +241,18 @@ private:
     void     restoreLinearPrediction(uint8_t ch, uint8_t shift);
     int32_t  specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
 
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    inline int32_t readSignedInt(int32_t nBits, int32_t* bytesLeft) {
+        int32_t temp = readUint(nBits, bytesLeft) << (32 - nBits);
+        temp = temp >> (32 - nBits); // The C++ compiler uses the sign bit to fill vacated bit positions
+        return temp;
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // Macro for comfortable calls
-    #define FLAC_LOG_ERROR(fmt, ...)   Audio::AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_WARN(fmt, ...)    Audio::AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    #define FLAC_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_ERROR(fmt, ...)   Audio::AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_WARN(fmt, ...)    Audio::AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define FLAC_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
