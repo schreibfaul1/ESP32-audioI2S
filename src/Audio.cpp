@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3k                                                                                                                              ";
+    Version 3.4.3l                                                                                                                              ";
 /*  Updated on: 17.10.2025
 
     Author: Wolle (schreibfaul1)
@@ -192,7 +192,7 @@ Audio::Audio(uint8_t i2sPort) {
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;     // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = 32;          // number of DMA buffer
+    m_i2s_chan_cfg.dma_desc_num = 16;          // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = 512;        // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear = true;          // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
@@ -5623,7 +5623,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
                     res = offset;
                     t = millis();
                 }
-                if (readed_bytes <= 0) vTaskDelay(5);
+                if (readed_bytes <= 0) break;
             } else {
                 readed_bytes = m_client->read(buff + offset, len);
                 if (readed_bytes > 0) {
@@ -5633,7 +5633,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
                     res = offset;
                     t = millis();
                 }
-                if (readed_bytes <= 0) vTaskDelay(5);
+                if (readed_bytes <= 0) break;
             }
             if (t + 3000 < millis()) {
                 AUDIO_LOG_ERROR("timeout");
