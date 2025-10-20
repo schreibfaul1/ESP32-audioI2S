@@ -91,7 +91,6 @@ void VorbisDecoder::VORBISsetDefaults() {
     m_vorbisBlockPicLen = 0;
     m_vorbisBlockPicLenUntilFrameEnd = 0;
     m_commentBlockSegmentSize = 0;
-    m_vorbisBlockPicItem.shrink_to_fit();
     clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -157,6 +156,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbu
     // So the last segment is saved. m_lastSegmentTableLen specifies the size of the last saved segment.
     // If the next Ogg Page does not contain a 'continuedPage', the last segment is played first. However,
     // if 'continuedPage' is set, the first segment of the new page is added to the saved segment and played.
+
     if (!m_lastSegmentTableLen) {
         if (m_vorbisSegmentTableSize) {
             m_vorbisSegmentTableRdPtr++;
@@ -190,7 +190,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbu
             break;
     }
 exit:
-    if(ret >= 0) m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft);
+    if (ret >= 0) m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft);
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
@@ -213,23 +213,21 @@ int32_t VorbisDecoder::vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uin
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
 int32_t VorbisDecoder::vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength, uint32_t current_file_pos) {
 
-    int32_t ret = VORBIS_PARSE_OGG_DONE;
-    int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
-    if(m_f_comment_done) goto exit;
+    int32_t ret = 0;
+    ret = parseVorbisComment(inbuf, segmentLength, current_file_pos);
 
-    if (idx == 1) {
-        ret = parseVorbisComment(inbuf, segmentLength, current_file_pos);
-        if(ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
-        if(ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
-        if(ret == VORBIS_COMMENT_DONE) {m_f_comment_done = true; ret = VORBIS_PARSE_OGG_DONE;}
+    if (ret == VORBIS_COMMENT_INVALID) {
+        VORBIS_LOG_DEBUG("VORBIS_COMMENT_INVALID");
+    } else if (ret == VORBIS_COMMENT_NEED_MORE) {
+        VORBIS_LOG_DEBUG("VORBIS_COMMENT_NEED_MORE");
+        *bytesLeft -= segmentLength;
+    } else if (ret == VORBIS_COMMENT_DONE) {
+        VORBIS_LOG_DEBUG("VORBIS_COMMENT_DONE");
+        *bytesLeft -= segmentLength;
+        VORBIS_LOG_DEBUG("bytesLeft %i", *bytesLeft);
     } else {
-        ret = parseVorbisComment(inbuf, segmentLength, current_file_pos);
-        if(ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
-        if(ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
-        if(ret == VORBIS_COMMENT_DONE) {m_f_comment_done = true; ret = VORBIS_PARSE_OGG_DONE;}
+        VORBIS_LOG_DEBUG("VORBIS_UNKNOWN");
     }
-exit:
-    *bytesLeft -= segmentLength;
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
@@ -241,7 +239,7 @@ int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uin
         // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         m_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
-VORBIS_LOG_WARN(" segmentLength %i", segmentLength);
+        VORBIS_LOG_WARN(" segmentLength %i", segmentLength);
         if (segmentLength == 4080) {
             // that is 16*255 bytes and thus the maximum segment size
             // it is possible that there is another block starting with 'OggS' in which there is information
@@ -369,7 +367,7 @@ uint32_t VorbisDecoder::getAudioFileDuration() {
 const char* VorbisDecoder::getStreamTitle() {
     if (m_f_vorbisNewSteamTitle) {
         m_f_vorbisNewSteamTitle = false;
-        return m_vorbisChbuf.get();
+        return m_comment.stream_title.c_get();
     }
     return NULL;
 }
@@ -379,7 +377,7 @@ std::vector<uint32_t> VorbisDecoder::getMetadataBlockPicture() {
         m_f_vorbisNewMetadataBlockPicture = false;
         return m_comment.pic_vec;
     }
-    std::vector<uint32_t>v;
+    std::vector<uint32_t> v;
     return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -467,7 +465,8 @@ int32_t VorbisDecoder::parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes) { 
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32_t current_file_pos) { // reference https://xiph.org/vorbis/doc/v-comment.html
-#define BIG_COMMENT_SIZE 1024
+
+    constexpr uint16_t BIG_COMMENT_SIZE = 1024;
 
     auto parse_comment = [&](ps_ptr<char> comment) -> void {
         int idx = comment.index_of("=");
@@ -492,21 +491,23 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
             if (!m_comment.stream_title.valid()) {
                 m_comment.stream_title.assign(val.c_get());
             } else {
-                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
+            m_f_vorbisNewSteamTitle = true;
         }
 
         if (key.starts_with_icase("title")) {
             if (!m_comment.stream_title.valid()) {
                 m_comment.stream_title.assign(val.c_get());
             } else {
-                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
+            m_f_vorbisNewSteamTitle = true;
         }
 
-        comment.println(); // optional output
+        // comment.println(); // optional output
         m_comment.item_vec.clear();
     };
 
@@ -583,7 +584,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
         if (comment_size > BIG_COMMENT_SIZE) m_comment.big_comment = true;
         m_comment.pointer += 4;
         m_comment.start_pos = current_file_pos + m_comment.pointer;
-        m_comment.end_pos = m_comment.start_pos + comment_size;
+        m_comment.end_pos = m_comment.start_pos + comment_size + 1;
 
         VORBIS_LOG_DEBUG("start %i", m_comment.start_pos);
         m_comment.item_vec.push_back(m_comment.start_pos);
@@ -816,7 +817,7 @@ int32_t VorbisDecoder::VORBISparseOGG(uint8_t* inbuf, int32_t* bytesLeft) {
     m_f_oggLastPage = lastPage;
     m_oggHeaderSize = headerSize;
 
-    if (firstPage) m_pageNr = 0;
+    // if (firstPage) m_pageNr = 0;
 
     return VORBIS_PARSE_OGG_DONE; // no error
 }
@@ -1958,7 +1959,7 @@ int32_t VorbisDecoder::floor1_memosize(ps_ptr<vorbis_info_floor>& i) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor>& i, int32_t* lsp) {
     vorbis_info_floor* info = (vorbis_info_floor*)i.get();
-    int32_t              j;
+    int32_t            j;
 
     int32_t ampraw = bitReader(info->ampbits);
 
