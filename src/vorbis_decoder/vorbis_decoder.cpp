@@ -241,7 +241,7 @@ int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uin
         // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         m_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
-VORBIS_LOG_ERROR(" segmentLength %i", segmentLength);
+VORBIS_LOG_WARN(" segmentLength %i", segmentLength);
         if (segmentLength == 4080) {
             // that is 16*255 bytes and thus the maximum segment size
             // it is possible that there is another block starting with 'OggS' in which there is information

@@ -195,12 +195,12 @@ typedef struct _tspp { // used in ts_parsePacket
 }tspp_t;
 
 struct pwst_t { // used in processWebStream
-    uint16_t maxFrameSize;
+    uint32_t maxFrameSize;
     uint32_t chunkSize = 0;
     bool     f_skipCRLF = false;
     uint32_t availableBytes;
     bool     f_clientIsConnected;
-    uint16_t readedBytes;
+    uint32_t readedBytes;
 };
 
 struct gchs_t { // used in getChunkSize
@@ -231,7 +231,7 @@ struct pad_t { // used in playAudioData
     size_t  oldAudioDataSize = 0;
     bool    lastFrames = false;
     int32_t bytesToDecode;
-    int16_t bytesDecoded;
+    int32_t bytesDecoded;
 };
 
 struct sbyt_t { // used in sendBytes
@@ -244,9 +244,9 @@ struct sbyt_t { // used in sendBytes
 };
 
 struct rmet_t {          // used in readMetadata
-    uint16_t pos_ml = 0; // determines the current position in metaline
-    uint16_t metaDataSize = 0;
-    uint16_t res = 0;
+    uint32_t pos_ml = 0; // determines the current position in metaline
+    uint32_t metaDataSize = 0;
+    uint32_t res = 0;
 };
 
 struct pwsts_t {                    // used in processWebStreamTS

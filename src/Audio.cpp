@@ -28,9 +28,9 @@ char audioI2SVers[] = "\
 constexpr size_t m_frameSizeWav = 2048;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600 * 2;
-constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
-constexpr size_t m_frameSizeOPUS = 2048;
-constexpr size_t m_frameSizeVORBIS = 4096 * 2;
+constexpr size_t m_frameSizeFLAC = UINT16_MAX;
+constexpr size_t m_frameSizeOPUS = UINT16_MAX;
+constexpr size_t m_frameSizeVORBIS = UINT16_MAX;
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
@@ -73,12 +73,12 @@ size_t AudioBuffer::init() {
     return m_buffSize;
 }
 
-void AudioBuffer::changeMaxBlockSize(uint16_t mbs) {
+void AudioBuffer::changeMaxBlockSize(uint32_t mbs) {
     m_maxBlockSize = mbs;
     return;
 }
 
-uint16_t AudioBuffer::getMaxBlockSize() {
+uint32_t AudioBuffer::getMaxBlockSize() {
     return m_maxBlockSize;
 }
 
@@ -261,7 +261,7 @@ void Audio::initInBuff() {
         size_t size = InBuff.init();
         if (size > 0) { info(*this, evt_info, "inputBufferSize: %u bytes", size - 1); }
     }
-    InBuff.changeMaxBlockSize(1600); // default size mp3 or aac
+    InBuff.changeMaxBlockSize(UINT16_MAX); // default size mp3 or aac
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstart() {
@@ -3317,7 +3317,7 @@ void Audio::loop() {
 bool Audio::readPlayListData() {
 
     uint32_t     chunksize = 0;
-    uint16_t     readedBytes = 0;
+    uint32_t     readedBytes = 0;
     ps_ptr<char> pl;
     uint32_t     ctl = 0;
     uint16_t     plSize = 0;
@@ -3890,7 +3890,7 @@ void Audio::processLocalFile() {
 void Audio::processWebStream() {
 
     if (m_dataMode != AUDIO_DATA) return; // guard
-    uint16_t readedBytes = 0;
+    uint32_t readedBytes = 0;
 
     m_pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     m_pwst.availableBytes = 0;                      // available from stream
@@ -4099,7 +4099,7 @@ nextRound:
            However, the chunk size in some streams is limited to 32768 bytes, although the chunk can be larger. Then the chunk size is
            calculated again. The data used to calculate (here readedBytes) the chunk size is not part of it.
         */
-        uint16_t readedBytes = 0;
+        uint32_t readedBytes = 0;
         uint32_t minAvBytes = 0;
         if (m_pwsst.f_chunkFinished) goto chunkFinished;
         if (m_f_chunked && m_pwsst.chunkSize == m_pwsst.byteCounter) {
@@ -4237,7 +4237,7 @@ void Audio::processWebStreamHLS() {
 
     m_pwsHLS.availableBytes = m_client->available();
     if (m_pwsHLS.availableBytes) { // an ID3 header could come here
-        uint16_t readedBytes = 0;
+        uint32_t readedBytes = 0;
 
         if (m_f_chunked && !m_pwsHLS.chunkSize) {
             m_pwsHLS.chunkSize = getChunkSize(&readedBytes);
@@ -5262,6 +5262,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
     } // nothing to play
     if (m_codec == CODEC_VORBIS) {
         if (res == VorbisDecoder::VORBIS_PARSE_OGG_DONE) return bytesDecoded;
+        if (res == VorbisDecoder::VORBIS_COMMENT_NEED_MORE) return bytesDecoded;
     } // nothing to play
     return 0;
 }
@@ -6423,7 +6424,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 //    W E B S T R E A M  -  H E L P   F U N C T I O N S
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
+bool Audio::readMetadata(uint32_t maxBytes, uint32_t* readedBytes, bool first) {
     *readedBytes = 0;
     ps_ptr<char> buff;
     buff.alloc(4096);
@@ -6484,7 +6485,7 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
+int32_t Audio::getChunkSize(uint32_t* readedBytes, bool first) {
     uint32_t timeout = 2000; // ms
     uint32_t ctime;
 
