@@ -297,7 +297,6 @@ class VorbisDecoder : public Decoder {
 
     bitReader_t m_bitReader;
 
-    ps_ptr<char>                      m_vorbisChbuf;
     ps_ptr<uint8_t>                   m_lastSegmentTable;
     ps_ptr<uint16_t>                  m_vorbisSegmentTable;
     ps_ptr<codebook_t>                m_codebooks;

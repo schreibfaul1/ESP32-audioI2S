@@ -37,7 +37,6 @@ bool VorbisDecoder::init() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void VorbisDecoder::reset() {
     clearGlobalConfigurations();
-    if (m_vorbisChbuf.valid()) m_vorbisChbuf.reset();
     if (m_lastSegmentTable.valid()) m_lastSegmentTable.reset();
     if (m_vorbisSegmentTable.valid()) m_vorbisSegmentTable.reset();
     if (m_codebooks.valid()) m_codebooks.reset();
@@ -375,7 +374,7 @@ uint32_t VorbisDecoder::getAudioFileDuration() {
 const char* VorbisDecoder::getStreamTitle() {
     if (m_f_vorbisNewSteamTitle) {
         m_f_vorbisNewSteamTitle = false;
-        return m_vorbisChbuf.get();
+        return m_comment.stream_title.c_get();
     }
     return NULL;
 }
