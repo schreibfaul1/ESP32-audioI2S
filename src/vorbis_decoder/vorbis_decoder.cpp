@@ -501,7 +501,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
                 m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
-            m_f_vorbisNewMetadataBlockPicture = true;
+            m_f_vorbisNewSteamTitle = true;
         }
 
         if (key.starts_with_icase("title")) {
@@ -511,7 +511,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
                 m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
-            m_f_vorbisNewMetadataBlockPicture = true;
+            m_f_vorbisNewSteamTitle = true;
         }
 
         // comment.println(); // optional output
