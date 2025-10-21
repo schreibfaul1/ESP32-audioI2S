@@ -141,7 +141,6 @@ class VorbisDecoder : public Decoder {
     } bitReader_t;
     bitReader_t m_bitReader;
 
-
     union magic {
         struct {
             int32_t lo;
@@ -250,6 +249,14 @@ class VorbisDecoder : public Decoder {
     } comment_t;
     comment_t m_comment;
 
+    typedef struct _segment_table {
+
+
+
+        void reset() { *this = _segment_table{}; }
+    } segment_table_t;
+ 
+
     // global vars
     bool     m_f_vorbisNewSteamTitle = false; // streamTitle
     bool     m_f_vorbisNewMetadataBlockPicture = false;
@@ -257,7 +264,6 @@ class VorbisDecoder : public Decoder {
     bool     m_f_oggContinuedPage = false;
     bool     m_f_oggLastPage = false;
     bool     m_f_parseOggDone = true;
-    bool     m_f_lastSegmentTable = false;
     bool     m_f_vorbisStr_found = false;
     bool     m_f_isValid = false;
     bool     m_f_comment_done = false;
@@ -271,8 +277,7 @@ class VorbisDecoder : public Decoder {
     uint16_t m_lastSegmentTableLen = 0;
 
     uint32_t m_vorbisBitRate = 0;
-    uint32_t m_vorbisSegmentLength = 0;
-    uint32_t m_vorbisBlockPicLenUntilFrameEnd = 0;
+    uint32_t m_vorbis_segment_length = 0;
     uint32_t m_vorbisCurrentFilePos = 0;
     uint32_t m_vorbisAudioDataStart = 0;
 
@@ -292,14 +297,12 @@ class VorbisDecoder : public Decoder {
     uint8_t m_nrOfModes = 0;
 
     uint16_t m_oggPage3Len = 0; // length of the current audio segment
-    uint8_t  m_vorbisSegmentTableSize = 0;
-    int16_t  m_vorbisSegmentTableRdPtr = -1;
     int8_t   m_vorbisError = 0;
     float    m_vorbisCompressionRatio = 0;
+    std::deque<uint32_t>m_vorbis_segment_table;
 
     ps_ptr<char>                      m_vorbisChbuf;
     ps_ptr<uint8_t>                   m_lastSegmentTable;
-    ps_ptr<uint16_t>                  m_vorbisSegmentTable;
     ps_ptr<codebook_t>                m_codebooks;
     ps_ptr<ps_ptr<vorbis_info_floor>> m_floor_param{};
     ps_ptr<int8_t>                    m_floor_type;
