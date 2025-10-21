@@ -133,12 +133,14 @@ class VorbisDecoder : public Decoder {
     } vorbis_info_mode_t;
 
     typedef struct _bitreader {
-        uint8_t* data;
-        uint8_t  length;
-        uint16_t headbit;
-        uint8_t* headptr;
-        int32_t  headend;
+        uint8_t* data;    // Anfang des Puffers
+        uint8_t* headptr; // Aktuelle Leseposition (Byte)
+        uint32_t length;  // Gesamtlänge in Bytes
+        uint32_t headend; // Verbleibende Bytes ab headptr
+        uint8_t  headbit; // Aktuelle Bitposition im Byte (0–7)
     } bitReader_t;
+    bitReader_t m_bitReader;
+
 
     union magic {
         struct {
@@ -295,8 +297,6 @@ class VorbisDecoder : public Decoder {
     int8_t   m_vorbisError = 0;
     float    m_vorbisCompressionRatio = 0;
 
-    bitReader_t m_bitReader;
-
     ps_ptr<char>                      m_vorbisChbuf;
     ps_ptr<uint8_t>                   m_lastSegmentTable;
     ps_ptr<uint16_t>                  m_vorbisSegmentTable;
@@ -382,7 +382,7 @@ class VorbisDecoder : public Decoder {
     // some helper functions
     int32_t  VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
     void     bitReader_clear();
-    void     bitReader_setData(uint8_t* buff, uint16_t buffSize);
+    void     bitReader_setData(uint8_t* buff, uint32_t buffSize);
     int32_t  bitReader(uint16_t bits);
     int32_t  bitReader_look(uint16_t nBits);
     int8_t   bitReader_adv(uint16_t bits);
@@ -391,8 +391,8 @@ class VorbisDecoder : public Decoder {
     int32_t  _float32_unpack(int32_t val, int32_t* point);
     int32_t  _determine_node_bytes(uint32_t used, uint8_t leafwidth);
     int32_t  _determine_leaf_words(int32_t nodeb, int32_t leafwidth);
-    int32_t  _make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype);
-    int32_t  _make_words(char* l, uint16_t n, uint32_t* r, uint8_t quantvals, codebook_t* b, int32_t maptype);
+    int32_t  _make_decode_table(codebook_t* s, int32_t* lengthlist, uint8_t quantvals, int32_t maptype);
+    int32_t  _make_words(int32_t* l, uint16_t n, uint32_t* r, uint8_t quantvals, codebook_t* b, int32_t maptype);
     uint8_t  _book_maptype1_quantvals(codebook_t* b);
     int32_t* _vorbis_window(int32_t left);
 

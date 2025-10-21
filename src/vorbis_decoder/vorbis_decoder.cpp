@@ -239,20 +239,21 @@ int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uin
         // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         m_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
+
         VORBIS_LOG_WARN(" segmentLength %i", segmentLength);
-        if (segmentLength == 4080) {
-            // that is 16*255 bytes and thus the maximum segment size
-            // it is possible that there is another block starting with 'OggS' in which there is information
-            // about codebooks. It is possible that there is another block starting with 'OggS' in which
-            // there is information about codebooks.
-            int32_t l = continuedOggPackets(inbuf + m_oggPage3Len);
-            *bytesLeft -= l;
-            m_oggPage3Len += l;
-            m_setupHeaderLength += l;
-            bitReader_setData(inbuf, m_oggPage3Len);
-            // VORBIS_LOG_INFO("s_oggPage3Len %i", m_oggPage3Len);
-            m_pageNr++;
-        }
+        // if (segmentLength == 4080) {
+        //     // that is 16*255 bytes and thus the maximum segment size
+        //     // it is possible that there is another block starting with 'OggS' in which there is information
+        //     // about codebooks. It is possible that there is another block starting with 'OggS' in which
+        //     // there is information about codebooks.
+        //     int32_t l = continuedOggPackets(inbuf + m_oggPage3Len);
+        //     *bytesLeft -= l;
+        //     m_oggPage3Len += l;
+        //     m_setupHeaderLength += l;
+        //     bitReader_setData(inbuf, m_oggPage3Len);
+        //     // VORBIS_LOG_INFO("s_oggPage3Len %i", m_oggPage3Len);
+        //     m_pageNr++;
+        // }
         ret = parseVorbisCodebook();
     } else {
         VORBIS_LOG_ERROR("no \"vorbis\" something went wrong, segmentLenght: %i", segmentLength);
@@ -637,10 +638,19 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
 int32_t VorbisDecoder::parseVorbisCodebook() {
 
     m_bitReader.headptr += 7;
-    m_bitReader.length = m_oggPage3Len;
+    m_bitReader.headend -= 7;
+
+
+
+    //    m_bitReader.length = m_oggPage3Len;
 
     int32_t i;
     int32_t ret = 0;
+
+
+
+
+  //  uint8_t raw_count = static_cast<uint8_t>(bitReader(8)); // Explizit als uint8_t casten, um Overflow zu vermeiden.
 
     m_nrOfCodebooks = bitReader(8) + 1;
     m_codebooks.calloc_array(m_nrOfCodebooks, "m_codebooks");
@@ -878,11 +888,11 @@ void VorbisDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uin
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
-    ps_ptr<char> lengthlist;
-    uint8_t      quantvals = 0;
-    int32_t      i, j;
-    int32_t      maptype;
-    int32_t      ret = 0;
+    ps_ptr<int32_t> lengthlist;
+    uint8_t         quantvals = 0;
+    int32_t         i, j;
+    int32_t         maptype;
+    int32_t         ret = 0;
 
     /* make sure alignment is correct */
     if (bitReader(24) != 0x564342) {
@@ -905,7 +915,7 @@ int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
     switch (bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist.alloc(sizeof(char) * s->entries, "lengthlist");
+            lengthlist.alloc_array(sizeof(char) * s->entries, "lengthlist");
 
             /* allocated but unused entries? */
             if (bitReader(1)) {
@@ -1091,11 +1101,11 @@ void VorbisDecoder::bitReader_clear() {
     m_bitReader.headbit = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void VorbisDecoder::bitReader_setData(uint8_t* buff, uint16_t buffSize) {
+void VorbisDecoder::bitReader_setData(uint8_t* buff, uint32_t buffSize) {
     m_bitReader.data = buff;
     m_bitReader.headptr = buff;
     m_bitReader.length = buffSize;
-    m_bitReader.headend = buffSize * 8;
+    m_bitReader.headend = buffSize;
     m_bitReader.headbit = 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1106,7 +1116,7 @@ int32_t VorbisDecoder::bitReader_look(uint16_t nBits) {
 
     nBits += m_bitReader.headbit;
 
-    if (nBits >= m_bitReader.headend << 3) {
+    if (nBits >= m_bitReader.headend) {
         uint8_t* ptr = m_bitReader.headptr;
         if (nBits) {
             ret = *ptr++ >> m_bitReader.headbit;
@@ -1140,25 +1150,71 @@ int32_t VorbisDecoder::bitReader_look(uint16_t nBits) {
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* bits <= 32 */
 int32_t VorbisDecoder::bitReader(uint16_t nBits) {
-    int32_t ret = bitReader_look(nBits);
-    if (bitReader_adv(nBits) < 0) return -1;
-    return (ret);
+    if (!m_bitReader.headptr || nBits == 0) return 0;
+
+    uint32_t val = 0;
+    uint32_t bits_collected = 0;
+
+    while (nBits > 0) {
+        // Prüfen, ob noch mindestens 1 Bit im Buffer ist
+        if (m_bitReader.headend == 0 && m_bitReader.headbit >= 8) {
+            VORBIS_LOG_ERROR("bitReader: out of data (nBits=%u)", nBits);
+            return -1;
+        }
+
+        if (m_bitReader.headptr >= m_bitReader.data + m_bitReader.length) {
+            VORBIS_LOG_ERROR("bitReader: pointer past end, m_bitReader.headend %i, nBits=%u", m_bitReader.headend, nBits);
+            return -1;
+        }
+
+        uint8_t  current_byte = *m_bitReader.headptr;
+        uint32_t bits_avail = 8 - m_bitReader.headbit;
+        uint32_t take = std::min<uint32_t>(bits_avail, nBits);
+
+        uint32_t mask = ((1u << take) - 1);
+        val |= ((current_byte >> m_bitReader.headbit) & mask) << bits_collected;
+
+        bits_collected += take;
+        nBits -= take;
+        m_bitReader.headbit += take;
+
+        // Byte vollständig gelesen?
+        if (m_bitReader.headbit >= 8) {
+            m_bitReader.headbit = 0;
+            m_bitReader.headptr++;
+            m_bitReader.headend--;
+        }
+    }
+
+    if (m_bitReader.headend <= 0) { VORBIS_LOG_WARN("bitReader nearly empty: %d bytes left", m_bitReader.headend); }
+
+    return val;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* limited to 32 at a time */
 int8_t VorbisDecoder::bitReader_adv(uint16_t nBits) {
-    nBits += m_bitReader.headbit;
-    m_bitReader.headbit = nBits & 7;
-    m_bitReader.headend -= (nBits >> 3);
-    m_bitReader.headptr += (nBits >> 3);
-    if (m_bitReader.headend < 1) {
+    // neue Bitposition im aktuellen Byte
+    uint32_t newBit = m_bitReader.headbit + nBits;
+
+    // Berechne, wie viele ganze Bytes wir überspringen
+    uint32_t byteAdvance = newBit >> 3;
+
+    // Restbits im aktuellen Byte
+    m_bitReader.headbit = newBit & 7;
+
+    // Prüfen, ob wir über das Ende hinausgehen würden
+    if (byteAdvance > (uint32_t)m_bitReader.headend || (byteAdvance == (uint32_t)m_bitReader.headend && m_bitReader.headbit > 0)) {
+        VORBIS_LOG_ERROR("bitReader_adv: ran out of data (advance=%u, left=%i)", byteAdvance, m_bitReader.headend);
         return -1;
-        VORBIS_LOG_ERROR("error in bitreader");
     }
+
+    // Bytezeiger fortsetzen
+    m_bitReader.headptr += byteAdvance;
+    m_bitReader.headend -= byteAdvance;
+
     return 0;
 }
+
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::ilog(uint32_t v) {
     int32_t ret = 0;
@@ -1216,7 +1272,7 @@ int32_t VorbisDecoder::_determine_leaf_words(int32_t nodeb, int32_t leafwidth) {
     return 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::_make_decode_table(codebook_t* s, char* lengthlist, uint8_t quantvals, int32_t maptype) {
+int32_t VorbisDecoder::_make_decode_table(codebook_t* s, int32_t* lengthlist, uint8_t quantvals, int32_t maptype) {
     ps_ptr<uint32_t> work;
 
     if (s->dec_nodeb == 4) {
@@ -1311,7 +1367,7 @@ int32_t VorbisDecoder::_make_decode_table(codebook_t* s, char* lengthlist, uint8
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /* given a list of word lengths, number of used entries, and byte width of a leaf, generate the decode table */
-int32_t VorbisDecoder::_make_words(char* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook_t* b, int32_t maptype) {
+int32_t VorbisDecoder::_make_words(int32_t* l, uint16_t n, uint32_t* work, uint8_t quantvals, codebook_t* b, int32_t maptype) {
 
     int32_t  i, j, count = 0;
     uint32_t top = 0;
@@ -2147,7 +2203,6 @@ int32_t VorbisDecoder::decode_packed_entry_number(codebook_t* book) {
         return chase;
     }
     bitReader_adv(read + 1);
-    VORBIS_LOG_ERROR("read %i", read);
     return (VORBIS_ERR);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
