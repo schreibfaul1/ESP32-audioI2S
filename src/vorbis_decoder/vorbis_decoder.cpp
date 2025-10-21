@@ -190,7 +190,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbu
             break;
     }
 exit:
-    if(ret >= 0) m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft);
+    if (ret >= 0) m_vorbisCurrentFilePos += bytesLeft_begin - (*bytesLeft);
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————--------------------------------------------------------------------------------
@@ -215,18 +215,24 @@ int32_t VorbisDecoder::vorbisDecodePage2(uint8_t* inbuf, int32_t* bytesLeft, uin
 
     int32_t ret = VORBIS_PARSE_OGG_DONE;
     int32_t idx = VORBIS_specialIndexOf(inbuf, "vorbis", 10);
-    if(m_f_comment_done) goto exit;
+    if (m_f_comment_done) goto exit;
 
     if (idx == 1) {
         ret = parseVorbisComment(inbuf, segmentLength, current_file_pos);
-        if(ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
-        if(ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
-        if(ret == VORBIS_COMMENT_DONE) {m_f_comment_done = true; ret = VORBIS_PARSE_OGG_DONE;}
+        if (ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
+        if (ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
+        if (ret == VORBIS_COMMENT_DONE) {
+            m_f_comment_done = true;
+            ret = VORBIS_PARSE_OGG_DONE;
+        }
     } else {
         ret = parseVorbisComment(inbuf, segmentLength, current_file_pos);
-        if(ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
-        if(ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
-        if(ret == VORBIS_COMMENT_DONE) {m_f_comment_done = true; ret = VORBIS_PARSE_OGG_DONE;}
+        if (ret == VORBIS_COMMENT_INVALID) ret = VORBIS_ERR;
+        if (ret == VORBIS_COMMENT_NEED_MORE) ret = VORBIS_PARSE_OGG_DONE;
+        if (ret == VORBIS_COMMENT_DONE) {
+            m_f_comment_done = true;
+            ret = VORBIS_PARSE_OGG_DONE;
+        }
     }
 exit:
     *bytesLeft -= segmentLength;
@@ -241,7 +247,7 @@ int32_t VorbisDecoder::vorbisDecodePage3(uint8_t* inbuf, int32_t* bytesLeft, uin
         // VORBIS_LOG_INFO("third packet (setup segmentLength) %i", segmentLength);
         m_setupHeaderLength = segmentLength;
         bitReader_setData(inbuf, segmentLength);
-VORBIS_LOG_ERROR(" segmentLength %i", segmentLength);
+        VORBIS_LOG_DEBUG(" segmentLength %i", segmentLength);
         if (segmentLength == 4080) {
             // that is 16*255 bytes and thus the maximum segment size
             // it is possible that there is another block starting with 'OggS' in which there is information
@@ -379,7 +385,7 @@ std::vector<uint32_t> VorbisDecoder::getMetadataBlockPicture() {
         m_f_vorbisNewMetadataBlockPicture = false;
         return m_comment.pic_vec;
     }
-    std::vector<uint32_t>v;
+    std::vector<uint32_t> v;
     return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -484,7 +490,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
             m_comment.item_vec.clear();
             m_f_vorbisNewMetadataBlockPicture = true;
 
-            for (int i = 0; i < m_comment.pic_vec.size(); i += 2) { VORBIS_LOG_INFO("Segment %i   %i - %i", i / 2, m_comment.pic_vec[i], m_comment.pic_vec[i + 1]); }
+            for (int i = 0; i < m_comment.pic_vec.size(); i += 2) { VORBIS_LOG_DEBUG("Segment %i   %i - %i", i / 2, m_comment.pic_vec[i], m_comment.pic_vec[i + 1]); }
             VORBIS_LOG_DEBUG("Skipping embedded picture (%d bytes)", val.size());
             return;
         }
@@ -492,21 +498,23 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
             if (!m_comment.stream_title.valid()) {
                 m_comment.stream_title.assign(val.c_get());
             } else {
-                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
+            m_f_vorbisNewMetadataBlockPicture = true;
         }
 
         if (key.starts_with_icase("title")) {
             if (!m_comment.stream_title.valid()) {
                 m_comment.stream_title.assign(val.c_get());
             } else {
-                m_comment.stream_title.append(" -");
+                m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
+            m_f_vorbisNewMetadataBlockPicture = true;
         }
 
-        comment.println(); // optional output
+        // comment.println(); // optional output
         m_comment.item_vec.clear();
     };
 
@@ -1958,7 +1966,7 @@ int32_t VorbisDecoder::floor1_memosize(ps_ptr<vorbis_info_floor>& i) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t* VorbisDecoder::floor0_inverse1(ps_ptr<vorbis_info_floor>& i, int32_t* lsp) {
     vorbis_info_floor* info = (vorbis_info_floor*)i.get();
-    int32_t              j;
+    int32_t            j;
 
     int32_t ampraw = bitReader(info->ampbits);
 

@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 18.10,2025
+ * Updated on: 21.10,2025
  *
  * Author: Wolle
  *
@@ -675,14 +675,6 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
             m_flacValidSamples = blockSize;
         }
 
-        // for (int32_t i = 0; i < blockSize; i++) {
-        //     for (int32_t j = 0; j < FLACMetadataBlock->numChannels; j++) {
-        //         int32_t val = m_samplesBuffer[j][i + m_offset];
-        //         if (FLACMetadataBlock->bitsPerSample == 8) val += 128;
-        //         outbuf[FLACMetadataBlock->numChannels * i + j] = val;
-        //     }
-        // }
-
         if (FLACMetadataBlock->numChannels == 1) {
             const int32_t* src = m_samplesBuffer[0].get() + m_offset;
             int16_t*       dst = outbuf;
@@ -898,22 +890,6 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
 
-        // if (FLACFrameHeader->chanAsgn == 8) {
-        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[1][i] = (m_samplesBuffer[0][i] - m_samplesBuffer[1][i]);
-        // } else if (FLACFrameHeader->chanAsgn == 9) {
-        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) m_samplesBuffer[0][i] += m_samplesBuffer[1][i];
-        // } else if (FLACFrameHeader->chanAsgn == 10) {
-        //     for (int32_t i = 0; i < m_numOfOutSamples; i++) {
-        //         int32_t side = m_samplesBuffer[1][i];
-        //         int32_t right = m_samplesBuffer[0][i] - (side >> 1);
-        //         m_samplesBuffer[1][i] = right;
-        //         m_samplesBuffer[0][i] = right + side;
-        //     }
-        // } else {
-        //     FLAC_LOG_ERROR("Flac, unknown channel assignment, %i", FLACFrameHeader->chanAsgn);
-        //     return FLAC_ERR;
-        // }
-
         int32_t*      ch0 = m_samplesBuffer[0].get();
         int32_t*      ch1 = m_samplesBuffer[1].get();
         const int32_t n = m_numOfOutSamples;
@@ -1039,140 +1015,63 @@ int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
-
-    int32_t method = readUint(2, bytesLeft); // Residual coding method:
-                                             // 00 : partitioned Rice coding with 4-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE follows
-                                             // 01 : partitioned Rice coding with 5-bit Rice parameter; RESIDUAL_CODING_METHOD_PARTITIONED_RICE2 follows
-                                             // 10-11 : reserved
+    int32_t method = readUint(2, bytesLeft);
     if (method >= 2) {
         FLAC_LOG_ERROR("Flac reserved residual coding, method: %i", method);
         return FLAC_ERR;
     }
 
-    uint8_t paramBits = method == 0 ? 4 : 5; // RESIDUAL_CODING_METHOD_PARTITIONED_RICE || RESIDUAL_CODING_METHOD_PARTITIONED_RICE2
-    int32_t escapeParam = (method == 0 ? 0xF : 0x1E);
-    int32_t partitionOrder = readUint(4, bytesLeft); // Partition order
-    int32_t numPartitions = 1 << partitionOrder;     // There will be 2^order partitions.
+    const uint8_t paramBits = (method == 0 ? 4 : 5);
+    const int32_t escapeParam = (method == 0 ? 0xF : 0x1E);
+    const int32_t partitionOrder = readUint(4, bytesLeft);
+    const int32_t numPartitions = 1 << partitionOrder;
 
     if (m_numOfOutSamples % numPartitions != 0) {
         FLAC_LOG_ERROR("Flac, wrong rice partition number");
-        return FLAC_ERR; // Error: Block size not divisible by number of Rice partitions
+        return FLAC_ERR;
     }
 
-    int32_t partitionSize = m_numOfOutSamples / numPartitions;
-
-    // for (int32_t i = 0; i < numPartitions; i++) {
-    //     int32_t start = i * partitionSize + (i == 0 ? warmup : 0);
-    //     int32_t end = (i + 1) * partitionSize;
-
-    //     int32_t param = readUint(paramBits, bytesLeft);
-    //     if (param < escapeParam) {
-    //         for (int32_t j = start; j < end; j++) {
-    //             if (m_f_bitReaderError) break;
-    //             m_samplesBuffer[ch][j] = readRiceSignedInt(param, bytesLeft);
-    //         }
-    //     } else {
-    //         int32_t numBits = readUint(5, bytesLeft); // Escape code, meaning the partition is in unencoded binary form using n bits per sample; n follows as a 5-bit number.
-    //         for (int32_t j = start; j < end; j++) {
-    //             if (m_f_bitReaderError) break;
-    //             m_samplesBuffer[ch][j] = readSignedInt(numBits, bytesLeft);
-    //         }
-    //     }
-    // }
+    const int32_t partitionSize = m_numOfOutSamples / numPartitions;
+    int32_t* sampleBase = m_samplesBuffer[ch].get();
 
     for (int32_t i = 0; i < numPartitions; i++) {
-        int32_t start = i * partitionSize + (i == 0 ? warmup : 0);
-        int32_t end = (i + 1) * partitionSize;
+        const int32_t start = i * partitionSize + ((i == 0) ? warmup : 0);
+        const int32_t end = (i + 1) * partitionSize;
+        int32_t* dst = sampleBase + start;
+        int32_t* dstEnd = sampleBase + end;
 
-        int32_t param = readUint(paramBits, bytesLeft);
-
-        // Lokale Bitpuffer-Variablen für Performance
-        uint32_t bitbuf = m_flac_bitBuffer;
-        int32_t  bitlen = m_flacBitBufferLen;
-        uint8_t* ptr = m_flacInptr + m_rIndex;
-        int32_t  bytes = *bytesLeft;
+        const int32_t param = readUint(paramBits, bytesLeft);
 
         if (param < escapeParam) {
-            // --- Rice-encoded Partition ---
-            for (int32_t j = start; j < end; j++) {
+            // Rice-coded partition
+            while (dst < dstEnd) {
                 if (m_f_bitReaderError) break;
 
-                uint32_t bit;
-                int64_t  val = 0;
-
-                // 1. Präfix lesen (Rice)
-                while (true) {
-                    if (bitlen == 0) {
-                        if (bytes <= 0) {
-                            m_f_bitReaderError = true;
-                            goto rice_done;
-                        }
-                        bitbuf = (bitbuf << 8) | *ptr++;
-                        bytes--;
-                        bitlen = 8;
-                    }
-                    bitlen--;
-                    bit = (bitbuf >> bitlen) & 1u;
-                    if (bit) break;
+                uint32_t val = 0;
+                // Inline Rice unary prefix
+                while (readUint(1, bytesLeft) == 0) {
                     val++;
+                    if (m_f_bitReaderError) break;
                 }
+                // Append remainder bits
+                val = (val << param) | readUint(param, bytesLeft);
 
-                // 2. Restbits lesen
-                if (param > 0) {
-                    while (bitlen < param) {
-                        if (bytes <= 0) {
-                            m_f_bitReaderError = true;
-                            goto rice_done;
-                        }
-                        bitbuf = (bitbuf << 8) | *ptr++;
-                        bytes--;
-                        bitlen += 8;
-                    }
-                    bitlen -= param;
-                    val = (val << param) | ((bitbuf >> bitlen) & ((1u << param) - 1u));
-                }
-
-                // 3. In signed umwandeln
-                val = (val >> 1) ^ -(val & 1);
-                m_samplesBuffer[ch][j] = val;
+                // Convert to signed
+                int32_t signedVal = (val >> 1) ^ -(val & 1);
+                *dst++ = signedVal;
             }
-
         } else {
-            // --- Escape code: unencoded binary samples ---
-            int32_t numBits = readUint(5, bytesLeft);
-
-            for (int32_t j = start; j < end; j++) {
+            // Escape partition (raw signed integers)
+            const int32_t numBits = readUint(5, bytesLeft);
+            while (dst < dstEnd) {
                 if (m_f_bitReaderError) break;
 
-                // 1. Sicherstellen, dass genügend Bits im Puffer sind
-                while (bitlen < numBits) {
-                    if (bytes <= 0) {
-                        m_f_bitReaderError = true;
-                        goto rice_done;
-                    }
-                    bitbuf = (bitbuf << 8) | *ptr++;
-                    bytes--;
-                    bitlen += 8;
-                }
-
-                // 2. Bits extrahieren
-                bitlen -= numBits;
-                uint32_t raw = (bitbuf >> bitlen) & ((1u << numBits) - 1u);
-
-                // 3. Signed-Umwandlung (wie dein readSignedInt)
-                int32_t val = (int32_t)(raw << (32 - numBits)) >> (32 - numBits);
-                m_samplesBuffer[ch][j] = val;
+                uint32_t val = readUint(numBits, bytesLeft);
+                // Sign extend
+                int32_t signedVal = (int32_t)(val << (32 - numBits)) >> (32 - numBits);
+                *dst++ = signedVal;
             }
         }
-
-    rice_done:
-        // Lokale Zustände zurückschreiben
-        m_flac_bitBuffer = bitbuf;
-        m_flacBitBufferLen = bitlen;
-        m_rIndex = ptr - m_flacInptr;
-        *bytesLeft = bytes;
-
-        if (m_f_bitReaderError) break;
     }
 
     if (m_f_bitReaderError) {
