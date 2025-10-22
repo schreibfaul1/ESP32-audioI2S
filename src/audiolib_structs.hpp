@@ -231,7 +231,7 @@ struct pad_t { // used in playAudioData
     size_t  oldAudioDataSize = 0;
     bool    lastFrames = false;
     int32_t bytesToDecode;
-    int16_t bytesDecoded;
+    int32_t bytesDecoded;
 };
 
 struct sbyt_t { // used in sendBytes

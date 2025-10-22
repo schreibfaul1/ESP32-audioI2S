@@ -76,8 +76,8 @@ class AudioBuffer {
     bool     isInitialized() { return m_f_init; };
     int32_t  getBufsize();
     bool     setBufsize(size_t mbs);           // default is m_buffSizePSRAM for psram, and m_buffSizeRAM without psram
-    void     changeMaxBlockSize(uint16_t mbs); // is default 1600 for mp3 and aac, set 16384 for FLAC
-    uint16_t getMaxBlockSize();                // returns maxBlockSize
+    void     changeMaxBlockSize(uint32_t mbs); // is default 1600 for mp3 and aac, set 16384 for FLAC
+    uint32_t getMaxBlockSize();                // returns maxBlockSize
     size_t   freeSpace();                      // number of free bytes to overwrite
     size_t   writeSpace();                     // space fom writepointer to bufferend
     size_t   bufferFilled();                   // returns the number of filled bytes
@@ -95,7 +95,7 @@ class AudioBuffer {
     size_t          m_freeSpace = 0;
     size_t          m_writeSpace = 0;
     size_t          m_dataLength = 0;
-    size_t          m_resBuffSize = 4096 * 6; // reserved buffspace, >= one flac frame
+    size_t          m_resBuffSize = UINT16_MAX; // reserved buffspace, >= one flac frame
     size_t          m_maxBlockSize = 1600;
     ps_ptr<uint8_t> m_buffer;
     uint8_t*        m_writePtr = NULL;

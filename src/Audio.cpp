@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3m                                                                                                                              ";
-/*  Updated on: 21.10.2025
+    Version 3.4.3n                                                                                                                              ";
+/*  Updated on: 22.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -30,7 +30,7 @@ constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600 * 2;
 constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
 constexpr size_t m_frameSizeOPUS = 2048;
-constexpr size_t m_frameSizeVORBIS = 4096 * 2;
+constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
@@ -73,12 +73,12 @@ size_t AudioBuffer::init() {
     return m_buffSize;
 }
 
-void AudioBuffer::changeMaxBlockSize(uint16_t mbs) {
+void AudioBuffer::changeMaxBlockSize(uint32_t mbs) {
     m_maxBlockSize = mbs;
     return;
 }
 
-uint16_t AudioBuffer::getMaxBlockSize() {
+uint32_t AudioBuffer::getMaxBlockSize() {
     return m_maxBlockSize;
 }
 
@@ -5257,11 +5257,13 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
         if (res == FlacDecoder::FLAC_DECODE_FRAMES_LOOP) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_OPUS) {
-        if (res == OpusDecoder::OPUS_PARSE_OGG_DONE) return bytesDecoded; // nothing to play
+        if (res == OpusDecoder::OPUS_PARSE_OGG_DONE) return bytesDecoded;
         if (res == OpusDecoder::OPUS_END) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_VORBIS) {
         if (res == VorbisDecoder::VORBIS_PARSE_OGG_DONE) return bytesDecoded;
+        if (res == VorbisDecoder::VORBIS_COMMENT_DONE) return bytesDecoded;
+        if (res == VorbisDecoder::VORBIS_COMMENT_NEED_MORE) return bytesDecoded;
     } // nothing to play
     return 0;
 }
