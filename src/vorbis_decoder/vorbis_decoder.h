@@ -242,8 +242,8 @@ class VorbisDecoder : public Decoder {
         uint32_t              end_pos{};   // comment end file position
         ps_ptr<uint8_t>       save_oob{};
         ps_ptr<char>          stream_title{};
-        std::vector<uint32_t> item_vec;
-        std::vector<uint32_t> pic_vec;
+        std::vector<uint32_t> item_vec{};
+        std::vector<uint32_t> pic_vec{};
 
         void reset() { *this = _comment{}; }
     } comment_t;
@@ -252,7 +252,9 @@ class VorbisDecoder : public Decoder {
     typedef struct _ogg_items {
         std::deque<uint32_t> segment_table{};
         uint32_t             bytes_consumed_from_other{};
-        uint8_t*             data_ptr;
+        uint8_t*             data_ptr{};
+        uint32_t             lastSegmentTableLen{};
+        ps_ptr<uint8_t>      lastSegmentTable{};
         void                 reset() { *this = _ogg_items{}; }
     } ogg_items_t;
     ogg_items_t m_ogg_items;
@@ -272,8 +274,6 @@ class VorbisDecoder : public Decoder {
     uint16_t m_oggHeaderSize = 0;
     uint8_t  m_vorbisChannels = 0;
     uint16_t m_vorbisSamplerate = 0;
-    uint16_t m_lastSegmentTableLen = 0;
-
     uint32_t m_vorbisBitRate = 0;
     uint32_t m_vorbis_segment_length = 0;
     uint32_t m_vorbisCurrentFilePos = 0;
@@ -298,7 +298,6 @@ class VorbisDecoder : public Decoder {
     int8_t   m_vorbisError = 0;
     float    m_vorbisCompressionRatio = 0;
 
-    ps_ptr<uint8_t>                   m_lastSegmentTable;
     ps_ptr<codebook_t>                m_codebooks;
     ps_ptr<ps_ptr<vorbis_info_floor>> m_floor_param{};
     ps_ptr<int8_t>                    m_floor_type;

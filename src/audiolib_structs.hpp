@@ -149,19 +149,25 @@ struct prlf_t { // used in processLocalFile
     int32_t  bytesAddedToBuffer;
 };
 
-struct cat_t { // used in calculateAudioTime
-    uint64_t sumBytesIn;
-    uint64_t sumBytesOut;
-    uint32_t counter;
-    uint32_t timeStamp;
-    uint32_t deltaBytesIn;
-    uint32_t nominalBitRate;
-    uint32_t avrBitRate;
-    uint16_t syltIdx;
-    uint32_t avrBitrateStable;
-    uint32_t oldAvrBitrate;
-    uint32_t brCounter;
-};
+typedef struct _cat { // used in calculateAudioTime
+    uint64_t sumBytesIn{};
+    uint64_t sum_samples{};
+    uint32_t counter{};
+    uint32_t timeStamp{};
+    uint32_t deltaBytesIn{};
+    uint32_t nominalBitRate{};
+    uint32_t tota_samples{};
+    uint32_t avrBitRate{};
+    uint16_t syltIdx{};
+    uint32_t avrBitrateStable{};
+    uint32_t oldAvrBitrate{};
+    uint32_t brCounter{};
+
+    void reset() {
+        // Default-initialize alles neu (inklusive Array)
+        *this = _cat{};
+    }
+} cat_t;
 
 struct cVUl_t { // used in computeVUlevel
     uint8_t sampleArray[2][4][8] = {0};
