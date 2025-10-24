@@ -133,11 +133,15 @@ class VorbisDecoder : public Decoder {
     } vorbis_info_mode_t;
 
     typedef struct _bitreader {
-        uint8_t* data;    // Anfang des Puffers
-        uint8_t* headptr; // Aktuelle Leseposition (Byte)
-        uint32_t length;  // Gesamtlänge in Bytes
-        uint32_t headend; // Verbleibende Bytes ab headptr
-        uint8_t  headbit; // Aktuelle Bitposition im Byte (0–7)
+        uint8_t* data{};    // Anfang des Puffers
+        uint8_t* headptr{}; // Aktuelle Leseposition (Byte)
+        uint32_t length{};  // Gesamtlänge in Bytes
+        uint32_t headend{}; // Verbleibende Bytes ab headptr
+        uint8_t  headbit{}; // Aktuelle Bitposition im Byte (0–7)
+
+        void reset() {
+            *this = _bitreader{}; // reinitialize cleanly
+        }
     } bitReader_t;
     bitReader_t m_bitReader;
 
@@ -183,7 +187,7 @@ class VorbisDecoder : public Decoder {
         char     stages{};
 
         void reset() {
-            *this = vorbis_info_residue{}; // sauber neu initialisieren
+            *this = vorbis_info_residue{}; // reinitialize cleanly
         }
     };
 
@@ -260,8 +264,8 @@ class VorbisDecoder : public Decoder {
     ogg_items_t m_ogg_items;
 
     // global vars
-    bool     m_f_vorbisNewSteamTitle = false; // streamTitle
-    bool     m_f_vorbisNewMetadataBlockPicture = false;
+    bool     m_f_newSteamTitle = false; // streamTitle
+    bool     m_f_newMetadataBlockPicture = false;
     bool     m_f_oggFirstPage = false;
     bool     m_f_oggContinuedPage = false;
     bool     m_f_oggLastPage = false;
@@ -313,7 +317,7 @@ class VorbisDecoder : public Decoder {
     // ogg impl
 
     ps_ptr<vorbis_info_floor> floor0_info_unpack();
-    void                      VORBISsetDefaults();
+    void                      setDefaults();
     void                      clearGlobalConfigurations();
     int32_t                   parse_OGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t                   vorbisDecodePage1(uint8_t* inbuf, int32_t* bytesLeft, uint32_t segmentLength);
@@ -323,7 +327,6 @@ class VorbisDecoder : public Decoder {
     int32_t                   parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32_t current_file_pos);
     int32_t                   parseVorbisCodebook();
     int32_t                   parseVorbisFirstPacket(uint8_t* inbuf, int16_t nBytes);
-    uint16_t                  continuedOggPackets(uint8_t* inbuf);
     int32_t                   vorbis_book_unpack(codebook_t* s);
     uint32_t                  decpack(int32_t entry, int32_t used_entry, uint8_t quantvals, codebook_t* b, int32_t maptype);
     int32_t                   oggpack_eop();
@@ -378,8 +381,7 @@ class VorbisDecoder : public Decoder {
                                              int32_t end /* samples, this frame */);
 
     // some helper functions
-    int32_t  VORBIS_specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
-    void     bitReader_clear();
+    int32_t  special_index_of(uint8_t* base, const char* str, int32_t baselen, bool exact = false);
     void     bitReader_setData(uint8_t* buff, uint32_t buffSize);
     int32_t  bitReader(uint16_t bits);
     int32_t  bitReader_look(uint16_t nBits);
@@ -411,5 +413,5 @@ class VorbisDecoder : public Decoder {
 #define VORBIS_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define VORBIS_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define VORBIS_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 };
