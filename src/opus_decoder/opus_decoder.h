@@ -165,7 +165,6 @@ class OpusDecoder : public Decoder {
     } comment_t;
     comment_t m_comment;
 
-    ps_ptr<char>     m_streamTitle;
     ps_ptr<uint16_t> m_opusSegmentTable;
 
     ofp2_t m_ofp2; // used in opus_FramePacking_Code2
@@ -181,7 +180,7 @@ class OpusDecoder : public Decoder {
     int8_t  opus_FramePacking_Code1(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
     int8_t  opus_FramePacking_Code2(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
     int8_t  opus_FramePacking_Code3(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf, int32_t packetLen, uint16_t samplesPerFrame, uint8_t* frameCount);
-    int32_t OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft);
+    int32_t parseOGG(uint8_t* inbuf, int32_t* bytesLeft);
     int32_t parseOpusHead(uint8_t* inbuf, int32_t nBytes);
     int32_t parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t current_file_pos);
     int8_t  parseOpusTOC(uint8_t TOC_Byte);

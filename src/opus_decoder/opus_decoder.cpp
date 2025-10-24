@@ -60,7 +60,6 @@ void OpusDecoder::reset() {
     silkdec.reset();
     celtdec.reset();
     m_opusSegmentTable.reset();
-    m_streamTitle.reset();
     m_frameCount = 0;
     m_opusSegmentLength = 0;
     m_opusValidSamples = 0;
@@ -72,7 +71,6 @@ void OpusDecoder::reset() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::clear() {
-    m_streamTitle.clear();
     m_opusSegmentTable.clear();
     m_frameCount = 0;
     m_opusSegmentLength = 0;
@@ -134,9 +132,11 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
     int32_t bytes_consumed = 0;
 
     if (m_f_lastPage && m_opusSegmentTableSize == 0) {
-        *bytesLeft = segmLen;
-        ret = OPUS_END;
-        return ret;
+        if (OPUS_specialIndexOf(inbuf, "OggS", 5) == 0) { // next round
+            m_opusPageNr = 0;
+        } else {
+            return OPUS_END;
+        }
     }
 
     if (m_frameCount > 0) { // decode audio, next part
@@ -147,7 +147,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
     if (!m_opusSegmentTableSize) {
         m_f_opusParseOgg = false;
         m_opusCountCode = 0;
-        ret = OPUSparseOGG(inbuf, bytesLeft);
+        ret = parseOGG(inbuf, bytesLeft);
         bytes_consumed = bytesLeft_begin - (*bytesLeft);
         if (ret != OPUS_NONE) goto exit; // error
         inbuf += m_opusOggHeaderSize;    // no return, fall through
@@ -161,6 +161,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
 
     if (m_opusPageNr == 0) { // OpusHead
         ret = opusDecodePage0(inbuf, bytesLeft, segmLen);
+        m_comment.reset();
         goto exit;
     }
 
@@ -962,7 +963,7 @@ uint32_t OpusDecoder::getBitRate() {
 const char* OpusDecoder::getStreamTitle() {
     if (m_f_newSteamTitle) {
         m_f_newSteamTitle = false;
-        return m_streamTitle.c_get();
+        return m_comment.stream_title.c_get();
     }
     return NULL;
 }
@@ -985,7 +986,7 @@ std::vector<uint32_t> OpusDecoder::getMetadataBlockPicture() {
         m_f_opusNewMetadataBlockPicture = false;
         return m_comment.pic_vec;
     }
-    std::vector<uint32_t>v;
+    std::vector<uint32_t> v;
     return v;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1052,8 +1053,9 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
         ps_ptr<char> val = comment.substr(idx + 1);
 
         if (key.starts_with_icase("metadata_block_picture")) {
-            for (int i = 0; i < m_comment.item_vec.size(); i += 2){
-                m_comment.pic_vec.push_back(m_comment.item_vec[i]); // start pos
+            m_comment.item_vec[0] += strlen("METADATA_BLOCK_PICTURE=");
+            for (int i = 0; i < m_comment.item_vec.size(); i += 2) {
+                m_comment.pic_vec.push_back(m_comment.item_vec[i]);                             // start pos
                 m_comment.pic_vec.push_back(m_comment.item_vec[i + 1] - m_comment.item_vec[i]); // len = end pos - start pos
             }
             m_comment.item_vec.clear();
@@ -1071,7 +1073,6 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
                 m_comment.stream_title.append(val.c_get());
             }
         }
-
         if (key.starts_with_icase("title")) {
             if (!m_comment.stream_title.valid()) {
                 m_comment.stream_title.assign(val.c_get());
@@ -1080,7 +1081,6 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
                 m_comment.stream_title.append(val.c_get());
             }
         }
-
         // comment.println(); // optional output
         m_comment.item_vec.clear();
     };
@@ -1203,7 +1203,11 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
     // 🔹 4. Return status
     if (m_comment.oob) { return OPUS_COMMENT_NEED_MORE; }
 
-    if (m_comment.list_length == 0) { return OPUS_COMMENT_DONE; }
+    if (m_comment.list_length == 0) {
+        if (m_comment.stream_title.valid()) m_f_newSteamTitle = true;
+        // m_comment.stream_title.println();
+        return OPUS_COMMENT_DONE;
+    }
 
     return OPUS_COMMENT_NEED_MORE;
 }
@@ -1261,7 +1265,7 @@ int32_t OpusDecoder::parseOpusHead(uint8_t* inbuf, int32_t nBytes) { // referenc
     return 1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t OpusDecoder::OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference https://www.xiph.org/ogg/doc/rfc3533.txt
+int32_t OpusDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference https://www.xiph.org/ogg/doc/rfc3533.txt
 
     int32_t idx = OPUS_specialIndexOf(inbuf, "OggS", 6);
     if (idx != 0) {
@@ -1324,7 +1328,9 @@ int32_t OpusDecoder::OPUSparseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // refer
     m_f_firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
     m_f_lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
 
-    //  OPUS_LOG_INFO("firstPage %i, continuedPage %i, lastPage %i",s_f_firstPage, m_f_continuedPage, m_f_lastPage);
+    if (m_f_firstPage) { m_opusPageNr = 0; }
+
+    OPUS_LOG_DEBUG("firstPage %i, continuedPage %i, lastPage %i", m_f_firstPage, m_f_continuedPage, m_f_lastPage);
 
     uint16_t headerSize = pageSegments + 27;
     *bytesLeft -= headerSize;

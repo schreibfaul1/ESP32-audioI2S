@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3j                                                                                                                              ";
+    Version 3.4.3k                                                                                                                              ";
 /*  Updated on: 24.10.2025
 
     Author: Wolle (schreibfaul1)
@@ -29,7 +29,7 @@ constexpr size_t m_frameSizeWav = 2048;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600 * 2;
 constexpr size_t m_frameSizeFLAC = 4096 * 6; // 24576
-constexpr size_t m_frameSizeOPUS = 2048;
+constexpr size_t m_frameSizeOPUS = UINT16_MAX;
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
@@ -261,7 +261,6 @@ void Audio::initInBuff() {
         size_t size = InBuff.init();
         if (size > 0) { info(*this, evt_info, "inputBufferSize: %u bytes", size - 1); }
     }
-    InBuff.changeMaxBlockSize(1600); // default size mp3 or aac
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstart() {
@@ -3893,8 +3892,7 @@ void Audio::processWebStream() {
     if (m_dataMode != AUDIO_DATA) return; // guard
     uint16_t readedBytes = 0;
 
-    m_pwst.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
-    m_pwst.availableBytes = 0;                      // available from stream
+    m_pwst.availableBytes = 0; // available from stream
     m_pwst.f_clientIsConnected = m_client->connected();
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3956,7 +3954,8 @@ void Audio::processWebStream() {
         }
     }
     if (!m_decoder && InBuff.bufferFilled() > 127) {
-        if (!initializeDecoder()) return;
+        if (initializeDecoder()) m_pwst.maxFrameSize = InBuff.getMaxBlockSize();
+        else return;
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4797,6 +4796,7 @@ bool Audio::initializeDecoder() {
         case CODEC_VORBIS:
             type = "VORBIS";
             InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
+            AUDIO_LOG_ERROR("bs %i", InBuff.getMaxBlockSize());
             break;
         case CODEC_WAV:
             type = "WAV";
