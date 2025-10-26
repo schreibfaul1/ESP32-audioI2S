@@ -1079,25 +1079,53 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
                 m_comment.stream_title.append(val.c_get());
             }
         }
-        if(m_comment.stream_title.valid()) m_f_newSteamTitle = true;
-        // comment.println(); // optional output
+        if (m_comment.stream_title.valid()) m_f_newSteamTitle = true;
+        comment.println(); // optional output
         m_comment.item_vec.clear();
     };
 
-    auto fill_content = [&](uint8_t* buff, uint32_t len) -> void { // no more than MAX_COMMENT_SIZE
-        uint32_t s = m_comment.comment_content.strlen();
-        uint32_t to_fill = min(MAX_COMMENT_SIZE - s, len);
-        OPUS_LOG_DEBUG("strlen %i, len %i, to_fill %i", s, len, to_fill);
-        if (s == 0)
-            m_comment.comment_content.copy_from((const char*)buff, to_fill);
-        else
-            m_comment.comment_content.append((const char*)buff, to_fill);
+    auto fill_content = [&](uint8_t* buff, uint32_t len) -> void {
+        // defensive guards (avoid signed/unsigned confusion)
+        const uint32_t S_MAX = MAX_COMMENT_SIZE;
+        uint32_t       s = m_comment.comment_content.strlen(); // vorhandene länge
+        if (s >= S_MAX) {
+            // already full — nothing more to add
+            OPUS_LOG_DEBUG("comment_content already at or above MAX_COMMENT_SIZE (%u >= %u)", s, S_MAX);
+            return;
+        }
+
+        // clamp len to something sensible (len can come from the caller, so check)
+        uint32_t available_space = S_MAX - s;
+        uint32_t to_fill = (len <= available_space) ? len : available_space;
+
+        OPUS_LOG_DEBUG("strlen %u, incoming len %u, to_fill %u", s, len, to_fill);
+
+        // defensive: wenn to_fill == 0, nichts tun
+        if (to_fill == 0) return;
+
+        // copy/append execute safely
+        const char* src = reinterpret_cast<const char*>(buff);
+        if (s == 0) {
+            // initial copy
+            m_comment.comment_content.copy_from(src, to_fill);
+        } else {
+            // append, ensure append argument limited to to_fill
+            m_comment.comment_content.append(src, to_fill);
+        }
     };
 
     // 🔹 1. If the previous comment block was incomplete → continue now
     if (m_comment.oob) {
-        uint32_t to_read = m_comment.comment_size - m_comment.save_len;
-        if (to_read > available_bytes) to_read = available_bytes;
+        int64_t tmp_to_read = (int64_t)m_comment.comment_size - (int64_t)m_comment.save_len;
+        if (tmp_to_read < 0) tmp_to_read = 0;
+        uint32_t to_read = (uint32_t)tmp_to_read;
+        if (available_bytes <= 0) {  // clamp to available_bytes (available_bytes ist signed int)
+            // nothing to do
+            if (m_comment.list_length == 0) return OPUS_COMMENT_DONE;
+            return OPUS_COMMENT_NEED_MORE;
+        }
+        if ((uint32_t)available_bytes < to_read) to_read = (uint32_t)available_bytes;
+
         OPUS_LOG_DEBUG("to_read %i, available_bytes %i", to_read, available_bytes);
         m_comment.start_pos = current_file_pos;
         OPUS_LOG_DEBUG("partial start %i", m_comment.start_pos);
@@ -1111,7 +1139,7 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
             m_comment.item_vec.push_back(m_comment.start_pos + to_read);
             // m_comment.comment_content.println();
             parse_comment(m_comment.comment_content);
-            m_comment.comment_content.clear();
+            m_comment.comment_content.reset();
             m_comment.oob = false;
             m_comment.list_length--;
         } else {
@@ -1131,7 +1159,6 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
 
         m_comment.pointer = 8; // skip "OpusTags"
         available_bytes -= 8;
-        m_comment.comment_content.calloc(MAX_COMMENT_SIZE);
         uint32_t vendorLength = little_endian(inbuf + m_comment.pointer);
         m_comment.pointer += 4 + vendorLength; // skip vendor string
         available_bytes -= 4 + vendorLength;
@@ -1144,12 +1171,10 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
     // 🔹 3. read comments
     while (m_comment.list_length > 0) {
 
-      // --- handle possible split 4-byte comment length ---
+        // --- handle possible split 4-byte comment length ---
         if (m_comment.partial_length > 0 || available_bytes < 4) {
             uint8_t bytes_to_copy = std::min<uint8_t>(4 - m_comment.partial_length, available_bytes);
-            memcpy(m_comment.length_bytes + m_comment.partial_length,
-                   inbuf + (nBytes - available_bytes),
-                   bytes_to_copy);
+            memcpy(m_comment.length_bytes + m_comment.partial_length, inbuf + (nBytes - available_bytes), bytes_to_copy);
 
             m_comment.partial_length += bytes_to_copy;
             available_bytes -= bytes_to_copy;
@@ -1185,7 +1210,7 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
             m_comment.pointer += m_comment.comment_size;
             available_bytes -= m_comment.comment_size;
             parse_comment(m_comment.comment_content);
-            m_comment.comment_content.clear();
+            m_comment.comment_content.reset();
             m_comment.list_length--;
             if (m_comment.list_length == 0) return OPUS_COMMENT_DONE;
         }
