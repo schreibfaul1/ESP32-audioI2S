@@ -832,7 +832,7 @@ int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
     switch (bitReader(1)) {
         case 0:
             /* unordered */
-            lengthlist.alloc_array(sizeof(char) * s->entries, "lengthlist");
+            lengthlist.alloc_array(s->entries * 2, "lengthlist");
 
             /* allocated but unused entries? */
             if (bitReader(1)) {
@@ -866,7 +866,7 @@ int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
                 int32_t length = bitReader(5) + 1;
 
                 s->used_entries = s->entries;
-                lengthlist.alloc(sizeof(char) * s->entries, "lengthlist");
+                lengthlist.alloc_array( s->entries * 2, "lengthlist");
 
                 for (i = 0; i < s->entries;) {
                     int32_t num = bitReader(_ilog(s->entries - i));
@@ -920,7 +920,7 @@ int32_t VorbisDecoder::vorbis_book_unpack(codebook_t* s) {
                 if (total1 <= 4 && total1 <= total2) {
                     /* use dec_type 1: vector of packed values */
                     /* need quantized values before  */
-                    s->q_val.alloc(sizeof(uint16_t) * quantvals, "q_val");
+                    s->q_val.calloc_array(sizeof(uint16_t) * quantvals, "q_val");
                     for (i = 0; i < quantvals; i++) ((uint16_t*)s->q_val.get())[i] = bitReader(s->q_bits);
 
                     if (oggpack_eop()) { goto _eofout; }

@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3l                                                                                                                              ";
+    Version 3.4.3m                                                                                                                              ";
 /*  Updated on: 26.10.2025
 
     Author: Wolle (schreibfaul1)
@@ -3959,7 +3959,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (InBuff.bufferFilled() > m_pwst.maxFrameSize * 2 && !m_f_stream) { // waiting for buffer filled
+    if (InBuff.bufferFilled() > m_pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
