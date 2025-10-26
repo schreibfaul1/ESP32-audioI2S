@@ -694,3 +694,61 @@ class Decoder {
   private:
     Decoder() = delete; // Deactivate default constructor explicitly (optional but good against abuse)
 };
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  A U T O L O G G E R     for detecting memory leaks  📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* usage:
+    void myFunction(){
+        HeapAutoLogger heaplog(__func__);  // <--- automatic check
+        my code ...
+        my code ...
+    }
+*/
+
+static const char* TAG_HEAPLOG = "HEAPLOG";
+
+struct HeapSnapshot {
+    size_t free_dram_before{};
+    size_t free_psram_before{};
+    bool   integrity_before{};
+};
+
+class HeapAutoLogger {
+public:
+    explicit HeapAutoLogger(const char* func_name)
+        : func(func_name)
+    {
+        snap.free_dram_before  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        snap.free_psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        snap.integrity_before  = heap_caps_check_integrity_all(true);
+
+        if (!snap.integrity_before) {
+            ESP_LOGE(TAG_HEAPLOG, "[%s] Heap corruption detected BEFORE!", func);
+        } else {
+            ESP_LOGI(TAG_HEAPLOG, "[%s] Begin check: DRAM=%u, PSRAM=%u",
+                     func,
+                     (unsigned)snap.free_dram_before,
+                     (unsigned)snap.free_psram_before);
+        }
+    }
+
+    ~HeapAutoLogger() {
+        size_t free_dram_after  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        size_t free_psram_after = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        bool ok = heap_caps_check_integrity_all(true);
+
+        int delta_dram  = (int)(free_dram_after - snap.free_dram_before);
+        int delta_psram = (int)(free_psram_after - snap.free_psram_before);
+
+        if (!ok) {
+            ESP_LOGE(TAG_HEAPLOG, "[%s] ❌ Heap corruption detected AFTER!", func);
+        } else {
+            ESP_LOGI(TAG_HEAPLOG, "[%s] ✅ Heap OK | ΔDRAM=%+d | ΔPSRAM=%+d",
+                     func, delta_dram, delta_psram);
+        }
+    }
+
+private:
+    const char* func;
+    HeapSnapshot snap;
+};

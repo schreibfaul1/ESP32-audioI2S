@@ -1080,7 +1080,7 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
             }
         }
         if (m_comment.stream_title.valid()) m_f_newSteamTitle = true;
-        comment.println(); // optional output
+        // comment.println(); // optional output
         m_comment.item_vec.clear();
     };
 
