@@ -1571,7 +1571,7 @@ int32_t CeltDecoder::celt_decode_with_ec(int16_t * outbuf, int32_t frame_size) {
 
     M = 1 << LM;
 
-    if(rd.get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bas arg"); return OPUS_BAD_ARG;}
+    if(rd.get_storage() > 1275 || outbuf == NULL) {OPUS_LOG_ERROR("Opus Celt bad arg"); return OPUS_BAD_ARG;}
 
     N = M * m_CELTMode.shortMdctSize;
     c = 0;

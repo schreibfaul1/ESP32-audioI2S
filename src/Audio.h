@@ -697,58 +697,94 @@ class Decoder {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U T O L O G G E R     for detecting memory leaks  📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-/* usage:
+/* usage
     void myFunction(){
-        HeapAutoLogger heaplog(__func__);  // <--- automatic check
+        HEAP_GUARD();  // <--- automatic check
         my code ...
         my code ...
+    }
+
+    { // Or in small critical code blocks:
+        HEAP_GUARD();
+        fill_content(inbuf, to_read);
     }
 */
 
-static const char* TAG_HEAPLOG = "HEAPLOG";
+struct _HeapGuardSnapshot {
+    size_t      free_dram_before{};
+    size_t      free_psram_before{};
+    bool        integrity_before{};
+    const char* func{};
+    bool        active{false};
 
-struct HeapSnapshot {
-    size_t free_dram_before{};
-    size_t free_psram_before{};
-    bool   integrity_before{};
-};
-
-class HeapAutoLogger {
-public:
-    explicit HeapAutoLogger(const char* func_name)
-        : func(func_name)
-    {
-        snap.free_dram_before  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-        snap.free_psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        snap.integrity_before  = heap_caps_check_integrity_all(true);
-
-        if (!snap.integrity_before) {
-            ESP_LOGE(TAG_HEAPLOG, "[%s] Heap corruption detected BEFORE!", func);
+    _HeapGuardSnapshot(const char* f) : func(f), active(true) {
+        free_dram_before = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        free_psram_before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        integrity_before = heap_caps_check_integrity_all(true);
+        if (!integrity_before) {
+            printf(ANSI_ESC_RED "HEAPGUARD [%s] ❌ Heap corruption detected BEFORE!" ANSI_ESC_RESET "\n", func);
         } else {
-            ESP_LOGI(TAG_HEAPLOG, "[%s] Begin check: DRAM=%u, PSRAM=%u",
-                     func,
-                     (unsigned)snap.free_dram_before,
-                     (unsigned)snap.free_psram_before);
+            printf(ANSI_ESC_GREEN "HEAPGUARD [%s] Begin: DRAM=%u, PSRAM=%u" ANSI_ESC_RESET "\n", func, (unsigned)free_dram_before, (unsigned)free_psram_before);
         }
     }
 
-    ~HeapAutoLogger() {
-        size_t free_dram_after  = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    ~_HeapGuardSnapshot() {
+        if (!active) return; // falls moved / deaktiviert
+        size_t free_dram_after = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
         size_t free_psram_after = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        bool ok = heap_caps_check_integrity_all(true);
+        bool   ok = heap_caps_check_integrity_all(true);
 
-        int delta_dram  = (int)(free_dram_after - snap.free_dram_before);
-        int delta_psram = (int)(free_psram_after - snap.free_psram_before);
+        int delta_dram = (int)(free_dram_after - free_dram_before);
+        int delta_psram = (int)(free_psram_after - free_psram_before);
 
         if (!ok) {
-            ESP_LOGE(TAG_HEAPLOG, "[%s] ❌ Heap corruption detected AFTER!", func);
+            printf(ANSI_ESC_RED "HEAPGUARD [%s] ❌ Heap corruption detected AFTER!" ANSI_ESC_RESET "\n", func);
         } else {
-            ESP_LOGI(TAG_HEAPLOG, "[%s] ✅ Heap OK | ΔDRAM=%+d | ΔPSRAM=%+d",
-                     func, delta_dram, delta_psram);
+            printf(ANSI_ESC_GREEN "HEAPGUARD [%s] ✅ Heap OK | ΔDRAM=%+d | ΔPSRAM=%+d" ANSI_ESC_RESET "\n", func, delta_dram, delta_psram);
+        }
+    }
+};
+#define HEAP_GUARD() _HeapGuardSnapshot _heapguard_instance_##__LINE__(__func__)
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  A U T O P R O F I L E R    RAII-class for timekeeping  📌📌📌
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/* usage
+    void decodeNative(uint8_t* inbuf, int bytesLeft, uint8_t* outbuf) {
+        PROFILE_SCOPE_N(1000);  // automatically measures 1000 views on average
+
+        // ... my code ...
+    }
+
+    {   // Or in small critical code blocks:
+        PROFILE_SCOPE_N(100);  // measures this block over 100 runs
+        do_fft_processing(data);
+    }
+*/
+class _AutoProfiler {
+  public:
+    _AutoProfiler(const char* name, uint32_t report_interval) : tag(name), N(report_interval) { start = esp_timer_get_time(); }
+
+    ~_AutoProfiler() {
+        uint64_t elapsed = esp_timer_get_time() - start;
+        sum += elapsed;
+        count++;
+
+        if (count >= N) {
+            double avg_us = (double)sum / count;
+            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %u runs" ANSI_ESC_RESET "\n", tag, avg_us, count);
+            sum = 0;
+            count = 0;
         }
     }
 
-private:
-    const char* func;
-    HeapSnapshot snap;
+  private:
+    const char*            tag;
+    uint32_t               N;
+    uint64_t               start;
+    static inline uint64_t sum = 0;
+    static inline uint32_t count = 0;
 };
+
+// Macro for automatic use with function name
+#define PROFILE_SCOPE_N(N) _AutoProfiler _prof_instance_##__LINE__(__func__, N)
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

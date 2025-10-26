@@ -447,30 +447,37 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
                     if ((specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "title", 6) == 0)) {
                         vb[0].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        audio.info(audio, Audio::evt_id3data, "Title: %s", vb[0].c_get());
                         // FLAC_LOG_VERBOSE("TITLE: %s", vb[0].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)) {
                         vb[1].assign((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
+                        audio.info(audio, Audio::evt_id3data, "Artist: %s", vb[1].c_get());
                         // FLAC_LOG_VERBOSE("ARTIST: %s", vb[1].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)) {
                         vb[2].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        audio.info(audio, Audio::evt_id3data, "Genre: %s", vb[2].c_get());
                         FLAC_LOG_VERBOSE("GENRE: %s", vb[2].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "album", 6) == 0)) {
                         vb[3].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                        audio.info(audio, Audio::evt_id3data, "Album: %s", vb[3].c_get());
                         FLAC_LOG_VERBOSE("ALBUM: %s", vb[3].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)) {
                         vb[4].assign((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
+                        audio.info(audio, Audio::evt_id3data, "Comments: %s", vb[4].c_get());
                         FLAC_LOG_VERBOSE("COMMENT: %s", vb[4].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (specialIndexOf(inbuf + pos + 4, "date", 5) == 0)) {
                         vb[5].assign((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
+                        audio.info(audio, Audio::evt_id3data, "Date: %s", vb[5].c_get());
                         FLAC_LOG_VERBOSE("DATE: %s", vb[5].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)) {
                         vb[6].assign((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
+                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", vb[6].c_get());
                         FLAC_LOG_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
                     }
                     if ((specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)) {
@@ -489,7 +496,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                         }
                     }
                     pos += 4 + commemtStringLength;
-                    // FLAC_LOG_VERBOSE("nBytes %i, pos %i, commemtStringLength %i", nBytes, pos, commemtStringLength);
+                    FLAC_LOG_VERBOSE("nBytes %i, pos %i, commemtStringLength %i", nBytes, pos, commemtStringLength);
                 }
                 if (vb[1].valid() && vb[0].valid()) { // artist and title
                     m_flacStreamTitle.assign(vb[1].c_get());
