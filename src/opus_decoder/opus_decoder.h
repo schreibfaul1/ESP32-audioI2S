@@ -145,19 +145,19 @@ class OpusDecoder : public Decoder {
     };
 
     typedef struct _comment {
-        uint32_t              pointer{};
-        uint32_t              list_length{};
-        bool                  subsequent_page{};
-        bool                  oob{}; // out of bounds (block overflow)
-        bool                  big_comment{};
-        uint32_t              big_comment_filled{};
-        uint32_t              oob_len{};
-        uint32_t              save_len{};
-        uint32_t              comment_expected{};
-        uint32_t              start_pos{}; // comment start file position
-        uint32_t              end_pos{}; // comment end file position
-        ps_ptr<uint8_t>       save_oob{};
+        uint32_t pointer{};
+        uint32_t list_length{};
+        bool     oob{}; // out of bounds (block overflow)
+        uint32_t save_len{};
+        uint32_t comment_size{};
+        uint32_t start_pos{};       // comment start file position
+        uint32_t end_pos{};         // comment end file position
+        uint8_t  length_bytes[4]{}; // 🆕 Addition for split 4-byte length fields
+        uint8_t  partial_length{};  // how many of the 4 bytes have already been read
+        uint32_t bytes_available{};
+
         ps_ptr<char>          stream_title{};
+        ps_ptr<char>          comment_content{};
         std::vector<uint32_t> item_vec;
         std::vector<uint32_t> pic_vec;
 
@@ -201,4 +201,27 @@ class OpusDecoder : public Decoder {
 #define OPUS_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define OPUS_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // Macro for time measuring
+    // PROFILE_START(decodeNative);
+    // ret = decodeNative(inbuf, bytesLeft, outbuf);
+    // PROFILE_END_N(decodeNative, 1000);
+
+#define PROFILE_START(name)                   \
+    static uint64_t _prof_##name##_start = 0; \
+    _prof_##name##_start = esp_timer_get_time()
+
+#define PROFILE_END_N(name, N)                                                                                                           \
+    do {                                                                                                                                 \
+        static uint64_t _prof_##name##_sum = 0;                                                                                          \
+        static uint32_t _prof_##name##_count = 0;                                                                                        \
+        uint64_t        _prof_##name##_elapsed = esp_timer_get_time() - _prof_##name##_start;                                            \
+        _prof_##name##_sum += _prof_##name##_elapsed;                                                                                    \
+        _prof_##name##_count++;                                                                                                          \
+        if (_prof_##name##_count >= (N)) {                                                                                               \
+            printf("%-20s avg: %.2f µs over %u runs\n", #name, (double)_prof_##name##_sum / _prof_##name##_count, _prof_##name##_count); \
+            _prof_##name##_sum = 0;                                                                                                      \
+            _prof_##name##_count = 0;                                                                                                    \
+        }                                                                                                                                \
+    } while (0)
 };
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
