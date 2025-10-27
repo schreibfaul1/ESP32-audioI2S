@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3m                                                                                                                              ";
-/*  Updated on: 26.10.2025
+    Version 3.4.3n                                                                                                                              ";
+/*  Updated on: 27.10.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -34,7 +34,7 @@ constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
 
-constexpr size_t AUDIO_STACK_SIZE = 3300;
+constexpr size_t AUDIO_STACK_SIZE = 3500;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;

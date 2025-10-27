@@ -413,28 +413,5 @@ class VorbisDecoder : public Decoder {
 #define VORBIS_LOG_INFO(fmt, ...)    Audio::AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define VORBIS_LOG_DEBUG(fmt, ...)   Audio::AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 #define VORBIS_LOG_VERBOSE(fmt, ...) Audio::AUDIO_LOG_IMPL(5, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // Macro for time measuring
-    // PROFILE_START(decodeNative);
-    // ret = decodeNative(inbuf, bytesLeft, outbuf);
-    // PROFILE_END_N(decodeNative, 1000);
-
-#define PROFILE_START(name)                   \
-    static uint64_t _prof_##name##_start = 0; \
-    _prof_##name##_start = esp_timer_get_time()
-
-#define PROFILE_END_N(name, N)                                                                                                           \
-    do {                                                                                                                                 \
-        static uint64_t _prof_##name##_sum = 0;                                                                                          \
-        static uint32_t _prof_##name##_count = 0;                                                                                        \
-        uint64_t        _prof_##name##_elapsed = esp_timer_get_time() - _prof_##name##_start;                                            \
-        _prof_##name##_sum += _prof_##name##_elapsed;                                                                                    \
-        _prof_##name##_count++;                                                                                                          \
-        if (_prof_##name##_count >= (N)) {                                                                                               \
-            printf("%-20s avg: %.2f µs over %u runs\n", #name, (double)_prof_##name##_sum / _prof_##name##_count, _prof_##name##_count); \
-            _prof_##name##_sum = 0;                                                                                                      \
-            _prof_##name##_count = 0;                                                                                                    \
-        }                                                                                                                                \
-    } while (0)
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

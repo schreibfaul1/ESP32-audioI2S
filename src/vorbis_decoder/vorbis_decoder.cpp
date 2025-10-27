@@ -1285,14 +1285,14 @@ int32_t VorbisDecoder::_make_decode_table(codebook_t* s, int32_t* lengthlist, ui
     ps_ptr<uint32_t> work;
 
     if (s->dec_nodeb == 4) {
-        s->dec_table.alloc((s->used_entries * 2 + 1) * sizeof(*work), "dec_table");
+        s->dec_table.alloc((s->used_entries + 1) * sizeof(*work), "dec_table");
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
         if (_make_words(lengthlist, s->entries, (uint32_t*)s->dec_table.get(), quantvals, s, maptype)) return 1;
 
         return 0;
     }
 
-    work.alloc((s->used_entries * 2 - 2) * sizeof(uint32_t), "work");
+    work.alloc((s->used_entries * 2) * sizeof(int32_t), "work");
     work.clear();
 
     if (_make_words(lengthlist, s->entries, work.get(), quantvals, s, maptype)) { return 1; }
