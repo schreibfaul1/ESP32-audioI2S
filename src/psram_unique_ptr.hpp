@@ -1754,6 +1754,73 @@ class ps_ptr {
         return static_cast<uint32_t>(result);
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O _ I N T 3 2  📌📌📌
+    // Retrieves the numeric value (int32_t) from the stored string, parsing it as a number in the specified base (default: 10 for decimal).
+    // Example:
+    //   ps_ptr<char> temp = "-12345"; int32_t val = temp.to_int32(10); // Returns -12345
+    //   ps_ptr<char> hex  = "0x7FFF"; int32_t val = hex.to_int32(16); // Returns 32767
+    // If the string is empty, null, invalid, or exceeds INT32 range (-2147483648 ... 2147483647), returns 0 and logs an error.
+
+    int32_t to_int32(int base = 10) const {
+        static_assert(std::is_same_v<T, char>, "to_int32 is only valid for ps_ptr<char>");
+        if (!mem || !get()) {
+            log_e("to_int32: No valid string data");
+            return 0;
+        }
+
+        const char* str = get();
+        char*       end = nullptr;
+        long        result = std::strtol(str, &end, base);
+
+        if (end == str) {
+            log_e("to_int32: Invalid numeric value in '%s' for base %i", str, base);
+            return 0;
+        }
+
+        if (result < INT32_MIN || result > INT32_MAX) {
+            log_e("to_int32: Value in '%s' exceeds INT32 range (%ld..%ld) for base %i", str, (long)INT32_MIN, (long)INT32_MAX, base);
+            return 0;
+        }
+
+        return static_cast<int32_t>(result);
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  T O _ I N T 6 4  📌📌📌
+    // Retrieves the numeric value (int64_t) from the stored string, parsing it as a number
+    // in the specified base (default: 10 for decimal).
+    //
+    // Examples:
+    //   ps_ptr<char> val1 = "9223372036854775807"; int64_t v1 = val1.to_int64();  // OK
+    //   ps_ptr<char> val2 = "-1234567890123";     int64_t v2 = val2.to_int64();  // OK
+    //   ps_ptr<char> val3 = "0x7FFFFFFFFFFFFFFF"; int64_t v3 = val3.to_int64(16); // OK
+    //
+    // If the string is empty, invalid, or exceeds INT64 range (-9223372036854775808 .. 9223372036854775807),
+    // returns 0 and logs an error.
+
+    int64_t to_int64(int base = 10) const {
+        static_assert(std::is_same_v<T, char>, "to_int64 is only valid for ps_ptr<char>");
+        if (!mem || !get()) {
+            log_e("to_int64: No valid string data");
+            return 0;
+        }
+
+        const char* str = get();
+        char*       end = nullptr;
+        long long   result = std::strtoll(str, &end, base);
+
+        if (end == str) {
+            log_e("to_int64: Invalid numeric value in '%s' for base %i", str, base);
+            return 0;
+        }
+
+        if (result < INT64_MIN || result > INT64_MAX) {
+            log_e("to_int64: Value in '%s' exceeds INT64 range (%lld..%lld) for base %i", str, (long long)INT64_MIN, (long long)INT64_MAX, base);
+            return 0;
+        }
+
+        return static_cast<int64_t>(result);
+    }
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     // 📌📌📌  B I G _ E N D I A N  📌📌📌
     // Reads up to 8 bytes from a uint8_t array in big-endian order and stores the value as a hexadecimal string (e.g., "0x12345678").
