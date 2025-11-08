@@ -7,6 +7,7 @@
 #include <memory>
 #include <type_traits>
 #include <utility>
+#include <span>
 
 #ifndef PS_PTR_CLASS
     #define PS_PTR_CLASS 1

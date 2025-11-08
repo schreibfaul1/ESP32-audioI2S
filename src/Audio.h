@@ -29,6 +29,7 @@
 #include <locale>
 #include <memory>
 #include <vector>
+#include <span>
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
