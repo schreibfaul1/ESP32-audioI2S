@@ -59,21 +59,42 @@ const char* WavDecoder::whoIsIt() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+    uint16_t frame = *bytesLeft;
+    if (frame > 2048) frame = 2048;
 
     if (m_bps == 16) {
-        memmove(outbuf, inbuf, *bytesLeft); // copy len data in outbuff and set validsamples and bytesdecoded=len
-        m_validSamples = *bytesLeft / (2 * getChannels());
-    } else {
-        for (int i = 0; i < *bytesLeft; i++) {
-            int16_t sample1 = (inbuf[i] & 0x00FF) - 128;
-            int16_t sample2 = (inbuf[i] & 0xFF00 >> 8) - 128;
-            outbuf[i * 2 + 0] = sample1 << 8;
-            outbuf[i * 2 + 1] = sample2 << 8;
-        }
-        m_validSamples = *bytesLeft;
-    }
-    *bytesLeft = 0;
+        memmove(outbuf, inbuf, frame);
+        m_validSamples = frame / (2 * getChannels());
+    } else if (m_bps == 8) {
+        int channels = getChannels(); // e.g. 1 or 2
+        int samples  = frame / channels; // Number of sample frames
 
+        if (channels == 1) {
+            // MONO
+            for (int i = 0; i < samples; i++) {
+                outbuf[i] = (static_cast<int16_t>(inbuf[i]) - 128) << 8;
+            }
+        } else if (channels == 2) {
+            // STEREO (interleaved L/R)
+            for (int i = 0; i < samples; i++) {
+                uint8_t l = inbuf[i * 2 + 0];
+                uint8_t r = inbuf[i * 2 + 1];
+                outbuf[i * 2 + 0] = (static_cast<int16_t>(l) - 128) << 8;
+                outbuf[i * 2 + 1] = (static_cast<int16_t>(r) - 128) << 8;
+            }
+        } else {
+            // other channel numbers optional
+            return -2;
+        }
+
+        m_validSamples = samples;
+    } else {
+        // Unsupported bits per sample
+        m_validSamples = 0;
+        return -1;
+    }
+
+    *bytesLeft -= frame;
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

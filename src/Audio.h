@@ -43,42 +43,41 @@ class Decoder; // prototype
 static constexpr std::array<const char*, 13> eventStr = {"info",    "id3data",  "eof",      "station_name", "icy_description", "streamtitle", "bitrate",
                                                          "icy_url", "icy_logo", "lasthost", "cover_image",  "lyrics",          "log"};
 //----------------------------------------------------------------------------------------------------------------------
-
 class AudioBuffer {
     // AudioBuffer will be allocated in PSRAM
     //
-    //  m_buffer            m_readPtr                 m_writePtr                 m_endPtr
-    //   |                       |<------dataLength------->|<------ writeSpace ----->|
-    //   ▼                       ▼                         ▼                         ▼
+    //  m_buffer            m_readPtr                 m_writePtr                        m_endPtr
+    //   |                       |<------dataLength------->|<--------- writeSpace -------->|
+    //   ▼                       ▼                         ▼                               ▼
     //   ---------------------------------------------------------------------------------------------------------------
-    //   |                     <--m_buffSize-->                                      |      <--m_resBuffSize -->     |
+    //   |                     <--m_buffSize-->                                       |      <--m_resBuffSize -->     |
     //   ---------------------------------------------------------------------------------------------------------------
-    //   |<-----freeSpace------->|                         |<------freeSpace-------->|
-    //
-    //
-    //
-    //   if the space between m_readPtr and buffend < m_resBuffSize copy data from the beginning to resBuff
+    //   |<-----freeSpace------->|                         |<-------freeSpace-------->|
+    //                                                                                ▲
+    //                                                                                |
+    //                                                                             m_buffEnd
+    //   if m_writePtr == m_endPtr copy data from resBuff to the beginning
     //   so that the mp3/aac/flac frame is always completed
     //
-    //  m_buffer                      m_writePtr                 m_readPtr        m_endPtr
-    //   |                                 |<-------writeSpace------>|<--dataLength-->|
-    //   ▼                                 ▼                         ▼                ▼
+    //  m_buffer                      m_writePtr                 m_readPtr                      m_endPtr
+    //   |                                 |<-------writeSpace------>|<--dataLength-->|            |
+    //   ▼                                 ▼                         ▼                ▼            ▼
     //   ---------------------------------------------------------------------------------------------------------------
     //   |                        <--m_buffSize-->                                    |      <--m_resBuffSize -->     |
     //   ---------------------------------------------------------------------------------------------------------------
-    //   |<---  ------dataLength--  ------>|<-------freeSpace------->|
-    //
+    //   |<---  ------dataLength--  ------>|<-------freeSpace------->|                ▲
+    //                                                                                |
+    //                                                                             m_buffEnd
     //
 
   public:
-    AudioBuffer(size_t maxBlockSize = 0); // constructor
+    AudioBuffer();                        // constructor
     ~AudioBuffer();                       // frees the buffer
     size_t   init();                      // set default values
     bool     isInitialized() { return m_f_init; };
-    int32_t  getBufsize();
-    bool     setBufsize(size_t mbs);           // default is m_buffSizePSRAM for psram, and m_buffSizeRAM without psram
+    size_t   getBufsize();
     void     changeMaxBlockSize(uint32_t mbs); // is default 1600 for mp3 and aac, set 16384 for FLAC
-    uint32_t getMaxBlockSize();                // returns maxBlockSize
+    size_t   getMaxBlockSize();                // returns maxBlockSize
     size_t   freeSpace();                      // number of free bytes to overwrite
     size_t   writeSpace();                     // space fom writepointer to bufferend
     size_t   bufferFilled();                   // returns the number of filled bytes
@@ -87,21 +86,21 @@ class AudioBuffer {
     void     bytesWasRead(size_t br);          // update readpointer
     uint8_t* getWritePtr();                    // returns the current writepointer
     uint8_t* getReadPtr();                     // returns the current readpointer
-    uint32_t getWritePos();                    // write position relative to the beginning
-    uint32_t getReadPos();                     // read position relative to the beginning
     void     resetBuffer();                    // restore defaults
 
   protected:
-    size_t          m_buffSize = UINT16_MAX * 10; // most webstreams limit the advance to 100...300Kbytes
+    size_t          m_buffSize = 0; // most webstreams limit the advance to 100...300Kbytes
     size_t          m_freeSpace = 0;
     size_t          m_writeSpace = 0;
     size_t          m_dataLength = 0;
-    size_t          m_resBuffSize = UINT16_MAX; // reserved buffspace, >= one flac frame
-    size_t          m_maxBlockSize = 1600;
+    size_t          m_resBuffSize = 0;
+    size_t          m_maxBlockSize = 0;
     ps_ptr<uint8_t> m_buffer;
-    uint8_t*        m_writePtr = NULL;
-    uint8_t*        m_readPtr = NULL;
-    uint8_t*        m_endPtr = NULL;
+    uint8_t*        m_buffEnd = nullptr;
+    uint8_t*        m_writePtr = nullptr;
+    uint8_t*        m_readPtr = nullptr;
+    uint8_t*        m_endPtr = nullptr;
+    uint8_t*        m_startPtr = nullptr;
     bool            m_f_init = false;
     bool            m_f_isEmpty = true;
 };
@@ -164,7 +163,6 @@ class Audio {
     uint32_t         inBufferFilled();            // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();              // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize();           // returns the size of the inputbuffer in bytes
-    bool             setInBufferSize(size_t mbs); // sets the size of the inputbuffer in bytes
     void             setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
