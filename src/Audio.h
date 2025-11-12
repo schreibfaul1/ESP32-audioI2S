@@ -46,9 +46,9 @@ static constexpr std::array<const char*, 13> eventStr = {"info",    "id3data",  
 class AudioBuffer {
     // AudioBuffer will be allocated in PSRAM
     //
-    //  m_buffer            m_readPtr                 m_writePtr                        m_endPtr
-    //   |                       |<------dataLength------->|<--------- writeSpace -------->|
-    //   ▼                       ▼                         ▼                               ▼
+    //  m_buffer            m_readPtr                 m_writePtr                                                 m_endPtr
+    //   |                       |<------dataLength------->|<--------------------- writeSpace ----------------------->|
+    //   ▼                       ▼                         ▼                                                          ▼
     //   ---------------------------------------------------------------------------------------------------------------
     //   |                     <--m_buffSize-->                                       |      <--m_resBuffSize -->     |
     //   ---------------------------------------------------------------------------------------------------------------
@@ -59,9 +59,9 @@ class AudioBuffer {
     //   if m_writePtr == m_endPtr copy data from resBuff to the beginning
     //   so that the mp3/aac/flac frame is always completed
     //
-    //  m_buffer                      m_writePtr                 m_readPtr                      m_endPtr
-    //   |                                 |<-------writeSpace------>|<--dataLength-->|            |
-    //   ▼                                 ▼                         ▼                ▼            ▼
+    //  m_buffer                      m_writePtr                 m_readPtr                                         m_endPtr
+    //   |                                 |<-------writeSpace------>|<--dataLength-->|                               |
+    //   ▼                                 ▼                         ▼                ▼                               ▼
     //   ---------------------------------------------------------------------------------------------------------------
     //   |                        <--m_buffSize-->                                    |      <--m_resBuffSize -->     |
     //   ---------------------------------------------------------------------------------------------------------------

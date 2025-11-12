@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3p                                                                                                                              ";
-/*  Updated on: 10.11.2025
+    Version 3.4.3q                                                                                                                              ";
+/*  Updated on: 12.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -28,7 +28,7 @@ char audioI2SVers[] = "\
 constexpr size_t m_frameSizeWav = 2048;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600 * 2;
-constexpr size_t m_frameSizeFLAC = UINT16_MAX; // max ogg size
+constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
@@ -66,29 +66,18 @@ size_t AudioBuffer::init() {
     return getBufsize();
 }
 
-void AudioBuffer::changeMaxBlockSize(uint32_t mbs) {
-    return;
-}
-
 size_t AudioBuffer::getMaxBlockSize() {
     return m_maxBlockSize;
 }
 
 size_t AudioBuffer::freeSpace() {
-    if (m_readPtr == m_writePtr) {
-        if (m_f_isEmpty == true)
-            m_freeSpace = m_buffSize;
-        else
-            m_freeSpace = 0;
-    }
-    if (m_readPtr < m_writePtr) { m_freeSpace = (m_buffEnd - m_writePtr) + (m_readPtr - m_startPtr); }
-    if (m_readPtr > m_writePtr) { m_freeSpace = m_readPtr - m_writePtr; }
- //   if(m_freeSpace > m_buffSize) m_freeSpace = m_buffSize; // do not take resBuff in account
-    return m_freeSpace;
+    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? m_buffSize : 0; }
+    if (m_readPtr < m_writePtr) { return (m_buffEnd - m_writePtr) + (m_readPtr - m_startPtr); }
+    return m_readPtr - m_writePtr;
 }
 
 size_t AudioBuffer::writeSpace() {
-    if(m_writePtr == m_endPtr && m_readPtr >= m_startPtr + m_maxBlockSize){
+    if (m_writePtr == m_endPtr && m_readPtr >= m_startPtr + m_maxBlockSize) {
         memcpy(m_startPtr, m_endPtr - m_maxBlockSize, m_maxBlockSize); // be sure the frame is completely
         log_d("memcopy %i bytes", m_maxBlockSize);
         m_writePtr = m_startPtr + m_maxBlockSize;
@@ -105,25 +94,16 @@ size_t AudioBuffer::writeSpace() {
 }
 
 size_t AudioBuffer::bufferFilled() {
-    if (m_readPtr == m_writePtr) {
-        if (m_f_isEmpty == true)
-            m_dataLength = 0;
-        else
-            m_dataLength = m_buffSize;
-    }
-    if (m_readPtr < m_writePtr) {
-        m_dataLength = m_writePtr - m_readPtr;
-    }
-    if (m_readPtr > m_writePtr) { m_dataLength = (m_buffEnd - m_readPtr) + (m_writePtr - m_startPtr); }
-    if(m_dataLength > m_buffSize) m_dataLength = m_buffSize; // if write in resBuff
-    return m_dataLength;
+    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? 0 : m_buffSize; }
+    if (m_readPtr < m_writePtr) { return m_writePtr - m_readPtr; }
+    return (m_buffEnd - m_readPtr) + (m_writePtr - m_startPtr);
 }
 
 size_t AudioBuffer::getMaxAvailableBytes() {
     if (m_readPtr == m_writePtr) {
-        if (m_f_isEmpty == true)
+        if (m_f_isEmpty == true) {
             m_dataLength = 0;
-        else
+        } else
             m_dataLength = (m_endPtr - m_readPtr);
     }
     if (m_readPtr < m_writePtr) { m_dataLength = m_writePtr - m_readPtr; }
@@ -1584,7 +1564,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             stopSong();
             return -1;
         }
-        //        InBuff.changeMaxBlockSize(m_rflh.maxFrameSize);
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
         m_rflh.sampleRate = nextval >> 4;
@@ -3946,8 +3925,10 @@ void Audio::processWebStream() {
         }
     }
     if (!m_decoder && InBuff.bufferFilled() > 127) {
-        if (initializeDecoder()) m_pwst.maxFrameSize = InBuff.getMaxBlockSize();
-        else return;
+        if (initializeDecoder())
+            m_pwst.maxFrameSize = InBuff.getMaxBlockSize();
+        else
+            return;
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4318,7 +4299,7 @@ void Audio::playAudioData() {
     } // guard, play samples first
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
-    m_pad.bytesToDecode = InBuff.bufferFilled();
+    m_pad.bytesToDecode = InBuff.getMaxAvailableBytes();
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
@@ -4340,7 +4321,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.bufferFilled()), (uint32_t)InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.getMaxAvailableBytes()), (uint32_t)InBuff.getMaxBlockSize());
 
         if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode
@@ -4358,7 +4339,7 @@ void Audio::playAudioData() {
         }
     } else {
         if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
-        m_pad.bytesToDecode = min(InBuff.bufferFilled(), (size_t)InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min(InBuff.getMaxAvailableBytes(), (size_t)InBuff.getMaxBlockSize());
     }
 
     if (m_pad.lastFrames) {
@@ -4767,31 +4748,24 @@ bool Audio::initializeDecoder() {
     switch (m_codec) {
         case CODEC_MP3:
             type = "MP3";
-            InBuff.changeMaxBlockSize(m_frameSizeMP3);
             break;
         case CODEC_AAC:
             type = "AAC";
-            InBuff.changeMaxBlockSize(m_frameSizeAAC);
             break;
         case CODEC_M4A:
             type = "AAC";
-            InBuff.changeMaxBlockSize(m_frameSizeAAC);
             break;
         case CODEC_FLAC:
             type = "FLAC";
-            InBuff.changeMaxBlockSize(m_frameSizeFLAC);
             break;
         case CODEC_OPUS:
             type = "OPUS";
-            InBuff.changeMaxBlockSize(m_frameSizeOPUS);
             break;
         case CODEC_VORBIS:
             type = "VORBIS";
-            InBuff.changeMaxBlockSize(m_frameSizeVORBIS);
             break;
         case CODEC_WAV:
             type = "WAV";
-            InBuff.changeMaxBlockSize(m_frameSizeWav);
             break;
         default:
             AUDIO_LOG_ERROR("unknown decoder");
