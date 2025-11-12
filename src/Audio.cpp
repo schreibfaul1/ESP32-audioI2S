@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3q                                                                                                                              ";
+    Version 3.4.3r                                                                                                                              ";
 /*  Updated on: 12.11.2025
 
     Author: Wolle (schreibfaul1)
@@ -43,78 +43,119 @@ StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+// AudioBuffer will be allocated in PSRAM
+//
+//  m_startPtr       m_readPtr                  m_writePtr                                                    m_endPtr
+//   |                  |<------maxAvailableBytes----->|<--------------------- writeSpace ----------------------->|
+//   ▼                  ▼                              ▼                                                          ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                     <--m_mainBuffSize-->                                   |      <--m_resBuffSize -->     |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
+//                                                                                ▲
+//                                                                                |
+//                                                                             m_buffEnd
+//   if resBuff is full copy data from resBuff to the beginning
+//   if m_readPtr >= m_buff<end set m_readptr to m_startPtr + (m_readPtr - m_buffEnd)
+//
+//  m_startPtr                      m_writePtr                 m_readPtr                                      m_endPtr
+//   |                                 |<-------writeSpace------>|<---------------maxAvailableBytes-------------->|
+//   ▼                                 ▼                         ▼                ▼                               ▼
+//   ---------------------------------------------------------------------------------------------------------------
+//   |                        <--m_mainBuffSize-->                                |      <--m_resBuffSize -->     |
+//   ---------------------------------------------------------------------------------------------------------------
+//   |<------------filled------------->|<-------freeSpace------->|<----filled---->▲
+//                                                                                |
+//                                                                             m_buffEnd
+//
+
 AudioBuffer::AudioBuffer() {
-    m_buffSize = UINT16_MAX * 10;
+    m_mainBuffSize = UINT16_MAX * 10;
     m_resBuffSize = UINT16_MAX;
-    m_maxBlockSize = UINT16_MAX;
 }
 
 AudioBuffer::~AudioBuffer() {
-    // m_buffer.reset();
+    ;
 }
 
 size_t AudioBuffer::getBufsize() {
-    return m_buffSize;
+    return m_mainBuffSize;
 }
 
 size_t AudioBuffer::init() {
-    m_buffer.alloc(m_buffSize + m_resBuffSize, "AudioBuffer");
+    m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
     m_f_init = true;
     m_startPtr = m_buffer.get();
-    m_buffEnd = m_buffer.get() + m_buffSize;
-    resetBuffer();
-    return getBufsize();
+    m_endPtr = m_buffer.get() + m_mainBuffSize;
+    m_buffEnd = m_endPtr + m_resBuffSize;
+    reset();
+    return m_mainBuffSize;
 }
 
 size_t AudioBuffer::getMaxBlockSize() {
-    return m_maxBlockSize;
+    return m_resBuffSize;
 }
 
 size_t AudioBuffer::freeSpace() {
-    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? m_buffSize : 0; }
-    if (m_readPtr < m_writePtr) { return (m_buffEnd - m_writePtr) + (m_readPtr - m_startPtr); }
+    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? m_mainBuffSize : 0; }
+    if (m_readPtr < m_writePtr) {
+        if (m_writePtr > m_endPtr) {
+            return (m_readPtr - m_startPtr);
+        } else {
+            return (m_endPtr - m_writePtr) + (m_readPtr - m_startPtr);
+        }
+    }
     return m_readPtr - m_writePtr;
 }
 
 size_t AudioBuffer::writeSpace() {
-    if (m_writePtr == m_endPtr && m_readPtr >= m_startPtr + m_maxBlockSize) {
-        memcpy(m_startPtr, m_endPtr - m_maxBlockSize, m_maxBlockSize); // be sure the frame is completely
-        log_d("memcopy %i bytes", m_maxBlockSize);
-        m_writePtr = m_startPtr + m_maxBlockSize;
+    // Check whether a complete block still fits in at the end
+    size_t spaceToEnd = m_buffEnd - m_writePtr;
+
+    if (spaceToEnd == 0) { // be sure that the resBuff is full
+        // Only copy if the read pointer is not in the way
+        if (m_readPtr >= m_startPtr + m_resBuffSize) {
+            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
+            log_w("wrap copy %u bytes", m_resBuffSize);
+            m_writePtr = m_startPtr + m_resBuffSize;
+        }
     }
+
+    // Now calculate regular free space (main buffer only)
     if (m_readPtr == m_writePtr) {
-        if (m_f_isEmpty == true)
-            m_writeSpace = m_endPtr - m_writePtr;
-        else
-            m_writeSpace = 0;
+        // log_e("writeSpace %i", m_f_isEmpty ? m_mainBuffSize : 0);
+        return m_f_isEmpty ? m_mainBuffSize : 0;
     }
-    if (m_readPtr < m_writePtr) { m_writeSpace = m_endPtr - m_writePtr; }
-    if (m_readPtr > m_writePtr) { m_writeSpace = m_readPtr - m_writePtr; }
-    return m_writeSpace;
+    if (m_readPtr > m_writePtr) return (m_readPtr - m_writePtr);
+    return spaceToEnd;
 }
 
 size_t AudioBuffer::bufferFilled() {
-    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? 0 : m_buffSize; }
-    if (m_readPtr < m_writePtr) { return m_writePtr - m_readPtr; }
-    return (m_buffEnd - m_readPtr) + (m_writePtr - m_startPtr);
+    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? 0 : m_mainBuffSize; }
+    if (m_readPtr < m_writePtr) {
+        if (m_writePtr > m_endPtr) {
+            return m_endPtr - m_readPtr;
+        } else {
+            return m_writePtr - m_readPtr;
+        }
+    }
+    return (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
 }
 
-size_t AudioBuffer::getMaxAvailableBytes() {
+size_t AudioBuffer::readSpace() {
     if (m_readPtr == m_writePtr) {
-        if (m_f_isEmpty == true) {
-            m_dataLength = 0;
-        } else
-            m_dataLength = (m_endPtr - m_readPtr);
+        return m_f_isEmpty ? 0 : m_buffEnd - m_readPtr; // empty or full
     }
-    if (m_readPtr < m_writePtr) { m_dataLength = m_writePtr - m_readPtr; }
-    if (m_readPtr > m_writePtr) { m_dataLength = (m_endPtr - m_readPtr); }
-    return m_dataLength;
+    if (m_readPtr < m_writePtr) { return m_writePtr - m_readPtr; }
+
+    return m_buffEnd - m_readPtr;
 }
 
 void AudioBuffer::bytesWritten(size_t bw) {
     if (!bw) return;
     m_writePtr += bw;
-    if (m_writePtr > m_endPtr) log_e("AudioBuffer: m_writePtr %p > m_endPtr %p", m_writePtr, m_endPtr);
+    if (m_writePtr > m_buffEnd) log_e("AudioBuffer: m_writePtr %p > m_endPtr %p", m_writePtr, m_buffEnd);
     m_f_isEmpty = false;
 }
 
@@ -123,6 +164,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
     m_readPtr += br;
     if (m_readPtr >= m_endPtr) {
         size_t tmp = m_readPtr - m_endPtr;
+        log_w("readPtr set to %i", tmp);
         m_readPtr = m_startPtr + tmp;
     }
     if (m_readPtr == m_writePtr) m_f_isEmpty = true;
@@ -133,18 +175,17 @@ uint8_t* AudioBuffer::getWritePtr() {
 }
 
 uint8_t* AudioBuffer::getReadPtr() {
-    int32_t len = m_endPtr - m_readPtr;
-    if (len < m_maxBlockSize) {
-        m_readPtr = m_startPtr + (m_maxBlockSize - len);
-        log_d("set new readptr to %i", m_maxBlockSize - len);
+    if (m_readPtr > m_endPtr) {
+        int32_t len = m_readPtr - m_endPtr;
+        log_w("set new readptr to %i", len);
+        m_readPtr = m_startPtr + len;
     }
     return m_readPtr;
 }
 
-void AudioBuffer::resetBuffer() {
-    m_writePtr = m_startPtr;
-    m_readPtr = m_startPtr;
-    m_endPtr = m_startPtr + getBufsize() + m_resBuffSize;
+void AudioBuffer::reset() {
+    m_writePtr = m_buffer.get();
+    m_readPtr = m_buffer.get();
     m_f_isEmpty = true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -257,7 +298,7 @@ void Audio::zeroI2Sbuff() {
 void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
-    InBuff.resetBuffer();
+    InBuff.reset();
     m_outBuff.clear();        // Clear OutputBuffer
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
@@ -2231,7 +2272,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             int res = audioFileSeek(m_m4aHdr.headerSize);
             if (res >= 0) {
                 AUDIO_LOG_INFO("skip %li bytes", m_m4aHdr.retvalue);
-                InBuff.resetBuffer();
+                InBuff.reset();
                 m_m4aHdr.retvalue = 0;
                 return 0;
             }
@@ -3819,7 +3860,7 @@ void Audio::processLocalFile() {
                 goto exit;
             }
             if (InBuff.bufferFilled() > m_prlf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
-                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
+                InBuff.bytesWasRead(readAudioHeader(InBuff.readSpace()));
             }
             if (m_controlCounter == 100) {
                 if (m_audioDataStart > 0) { m_prlf.audioHeaderFound = true; }
@@ -4001,7 +4042,7 @@ void Audio::processWebFile() {
                 goto exit;
             }
             if (InBuff.bufferFilled() > m_pwf.maxFrameSize || (InBuff.bufferFilled() == m_audioFileSize) || m_f_allDataReceived) { // at least one complete frame or the file is smaller
-                InBuff.bytesWasRead(readAudioHeader(InBuff.getMaxAvailableBytes()));
+                InBuff.bytesWasRead(readAudioHeader(InBuff.readSpace()));
             }
             if (m_controlCounter == 100) {
                 if (m_audioDataStart > 0) { m_pwf.audioHeaderFound = true; }
@@ -4299,7 +4340,7 @@ void Audio::playAudioData() {
     } // guard, play samples first
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
-    m_pad.bytesToDecode = InBuff.getMaxAvailableBytes();
+    m_pad.bytesToDecode = InBuff.readSpace();
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
@@ -4321,7 +4362,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.getMaxAvailableBytes()), (uint32_t)InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.readSpace()), (uint32_t)InBuff.getMaxBlockSize());
 
         if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode
@@ -4339,7 +4380,7 @@ void Audio::playAudioData() {
         }
     } else {
         if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
-        m_pad.bytesToDecode = min(InBuff.getMaxAvailableBytes(), (size_t)InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)InBuff.getMaxBlockSize());
     }
 
     if (m_pad.lastFrames) {
@@ -4746,27 +4787,13 @@ bool Audio::initializeDecoder() {
     }
     const char* type = nullptr;
     switch (m_codec) {
-        case CODEC_MP3:
-            type = "MP3";
-            break;
-        case CODEC_AAC:
-            type = "AAC";
-            break;
-        case CODEC_M4A:
-            type = "AAC";
-            break;
-        case CODEC_FLAC:
-            type = "FLAC";
-            break;
-        case CODEC_OPUS:
-            type = "OPUS";
-            break;
-        case CODEC_VORBIS:
-            type = "VORBIS";
-            break;
-        case CODEC_WAV:
-            type = "WAV";
-            break;
+        case CODEC_MP3: type = "MP3"; break;
+        case CODEC_AAC: type = "AAC"; break;
+        case CODEC_M4A: type = "AAC"; break;
+        case CODEC_FLAC: type = "FLAC"; break;
+        case CODEC_OPUS: type = "OPUS"; break;
+        case CODEC_VORBIS: type = "VORBIS"; break;
+        case CODEC_WAV: type = "WAV"; break;
         default:
             AUDIO_LOG_ERROR("unknown decoder");
             stopSong();
@@ -6656,7 +6683,7 @@ int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
 
         /* skip to position */
         res = audioFileSeek(m_resumeFilePos);
-        InBuff.resetBuffer();
+        InBuff.reset();
         offset = 0;
 
         audioFileRead(InBuff.getWritePtr() + offset, buffFillValue);
@@ -6737,6 +6764,7 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
             m_sdet.cnt_lost = 0;
             info(*this, evt_info, "Stream lost -> try new connection");
             m_f_reset_m3u8Codec = false;
+            InBuff.reset();
             httpPrint(m_lastHost.get());
             return true;
         }
@@ -6819,7 +6847,7 @@ uint32_t Audio::ogg_correctResumeFilePos() {
     };
 
     uint8_t* readPtr = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.readSpace();
     int32_t  steps = 0;
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
@@ -6848,7 +6876,7 @@ int32_t Audio::flac_correctResumeFilePos() {
     };
 
     uint8_t* readPtr = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.readSpace();
     int32_t  steps = 0;
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
@@ -6863,7 +6891,7 @@ int32_t Audio::mp3_correctResumeFilePos() {
     int32_t  steps = 0;
     int32_t  sumSteps = 0;
     uint8_t* pos = InBuff.getReadPtr();
-    size_t   av = InBuff.getMaxAvailableBytes();
+    size_t   av = InBuff.readSpace();
 
     if (av < InBuff.getMaxBlockSize()) return -1; // guard
 

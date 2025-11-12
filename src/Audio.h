@@ -44,31 +44,7 @@ static constexpr std::array<const char*, 13> eventStr = {"info",    "id3data",  
                                                          "icy_url", "icy_logo", "lasthost", "cover_image",  "lyrics",          "log"};
 //----------------------------------------------------------------------------------------------------------------------
 class AudioBuffer {
-    // AudioBuffer will be allocated in PSRAM
-    //
-    //  m_buffer            m_readPtr                 m_writePtr                                                 m_endPtr
-    //   |                       |<------dataLength------->|<--------------------- writeSpace ----------------------->|
-    //   ▼                       ▼                         ▼                                                          ▼
-    //   ---------------------------------------------------------------------------------------------------------------
-    //   |                     <--m_buffSize-->                                       |      <--m_resBuffSize -->     |
-    //   ---------------------------------------------------------------------------------------------------------------
-    //   |<-----freeSpace------->|                         |<-------freeSpace-------->|
-    //                                                                                ▲
-    //                                                                                |
-    //                                                                             m_buffEnd
-    //   if m_writePtr == m_endPtr copy data from resBuff to the beginning
-    //   so that the mp3/aac/flac frame is always completed
-    //
-    //  m_buffer                      m_writePtr                 m_readPtr                                         m_endPtr
-    //   |                                 |<-------writeSpace------>|<--dataLength-->|                               |
-    //   ▼                                 ▼                         ▼                ▼                               ▼
-    //   ---------------------------------------------------------------------------------------------------------------
-    //   |                        <--m_buffSize-->                                    |      <--m_resBuffSize -->     |
-    //   ---------------------------------------------------------------------------------------------------------------
-    //   |<---  ------dataLength--  ------>|<-------freeSpace------->|                ▲
-    //                                                                                |
-    //                                                                             m_buffEnd
-    //
+
 
   public:
     AudioBuffer();                        // constructor
@@ -76,25 +52,22 @@ class AudioBuffer {
     size_t   init();                      // set default values
     bool     isInitialized() { return m_f_init; };
     size_t   getBufsize();
-    void     changeMaxBlockSize(uint32_t mbs); // is default 1600 for mp3 and aac, set 16384 for FLAC
     size_t   getMaxBlockSize();                // returns maxBlockSize
     size_t   freeSpace();                      // number of free bytes to overwrite
     size_t   writeSpace();                     // space fom writepointer to bufferend
     size_t   bufferFilled();                   // returns the number of filled bytes
-    size_t   getMaxAvailableBytes();           // max readable bytes in one block
+    size_t   readSpace();                      // max readable bytes in one block
     void     bytesWritten(size_t bw);          // update writepointer
     void     bytesWasRead(size_t br);          // update readpointer
     uint8_t* getWritePtr();                    // returns the current writepointer
     uint8_t* getReadPtr();                     // returns the current readpointer
-    void     resetBuffer();                    // restore defaults
+    void     reset();                          // restore defaults
 
   protected:
-    size_t          m_buffSize = 0; // most webstreams limit the advance to 100...300Kbytes
+    size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
     size_t          m_freeSpace = 0;
     size_t          m_writeSpace = 0;
-    size_t          m_dataLength = 0;
     size_t          m_resBuffSize = 0;
-    size_t          m_maxBlockSize = 0;
     ps_ptr<uint8_t> m_buffer;
     uint8_t*        m_buffEnd = nullptr;
     uint8_t*        m_writePtr = nullptr;
