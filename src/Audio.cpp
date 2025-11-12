@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3r                                                                                                                              ";
-/*  Updated on: 12.11.2025
+    Version 3.4.3s                                                                                                                              ";
+/*  Updated on: 13.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -50,7 +50,7 @@ StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
 //   |                  |<------maxAvailableBytes----->|<--------------------- writeSpace ----------------------->|
 //   ▼                  ▼                              ▼                                                          ▼
 //   ---------------------------------------------------------------------------------------------------------------
-//   |                     <--m_mainBuffSize-->                                   |      <--m_resBuffSize -->     |
+//   |                         <--m_mainBuffSize-->                               |      <--m_resBuffSize -->     |
 //   ---------------------------------------------------------------------------------------------------------------
 //   |<---freeSpace---->|<------------filled---------->|<-------freeSpace-------->|
 //                                                                                ▲
@@ -117,7 +117,7 @@ size_t AudioBuffer::writeSpace() {
         // Only copy if the read pointer is not in the way
         if (m_readPtr >= m_startPtr + m_resBuffSize) {
             memcpy(m_startPtr, m_endPtr, m_resBuffSize);
-            log_w("wrap copy %u bytes", m_resBuffSize);
+            // log_w("wrap copy %u bytes", m_resBuffSize);
             m_writePtr = m_startPtr + m_resBuffSize;
         }
     }
@@ -162,12 +162,16 @@ void AudioBuffer::bytesWritten(size_t bw) {
 void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) return;
     m_readPtr += br;
-    if (m_readPtr >= m_endPtr) {
-        size_t tmp = m_readPtr - m_endPtr;
-        log_w("readPtr set to %i", tmp);
-        m_readPtr = m_startPtr + tmp;
+    if (m_readPtr >= m_endPtr && m_readPtr == m_writePtr){ // maybe file end
+        m_f_isEmpty = true;
+        return;
     }
-    if (m_readPtr == m_writePtr) m_f_isEmpty = true;
+    if (m_readPtr >= m_endPtr && m_writePtr < m_readPtr) {
+        size_t len = m_readPtr - m_endPtr;
+        log_d("set new readptr to %i", len);
+        m_readPtr = m_startPtr + len;
+    }
+    if(m_readPtr == m_writePtr) m_f_isEmpty = true;
 }
 
 uint8_t* AudioBuffer::getWritePtr() {
@@ -175,11 +179,6 @@ uint8_t* AudioBuffer::getWritePtr() {
 }
 
 uint8_t* AudioBuffer::getReadPtr() {
-    if (m_readPtr > m_endPtr) {
-        int32_t len = m_readPtr - m_endPtr;
-        log_w("set new readptr to %i", len);
-        m_readPtr = m_startPtr + len;
-    }
     return m_readPtr;
 }
 
@@ -3845,7 +3844,7 @@ void Audio::processLocalFile() {
     if (!m_audioDataSize && m_audioFilePosition == m_audioFileSize) {
         if (!m_f_allDataReceived) m_f_allDataReceived = true;
     }
-    AUDIO_LOG_DEBUG("m_audioFilePosition %u >= m_audioDataSize %u, m_f_allDataReceived % i", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
+    // AUDIO_LOG_DEBUG("m_audioFilePosition %u >= m_audioDataSize %u, m_f_allDataReceived % i", m_audioFilePosition, m_audioDataSize, m_f_allDataReceived);
 
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (!initializeDecoder()) return;
