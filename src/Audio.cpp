@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3s                                                                                                                              ";
+    Version 3.4.3t                                                                                                                              ";
 /*  Updated on: 13.11.2025
 
     Author: Wolle (schreibfaul1)
@@ -91,6 +91,13 @@ size_t AudioBuffer::init() {
     m_buffEnd = m_endPtr + m_resBuffSize;
     reset();
     return m_mainBuffSize;
+}
+
+void AudioBuffer::setMaxBlocksize(uint16_t mbs) {
+    if (!m_f_init) return;
+    m_resBuffSize = mbs;
+    m_buffEnd = m_endPtr + m_resBuffSize;
+    reset();
 }
 
 size_t AudioBuffer::getMaxBlockSize() {
@@ -4291,10 +4298,22 @@ void Audio::processWebStreamHLS() {
                 memcpy(InBuff.getWritePtr(), &m_pwsHLS.ID3Buff[m_pwsHLS.ID3ReadPtr], m_pwsHLS.ID3BuffSize - m_pwsHLS.ID3ReadPtr);
                 InBuff.bytesWritten(m_pwsHLS.ID3BuffSize - m_pwsHLS.ID3ReadPtr);
             } else {
+                int t = 0;
                 memcpy(InBuff.getWritePtr(), &m_pwsHLS.ID3Buff[m_pwsHLS.ID3ReadPtr], ws);
                 InBuff.bytesWritten(ws);
-                memcpy(InBuff.getWritePtr(), &m_pwsHLS.ID3Buff[ws + m_pwsHLS.ID3ReadPtr], m_pwsHLS.ID3BuffSize - (m_pwsHLS.ID3ReadPtr + ws));
-                InBuff.bytesWritten(m_pwsHLS.ID3BuffSize - (m_pwsHLS.ID3ReadPtr + ws));
+                while (true) {
+                    if (InBuff.writeSpace() >= m_pwsHLS.ID3BuffSize - (m_pwsHLS.ID3ReadPtr + ws)) {
+                        memcpy(InBuff.getWritePtr(), &m_pwsHLS.ID3Buff[ws + m_pwsHLS.ID3ReadPtr], m_pwsHLS.ID3BuffSize - (m_pwsHLS.ID3ReadPtr + ws)); // write everything that fits into the buffer
+                        InBuff.bytesWritten(m_pwsHLS.ID3BuffSize - (m_pwsHLS.ID3ReadPtr + ws));
+                        break;
+                    }
+                    t++;
+                    vTaskDelay(10); // wait until the buffer is free
+                    if (t == 10) {
+                        AUDIO_LOG_ERROR("InBuff is full");
+                        break;
+                    }
+                }
             }
             m_pwsHLS.ID3Buff.reset();
             m_pwsHLS.byteCounter += m_pwsHLS.ID3BuffSize;
@@ -4798,13 +4817,34 @@ bool Audio::initializeDecoder() {
     }
     const char* type = nullptr;
     switch (m_codec) {
-        case CODEC_MP3: type = "MP3"; break;
-        case CODEC_AAC: type = "AAC"; break;
-        case CODEC_M4A: type = "AAC"; break;
-        case CODEC_FLAC: type = "FLAC"; break;
-        case CODEC_OPUS: type = "OPUS"; break;
-        case CODEC_VORBIS: type = "VORBIS"; break;
-        case CODEC_WAV: type = "WAV"; break;
+        case CODEC_MP3:
+            type = "MP3";
+            InBuff.setMaxBlocksize(m_frameSizeMP3);
+            break;
+        case CODEC_AAC:
+            type = "AAC";
+            InBuff.setMaxBlocksize(m_frameSizeAAC);
+            break;
+        case CODEC_M4A:
+            type = "AAC";
+            InBuff.setMaxBlocksize(m_frameSizeAAC);
+            break;
+        case CODEC_FLAC:
+            type = "FLAC";
+            InBuff.setMaxBlocksize(m_frameSizeFLAC);
+            break;
+        case CODEC_OPUS:
+            type = "OPUS";
+            InBuff.setMaxBlocksize(m_frameSizeOPUS);
+            break;
+        case CODEC_VORBIS:
+            type = "VORBIS";
+            InBuff.setMaxBlocksize(m_frameSizeVORBIS);
+            break;
+        case CODEC_WAV:
+            type = "WAV";
+            InBuff.setMaxBlocksize(m_frameSizeWav);
+            break;
         default:
             AUDIO_LOG_ERROR("unknown decoder");
             stopSong();

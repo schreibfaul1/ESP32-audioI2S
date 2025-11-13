@@ -53,6 +53,7 @@ class AudioBuffer {
     bool     isInitialized() { return m_f_init; };
     size_t   getBufsize();
     size_t   getMaxBlockSize();                // returns maxBlockSize
+    void     setMaxBlocksize(uint16_t mbs);
     size_t   freeSpace();                      // number of free bytes to overwrite
     size_t   writeSpace();                     // space fom writepointer to bufferend
     size_t   bufferFilled();                   // returns the number of filled bytes
