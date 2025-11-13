@@ -162,7 +162,7 @@ void AudioBuffer::bytesWritten(size_t bw) {
 void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) return;
     m_readPtr += br;
-    if (m_readPtr >= m_endPtr && m_readPtr == m_writePtr){ // maybe file end
+    if (m_readPtr >= m_endPtr && m_readPtr == m_writePtr) { // maybe file end
         m_f_isEmpty = true;
         return;
     }
@@ -171,7 +171,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
         log_d("set new readptr to %i", len);
         m_readPtr = m_startPtr + len;
     }
-    if(m_readPtr == m_writePtr) m_f_isEmpty = true;
+    if (m_readPtr == m_writePtr) m_f_isEmpty = true;
 }
 
 uint8_t* AudioBuffer::getWritePtr() {
@@ -3972,7 +3972,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (InBuff.bufferFilled() > m_pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
+    if (InBuff.bufferFilled() * 2 > m_pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
@@ -4050,7 +4050,7 @@ void Audio::processWebFile() {
             return;
         } else {
             if (m_resumeFilePos == -1) {
-                m_f_stream = true;
+                if (InBuff.bufferFilled() > 2 * InBuff.getMaxBlockSize()) { m_f_stream = true; }
                 info(*this, evt_info, "stream ready");
             }
         }
@@ -4165,10 +4165,22 @@ nextRound:
                     InBuff.bytesWritten(ts_packetLength);
                     m_pwsst.f_nextRound = true;
                 } else {
-                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ws);
+                    int t = 0;
+                    memcpy(InBuff.getWritePtr(), m_pwsst.ts_packet.get() + ts_packetStart, ws); // write everything that fits into the buffer
                     InBuff.bytesWritten(ws);
-                    memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet.get()[ws + ts_packetStart], ts_packetLength - ws);
-                    InBuff.bytesWritten(ts_packetLength - ws);
+                    while (true) {
+                        if (InBuff.writeSpace() >= ts_packetLength - ws) {
+                            memcpy(InBuff.getWritePtr(), &m_pwsst.ts_packet.get()[ws + ts_packetStart], ts_packetLength - ws); // write the rest
+                            InBuff.bytesWritten(ts_packetLength - ws);
+                            break;
+                        }
+                        t++;
+                        vTaskDelay(10); // wait until the buffer is free
+                        if (t == 10) {
+                            AUDIO_LOG_ERROR("InBuff is full");
+                            break;
+                        }
+                    }
                 }
             }
             if (m_audioFileSize && m_pwsst.byteCounter > m_audioFileSize) {
@@ -4385,9 +4397,9 @@ void Audio::playAudioData() {
     if (m_pad.lastFrames) {
         m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
     } else {
-        ps_ptr<char> hd;
-        hd.copy_from((const char*)InBuff.getReadPtr(), 30);
-        if (InBuff.bufferFilled() >= InBuff.getMaxBlockSize())
+        // ps_ptr<char> hd;
+        // hd.copy_from((const char*)InBuff.getReadPtr(), 30);
+        if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize())
             m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
         else
             m_pad.bytesDecoded = 0; // Inbuff not filled enough

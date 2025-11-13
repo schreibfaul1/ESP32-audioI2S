@@ -1303,8 +1303,8 @@ int32_t MP3Decoder::DecodeHuffmanPairs(int32_t* xy, int32_t nVals, int32_t tabId
 
                 /* ran out of bits - should never have consumed padBits */
                 if (cachedBits < padBits) {
-                    break; // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
-                    //    return -1;
+                    MP3_LOG_ERROR("MP3, error - overran end of bitstream"); // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                    return MP3_ERR;
                 }
 
                 *xy++ = x;
@@ -1380,7 +1380,10 @@ int32_t MP3Decoder::DecodeHuffmanPairs(int32_t* xy, int32_t nVals, int32_t tabId
 
                 if (y == 15 && tabType == loopLinbits) {
                     minBits = linBits + 1;
-                    if (cachedBits + bitsLeft < minBits) break; // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                    if (cachedBits + bitsLeft < minBits){
+                        MP3_LOG_ERROR("MP3, error - overran end of bitstream"); // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
+                        return MP3_ERR;
+                    }
                     // return -1;
                     while (cachedBits < minBits) {
                         cache |= (uint32_t)(*buf++) << (24 - cachedBits);
