@@ -94,14 +94,11 @@ size_t AudioBuffer::init() {
 }
 
 void AudioBuffer::setMaxBlocksize(uint16_t mbs) {
-    if (!m_f_init) return;
-    m_resBuffSize = mbs;
-    m_buffEnd = m_endPtr + m_resBuffSize;
-    reset();
+    m_maxBlockSize = mbs;
 }
 
 size_t AudioBuffer::getMaxBlockSize() {
-    return m_resBuffSize;
+    return m_maxBlockSize;
 }
 
 size_t AudioBuffer::freeSpace() {
@@ -193,6 +190,7 @@ void AudioBuffer::reset() {
     m_writePtr = m_buffer.get();
     m_readPtr = m_buffer.get();
     m_f_isEmpty = true;
+    m_maxBlockSize = UINT16_MAX;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O   📌📌📌
@@ -3816,7 +3814,7 @@ ps_ptr<char> Audio::m3u8redirection(uint8_t* codec) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processLocalFile() {
     if (!(m_audiofile && m_f_running && m_dataMode == AUDIO_LOCALFILE)) return; // guard
-    m_prlf.maxFrameSize = InBuff.getMaxBlockSize();                             // every mp3/aac frame is not bigger maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
+
     m_prlf.availableBytes = 0;
     m_prlf.bytesAddedToBuffer = 0;
 
@@ -3855,6 +3853,8 @@ void Audio::processLocalFile() {
 
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (!initializeDecoder()) return;
+        m_prlf.maxFrameSize = InBuff.getMaxBlockSize();
+
     }
 
     if (!m_f_stream) {
@@ -3996,7 +3996,6 @@ void Audio::processWebFile() {
         AUDIO_LOG_ERROR("m_lastHost is empty");
         return;
     } // guard
-    m_pwf.maxFrameSize = InBuff.getMaxBlockSize(); // every frame is not bigger
     uint32_t availableBytes = 0;
     int32_t  bytesAddedToBuffer = 0;
     // m_pwf.f_clientIsConnected = m_client->connected();     // we are not connected
@@ -4014,6 +4013,7 @@ void Audio::processWebFile() {
         m_f_allDataReceived = false;
         m_pwf.timeout = 8000; // ms
         if (!initializeDecoder()) return;
+        m_pwf.maxFrameSize = InBuff.getMaxBlockSize(); // every frame is not bigger
     }
 
     if (m_resumeFilePos >= 0) { // we have a resume file position
@@ -4250,8 +4250,6 @@ void Audio::processWebStreamHLS() {
         m_t0 = millis();
         m_controlCounter = 0;
         m_audioFilePosition = 0;
-
-        m_pwsHLS.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
         m_pwsHLS.ID3BuffSize = 4096;
         m_pwsHLS.availableBytes = 0;
         m_pwsHLS.firstBytes = true;
@@ -4263,6 +4261,7 @@ void Audio::processWebStreamHLS() {
         m_pwsHLS.ID3Buff.alloc(m_pwsHLS.ID3BuffSize, "m_pwsHLS.ID3Buff");
         getChunkSize(0, true);
         if (!m_decoder && !initializeDecoder()) return;
+        m_pwsHLS.maxFrameSize = InBuff.getMaxBlockSize(); // every mp3/aac frame is not bigger
     }
 
     if (m_dataMode != AUDIO_DATA) return; // guard

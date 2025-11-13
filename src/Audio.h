@@ -69,6 +69,7 @@ class AudioBuffer {
     size_t          m_freeSpace = 0;
     size_t          m_writeSpace = 0;
     size_t          m_resBuffSize = 0;
+    size_t          m_maxBlockSize = 0;
     ps_ptr<uint8_t> m_buffer;
     uint8_t*        m_buffEnd = nullptr;
     uint8_t*        m_writePtr = nullptr;
