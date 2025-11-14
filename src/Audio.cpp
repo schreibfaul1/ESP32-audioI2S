@@ -85,7 +85,7 @@ size_t AudioBuffer::getBufsize() {
 
 size_t AudioBuffer::init() {
     m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
-    m_f_init = true;
+    m_init = true;
     m_startPtr = m_buffer.get();
     m_endPtr = m_buffer.get() + m_mainBuffSize;
     m_buffEnd = m_endPtr + m_resBuffSize;
@@ -100,9 +100,9 @@ void AudioBuffer::setMaxBlocksize(uint16_t mbs) {
 size_t AudioBuffer::getMaxBlockSize() {
     return m_maxBlockSize;
 }
-
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::freeSpace() {
-    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? m_mainBuffSize : 0; }
+    if (m_readPtr == m_writePtr) { return m_isEmpty ? m_mainBuffSize : 0; }
     if (m_readPtr < m_writePtr) {
         if (m_writePtr > m_endPtr) {
             return (m_readPtr - m_startPtr);
@@ -112,14 +112,28 @@ size_t AudioBuffer::freeSpace() {
     }
     return m_readPtr - m_writePtr;
 }
-
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t AudioBuffer::bufferFilled() {
+    if (m_readPtr == m_writePtr) { return m_isEmpty ? 0 : m_mainBuffSize; }
+    if (m_readPtr < m_writePtr) {
+        if (m_writePtr > m_endPtr) {
+            return m_endPtr - m_readPtr;
+        } else {
+            return m_writePtr - m_readPtr;
+        }
+    }
+    return (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::writeSpace() {
 
-    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) {
-        log_e("ddd");
+    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) { // special case
         m_readPtr = m_startPtr;
         m_writePtr = m_startPtr;
-        m_f_isEmpty = true;
+        m_isEmpty = true;
+        m_isFull = false;
+        m_writeSpace = min(m_maxRet, m_mainBuffSize);
+        return m_writeSpace;
     }
 
     // Check whether a complete block still fits in at the end
@@ -138,38 +152,21 @@ size_t AudioBuffer::writeSpace() {
         }
     }
 
-    // Now calculate regular free space (main buffer only)
-    if (m_readPtr == m_writePtr) {
-        // log_e("writeSpace %i", m_f_isEmpty ? m_mainBuffSize : 0);
-        return m_f_isEmpty ? m_mainBuffSize : 0;
-    }
-    if (m_readPtr > m_writePtr) return (m_readPtr - m_writePtr);
-    return spaceToEnd;
+    if (m_readPtr > m_writePtr) { m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr)); return m_writeSpace;}
+    if (m_readPtr < m_writePtr) { m_writeSpace = min(m_maxRet, spaceToEnd); return m_writeSpace; }
+
+    if(m_isFull) { m_writeSpace = 0; return m_writeSpace; }
+    if(m_isEmpty) { m_writeSpace = min(m_maxRet, m_mainBuffSize); return m_writeSpace; }
+
+    log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    return  0;
 }
-
-size_t AudioBuffer::bufferFilled() {
-    if (m_readPtr == m_writePtr) { return m_f_isEmpty ? 0 : m_mainBuffSize; }
-    if (m_readPtr < m_writePtr) {
-        if (m_writePtr > m_endPtr) {
-            return m_endPtr - m_readPtr;
-        } else {
-            return m_writePtr - m_readPtr;
-        }
-    }
-    return (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
-}
-
-size_t AudioBuffer::readSpace() {
-    if (m_readPtr == m_writePtr) {
-        return m_f_isEmpty ? 0 : m_buffEnd - m_readPtr; // empty or full
-    }
-    if (m_readPtr < m_writePtr) { return m_writePtr - m_readPtr; }
-
-    return m_buffEnd - m_readPtr;
-}
-
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWritten(size_t bw) {
     if (!bw) return;
+
+    if(bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, br %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
+
     if(m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr){
         log_e("writePtr overrruns readPtr, writePtr %i, readPtr %i, bw %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
         m_writePtr = m_readPtr;
@@ -181,12 +178,37 @@ void AudioBuffer::bytesWritten(size_t bw) {
         return;
     }
     m_writePtr += bw;
-    m_f_isEmpty = false;
+    if(bw && m_writePtr == m_readPtr) m_isFull = true;
+    if(bw) m_isEmpty = false;
 }
+//----------------------------------------------------------------------------------------------------------------------------------------------------
+size_t AudioBuffer::readSpace() {
 
+    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) { // special case
+        m_readPtr = m_startPtr;
+        m_writePtr = m_startPtr;
+        m_isEmpty = true;
+        m_isFull = false;
+        m_readSpace = 0;
+        return m_readSpace;
+    }
+
+    if (m_readPtr < m_writePtr) { m_readSpace = min(m_maxRet, (size_t)(m_writePtr - m_readPtr)); return m_readSpace; }
+    if (m_readPtr > m_writePtr){ m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr)); return m_readSpace; }
+
+    if(m_isEmpty) {m_readSpace = 0; return m_readSpace;}
+    if(m_isFull)  {m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr)); return m_readSpace;}
+
+    log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    return  0;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) return;
-    if(m_readPtr <= m_writePtr && m_readPtr + br > m_writePtr){
+
+    if(m_readSpace < br) log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+
+    if(m_readPtr < m_writePtr && m_readPtr + br > m_writePtr){
         log_e("readPtr overrruns writePtr, readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
         m_readPtr = m_writePtr;
         return;
@@ -197,16 +219,14 @@ void AudioBuffer::bytesWasRead(size_t br) {
         return;
     }
     m_readPtr += br;
-    if (m_readPtr >= m_endPtr && m_readPtr == m_writePtr) { // maybe file end
-        m_f_isEmpty = true;
-        return;
-    }
+
     if (m_readPtr >= m_endPtr && m_writePtr < m_readPtr) {
         size_t len = m_readPtr - m_endPtr;
         log_d("set new readptr to %i", len);
         m_readPtr = m_startPtr + len;
     }
-    if (m_readPtr == m_writePtr) m_f_isEmpty = true;
+    if (br && m_readPtr == m_writePtr) m_isEmpty = true;
+    if(br) m_isFull = false;
 }
 
 uint8_t* AudioBuffer::getWritePtr() {
@@ -220,7 +240,8 @@ uint8_t* AudioBuffer::getReadPtr() {
 void AudioBuffer::reset() {
     m_writePtr = m_buffer.get();
     m_readPtr = m_buffer.get();
-    m_f_isEmpty = true;
+    m_isEmpty = true;
+    m_isFull = false;
     m_maxBlockSize = UINT16_MAX;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1907,9 +1928,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.frameid[3] = *(data + 3);
         m_ID3Hdr.frameid[4] = 0;
         for (uint8_t i = 0; i < 4; i++) m_ID3Hdr.tag[i] = m_ID3Hdr.frameid[i]; // tag = frameid
-AUDIO_LOG_ERROR("m_ID3Hdr %i %i %i %i", m_ID3Hdr.frameid[0], m_ID3Hdr.frameid[1], m_ID3Hdr.frameid[2], m_ID3Hdr.frameid[3]);
         if (m_ID3Hdr.frameid[0] == 0 && m_ID3Hdr.frameid[1] == 0 && m_ID3Hdr.frameid[2] == 0 && m_ID3Hdr.frameid[3] == 0) {
-
             // We're in padding
             m_controlCounter = MP3_LASTFRAMES; // all ID3 metadata processed
         }
@@ -1944,13 +1963,11 @@ AUDIO_LOG_ERROR("m_ID3Hdr %i %i %i %i", m_ID3Hdr.frameid[0], m_ID3Hdr.frameid[1]
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == MP3_SKIP) { // If the frame is larger than m_ID3Hdr.framesize, skip the rest
-AUDIO_LOG_ERROR("m_ID3Hdr.framesize %i  len %i", m_ID3Hdr.framesize, len);
         if (m_ID3Hdr.framesize > len) {
             m_ID3Hdr.framesize -= len;
             m_ID3Hdr.remainingHeaderBytes -= len;
             return len;
         } else {
-AUDIO_LOG_ERROR("m_ID3Hdr.framesize %i  m_ID3Hdr.remainingHeaderBytes %i", m_ID3Hdr.framesize, m_ID3Hdr.remainingHeaderBytes);
             m_controlCounter = MP3_ID3FRAME; // check next frame
             m_ID3Hdr.remainingHeaderBytes -= m_ID3Hdr.framesize;
             return m_ID3Hdr.framesize;
@@ -1969,7 +1986,7 @@ AUDIO_LOG_ERROR("m_ID3Hdr.framesize %i  m_ID3Hdr.remainingHeaderBytes %i", m_ID3
         if (startsWith(m_ID3Hdr.tag, "APIC")) { // a image embedded in file, passing it to external function
             m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes);
             m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.framesize);
-            AUDIO_LOG_WARN("APIC_pos %i, APIC_size %i", m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header], m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header + 1]);
+            AUDIO_LOG_DEBUG("APIC_pos %i, APIC_size %i", m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header], m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header + 1]);
             return 0;
         }
 
@@ -4435,7 +4452,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min((uint32_t)(m_audioFileSize - m_audioFilePosition + InBuff.readSpace()), (uint32_t)InBuff.getMaxBlockSize());
+        m_pad.bytesToDecode = min3(m_audioFileSize - m_audioFilePosition, InBuff.readSpace(), (uint32_t)InBuff.getMaxBlockSize());
 
         if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode

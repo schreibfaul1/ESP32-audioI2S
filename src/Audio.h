@@ -50,7 +50,7 @@ class AudioBuffer {
     AudioBuffer();                        // constructor
     ~AudioBuffer();                       // frees the buffer
     size_t   init();                      // set default values
-    bool     isInitialized() { return m_f_init; };
+    bool     isInitialized() { return m_init; };
     size_t   getBufsize();
     size_t   getMaxBlockSize();                // returns maxBlockSize
     void     setMaxBlocksize(uint16_t mbs);
@@ -70,14 +70,17 @@ class AudioBuffer {
     size_t          m_writeSpace = 0;
     size_t          m_resBuffSize = 0;
     size_t          m_maxBlockSize = 0;
+    size_t          m_readSpace = 0;
+    const size_t    m_maxRet = UINT16_MAX;
     ps_ptr<uint8_t> m_buffer;
     uint8_t*        m_buffEnd = nullptr;
     uint8_t*        m_writePtr = nullptr;
     uint8_t*        m_readPtr = nullptr;
     uint8_t*        m_endPtr = nullptr;
     uint8_t*        m_startPtr = nullptr;
-    bool            m_f_init = false;
-    bool            m_f_isEmpty = true;
+    bool            m_init = false;
+    bool            m_isEmpty = true;
+    bool            m_isFull = false;
 };
 //----------------------------------------------------------------------------------------------------------------------
 
