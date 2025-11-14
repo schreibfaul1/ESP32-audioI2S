@@ -1876,8 +1876,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.frameid[3] = *(data + 3);
         m_ID3Hdr.frameid[4] = 0;
         for (uint8_t i = 0; i < 4; i++) m_ID3Hdr.tag[i] = m_ID3Hdr.frameid[i]; // tag = frameid
-
+AUDIO_LOG_ERROR("m_ID3Hdr %i %i %i %i", m_ID3Hdr.frameid[0], m_ID3Hdr.frameid[1], m_ID3Hdr.frameid[2], m_ID3Hdr.frameid[3]);
         if (m_ID3Hdr.frameid[0] == 0 && m_ID3Hdr.frameid[1] == 0 && m_ID3Hdr.frameid[2] == 0 && m_ID3Hdr.frameid[3] == 0) {
+
             // We're in padding
             m_controlCounter = MP3_LASTFRAMES; // all ID3 metadata processed
         }
@@ -1893,6 +1894,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else {
             m_ID3Hdr.framesize = bigEndian(data, 4); // << 8
         }
+
         uint8_t frameFlag_0 = *(data + 4);
         uint8_t frameFlag_1 = *(data + 5);
         (void)frameFlag_0;
@@ -1911,11 +1913,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == MP3_SKIP) { // If the frame is larger than m_ID3Hdr.framesize, skip the rest
+AUDIO_LOG_ERROR("m_ID3Hdr.framesize %i  len %i", m_ID3Hdr.framesize, len);
         if (m_ID3Hdr.framesize > len) {
             m_ID3Hdr.framesize -= len;
             m_ID3Hdr.remainingHeaderBytes -= len;
             return len;
         } else {
+AUDIO_LOG_ERROR("m_ID3Hdr.framesize %i  m_ID3Hdr.remainingHeaderBytes %i", m_ID3Hdr.framesize, m_ID3Hdr.remainingHeaderBytes);
             m_controlCounter = MP3_ID3FRAME; // check next frame
             m_ID3Hdr.remainingHeaderBytes -= m_ID3Hdr.framesize;
             return m_ID3Hdr.framesize;
@@ -1934,7 +1938,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if (startsWith(m_ID3Hdr.tag, "APIC")) { // a image embedded in file, passing it to external function
             m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes);
             m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.framesize);
-            AUDIO_LOG_DEBUG("APIC_pos %i, APIC_size %i", m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header], m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header + 1]);
+            AUDIO_LOG_WARN("APIC_pos %i, APIC_size %i", m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header], m_ID3Hdr.APIC_vec[2 * m_ID3Hdr.numID3Header + 1]);
             return 0;
         }
 
