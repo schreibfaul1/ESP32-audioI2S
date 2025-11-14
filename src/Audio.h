@@ -263,6 +263,7 @@ class Audio {
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, HTTP_RANGE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE, AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER, AUDIO_PLAYLISTDATA };
     const char* dataModeStr[8] = {"AUDIO_NONE", "HTTP_RESPONSE_HEADER", "HTTP_RANGE_HEADER", "AUDIO_DATA", "AUDIO_LOCALFILE", "AUDIO_PLAYLISTINIT", "AUDIO_PLAYLISTHEADER", "AUDIO_PLAYLISTDATA"};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH = 2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5, FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100 };
+    enum : int { MP3_BEGIN = 0, MP3_ID3HEADER, MP3_NEXTID3, MP3_EXTHEADER, MP3_ID3FRAME, MP3_FRAMESIZE, MP3_SKIP, MP3_TAG, MP3_SYLT, MP3_ID3V22, MP3_LASTFRAMES, MP3_XING, MP3_OKAY = 100};
     enum : int {
         M4A_BEGIN = 0,
         M4A_FTYP = 1,
@@ -407,9 +408,7 @@ class Audio {
     bool     m_f_running = false;
     bool     m_f_firstCall = false;         // InitSequence for processWebstream and processLokalFile
     bool     m_f_firstLoop = false;         // InitSequence in loop()
-    bool     m_f_firstCurTimeCall = false;  // InitSequence for calculateAudioTime
     bool     m_f_firstPlayCall = false;     // InitSequence for playAudioData
-    bool     m_f_firstM3U8call = false;     // InitSequence for m3u8 parsing
     bool     m_f_ID3v1TagFound = false;     // ID3v1 tag found
     bool     m_f_chunked = false;           // Station provides chunked transfer
     bool     m_f_firstmetabyte = false;     // True if first metabyte (counter)
