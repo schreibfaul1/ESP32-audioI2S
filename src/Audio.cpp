@@ -114,12 +114,24 @@ size_t AudioBuffer::freeSpace() {
 }
 
 size_t AudioBuffer::writeSpace() {
+
+    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) {
+        log_e("ddd");
+        m_readPtr = m_startPtr;
+        m_writePtr = m_startPtr;
+        m_f_isEmpty = true;
+    }
+
     // Check whether a complete block still fits in at the end
     size_t spaceToEnd = m_buffEnd - m_writePtr;
-
     if (spaceToEnd == 0) { // be sure that the resBuff is full
         // Only copy if the read pointer is not in the way
-        if (m_readPtr >= m_startPtr + m_resBuffSize) {
+        if(m_readPtr > m_endPtr){
+            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
+            m_writePtr = m_startPtr + m_resBuffSize;
+            m_readPtr = m_startPtr + (m_readPtr - m_endPtr);
+        }
+        else if (m_readPtr >= m_startPtr + m_resBuffSize) {
             memcpy(m_startPtr, m_endPtr, m_resBuffSize);
             // log_w("wrap copy %u bytes", m_resBuffSize);
             m_writePtr = m_startPtr + m_resBuffSize;
