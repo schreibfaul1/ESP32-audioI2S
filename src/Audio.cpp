@@ -158,13 +158,32 @@ size_t AudioBuffer::readSpace() {
 
 void AudioBuffer::bytesWritten(size_t bw) {
     if (!bw) return;
+    if(m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr){
+        log_e("writePtr overrruns readPtr, writePtr %i, readPtr %i, bw %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
+        m_writePtr = m_readPtr;
+        return;
+    }
+    if(m_writePtr + bw > m_buffEnd){
+        log_e("writePtr overrruns buffEnd, writePtr %i, buffEnd %i, bw %i", m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
+        m_writePtr = m_buffEnd;
+        return;
+    }
     m_writePtr += bw;
-    if (m_writePtr > m_buffEnd) log_e("AudioBuffer: m_writePtr %p > m_endPtr %p", m_writePtr, m_buffEnd);
     m_f_isEmpty = false;
 }
 
 void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) return;
+    if(m_readPtr <= m_writePtr && m_readPtr + br > m_writePtr){
+        log_e("readPtr overrruns writePtr, readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+        m_readPtr = m_writePtr;
+        return;
+    }
+    if(m_readPtr + br > m_buffEnd){
+        log_e("readPtr overrruns buffEnd, readPtr %i, buffEnd %i, bw %i", m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
+        m_readPtr = m_buffEnd;
+        return;
+    }
     m_readPtr += br;
     if (m_readPtr >= m_endPtr && m_readPtr == m_writePtr) { // maybe file end
         m_f_isEmpty = true;
