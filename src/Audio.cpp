@@ -277,7 +277,7 @@ void AudioBuffer::showStatus(){
     printf("\nfilled %i, free %i\n", bufferFilled(), freeSpace());
     printf("writeSpace %i, readSpace %i\n", writeSpace(), readSpace());
     printf("writePtr %i, readPtr %i\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    printf("\nisEmpty %i, isFull %i\n\n", m_isFull, m_isEmpty);
+    printf("isEmpty %i, isFull %i\n\n", m_isFull, m_isEmpty);
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
