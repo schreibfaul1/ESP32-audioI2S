@@ -95,7 +95,7 @@ size_t AudioBuffer::init() {
     return m_mainBuffSize;
 }
 
-void AudioBuffer::setMaxBlocksize(uint16_t mbs) {
+void AudioBuffer::setMaxBlocksize(uint32_t mbs) {
     m_maxBlockSize = mbs;
 }
 
@@ -104,7 +104,11 @@ size_t AudioBuffer::getMaxBlockSize() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::freeSpace() {
-    if (m_readPtr == m_writePtr) { return m_isEmpty ? m_mainBuffSize : 0; }
+    if (m_readPtr == m_writePtr) {
+        if (m_isEmpty) { return m_mainBuffSize; }
+        if (m_isFull) { return 0; }
+        log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    }
     if (m_readPtr < m_writePtr) {
         if (m_writePtr > m_endPtr) {
             return (m_readPtr - m_startPtr);
@@ -116,7 +120,11 @@ size_t AudioBuffer::freeSpace() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::bufferFilled() {
-    if (m_readPtr == m_writePtr) { return m_isEmpty ? 0 : m_mainBuffSize; }
+    if (m_readPtr == m_writePtr) {
+        if (m_isEmpty) { return 0; }
+        if (m_isFull) { return m_mainBuffSize; }
+        log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    }
     if (m_readPtr < m_writePtr) {
         if (m_writePtr > m_endPtr) {
             return m_endPtr - m_readPtr;
@@ -133,6 +141,7 @@ size_t AudioBuffer::writeSpace() {
 
     // Check whether a complete block still fits in at the end
     size_t spaceToEnd = m_buffEnd - m_writePtr;
+
     if (spaceToEnd == 0) { // be sure that the resBuff is full
         // Only copy if the read pointer is not in the way
         if (m_readPtr >= m_startPtr + m_resBuffSize) {
@@ -271,14 +280,13 @@ void AudioBuffer::reset() {
     m_readPtr = m_buffer.get();
     m_isEmpty = true;
     m_isFull = false;
-    m_maxBlockSize = UINT16_MAX;
 }
 
 void AudioBuffer::showStatus(){
     printf("\nfilled %i, free %i\n", bufferFilled(), freeSpace());
     printf("writeSpace %i, readSpace %i\n", writeSpace(), readSpace());
     printf("writePtr %i, readPtr %i\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    printf("isEmpty %i, isFull %i\n\n", m_isFull, m_isEmpty);
+    printf("isEmpty %i, isFull %i\n\n", m_isEmpty, m_isFull);
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4488,8 +4496,7 @@ void Audio::playAudioData() {
             m_pad.oldAudioDataSize = m_audioDataSize;
         }
 
-        m_pad.bytesToDecode = min3(m_audioFileSize - m_audioFilePosition, InBuff.readSpace(), (uint32_t)InBuff.getMaxBlockSize());
-
+        m_pad.bytesToDecode = InBuff.readSpace();
         if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
         if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode
             m_pad.lastFrames = true;
