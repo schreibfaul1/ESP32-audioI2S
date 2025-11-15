@@ -16,39 +16,43 @@ struct sylt_t {
 };
 
 struct ID3Hdr_t { // used only in readID3header()
-    size_t                retvalue;
-    size_t                headerSize;
-    size_t                tagSize;
-    size_t                cnt;
-    size_t                id3Size;
-    size_t                totalId3Size; // if we have more header, id3_1_size + id3_2_size + ....
-    size_t                remainingHeaderBytes;
-    size_t                universal_tmp;
-    uint8_t               ID3version;
-    uint8_t               ID3revision;
-    uint8_t               flags;
-    bool                  unsync;
-    bool                  extended_header;
-    bool                  experimental_indicator;
-    bool                  footer_present;
-    size_t                offset;
-    size_t                currentPosition;
-    int                   ehsz;
-    char                  tag[5];
-    char                  frameid[5];
-    char                  lang[5];
-    size_t                framesize;
-    bool                  compressed;
-    std::vector<uint32_t> APIC_vec;
-    sylt_t                SYLT;
-    uint8_t               numID3Header;
-    uint16_t              iBuffSize;
-    uint8_t               contentDescriptorTerminator_0;
-    uint8_t               contentDescriptorTerminator_1;
-    uint8_t               textStringTerminator_0;
-    uint8_t               textStringTerminator_1;
-    bool                  byteOrderMark;
+    size_t                retvalue = {};
+    size_t                headerSize = {};
+    size_t                tagSize = {};
+    size_t                cnt = {};
+    size_t                id3Size = {};
+    size_t                totalId3Size = {}; // if we have more header, id3_1_size + id3_2_size + ....
+    size_t                remainingHeaderBytes = {};
+    size_t                universal_tmp = {};
+    uint8_t               ID3version = {};
+    uint8_t               ID3revision = {};
+    uint8_t               flags = {};
+    bool                  unsync = {};
+    bool                  extended_header = {};
+    bool                  experimental_indicator = {};
+    bool                  footer_present = {};
+    size_t                offset = {};
+    size_t                currentPosition = {};
+    int                   ehsz = {};
+    char                  tag[5] = {};
+    char                  frameid[5] = {};
+    char                  lang[5] = {};
+    size_t                framesize = {};
+    bool                  compressed = {};
+    std::vector<uint32_t> APIC_vec = {};
+    sylt_t                SYLT = {};
+    uint8_t               numID3Header = {};
+    uint16_t              iBuffSize = {};
+    uint8_t               contentDescriptorTerminator_0 = {};
+    uint8_t               contentDescriptorTerminator_1 = {};
+    uint8_t               textStringTerminator_0 = {};
+    uint8_t               textStringTerminator_1 = {};
+    bool                  byteOrderMark = {};
     ps_ptr<char>          iBuff;
+
+    void reset() {
+        *this = ID3Hdr_t{};
+    }
 };
 
 struct pwsHLS_t { // used in processWebStreamHLS()
@@ -67,6 +71,7 @@ struct pwsHLS_t { // used in processWebStreamHLS()
 struct pplM3u8_t { // used in parsePlaylist_M3U8
     uint64_t xMedSeq;
     bool     f_mediaSeq_found;
+    bool     firstCall;
 };
 
 struct m4aHdr_t { // used in read_M4A_Header
@@ -162,9 +167,9 @@ typedef struct _cat { // used in calculateAudioTime
     uint32_t avrBitrateStable{};
     uint32_t oldAvrBitrate{};
     uint32_t brCounter{};
+    bool     firstCall{};
 
     void reset() {
-        // Default-initialize alles neu (inklusive Array)
         *this = _cat{};
     }
 } cat_t;
@@ -198,7 +203,7 @@ typedef struct _tspp { // used in ts_parsePacket
         // Default-initialize alles neu (inklusive Array)
         *this = _tspp{};
     }
-}tspp_t;
+} tspp_t;
 
 struct pwst_t { // used in processWebStream
     uint16_t maxFrameSize;

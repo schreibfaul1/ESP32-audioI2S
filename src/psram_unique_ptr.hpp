@@ -1276,19 +1276,36 @@ class ps_ptr {
     // int last = str.last_index_of('/');            // → 32 (the last '/')
     // int prev = str.last_index_of('/', last - 1);  // → 23 (the second to last '/')
 
-    int last_index_of(const T& value, int start_pos = -1) const {
-        if (!mem || allocated_size < sizeof(T)) return -1;
+    template <typename U = T>
+        requires std::is_same_v<U, const char>
+    int last_index_of(const char ch, int start_pos = -1) const {
+        if (!mem) return -1;
 
-        std::size_t count = allocated_size / sizeof(T);
-        T*          data = get();
+        const char* str = static_cast<const char*>(mem.get());
+        int         len = static_cast<int>(std::strlen(str));
 
-        if (start_pos < 0 || start_pos >= static_cast<int>(count)) start_pos = static_cast<int>(count) - 1;
+        // if no start position is specified, start at the end
+        if (start_pos < 0 || start_pos >= len) start_pos = len - 1;
 
         for (int i = start_pos; i >= 0; --i) {
-            if (data[i] == value) return i;
+            if (str[i] == ch) return i;
         }
         return -1;
     }
+
+    // int last_index_of(const T& value, int start_pos = -1) const {
+    //     if (!mem || allocated_size < sizeof(T)) return -1;
+
+    //     std::size_t count = allocated_size / sizeof(T);
+    //     T*          data = get();
+
+    //     if (start_pos < 0 || start_pos >= static_cast<int>(count)) start_pos = static_cast<int>(count) - 1;
+
+    //     for (int i = start_pos; i >= 0; --i) {
+    //         if (data[i] == value) return i;
+    //     }
+    //     return -1;
+    // }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F _ S U B S T R   📌📌📌
 

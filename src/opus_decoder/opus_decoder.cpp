@@ -166,6 +166,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
 
     else if (m_opusPageNr == 1) { // OpusComment Subsequent Pages
         ret = parseOpusComment(inbuf, segmLen, m_opusCurrentFilePos + bytes_consumed);
+
         if (ret == OPUS_COMMENT_INVALID) {
             OPUS_LOG_ERROR("Error in Opus comment page");
             return OPUS_ERR;
@@ -1189,6 +1190,9 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
         m_comment.pointer += 4;
         available_bytes -= 4;
         OPUS_LOG_DEBUG("VendorLen=%u, CommentCount=%u", vendorLength, m_comment.list_length);
+        if(m_comment.list_length == 0){
+            return OPUS_COMMENT_DONE;
+        }
     }
 
     // 🔹 3. read comments
