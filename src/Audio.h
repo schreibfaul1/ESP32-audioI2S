@@ -62,6 +62,7 @@ class AudioBuffer {
     uint8_t* getWritePtr();           // returns the current writepointer
     uint8_t* getReadPtr();            // returns the current readpointer
     void     reset();                 // restore defaults
+    void     showStatus();
 
   protected:
     size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
