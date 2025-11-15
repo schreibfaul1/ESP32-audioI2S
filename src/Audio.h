@@ -28,8 +28,8 @@
 #include <libb64/cencode.h>
 #include <locale>
 #include <memory>
-#include <vector>
 #include <span>
+#include <vector>
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -45,24 +45,23 @@ static constexpr std::array<const char*, 13> eventStr = {"info",    "id3data",  
 //----------------------------------------------------------------------------------------------------------------------
 class AudioBuffer {
 
-
   public:
-    AudioBuffer();                        // constructor
-    ~AudioBuffer();                       // frees the buffer
-    size_t   init();                      // set default values
+    AudioBuffer();   // constructor
+    ~AudioBuffer();  // frees the buffer
+    size_t   init(); // set default values
     bool     isInitialized() { return m_init; };
     size_t   getBufsize();
-    size_t   getMaxBlockSize();                // returns maxBlockSize
+    size_t   getMaxBlockSize(); // returns maxBlockSize
     void     setMaxBlocksize(uint16_t mbs);
-    size_t   freeSpace();                      // number of free bytes to overwrite
-    size_t   writeSpace();                     // space fom writepointer to bufferend
-    size_t   bufferFilled();                   // returns the number of filled bytes
-    size_t   readSpace();                      // max readable bytes in one block
-    void     bytesWritten(size_t bw);          // update writepointer
-    void     bytesWasRead(size_t br);          // update readpointer
-    uint8_t* getWritePtr();                    // returns the current writepointer
-    uint8_t* getReadPtr();                     // returns the current readpointer
-    void     reset();                          // restore defaults
+    size_t   freeSpace();             // number of free bytes to overwrite
+    size_t   writeSpace();            // space fom writepointer to bufferend
+    size_t   bufferFilled();          // returns the number of filled bytes
+    size_t   readSpace();             // max readable bytes in one block
+    void     bytesWritten(size_t bw); // update writepointer
+    void     bytesWasRead(size_t br); // update readpointer
+    uint8_t* getWritePtr();           // returns the current writepointer
+    uint8_t* getReadPtr();            // returns the current readpointer
+    void     reset();                 // restore defaults
 
   protected:
     size_t          m_mainBuffSize = 0; // most webstreams limit the advance to 100...300Kbytes
@@ -81,6 +80,9 @@ class AudioBuffer {
     bool            m_init = false;
     bool            m_isEmpty = true;
     bool            m_isFull = false;
+
+  private:
+    SemaphoreHandle_t m_mutex = nullptr;
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -138,9 +140,9 @@ class Audio {
     uint32_t         getAudioFilePosition();
     bool             setAudioFilePosition(uint32_t pos);
     uint16_t         getVUlevel();
-    uint32_t         inBufferFilled();            // returns the number of stored bytes in the inputbuffer
-    uint32_t         inBufferFree();              // returns the number of free bytes in the inputbuffer
-    uint32_t         getInBufferSize();           // returns the size of the inputbuffer in bytes
+    uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
+    uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
+    uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
     void             setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
@@ -266,7 +268,7 @@ class Audio {
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, HTTP_RANGE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE, AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER, AUDIO_PLAYLISTDATA };
     const char* dataModeStr[8] = {"AUDIO_NONE", "HTTP_RESPONSE_HEADER", "HTTP_RANGE_HEADER", "AUDIO_DATA", "AUDIO_LOCALFILE", "AUDIO_PLAYLISTINIT", "AUDIO_PLAYLISTHEADER", "AUDIO_PLAYLISTDATA"};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH = 2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5, FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100 };
-    enum : int { MP3_BEGIN = 0, MP3_ID3HEADER, MP3_NEXTID3, MP3_EXTHEADER, MP3_ID3FRAME, MP3_FRAMESIZE, MP3_SKIP, MP3_TAG, MP3_SYLT, MP3_ID3V22, MP3_LASTFRAMES, MP3_XING, MP3_OKAY = 100};
+    enum : int { MP3_BEGIN = 0, MP3_ID3HEADER, MP3_NEXTID3, MP3_EXTHEADER, MP3_ID3FRAME, MP3_FRAMESIZE, MP3_SKIP, MP3_TAG, MP3_SYLT, MP3_ID3V22, MP3_LASTFRAMES, MP3_XING, MP3_OKAY = 100 };
     enum : int {
         M4A_BEGIN = 0,
         M4A_FTYP = 1,

@@ -85,6 +85,8 @@ size_t AudioBuffer::getBufsize() {
 
 size_t AudioBuffer::init() {
     m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
+    m_mutex = xSemaphoreCreateBinary();
+    xSemaphoreGive(m_mutex);
     m_init = true;
     m_startPtr = m_buffer.get();
     m_endPtr = m_buffer.get() + m_mainBuffSize;
@@ -126,98 +128,118 @@ size_t AudioBuffer::bufferFilled() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::writeSpace() {
-
-    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) { // special case
-        m_readPtr = m_startPtr;
-        m_writePtr = m_startPtr;
-        m_isEmpty = true;
-        m_isFull = false;
-        m_writeSpace = min(m_maxRet, m_mainBuffSize);
-        return m_writeSpace;
-    }
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+    m_writeSpace = 0;
 
     // Check whether a complete block still fits in at the end
     size_t spaceToEnd = m_buffEnd - m_writePtr;
     if (spaceToEnd == 0) { // be sure that the resBuff is full
         // Only copy if the read pointer is not in the way
-        if(m_readPtr > m_endPtr){
-            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
-            m_writePtr = m_startPtr + m_resBuffSize;
-            m_readPtr = m_startPtr + (m_readPtr - m_endPtr);
-        }
-        else if (m_readPtr >= m_startPtr + m_resBuffSize) {
+        if (m_readPtr >= m_startPtr + m_resBuffSize) {
             memcpy(m_startPtr, m_endPtr, m_resBuffSize);
             // log_w("wrap copy %u bytes", m_resBuffSize);
             m_writePtr = m_startPtr + m_resBuffSize;
         }
     }
 
-    if (m_readPtr > m_writePtr) { m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr)); return m_writeSpace;}
-    if (m_readPtr < m_writePtr) { m_writeSpace = min(m_maxRet, spaceToEnd); return m_writeSpace; }
+    if (m_isFull) {
+        m_writeSpace = 0;
+        goto end;
+    }
+    if (m_isEmpty) {
+        m_writeSpace = min(m_maxRet, m_mainBuffSize);
+        goto end;
+    }
 
-    if(m_isFull) { m_writeSpace = 0; return m_writeSpace; }
-    if(m_isEmpty) { m_writeSpace = min(m_maxRet, m_mainBuffSize); return m_writeSpace; }
+    if (m_readPtr > m_writePtr) {
+        m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr));
+        goto end;
+    }
+    if (m_readPtr < m_writePtr) {
+        m_writeSpace = min(m_maxRet, spaceToEnd);
+        goto end;
+    }
 
     log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    return  0;
+
+end:
+    xSemaphoreGive(m_mutex);
+    return m_writeSpace;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWritten(size_t bw) {
-    if (!bw) return;
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+    if (!bw) goto end;
 
-    if(bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, br %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
+    if (bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, br %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
 
-    if(m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr){
+    if (m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr) {
         log_e("writePtr overrruns readPtr, writePtr %i, readPtr %i, bw %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
         m_writePtr = m_readPtr;
-        return;
+        goto end;
     }
-    if(m_writePtr + bw > m_buffEnd){
+    if (m_writePtr + bw > m_buffEnd) {
         log_e("writePtr overrruns buffEnd, writePtr %i, buffEnd %i, bw %i", m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
         m_writePtr = m_buffEnd;
-        return;
+        goto end;
     }
+
     m_writePtr += bw;
-    if(bw && m_writePtr == m_readPtr) m_isFull = true;
-    if(bw) m_isEmpty = false;
+    if (bw) {
+        if (m_writePtr == m_readPtr) m_isFull = true;
+        m_isEmpty = false;
+    }
+
+end:
+    xSemaphoreGive(m_mutex);
+    return;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::readSpace() {
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
 
-    if(m_readPtr == m_buffEnd && m_writePtr == m_buffEnd) { // special case
-        m_readPtr = m_startPtr;
-        m_writePtr = m_startPtr;
-        m_isEmpty = true;
-        m_isFull = false;
-        m_readSpace = 0;
-        return m_readSpace;
+    m_readSpace = 0;
+    if (m_isEmpty) { goto end; }
+
+    if (m_isFull) {
+        m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
+        goto end;
     }
 
-    if (m_readPtr < m_writePtr) { m_readSpace = min(m_maxRet, (size_t)(m_writePtr - m_readPtr)); return m_readSpace; }
-    if (m_readPtr > m_writePtr){ m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr)); return m_readSpace; }
+    if (m_readPtr < m_writePtr) {
+        m_readSpace = min(m_maxRet, (size_t)(m_writePtr - m_readPtr));
+        goto end;
+    }
 
-    if(m_isEmpty) {m_readSpace = 0; return m_readSpace;}
-    if(m_isFull)  {m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr)); return m_readSpace;}
+    if (m_readPtr > m_writePtr) {
+        m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
+        goto end;
+    }
 
     log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    return  0;
+end:
+    xSemaphoreGive(m_mutex);
+    return m_readSpace;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWasRead(size_t br) {
-    if (!br) return;
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
 
-    if(m_readSpace < br) log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+    if (!br) goto end;
 
-    if(m_readPtr < m_writePtr && m_readPtr + br > m_writePtr){
+    if (m_readSpace < br) log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+
+    if (m_readPtr < m_writePtr && m_readPtr + br > m_writePtr) {
         log_e("readPtr overrruns writePtr, readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
         m_readPtr = m_writePtr;
-        return;
+        goto end;
     }
-    if(m_readPtr + br > m_buffEnd){
+    if (m_readPtr + br > m_buffEnd) {
         log_e("readPtr overrruns buffEnd, readPtr %i, buffEnd %i, bw %i", m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
         m_readPtr = m_buffEnd;
-        return;
+        goto end;
     }
+
     m_readPtr += br;
 
     if (m_readPtr >= m_endPtr && m_writePtr < m_readPtr) {
@@ -225,10 +247,16 @@ void AudioBuffer::bytesWasRead(size_t br) {
         log_d("set new readptr to %i", len);
         m_readPtr = m_startPtr + len;
     }
-    if (br && m_readPtr == m_writePtr) m_isEmpty = true;
-    if(br) m_isFull = false;
-}
+    if (br) {
+        if (m_readPtr == m_writePtr) m_isEmpty = true;
+        m_isFull = false;
+    }
 
+end:
+    xSemaphoreGive(m_mutex);
+    return;
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 uint8_t* AudioBuffer::getWritePtr() {
     return m_writePtr;
 }
@@ -378,10 +406,10 @@ void Audio::setDefaults() {
     //    m_f_ssl = false;
     m_f_metadata = false;
     m_f_tts = false;
-    m_f_firstCall = true;        // InitSequence for processWebstream and processLocalFile
-    m_cat.firstCall = true;      // InitSequence for calculateAudioTime
-    m_pplM3U8.firstCall = true;  // InitSequence for parsePlaylist_M3U8
-    m_f_firstPlayCall = true;    // InitSequence for playAudioData
+    m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
+    m_cat.firstCall = true;     // InitSequence for calculateAudioTime
+    m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
+    m_f_firstPlayCall = true;   // InitSequence for playAudioData
     //    m_f_running = false;       // already done in stopSong
     m_f_firstLoop = true;
     m_f_unsync = false;   // set within ID3 tag but not used
@@ -1833,7 +1861,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         memset(m_ID3Hdr.tag, 0, sizeof(m_ID3Hdr.tag));
         return 0;
     }
-    if(m_controlCounter == MP3_NEXTID3){
+    if (m_controlCounter == MP3_NEXTID3) {
         m_controlCounter = MP3_ID3HEADER;
         // reset specific
         m_ID3Hdr.id3Size = 0;
@@ -1852,7 +1880,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         return 0;
     }
 
-    if(m_controlCounter == MP3_ID3HEADER){
+    if (m_controlCounter == MP3_ID3HEADER) {
         m_controlCounter = MP3_EXTHEADER;
         int retval = 0;
         if (!m_f_m3u8data) info(*this, evt_info, "File-Size: %lu", m_audioFileSize);
@@ -1864,7 +1892,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_audioDataSize = m_audioFileSize;
             // if(!m_f_m3u8data) info(*this, evt_info, "Audio-Length: %u", m_audioDataSize);
             m_controlCounter = MP3_XING; // have xing?
-            return 0;              // error, no ID3 signature found
+            return 0;                    // error, no ID3 signature found
         }
         m_ID3Hdr.ID3version = *(data + 3);
         switch (m_ID3Hdr.ID3version) {
@@ -1975,7 +2003,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == MP3_TAG) { // Read the value
-        m_controlCounter = MP3_SKIP;    // only read 256 bytes
+        m_controlCounter = MP3_SKIP;   // only read 256 bytes
 
         uint8_t textEncodingByte = *(data + 0); // ID3v2 Text-Encoding-Byte
         // $00 – ISO-8859-1 (LATIN-1, Identical to ASCII for values smaller than 0x80).
@@ -3915,7 +3943,6 @@ void Audio::processLocalFile() {
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (!initializeDecoder()) return;
         m_prlf.maxFrameSize = InBuff.getMaxBlockSize();
-
     }
 
     if (!m_f_stream) {
