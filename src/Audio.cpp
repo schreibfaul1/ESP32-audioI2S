@@ -146,8 +146,9 @@ size_t AudioBuffer::writeSpace() {
         m_writeSpace = 0;
         goto end;
     }
+
     if (m_isEmpty) {
-        m_writeSpace = min(m_maxRet, m_mainBuffSize);
+        m_writeSpace = min(m_maxRet, spaceToEnd);
         goto end;
     }
 
