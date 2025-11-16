@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3u                                                                                                                              ";
-/*  Updated on: 15.11.2025
+    Version 3.4.3v                                                                                                                              ";
+/*  Updated on: 16.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -120,19 +120,31 @@ size_t AudioBuffer::freeSpace() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::bufferFilled() {
+    xSemaphoreTake(m_mutex, portMAX_DELAY);
+    size_t bufferFilled = 0;
     if (m_readPtr == m_writePtr) {
-        if (m_isEmpty) { return 0; }
-        if (m_isFull) { return m_mainBuffSize; }
-        log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        if (m_isEmpty) {
+            bufferFilled = 0;
+            goto end;
+        }
+        if (m_isFull) {
+            bufferFilled = m_mainBuffSize;
+            goto end;
+        }
+        log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
     }
     if (m_readPtr < m_writePtr) {
         if (m_writePtr > m_endPtr) {
-            return m_endPtr - m_readPtr;
+            bufferFilled = m_endPtr - m_readPtr;
         } else {
-            return m_writePtr - m_readPtr;
+            bufferFilled = m_writePtr - m_readPtr;
         }
+        goto end;
     }
-    return (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
+    bufferFilled = (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
+end:
+    xSemaphoreGive(m_mutex);
+    return bufferFilled;
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::writeSpace() {
@@ -141,15 +153,6 @@ size_t AudioBuffer::writeSpace() {
 
     // Check whether a complete block still fits in at the end
     size_t spaceToEnd = m_buffEnd - m_writePtr;
-
-    if (spaceToEnd == 0) { // be sure that the resBuff is full
-        // Only copy if the read pointer is not in the way
-        if (m_readPtr >= m_startPtr + m_resBuffSize) {
-            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
-            // log_w("wrap copy %u bytes", m_resBuffSize);
-            m_writePtr = m_startPtr + m_resBuffSize;
-        }
-    }
 
     if (m_isFull) {
         m_writeSpace = 0;
@@ -161,16 +164,29 @@ size_t AudioBuffer::writeSpace() {
         goto end;
     }
 
-    if (m_readPtr > m_writePtr) {
-        m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr));
+    if (spaceToEnd == 0) { // be sure that the resBuff is full
+        // Only copy if the read pointer is not in the way
+        if (m_readPtr > m_startPtr + m_resBuffSize) {
+            memcpy(m_startPtr, m_endPtr, m_resBuffSize);
+            // log_w("wrap copy %u bytes", m_resBuffSize);
+            m_writePtr = m_startPtr + m_resBuffSize;
+        }
+    }
+
+    if (m_writePtr < m_readPtr) {
+        if (m_readPtr >= m_endPtr) {                                       // readPtr is in resBuff?
+            m_writeSpace = min(m_maxRet, (size_t)(m_endPtr - m_writePtr)); // writePtr does not enter resbuff, wait for copy im readspace
+        } else {
+            m_writeSpace = min(m_maxRet, (size_t)(m_readPtr - m_writePtr));
+        }
         goto end;
     }
-    if (m_readPtr < m_writePtr) {
+    if (m_writePtr > m_readPtr) {
         m_writeSpace = min(m_maxRet, spaceToEnd);
         goto end;
     }
 
-    log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
 
 end:
     xSemaphoreGive(m_mutex);
@@ -208,6 +224,14 @@ end:
 size_t AudioBuffer::readSpace() {
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
+    if (m_readPtr >= m_endPtr && m_writePtr <= m_endPtr) {
+        size_t len = m_readPtr - m_endPtr;
+        if (m_writePtr > m_startPtr + len) {
+            log_d("set new readptr to %i", len);
+            m_readPtr = m_startPtr + len;
+        }
+    }
+
     m_readSpace = 0;
     if (m_isEmpty) { goto end; }
 
@@ -226,7 +250,7 @@ size_t AudioBuffer::readSpace() {
         goto end;
     }
 
-    log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
 end:
     xSemaphoreGive(m_mutex);
     return m_readSpace;
@@ -252,11 +276,6 @@ void AudioBuffer::bytesWasRead(size_t br) {
 
     m_readPtr += br;
 
-    if (m_readPtr >= m_endPtr && m_writePtr < m_readPtr) {
-        size_t len = m_readPtr - m_endPtr;
-        log_d("set new readptr to %i", len);
-        m_readPtr = m_startPtr + len;
-    }
     if (br) {
         if (m_readPtr == m_writePtr) m_isEmpty = true;
         m_isFull = false;
@@ -282,7 +301,7 @@ void AudioBuffer::reset() {
     m_isFull = false;
 }
 
-void AudioBuffer::showStatus(){
+void AudioBuffer::showStatus() {
     printf("\nfilled %i, free %i\n", bufferFilled(), freeSpace());
     printf("writeSpace %i, readSpace %i\n", writeSpace(), readSpace());
     printf("writePtr %i, readPtr %i\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
