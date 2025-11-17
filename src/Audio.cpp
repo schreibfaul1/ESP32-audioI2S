@@ -2079,6 +2079,12 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             ; // AUDIO_LOG_ERROR("PRIV");
             return 0;
         }
+        if(startsWith(m_ID3Hdr.tag, "TSIZ") || startsWith(m_ID3Hdr.tag, "XTRA")){ // tag with invalid length, skip everything and find the first sync word
+            m_ID3Hdr.framesize = 0;
+            size_t tmp = m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.remainingHeaderBytes = 0;
+            return tmp;
+        }
 
         if (m_ID3Hdr.framesize == 0) return 0;
 
