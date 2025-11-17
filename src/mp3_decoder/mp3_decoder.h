@@ -60,6 +60,7 @@ class MP3Decoder : public Decoder {
     ps_ptr<char>            m_mpeg_version_str;
 
     // internally used
+    int32_t  IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft);
     void     MP3GetLastFrameInfo();
     int32_t  MP3GetNextFrameInfo(uint8_t* buf);
     int      MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len);
