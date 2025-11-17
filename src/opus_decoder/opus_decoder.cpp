@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 26.10.2025
+ *  Updated on: 17.11.2025
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -1243,7 +1243,7 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
         }
 
         else { // out of bounds
-            m_comment.start_pos = current_file_pos + m_comment.pointer;
+            m_comment.start_pos = current_file_pos + nBytes - available_bytes;
             OPUS_LOG_DEBUG("start %i", m_comment.start_pos);
             m_comment.item_vec.push_back(m_comment.start_pos);
             fill_content(inbuf + (nBytes - available_bytes), available_bytes);
