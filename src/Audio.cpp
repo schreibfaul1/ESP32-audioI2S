@@ -1657,10 +1657,25 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             return 0;
         }
         if (specialIndexOf(data, "fLaC", 10) != 0) {
+            if(specialIndexOf(data, "ID3", 10) == 0) { // has ID3 before fLaC
+                // Synchsafe-Size
+                uint32_t size =
+                (data[6] << 21) |
+                (data[7] << 14) |
+                (data[8] << 7)  |
+                data[9];
+                size += 10; // header + body
+                m_rflh.retvalue = size; // skip ID3 header + body
+                return 0;
+            }
             AUDIO_LOG_ERROR("Magic String 'fLaC' not found in header");
             stopSong();
             return -1;
         }
+
+
+
+        
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         m_rflh.headerSize = 4;
         m_rflh.retvalue = 4;
@@ -4525,7 +4540,7 @@ void Audio::playAudioData() {
             goto exit;
         } // file end reached
 
-        if (m_codec == CODEC_MP3 && m_pad.lastFrames && m_pad.bytesToDecode == 128) {
+        if (m_pad.lastFrames && m_pad.bytesToDecode == 128) {
             m_f_ID3v1TagFound = true;
             m_f_eof = true;
             goto exit;
