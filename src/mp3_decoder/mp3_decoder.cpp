@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 25.09.2025
+ *  Updated on: 18.11.2025
  */
 #include "mp3_decoder.h"
 
@@ -1008,6 +1008,68 @@ void MP3Decoder::MP3ClearBadFrame(int16_t* outbuf) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*
+ * Function:    IsLikelyRealFrame
+ *
+ * Description: Detection of valid MP3 frames
+ *
+ * Return:      true, if valid
+ *              false if ID3 padding fragments, LAME Info, Xing Header, VBRI Header, Repeater-Frames, Encoder Delay Blocks
+ * LAME Info
+ */
+int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
+
+    auto CalcFrameLength = [](const uint8_t* h) -> int {
+        static const int bitrateTable[2][16] = {
+            {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0},    // MPEG2/2.5
+            {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0} // MPEG1
+        };
+
+        static const int samplerateTable[3][3] = {
+            {11025, 12000, 8000},  // MPEG 2.5
+            {22050, 24000, 16000}, // MPEG 2
+            {44100, 48000, 32000}  // MPEG 1
+        };
+
+        uint8_t verID = (h[1] >> 3) & 0x03;
+        uint8_t layer = (h[1] >> 1) & 0x03;
+        uint8_t brIdx = (h[2] >> 4) & 0x0F;
+        uint8_t srIdx = (h[2] >> 2) & 0x03;
+        uint8_t padding = (h[2] >> 1) & 0x01;
+
+        if (layer != 1) return -1;
+        if (srIdx == 3) return -1;
+        if (brIdx == 0 || brIdx == 15) return -1;
+
+        int verGroup = (verID == 3) ? 2 : (verID == 2 ? 1 : 0);
+        int samplerate = samplerateTable[verGroup][srIdx];
+        if (samplerate == 0) return -1;
+
+        int br = bitrateTable[(verID == 3)][brIdx] * 1000;
+
+        int frameLength = (verID == 3) ? (144 * br / samplerate + padding) : (72 * br / samplerate + padding);
+
+        return frameLength;
+    };
+
+    // 1) Sync?
+    if (p[0] != 0xFF || (p[1] & 0xE0) != 0xE0) return 0; // no header
+
+    int frameLen = CalcFrameLength(p);
+    if (frameLen <= 0 || frameLen > bytesLeft) return -frameLen; // Fake frame
+
+    // 1) Hard limits
+    if (frameLen < 96 || frameLen > 2880) return -frameLen; // is fake
+
+    // 2) Check next header
+    const uint8_t* next = p + frameLen;
+    if (bytesLeft >= frameLen + 4 && next[0] == 0xFF && (next[1] & 0xE0) == 0xE0) {
+        return frameLen; // echtes Frame
+    }
+
+    return -frameLen; // Fakeframe
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+/*
  * Function:    MP3Decode
  *
  * Description: decode one frame of MP3 data
@@ -1027,6 +1089,20 @@ void MP3Decoder::MP3ClearBadFrame(int16_t* outbuf) {
  *                is not supported (bit reservoir is not maintained if useSize on)
  */
 int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+
+    // Skip fake frames
+    int frameLen = IsLikelyRealFrame(inbuf, *bytesLeft);
+
+    if (frameLen <= 0) {
+        int skip = -frameLen;
+        if (skip > 0 && skip <= *bytesLeft) {
+            *bytesLeft -= skip;
+            MP3_LOG_DEBUG("Fakeframe, size %i", frameLen);
+            return MP3_NONE; // fakeframe
+        }
+        // inbuf empty or unusable
+        return MP3_ERR;
+    }
 
     int32_t        offset, bitOffset, mainBits, gr, ch, fhBytes, siBytes, freeFrameBytes;
     int32_t        prevBitOffset, sfBlockBits, huffBlockBits;
@@ -1067,28 +1143,6 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
         m_MP3DecInfo->nSlots = m_MP3DecInfo->freeBitrateSlots + CheckPadBit(); /* add pad byte, if required */
     }
 
-    /* useSize != 0 means we're getting reformatted (RTP) packets (see RFC 3119)
-     *  - calling function assembles "self-contained" MP3 frames by shifting any main_data
-     *      from the bit reservoir (in previous frames) to AFTER the sync word and side info
-     *  - calling function should set mainDataBegin to 0, and tell us exactly how large this
-     *      frame is (in bytesLeft)
-     */
-    // if (useSize) {
-    //     m_MP3DecInfo->nSlots = *bytesLeft;
-    //     if (m_MP3DecInfo->mainDataBegin != 0 || m_MP3DecInfo->nSlots <= 0) {
-    //         /* error - non self-contained frame, or missing frame (size <= 0), could do loss concealment here */
-    //         MP3ClearBadFrame(outbuf);
-    //         MP3_ERROR("MP3, invalid frameheader");
-    //         return MP3_ERR;
-    //     }
-
-    //     /* can operate in-place on reformatted frames */
-    //     m_MP3DecInfo->mainDataBytes = m_MP3DecInfo->nSlots;
-    //     mainPtr = inbuf;
-    //     inbuf += m_MP3DecInfo->nSlots;
-    //     *bytesLeft -= (m_MP3DecInfo->nSlots);
-    // } else {
-    /* out of data - assume last or truncated frame */
     if (m_MP3DecInfo->nSlots > *bytesLeft) {
         MP3ClearBadFrame(outbuf);
         MP3_LOG_ERROR("MP3, indata underflow");
@@ -1115,8 +1169,8 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
         *bytesLeft -= (m_MP3DecInfo->nSlots);
         if (underflowCounter < 4) { return MP3_NONE; }
         MP3ClearBadFrame(outbuf);
-        MP3_LOG_ERROR("MP3, maindata underflow");
-        return MP3_ERR;
+        MP3_LOG_DEBUG("MP3, maindata underflow");
+        return MP3_NONE;
     }
     //    }
     bitOffset = 0;
@@ -1380,7 +1434,7 @@ int32_t MP3Decoder::DecodeHuffmanPairs(int32_t* xy, int32_t nVals, int32_t tabId
 
                 if (y == 15 && tabType == loopLinbits) {
                     minBits = linBits + 1;
-                    if (cachedBits + bitsLeft < minBits){
+                    if (cachedBits + bitsLeft < minBits) {
                         MP3_LOG_ERROR("MP3, error - overran end of bitstream"); // https://bestof80s.stream.laut.fm/best_of_80s (after advertising)
                         return MP3_ERR;
                     }
@@ -3248,7 +3302,7 @@ void MP3Decoder::FDCT32(int32_t* buf, int32_t* dest, int32_t offset, int32_t odd
  * P O L Y P H A S E
  */
 int16_t MP3Decoder::ClipToShort(int32_t x, int32_t fracBits) {
-#if(defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32S3)
+#if (defined CONFIG_IDF_TARGET_ESP32 || defined CONFIG_IDF_TARGET_ESP32S3)
     /* assumes you've already rounded (x += (1 << (fracBits-1))) */
     x >>= fracBits;
     // this is better on xtensa (fb)
@@ -3264,13 +3318,10 @@ int16_t MP3Decoder::ClipToShort(int32_t x, int32_t fracBits) {
 
     /* Ken's trick: clips to [-32768, 32767] */
     sign = x >> 31;
-    if (sign != (x >> 15)) {
-        x = sign ^ ((1 << 15) - 1);
-    }
+    if (sign != (x >> 15)) { x = sign ^ ((1 << 15) - 1); }
 
     return (int16_t)x;
 #endif
-
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*

@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3v                                                                                                                              ";
-/*  Updated on: 16.11.2025
+    Version 3.4.3w                                                                                                                              ";
+/*  Updated on: 18.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1657,10 +1657,25 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             return 0;
         }
         if (specialIndexOf(data, "fLaC", 10) != 0) {
+            if(specialIndexOf(data, "ID3", 10) == 0) { // has ID3 before fLaC
+                // Synchsafe-Size
+                uint32_t size =
+                (data[6] << 21) |
+                (data[7] << 14) |
+                (data[8] << 7)  |
+                data[9];
+                size += 10; // header + body
+                m_rflh.retvalue = size; // skip ID3 header + body
+                return 0;
+            }
             AUDIO_LOG_ERROR("Magic String 'fLaC' not found in header");
             stopSong();
             return -1;
         }
+
+
+
+        
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         m_rflh.headerSize = 4;
         m_rflh.retvalue = 4;
@@ -2064,6 +2079,12 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             ; // AUDIO_LOG_ERROR("PRIV");
             return 0;
         }
+        if(startsWith(m_ID3Hdr.tag, "TSIZ") || startsWith(m_ID3Hdr.tag, "XTRA")){ // tag with invalid length, skip everything and find the first sync word
+            m_ID3Hdr.framesize = 0;
+            size_t tmp = m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.remainingHeaderBytes = 0;
+            return tmp;
+        }
 
         if (m_ID3Hdr.framesize == 0) return 0;
 
@@ -2221,8 +2242,10 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         memcpy(value, (data + 7), dataLen);
         value[dataLen + 1] = 0;
         if (startsWith(m_ID3Hdr.tag, "PIC")) { // image embedded in header
-            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes);
-            m_ID3Hdr.APIC_vec.push_back(m_ID3Hdr.framesize);
+            size_t pic_len = bigEndian(data + 3, 3);
+            uint32_t pic_start = m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.APIC_vec.push_back(pic_start);
+            m_ID3Hdr.APIC_vec.push_back(pic_len);
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
 
@@ -4525,7 +4548,7 @@ void Audio::playAudioData() {
             goto exit;
         } // file end reached
 
-        if (m_codec == CODEC_MP3 && m_pad.lastFrames && m_pad.bytesToDecode == 128) {
+        if (m_pad.lastFrames && m_pad.bytesToDecode == 128) {
             m_f_ID3v1TagFound = true;
             m_f_eof = true;
             goto exit;
