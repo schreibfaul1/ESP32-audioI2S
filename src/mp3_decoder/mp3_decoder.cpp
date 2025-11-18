@@ -1013,7 +1013,7 @@ void MP3Decoder::MP3ClearBadFrame(int16_t* outbuf) {
  * Description: Detection of valid MP3 frames
  *
  * Return:      true, if valid
- *              false if ID3 padding pragments, LAME Info, Xing Header, VBRI Header, Repeater-Frames, Encoder Delay Blocks
+ *              false if ID3 padding fragments, LAME Info, Xing Header, VBRI Header, Repeater-Frames, Encoder Delay Blocks
  * LAME Info
  */
 int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
