@@ -1145,8 +1145,8 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
 
     if (m_MP3DecInfo->nSlots > *bytesLeft) {
         MP3ClearBadFrame(outbuf);
-        MP3_LOG_ERROR("MP3, indata underflow");
-        return MP3_ERR;
+        MP3_LOG_DEBUG("MP3, indata underflow");
+        return MP3_NONE;
     }
 
     /* fill main data buffer with enough new data for this frame */

@@ -2715,6 +2715,36 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
+        if (atom_name.equals("alac")) {
+            AUDIO_LOG_ERROR("Apple loseless audio codec (ALAC) not supported");
+            stopSong();
+            return 0;
+        }
+
+        if (atom_name.equals("ac-3")) {
+            AUDIO_LOG_ERROR("Dolby Digital not supported");
+            stopSong();
+            return 0;
+        }
+
+        if (atom_name.equals("ec-3")) {
+            AUDIO_LOG_ERROR("Dolby Digital Plud not supported");
+            stopSong();
+            return 0;
+        }
+
+        if (atom_name.equals("Opus")) {
+            // todo
+            stopSong();
+            return 0;
+        }
+
+        if (atom_name.equals("mp3 ")) {
+            // todo
+            stopSong();
+            return 0;
+        }
+
         if (atom_struct) { AUDIO_LOG_WARN("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16)); }
         m_m4aHdr.retvalue += atom_size.to_uint32(16);
         m_m4aHdr.headerSize += atom_size.to_uint32(16);
@@ -2967,7 +2997,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                         id3tag.reset();
                         if (dty == 0 && strlen(&sa[24]) > 0) {
                             if(strcmp(san, "covr") == 0){
-                                sa.hex_dump(90);
                                 m_m4aHdr.picLen = as - 24;
                                 m_m4aHdr.picPos = pos + 24 - as;
                                 AUDIO_LOG_DEBUG("cover jpeg start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);
