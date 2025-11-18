@@ -94,6 +94,7 @@ struct m4aHdr_t { // used in read_M4A_Header
     size_t   sizeof_mp4a;
     size_t   sizeof_udta;
     size_t   sizeof_meta;
+    size_t   sizeof_chpl;
     size_t   audioDataPos;
     size_t   cnt;
     size_t   offset;
