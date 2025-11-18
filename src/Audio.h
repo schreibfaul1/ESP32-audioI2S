@@ -290,6 +290,7 @@ class Audio {
         M4A_STSZ = 15,
         M4A_META = 16,
         M4A_MDHD = 17,
+        M4A_CHPL = 18,
         M4A_AMRDY = 99,
         M4A_OKAY = 100,
     };
