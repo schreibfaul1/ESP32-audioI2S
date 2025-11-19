@@ -223,3 +223,11 @@ typedef struct {
     uint8_t  channel_mode;
     uint32_t frame_length; // In Bytes
 } Mp3FrameHeader;
+
+struct invalid_frame {
+    uint32_t timer = 0;
+    bool start = true;
+    uint32_t count1 = 0;
+    uint32_t count2 = 0;
+
+};

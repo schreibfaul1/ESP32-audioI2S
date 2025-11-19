@@ -559,9 +559,9 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         uint8_t  sample_rate_idx = 0;
         bool     padding = 0;
         uint8_t  channel_mode = 0;
-        uint32_t frame_length = 0; // cytes
-        uint16_t sample_rate_hz = 0;   // the actual sampling rate in Hz
-        uint16_t bitrate_kbps = 0;     // the actual bit rate in Kbps
+        uint32_t frame_length = 0;   // cytes
+        uint16_t sample_rate_hz = 0; // the actual sampling rate in Hz
+        uint16_t bitrate_kbps = 0;   // the actual bit rate in Kbps
         uint16_t samples_per_frame = 0;
     } Mp3FrameHeader_sync_t;
 
@@ -1093,11 +1093,31 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     // Skip fake frames
     int frameLen = IsLikelyRealFrame(inbuf, *bytesLeft);
 
+    if(m_invalid_frame.start == true && m_invalid_frame.timer + 3000 > millis()) m_invalid_frame.start = false;
+
     if (frameLen <= 0) {
         int skip = -frameLen;
         if (skip > 0 && skip <= *bytesLeft) {
             *bytesLeft -= skip;
             MP3_LOG_DEBUG("Fakeframe, size %i", frameLen);
+
+            if (m_invalid_frame.start == false) { // fake frames control
+                m_invalid_frame.start = true;
+                m_invalid_frame.timer = millis();
+                m_invalid_frame.count1 = 0;
+                m_invalid_frame.count2 = 0;
+            } else {
+                m_invalid_frame.count1++;
+                if (m_invalid_frame.start && m_invalid_frame.timer + 1000 < millis()) { m_invalid_frame.count2++; }
+                if (m_invalid_frame.start && m_invalid_frame.timer + 2000 < millis()) {
+                    if (m_invalid_frame.count1 > 5 && m_invalid_frame.count2 > 5) {
+                        // network error
+                        m_invalid_frame.start = false;
+                        return MP3_NEED_RESTART;
+                    }
+                }
+            }
+
             return MP3_NONE; // fakeframe
         }
         // inbuf empty or unusable

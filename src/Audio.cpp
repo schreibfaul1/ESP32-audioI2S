@@ -5509,8 +5509,8 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
         return 0;
     }
     if (m_codec == CODEC_MP3) {
-        if (res == MP3Decoder::MP3_MAIN_DATA_UNDERFLOW) {
-            info(*this, evt_info, "MP3_MAIN_DATA_UNDERFLOW");
+        if (res == MP3Decoder::MP3_NEED_RESTART) {
+            info(*this, evt_info, "" ANSI_ESC_RED "Network error" ANSI_ESC_RESET "");
             connecttohost(m_lastHost.get());
             return 0;
         }

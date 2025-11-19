@@ -36,6 +36,7 @@ class MP3Decoder : public Decoder {
         MP3_NONE = 0,
         MP3_ERR = -1,
         MP3_MAIN_DATA_UNDERFLOW = - 2,
+        MP3_NEED_RESTART = -3,
         MP3_STOP = -100,
     };
 
@@ -59,6 +60,8 @@ class MP3Decoder : public Decoder {
     ps_ptr<SubbandInfo_t>   m_SubbandInfo;
     ps_ptr<MP3FrameInfo_t>  m_MP3FrameInfo;
     ps_ptr<char>            m_mpeg_version_str;
+
+    invalid_frame           m_invalid_frame;
 
     // internally used
     int32_t  IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft);
