@@ -2476,7 +2476,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         atom_name.copy_from((const char*)data + 4, 4);
 
         if (atom_name.equals("moov")) {
-            m_m4aHdr.progressive = true;
+            if (!m_m4aHdr.mdat_seen) m_m4aHdr.progressive = true; // moov before mdat
             if (atom_struct) { AUDIO_LOG_WARN("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.headerSize, atom_size.to_uint32(16), m_m4aHdr.headerSize + atom_size.to_uint32(16)); }
             m_m4aHdr.sizeof_moov = atom_size.to_uint32(16) - 8;
             m_m4aHdr.retvalue += 8;
@@ -2486,8 +2486,17 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         }
 
         if (atom_name.equals("mdat")) {
+            m_m4aHdr.mdat_seen = true;
             if (!m_m4aHdr.progressive) {
-                AUDIO_LOG_ERROR("non progressive file can't be played yet"); // mdat before moov, todo: skip mdat
+                m_m4aHdr.mdat_startPos = m_m4aHdr.headerSize + 8;
+                m_m4aHdr.sizeof_mdat = atom_size.to_uint32(16);
+                if (atom_struct) {
+                    AUDIO_LOG_WARN("atom %s @ %i, size: %i, ends @ %i", atom_name.c_get(), m_m4aHdr.mdat_startPos, m_m4aHdr.sizeof_mdat, m_m4aHdr.mdat_startPos + m_m4aHdr.sizeof_mdat);
+                }
+                info(*this, evt_info, "Audiofile is non progressive");
+                m_m4aHdr.retvalue += m_m4aHdr.sizeof_mdat;
+                m_m4aHdr.headerSize += m_m4aHdr.sizeof_mdat;
+                return 0;
                 stopSong();
                 return -1;
             }
@@ -2509,7 +2518,17 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == M4A_MOOV) { // moov
         if (atom_struct) { AUDIO_LOG_WARN("moov size remain %i", m_m4aHdr.sizeof_moov); }
         if (m_m4aHdr.sizeof_moov == 0) {
-            m_controlCounter = M4A_CHK;
+            if (m_m4aHdr.progressive) {
+                m_controlCounter = M4A_CHK;
+                AUDIO_LOG_WARN("goto CHK");
+            } else {
+                audioFileSeek(0); // non progressive, back to mdat
+                InBuff.reset();
+                m_m4aHdr.headerSize = m_m4aHdr.mdat_startPos;
+                m_m4aHdr.retvalue = m_m4aHdr.mdat_startPos; // set InBuff.getReadPtr to audiodatastart
+                if (atom_struct) AUDIO_LOG_WARN("goto MDAT at %i", m_m4aHdr.mdat_startPos + 8);
+                m_controlCounter = M4A_MDAT;
+            }
             return 0;
         } // go back
 
@@ -2996,7 +3015,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                     if (memcmp(san, tags[i].tag, 4) == 0) {
                         id3tag.reset();
                         if (dty == 0 && strlen(&sa[24]) > 0) {
-                            if(strcmp(san, "covr") == 0){
+                            if (strcmp(san, "covr") == 0) {
                                 m_m4aHdr.picLen = as - 24;
                                 m_m4aHdr.picPos = pos + 24 - as;
                                 AUDIO_LOG_DEBUG("cover jpeg start: %lu, len %lu", m_m4aHdr.picPos, m_m4aHdr.picLen);
@@ -3094,6 +3113,8 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     uint8_t extLen = 0;
     if (m_controlCounter == M4A_MDAT) {         // mdat
+                ps_ptr<char>hd; hd.copy_from((const char*)data, 30);
+                hd.hex_dump(30);
         m_audioDataSize = m_m4aHdr.sizeof_mdat; // length of this atom
 
         // Extended Size
@@ -5487,8 +5508,8 @@ uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
         m_decoder->init();
         return 0;
     }
-    if(m_codec == CODEC_MP3){
-        if(res == MP3Decoder::MP3_MAIN_DATA_UNDERFLOW){
+    if (m_codec == CODEC_MP3) {
+        if (res == MP3Decoder::MP3_MAIN_DATA_UNDERFLOW) {
             info(*this, evt_info, "MP3_MAIN_DATA_UNDERFLOW");
             connecttohost(m_lastHost.get());
             return 0;

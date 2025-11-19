@@ -98,6 +98,7 @@ struct m4aHdr_t { // used in read_M4A_Header
     size_t   audioDataPos;
     size_t   cnt;
     size_t   offset;
+    uint32_t mdat_startPos;
     uint32_t picPos;
     uint32_t picLen;
     uint32_t ilst_pos;
@@ -116,6 +117,7 @@ struct m4aHdr_t { // used in read_M4A_Header
     uint32_t stsz_table_pos;
     bool     progressive; // Progressive (moov before mdat)
     bool     version_flags;
+    bool     mdat_seen;
 };
 
 struct plCh_t { // used in playChunk
