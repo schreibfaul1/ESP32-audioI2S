@@ -552,17 +552,17 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     // };
 
     typedef struct {
-        uint8_t  mpeg_version; // 0=MPEG2.5, 1=reserved, 2=MPEG2, 3=MPEG1
-        uint8_t  layer;        // 0=reserved, 1=Layer III, 2=Layer II, 3=Layer I
-        bool     crc_protected;
-        uint8_t  bitrate_idx;
-        uint8_t  sample_rate_idx;
-        bool     padding;
-        uint8_t  channel_mode;
+        uint8_t  mpeg_version = 0; // 0=MPEG2.5, 1=reserved, 2=MPEG2, 3=MPEG1
+        uint8_t  layer = 0;        // 0=reserved, 1=Layer III, 2=Layer II, 3=Layer I
+        bool     crc_protected = 0;
+        uint8_t  bitrate_idx = 0;
+        uint8_t  sample_rate_idx = 0;
+        bool     padding = 0;
+        uint8_t  channel_mode = 0;
         uint32_t frame_length = 0; // cytes
-        uint16_t sample_rate_hz;   // the actual sampling rate in Hz
-        uint16_t bitrate_kbps;     // the actual bit rate in Kbps
-        uint16_t samples_per_frame;
+        uint16_t sample_rate_hz = 0;   // the actual sampling rate in Hz
+        uint16_t bitrate_kbps = 0;     // the actual bit rate in Kbps
+        uint16_t samples_per_frame = 0;
     } Mp3FrameHeader_sync_t;
 
     // SamplingFrequenz-Lookup tables(Beispiel für MPEG1, MPEG2, MPEG2.5)
@@ -644,7 +644,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         uint16_t sample_rate_hz = 0;
 
         // Mapping from MPEG version to sampling rate table
-        uint8_t sr_table_idx;
+        uint8_t sr_table_idx = 0;
         if (header_info->mpeg_version == 3)
             sr_table_idx = 0; // MPEG 1 (0b11)
         else if (header_info->mpeg_version == 2)
@@ -1146,7 +1146,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     if (m_MP3DecInfo->nSlots > *bytesLeft) {
         MP3ClearBadFrame(outbuf);
         MP3_LOG_DEBUG("MP3, indata underflow");
-        return MP3_NONE;
+        return MP3_MAIN_DATA_UNDERFLOW;
     }
 
     /* fill main data buffer with enough new data for this frame */

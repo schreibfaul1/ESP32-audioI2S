@@ -35,6 +35,7 @@ class MP3Decoder : public Decoder {
     enum {
         MP3_NONE = 0,
         MP3_ERR = -1,
+        MP3_MAIN_DATA_UNDERFLOW = - 2,
         MP3_STOP = -100,
     };
 
