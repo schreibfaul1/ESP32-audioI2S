@@ -6928,7 +6928,7 @@ bool Audio::readID3V1Tag() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
-    if (m_controlCounter != 100 || m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize || (m_codec == CODEC_M4A && !m_stsz_position || !m_nominal_bitrate)) {
+    if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position) || !m_nominal_bitrate) {
         AUDIO_LOG_WARN("timeOffset not possible");
         return 0;
     }
@@ -7138,32 +7138,74 @@ uint32_t Audio::ogg_correctResumeFilePos() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::flac_correctResumeFilePos() {
+    uint8_t* p = InBuff.getReadPtr();
+    size_t   av = InBuff.readSpace();
 
-    auto find_sync_word = [&](uint8_t* pos, uint32_t av) -> int {
-        int steps = 0;
-        while (av--) {
-            char c = pos[steps];
-            steps++;
-            if (c == 0xFF) { // First byte of sync word found
-                char nextByte = pos[steps];
-                steps++;
-                if (nextByte == 0xF8) { // Check for the second part of sync word
-                    return steps - 2;   // Sync word found, return the number of steps
-                }
-            }
-        }
-        return -1; // Return -1 if sync word is not found
+    if (av < 32) return -1; // sicher gehen
+
+    auto utf8_length = [&](uint8_t first) -> int {
+        if ((first & 0x80) == 0x00) return 1; // 0xxxxxxx
+        if ((first & 0xE0) == 0xC0) return 2; // 110xxxxx
+        if ((first & 0xF0) == 0xE0) return 3; // 1110xxxx
+        if ((first & 0xF8) == 0xF0) return 4; // 11110xxx
+        if ((first & 0xFC) == 0xF8) return 5; // 111110xx
+        if ((first & 0xFE) == 0xFC) return 6; // 1111110x
+        if (first == 0xFE) return 7;          // 11111110
+        return -1;                            // invalid UTF-8
     };
 
-    uint8_t* readPtr = InBuff.getReadPtr();
-    size_t   av = InBuff.readSpace();
-    int32_t  steps = 0;
+    // FLAC CRC-8
+    auto crc8_update = [](uint8_t crc, uint8_t data) -> uint8_t {
+        crc ^= data;
+        for (int i = 0; i < 8; ++i) {
+            if (crc & 0x80)
+                crc = (crc << 1) ^ 0x07;
+            else
+                crc <<= 1;
+        }
+        return crc;
+    };
 
-    if (av < InBuff.getMaxBlockSize()) return -1; // guard
+    for (size_t i = 0; i + 14 < av; ++i) {
+        // 14-Bit-Sync: 0xFFF8 oder 0xFFF9 (last 2 Bits variable!)
+        uint8_t b0 = p[i + 0]; // 11111111  sync
+        uint8_t b1 = p[i + 1]; // 111111rb  sync         r-reserved    b-blocking strategy
+        if (b0 != 0xFF) continue;
+        if ((b1 & 0xFE) != 0xF8) continue;
 
-    steps = find_sync_word(readPtr, av);
-    if (steps == -1) return -1;
-    return steps; // Return the number of steps to the sync word
+        uint8_t b2 = p[i + 2]; // bbbbssss   b-blocksize   s samplerate
+        uint8_t blocksize_code = (b2 & 0xF0) >> 4;
+        uint8_t samplerate_code = (b2 & 0x0F);
+
+        uint8_t b3 = p[i + 3]; // ccccsssr   c-channel assignment, s sample size, r reserved
+        uint8_t channel_assign = (b3 & 0xF0) >> 4;
+        uint8_t bps_code = (b3 & 0x0E) >> 1; // bits per sample
+        uint8_t reserved_bit = b3 & 0x01;    // has to be 0
+
+        if (reserved_bit != 0) continue;
+        if (channel_assign >= 11) continue; // 11-15 reserved
+        if (bps_code == 0x07) continue;     // reserved
+
+        size_t pos = i + 4; // first byte of UTF8
+        int    len = utf8_length(p[pos]);
+        if (len < 1 || pos + len >= av) continue; // invalid/incomplete header
+
+        size_t crc_end = pos + len; // this is where the CRC byte lives
+
+        AUDIO_LOG_DEBUG("samplerate_code %i, bps_code %i channel_assign %i, reserved_bit %i", samplerate_code, bps_code, channel_assign, reserved_bit);
+        AUDIO_LOG_DEBUG("b0 %i, b1 %i, b2 %i, b3 %i", b0, b1, b2, b3);
+
+        uint8_t crc = 0;
+        for (size_t k = i; k < crc_end; ++k) crc = crc8_update(crc, p[k]);
+
+        if (crc != p[crc_end]) continue;
+
+        // === Wenn wir hier ankommen: 99,9999 % sicher ein echter Frame ===
+        AUDIO_LOG_ERROR(">>> ECHTER FLAC-FRAME gefunden bei Offset %u", (uint32_t)i);
+        return (int32_t)i;
+    }
+
+    return -1; // kein Frame in den ersten 64 KB gefunden
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::mp3_correctResumeFilePos() {
