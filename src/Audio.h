@@ -364,7 +364,7 @@ class Audio {
     uint32_t       m_avr_bitrate = 0;       // average bitrate, median calculated by VBR
     uint32_t       m_nominal_bitrate = 0;   // given br from header
     uint32_t       m_audioFilePosition = 0; // current position, counts every readed byte
-    uint32_t       m_audioFileReadPtr = 0;  // used in playAudioData
+    uint32_t       m_audioDataReadPtr = 0;  // used in playAudioData
     uint32_t       m_audioFileSize = 0;     // local and web files
     int            m_readbytes = 0;         // bytes read
     uint32_t       m_metacount = 0;         // counts down bytes between metadata

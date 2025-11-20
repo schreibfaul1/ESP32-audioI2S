@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3w                                                                                                                              ";
-/*  Updated on: 18.11.2025
+    Version 3.4.3x                                                                                                                              ";
+/*  Updated on: 20.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4072,7 +4072,7 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
-        m_audioFileReadPtr = m_prlf.newFilePos;
+        m_audioDataReadPtr = m_prlf.newFilePos;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4257,7 +4257,7 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
-        m_audioFileReadPtr = m_pwf.newFilePos;
+        m_audioDataReadPtr = m_pwf.newFilePos;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4611,7 +4611,7 @@ void Audio::playAudioData() {
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
-        m_audioFileReadPtr = 0;
+        m_audioDataReadPtr = 0;
         m_f_firstPlayCall = false;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
@@ -4639,17 +4639,16 @@ void Audio::playAudioData() {
                 m_f_eof = true;
                 goto exit;
             }
-            if (m_audioDataSize <= m_audioFileReadPtr) {
+            if (m_audioDataSize <= m_audioDataReadPtr) {
                 m_f_eof = true;
                 goto exit;
             }
 
             if (m_audioDataStart + m_audioDataSize >= m_audioFilePosition) m_f_allDataReceived = true;
-            if (m_audioDataSize - m_audioFileReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
-
+            if (m_audioDataSize - m_audioDataReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
 
             if (m_pad.lastFrames) {
-                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioFileReadPtr));
+                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
                 m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
             } else {
                 m_pad.bytesToDecode = InBuff.readSpace();
@@ -4665,13 +4664,13 @@ void Audio::playAudioData() {
 
         if (m_pad.bytesDecoded > 0) {
             InBuff.bytesWasRead(m_pad.bytesDecoded);
-            m_audioFileReadPtr += m_pad.bytesDecoded;
+            m_audioDataReadPtr += m_pad.bytesDecoded;
         }
     }
 exit:
     xSemaphoreGive(mutex_audioTaskIsDecoding);
 
-    AUDIO_LOG_WARN("m_audioFileReadPtr %i, m_audioDataSize %i", m_audioFileReadPtr, m_audioDataSize);
+    AUDIO_LOG_WARN("m_audioDataReadPtr %i, m_audioDataSize %i", m_audioDataReadPtr, m_audioDataSize);
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6927,34 +6926,25 @@ bool Audio::readID3V1Tag() {
     // [2] https://en.wikipedia.org/wiki/ID3#ID3v1_and_ID3v1.1[5]
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-int32_t Audio::newInBuffStart(int32_t resumeFilePos)
-{
-    // --- Grundlegende Checks ---------------------------------------------------
-    if (m_controlCounter != 100 ||
-        m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize ||
-        (m_codec == CODEC_M4A && !m_stsz_position))
-    {
+int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
+
+    if (m_controlCounter != 100 || m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize || (m_codec == CODEC_M4A && !m_stsz_position || !m_nominal_bitrate)) {
         AUDIO_LOG_WARN("timeOffset not possible");
-        return -1;
+        return 0;
     }
 
-    // resumeFilePos innerhalb der Audiodaten halten
-    if (resumeFilePos < (int32_t)m_audioDataStart)
-        resumeFilePos = m_audioDataStart;
+    // keep resumeFilePos within the audio data
+    if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
 
-    uint32_t buffFillValue = std::min<uint32_t>(
-        m_audioDataSize - resumeFilePos,
-        UINT16_MAX
-    );
+    uint32_t buffFillValue = std::min<uint32_t>(m_audioDataSize - resumeFilePos, UINT16_MAX);
 
-    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i",
-                     m_resumeFilePos, m_audioDataStart);
+    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
 
-    // --- Kritischen Bereich betreten ------------------------------------------
+    // --- enter critical area ------------------------------------------
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     m_f_lockInBuffer = true;
 
-    // ------- Buffer vorbereiten ------
+    // ------- prepare InBuff ------
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
     InBuff.reset();
@@ -6965,7 +6955,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos)
     int32_t newFilePos = resumeFilePos;
 
     // ---------------------------------------------------------------------------
-    //                          Codec-spezifische Behandlung
+    // codec specific handling
     // ---------------------------------------------------------------------------
 
     auto fail = [&]() {
@@ -6977,56 +6967,46 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos)
         return -1;
     };
 
-    switch (m_codec)
-    {
+    switch (m_codec) {
         case CODEC_M4A:
             offset = m4a_correctResumeFilePos();
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
         case CODEC_WAV:
             // WAV muss auf 4-Byte-Grenze
             offset = wav_correctResumeFilePos();
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
         case CODEC_MP3:
             offset = mp3_correctResumeFilePos();
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
         case CODEC_FLAC:
             offset = flac_correctResumeFilePos();
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
         case CODEC_VORBIS:
             offset = ogg_correctResumeFilePos(); // next OggS
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
         case CODEC_OPUS:
             offset = ogg_correctResumeFilePos(); // next OggS
             if (offset < 0) return fail();
-            newFilePos += offset;
-            m_decoder->clear();
             break;
 
-        default:
-            return fail();
+        default: return fail();
     }
 
-    // --- Abschluss ----------------------------------------------
+    AUDIO_LOG_ERROR("offset %i", offset);
+    newFilePos += offset;
+    m_decoder->clear();
+
+    // --- leaf critical area ----------------------------------------------
     InBuff.bytesWasRead(offset);
     m_f_lockInBuffer = false;
     xSemaphoreGive(mutex_audioTaskIsDecoding);
@@ -7081,7 +7061,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
         uint8_t  u8[4];
         uint32_t u32;
     } tu;
-    tu uu;
+    tu uu = {};
 
     uint32_t i = 0, pos = m_audioDataStart;
     uint32_t filePtr = m_audioFilePosition;
@@ -7089,7 +7069,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     audioFileSeek(m_stsz_position, m_stsz_numEntries * 4);
 
     auto read_next = [&]() -> int {
-        int r;
+        int r = 0;
         int cnt = 0;
         while (true) {
             r = audioFileRead();
@@ -7207,15 +7187,16 @@ int32_t Audio::mp3_correctResumeFilePos() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::wav_correctResumeFilePos() {
-            int32_t pos = m_resumeFilePos;
-            uint8_t offset;
-            // WAV must be on 4 byte limit
-            while (pos % 4 != 0) {
-                offset++;
-                pos++;
-            }
-            if (pos >= m_audioDataStart + m_audioDataSize)return 0;
-            return offset;
+    int32_t pos = m_resumeFilePos;
+    uint8_t offset = 0;
+    ;
+    // WAV must be on 4 byte limit
+    while (pos % 4 != 0) {
+        offset++;
+        pos++;
+    }
+    if (pos >= m_audioDataStart + m_audioDataSize) return 0;
+    return offset;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 uint8_t Audio::determineOggCodec() {
