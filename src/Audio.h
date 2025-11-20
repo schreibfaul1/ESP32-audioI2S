@@ -240,6 +240,7 @@ class Audio {
     uint32_t     ogg_correctResumeFilePos();
     int32_t      flac_correctResumeFilePos();
     int32_t      mp3_correctResumeFilePos();
+    int32_t      wav_correctResumeFilePos();
     uint8_t      determineOggCodec();
     void         strlower(char* str);
     void         trim(char* str);
