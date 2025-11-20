@@ -234,12 +234,13 @@ class Audio {
     bool         readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
     int32_t      getChunkSize(uint16_t* readedBytes, bool first = false);
     bool         readID3V1Tag();
-    int32_t      newInBuffStart(int32_t m_resumeFilePos);
+    int32_t      newInBuffStart(int32_t resumeFilePos);
     boolean      streamDetection(uint32_t bytesAvail);
     uint32_t     m4a_correctResumeFilePos();
     uint32_t     ogg_correctResumeFilePos();
     int32_t      flac_correctResumeFilePos();
     int32_t      mp3_correctResumeFilePos();
+    int32_t      wav_correctResumeFilePos();
     uint8_t      determineOggCodec();
     void         strlower(char* str);
     void         trim(char* str);
@@ -322,6 +323,7 @@ class Audio {
 
     SemaphoreHandle_t mutex_playAudioData;
     SemaphoreHandle_t mutex_audioTask;
+    SemaphoreHandle_t mutex_audioTaskIsDecoding;
     TaskHandle_t      m_audioTaskHandle = nullptr;
 
 #pragma GCC diagnostic push
@@ -362,6 +364,7 @@ class Audio {
     uint32_t       m_avr_bitrate = 0;       // average bitrate, median calculated by VBR
     uint32_t       m_nominal_bitrate = 0;   // given br from header
     uint32_t       m_audioFilePosition = 0; // current position, counts every readed byte
+    uint32_t       m_audioDataReadPtr = 0;  // used in playAudioData
     uint32_t       m_audioFileSize = 0;     // local and web files
     int            m_readbytes = 0;         // bytes read
     uint32_t       m_metacount = 0;         // counts down bytes between metadata
