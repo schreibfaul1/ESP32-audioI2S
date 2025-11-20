@@ -197,7 +197,7 @@ void AudioBuffer::bytesWritten(size_t bw) {
     xSemaphoreTake(m_mutex, portMAX_DELAY);
     if (!bw) goto end;
 
-    if (bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, br %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
+    if (bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, bw %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
 
     if (m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr) {
         log_e("writePtr overrruns readPtr, writePtr %i, readPtr %i, bw %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
@@ -299,6 +299,8 @@ void AudioBuffer::reset() {
     m_readPtr = m_buffer.get();
     m_isEmpty = true;
     m_isFull = false;
+    m_readSpace = 0;
+    m_writeSpace = min(m_maxRet, (size_t)(m_buffEnd - m_writePtr));
 }
 
 void AudioBuffer::showStatus() {
@@ -315,6 +317,7 @@ Audio::Audio(uint8_t i2sPort) {
 
     mutex_playAudioData = xSemaphoreCreateMutex();
     mutex_audioTask = xSemaphoreCreateMutex();
+    mutex_audioTaskIsDecoding = xSemaphoreCreateMutex();
 
     if (!psramFound()) AUDIO_LOG_ERROR("audioI2S requires PSRAM!");
 
@@ -368,6 +371,7 @@ Audio::~Audio() {
     stopAudioTask();
     vSemaphoreDelete(mutex_playAudioData);
     vSemaphoreDelete(mutex_audioTask);
+    vSemaphoreDelete(mutex_audioTaskIsDecoding);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::destroy_decoder() {
@@ -3103,7 +3107,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         (void)flags;
         uint32_t sample_size = bigEndian(data + 4, 4);
         (void)sample_size;
-        m_m4aHdr.stsz_num_entries = bigEndian(data + 8, 4);
+        m_m4aHdr.stsz_num_entries = bigEndian(data + 8, 4) / 4; // is uint32_t
         m_m4aHdr.stsz_table_pos = m_m4aHdr.headerSize + 12;
         m_m4aHdr.retvalue += m_m4aHdr.sizeof_stsz + 8;
         m_m4aHdr.headerSize += m_m4aHdr.sizeof_stsz + 8;
@@ -3112,9 +3116,10 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     uint8_t extLen = 0;
-    if (m_controlCounter == M4A_MDAT) {         // mdat
-                ps_ptr<char>hd; hd.copy_from((const char*)data, 30);
-                hd.hex_dump(30);
+    if (m_controlCounter == M4A_MDAT) { // mdat
+        ps_ptr<char> hd;
+        hd.copy_from((const char*)data, 30);
+        hd.hex_dump(30);
         m_audioDataSize = m_m4aHdr.sizeof_mdat; // length of this atom
 
         // Extended Size
@@ -3214,35 +3219,35 @@ size_t Audio::process_m3u8_ID3_Header(uint8_t* packet) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::stopSong() {
     m_f_lockInBuffer = true; // wait for the decoding to finish
-    uint8_t maxWait = 0;
-    while (m_f_audioTaskIsDecoding) {
-        vTaskDelay(1);
-        maxWait++;
-        if (maxWait > 100) break;
-    } // in case of error wait max 100ms
+    uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
-    if (m_f_running) {
-        m_f_running = false;
-        if (m_client->connected()) {
-            info(*this, evt_info, "Closing web file \"%s\"", m_lastHost.c_get());
-            m_client->stop();
+
+    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ); // wait for audioTask is ready
+    {
+        if (m_f_running) {
+            m_f_running = false;
+            if (m_client->connected()) {
+                info(*this, evt_info, "Closing web file \"%s\"", m_lastHost.c_get());
+                m_client->stop();
+            }
+            if (m_audiofile) {
+                info(*this, evt_info, "Closing audio file \"%s\"", m_audiofile.name());
+                m_audiofile.close();
+                m_client->stop();
+            }
         }
-        if (m_audiofile) {
-            info(*this, evt_info, "Closing audio file \"%s\"", m_audiofile.name());
-            m_audiofile.close();
-            m_client->stop();
-        }
+        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
+        destroy_decoder();
+        m_validSamples = 0;
+        m_audioCurrentTime = 0;
+        m_audioFileDuration = 0;
+        m_codec = CODEC_NONE;
+        m_dataMode = AUDIO_NONE;
+        m_streamType = ST_NONE;
+        m_playlistFormat = FORMAT_NONE;
+        m_f_lockInBuffer = false;
     }
-    memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
-    destroy_decoder();
-    m_validSamples = 0;
-    m_audioCurrentTime = 0;
-    m_audioFileDuration = 0;
-    m_codec = CODEC_NONE;
-    m_dataMode = AUDIO_NONE;
-    m_streamType = ST_NONE;
-    m_playlistFormat = FORMAT_NONE;
-    m_f_lockInBuffer = false;
+    xSemaphoreGive(mutex_audioTaskIsDecoding);
     return currTime;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -4067,6 +4072,7 @@ void Audio::processLocalFile() {
         m_prlf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_prlf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_prlf.newFilePos;
+        m_audioFileReadPtr = m_prlf.newFilePos;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4251,6 +4257,7 @@ void Audio::processWebFile() {
         m_pwf.newFilePos = newInBuffStart(m_resumeFilePos);
         if (m_pwf.newFilePos < 0) AUDIO_LOG_WARN("skip to new position was not successful");
         m_haveNewFilePos = m_pwf.newFilePos;
+        m_audioFileReadPtr = m_pwf.newFilePos;
         m_resumeFilePos = -1;
         m_f_allDataReceived = false;
         return;
@@ -4604,6 +4611,7 @@ void Audio::playAudioData() {
     m_pad.bytesDecoded = 0;
 
     if (m_f_firstPlayCall) {
+        m_audioFileReadPtr = 0;
         m_f_firstPlayCall = false;
         m_pad.count = 0;
         m_pad.oldAudioDataSize = 0;
@@ -4613,70 +4621,57 @@ void Audio::playAudioData() {
     }
     //--------------------------------------------------------------------------------
 
-    m_f_audioTaskIsDecoding = true;
+    bool isFile = false;
+    bool isStream = false;
 
-    if ((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) && m_playlistFormat != FORMAT_M3U8) { // local file or webfile but not m3u8 file
-        if (!m_audioDataSize) goto exit;                                                                    // no data to decode if filesize is 0
-        if (m_audioDataSize != m_pad.oldAudioDataSize) {                                                    // Special case: Metadata in ogg files are recognized by the decoder,
-            if (m_f_ogg) m_bytesNotConsumed = 0;
-            m_pad.oldAudioDataSize = m_audioDataSize;
+    if (m_dataMode == AUDIO_LOCALFILE) isFile = true;
+    if (m_streamType == ST_WEBFILE && m_playlistFormat != FORMAT_M3U8) isStream = true; // local file or webfile but not m3u8 file
+    if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) isStream = true;
+    if (!isFile && !isStream) return;
+
+    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ);
+    {
+        m_pad.bytesDecoded = 0;
+        if (isFile) {
+            if (!m_audioDataSize) goto exit; // no data to decode if filesize is 0
+            if (m_audioDataStart + m_audioDataSize - m_audioFilePosition == 128) {
+                m_f_ID3v1TagFound = true;
+                m_f_eof = true;
+                goto exit;
+            }
+            if (m_audioDataSize <= m_audioFileReadPtr) {
+                m_f_eof = true;
+                goto exit;
+            }
+
+            if (m_audioDataStart + m_audioDataSize >= m_audioFilePosition) m_f_allDataReceived = true;
+            if (m_audioDataSize - m_audioFileReadPtr <= InBuff.getMaxBlockSize()) m_pad.lastFrames = true;
+
+
+            if (m_pad.lastFrames) {
+                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioFileReadPtr));
+                m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
+            } else {
+                m_pad.bytesToDecode = InBuff.readSpace();
+                if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize()) { m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode); }
+            }
         }
 
-        m_pad.bytesToDecode = InBuff.readSpace();
-        if (m_audioFileSize - m_audioFilePosition == 0) m_f_allDataReceived = true;
-        if (m_f_allDataReceived && InBuff.bufferFilled() < InBuff.getMaxBlockSize()) { // last frames to decode
-            m_pad.lastFrames = true;
+        if (isStream) {
+            if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
+            m_pad.bytesToDecode = InBuff.readSpace();
+            if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize()) { m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode); }
         }
-        if (m_pad.bytesToDecode == 0) {
-            m_f_eof = true;
-            goto exit;
-        } // file end reached
 
-        if (m_pad.lastFrames && m_pad.bytesToDecode == 128) {
-            m_f_ID3v1TagFound = true;
-            m_f_eof = true;
-            goto exit;
-        }
-    } else {
-        if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
-        m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)InBuff.getMaxBlockSize());
-    }
-
-    if (m_pad.lastFrames) {
-        m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
-    } else {
-        // ps_ptr<char> hd;
-        // hd.copy_from((const char*)InBuff.getReadPtr(), 30);
-        if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize())
-            m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
-        else
-            m_pad.bytesDecoded = 0; // Inbuff not filled enough
-    }
-
-    if (m_pad.bytesDecoded <= 0) {
-        if (m_pad.lastFrames) {
-            m_f_eof = true;
-            goto exit;
-        } // end of file reached
-        m_pad.count++;
-        vTaskDelay(50); // wait for data
-        if (m_pad.count == 10) {
-            if (m_f_allDataReceived) m_f_eof = true;
-        } // maybe slow stream
-        goto exit; // syncword at pos0
-    }
-    m_pad.count = 0;
-
-    if (m_pad.bytesDecoded > 0) {
-        InBuff.bytesWasRead(m_pad.bytesDecoded);
-
-        if (m_f_allDataReceived && InBuff.bufferFilled() == 0) {
-            m_f_eof = true; // end of file reached
+        if (m_pad.bytesDecoded > 0) {
+            InBuff.bytesWasRead(m_pad.bytesDecoded);
+            m_audioFileReadPtr += m_pad.bytesDecoded;
         }
     }
-
 exit:
-    m_f_audioTaskIsDecoding = false;
+    xSemaphoreGive(mutex_audioTaskIsDecoding);
+
+    AUDIO_LOG_WARN("m_audioFileReadPtr %i, m_audioDataSize %i", m_audioFileReadPtr, m_audioDataSize);
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6932,95 +6927,127 @@ bool Audio::readID3V1Tag() {
     // [2] https://en.wikipedia.org/wiki/ID3#ID3v1_and_ID3v1.1[5]
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-int32_t Audio::newInBuffStart(int32_t m_resumeFilePos) {
-    int32_t offset = 0, buffFillValue = 0, res = 0;
+int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
+    int32_t offset = 0, buffFillValue = 0, newFilePos = 0;
 
     if (m_controlCounter != 100) {
         AUDIO_LOG_WARN("timeOffset not possible");
-        m_resumeFilePos = -1;
-        offset = -1;
-        goto exit;
+        return -1;
     }
     if (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) {
-        m_resumeFilePos = -1;
-        offset = -1;
-        goto exit;
+        AUDIO_LOG_WARN("timeOffset not possible");
+        return -1;
     }
     if (m_codec == CODEC_M4A && !m_stsz_position) {
-        m_resumeFilePos = -1;
-        offset = -1;
-        goto exit;
+        AUDIO_LOG_WARN("timeOffset not possible");
+        return -1;
     }
 
-    if (m_resumeFilePos < (int32_t)m_audioDataStart) m_resumeFilePos = m_audioDataStart;
-    buffFillValue = min((uint32_t)(m_audioDataSize - m_resumeFilePos), (uint32_t)UINT16_MAX);
+    if (resumeFilePos < (int32_t)m_audioDataStart) { resumeFilePos = m_audioDataStart; }
+
+    buffFillValue = min((uint32_t)(m_audioDataSize - resumeFilePos), (uint32_t)UINT16_MAX);
     AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
-    m_f_lockInBuffer = true; // lock the buffer, the InBuffer must not be re-entered in playAudioData()
+
+    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
+    m_f_lockInBuffer = true;                                  // lock the buffer, the InBuffer must not be re-entered in playAudioData()
     {
-        while (m_f_audioTaskIsDecoding) vTaskDelay(1); // We can't reset the InBuffer while the decoding is in progress
         m_f_allDataReceived = false;
 
-        /* process before */
-        if (m_controlCounter == 100) {
-            if (m_codec == CODEC_M4A) {
-                m_resumeFilePos += m4a_correctResumeFilePos();
-                if (m_resumeFilePos == -1) goto exit;
-            }
-        }
-
         /* skip to position */
-        res = audioFileSeek(m_resumeFilePos);
+        audioFileSeek(resumeFilePos);
         InBuff.reset();
-        offset = 0;
 
-        audioFileRead(InBuff.getWritePtr() + offset, buffFillValue);
+        audioFileRead(InBuff.getWritePtr(), buffFillValue);
         InBuff.bytesWritten(buffFillValue);
 
         /* process after */
         offset = 0;
-        if (m_controlCounter == 100) {
-            if (m_codec == CODEC_OPUS || m_codec == CODEC_VORBIS) {
-                if (InBuff.bufferFilled() < 0xFFFF) return -1;
-            } // ogg frame <= 64kB
-            if (m_codec == CODEC_WAV) {
-                while ((m_resumeFilePos % 4) != 0) {
-                    m_resumeFilePos++;
-                    offset++;
-                    if (m_resumeFilePos >= m_audioFileSize) goto exit;
-                }
-            } // must divisible by four
-            if (m_codec == CODEC_MP3) {
-                offset = mp3_correctResumeFilePos();
-                if (offset == -1) goto exit;
-                m_decoder->clear();
+
+        if (m_codec == CODEC_M4A) {
+            offset = m4a_correctResumeFilePos();
+            if (offset == -1) {
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
             }
-            if (m_codec == CODEC_FLAC) {
-                offset = flac_correctResumeFilePos();
-                if (offset == -1) goto exit;
-                m_decoder->clear();
-            }
-            if (m_codec == CODEC_VORBIS) {
-                offset = ogg_correctResumeFilePos();
-                if (offset == -1) goto exit;
-                m_decoder->clear();
-            }
-            if (m_codec == CODEC_OPUS) {
-                offset = ogg_correctResumeFilePos();
-                if (offset == -1) goto exit;
-                m_decoder->clear();
-            }
-        } else {
-            m_resumeFilePos = -1;
+            AUDIO_LOG_ERROR("offset %i", offset);
+            newFilePos = resumeFilePos + offset;
+            m_decoder->clear();
+            goto exit;
         }
 
-        InBuff.bytesWasRead(offset);
+        if (m_codec == CODEC_WAV) {
+            newFilePos = resumeFilePos;
+            while ((m_resumeFilePos % 4) != 0) { // must divisible by four
+                newFilePos++;
+                offset++;
+            }
+            if (newFilePos >= m_audioDataStart + m_audioDataSize) { newFilePos = m_audioDataStart + m_audioDataSize; }
+            goto exit;
+        }
+
+        if (m_codec == CODEC_MP3) {
+            offset = mp3_correctResumeFilePos();
+            if (offset == -1) {
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+            newFilePos = resumeFilePos + offset;
+            m_decoder->clear();
+            goto exit;
+        }
+
+        if (m_codec == CODEC_FLAC) {
+            offset = flac_correctResumeFilePos();
+            if (offset == -1) {
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+            newFilePos = resumeFilePos + offset;
+            m_decoder->clear();
+            goto exit;
+        }
+
+        if (m_codec == CODEC_VORBIS) {
+            if (InBuff.bufferFilled() < 0xFFFF) { // ogg frame <= 64kB
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+
+            offset = ogg_correctResumeFilePos();
+            if (offset == -1) {
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+            newFilePos = resumeFilePos + offset;
+            m_decoder->clear();
+            goto exit;
+        }
+
+        if (m_codec == CODEC_OPUS) {
+            if (InBuff.bufferFilled() < 0xFFFF) { // ogg frame <= 64kB
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+            if (offset == -1) {
+                AUDIO_LOG_ERROR("can't set newFilePos");
+                goto exit;
+            }
+            newFilePos = resumeFilePos + offset;
+            m_decoder->clear();
+            goto exit;
+        }
     }
-    m_f_lockInBuffer = false;
-    return res + offset;
+
 exit:
+    InBuff.bytesWasRead(offset);
     m_f_lockInBuffer = false;
-    stopSong();
-    return offset;
+    xSemaphoreGive(mutex_audioTaskIsDecoding);
+
+    if (offset == -1) {
+        stopSong();
+        return -1;
+    }
+    return newFilePos;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 boolean Audio::streamDetection(uint32_t bytesAvail) {
@@ -7074,7 +7101,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     uint32_t i = 0, pos = m_audioDataStart;
     uint32_t filePtr = m_audioFilePosition;
     bool     found = false;
-    audioFileSeek(m_stsz_position);
+    audioFileSeek(m_stsz_position, m_stsz_numEntries * 4);
 
     auto read_next = [&]() -> int {
         int r;
@@ -7092,7 +7119,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
         return r;
     };
 
-    while (i < m_stsz_numEntries) {
+    while (i < m_stsz_numEntries * 4) { // is uint32_t
         i++;
         uu.u8[3] = read_next();
         uu.u8[2] = read_next();
@@ -7107,7 +7134,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
     }
     if (!found) return -1; // not found
 
-    // audioFileSeek(filePtr); // restore file pointer
+    audioFileSeek(filePtr);       // restore file pointer
     return pos - m_resumeFilePos; // return the number of bytes to jump
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
