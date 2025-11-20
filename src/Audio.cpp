@@ -3117,9 +3117,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     uint8_t extLen = 0;
     if (m_controlCounter == M4A_MDAT) { // mdat
-        ps_ptr<char> hd;
-        hd.copy_from((const char*)data, 30);
-        hd.hex_dump(30);
+        // ps_ptr<char> hd;
+        // hd.copy_from((const char*)data, 30);
+        // hd.hex_dump(30);
         m_audioDataSize = m_m4aHdr.sizeof_mdat; // length of this atom
 
         // Extended Size
