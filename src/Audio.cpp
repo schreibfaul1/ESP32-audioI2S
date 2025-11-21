@@ -134,11 +134,7 @@ size_t AudioBuffer::bufferFilled() {
         log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
     }
     if (m_readPtr < m_writePtr) {
-        if (m_writePtr > m_endPtr) {
-            bufferFilled = m_endPtr - m_readPtr;
-        } else {
-            bufferFilled = m_writePtr - m_readPtr;
-        }
+        bufferFilled = (size_t)(m_writePtr - m_readPtr);
         goto end;
     }
     bufferFilled = (m_endPtr - m_readPtr) + (m_writePtr - m_startPtr);
@@ -2353,7 +2349,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         } else {
             // padding after ID3 body?
-            uint32_t     padding_counter = 0;
+            uint32_t padding_counter = 0;
             while (data[padding_counter] == 0) {
                 padding_counter++;
                 m_audioDataStart++;
@@ -5550,7 +5546,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
         if (res == VorbisDecoder::VORBIS_COMMENT_NEED_MORE) return bytesDecoded;
     } // nothing to play
     if (m_codec == CODEC_MP3) {
-        if(res == MP3Decoder::MP3_NEXT_FRAME) return bytesDecoded;
+        if (res == MP3Decoder::MP3_NEXT_FRAME) return bytesDecoded;
     }
     return 0;
 }

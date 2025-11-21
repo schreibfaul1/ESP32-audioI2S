@@ -1106,10 +1106,10 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     if(m_invalid_frame.start == true && m_invalid_frame.timer + 3000 > millis()) m_invalid_frame.start = false;
 
     if (frameLen <= 0) {
-        int skip = -frameLen;
+        int skip = abs(frameLen);
         if (skip > 0 && skip <= *bytesLeft) {
             *bytesLeft -= skip;
-            MP3_LOG_DEBUG("Fakeframe, size %i", frameLen);
+            MP3_LOG_DEBUG("Fakeframe, size %i", abs(frameLen));
 
             if (m_invalid_frame.start == false) { // fake frames control
                 m_invalid_frame.start = true;
