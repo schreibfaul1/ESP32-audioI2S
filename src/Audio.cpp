@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3x                                                                                                                              ";
-/*  Updated on: 20.11.2025
+    Version 3.4.3y                                                                                                                              ";
+/*  Updated on: 21.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1915,7 +1915,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.id3Size = 0;
         //    m_ID3Hdr.totalId3Size = 0; // if we have more header, id3_1_size + id3_2_size + ....
         m_ID3Hdr.remainingHeaderBytes = 0;
-        m_ID3Hdr.universal_tmp = 0;
+        m_ID3Hdr.v22_tag_length = 0;
         m_ID3Hdr.ID3version = 0;
         m_ID3Hdr.ehsz = 0;
         m_ID3Hdr.framesize = 0;
@@ -2213,35 +2213,34 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // see https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
     if (m_controlCounter == MP3_ID3V22) { // frames in V2.2, 3bytes identifier, 3bytes size descriptor
 
-        if (m_ID3Hdr.universal_tmp > 0) {
-            if (m_ID3Hdr.universal_tmp > len) {
-                m_ID3Hdr.universal_tmp -= len;
+        if (m_ID3Hdr.v22_tag_length > 0) {
+            if (m_ID3Hdr.v22_tag_length > len) {
+                m_ID3Hdr.v22_tag_length -= len;
                 return len;
             } // Throw it away
             else {
-                uint32_t t = m_ID3Hdr.universal_tmp;
-                m_ID3Hdr.universal_tmp = 0;
+                uint32_t t = m_ID3Hdr.v22_tag_length;
+                m_ID3Hdr.v22_tag_length = 0;
                 return t;
             } // Throw it away
         }
+        ps_ptr<char>tag;
+        ps_ptr<char> value;
+        if(data[0] == 0){ // we are in padding
+            m_controlCounter = MP3_LASTFRAMES;
+            uint16_t padding = m_ID3Hdr.remainingHeaderBytes;
+            m_ID3Hdr.remainingHeaderBytes = 0;
+            return padding;
+        }
+        tag.copy_from((const char*)data, 3);
+        m_ID3Hdr.v22_tag_length = bigEndian(data + 3, 3) + 6;
+        value.copy_from((const char*)data + 7, min( m_ID3Hdr.v22_tag_length -7, (size_t)1024));
 
-        m_ID3Hdr.frameid[0] = *(data + 0);
-        m_ID3Hdr.frameid[1] = *(data + 1);
-        m_ID3Hdr.frameid[2] = *(data + 2);
-        m_ID3Hdr.frameid[3] = 0;
-        for (uint8_t i = 0; i < 4; i++) m_ID3Hdr.tag[i] = m_ID3Hdr.frameid[i]; // tag = frameid
-        m_ID3Hdr.remainingHeaderBytes -= 3;
-        size_t dataLen = bigEndian(data + 3, 3);
-        m_ID3Hdr.universal_tmp = dataLen;
-        m_ID3Hdr.remainingHeaderBytes -= 3;
-        char value[256];
-        if (dataLen > 249) { dataLen = 249; }
-        memcpy(value, (data + 7), dataLen);
-        value[dataLen + 1] = 0;
-        if (startsWith(m_ID3Hdr.tag, "PIC")) { // image embedded in header
+        if (tag.starts_with("PIC")) { // image embedded in header
             size_t   pic_len = bigEndian(data + 3, 3);
             uint32_t pic_start = m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-            m_ID3Hdr.APIC_vec.push_back(pic_start);
+
+            m_ID3Hdr.APIC_vec.push_back(pic_start + 7);
             m_ID3Hdr.APIC_vec.push_back(pic_len);
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
@@ -2254,7 +2253,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 int          idx = 0;
 
                 m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT.size = m_ID3Hdr.universal_tmp;
+                m_ID3Hdr.SYLT.size = m_ID3Hdr.v22_tag_length;
                 if (m_ID3Hdr.SYLT.size < len) return 0;
                 syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
                 m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
@@ -2302,15 +2301,12 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 // }
             }
         } else {
-            showID3Tag(m_ID3Hdr.tag, value);
+            showID3Tag(tag.c_get(), value.c_get());
         }
-        m_ID3Hdr.remainingHeaderBytes -= m_ID3Hdr.universal_tmp;
-        m_ID3Hdr.universal_tmp -= dataLen;
-
-        if (dataLen == 0) m_controlCounter = MP3_LASTFRAMES;
+        m_ID3Hdr.remainingHeaderBytes -= m_ID3Hdr.v22_tag_length;
         if (m_ID3Hdr.remainingHeaderBytes == 0) m_controlCounter = MP3_LASTFRAMES;
 
-        return 3 + 3 + dataLen;
+        return 0;
     }
     // -- end section V2.2 -----------
 
@@ -4670,7 +4666,7 @@ void Audio::playAudioData() {
 exit:
     xSemaphoreGive(mutex_audioTaskIsDecoding);
 
-    AUDIO_LOG_WARN("m_audioDataReadPtr %i, m_audioDataSize %i", m_audioDataReadPtr, m_audioDataSize);
+    AUDIO_LOG_DEBUG("m_audioDataReadPtr %i, m_audioDataSize %i", m_audioDataReadPtr, m_audioDataSize);
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

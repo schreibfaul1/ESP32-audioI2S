@@ -23,7 +23,7 @@ struct ID3Hdr_t { // used only in readID3header()
     size_t                id3Size = {};
     size_t                totalId3Size = {}; // if we have more header, id3_1_size + id3_2_size + ....
     size_t                remainingHeaderBytes = {};
-    size_t                universal_tmp = {};
+    size_t                v22_tag_length = {};
     uint8_t               ID3version = {};
     uint8_t               ID3revision = {};
     uint8_t               flags = {};
