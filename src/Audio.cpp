@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3y                                                                                                                              ";
+    Version 3.4.3z                                                                                                                              ";
 /*  Updated on: 21.11.2025
 
     Author: Wolle (schreibfaul1)
@@ -2531,7 +2531,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         if (m_m4aHdr.sizeof_moov == 0) {
             if (m_m4aHdr.progressive) {
                 m_controlCounter = M4A_CHK;
-                AUDIO_LOG_WARN("goto CHK");
+                AUDIO_LOG_DEBUG("goto CHK");
             } else {
                 audioFileSeek(0); // non progressive, back to mdat
                 InBuff.reset();
@@ -4664,9 +4664,17 @@ void Audio::playAudioData() {
         }
 
         if (isStream) {
-            if (InBuff.bufferFilled() < InBuff.getMaxBlockSize() && m_f_allDataReceived) { m_pad.lastFrames = true; }
-            m_pad.bytesToDecode = InBuff.readSpace();
-            if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize()) { m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode); }
+            if(m_f_allDataReceived){ // Google TTS, OpenAI
+                m_pad.lastFrames = true;
+                if(m_f_tts && !InBuff.bufferFilled()){ m_f_eof = true; goto exit;}
+            }
+            if (m_pad.lastFrames) {
+                m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
+                m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode);
+            } else {
+                m_pad.bytesToDecode = InBuff.readSpace();
+                if (m_pad.bytesToDecode >= InBuff.getMaxBlockSize()) { m_pad.bytesDecoded = sendBytes(InBuff.getReadPtr(), m_pad.bytesToDecode); }
+            }
         }
 
         if (m_pad.bytesDecoded > 0) {
@@ -6938,7 +6946,7 @@ bool Audio::readID3V1Tag() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
-    if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position) || !m_nominal_bitrate) {
+    if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
         AUDIO_LOG_WARN("timeOffset not possible");
         return 0;
     }
