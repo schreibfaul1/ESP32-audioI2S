@@ -2224,9 +2224,15 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 return t;
             } // Throw it away
         }
-        ps_ptr<char>tag;
+
+        if (m_ID3Hdr.remainingHeaderBytes == 0) {
+            m_controlCounter = MP3_LASTFRAMES;
+            return 0;
+        }
+
+        ps_ptr<char> tag;
         ps_ptr<char> value;
-        if(data[0] == 0){ // we are in padding
+        if (data[0] == 0) { // we are in padding
             m_controlCounter = MP3_LASTFRAMES;
             uint16_t padding = m_ID3Hdr.remainingHeaderBytes;
             m_ID3Hdr.remainingHeaderBytes = 0;
@@ -2234,7 +2240,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
         tag.copy_from((const char*)data, 3);
         m_ID3Hdr.v22_tag_length = bigEndian(data + 3, 3) + 6;
-        value.copy_from((const char*)data + 7, min( m_ID3Hdr.v22_tag_length -7, (size_t)1024));
+        value.copy_from((const char*)data + 7, min(m_ID3Hdr.v22_tag_length - 7, (size_t)1024));
 
         if (tag.starts_with("PIC")) { // image embedded in header
             size_t   pic_len = bigEndian(data + 3, 3);
@@ -2303,8 +2309,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         } else {
             showID3Tag(tag.c_get(), value.c_get());
         }
+
         m_ID3Hdr.remainingHeaderBytes -= m_ID3Hdr.v22_tag_length;
-        if (m_ID3Hdr.remainingHeaderBytes == 0) m_controlCounter = MP3_LASTFRAMES;
 
         return 0;
     }
@@ -2346,6 +2352,15 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             m_ID3Hdr.numID3Header++;
             return 0;
         } else {
+            // padding after ID3 body?
+            uint32_t     padding_counter = 0;
+            while (data[padding_counter] == 0) {
+                padding_counter++;
+                m_audioDataStart++;
+                m_audioDataSize--;
+            }
+            if (padding_counter) return padding_counter;
+
             m_controlCounter = MP3_OKAY; // 100 -> ok
             m_audioDataSize = m_audioFileSize - m_audioDataStart;
             if (!m_f_m3u8data) info(*this, evt_info, "Audio-Data-Start: %u", m_audioDataStart);
