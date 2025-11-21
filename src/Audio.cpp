@@ -2246,7 +2246,7 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             size_t   pic_len = bigEndian(data + 3, 3);
             uint32_t pic_start = m_ID3Hdr.totalId3Size + m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
 
-            m_ID3Hdr.APIC_vec.push_back(pic_start + 7);
+            m_ID3Hdr.APIC_vec.push_back(pic_start + 6);
             m_ID3Hdr.APIC_vec.push_back(pic_len);
         } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
             if (m_dataMode == AUDIO_LOCALFILE) {
