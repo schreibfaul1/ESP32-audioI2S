@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 18.11.2025
+ *  Updated on: 21.11.2025
  */
 #include "mp3_decoder.h"
 
@@ -1057,10 +1057,10 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
     int frameLen = CalcFrameLength(p);
     if (frameLen <= 0 || frameLen > bytesLeft) return -frameLen; // Fake frame
 
-    // 1) Hard limits
+    // 2) Hard limits
     if (frameLen < 96 || frameLen > 2880) return -frameLen; // is fake
 
-    // 2) Check next header
+    // 3) Check next header
     const uint8_t* next = p + frameLen;
     if (bytesLeft >= frameLen + 4 && next[0] == 0xFF && (next[1] & 0xE0) == 0xE0) {
         return frameLen; // echtes Frame
@@ -1092,6 +1092,16 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
 
     // Skip fake frames
     int frameLen = IsLikelyRealFrame(inbuf, *bytesLeft);
+    if(frameLen == 0){
+        if (memcmp(inbuf, "APETAGEX", 8) == 0){
+            MP3_LOG_DEBUG("APETAGEX gefunden");
+            uint32_t version = inbuf[8] | (inbuf[9] << 8) | (inbuf[10] << 16) | (inbuf[11] << 24);
+            uint32_t size    = inbuf[12] | (inbuf[13] << 8) | (inbuf[14] << 16) | (inbuf[15] << 24);
+            MP3_LOG_DEBUG("version %i size %i", version, size);
+            *bytesLeft -= min(*bytesLeft, (int32_t)size);
+            return MP3_NEXT_FRAME;
+        }
+    }
 
     if(m_invalid_frame.start == true && m_invalid_frame.timer + 3000 > millis()) m_invalid_frame.start = false;
 

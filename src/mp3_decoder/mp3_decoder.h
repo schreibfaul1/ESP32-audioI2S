@@ -38,6 +38,7 @@ class MP3Decoder : public Decoder {
         MP3_MAIN_DATA_UNDERFLOW = - 2,
         MP3_NEED_RESTART = -3,
         MP3_STOP = -100,
+        MP3_NEXT_FRAME = 100,
     };
 
   private:

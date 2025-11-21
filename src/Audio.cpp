@@ -4645,7 +4645,7 @@ void Audio::playAudioData() {
         m_pad.bytesDecoded = 0;
         if (isFile) {
             if (!m_audioDataSize) goto exit; // no data to decode if filesize is 0
-            if (m_audioDataStart + m_audioDataSize - m_audioFilePosition == 128) {
+            if (m_audioDataStart + m_audioDataSize - m_audioDataReadPtr == 128) {
                 m_f_ID3v1TagFound = true;
                 m_f_eof = true;
                 goto exit;
@@ -5549,6 +5549,9 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
         if (res == VorbisDecoder::VORBIS_COMMENT_DONE) return bytesDecoded;
         if (res == VorbisDecoder::VORBIS_COMMENT_NEED_MORE) return bytesDecoded;
     } // nothing to play
+    if (m_codec == CODEC_MP3) {
+        if(res == MP3Decoder::MP3_NEXT_FRAME) return bytesDecoded;
+    }
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
