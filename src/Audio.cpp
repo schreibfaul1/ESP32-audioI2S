@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3z                                                                                                                              ";
-/*  Updated on: 21.11.2025
+    Version 3.4.3za                                                                                                                              ";
+/*  Updated on: 22.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4664,9 +4664,12 @@ void Audio::playAudioData() {
         }
 
         if (isStream) {
-            if(m_f_allDataReceived){ // Google TTS, OpenAI
+            if (m_f_allDataReceived) { // Google TTS, OpenAI
                 m_pad.lastFrames = true;
-                if(m_f_tts && !InBuff.bufferFilled()){ m_f_eof = true; goto exit;}
+                if (m_f_tts && !InBuff.bufferFilled()) {
+                    m_f_eof = true;
+                    goto exit;
+                }
             }
             if (m_pad.lastFrames) {
                 m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
@@ -5269,12 +5272,13 @@ void Audio::showstreamtitle(char* st) {
         }
     }
 
-    else if (ml.index_of("StreamTitle='") == 0) {
-        titleStart = 13;
-        idx2 = ml.index_of(";", 12);
-        if (idx2 > titleStart + 1) {
-            titleLen = idx2 - 1 - titleStart;
-            streamTitle.assign(ml.get() + 13, titleLen);
+    else if (ml.index_of("StreamTitle='") == 0) { // #1202
+        int start = 13;
+        int end = ml.index_of("';", start);
+        if (end < 0) end = ml.index_of("'", start); // fallback — when the station is transmitting incorrectly
+        if (end > start) {
+            int len = end - start;
+            streamTitle.assign(ml.get() + start, len);
         }
     }
 
