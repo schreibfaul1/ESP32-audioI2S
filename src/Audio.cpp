@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3za                                                                                                                              ";
-/*  Updated on: 22.11.2025
+    Version 3.4.3zb                                                                                                                              ";
+/*  Updated on: 23.11.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -1965,8 +1965,8 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         m_ID3Hdr.remainingHeaderBytes -= 10;
 
         if (m_f_exthdr) {
-            info(*this, evt_info, "ID3 extended header");
-            m_ID3Hdr.ehsz = bigEndian(data, 4);
+            m_ID3Hdr.ehsz = bigEndian(data + 10, 4, 7); //syncSave
+            info(*this, evt_info, "ID3 extended header, size: %i", m_ID3Hdr.ehsz);
             m_ID3Hdr.ehsz -= 4;
             m_ID3Hdr.remainingHeaderBytes -= 4;
             m_ID3Hdr.id3Size += 4;
