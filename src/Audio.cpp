@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.3zd                                                                                                                              ";
+    Version 3.4.3ze                                                                                                                              ";
 /*  Updated on: 27.11.2025
 
     Author: Wolle (schreibfaul1)
@@ -263,23 +263,32 @@ void AudioBuffer::bytesWasRead(size_t br) {
 
     if (!br) goto end;
 
-    if (m_readSpace < br) log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+    if (m_readSpace < br){
+        log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+        vTaskDelay(100);
+        goto end;
+    }
 
     if (m_readPtr < m_writePtr && m_readPtr + br > m_writePtr) {
         log_e("readPtr overrruns writePtr, readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
         m_readPtr = m_writePtr;
+        vTaskDelay(100);
         goto end;
     }
     if (m_readPtr + br > m_buffEnd) {
         log_e("readPtr overrruns buffEnd, readPtr %i, buffEnd %i, bw %i", m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
         m_readPtr = m_buffEnd;
+        vTaskDelay(100);
         goto end;
     }
 
     m_readPtr += br;
 
     if (br) {
-        if (m_readPtr == m_writePtr) m_isEmpty = true;
+        if (m_readPtr == m_writePtr){
+            m_isEmpty = true;
+           // log_d(" readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+        }
         m_isFull = false;
     }
 
@@ -4638,7 +4647,7 @@ void Audio::playAudioData() {
     bool isStream = false;
 
     if (m_dataMode == AUDIO_LOCALFILE) isFile = true;
-    if (m_streamType == ST_WEBFILE && m_playlistFormat != FORMAT_M3U8) isStream = true; // local file or webfile but not m3u8 file
+    if (m_streamType == ST_WEBFILE && m_playlistFormat != FORMAT_M3U8) isFile = true; // local file or webfile but not m3u8 file
     if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) isStream = true;
     if (!isFile && !isStream) return;
 
