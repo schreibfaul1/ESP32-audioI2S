@@ -58,6 +58,11 @@ const char* WavDecoder::whoIsIt() {
     return "WAV";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) {
+
+    return 0;
+}
+
 int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     uint16_t frame = *bytesLeft;
     if (frame > 2048) frame = 2048;

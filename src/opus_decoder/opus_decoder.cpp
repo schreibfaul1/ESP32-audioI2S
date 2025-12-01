@@ -124,6 +124,11 @@ void OpusDecoder::OPUSsetDefaults() {
     m_opusBlockPicItem.shrink_to_fit();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t OpusDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
+    return 0;
+}
+
+
 int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     int32_t ret = OPUS_NONE;
     int32_t segmLen = 0;

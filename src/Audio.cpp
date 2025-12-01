@@ -104,7 +104,7 @@ size_t AudioBuffer::getMaxBlockSize() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::freeSpace() {
-    if(!m_init) return 0;
+    if (!m_init) return 0;
     if (m_readPtr == m_writePtr) {
         if (m_isEmpty) { return m_mainBuffSize; }
         if (m_isFull) { return 0; }
@@ -121,7 +121,7 @@ size_t AudioBuffer::freeSpace() {
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::bufferFilled() {
-    if(!m_init) return 0;
+    if (!m_init) return 0;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
     size_t bufferFilled = 0;
     if (m_readPtr == m_writePtr) {
@@ -146,7 +146,7 @@ end:
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::writeSpace() {
-    if(!m_init) return 0;
+    if (!m_init) return 0;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
     m_writeSpace = 0;
 
@@ -193,7 +193,7 @@ end:
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWritten(size_t bw) {
-    if(!m_init) return;
+    if (!m_init) return;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
     if (!bw) goto end;
 
@@ -222,7 +222,7 @@ end:
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 size_t AudioBuffer::readSpace() {
-    if(!m_init) return 0;
+    if (!m_init) return 0;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
     if (m_readPtr >= m_endPtr && m_writePtr <= m_endPtr) {
@@ -258,12 +258,12 @@ end:
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 void AudioBuffer::bytesWasRead(size_t br) {
-    if(!m_init) return;
+    if (!m_init) return;
     xSemaphoreTake(m_mutex, portMAX_DELAY);
 
     if (!br) goto end;
 
-    if (m_readSpace < br){
+    if (m_readSpace < br) {
         log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
         vTaskDelay(100);
         goto end;
@@ -285,9 +285,9 @@ void AudioBuffer::bytesWasRead(size_t br) {
     m_readPtr += br;
 
     if (br) {
-        if (m_readPtr == m_writePtr){
+        if (m_readPtr == m_writePtr) {
             m_isEmpty = true;
-           // log_d(" readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+            // log_d(" readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
         }
         m_isFull = false;
     }
@@ -418,6 +418,7 @@ esp_err_t Audio::I2Sstart() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear();                                                  // Clear OutputBuffer
+    m_outBuff1.clear(); 
     m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
@@ -435,6 +436,7 @@ void Audio::setDefaults() {
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.reset();
     m_outBuff.clear();        // Clear OutputBuffer
+    m_outBuff1.clear(); 
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
@@ -3281,6 +3283,7 @@ bool Audio::pauseResume() {
         retVal = true;
         if (!m_f_running) {
             memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t));               // Clear OutputBuffer
+            memset(m_outBuff1.get(), 0, m_outbuffSize * sizeof(int16_t));
             memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear SamplesBuffer
             m_validSamples = 0;
         }
@@ -5607,7 +5610,8 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
     //-----------------------------------------------------------------
-    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
+    if (m_codec == CODEC_WAV) { res = m_decoder->decode1(data, &m_sbyt.bytesLeft, m_outBuff1.get()); }
+    else res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
     bytesDecoded = len - m_sbyt.bytesLeft;
     //-----------------------------------------------------------------
 
@@ -5797,6 +5801,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_f_psramFound = psramInit();
 
     m_outBuff.alloc(m_outbuffSize, "m_outBuff");
+    m_outBuff1.alloc(m_outbuffSize, "m_outBuff1");
     m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
 
     esp_err_t result = ESP_OK;

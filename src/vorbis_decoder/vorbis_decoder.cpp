@@ -123,6 +123,10 @@ void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
     if (m_mode_param.valid()) m_mode_param.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t VorbisDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
+    return 0;
+}
+
 int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 
     int32_t ret = 0;

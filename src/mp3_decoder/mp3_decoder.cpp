@@ -1088,6 +1088,12 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
  * Notes:       switching useSize on and off between frames in the same stream
  *                is not supported (bit reservoir is not maintained if useSize on)
  */
+
+int32_t MP3Decoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
+    return 0;
+}
+
+
 int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 
     // Skip fake frames

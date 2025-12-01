@@ -116,6 +116,11 @@ const char* AACDecoder::getErrorMessage(int8_t err) {
     return m_neaacdec->NeAACDecGetErrorMessage(abs(err));
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+int32_t AACDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
+    return 0;
+}
+
+
 int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     uint8_t* ob = (uint8_t*)outbuf;
     if (m_f_firstCall == false) {
