@@ -357,7 +357,7 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_240M;        // Select PLL_F160M as the default source clock
-    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384; // mclk = sample_rate * 256
+    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256; // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
@@ -1578,8 +1578,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         info(*this, evt_info, "DataBlockSize: %u", dbs);
         info(*this, evt_info, "BitsPerSample: %u", bps);
 
-        if ((bps != 8) && (bps != 16) && (bps != 24)) {
-            info(*this, evt_info, "BitsPerSample is %u,  must be 8, 16 or 24", bps);
+        if ((bps != 8) && (bps != 16) && (bps != 24) && (bps != 32)) {
+            info(*this, evt_info, "BitsPerSample is %u,  must be 8, 16, 24 or 32", bps);
             stopSong();
             return -1;
         }
@@ -3378,6 +3378,7 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.s2 = 0;
     if (m_bitsPerSample == 16) m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4;
+    if (m_bitsPerSample == 32) m_plCh.sampleSize = 4;
     m_plCh.err = ESP_OK;
     m_plCh.i = 0;
 
@@ -5527,8 +5528,8 @@ void Audio::setDecoderItems() {
         info(*this, evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
     }
 
-    if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24) {
-        AUDIO_LOG_ERROR("Bits per sample must be 8 or 16, found %i", getBitsPerSample());
+    if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
+        AUDIO_LOG_ERROR("Bits per sample must be 8, 16, 24 or 32 found %i", getBitsPerSample());
         stopSong();
     }
 
@@ -6081,7 +6082,7 @@ uint32_t Audio::getSampleRate() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setBitsPerSample(int bits) {
-    if ((bits != 24) && (bits != 16) && (bits != 8)) return false;
+    if ((bits != 32) && (bits != 24) && (bits != 16) && (bits != 8)) return false;
     m_bitsPerSample = bits;
     reconfigI2S();
     return true;

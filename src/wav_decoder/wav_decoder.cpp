@@ -96,7 +96,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
             p += 4;
         }
 
-        m_validSamples = frame /  getChannels();
+        m_validSamples = frame / (2 *getChannels());
     //    log_w("decode1 m_validSamples %i", m_validSamples);
         *bytesLeft -= frame;
         return 0;
