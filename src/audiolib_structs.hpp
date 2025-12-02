@@ -126,6 +126,7 @@ struct plCh_t { // used in playChunk
     uint32_t  count = 0;
     size_t    i2s_bytesConsumed;
     int16_t*  sample[2];
+    int32_t*  sample1[2];
     int16_t*  s2;
     int       sampleSize;
     esp_err_t err;

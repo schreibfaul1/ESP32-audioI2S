@@ -60,7 +60,24 @@ const char* WavDecoder::whoIsIt() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) {
 
-    return 0;
+    uint16_t frame = *bytesLeft;
+    if (frame > 2048) frame = 2048;
+    const uint8_t* p = inbuf;
+     // ------------ 16-BIT PCM ------------
+    if (m_bps == 16) {
+
+        for (int i = 0; i < frame * getChannels(); i++) {
+            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]) ;
+            p+= 4;
+        }
+
+        m_validSamples = frame / (2 * getChannels());
+        log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
+    }
+
+    return -1;
 }
 
 int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
@@ -68,17 +85,36 @@ int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     if (frame > 2048) frame = 2048;
 
     if (m_bps == 16) {
-        memmove(outbuf, inbuf, frame);
-        m_validSamples = frame / (2 * getChannels());
+        // memmove(outbuf, inbuf, frame);
+        // m_validSamples = frame / (2 * getChannels());
+
+        const uint8_t* p = inbuf;
+
+        int samples = frame / (2 * getChannels());
+
+        for (int i = 0; i < samples * getChannels(); i++) {
+
+            // 16-bit little endian sample
+            int16_t s = int16_t((p[1] << 8) | p[0]);
+
+            // einfach direkt als int32_t speichern
+            outbuf[i] = (int16_t)s;
+
+            p += 2;
+        }
+
+        m_validSamples = samples;
+        log_w("m_validSamples %i", m_validSamples);
+        *bytesLeft -= samples * getChannels() * 2;
+        return 0;
+
     } else if (m_bps == 8) {
-        int channels = getChannels(); // e.g. 1 or 2
-        int samples  = frame / channels; // Number of sample frames
+        int channels = getChannels();   // e.g. 1 or 2
+        int samples = frame / channels; // Number of sample frames
 
         if (channels == 1) {
             // MONO
-            for (int i = 0; i < samples; i++) {
-                outbuf[i] = (static_cast<int16_t>(inbuf[i]) - 128) << 8;
-            }
+            for (int i = 0; i < samples; i++) { outbuf[i] = (static_cast<int16_t>(inbuf[i]) - 128) << 8; }
         } else if (channels == 2) {
             // STEREO (interleaved L/R)
             for (int i = 0; i < samples; i++) {

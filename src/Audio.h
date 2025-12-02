@@ -202,6 +202,7 @@ class Audio {
     void                     computeVUlevel(int16_t sample[2]);
     void                     computeLimit();
     void                     Gain(int16_t* sample);
+    void                     Gain1(int32_t* sample);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(char* ct);
     bool                     parseHttpResponseHeader();
