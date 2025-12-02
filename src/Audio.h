@@ -200,6 +200,7 @@ class Audio {
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
     void                     computeVUlevel(int16_t sample[2]);
+    void                     computeVUlevel1(int32_t* sample);
     void                     computeLimit();
     void                     Gain(int16_t* sample);
     void                     Gain1(int32_t* sample);
