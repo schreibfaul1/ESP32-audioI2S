@@ -65,7 +65,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
     // ------------ 16-BIT PCM ------------
     if (m_bps == 16) {
         if (frame > 4096) frame = 4096;
-        for (int i = 0; i < frame; i++) {
+        for (int i = 0; i < frame / 4; i++) {
             outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
             p += 4;
         }
@@ -75,10 +75,10 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
         *bytesLeft -= frame;
         return 0;
     }
-
+    // ------------ 24-BIT PCM ------------
     if (m_bps == 24) {
         if (frame > 3072) frame = 3072;
-        for (int i = 0; i < frame; i++) {
+        for (int i = 0; i < frame / 3; i++) {
             outbuf1[i] = (p[2] << 24) | (p[1] << 16) | (p[0] << 8) | (0x00);
             p += 3;
         }
@@ -88,7 +88,19 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
         *bytesLeft -= frame;
         return 0;
     }
+    // ------------ 32-BIT PCM ------------
+    if (m_bps == 32) {
+        if (frame > 3072) frame = 3072;
+        for (int i = 0; i < frame / 4; i++) {
+            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            p += 4;
+        }
 
+        m_validSamples = frame /  getChannels();
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
+    }
     return -1;
 }
 
