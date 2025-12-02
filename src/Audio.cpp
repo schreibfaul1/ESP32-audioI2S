@@ -3376,8 +3376,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.sample1[0] = 0;
     m_plCh.sample1[1] = 0;
     m_plCh.s2 = 0;
-    if(m_bitsPerSample == 16) m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
-    if(m_bitsPerSample == 24) m_plCh.sampleSize = 4;
+    if (m_bitsPerSample == 16) m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
+    if (m_bitsPerSample == 24) m_plCh.sampleSize = 4;
     m_plCh.err = ESP_OK;
     m_plCh.i = 0;
 
@@ -3473,7 +3473,7 @@ i2swrite:
 
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff1.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
 
-   //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
+        //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 
     } else {
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
@@ -6066,18 +6066,13 @@ bool Audio::fsRange(uint32_t range) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setSampleRate(uint32_t sampRate) {
 
-    if (!sampRate) sampRate = 48000;
+    if (!sampRate) return false;
     if (sampRate < 8000) {
         AUDIO_LOG_WARN("Sample rate must not be smaller than 8kHz, found: %lu", sampRate);
-        m_sampleRate = 8000;
+        return false;
     }
     m_sampleRate = sampRate;
-
-    m_resampleRatio = (float)m_sampleRate / 48000.0f;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
-    i2s_channel_disable(m_i2s_tx_handle);
-    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-    i2s_channel_enable(m_i2s_tx_handle);
+    reconfigI2S();
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6087,22 +6082,8 @@ uint32_t Audio::getSampleRate() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setBitsPerSample(int bits) {
     if ((bits != 24) && (bits != 16) && (bits != 8)) return false;
-
-    i2s_channel_disable(m_i2s_tx_handle);
-
-    if (bits == 8 || bits == 16) {
-        m_i2s_std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_16BIT;
-        m_i2s_std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_16BIT;
-    }
-    if (bits == 24 || bits == 32) {
-        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-        // m_i2s_std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
-        // m_i2s_std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-        // m_i2s_std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    }
-    i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
-    i2s_channel_enable(m_i2s_tx_handle);
     m_bitsPerSample = bits;
+    reconfigI2S();
     return true;
 }
 uint8_t Audio::getBitsPerSample() {
@@ -6157,18 +6138,41 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
     // true:  changed to I2S_COMM_FORMAT_I2S_LSB for some DACs (PT8211)
     //        Japanese or called LSBJ (Least Significant Bit Justified) format
 
-    // m_f_commFMT = commFMT;
+    if (commFMT) {
+        info(*this, evt_info, "commFMT = LSBJ (Least Significant Bit Justified)");
+    } else {
+        info(*this, evt_info, "commFMT = Philips");
+    }
+    m_f_commFMT = commFMT;
+    reconfigI2S();
+    return;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::reconfigI2S() {
 
-    // i2s_channel_disable(m_i2s_tx_handle);
-    // if (commFMT) {
-    //     info(*this, evt_info, "commFMT = LSBJ (Least Significant Bit Justified)");
-    //     m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-    // } else {
-    //     info(*this, evt_info, "commFMT = Philips");
-    //     m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-    // }
-    // i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
-    // i2s_channel_enable(m_i2s_tx_handle);
+    i2s_channel_disable(m_i2s_tx_handle);
+    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) {
+        if (m_f_commFMT) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        }
+        i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
+    }
+
+    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
+        if (m_f_commFMT) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        }
+        i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
+    }
+
+    m_resampleRatio = (float)m_sampleRate / 48000.0f;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+    i2s_channel_enable(m_i2s_tx_handle);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::computeVUlevel(int16_t sample[2]) {
