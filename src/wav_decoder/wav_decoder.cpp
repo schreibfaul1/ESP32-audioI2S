@@ -60,19 +60,31 @@ const char* WavDecoder::whoIsIt() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) {
 
-    uint16_t frame = *bytesLeft;
-    if (frame > 2048) frame = 2048;
+    uint16_t       frame = *bytesLeft;
     const uint8_t* p = inbuf;
-     // ------------ 16-BIT PCM ------------
+    // ------------ 16-BIT PCM ------------
     if (m_bps == 16) {
-
-        for (int i = 0; i < frame * getChannels(); i++) {
-            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]) ;
-            p+= 4;
+        if (frame > 4096) frame = 4096;
+        for (int i = 0; i < frame; i++) {
+            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            p += 4;
         }
 
         m_validSamples = frame / (2 * getChannels());
-        log_w("decode1 m_validSamples %i", m_validSamples);
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
+    }
+
+    if (m_bps == 24) {
+        if (frame > 3072) frame = 3072;
+        for (int i = 0; i < frame; i++) {
+            outbuf1[i] = (p[2] << 24) | (p[1] << 16) | (p[0] << 8) | (0x00);
+            p += 3;
+        }
+
+        m_validSamples = frame / (1.5 * getChannels());
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
         *bytesLeft -= frame;
         return 0;
     }

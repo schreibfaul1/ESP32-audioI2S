@@ -25,7 +25,7 @@ char audioI2SVers[] = "\
 #include "wav_decoder/wav_decoder.h"
 
 // constants
-constexpr size_t m_frameSizeWav = 2048;
+constexpr size_t m_frameSizeWav = 4096;
 constexpr size_t m_frameSizeMP3 = 1600 * 2;
 constexpr size_t m_frameSizeAAC = 1600 * 2;
 constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
@@ -356,8 +356,8 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_240M;         // Select PLL_F160M as the default source clock
-    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256; // mclk = sample_rate * 256
+    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_240M;        // Select PLL_F160M as the default source clock
+    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384; // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
@@ -1578,8 +1578,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         info(*this, evt_info, "DataBlockSize: %u", dbs);
         info(*this, evt_info, "BitsPerSample: %u", bps);
 
-        if ((bps != 8) && (bps != 16)) {
-            info(*this, evt_info, "BitsPerSample is %u,  must be 8 or 16", bps);
+        if ((bps != 8) && (bps != 16) && (bps != 24)) {
+            info(*this, evt_info, "BitsPerSample is %u,  must be 8, 16 or 24", bps);
             stopSong();
             return -1;
         }
@@ -3376,7 +3376,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.sample1[0] = 0;
     m_plCh.sample1[1] = 0;
     m_plCh.s2 = 0;
-    m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
+    if(m_bitsPerSample == 16) m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
+    if(m_bitsPerSample == 24) m_plCh.sampleSize = 4;
     m_plCh.err = ESP_OK;
     m_plCh.i = 0;
 
@@ -3385,13 +3386,13 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_codec == CODEC_WAV) {
         m_plCh.validSamples = m_validSamples;
 
-        while (m_plCh.validSamples) {
-            *m_plCh.sample1 = m_outBuff1.get() + m_plCh.i;
-            computeVUlevel1(*m_plCh.sample1);
-            Gain1(*m_plCh.sample1);
-            m_plCh.i ++;
-            m_plCh.validSamples -= 1;
-        }
+        // while (m_validSamples < m_plCh.i) {
+        //     *m_plCh.sample1 = m_outBuff1.get() + m_plCh.i;
+        //     computeVUlevel1(*m_plCh.sample1);
+        //     Gain1(*m_plCh.sample1);
+        //     if (m_bitsPerSample == 16) m_plCh.i++;
+        //     if (m_bitsPerSample == 24) m_plCh.i += 2;
+        // }
     } else {
 
         if (getChannels() == 1) {
@@ -3472,8 +3473,7 @@ i2swrite:
 
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff1.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
 
-AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
-
+   //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 
     } else {
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
@@ -5527,7 +5527,7 @@ void Audio::setDecoderItems() {
         info(*this, evt_info, "Bitrate (b/s): %lu", m_nominal_bitrate);
     }
 
-    if (getBitsPerSample() != 8 && getBitsPerSample() != 16) {
+    if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24) {
         AUDIO_LOG_ERROR("Bits per sample must be 8 or 16, found %i", getBitsPerSample());
         stopSong();
     }
@@ -6086,15 +6086,19 @@ uint32_t Audio::getSampleRate() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setBitsPerSample(int bits) {
-    if ((bits != 16) && (bits != 8)) return false;
+    if ((bits != 24) && (bits != 16) && (bits != 8)) return false;
 
     i2s_channel_disable(m_i2s_tx_handle);
 
-    if (bits == 16) {
-AUDIO_LOG_INFO("bits = 16");
-        m_i2s_std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
+    if (bits == 8 || bits == 16) {
         m_i2s_std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_16BIT;
         m_i2s_std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_16BIT;
+    }
+    if (bits == 24 || bits == 32) {
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        // m_i2s_std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
+        // m_i2s_std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
+        // m_i2s_std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
@@ -6286,7 +6290,6 @@ void Audio::computeVUlevel1(int32_t* sample) {
     m_cVUl.cnt1++;
 }
 
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint16_t Audio::getVUlevel() {
     // avg 0 ... 127
@@ -6395,9 +6398,16 @@ void Audio::Gain(int16_t* sample) {
 
 void Audio::Gain1(int32_t* sample) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    int16_t* s16 = (int16_t*) sample;
-    s16[LEFTCHANNEL] *= m_limit_left;
-    s16[RIGHTCHANNEL] *= m_limit_right;
+    if (m_bitsPerSample == 16) {
+        int16_t* s16 = (int16_t*)sample;
+        s16[LEFTCHANNEL] *= m_limit_left;
+        s16[RIGHTCHANNEL] *= m_limit_right;
+    }
+    if (m_bitsPerSample == 24) {
+        int32_t* s32 = (int32_t*)sample;
+        s32[LEFTCHANNEL] *= m_limit_left;
+        s32[RIGHTCHANNEL] *= m_limit_right;
+    }
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
