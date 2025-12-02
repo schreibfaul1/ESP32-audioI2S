@@ -3377,8 +3377,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.sample1[1] = 0;
     m_plCh.s2 = 0;
     if (m_bitsPerSample == 16) m_plCh.sampleSize = 4; // 2 bytes per sample (int16_t) * 2 channels
-    if (m_bitsPerSample == 24) m_plCh.sampleSize = 4;
-    if (m_bitsPerSample == 32) m_plCh.sampleSize = 4;
+    if (m_bitsPerSample == 24) m_plCh.sampleSize = 8; // 3 bytes + padding per sample (int32_t) * 2 channels
+    if (m_bitsPerSample == 32) m_plCh.sampleSize = 8; // 4 bytes per sample (int32_t) * 2 channels
     m_plCh.err = ESP_OK;
     m_plCh.i = 0;
 
