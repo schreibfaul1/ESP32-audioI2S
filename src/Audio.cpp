@@ -3385,12 +3385,12 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_codec == CODEC_WAV) {
         m_plCh.validSamples = m_validSamples;
 
-        // while (m_plCh.validSamples) {
-        //     *m_plCh.sample1 = m_outBuff1.get() + m_plCh.i;
-        //     Gain1(*m_plCh.sample1);
-        //     m_plCh.i += 2;
-        //     m_plCh.validSamples -= 1;
-        // }
+        while (m_plCh.validSamples) {
+            *m_plCh.sample1 = m_outBuff1.get() + m_plCh.i;
+            Gain1(*m_plCh.sample1);
+            m_plCh.i ++;
+            m_plCh.validSamples -= 1;
+        }
     } else {
 
         if (getChannels() == 1) {
@@ -6332,8 +6332,9 @@ void Audio::Gain(int16_t* sample) {
 
 void Audio::Gain1(int32_t* sample) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    sample[LEFTCHANNEL] *= m_limit_left;
-    sample[RIGHTCHANNEL] *= m_limit_right;
+    int16_t* s16 = (int16_t*) sample;
+    s16[LEFTCHANNEL] *= m_limit_left;
+    s16[RIGHTCHANNEL] *= m_limit_right;
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
