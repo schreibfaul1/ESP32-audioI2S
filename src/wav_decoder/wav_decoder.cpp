@@ -62,6 +62,35 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
 
     uint16_t       frame = *bytesLeft;
     const uint8_t* p = inbuf;
+
+    // ------------ 8-BIT PCM ------------
+    if (m_bps == 8) {
+        if (frame > 4096) frame = 4096;
+        if (getChannels() == 1) {
+            // MONO
+            for (int i = 0; i < frame / 2; i++) {
+                uint8_t p0 = p[0];
+                uint8_t p1 = p[1];
+                outbuf1[i] = (static_cast<int16_t>(p0) - 128) << 24;
+                outbuf1[i] |= 0x0000FFFF & ((static_cast<int16_t>(p1) - 128) << 8);
+                p += 2;
+            }
+            m_validSamples = frame;
+            *bytesLeft -= frame;
+        } else if (getChannels() == 2) {
+            // STEREO (interleaved L/R)
+            for (int i = 0; i < frame / 2; i++) {
+                uint8_t l = p[0];
+                uint8_t r = p[1];
+                outbuf1[i] = ((static_cast<int16_t>(l) - 128) << 24);
+                outbuf1[i] |= 0x0000FFFF & ((static_cast<int16_t>(r) - 128) << 8);
+                p += 2;
+            }
+            m_validSamples = (frame / 2);
+            *bytesLeft -= frame;
+        }
+        return 0;
+    }
     // ------------ 16-BIT PCM ------------
     if (m_bps == 16) {
         if (frame > 4096) frame = 4096;
