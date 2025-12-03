@@ -117,7 +117,9 @@ const char* AACDecoder::getErrorMessage(int8_t err) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t AACDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
-    return 0;
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf1);
+    int32_t samples = decode(inbuf, bytesLeft, out16);
+    return samples;
 }
 
 

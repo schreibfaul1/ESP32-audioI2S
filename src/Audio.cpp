@@ -3381,7 +3381,7 @@ void IRAM_ATTR Audio::playChunk() {
 
     if (m_plCh.count > 0) goto i2swrite;
 
-    if (m_codec == CODEC_WAV || m_codec == CODEC_MP3) {
+    if (true) {
         m_plCh.validSamples = m_validSamples;
 
         if (getChannels() == 1) {                                // mono to stereo
@@ -3494,7 +3494,7 @@ i2swrite:
 #ifdef SR_48K
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
 #else
-    if (m_codec == CODEC_WAV || m_codec == CODEC_MP3) {
+    if (true) {
 
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff1.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
 
@@ -5659,10 +5659,10 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
     //-----------------------------------------------------------------
-    if (m_codec == CODEC_WAV || m_codec == CODEC_MP3) {
+    //if (m_codec == CODEC_WAV || m_codec == CODEC_MP3) {
         res = m_decoder->decode1(data, &m_sbyt.bytesLeft, m_outBuff1.get());
-    } else
-        res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
+    //} else
+    //    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
     bytesDecoded = len - m_sbyt.bytesLeft;
     //-----------------------------------------------------------------
 
