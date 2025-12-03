@@ -524,14 +524,9 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t FlacDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf1);
-    int32_t samples = decode(inbuf, bytesLeft, out16);
-    return samples;
-}
+int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) { //  MAIN LOOP
 
-
-int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) { //  MAIN LOOP
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
 
     int32_t  ret = 0;
     uint32_t segmLen = 0;
@@ -566,7 +561,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
         if (m_nBytes > 0) {
             int16_t diff = m_nBytes;
             if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-            ret = decodeNative(inbuf, &m_nBytes, outbuf);
+            ret = decodeNative(inbuf, &m_nBytes, out16);
             diff -= m_nBytes;
             m_flacCurrentFilePos += diff;
             *bytesLeft -= diff;
@@ -648,7 +643,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
         m_flacCurrentFilePos += segmLen;
         return ret;
     }
-    ret = decodeNative(inbuf, bytesLeft, outbuf);
+    ret = decodeNative(inbuf, bytesLeft, out16);
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

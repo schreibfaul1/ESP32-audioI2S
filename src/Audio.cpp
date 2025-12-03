@@ -418,7 +418,6 @@ esp_err_t Audio::I2Sstart() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear(); // Clear OutputBuffer
-    m_outBuff1.clear();
     m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
@@ -436,7 +435,6 @@ void Audio::setDefaults() {
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.reset();
     m_outBuff.clear(); // Clear OutputBuffer
-    m_outBuff1.clear();
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
@@ -3282,8 +3280,7 @@ bool Audio::pauseResume() {
         m_f_running = !m_f_running;
         retVal = true;
         if (!m_f_running) {
-            memset(m_outBuff.get(), 0, m_outbuffSize * sizeof(int16_t)); // Clear OutputBuffer
-            memset(m_outBuff1.get(), 0, m_outbuffSize * sizeof(int16_t));
+            m_outBuff.clear();
             memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear SamplesBuffer
             m_validSamples = 0;
         }
@@ -3387,19 +3384,19 @@ void IRAM_ATTR Audio::playChunk() {
         if (getChannels() == 1) {                                // mono to stereo
             if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
                 for (int i = m_validSamples / 2 - 1; i >= 0; --i) {
-                    int32_t sample = m_outBuff1[i];
+                    int32_t sample = m_outBuff[i];
                     int16_t sample_a = sample & 0x0000FFFF;
                     int16_t sample_b = (sample & 0xFFFF0000) >> 16;
-                    m_outBuff1[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
-                    m_outBuff1[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
+                    m_outBuff[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
+                    m_outBuff[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
                 }
                 m_validSamples *= 2; // mono -> stereo
             }
             if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
                 for (int i = m_validSamples - 1; i >= 0; --i) {
-                    int32_t sample = m_outBuff1[i];
-                    m_outBuff1[2 * i] = sample;
-                    m_outBuff1[2 * i + 1] = sample;
+                    int32_t sample = m_outBuff[i];
+                    m_outBuff[2 * i] = sample;
+                    m_outBuff[2 * i + 1] = sample;
                 }
             }
         }
@@ -3409,7 +3406,7 @@ void IRAM_ATTR Audio::playChunk() {
 
         m_plCh.i = 0;
         while (m_plCh.samples > m_plCh.i) {
-            m_plCh.sample1 = &m_outBuff1[m_plCh.i];
+            m_plCh.sample1 = &m_outBuff[m_plCh.i];
             computeVUlevel1(m_plCh.sample1);
             Gain1(m_plCh.sample1);
             if (m_bitsPerSample == 8) m_plCh.i++;
@@ -3420,42 +3417,42 @@ void IRAM_ATTR Audio::playChunk() {
 
     } else {
 
-        if (getChannels() == 1) {
-            for (int i = m_validSamples - 1; i >= 0; --i) {
-                int16_t sample = m_outBuff[i];
-                m_outBuff[2 * i] = sample;
-                m_outBuff[2 * i + 1] = sample;
-            }
-            //    m_validSamples *= 2;
-        }
+        // if (getChannels() == 1) {
+        //     for (int i = m_validSamples - 1; i >= 0; --i) {
+        //         int16_t sample = m_outBuff[i];
+        //         m_outBuff[2 * i] = sample;
+        //         m_outBuff[2 * i + 1] = sample;
+        //     }
+        //     //    m_validSamples *= 2;
+        // }
 
-        m_plCh.validSamples = m_validSamples;
+        // m_plCh.validSamples = m_validSamples;
 
-        while (m_plCh.validSamples) {
-            *m_plCh.sample = m_outBuff.get() + m_plCh.i;
-            computeVUlevel(*m_plCh.sample);
+        // while (m_plCh.validSamples) {
+        //     *m_plCh.sample = m_outBuff.get() + m_plCh.i;
+        //     computeVUlevel(*m_plCh.sample);
 
-            //---------- Filterchain, can commented out if not used-------------
-            {
-                if (m_corr > 1) {
-                    m_plCh.s2 = *m_plCh.sample;
-                    m_plCh.s2[LEFTCHANNEL] /= m_corr;
-                    m_plCh.s2[RIGHTCHANNEL] /= m_corr;
-                }
-                IIR_filterChain0(*m_plCh.sample);
-                IIR_filterChain1(*m_plCh.sample);
-                IIR_filterChain2(*m_plCh.sample);
-            }
-            //------------------------------------------------------------------
-            if (m_f_forceMono && m_channels == 2) {
-                int32_t xy = ((*m_plCh.sample)[RIGHTCHANNEL] + (*m_plCh.sample)[LEFTCHANNEL]) / 2;
-                (*m_plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
-                (*m_plCh.sample)[LEFTCHANNEL] = (int16_t)xy;
-            }
-            Gain(*m_plCh.sample);
-            m_plCh.i += 2;
-            m_plCh.validSamples -= 1;
-        }
+        //     //---------- Filterchain, can commented out if not used-------------
+        //     {
+        //         if (m_corr > 1) {
+        //             m_plCh.s2 = *m_plCh.sample;
+        //             m_plCh.s2[LEFTCHANNEL] /= m_corr;
+        //             m_plCh.s2[RIGHTCHANNEL] /= m_corr;
+        //         }
+        //         IIR_filterChain0(*m_plCh.sample);
+        //         IIR_filterChain1(*m_plCh.sample);
+        //         IIR_filterChain2(*m_plCh.sample);
+        //     }
+        //     //------------------------------------------------------------------
+        //     if (m_f_forceMono && m_channels == 2) {
+        //         int32_t xy = ((*m_plCh.sample)[RIGHTCHANNEL] + (*m_plCh.sample)[LEFTCHANNEL]) / 2;
+        //         (*m_plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
+        //         (*m_plCh.sample)[LEFTCHANNEL] = (int16_t)xy;
+        //     }
+        //     Gain(*m_plCh.sample);
+        //     m_plCh.i += 2;
+        //     m_plCh.validSamples -= 1;
+        // }
     }
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
@@ -3494,15 +3491,8 @@ i2swrite:
 #ifdef SR_48K
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 50);
 #else
-    if (true) {
-
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff1.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
-
-        //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
-
-    } else {
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
-    }
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize, &m_plCh.i2s_bytesConsumed, 20);
+    //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 #endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / m_plCh.sampleSize;
@@ -5659,10 +5649,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_decode_ready) return 0;                                        // find sync first
 
     //-----------------------------------------------------------------
-    //if (m_codec == CODEC_WAV || m_codec == CODEC_MP3) {
-        res = m_decoder->decode1(data, &m_sbyt.bytesLeft, m_outBuff1.get());
-    //} else
-    //    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
+    res = m_decoder->decode(data, &m_sbyt.bytesLeft, m_outBuff.get());
     bytesDecoded = len - m_sbyt.bytesLeft;
     //-----------------------------------------------------------------
 
@@ -5851,8 +5838,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_f_psramFound = psramInit();
 
-    m_outBuff.alloc(m_outbuffSize, "m_outBuff");
-    m_outBuff1.alloc_array(m_outbuffSize, "m_outBuff1");
+    m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
 
     esp_err_t result = ESP_OK;

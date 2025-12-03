@@ -58,7 +58,7 @@ const char* WavDecoder::whoIsIt() {
     return "WAV";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) {
+int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
     uint16_t       frame = *bytesLeft;
     const uint8_t* p = inbuf;
@@ -71,8 +71,8 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
             for (int i = 0; i < frame / 2; i++) {
                 uint8_t p0 = p[0];
                 uint8_t p1 = p[1];
-                outbuf1[i] = (static_cast<int16_t>(p0) - 128) << 24;
-                outbuf1[i] |= 0x0000FFFF & ((static_cast<int16_t>(p1) - 128) << 8);
+                outbuf[i] = (static_cast<int16_t>(p0) - 128) << 24;
+                outbuf[i] |= 0x0000FFFF & ((static_cast<int16_t>(p1) - 128) << 8);
                 p += 2;
             }
             m_validSamples = frame;
@@ -82,8 +82,8 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
             for (int i = 0; i < frame / 2; i++) {
                 uint8_t l = p[0];
                 uint8_t r = p[1];
-                outbuf1[i] = ((static_cast<int16_t>(l) - 128) << 24);
-                outbuf1[i] |= 0x0000FFFF & ((static_cast<int16_t>(r) - 128) << 8);
+                outbuf[i] = ((static_cast<int16_t>(l) - 128) << 24);
+                outbuf[i] |= 0x0000FFFF & ((static_cast<int16_t>(r) - 128) << 8);
                 p += 2;
             }
             m_validSamples = (frame / 2);
@@ -95,7 +95,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
     if (m_bps == 16) {
         if (frame > 4096) frame = 4096;
         for (int i = 0; i < frame / 4; i++) {
-            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            outbuf[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
             p += 4;
         }
 
@@ -108,7 +108,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
     if (m_bps == 24) {
         if (frame > 3072) frame = 3072;
         for (int i = 0; i < frame / 3; i++) {
-            outbuf1[i] = (p[2] << 24) | (p[1] << 16) | (p[0] << 8) | (0x00);
+            outbuf[i] = (p[2] << 24) | (p[1] << 16) | (p[0] << 8) | (0x00);
             p += 3;
         }
 
@@ -121,7 +121,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
     if (m_bps == 32) {
         if (frame > 3072) frame = 3072;
         for (int i = 0; i < frame / 4; i++) {
-            outbuf1[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            outbuf[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
             p += 4;
         }
 
@@ -131,11 +131,6 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
         return 0;
     }
     return -1;
-}
-
-int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
-    //dummy
-    return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void WavDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {

@@ -124,15 +124,10 @@ void OpusDecoder::OPUSsetDefaults() {
     m_opusBlockPicItem.shrink_to_fit();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t OpusDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf1);
-    int32_t samples = decode(inbuf, bytesLeft, out16);
-    return samples;
-}
+int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
 
-
-int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
     int32_t ret = OPUS_NONE;
     int32_t segmLen = 0;
     int32_t bytesLeft_begin = *bytesLeft;
@@ -147,7 +142,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
     }
 
     if (m_frameCount > 0) { // decode audio, next part
-        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf);
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, out16);
         goto exit;
     }
 
@@ -190,7 +185,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf)
     }
 
     else if (m_opusPageNr == 3) {
-        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, outbuf); // decode audio
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, out16); // decode audio
         goto exit;
     }
 

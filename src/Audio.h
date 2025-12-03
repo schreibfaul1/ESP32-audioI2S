@@ -350,8 +350,7 @@ class Audio {
     static const uint8_t m_tsHeaderSize = 4;
 
     std::unique_ptr<Decoder> m_decoder = {};
-    ps_ptr<int16_t>          m_outBuff;        // Interleaved L/R
-    ps_ptr<int32_t>          m_outBuff1;        // Interleaved L/R
+    ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
     ps_ptr<int16_t>          m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
@@ -666,8 +665,7 @@ class Decoder {
     virtual uint32_t              getAudioDataStart() = 0;
     virtual uint32_t              getAudioFileDuration() = 0;
     virtual uint32_t              getOutputSamples() = 0;
-    virtual int32_t               decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) = 0;
-    virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) = 0;
+    virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) = 0;
     virtual void                  setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
     virtual const char*           getStreamTitle();
     virtual const char*           whoIsIt();
