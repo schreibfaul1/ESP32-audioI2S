@@ -3371,15 +3371,12 @@ void IRAM_ATTR Audio::playChunk() {
 
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
-    m_plCh.sample[0] = 0;
-    m_plCh.sample[1] = 0;
-    m_plCh.sample1[0] = 0;
-    m_plCh.sample1[1] = 0;
     m_plCh.s2 = 0;
-    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
-    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels();; // 2 bytes per sample (int16_t) * channels
+    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels(); // upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
+    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels();
+    ;                                                                 // 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
-    if (m_bitsPerSample == 32) m_plCh.sampleSize  = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
+    if (m_bitsPerSample == 32) m_plCh.sampleSize = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
     m_plCh.err = ESP_OK;
     m_plCh.i = 0;
 
@@ -3397,7 +3394,7 @@ void IRAM_ATTR Audio::playChunk() {
                     m_outBuff1[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
                     m_outBuff1[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
                 }
-                m_validSamples *= 2;   // mono -> stereo
+                m_validSamples *= 2; // mono -> stereo
             }
             if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
                 for (int i = m_validSamples - 1; i >= 0; --i) {
@@ -3408,12 +3405,18 @@ void IRAM_ATTR Audio::playChunk() {
             }
         }
 
-        while (m_validSamples < m_plCh.i) {
-            *m_plCh.sample1 = m_outBuff1.get() + m_plCh.i;
-            computeVUlevel1(*m_plCh.sample1);
-            Gain1(*m_plCh.sample1);
+        m_plCh.samples = m_validSamples;
+        if (getBitsPerSample() == 24 || getBitsPerSample() == 32) m_plCh.samples *= 2;
+
+        m_plCh.i = 0;
+        while (m_plCh.samples > m_plCh.i) {
+            m_plCh.sample1 = &m_outBuff1[m_plCh.i];
+              //    computeVUlevel1(m_plCh.sample1);
+            Gain1(m_plCh.sample1);
+            if (m_bitsPerSample == 8) m_plCh.i++;
             if (m_bitsPerSample == 16) m_plCh.i++;
             if (m_bitsPerSample == 24) m_plCh.i += 2;
+            if (m_bitsPerSample == 32) m_plCh.i += 2;
         }
 
     } else {
@@ -6430,10 +6433,9 @@ void Audio::Gain1(int32_t* sample) {
         s16[LEFTCHANNEL] *= m_limit_left;
         s16[RIGHTCHANNEL] *= m_limit_right;
     }
-    if (m_bitsPerSample == 24) {
-        int32_t* s32 = (int32_t*)sample;
-        s32[LEFTCHANNEL] *= m_limit_left;
-        s32[RIGHTCHANNEL] *= m_limit_right;
+    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
+        sample[LEFTCHANNEL] *= m_limit_left;
+        sample[RIGHTCHANNEL] *= m_limit_right;
     }
 }
 
