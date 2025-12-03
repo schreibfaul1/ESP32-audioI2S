@@ -63,7 +63,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
     uint16_t       frame = *bytesLeft;
     const uint8_t* p = inbuf;
 
-    // ------------ 8-BIT PCM ------------
+    // ------------ 8-BIT PCM unsigned ------------
     if (m_bps == 8) {
         if (frame > 4096) frame = 4096;
         if (getChannels() == 1) {
@@ -134,61 +134,7 @@ int32_t WavDecoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1
 }
 
 int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
-    uint16_t frame = *bytesLeft;
-    if (frame > 2048) frame = 2048;
-
-    if (m_bps == 16) {
-        // memmove(outbuf, inbuf, frame);
-        // m_validSamples = frame / (2 * getChannels());
-
-        const uint8_t* p = inbuf;
-
-        int samples = frame / (2 * getChannels());
-
-        for (int i = 0; i < samples * getChannels(); i++) {
-
-            // 16-bit little endian sample
-            int16_t s = int16_t((p[1] << 8) | p[0]);
-
-            // einfach direkt als int32_t speichern
-            outbuf[i] = (int16_t)s;
-
-            p += 2;
-        }
-
-        m_validSamples = samples;
-        log_w("m_validSamples %i", m_validSamples);
-        *bytesLeft -= samples * getChannels() * 2;
-        return 0;
-
-    } else if (m_bps == 8) {
-        int channels = getChannels();   // e.g. 1 or 2
-        int samples = frame / channels; // Number of sample frames
-
-        if (channels == 1) {
-            // MONO
-            for (int i = 0; i < samples; i++) { outbuf[i] = (static_cast<int16_t>(inbuf[i]) - 128) << 8; }
-        } else if (channels == 2) {
-            // STEREO (interleaved L/R)
-            for (int i = 0; i < samples; i++) {
-                uint8_t l = inbuf[i * 2 + 0];
-                uint8_t r = inbuf[i * 2 + 1];
-                outbuf[i * 2 + 0] = (static_cast<int16_t>(l) - 128) << 8;
-                outbuf[i * 2 + 1] = (static_cast<int16_t>(r) - 128) << 8;
-            }
-        } else {
-            // other channel numbers optional
-            return -2;
-        }
-
-        m_validSamples = samples;
-    } else {
-        // Unsupported bits per sample
-        m_validSamples = 0;
-        return -1;
-    }
-
-    *bytesLeft -= frame;
+    //dummy
     return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

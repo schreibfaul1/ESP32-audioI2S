@@ -1090,9 +1090,10 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
  */
 
 int32_t MP3Decoder::decode1(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1){
-    return 0;
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf1);
+    int32_t samples = decode(inbuf, bytesLeft, out16);
+    return samples;
 }
-
 
 int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
 
