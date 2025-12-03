@@ -6260,11 +6260,12 @@ void Audio::computeVUlevel(int16_t sample[2]) {
 }
 
 void Audio::computeVUlevel1(int32_t* sample) {
-    int16_t* s16;
+    int16_t* s16 = NULL;
+    int32_t* s32 = NULL;
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
         s16 = (int16_t*)sample;
     } else if (getBitsPerSample() == 24 || getBitsPerSample() == 32) {
-        return;
+        s32 = sample;
     } else {
         return;
     }
@@ -6303,8 +6304,16 @@ void Audio::computeVUlevel1(int32_t* sample) {
     if (m_cVUl.cnt4 == 8) { m_cVUl.cnt4 = 0; }
 
     if (!m_cVUl.cnt0) { // store every 64th sample in the array[0]
-        m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 7);
-        m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 7);
+        if (s16) {
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 7);
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 7);
+        } else if (s32) {
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 23);
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 23);
+        } else {
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = 0;
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = 0;
+        }
     }
     if (!m_cVUl.cnt1) { // store argest from 64 * 8 samples in the array[1]
         m_cVUl.sampleArray[LEFTCHANNEL][1][m_cVUl.cnt2] = largest(m_cVUl.sampleArray[LEFTCHANNEL][0]);
