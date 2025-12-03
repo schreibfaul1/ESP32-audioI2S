@@ -3372,9 +3372,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.s2 = 0;
-    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels(); // upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
-    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels();
-    ;                                                                 // 2 bytes per sample (int16_t) * channels
+    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // 1 byte upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
+    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels(); // 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
     if (m_bitsPerSample == 32) m_plCh.sampleSize = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
     m_plCh.err = ESP_OK;
@@ -3411,7 +3410,7 @@ void IRAM_ATTR Audio::playChunk() {
         m_plCh.i = 0;
         while (m_plCh.samples > m_plCh.i) {
             m_plCh.sample1 = &m_outBuff1[m_plCh.i];
-              //    computeVUlevel1(m_plCh.sample1);
+            computeVUlevel1(m_plCh.sample1);
             Gain1(m_plCh.sample1);
             if (m_bitsPerSample == 8) m_plCh.i++;
             if (m_bitsPerSample == 16) m_plCh.i++;
@@ -6261,7 +6260,14 @@ void Audio::computeVUlevel(int16_t sample[2]) {
 }
 
 void Audio::computeVUlevel1(int32_t* sample) {
-    int16_t* s16 = (int16_t*)sample;
+    int16_t* s16;
+    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
+        s16 = (int16_t*)sample;
+    } else if (getBitsPerSample() == 24 || getBitsPerSample() == 32) {
+        return;
+    } else {
+        return;
+    }
 
     auto avg = [&](uint8_t* sampArr) { // lambda, inner function, compute the average of 8 samples
         uint16_t av = 0;
