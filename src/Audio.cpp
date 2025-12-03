@@ -417,7 +417,7 @@ esp_err_t Audio::I2Sstart() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
-    m_outBuff.clear(); // Clear OutputBuffer
+    m_outBuff.clear();                                                  // Clear OutputBuffer
     m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     return i2s_channel_disable(m_i2s_tx_handle);
@@ -434,7 +434,7 @@ void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.reset();
-    m_outBuff.clear(); // Clear OutputBuffer
+    m_outBuff.clear();        // Clear OutputBuffer
     m_samplesBuff48K.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
@@ -3378,59 +3378,35 @@ void IRAM_ATTR Audio::playChunk() {
 
     if (m_plCh.count > 0) goto i2swrite;
 
-    if (true) {
-        m_plCh.validSamples = m_validSamples;
+    m_plCh.validSamples = m_validSamples;
 
-        if (getChannels() == 1) {                                // mono to stereo
-            if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
-                for (int i = m_validSamples / 2 - 1; i >= 0; --i) {
-                    int32_t sample = m_outBuff[i];
-                    int16_t sample_a = sample & 0x0000FFFF;
-                    int16_t sample_b = (sample & 0xFFFF0000) >> 16;
-                    m_outBuff[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
-                    m_outBuff[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
-                }
-                m_validSamples *= 2; // mono -> stereo
+    if (getChannels() == 1) { //------------- mono to stereo ----------------------------
+        if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
+            for (int i = m_validSamples / 2 - 1; i >= 0; --i) {
+                int32_t sample = m_outBuff[i];
+                int16_t sample_a = sample & 0x0000FFFF;
+                int16_t sample_b = (sample & 0xFFFF0000) >> 16;
+                m_outBuff[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
+                m_outBuff[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
             }
-            if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
-                for (int i = m_validSamples - 1; i >= 0; --i) {
-                    int32_t sample = m_outBuff[i];
-                    m_outBuff[2 * i] = sample;
-                    m_outBuff[2 * i + 1] = sample;
-                }
+            m_validSamples *= 2; // mono -> stereo
+        }
+        if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
+            for (int i = m_validSamples - 1; i >= 0; --i) {
+                int32_t sample = m_outBuff[i];
+                m_outBuff[2 * i] = sample;
+                m_outBuff[2 * i + 1] = sample;
             }
         }
+    }  //--------------------------------------------------------------------------------
 
-        m_plCh.samples = m_validSamples;
-        if (getBitsPerSample() == 24 || getBitsPerSample() == 32) m_plCh.samples *= 2;
+    m_plCh.samples = m_validSamples;
+    if (getBitsPerSample() == 24 || getBitsPerSample() == 32) m_plCh.samples *= 2;
 
-        m_plCh.i = 0;
-        while (m_plCh.samples > m_plCh.i) {
-            m_plCh.sample1 = &m_outBuff[m_plCh.i];
-            computeVUlevel1(m_plCh.sample1);
-            Gain1(m_plCh.sample1);
-            if (m_bitsPerSample == 8) m_plCh.i++;
-            if (m_bitsPerSample == 16) m_plCh.i++;
-            if (m_bitsPerSample == 24) m_plCh.i += 2;
-            if (m_bitsPerSample == 32) m_plCh.i += 2;
-        }
-
-    } else {
-
-        // if (getChannels() == 1) {
-        //     for (int i = m_validSamples - 1; i >= 0; --i) {
-        //         int16_t sample = m_outBuff[i];
-        //         m_outBuff[2 * i] = sample;
-        //         m_outBuff[2 * i + 1] = sample;
-        //     }
-        //     //    m_validSamples *= 2;
-        // }
-
-        // m_plCh.validSamples = m_validSamples;
-
-        // while (m_plCh.validSamples) {
-        //     *m_plCh.sample = m_outBuff.get() + m_plCh.i;
-        //     computeVUlevel(*m_plCh.sample);
+    m_plCh.i = 0;
+    while (m_plCh.samples > m_plCh.i) {
+        m_plCh.sample1 = &m_outBuff[m_plCh.i];
+        computeVUlevel1(m_plCh.sample1);
 
         //     //---------- Filterchain, can commented out if not used-------------
         //     {
@@ -3449,11 +3425,14 @@ void IRAM_ATTR Audio::playChunk() {
         //         (*m_plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
         //         (*m_plCh.sample)[LEFTCHANNEL] = (int16_t)xy;
         //     }
-        //     Gain(*m_plCh.sample);
-        //     m_plCh.i += 2;
-        //     m_plCh.validSamples -= 1;
-        // }
+
+        Gain1(m_plCh.sample1);
+        if (m_bitsPerSample == 8) m_plCh.i++;
+        if (m_bitsPerSample == 16) m_plCh.i++;
+        if (m_bitsPerSample == 24) m_plCh.i += 2;
+        if (m_bitsPerSample == 32) m_plCh.i += 2;
     }
+
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
     if (m_plCh.count == 0) {
@@ -5735,7 +5714,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     samples_out = m_validSamples;
     if (m_channels == 2) samples_out /= 2;
-    if (m_bitsPerSample == 16) samples_out *= 2;
+    if (m_bitsPerSample != 8) samples_out *= 2;
 exit:
     m_curSample = 0;
     if (m_validSamples) {
