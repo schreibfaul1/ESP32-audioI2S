@@ -4661,7 +4661,7 @@ void Audio::processWebStreamHLS() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::playAudioData() {
 
-    if (!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running) {
+    if (!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running || m_codec == CODEC_NONE) {
         m_validSamples = 0;
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
@@ -6294,8 +6294,8 @@ void Audio::computeVUlevel1(int32_t* sample) {
             m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 7);
             m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 7);
         } else if (s32) {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 23);
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 23);
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s32[LEFTCHANNEL] >> 23);
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s32[RIGHTCHANNEL] >> 23);
         } else {
             m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = 0;
             m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = 0;
