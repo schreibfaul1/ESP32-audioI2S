@@ -5622,6 +5622,8 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_running) return 0; // guard
+    if (!m_decoder) return 0;  // guard
+
     int                   res = 0;
     int                   bytesDecoded = 0;
     const char*           st = NULL;
