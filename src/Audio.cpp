@@ -356,7 +356,7 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_240M;        // Select PLL_F160M as the default source clock
+    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_160M;        // Select PLL_F160M as the default source clock
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256; // mclk = sample_rate * 256
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
