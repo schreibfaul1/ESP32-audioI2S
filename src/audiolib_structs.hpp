@@ -129,6 +129,7 @@ struct plCh_t { // used in playChunk
     int16_t*  sample[2];
     int32_t*  sample1;
     int16_t*  s16;
+    int32_t*  s32;
     int       sampleSize;
     esp_err_t err;
     int       i;
@@ -186,15 +187,26 @@ struct cVUl_t { // used in computeVUlevel
 };
 
 struct ifCh_t { // used in IIR_filterChain0, 1, 2
-    float   inSample0[2];
-    float   outSample0[2];
-    int16_t iir_out0[2];
-    float   inSample1[2];
-    float   outSample1[2];
-    int16_t iir_out1[2];
-    float   inSample2[2];
-    float   outSample2[2];
-    int16_t iir_out2[2];
+    // s16
+    float   inSample0_16[2];
+    float   outSample0_16[2];
+    int16_t iir_out0_16[2];
+    float   inSample1_16[2];
+    float   outSample1_16[2];
+    int16_t iir_out1_16[2];
+    float   inSample2_16[2];
+    float   outSample2_16[2];
+    int16_t iir_out2_16[2];
+    // s32
+    double   inSample0_32[2];
+    double   outSample0_32[2];
+    int32_t iir_out0_32[2];
+    double   inSample1_32[2];
+    double   outSample1_32[2];
+    int32_t iir_out1_32[2];
+    double   inSample2_32[2];
+    double   outSample2_32[2];
+    int32_t iir_out2_32[2];
 };
 
 typedef struct _tspp { // used in ts_parsePacket
