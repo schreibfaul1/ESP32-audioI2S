@@ -213,9 +213,9 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
-    void                     IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-    void                     IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-    void                     IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+    void                     IIR_filterChain0(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain1(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain2(int16_t* iir_in, bool clear = false);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     void                     IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);

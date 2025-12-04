@@ -3368,7 +3368,7 @@ void IRAM_ATTR Audio::playChunk() {
 
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
-    m_plCh.s2 = 0;
+    m_plCh.s16 = 0;
     if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // 1 byte upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels(); // 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
@@ -3380,7 +3380,7 @@ void IRAM_ATTR Audio::playChunk() {
 
     m_plCh.validSamples = m_validSamples;
 
-    if (getChannels() == 1) { //------------- mono to stereo ----------------------------
+    if (getChannels() == 1) {                                //------------- mono to stereo ----------------------------
         if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
             for (int i = m_validSamples / 2 - 1; i >= 0; --i) {
                 int32_t sample = m_outBuff[i];
@@ -3398,7 +3398,7 @@ void IRAM_ATTR Audio::playChunk() {
                 m_outBuff[2 * i + 1] = sample;
             }
         }
-    }  //--------------------------------------------------------------------------------
+    } //--------------------------------------------------------------------------------
 
     m_plCh.samples = m_validSamples;
     if (getBitsPerSample() == 24 || getBitsPerSample() == 32) m_plCh.samples *= 2;
@@ -3408,23 +3408,23 @@ void IRAM_ATTR Audio::playChunk() {
         m_plCh.sample1 = &m_outBuff[m_plCh.i];
         computeVUlevel1(m_plCh.sample1);
 
-        //     //---------- Filterchain, can commented out if not used-------------
-        //     {
-        //         if (m_corr > 1) {
-        //             m_plCh.s2 = *m_plCh.sample;
-        //             m_plCh.s2[LEFTCHANNEL] /= m_corr;
-        //             m_plCh.s2[RIGHTCHANNEL] /= m_corr;
-        //         }
-        //         IIR_filterChain0(*m_plCh.sample);
-        //         IIR_filterChain1(*m_plCh.sample);
-        //         IIR_filterChain2(*m_plCh.sample);
-        //     }
-        //     //------------------------------------------------------------------
-        //     if (m_f_forceMono && m_channels == 2) {
-        //         int32_t xy = ((*m_plCh.sample)[RIGHTCHANNEL] + (*m_plCh.sample)[LEFTCHANNEL]) / 2;
-        //         (*m_plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
-        //         (*m_plCh.sample)[LEFTCHANNEL] = (int16_t)xy;
-        //     }
+        //---------- Filterchain, can commented out if not used-------------
+        {
+            m_plCh.s16 = (int16_t*)m_plCh.sample1;
+            if (m_corr > 1) {
+                m_plCh.s16[LEFTCHANNEL] /= m_corr;
+                m_plCh.s16[RIGHTCHANNEL] /= m_corr;
+            }
+            IIR_filterChain0(m_plCh.s16);
+            IIR_filterChain1(m_plCh.s16);
+            IIR_filterChain2(m_plCh.s16);
+        }
+        //------------------------------------------------------------------
+        // if (m_f_forceMono && m_channels == 2) {
+        //     int32_t xy = ((*m_plCh.sample)[RIGHTCHANNEL] + (*m_plCh.sample)[LEFTCHANNEL]) / 2;
+        //     (*m_plCh.sample)[RIGHTCHANNEL] = (int16_t)xy;
+        //     (*m_plCh.sample)[LEFTCHANNEL] = (int16_t)xy;
+        // }
 
         Gain1(m_plCh.sample1);
         if (m_bitsPerSample == 8) m_plCh.i++;
@@ -6537,7 +6537,7 @@ void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2) { // Infi
     //                                                  m_filter[2].b1, m_filter[2].b2);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain0(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain0(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
@@ -6577,7 +6577,7 @@ void Audio::IIR_filterChain0(int16_t iir_in[2], bool clear) { // Infinite Impuls
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain1(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain1(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
@@ -6617,7 +6617,7 @@ void Audio::IIR_filterChain1(int16_t iir_in[2], bool clear) { // Infinite Impuls
     return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain2(int16_t iir_in[2], bool clear) { // Infinite Impulse Response (IIR) filters
+void Audio::IIR_filterChain2(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
 
     uint8_t z1 = 0, z2 = 1;
     enum : uint8_t { in = 0, out = 1 };
