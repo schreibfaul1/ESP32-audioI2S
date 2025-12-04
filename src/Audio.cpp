@@ -3452,35 +3452,39 @@ void IRAM_ATTR Audio::playChunk() {
 
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
-    if (m_plCh.count == 0) {
-        m_plCh.validSamples = m_validSamples;
-        m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
-        m_validSamples = m_plCh.samples48K;
+    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
+        if (m_plCh.count == 0) {
+            m_plCh.validSamples = m_validSamples;
+            m_plCh.samples48K = resampleTo48kStereo((int16_t*)m_outBuff.get(), m_plCh.validSamples);
+            m_validSamples = m_plCh.samples48K;
 
-        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
-            m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-            i2s_channel_disable(m_i2s_tx_handle);
-            i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-            i2s_channel_enable(m_i2s_tx_handle);
+            if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
+                m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+                i2s_channel_disable(m_i2s_tx_handle);
+                i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+                i2s_channel_enable(m_i2s_tx_handle);
+            }
         }
     }
 #endif
 
     //------------------------------------------------------------------------------------------------------
-    //     if (audio_process_i2s) {
-    //         // processing the audio samples from external before forwarding them to i2s
-    //         bool continueI2S = false;
-    // #ifdef SR_48K
-    //         audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
-    // #else
-    //         audio_process_i2s(m_outBuff.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
-    // #endif
-    //         if (!continueI2S) {
-    //             m_validSamples = 0;
-    //             m_plCh.count = 0;
-    //             return;
-    //         }
-    //     }
+    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
+        if (audio_process_i2s) {
+            // processing the audio samples from external before forwarding them to i2s
+            bool continueI2S = false;
+    #ifdef SR_48K
+            audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
+    #else
+            audio_process_i2s((int16_t*)m_outBuff.get(), (int32_t) m_validSamples, &continueI2S);
+    #endif
+            if (!continueI2S) {
+                m_validSamples = 0;
+                m_plCh.count = 0;
+                return;
+            }
+        }
+    }
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
