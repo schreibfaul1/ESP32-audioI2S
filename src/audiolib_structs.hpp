@@ -198,14 +198,14 @@ struct ifCh_t { // used in IIR_filterChain0, 1, 2
     float   outSample2_16[2];
     int16_t iir_out2_16[2];
     // s32
-    double   inSample0_32[2];
-    double   outSample0_32[2];
+    float   inSample0_32[2];
+    float   outSample0_32[2];
     int32_t iir_out0_32[2];
-    double   inSample1_32[2];
-    double   outSample1_32[2];
+    float   inSample1_32[2];
+    float   outSample1_32[2];
     int32_t iir_out1_32[2];
-    double   inSample2_32[2];
-    double   outSample2_32[2];
+    float   inSample2_32[2];
+    float   outSample2_32[2];
     int32_t iir_out2_32[2];
 };
 

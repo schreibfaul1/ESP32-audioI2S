@@ -3425,9 +3425,9 @@ void IRAM_ATTR Audio::playChunk() {
                 m_plCh.s32[LEFTCHANNEL] /= m_corr;
                 m_plCh.s32[RIGHTCHANNEL] /= m_corr;
             }
-            // IIR_filterChain0_s32(m_plCh.s32);
-            // IIR_filterChain1_s32(m_plCh.s32);
-            // IIR_filterChain2_s32(m_plCh.s32);
+            IIR_filterChain0_s32(m_plCh.s32);
+            IIR_filterChain1_s32(m_plCh.s32);
+            IIR_filterChain2_s32(m_plCh.s32);
         }
         //------------------------------------------------------------------
         // if (m_f_forceMono && m_channels == 2) {
@@ -6610,7 +6610,7 @@ void Audio::IIR_filterChain0_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[0][z1][in][LEFTCHANNEL] = m_ifCh.inSample0_32[LEFTCHANNEL];
     m_filterBuff[0][z2][out][LEFTCHANNEL] = m_filterBuff[0][z1][out][LEFTCHANNEL];
     m_filterBuff[0][z1][out][LEFTCHANNEL] = m_ifCh.outSample0_32[LEFTCHANNEL];
-    m_ifCh.iir_out0_32[LEFTCHANNEL] = (int16_t)m_ifCh.outSample0_32[LEFTCHANNEL];
+    m_ifCh.iir_out0_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample0_32[LEFTCHANNEL];
 
     m_ifCh.outSample0_32[RIGHTCHANNEL] = m_filter[0].a0 * m_ifCh.inSample0_32[RIGHTCHANNEL] + m_filter[0].a1 * m_filterBuff[0][z1][in][RIGHTCHANNEL] +
                                       m_filter[0].a2 * m_filterBuff[0][z2][in][RIGHTCHANNEL] - m_filter[0].b1 * m_filterBuff[0][z1][out][RIGHTCHANNEL] -
@@ -6620,7 +6620,7 @@ void Audio::IIR_filterChain0_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[0][z1][in][RIGHTCHANNEL] = m_ifCh.inSample0_32[RIGHTCHANNEL];
     m_filterBuff[0][z2][out][RIGHTCHANNEL] = m_filterBuff[0][z1][out][RIGHTCHANNEL];
     m_filterBuff[0][z1][out][RIGHTCHANNEL] = m_ifCh.outSample0_32[RIGHTCHANNEL];
-    m_ifCh.iir_out0_32[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample0_32[RIGHTCHANNEL];
+    m_ifCh.iir_out0_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample0_32[RIGHTCHANNEL];
 
     iir_in[LEFTCHANNEL] = m_ifCh.iir_out0_32[LEFTCHANNEL];
     iir_in[RIGHTCHANNEL] = m_ifCh.iir_out0_32[RIGHTCHANNEL];
@@ -6690,7 +6690,7 @@ void Audio::IIR_filterChain1_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[1][z1][in][LEFTCHANNEL] = m_ifCh.inSample1_32[LEFTCHANNEL];
     m_filterBuff[1][z2][out][LEFTCHANNEL] = m_filterBuff[1][z1][out][LEFTCHANNEL];
     m_filterBuff[1][z1][out][LEFTCHANNEL] = m_ifCh.outSample1_32[LEFTCHANNEL];
-    m_ifCh.iir_out1_32[LEFTCHANNEL] = (int16_t)m_ifCh.outSample1_32[LEFTCHANNEL];
+    m_ifCh.iir_out1_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample1_32[LEFTCHANNEL];
 
     m_ifCh.outSample1_32[RIGHTCHANNEL] = m_filter[1].a0 * m_ifCh.inSample1_32[RIGHTCHANNEL] + m_filter[1].a1 * m_filterBuff[1][z1][in][RIGHTCHANNEL] +
                                       m_filter[1].a2 * m_filterBuff[1][z2][in][RIGHTCHANNEL] - m_filter[1].b1 * m_filterBuff[1][z1][out][RIGHTCHANNEL] -
@@ -6700,7 +6700,7 @@ void Audio::IIR_filterChain1_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[1][z1][in][RIGHTCHANNEL] = m_ifCh.inSample1_32[RIGHTCHANNEL];
     m_filterBuff[1][z2][out][RIGHTCHANNEL] = m_filterBuff[1][z1][out][RIGHTCHANNEL];
     m_filterBuff[1][z1][out][RIGHTCHANNEL] = m_ifCh.outSample1_32[RIGHTCHANNEL];
-    m_ifCh.iir_out1_32[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample1_32[RIGHTCHANNEL];
+    m_ifCh.iir_out1_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample1_32[RIGHTCHANNEL];
 
     iir_in[LEFTCHANNEL] = m_ifCh.iir_out1_32[LEFTCHANNEL];
     iir_in[RIGHTCHANNEL] = m_ifCh.iir_out1_32[RIGHTCHANNEL];
@@ -6770,7 +6770,7 @@ void Audio::IIR_filterChain2_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[2][z1][in][LEFTCHANNEL] = m_ifCh.inSample2_32[LEFTCHANNEL];
     m_filterBuff[2][z2][out][LEFTCHANNEL] = m_filterBuff[2][z1][out][LEFTCHANNEL];
     m_filterBuff[2][z1][out][LEFTCHANNEL] = m_ifCh.outSample2_32[LEFTCHANNEL];
-    m_ifCh.iir_out2_32[LEFTCHANNEL] = (int16_t)m_ifCh.outSample2_32[LEFTCHANNEL];
+    m_ifCh.iir_out2_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample2_32[LEFTCHANNEL];
 
     m_ifCh.outSample2_32[RIGHTCHANNEL] = m_filter[2].a0 * m_ifCh.inSample2_32[RIGHTCHANNEL] + m_filter[2].a1 * m_filterBuff[2][z1][in][RIGHTCHANNEL] +
                                       m_filter[2].a2 * m_filterBuff[2][z2][in][RIGHTCHANNEL] - m_filter[2].b1 * m_filterBuff[2][z1][out][RIGHTCHANNEL] -
@@ -6780,7 +6780,7 @@ void Audio::IIR_filterChain2_s32(int32_t* iir_in, bool clear) { // Infinite Impu
     m_filterBuff[2][z1][in][RIGHTCHANNEL] = m_ifCh.inSample2_32[RIGHTCHANNEL];
     m_filterBuff[2][z2][out][RIGHTCHANNEL] = m_filterBuff[2][z1][out][RIGHTCHANNEL];
     m_filterBuff[2][z1][out][RIGHTCHANNEL] = m_ifCh.outSample2_32[RIGHTCHANNEL];
-    m_ifCh.iir_out2_32[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample2_32[RIGHTCHANNEL];
+    m_ifCh.iir_out2_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample2_32[RIGHTCHANNEL];
 
     iir_in[LEFTCHANNEL] = m_ifCh.iir_out2_32[LEFTCHANNEL];
     iir_in[RIGHTCHANNEL] = m_ifCh.iir_out2_32[RIGHTCHANNEL];
