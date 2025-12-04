@@ -24,7 +24,7 @@ class MP3Decoder : public Decoder {
     uint32_t              getAudioFileDuration() override;
     const char*           getStreamTitle() override;
     const char*           whoIsIt() override;
-    int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) override;
+    int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) override;
     void                  setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) override;
     std::vector<uint32_t> getMetadataBlockPicture() override;
     const char*           arg1() override; // MPEG Version and Layer
@@ -35,7 +35,7 @@ class MP3Decoder : public Decoder {
     enum {
         MP3_NONE = 0,
         MP3_ERR = -1,
-        MP3_MAIN_DATA_UNDERFLOW = - 2,
+        MP3_MAIN_DATA_UNDERFLOW = -2,
         MP3_NEED_RESTART = -3,
         MP3_STOP = -100,
         MP3_NEXT_FRAME = 100,
@@ -62,7 +62,7 @@ class MP3Decoder : public Decoder {
     ps_ptr<MP3FrameInfo_t>  m_MP3FrameInfo;
     ps_ptr<char>            m_mpeg_version_str;
 
-    invalid_frame           m_invalid_frame;
+    invalid_frame m_invalid_frame;
 
     // internally used
     int32_t  IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft);

@@ -123,7 +123,9 @@ void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
     if (m_mode_param.valid()) m_mode_param.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
 
     int32_t ret = 0;
     int32_t bytesLeft_begin = *bytesLeft;
@@ -164,7 +166,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbu
             ret = vorbisDecodePage3(inbuf, bytesLeft, m_vorbis_segment_length); // codebooks
             break;
         case 4:
-            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, outbuf); // decode audio
+            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, out16); // decode audio
             break;
         default:
             VORBIS_LOG_ERROR("unknown page %s", m_pageNr);

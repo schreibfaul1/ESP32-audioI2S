@@ -1088,7 +1088,10 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
  * Notes:       switching useSize on and off between frames in the same stream
  *                is not supported (bit reservoir is not maintained if useSize on)
  */
-int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+
+int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
 
     // Skip fake frames
     int frameLen = IsLikelyRealFrame(inbuf, *bytesLeft);
@@ -1141,14 +1144,14 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     /* unpack frame header */
     fhBytes = UnpackFrameHeader(inbuf);
     if (fhBytes < 0) {
-        MP3_LOG_ERROR("MP3 invalid frameheader"); /* don't clear outbuf since we don't know size (failed to parse header) */
+        MP3_LOG_ERROR("MP3 invalid frameheader"); /* don't clear out16 since we don't know size (failed to parse header) */
         return MP3_ERR;
     }
     inbuf += fhBytes;
     /* unpack side info */
     siBytes = UnpackSideInfo(inbuf);
     if (siBytes < 0) {
-        MP3ClearBadFrame(outbuf);
+        MP3ClearBadFrame(out16);
         MP3_LOG_ERROR("MP3 invalid sideinfo");
         return MP3_ERR;
     }
@@ -1162,7 +1165,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
             m_MP3DecInfo->freeBitrateFlag = 1;
             m_MP3DecInfo->freeBitrateSlots = MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
             if (m_MP3DecInfo->freeBitrateSlots < 0) {
-                MP3ClearBadFrame(outbuf);
+                MP3ClearBadFrame(out16);
                 m_MP3DecInfo->freeBitrateFlag = 0;
                 MP3_LOG_ERROR("MP3, ca'nt find free bitrate slot");
                 return MP3_ERR;
@@ -1174,7 +1177,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
     }
 
     if (m_MP3DecInfo->nSlots > *bytesLeft) {
-        MP3ClearBadFrame(outbuf);
+        MP3ClearBadFrame(out16);
         MP3_LOG_DEBUG("MP3, indata underflow");
         return MP3_MAIN_DATA_UNDERFLOW;
     }
@@ -1198,7 +1201,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
         inbuf += m_MP3DecInfo->nSlots;
         *bytesLeft -= (m_MP3DecInfo->nSlots);
         if (underflowCounter < 4) { return MP3_NONE; }
-        MP3ClearBadFrame(outbuf);
+        MP3ClearBadFrame(out16);
         MP3_LOG_DEBUG("MP3, maindata underflow");
         return MP3_NONE;
     }
@@ -1218,7 +1221,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
             mainBits -= sfBlockBits;
 
             if (offset < 0 || mainBits < huffBlockBits) {
-                MP3ClearBadFrame(outbuf);
+                MP3ClearBadFrame(out16);
                 MP3_LOG_ERROR("MP3, invalid scalefact");
                 return MP3_ERR;
             }
@@ -1226,7 +1229,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
             prevBitOffset = bitOffset;
             offset = DecodeHuffman(mainPtr, &bitOffset, huffBlockBits, gr, ch);
             if (offset < 0) {
-                MP3ClearBadFrame(outbuf);
+                MP3ClearBadFrame(out16);
                 MP3_LOG_ERROR("MP3, invalid Huffman code words");
                 return MP3_ERR;
             }
@@ -1235,7 +1238,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
         }
         /* dequantize coefficients, decode stereo, reorder int16_t blocks */
         if (MP3Dequantize(gr) < 0) {
-            MP3ClearBadFrame(outbuf);
+            MP3ClearBadFrame(out16);
             MP3_LOG_ERROR("MP3, invalid dequantize coefficients");
             return MP3_ERR;
         }
@@ -1243,14 +1246,14 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) 
         /* alias reduction, inverse MDCT, overlap-add, frequency inversion */
         for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             if (IMDCT(gr, ch) < 0) {
-                MP3ClearBadFrame(outbuf);
+                MP3ClearBadFrame(out16);
                 MP3_LOG_ERROR("MP3, invalid inverse MDCT");
                 return MP3_ERR;
             }
         }
         /* subband transform - if stereo, interleaves pcm LRLRLR */
-        if (Subband(outbuf + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans) < 0) {
-            MP3ClearBadFrame(outbuf);
+        if (Subband(out16 + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans) < 0) {
+            MP3ClearBadFrame(out16);
             MP3_LOG_ERROR("MP3, invalid subband");
             return MP3_ERR;
         }

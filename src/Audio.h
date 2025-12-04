@@ -200,8 +200,10 @@ class Audio {
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
     void                     computeVUlevel(int16_t sample[2]);
+    void                     computeVUlevel1(int32_t* sample);
     void                     computeLimit();
     void                     Gain(int16_t* sample);
+    void                     Gain1(int32_t* sample);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(char* ct);
     bool                     parseHttpResponseHeader();
@@ -210,9 +212,13 @@ class Audio {
     esp_err_t                I2Sstart();
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
-    void                     IIR_filterChain0(int16_t iir_in[2], bool clear = false);
-    void                     IIR_filterChain1(int16_t iir_in[2], bool clear = false);
-    void                     IIR_filterChain2(int16_t iir_in[2], bool clear = false);
+    void                     reconfigI2S();
+    void                     IIR_filterChain0_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain1_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain2_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain0_s32(int32_t* iir_in, bool clear = false);
+    void                     IIR_filterChain1_s32(int32_t* iir_in, bool clear = false);
+    void                     IIR_filterChain2_s32(int32_t* iir_in, bool clear = false);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     void                     IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
@@ -347,7 +353,7 @@ class Audio {
     static const uint8_t m_tsHeaderSize = 4;
 
     std::unique_ptr<Decoder> m_decoder = {};
-    ps_ptr<int16_t>          m_outBuff;        // Interleaved L/R
+    ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
     ps_ptr<int16_t>          m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
@@ -662,7 +668,7 @@ class Decoder {
     virtual uint32_t              getAudioDataStart() = 0;
     virtual uint32_t              getAudioFileDuration() = 0;
     virtual uint32_t              getOutputSamples() = 0;
-    virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) = 0;
+    virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) = 0;
     virtual void                  setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
     virtual const char*           getStreamTitle();
     virtual const char*           whoIsIt();

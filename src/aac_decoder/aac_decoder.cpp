@@ -116,8 +116,11 @@ const char* AACDecoder::getErrorMessage(int8_t err) {
     return m_neaacdec->NeAACDecGetErrorMessage(abs(err));
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
-    uint8_t* ob = (uint8_t*)outbuf;
+int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
+
+    uint8_t* ob = (uint8_t*)out16;
     if (m_f_firstCall == false) {
         if (m_f_setRaWBlockParams) { // set raw AAC values, e.g. for M4A config.
             m_f_setRaWBlockParams = false;

@@ -58,44 +58,79 @@ const char* WavDecoder::whoIsIt() {
     return "WAV";
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
-    uint16_t frame = *bytesLeft;
-    if (frame > 2048) frame = 2048;
+int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    if (m_bps == 16) {
-        memmove(outbuf, inbuf, frame);
-        m_validSamples = frame / (2 * getChannels());
-    } else if (m_bps == 8) {
-        int channels = getChannels(); // e.g. 1 or 2
-        int samples  = frame / channels; // Number of sample frames
+    uint16_t       frame = *bytesLeft;
+    const uint8_t* p = inbuf;
 
-        if (channels == 1) {
+    // ------------ 8-BIT PCM unsigned ------------
+    if (m_bps == 8) {
+        if (frame > 4096) frame = 4096;
+        if (getChannels() == 1) {
             // MONO
-            for (int i = 0; i < samples; i++) {
-                outbuf[i] = (static_cast<int16_t>(inbuf[i]) - 128) << 8;
+            for (int i = 0; i < frame / 2; i++) {
+                uint8_t p0 = p[0];
+                uint8_t p1 = p[1];
+                outbuf[i] = (static_cast<int16_t>(p0) - 128) << 24;
+                outbuf[i] |= 0x0000FFFF & ((static_cast<int16_t>(p1) - 128) << 8);
+                p += 2;
             }
-        } else if (channels == 2) {
+            m_validSamples = frame;
+            *bytesLeft -= frame;
+        } else if (getChannels() == 2) {
             // STEREO (interleaved L/R)
-            for (int i = 0; i < samples; i++) {
-                uint8_t l = inbuf[i * 2 + 0];
-                uint8_t r = inbuf[i * 2 + 1];
-                outbuf[i * 2 + 0] = (static_cast<int16_t>(l) - 128) << 8;
-                outbuf[i * 2 + 1] = (static_cast<int16_t>(r) - 128) << 8;
+            for (int i = 0; i < frame / 2; i++) {
+                uint8_t l = p[0];
+                uint8_t r = p[1];
+                outbuf[i] = ((static_cast<int16_t>(l) - 128) << 24);
+                outbuf[i] |= 0x0000FFFF & ((static_cast<int16_t>(r) - 128) << 8);
+                p += 2;
             }
-        } else {
-            // other channel numbers optional
-            return -2;
+            m_validSamples = (frame / 2);
+            *bytesLeft -= frame;
+        }
+        return 0;
+    }
+    // ------------ 16-BIT PCM ------------
+    if (m_bps == 16) {
+        if (frame > 4096) frame = 4096;
+        for (int i = 0; i < frame / 4; i++) {
+            outbuf[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            p += 4;
         }
 
-        m_validSamples = samples;
-    } else {
-        // Unsupported bits per sample
-        m_validSamples = 0;
-        return -1;
+        m_validSamples = frame / (2 * getChannels());
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
     }
+    // ------------ 24-BIT PCM ------------
+    if (m_bps == 24) {
+        if (frame > 3072) frame = 3072;
+        for (int i = 0; i < frame / 3; i++) {
+            outbuf[i] = (p[2] << 24) | (p[1] << 16) | (p[0] << 8) | (0x00);
+            p += 3;
+        }
 
-    *bytesLeft -= frame;
-    return 0;
+        m_validSamples = (frame / 3) / getChannels();
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
+    }
+    // ------------ 32-BIT PCM ------------
+    if (m_bps == 32) {
+        if (frame > 3072) frame = 3072;
+        for (int i = 0; i < frame / 4; i++) {
+            outbuf[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
+            p += 4;
+        }
+
+        m_validSamples = (frame / 4) / getChannels();
+    //    log_w("decode1 m_validSamples %i", m_validSamples);
+        *bytesLeft -= frame;
+        return 0;
+    }
+    return -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void WavDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {
