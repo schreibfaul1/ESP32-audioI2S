@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4                                                                                                                              ";
-/*  Updated on: 04.12.2025
+    Version 3.4.4a                                                                                                                              ";
+/*  Updated on: 08.12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -893,7 +893,7 @@ bool Audio::httpPrint(const char* host) {
     cur_hwoe.clone_from(dismantledLastHost.hwoe);
 
     bool f_equal = true;
-    if (hwoe.equals(cur_hwoe)) {
+    if (hwoe.equals(cur_hwoe) && port == dismantledLastHost.port) {
         f_equal = true;
     } else {
         f_equal = false;
