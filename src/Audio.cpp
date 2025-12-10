@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4a                                                                                                                              ";
-/*  Updated on: 08.12.2025
+    Version 3.4.4b                                                                                                                              ";
+/*  Updated on: 10.12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -356,8 +356,8 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_PLL_160M;        // Select PLL_F160M as the default source clock
-    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256; // mclk = sample_rate * 256
+    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_APLL;
+    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384; // mclk = sample_rate * 2 * 192
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
@@ -1759,8 +1759,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data + 16) >> 4) + 1;
         m_rflh.bitsPerSample = bps;
-        if ((bps != 8) && (bps != 16)) {
-            AUDIO_LOG_ERROR("bits per sample must be 8 or 16, is %i", bps);
+        if ((bps != 8) && (bps != 16) && (bps != 24) ) {
+            AUDIO_LOG_ERROR("bits per sample must be 8, 16 or 24, is %i", bps);
             stopSong();
             return -1;
         }
@@ -7318,7 +7318,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
         default: return fail();
     }
 
-    AUDIO_LOG_ERROR("offset %i", offset);
+    AUDIO_LOG_DEBUG("offset %i", offset);
     newFilePos += offset;
     m_decoder->clear();
 
