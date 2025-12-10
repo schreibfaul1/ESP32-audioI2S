@@ -1759,8 +1759,8 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data + 16) >> 4) + 1;
         m_rflh.bitsPerSample = bps;
-        if ((bps != 8) && (bps != 16)) {
-            AUDIO_LOG_ERROR("bits per sample must be 8 or 16, is %i", bps);
+        if ((bps != 8) && (bps != 16) && (bps != 24) ) {
+            AUDIO_LOG_ERROR("bits per sample must be 8, 16 or 24, is %i", bps);
             stopSong();
             return -1;
         }
@@ -7318,7 +7318,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
         default: return fail();
     }
 
-    AUDIO_LOG_ERROR("offset %i", offset);
+    AUDIO_LOG_DEBUG("offset %i", offset);
     newFilePos += offset;
     m_decoder->clear();
 

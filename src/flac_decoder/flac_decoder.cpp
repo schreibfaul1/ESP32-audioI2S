@@ -526,8 +526,6 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) { //  MAIN LOOP
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-
     int32_t  ret = 0;
     uint32_t segmLen = 0;
 
@@ -561,7 +559,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         if (m_nBytes > 0) {
             int16_t diff = m_nBytes;
             if (m_flacAudioDataStart == 0) { m_flacAudioDataStart = m_flacCurrentFilePos; }
-            ret = decodeNative(inbuf, &m_nBytes, out16);
+            ret = decodeNative(inbuf, &m_nBytes, outbuf);
             diff -= m_nBytes;
             m_flacCurrentFilePos += diff;
             *bytesLeft -= diff;
@@ -643,11 +641,14 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         m_flacCurrentFilePos += segmLen;
         return ret;
     }
-    ret = decodeNative(inbuf, bytesLeft, out16);
+    ret = decodeNative(inbuf, bytesLeft, outbuf);
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* outbuf) {
+int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
+
+    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
+    int32_t* out32 = outbuf;
 
     int32_t        bl = *bytesLeft;
     static int32_t sbl = 0;
@@ -685,20 +686,24 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
         }
 
         if (FLACMetadataBlock->numChannels == 1) {
-            const int32_t* src = m_samplesBuffer[0].get() + m_offset;
-            int16_t*       dst = outbuf;
+            const int64_t* src = m_samplesBuffer[0].get() + m_offset;
 
             for (int32_t i = 0; i < blockSize; i++) {
                 int32_t val = *src++;
-                if (FLACMetadataBlock->bitsPerSample == 8) { val += 128; }
-                *dst++ = val;
+                if (FLACMetadataBlock->bitsPerSample == 8) {
+                    val += 128;
+                    *out16++ = val << 8;
+                } else if (FLACMetadataBlock->bitsPerSample == 16) {
+                    *out16++ = val;
+                } else if (FLACMetadataBlock->bitsPerSample == 24) {
+                    *out32++ = val << 8;
+                }
             }
         }
 
         if (FLACMetadataBlock->numChannels == 2) {
-            const int32_t* left = m_samplesBuffer[0].get() + m_offset;
-            const int32_t* right = m_samplesBuffer[1].get() + m_offset;
-            int16_t*       dst = outbuf;
+            const int64_t* left = m_samplesBuffer[0].get() + m_offset;
+            const int64_t* right = m_samplesBuffer[1].get() + m_offset;
 
             for (int32_t i = 0; i < blockSize; i++) {
                 int32_t l = *left++;
@@ -706,9 +711,15 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int16_t* ou
                 if (FLACMetadataBlock->bitsPerSample == 8) {
                     l += 128;
                     r += 128;
+                    *out16++ = (l << 8);
+                    *out16++ = (r << 8);
+                } else if (FLACMetadataBlock->bitsPerSample == 16) {
+                    *out16++ = l;
+                    *out16++ = r;
+                } else if (FLACMetadataBlock->bitsPerSample == 24) {
+                    *out32++ = (l << 8);
+                    *out32++ = (r << 8);
                 }
-                *dst++ = l;
-                *dst++ = r;
             }
         }
 
@@ -771,8 +782,8 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         if (FLACFrameHeader->sampleSizeCode == 5) FLACMetadataBlock->bitsPerSample = 20;
         if (FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
     }
-    if (FLACMetadataBlock->bitsPerSample > 16) {
-        FLAC_LOG_ERROR("Flac, bits per sample > 16, bps: %i", FLACMetadataBlock->bitsPerSample);
+    if (FLACMetadataBlock->bitsPerSample == 12 || FLACMetadataBlock->bitsPerSample == 20) {
+        FLAC_LOG_ERROR("Flac, bits per sample must be 8, 16 or 24, is: %i", FLACMetadataBlock->bitsPerSample);
         return FLAC_STOP;
     }
     if (FLACMetadataBlock->bitsPerSample < 8) {
@@ -899,8 +910,8 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
 
-        int32_t*      ch0 = m_samplesBuffer[0].get();
-        int32_t*      ch1 = m_samplesBuffer[1].get();
+        int64_t*      ch0 = m_samplesBuffer[0].get();
+        int64_t*      ch1 = m_samplesBuffer[1].get();
         const int32_t n = m_numOfOutSamples;
 
         switch (FLACFrameHeader->chanAsgn) { // 8, 9 or 10
@@ -1041,13 +1052,13 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
     }
 
     const int32_t partitionSize = m_numOfOutSamples / numPartitions;
-    int32_t* sampleBase = m_samplesBuffer[ch].get();
+    int64_t*      sampleBase = m_samplesBuffer[ch].get();
 
     for (int32_t i = 0; i < numPartitions; i++) {
         const int32_t start = i * partitionSize + ((i == 0) ? warmup : 0);
         const int32_t end = (i + 1) * partitionSize;
-        int32_t* dst = sampleBase + start;
-        int32_t* dstEnd = sampleBase + end;
+        int64_t*      dst = sampleBase + start;
+        int64_t*      dstEnd = sampleBase + end;
 
         const int32_t param = readUint(paramBits, bytesLeft);
 
@@ -1066,8 +1077,8 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
                 val = (val << param) | readUint(param, bytesLeft);
 
                 // Convert to signed
-                int32_t signedVal = (val >> 1) ^ -(val & 1);
-                *dst++ = signedVal;
+                int64_t signedVal = (val >> 1) ^ -(val & 1);
+                *dst++ = (int32_t)signedVal;
             }
         } else {
             // Escape partition (raw signed integers)
@@ -1077,8 +1088,8 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
 
                 uint32_t val = readUint(numBits, bytesLeft);
                 // Sign extend
-                int32_t signedVal = (int32_t)(val << (32 - numBits)) >> (32 - numBits);
-                *dst++ = signedVal;
+                int64_t signedVal = (int64_t)(val << (32 - numBits)) >> (32 - numBits);
+                *dst++ = (int32_t)signedVal;
             }
         }
     }
@@ -1093,7 +1104,7 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
 void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 
     for (int32_t i = coefs.size(); i < m_numOfOutSamples; i++) {
-        int32_t sum = 0;
+        int64_t sum = 0;
         for (int32_t j = 0; j < coefs.size(); j++) { sum += m_samplesBuffer[ch][i - 1 - j] * coefs[j]; }
         m_samplesBuffer[ch][i] += (sum >> shift);
     }
