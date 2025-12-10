@@ -339,8 +339,8 @@ Audio::Audio(uint8_t i2sPort) {
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;     // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = 32;          // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = 256;        // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_desc_num = 16;          // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = 512;        // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear = true;          // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
@@ -357,7 +357,7 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384; // mclk = sample_rate * 2 * 192
+    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_192;
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     I2Sstart();
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
