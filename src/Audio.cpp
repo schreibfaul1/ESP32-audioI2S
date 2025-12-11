@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4b                                                                                                                              ";
-/*  Updated on: 10.12.2025
+    Version 3.4.4c                                                                                                                              ";
+/*  Updated on: 11.12.2025
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -339,10 +339,11 @@ Audio::Audio(uint8_t i2sPort) {
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
     m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;     // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = 16;          // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = 512;        // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_desc_num = 32;          // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = 222;        // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear = true;          // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
+    m_i2s_chan_cfg.intr_priority = 2;
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
     memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
@@ -359,7 +360,6 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    I2Sstart();
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
     for (int i = 0; i < 3; i++) {
@@ -1759,7 +1759,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         uint8_t bps = (nextval & 0x01) << 4;
         bps += (*(data + 16) >> 4) + 1;
         m_rflh.bitsPerSample = bps;
-        if ((bps != 8) && (bps != 16) && (bps != 24) ) {
+        if ((bps != 8) && (bps != 16) && (bps != 24)) {
             AUDIO_LOG_ERROR("bits per sample must be 8, 16 or 24, is %i", bps);
             stopSong();
             return -1;
@@ -3380,16 +3380,21 @@ void IRAM_ATTR Audio::playChunk() {
 
     m_plCh.validSamples = m_validSamples;
 
-    if (getChannels() == 1) {                                //------------- mono to stereo ----------------------------
+    if (getChannels() == 1) { //------------- mono to stereo ----------------------------
         if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
-            for (int i = m_validSamples / 2 - 1; i >= 0; --i) {
-                int32_t sample = m_outBuff[i];
-                int16_t sample_a = sample & 0x0000FFFF;
-                int16_t sample_b = (sample & 0xFFFF0000) >> 16;
-                m_outBuff[2 * i] = (sample_b << 16) | (0x0000FFFF & sample_b);
-                m_outBuff[2 * i + 1] = (sample_a << 16) | (0x0000FFFF & sample_a);
+            int16_t* in = (int16_t*)m_outBuff.get();
+            int32_t* out = (int32_t*)m_outBuff.get();
+            int16_t  s;
+
+            for (int i = m_validSamples - 1; i >= 0; --i) {
+                s = in[i * 2];
+                uint32_t packed_l = ((uint32_t)(uint16_t)s << 16) | (uint16_t)s;
+                s = in[i * 2 + 1];
+                uint32_t packed_r = ((uint32_t)(uint16_t)s << 16) | (uint16_t)s;
+                out[2 * i + 1] = packed_r;
+                out[2 * i] = packed_l;
             }
-            m_validSamples *= 2; // mono -> stereo
+            m_validSamples *= 2;
         }
         if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
             for (int i = m_validSamples - 1; i >= 0; --i) {
@@ -3473,11 +3478,11 @@ void IRAM_ATTR Audio::playChunk() {
         if (audio_process_i2s) {
             // processing the audio samples from external before forwarding them to i2s
             bool continueI2S = false;
-    #ifdef SR_48K
+#ifdef SR_48K
             audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
-    #else
-            audio_process_i2s((int16_t*)m_outBuff.get(), (int32_t) m_validSamples, &continueI2S);
-    #endif
+#else
+            audio_process_i2s((int16_t*)m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+#endif
             if (!continueI2S) {
                 m_validSamples = 0;
                 m_plCh.count = 0;
@@ -5622,7 +5627,7 @@ uint32_t Audio::decodeContinue(int8_t res, uint8_t* data, int32_t bytesDecoded, 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int Audio::sendBytes(uint8_t* data, size_t len) {
     if (!m_f_running) return 0; // guard
-    if (!m_decoder) return 0;  // guard
+    if (!m_decoder) return 0;   // guard
 
     int                   res = 0;
     int                   bytesDecoded = 0;
