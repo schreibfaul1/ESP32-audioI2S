@@ -761,7 +761,7 @@ class _AutoProfiler {
 
         if (count >= N) {
             double avg_us = (double)sum / count;
-            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %u runs" ANSI_ESC_RESET "\n", tag, avg_us, count);
+            printf(ANSI_ESC_CYAN "PROFILER [%s] avg: %.2f µs over %lu runs" ANSI_ESC_RESET "\n", tag, avg_us, count);
             sum = 0;
             count = 0;
         }
