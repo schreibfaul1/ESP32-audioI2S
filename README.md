@@ -34,6 +34,13 @@ This document summarizes the modifications, improvements, and bug fixes applied 
     - Updated `reconfigI2S()`, `resampleTo48kStereo()`, and the `~Audio()` destructor to respect this flag.
 - **Result:** System logs are now clean during startup and station changes.
 
+## 4. Modular Speech Features (TTS)
+**Goal:** Remove dependencies on the Arduino `String` class and save Flash by disabling unused TTS features.
+
+- **Implementation:** Added `AUDIO_ENABLE_SPEECH` macro in `Audio.h`.
+- **Refactoring:** Completely rewrote `openai_speech()` to use `const char*` and `ps_ptr` instead of `String`, ensuring better memory management.
+- **Selective Compilation:** Wrapped `openai_speech()` and `connecttospeech()` methods, as well as the `m_speechtxt` member, with `#ifdef` blocks.
+
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
@@ -66,6 +73,14 @@ Ce document résume les modifications, améliorations et corrections apportées 
     - `I2Sstop()` ne désactive le canal que s'il est actuellement activé.
     - Mise à jour de `reconfigI2S()`, `resampleTo48kStereo()`, et du destructeur `~Audio()` pour respecter ce flag.
 - **Résultat :** Les journaux système sont propres lors du démarrage et des changements de station.
+
+## 4. Modularité des Fonctions Vocales (TTS)
+**Objectif :** Supprimer la dépendance à la classe `String` d'Arduino et économiser de la Flash en désactivant les fonctions vocales inutilisées.
+
+- **Implémentation :** Ajout de la macro `AUDIO_ENABLE_SPEECH` dans `Audio.h`.
+- **Refactorisation :** Réécriture de `openai_speech()` pour utiliser `const char*` et `ps_ptr` à la place de `String`, garantissant une meilleure gestion de la mémoire.
+- **Compilation Sélective :** Les méthodes `openai_speech()` et `connecttospeech()`, ainsi que le membre `m_speechtxt`, sont désormais conditionnels.
+
 ***
 
 Plays mp3, m4a and wav files from SD card via I2S with external hardware.

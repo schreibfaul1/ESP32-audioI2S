@@ -491,7 +491,9 @@ void Audio::setDefaults() {
     m_f_playing = false;
     //    m_f_ssl = false;
     m_f_metadata = false;
+#ifdef AUDIO_ENABLE_SPEECH
     m_f_tts = false;
+#endif
     m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
     m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
@@ -579,12 +581,13 @@ void Audio::setConnectionBuffSize(size_t size) {
 
     Usage: audio.openai_speech(OPENAI_API_KEY, "tts-1", input, instructions, "shimmer", "mp3", "1");
 */
-bool Audio::openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed) {
+#ifdef AUDIO_ENABLE_SPEECH
+bool Audio::openai_speech(const char* api_key, const char* model, const char* input, const char* instructions, const char* voice, const char* response_format, const char* speed) {
     ps_ptr<char> host;
     host.assign("api.openai.com");
     char path[] = "/v1/audio/speech";
 
-    if (input == "") {
+    if (!input || strlen(input) == 0) {
         AUDIO_LOG_WARN("input text is empty");
         stopSong();
         return false;
@@ -594,67 +597,63 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     setDefaults();
     m_f_ssl = true;
 
-    m_speechtxt.assign(input.c_str());
+    m_speechtxt.assign(input);
 
-    // Escape special characters in input
-    String input_clean = "";
-    for (int i = 0; i < input.length(); i++) {
-        char c = input.charAt(i);
-        if (c == '\"') {
-            input_clean += "\\\"";
-        } else if (c == '\n') {
-            input_clean += "\\n";
-        } else if (c == '\r') {
-            input_clean += "\\r";
-        } else if (c == '\t') {
-            input_clean += "\\t";
-        } else if (c == '\\') {
-            input_clean += "\\\\";
-        } else if (c == '\b') {
-            input_clean += "\\b";
-        } else if (c == '\f') {
-            input_clean += "\\f";
-        } else {
-            input_clean += c;
+    // Helper lambda for JSON escaping
+    auto json_escape = [](const char* src) -> ps_ptr<char> {
+        if (!src) return {};
+        ps_ptr<char> dest;
+        size_t       len = strlen(src);
+        dest.alloc(len * 2 + 1); // Allocate enough space
+        char*       d = dest.get();
+        const char* s = src;
+        while (*s) {
+            if (*s == '\"') {
+                *d++ = '\\';
+                *d++ = '\"';
+            } else if (*s == '\n') {
+                *d++ = '\\';
+                *d++ = 'n';
+            } else if (*s == '\r') {
+                *d++ = '\\';
+                *d++ = 'r';
+            } else if (*s == '\t') {
+                *d++ = '\\';
+                *d++ = 't';
+            } else if (*s == '\\') {
+                *d++ = '\\';
+                *d++ = '\\';
+            } else if (*s == '\b') {
+                *d++ = '\\';
+                *d++ = 'b';
+            } else if (*s == '\f') {
+                *d++ = '\\';
+                *d++ = 'f';
+            } else {
+                *d++ = *s;
+            }
+            s++;
         }
-    }
+        *d = 0;
+        return dest;
+    };
 
-    // Escape special characters in instructions
-    String instructions_clean = "";
-    for (int i = 0; i < instructions.length(); i++) {
-        char c = instructions.charAt(i);
-        if (c == '\"') {
-            instructions_clean += "\\\"";
-        } else if (c == '\n') {
-            instructions_clean += "\\n";
-        } else if (c == '\r') {
-            instructions_clean += "\\r";
-        } else if (c == '\t') {
-            instructions_clean += "\\t";
-        } else if (c == '\\') {
-            instructions_clean += "\\\\";
-        } else if (c == '\b') {
-            instructions_clean += "\\b";
-        } else if (c == '\f') {
-            instructions_clean += "\\f";
-        } else {
-            instructions_clean += c;
-        }
-    }
+    ps_ptr<char> input_clean = json_escape(input);
+    ps_ptr<char> instructions_clean = json_escape(instructions);
 
-    String post_body = "{"
-                       "\"model\": \"" +
-                       model + "\"," + "\"stream\": true," + // add
-                       "\"input\": \"" + input_clean + "\"," + "\"instructions\": \"" + instructions_clean + "\"," + "\"voice\": \"" + voice + "\"," + "\"response_format\": \"" + response_format +
-                       "\"," + "\"speed\": " + speed + "}";
+    ps_ptr<char> post_body;
+    // Calculate approximate size
+    size_t body_len = 200 + input_clean.strlen() + instructions_clean.strlen() + strlen(model) + strlen(voice) + strlen(response_format) + strlen(speed);
+    post_body.alloc(body_len);
+    post_body.assignf("{\"model\": \"%s\",\"stream\": true,\"input\": \"%s\",\"instructions\": \"%s\",\"voice\": \"%s\",\"response_format\": \"%s\",\"speed\": %s}",
+                      model, input_clean.c_get(), instructions_clean.c_get(), voice, response_format, speed);
 
-    String http_request =
-        //  "POST " + String(path) + " HTTP/1.0\r\n" // UNKNOWN ERROR CODE (0050) - crashing on HTTP/1.1 need to use HTTP/1.0
-        "POST " + String(path) + " HTTP/1.1\r\n" + "Host: " + host.get() + "\r\n" + "Authorization: Bearer " + api_key + "\r\n" + "Accept-Encoding: identity;q=1,*;q=0\r\n" +
-        "User-Agent: nArija/1.0\r\n" + "Content-Type: application/json; charset=utf-8\r\n" + "Content-Length: " + post_body.length() +
-        "\r\n"
-        //  + "Connection: close\r\n" + "\r\n"
-        + "\r\n" + post_body + "\r\n";
+    ps_ptr<char> http_request;
+    size_t       req_len = 500 + post_body.strlen() + strlen(api_key) + host.strlen();
+    http_request.alloc(req_len);
+
+    http_request.assignf("POST %s HTTP/1.1\r\nHost: %s\r\nAuthorization: Bearer %s\r\nAccept-Encoding: identity;q=1,*;q=0\r\n", path, host.c_get(), api_key);
+    http_request.appendf("User-Agent: nArija/1.0\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: %u\r\n\r\n%s\r\n", post_body.strlen(), post_body.c_get());
 
     bool res = true;
     int  port = 443;
@@ -675,11 +674,11 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     m_expectedPlsFmt = FORMAT_NONE;
 
     if (res) {
-        m_client->print(http_request);
-        if (response_format == "mp3") m_expectedCodec = CODEC_MP3;
-        if (response_format == "opus") m_expectedCodec = CODEC_OPUS;
-        if (response_format == "aac") m_expectedCodec = CODEC_AAC;
-        if (response_format == "flac") m_expectedCodec = CODEC_FLAC;
+        m_client->print(http_request.c_get());
+        if (strcmp(response_format, "mp3") == 0) m_expectedCodec = CODEC_MP3;
+        if (strcmp(response_format, "opus") == 0) m_expectedCodec = CODEC_OPUS;
+        if (strcmp(response_format, "aac") == 0) m_expectedCodec = CODEC_AAC;
+        if (strcmp(response_format, "flac") == 0) m_expectedCodec = CODEC_FLAC;
 
         m_dataMode = HTTP_RESPONSE_HEADER;
         m_f_tts = true;
@@ -689,6 +688,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
+#endif
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 audiolib::hwoe_t Audio::dismantle_host(const char* host) {
     if (!host) return {};
@@ -1150,6 +1150,7 @@ exit:
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef AUDIO_ENABLE_SPEECH
 bool Audio::connecttospeech(const char* speech, const char* lang) {
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
@@ -1194,6 +1195,7 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return true;
 }
+#endif
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::showID3Tag(const char* tag, const char* value) {
     ps_ptr<char> id3tag;
@@ -4334,7 +4336,9 @@ void Audio::processWebStream() {
         if (!m_f_allDataReceived)
             if (streamDetection(m_pwst.availableBytes)) return;
         if (!m_pwst.f_clientIsConnected) {
+#ifdef AUDIO_ENABLE_SPEECH
             if (m_f_tts && !m_f_allDataReceived) m_f_allDataReceived = true;
+#endif
         } // connection closed (OpenAi)
     }
 
@@ -4799,10 +4803,12 @@ void Audio::playAudioData() {
         if (isStream) {
             if (m_f_allDataReceived) { // Google TTS, OpenAI
                 m_pad.lastFrames = true;
+#ifdef AUDIO_ENABLE_SPEECH
                 if (m_f_tts && !InBuff.bufferFilled()) {
                     m_f_eof = true;
                     goto exit;
                 }
+#endif
             }
             if (m_pad.lastFrames) {
                 m_pad.bytesToDecode = min(InBuff.readSpace(), (size_t)(m_audioDataStart + m_audioDataSize - m_audioDataReadPtr));
@@ -5071,7 +5077,9 @@ lastToDo:
     m_streamType = ST_WEBSTREAM;
     if (m_audioFileSize > 0) m_streamType = ST_WEBFILE; // content length found
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
+#ifdef AUDIO_ENABLE_SPEECH
     if (m_f_tts) m_streamType = ST_WEBSTREAM; // this is from AI or GoogleTTS(AI response)
+#endif
 
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now

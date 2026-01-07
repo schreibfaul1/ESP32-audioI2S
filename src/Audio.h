@@ -17,6 +17,7 @@
 //#define AUDIO_CODEC_OPUS
 //#define AUDIO_CODEC_VORBIS
 //#define AUDIO_CODEC_OGG
+#define AUDIO_ENABLE_SPEECH
 // —————————————————————————————————————————————————————————————————————————————
 
 // 🔗 Automatic Dependencies
@@ -133,10 +134,14 @@ class Audio {
     inline static std::function<void(msg_t i)> audio_info_callback;
     // -------------------------------------------------------------------
 
-    bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
+#ifdef AUDIO_ENABLE_SPEECH
+    bool openai_speech(const char* api_key, const char* model, const char* input, const char* instructions, const char* voice, const char* response_format, const char* speed);
+#endif
     audiolib::hwoe_t dismantle_host(const char* host);
     bool             connecttohost(const char* host, const char* user = "", const char* pwd = "");
+#ifdef AUDIO_ENABLE_SPEECH
     bool             connecttospeech(const char* speech, const char* lang);
+#endif
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     void             setConnectionBuffSize(size_t size);
@@ -390,7 +395,9 @@ class Audio {
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
     ps_ptr<char>             m_lastM3U8host;
+#ifdef AUDIO_ENABLE_SPEECH
     ps_ptr<char>             m_speechtxt;   // stores tts text
+#endif
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_playlistBuff;
 
@@ -461,7 +468,9 @@ class Audio {
     bool     m_f_chunked = false;           // Station provides chunked transfer
     bool     m_f_firstmetabyte = false;     // True if first metabyte (counter)
     bool     m_f_playing = false;           // valid mp3 stream recognized
+#ifdef AUDIO_ENABLE_SPEECH
     bool     m_f_tts = false;               // text to speech
+#endif
     bool     m_f_ogg = false;               // OGG stream
     bool     m_f_forceMono = false;         // if true stereo -> mono
     bool     m_f_rtsp = false;              // set if RTSP is used (m3u8 stream)
