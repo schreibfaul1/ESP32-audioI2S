@@ -2,6 +2,72 @@
 
 :warning: **This library only works on multi-core chips like ESP32, ESP32-S3 and ESP32-P4. Your board must have PSRAM! It does not work on the ESP32-S2, ESP32-C3 etc** :warning:
 
+***
+# Changes applied to ESP32-audioI2S (v3.4.4d)
+
+This document summarizes the modifications, improvements, and bug fixes applied to the library to optimize resource usage and clean up system logs.
+
+## 1. Modular Codec Selection
+**Goal:** Reduce Flash and RAM footprint by compiling only the necessary codecs.
+
+- **Implementation:** Added `#define` macros at the top of `Audio.h` for each supported codec (`MP3`, `AAC`, `M4A`, `FLAC`, `WAV`, `OPUS`, `VORBIS`, `OGG`).
+- **Dependencies:** Added automatic logic to ensure `AUDIO_CODEC_AAC` is enabled if `AUDIO_CODEC_M4A` is selected.
+- **Selective Compilation:** 
+    - Wrapped decoder class inclusions and instantiations in `Audio.cpp` with `#ifdef` blocks.
+    - Conditionalized large metadata structures (`m_ID3Hdr`, `m_m4aHdr`, `m_rflh`, `m_rwh`) in the `Audio` class.
+    - Maintained `read_ID3_Header` availability if either `MP3` or `AAC` is active to support HLS metadata.
+
+## 2. Dynamic PSRAM Buffer Configuration
+**Goal:** Allow users to adjust the network buffer size without modifying the library source code.
+
+- **AudioBuffer Class:** Added `setBufsize(size_t ram, size_t psram)` to allow updating internal size variables.
+- **Audio Class:** Added `setConnectionBuffSize(size_t size)` as a public method.
+- **Feedback:** The library now logs the buffer resize event (e.g., `PSRAM Buffer resized: 655350 -> 1000000 bytes`) via the `audio_info` callback.
+
+## 3. I2S State Management & Log Cleanup
+**Goal:** Eliminate the annoying `E (10013) i2s_common: i2s_channel_disable(...): the channel has not been enabled yet` error in the serial console.
+
+- **State Tracking:** Added a private boolean member `m_i2s_enabled` to the `Audio` class.
+- **Logic:** 
+    - `I2Sstart()` only enables the channel if it's currently disabled.
+    - `I2Sstop()` only disables the channel if it's currently enabled.
+    - Updated `reconfigI2S()`, `resampleTo48kStereo()`, and the `~Audio()` destructor to respect this flag.
+- **Result:** System logs are now clean during startup and station changes.
+
+***
+
+# Changements appliqués à ESP32-audioI2S (v3.4.4d)
+
+Ce document résume les modifications, améliorations et corrections apportées à la bibliothèque pour optimiser l'utilisation des ressources et nettoyer les journaux (logs) système.
+
+## 1. Sélection Modulaire des Codecs
+**Objectif :** Réduire l'empreinte Flash et RAM en ne compilant que les codecs nécessaires.
+
+- **Implémentation :** Ajout de macros `#define` au début de `Audio.h` pour chaque codec supporté (`MP3`, `AAC`, `M4A`, `FLAC`, `WAV`, `OPUS`, `VORBIS`, `OGG`).
+- **Dépendances :** Ajout d'une logique automatique pour activer `AUDIO_CODEC_AAC` si `AUDIO_CODEC_M4A` est sélectionné.
+- **Compilation Sélective :** 
+    - Les inclusions et instantiations des classes de décodeurs dans `Audio.cpp` sont désormais encadrées par des blocs `#ifdef`.
+    - Les structures de données volumineuses pour les métadonnées (`m_ID3Hdr`, `m_m4aHdr`, `m_rflh`, `m_rwh`) sont conditionnelles dans la classe `Audio`.
+    - La fonction `read_ID3_Header` reste disponible si `MP3` ou `AAC` est actif pour supporter les métadonnées HLS.
+
+## 2. Configuration Dynamique du Buffer PSRAM
+**Objectif :** Permettre à l'utilisateur d'ajuster la taille du tampon réseau sans modifier le code source de la bibliothèque.
+
+- **Classe AudioBuffer :** Ajout de `setBufsize(size_t ram, size_t psram)` pour permettre la mise à jour des variables de taille internes.
+- **Classe Audio :** Ajout de la méthode publique `setConnectionBuffSize(size_t size)`.
+- **Retour d'information :** La bibliothèque enregistre maintenant l'événement de redimensionnement (ex: `PSRAM Buffer resized: 655350 -> 1000000 bytes`) via le callback `audio_info`.
+
+## 3. Gestion d'État I2S et Nettoyage des Logs
+**Objectif :** Éliminer l'erreur `E (10013) i2s_common: i2s_channel_disable(...): the channel has not been enabled yet` dans la console série.
+
+- **Suivi d'État :** Ajout d'un membre booléen privé `m_i2s_enabled` à la classe `Audio`.
+- **Logique :** 
+    - `I2Sstart()` n'active le canal que s'il est actuellement désactivé.
+    - `I2Sstop()` ne désactive le canal que s'il est actuellement activé.
+    - Mise à jour de `reconfigI2S()`, `resampleTo48kStereo()`, et du destructeur `~Audio()` pour respecter ce flag.
+- **Résultat :** Les journaux système sont propres lors du démarrage et des changements de station.
+***
+
 Plays mp3, m4a and wav files from SD card via I2S with external hardware.
 HELIX-mp3 and faad2-aac decoder is included. There is also an OPUS decoder for Fullband, an VORBIS decoder and a FLAC decoder.
 Works with MAX98357A (3 Watt amplifier with DAC), connected three lines (DOUT, BLCK, LRC) to I2S. The I2S output frequency is always 48kHz, regardless of the input source, so Bluetooth devices can also be connected without any problems.
