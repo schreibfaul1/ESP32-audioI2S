@@ -5,6 +5,27 @@
 
 // #define SR_48K
 
+// —————————————————————————————————————————————————————————————————————————————
+// 📌 Codec Selection
+// Comment out the codecs you don't need to save flash and RAM.
+// —————————————————————————————————————————————————————————————————————————————
+#define AUDIO_CODEC_MP3
+#define AUDIO_CODEC_AAC
+//#define AUDIO_CODEC_M4A
+//#define AUDIO_CODEC_FLAC
+//#define AUDIO_CODEC_WAV
+//#define AUDIO_CODEC_OPUS
+//#define AUDIO_CODEC_VORBIS
+//#define AUDIO_CODEC_OGG
+// —————————————————————————————————————————————————————————————————————————————
+
+// 🔗 Automatic Dependencies
+#ifdef AUDIO_CODEC_M4A
+    #ifndef AUDIO_CODEC_AAC
+        #define AUDIO_CODEC_AAC
+    #endif
+#endif
+
 #pragma once
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
@@ -53,6 +74,7 @@ class AudioBuffer {
     size_t   getBufsize();
     size_t   getMaxBlockSize(); // returns maxBlockSize
     void     setMaxBlocksize(uint32_t mbs);
+    void     setBufsize(size_t ram, size_t psram);
     size_t   freeSpace();             // number of free bytes to overwrite
     size_t   writeSpace();            // space fom writepointer to bufferend
     size_t   bufferFilled();          // returns the number of filled bytes
@@ -117,6 +139,7 @@ class Audio {
     bool             connecttospeech(const char* speech, const char* lang);
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
+    void             setConnectionBuffSize(size_t size);
     bool             setAudioPlayTime(uint16_t sec);
     bool             setTimeOffset(int sec);
     bool             setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK = I2S_GPIO_UNUSED);
@@ -189,10 +212,18 @@ class Audio {
     void                     calculateAudioTime(uint16_t bytesDecoderIn, uint16_t bytesDecoderOut);
     void                     showID3Tag(const char* tag, const char* val);
     size_t                   readAudioHeader(uint32_t bytes);
+#ifdef AUDIO_CODEC_WAV
     int                      read_WAV_Header(uint8_t* data, size_t len);
+#endif
+#ifdef AUDIO_CODEC_FLAC
     int                      read_FLAC_Header(uint8_t* data, size_t len);
+#endif
+#if defined(AUDIO_CODEC_MP3) || defined(AUDIO_CODEC_AAC)
     int                      read_ID3_Header(uint8_t* data, size_t len);
+#endif
+#ifdef AUDIO_CODEC_M4A
     int                      read_M4A_Header(uint8_t* data, size_t len);
+#endif
     size_t                   process_m3u8_ID3_Header(uint8_t* packet);
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
@@ -451,6 +482,7 @@ class Audio {
     bool     m_f_acceptRanges = false;
     bool     m_f_reset_m3u8Codec = true;  // reset codec for m3u8 stream
     bool     m_f_connectionClose = false; // set in parseHttpResponseHeader
+    bool     m_i2s_enabled = false;       // track I2S channel state
     uint32_t m_audioFileDuration = 0;     // seconds
     uint32_t m_audioCurrentTime = 0;      // seconds
     float    m_resampleError = 0.0f;
@@ -474,10 +506,14 @@ class Audio {
     int16_t   m_pesDataLength = 0;
 
     // audiolib structs
+#if defined(AUDIO_CODEC_MP3) || defined(AUDIO_CODEC_AAC)
     audiolib::ID3Hdr_t  m_ID3Hdr;
+#endif
     audiolib::pwsHLS_t  m_pwsHLS;
     audiolib::pplM3u8_t m_pplM3U8;
+#ifdef AUDIO_CODEC_M4A
     audiolib::m4aHdr_t  m_m4aHdr;
+#endif
     audiolib::plCh_t    m_plCh;
     audiolib::lVar_t    m_lVar;
     audiolib::prlf_t    m_prlf;
@@ -492,8 +528,12 @@ class Audio {
     audiolib::sbyt_t    m_sbyt;
     audiolib::rmet_t    m_rmet;
     audiolib::pwsts_t   m_pwsst;
+#ifdef AUDIO_CODEC_WAV
     audiolib::rwh_t     m_rwh;
+#endif
+#ifdef AUDIO_CODEC_FLAC
     audiolib::rflh_t    m_rflh;
+#endif
     audiolib::phreh_t   m_phreh;
     audiolib::phrah_t   m_phrah;
     audiolib::sdet_t    m_sdet;
