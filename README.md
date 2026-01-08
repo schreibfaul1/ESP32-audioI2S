@@ -58,6 +58,10 @@ This document summarizes the modifications, improvements, and bug fixes applied 
 - **Dynamic DSP Bypass:** The IIR filter chain (Equalizer/Tone) is now automatically bypassed if all gains (`m_gain0`, `m_gain1`, `m_gain2`) are set to zero. This saves significant CPU cycles during playback.
 - **Static Constexpr Conversion:** Internal string arrays (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) are now `static constexpr`, moving them from RAM to Flash.
 
+## 8. Further STL Elimination & Resampling Optimization
+- **Resampling:** `resampleTo48kStereo()` now uses a persistent PSRAM buffer instead of allocating a `std::vector` on every call.
+- **String Cleanup:** Eliminated all remaining `std::string` usage in `createDecoder()` and `getChunkSize()`.
+
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
@@ -114,6 +118,10 @@ Ce document résume les modifications, améliorations et corrections apportées 
 ## 7. Optimisations Performance & Mémoire
 - **Bypass DSP Dynamique :** Le filtrage IIR (Equalizer/Tone) est automatiquement contourné si tous les gains (`m_gain0`, `m_gain1`, `m_gain2`) sont à zéro, économisant des cycles CPU précieux.
 - **Conversion Constexpr :** Les tableaux de chaînes internes (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) sont passés en `static constexpr` pour résider en Flash plutôt qu'en RAM.
+
+## 8. Élimination des STL et Optimisation du Resampling
+- **Resampling :** `resampleTo48kStereo()` utilise désormais un buffer PSRAM persistant au lieu d'allouer un `std::vector` à chaque cycle.
+- **Nettoyage String :** Suppression des derniers `std::string` dans `createDecoder()` et `getChunkSize()`.
 
 ***
 

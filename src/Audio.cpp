@@ -410,25 +410,25 @@ void Audio::destroy_decoder() {
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-std::unique_ptr<Decoder> Audio::createDecoder(const std::string& type) {
+std::unique_ptr<Decoder> Audio::createDecoder(const char* type) {
     destroy_decoder();
 #ifdef AUDIO_CODEC_MP3
-    if (type == "MP3") return std::make_unique<MP3Decoder>(*this);
+    if (strcmp(type, "MP3") == 0) return std::make_unique<MP3Decoder>(*this);
 #endif
 #ifdef AUDIO_CODEC_FLAC
-    if (type == "FLAC") return std::make_unique<FlacDecoder>(*this);
+    if (strcmp(type, "FLAC") == 0) return std::make_unique<FlacDecoder>(*this);
 #endif
 #ifdef AUDIO_CODEC_OPUS
-    if (type == "OPUS") return std::make_unique<OpusDecoder>(*this);
+    if (strcmp(type, "OPUS") == 0) return std::make_unique<OpusDecoder>(*this);
 #endif
 #ifdef AUDIO_CODEC_AAC
-    if (type == "AAC") return std::make_unique<AACDecoder>(*this);
+    if (strcmp(type, "AAC") == 0) return std::make_unique<AACDecoder>(*this);
 #endif
 #ifdef AUDIO_CODEC_VORBIS
-    if (type == "VORBIS") return std::make_unique<VorbisDecoder>(*this);
+    if (strcmp(type, "VORBIS") == 0) return std::make_unique<VorbisDecoder>(*this);
 #endif
 #ifdef AUDIO_CODEC_WAV
-    if (type == "WAV") return std::make_unique<WavDecoder>(*this);
+    if (strcmp(type, "WAV") == 0) return std::make_unique<WavDecoder>(*this);
 #endif
     return nullptr;
 }
@@ -3372,7 +3372,9 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
     size_t extendedSamples = inputSamples + 3;
 
     // Temporärer Buffer: History + aktueller Input
-    std::vector<int16_t> extendedInput(extendedSamples * 2);
+    // std::vector<int16_t> extendedInput(extendedSamples * 2);
+    if (m_resampleBuff.size() < extendedSamples * 2 * sizeof(int16_t)) { m_resampleBuff.alloc_array(extendedSamples * 2); }
+    int16_t* extendedInput = m_resampleBuff.get();
 
     // Historie an den Anfang kopieren (6 Werte = 3 Stereo-Samples)
     memcpy(&extendedInput[0], m_inputHistory, 6 * sizeof(int16_t));
@@ -7242,7 +7244,9 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
     }
 
     // -------- HTTP-chunked-Read Logic --------
-    std::string chunkLine;
+    ps_ptr<char> chunkLine;
+    chunkLine.alloc(128); // Should be more than enough for a hex size + comments
+    uint16_t idx = 0;
     ctime = millis();
 
     while (true) {
@@ -7260,7 +7264,10 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
         if (b == '\n') break; // End of the line
         if (b == '\r') continue;
 
-        chunkLine += static_cast<char>(b);
+        if (idx < 127) {
+            chunkLine[idx++] = static_cast<char>(b);
+            chunkLine[idx] = '\0';
+        }
 
         // Detection: if signs are not hexadecimal and not ';'→ No http chunk
         if (!isxdigit(b) && b != ';') {
@@ -7274,10 +7281,10 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
     }
 
     // Extract the hex number (before possibly ';')
-    size_t      semicolonPos = chunkLine.find(';');
-    std::string hexSize = (semicolonPos != std::string::npos) ? chunkLine.substr(0, semicolonPos) : chunkLine;
+    int semicolonPos = chunkLine.index_of(';');
+    if (semicolonPos >= 0) { chunkLine[semicolonPos] = '\0'; }
 
-    size_t chunksize = strtoul(hexSize.c_str(), nullptr, 16);
+    size_t chunksize = strtoul(chunkLine.c_get(), nullptr, 16);
 
     if (chunksize > 0) {
         m_gchs.f_skipCRLF = true; // skip next CRLF after data

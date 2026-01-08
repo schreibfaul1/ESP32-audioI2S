@@ -3,7 +3,7 @@
  *
  */
 
-// #define SR_48K
+//#define SR_48K
 
 // —————————————————————————————————————————————————————————————————————————————
 // 📌 Codec Selection
@@ -193,7 +193,7 @@ class Audio {
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
-    std::unique_ptr<Decoder> createDecoder(const std::string& type);
+    std::unique_ptr<Decoder> createDecoder(const char* type);
     void                     destroy_decoder();
 #ifdef AUDIO_ENABLE_FS
     bool                     fsRange(uint32_t range);
@@ -409,6 +409,7 @@ class Audio {
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
     ps_ptr<int16_t>          m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<int16_t>          m_resampleBuff;   // Buffer for resampling (persistent to avoid realloc)
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
