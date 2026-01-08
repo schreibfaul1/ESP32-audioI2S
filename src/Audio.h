@@ -20,6 +20,11 @@
 //#define AUDIO_ENABLE_SPEECH
 //#define AUDIO_ENABLE_FS
 // —————————————————————————————————————————————————————————————————————————————
+// 📌 Log Level Selection
+// 0: None, 1: Error, 2: Warning, 3: Info, 4: Debug
+// —————————————————————————————————————————————————————————————————————————————
+#define AUDIO_LOG_LEVEL 3
+// —————————————————————————————————————————————————————————————————————————————
 
 // 🔗 Automatic Dependencies
 #ifdef AUDIO_CODEC_M4A
@@ -706,11 +711,30 @@ class Audio {
         logStr.reset();
     }
 
-// Macro for comfortable calls
-#define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+// Macros for comfortable calls
+#if AUDIO_LOG_LEVEL >= 1
+    #define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+    #define AUDIO_LOG_ERROR(fmt, ...)
+#endif
+
+#if AUDIO_LOG_LEVEL >= 2
+    #define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+    #define AUDIO_LOG_WARN(fmt, ...)
+#endif
+
+#if AUDIO_LOG_LEVEL >= 3
+    #define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+    #define AUDIO_LOG_INFO(fmt, ...)
+#endif
+
+#if AUDIO_LOG_LEVEL >= 4
+    #define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+    #define AUDIO_LOG_DEBUG(fmt, ...)
+#endif
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  D E C O D E R  📌📌📌

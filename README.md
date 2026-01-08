@@ -47,6 +47,13 @@ This document summarizes the modifications, improvements, and bug fixes applied 
 - **Implementation:** Added `AUDIO_ENABLE_FS` macro.
 - **Selective Compilation:** Wrapped all file system related includes (`FS.h`, `SD.h`...) and methods (`connecttoFS`, `processLocalFile`, `fsRange`) with `#ifdef` blocks.
 
+## 6. Granular Log Control
+**Goal:** Save Flash by physically removing log strings during compilation.
+
+- **Implementation:** Added `AUDIO_LOG_LEVEL` macro in `Audio.h`.
+- **Levels:** `0: None`, `1: Error`, `2: Warning`, `3: Info`, `4: Debug`.
+- **Nuance:** This setting only affects internal library logs (`AUDIO_LOG_XXX` macros). Functional data sent to your `myAudioInfo` callback (station name, bitrate, stream title) remains active, as these are functional events rather than simple logs.
+
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
@@ -92,6 +99,13 @@ Ce document résume les modifications, améliorations et corrections apportées 
 
 - **Implémentation :** Ajout de la macro `AUDIO_ENABLE_FS`.
 - **Compilation Sélective :** Toutes les inclusions (`FS.h`, `SD.h`...) et les méthodes liées aux fichiers (`connecttoFS`, `processLocalFile`) sont encadrées par des blocs `#ifdef`.
+
+## 6. Contrôle Granulaire des Logs
+**Objectif :** Économiser de la Flash en supprimant physiquement les chaînes de caractères des logs lors de la compilation.
+
+- **Implémentation :** Ajout de la macro `AUDIO_LOG_LEVEL` dans `Audio.h`.
+- **Niveaux :** `0: Aucun`, `1: Erreur`, `2: Avertissement`, `3: Info`, `4: Debug`.
+- **Nuance :** Ce réglage n'affecte que les logs internes de la bibliothèque (macros `AUDIO_LOG_XXX`). Les informations envoyées à votre callback `myAudioInfo` (nom de station, bitrate, titre du flux) restent actives car il s'agit d'événements fonctionnels et non de simples logs.
 
 ***
 
