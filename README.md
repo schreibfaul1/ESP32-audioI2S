@@ -5,123 +5,122 @@
 ***
 # Changes applied to ESP32-audioI2S (v3.4.4d)
 
-This document summarizes the modifications, improvements, and bug fixes applied to the library to optimize resource usage and clean up system logs.
+This document provides a detailed breakdown of the modifications, improvements, and bug fixes applied to the library. Each change aims to optimize resource usage (Flash, RAM, CPU) and improve system stability.
 
 ## 1. Modular Codec Selection
-**Goal:** Reduce Flash and RAM footprint by compiling only the necessary codecs.
-
-- **Implementation:** Added `#define` macros at the top of `Audio.h` for each supported codec (`MP3`, `AAC`, `M4A`, `FLAC`, `WAV`, `OPUS`, `VORBIS`, `OGG`).
-- **Dependencies:** Added automatic logic to ensure `AUDIO_CODEC_AAC` is enabled if `AUDIO_CODEC_M4A` is selected.
-- **Selective Compilation:** 
-    - Wrapped decoder class inclusions and instantiations in `Audio.cpp` with `#ifdef` blocks.
-    - Conditionalized large metadata structures (`m_ID3Hdr`, `m_m4aHdr`, `m_rflh`, `m_rwh`) in the `Audio` class.
-    - Maintained `read_ID3_Header` availability if either `MP3` or `AAC` is active to support HLS metadata.
+**Context:** By default, the library compiles all decoders (MP3, AAC, FLAC, WAV, OPUS, VORBIS, OGG), consuming significant Flash memory even if only one format is used.
+**Improvement:**
+- Added `#define` macros in `Audio.h` to selectively enable/disable each codec.
+- Implemented automatic dependency logic (e.g., enabling `AUDIO_CODEC_M4A` forces `AUDIO_CODEC_AAC`).
+- Wrapped decoders and their large metadata structures (`m_ID3Hdr`, etc.) with conditional compilation blocks.
+**Benefit:** Drastic reduction in Flash usage (up to ~300KB saved) and static RAM allocation.
 
 ## 2. Dynamic PSRAM Buffer Configuration
-**Goal:** Allow users to adjust the network buffer size without modifying the library source code.
-
-- **AudioBuffer Class:** Added `setBufsize(size_t ram, size_t psram)` to allow updating internal size variables.
-- **Audio Class:** Added `setConnectionBuffSize(size_t size)` as a public method.
-- **Feedback:** The library now logs the buffer resize event (e.g., `PSRAM Buffer resized: 655350 -> 1000000 bytes`) via the `audio_info` callback.
+**Context:** The network buffer size was hardcoded (~640KB), forcing a recompile to change it.
+**Improvement:**
+- Added `setBufsize(size_t ram, size_t psram)` to the `AudioBuffer` class.
+- Added `setConnectionBuffSize(size_t size)` to the `Audio` class to adjust the buffer size at runtime (before connection).
+**Benefit:** Allows fine-tuning the buffer size based on available PSRAM and network stability without modifying the library source.
 
 ## 3. I2S State Management & Log Cleanup
-**Goal:** Eliminate the annoying `E (10013) i2s_common: i2s_channel_disable(...): the channel has not been enabled yet` error in the serial console.
+**Context:** The library often generated `E (10013) i2s_channel_disable: channel not enabled` errors during startup or station changes, spamming the logs.
+**Improvement:**
+- Added `m_i2s_enabled` flag to track the actual state of the I2S channel.
+- Modified `I2Sstart()` and `I2Sstop()` to check this flag before calling ESP-IDF drivers.
+**Benefit:** Clean, error-free system logs, making real issues easier to spot.
 
-- **State Tracking:** Added a private boolean member `m_i2s_enabled` to the `Audio` class.
-- **Logic:** 
-    - `I2Sstart()` only enables the channel if it's currently disabled.
-    - `I2Sstop()` only disables the channel if it's currently enabled.
-    - Updated `reconfigI2S()`, `resampleTo48kStereo()`, and the `~Audio()` destructor to respect this flag.
-- **Result:** System logs are now clean during startup and station changes.
-
-## 4. Modular Speech Features (TTS)
-**Goal:** Remove dependencies on the Arduino `String` class and save Flash by disabling unused TTS features.
-
-- **Implementation:** Added `AUDIO_ENABLE_SPEECH` macro in `Audio.h`.
-- **Refactoring:** Completely rewrote `openai_speech()` to use `const char*` and `ps_ptr` instead of `String`, ensuring better memory management.
-- **Selective Compilation:** Wrapped `openai_speech()` and `connecttospeech()` methods, as well as the `m_speechtxt` member, with `#ifdef` blocks.
+## 4. Modular Speech Features (TTS) & String Elimination
+**Context:** The TTS features (Google/OpenAI) heavily relied on the Arduino `String` class, causing heap fragmentation through dynamic concatenations.
+**Improvement:**
+- Added `AUDIO_ENABLE_SPEECH` macro to completely disable TTS code if unused.
+- **Refactoring:** Completely rewrote `openai_speech()` to use `const char*`, `ps_ptr` buffers, and `snprintf`.
+**Benefit:**
+- Saves Flash when TTS is disabled.
+- Eliminates heap fragmentation risks by removing the `String` class dependency from the TTS module.
 
 ## 5. Modular File System Support
-**Goal:** Remove local file system dependencies (SD, FFat, etc.) for pure WebRadio projects.
-
-- **Implementation:** Added `AUDIO_ENABLE_FS` macro.
-- **Selective Compilation:** Wrapped all file system related includes (`FS.h`, `SD.h`...) and methods (`connecttoFS`, `processLocalFile`, `fsRange`) with `#ifdef` blocks.
+**Context:** The library unconditionally included libraries for SD, SD_MMC, FFat, and LittleFS, which is unnecessary for pure WebRadio projects.
+**Improvement:**
+- Added `AUDIO_ENABLE_FS` macro.
+- Wrapped all FS-related includes and methods (`connecttoFS`, `processLocalFile`, `fsRange`) with `#ifdef` blocks.
+**Benefit:** Removes dependencies on external FS libraries, speeding up compilation and ensuring a cleaner build for web-only projects.
 
 ## 6. Granular Log Control
-**Goal:** Save Flash by physically removing log strings during compilation.
-
-- **Implementation:** Added `AUDIO_LOG_LEVEL` macro in `Audio.h`.
-- **Levels:** `0: None`, `1: Error`, `2: Warning`, `3: Info`, `4: Debug`.
-- **Nuance:** This setting only affects internal library logs (`AUDIO_LOG_XXX` macros). Functional data sent to your `myAudioInfo` callback (station name, bitrate, stream title) remains active, as these are functional events rather than simple logs.
+**Context:** Debug strings take up valuable Flash memory.
+**Improvement:**
+- Added `AUDIO_LOG_LEVEL` macro (0=None to 4=Debug).
+- Redefined log macros to strip format strings from the binary at compilation time based on the level.
+**Benefit:** Saves ~10-15KB of Flash by removing static debug strings in production builds.
 
 ## 7. Performance & Memory Optimizations
-- **Dynamic DSP Bypass:** The IIR filter chain (Equalizer/Tone) is now automatically bypassed if all gains (`m_gain0`, `m_gain1`, `m_gain2`) are set to zero. This saves significant CPU cycles during playback.
-- **Static Constexpr Conversion:** Internal string arrays (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) are now `static constexpr`, moving them from RAM to Flash.
-
-## 8. Further STL Elimination & Resampling Optimization
-- **Resampling:** `resampleTo48kStereo()` now uses a persistent PSRAM buffer instead of allocating a `std::vector` on every call.
-- **String Cleanup:** Eliminated all remaining `std::string` usage in `createDecoder()` and `getChunkSize()`.
+**Context:**
+- The IIR filter chain (Equalizer) was consuming CPU cycles for every sample even when gains were zero.
+- Internal string arrays were consuming RAM.
+- `resampleTo48kStereo` was reallocating a `std::vector` for every audio chunk.
+**Improvement:**
+- **Dynamic DSP Bypass:** Skips the filter chain calculations if all gains are zero.
+- **Static Constexpr:** Moved internal lookup tables (`plsFmtStr`, etc.) to Flash (PROGMEM).
+- **Persistent Resample Buffer:** Implemented a persistent `ps_ptr` buffer for resampling to avoid repetitive heap allocations.
+- **STL Removal:** Replaced remaining `std::string` usage with C-strings.
+**Benefit:** Significant CPU savings, reduced RAM usage, and reduced stress on the memory allocator.
 
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
 
-Ce document résume les modifications, améliorations et corrections apportées à la bibliothèque pour optimiser l'utilisation des ressources et nettoyer les journaux (logs) système.
+Ce document détaille les modifications, améliorations et corrections apportées à la bibliothèque. Chaque changement vise à optimiser l'utilisation des ressources (Flash, RAM, CPU) et à améliorer la stabilité du système.
 
 ## 1. Sélection Modulaire des Codecs
-**Objectif :** Réduire l'empreinte Flash et RAM en ne compilant que les codecs nécessaires.
-
-- **Implémentation :** Ajout de macros `#define` au début de `Audio.h` pour chaque codec supporté (`MP3`, `AAC`, `M4A`, `FLAC`, `WAV`, `OPUS`, `VORBIS`, `OGG`).
-- **Dépendances :** Ajout d'une logique automatique pour activer `AUDIO_CODEC_AAC` si `AUDIO_CODEC_M4A` est sélectionné.
-- **Compilation Sélective :** 
-    - Les inclusions et instantiations des classes de décodeurs dans `Audio.cpp` sont désormais encadrées par des blocs `#ifdef`.
-    - Les structures de données volumineuses pour les métadonnées (`m_ID3Hdr`, `m_m4aHdr`, `m_rflh`, `m_rwh`) sont conditionnelles dans la classe `Audio`.
-    - La fonction `read_ID3_Header` reste disponible si `MP3` ou `AAC` est actif pour supporter les métadonnées HLS.
+**Contexte :** Par défaut, la bibliothèque compile tous les décodeurs (MP3, AAC, FLAC, WAV, etc.), consommant beaucoup de mémoire Flash même si un seul format est utilisé.
+**Amélioration :**
+- Ajout de macros `#define` dans `Audio.h` pour activer/désactiver chaque codec.
+- Gestion automatique des dépendances (ex: activer M4A active automatiquement AAC).
+- Encadrement conditionnel des structures de métadonnées volumineuses.
+**Bénéfice :** Réduction drastique de l'empreinte Flash (jusqu'à ~300 Ko économisés) et de l'allocation RAM statique.
 
 ## 2. Configuration Dynamique du Buffer PSRAM
-**Objectif :** Permettre à l'utilisateur d'ajuster la taille du tampon réseau sans modifier le code source de la bibliothèque.
-
-- **Classe AudioBuffer :** Ajout de `setBufsize(size_t ram, size_t psram)` pour permettre la mise à jour des variables de taille internes.
-- **Classe Audio :** Ajout de la méthode publique `setConnectionBuffSize(size_t size)`.
-- **Retour d'information :** La bibliothèque enregistre maintenant l'événement de redimensionnement (ex: `PSRAM Buffer resized: 655350 -> 1000000 bytes`) via le callback `audio_info`.
+**Contexte :** La taille du tampon réseau était fixée en dur (~640 Ko), obligeant à recompiler pour la modifier.
+**Amélioration :**
+- Ajout de la méthode publique `setConnectionBuffSize(size_t size)`.
+**Bénéfice :** Permet d'ajuster finement la taille du tampon au démarrage en fonction de la PSRAM disponible et de la qualité du réseau, sans modifier le code de la bibliothèque.
 
 ## 3. Gestion d'État I2S et Nettoyage des Logs
-**Objectif :** Éliminer l'erreur `E (10013) i2s_common: i2s_channel_disable(...): the channel has not been enabled yet` dans la console série.
+**Contexte :** Des erreurs `E (10013)` apparaissaient fréquemment dans les logs car la bibliothèque tentait d'arrêter un canal I2S déjà arrêté.
+**Amélioration :**
+- Ajout d'un flag `m_i2s_enabled` pour suivre l'état réel du canal.
+- Les fonctions `I2Sstart()` et `I2Sstop()` vérifient désormais cet état avant d'agir.
+**Bénéfice :** Des logs système propres, facilitant le diagnostic des vrais problèmes.
 
-- **Suivi d'État :** Ajout d'un membre booléen privé `m_i2s_enabled` à la classe `Audio`.
-- **Logique :** 
-    - `I2Sstart()` n'active le canal que s'il est actuellement désactivé.
-    - `I2Sstop()` ne désactive le canal que s'il est actuellement activé.
-    - Mise à jour de `reconfigI2S()`, `resampleTo48kStereo()`, et du destructeur `~Audio()` pour respecter ce flag.
-- **Résultat :** Les journaux système sont propres lors du démarrage et des changements de station.
-
-## 4. Modularité des Fonctions Vocales (TTS)
-**Objectif :** Supprimer la dépendance à la classe `String` d'Arduino et économiser de la Flash en désactivant les fonctions vocales inutilisées.
-
-- **Implémentation :** Ajout de la macro `AUDIO_ENABLE_SPEECH` dans `Audio.h`.
-- **Refactorisation :** Réécriture de `openai_speech()` pour utiliser `const char*` et `ps_ptr` à la place de `String`, garantissant une meilleure gestion de la mémoire.
-- **Compilation Sélective :** Les méthodes `openai_speech()` et `connecttospeech()`, ainsi que le membre `m_speechtxt`, sont désormais conditionnels.
+## 4. Modularité TTS et Suppression de String
+**Contexte :** Les fonctions de synthèse vocale utilisaient la classe Arduino `String`, provoquant une fragmentation de la mémoire (tas/heap) à cause des concaténations dynamiques.
+**Amélioration :**
+- Ajout de la macro `AUDIO_ENABLE_SPEECH` pour désactiver complètement le TTS.
+- **Refactorisation :** Réécriture complète de `openai_speech()` en utilisant des `const char*` et `snprintf` avec des buffers `ps_ptr`.
+**Bénéfice :** Élimination des risques de fragmentation mémoire et économie de Flash si le module est désactivé.
 
 ## 5. Modularité du Système de Fichiers (FS)
-**Objectif :** Supprimer les dépendances aux fichiers locaux (SD, FFat, etc.) pour les projets purement WebRadio.
-
-- **Implémentation :** Ajout de la macro `AUDIO_ENABLE_FS`.
-- **Compilation Sélective :** Toutes les inclusions (`FS.h`, `SD.h`...) et les méthodes liées aux fichiers (`connecttoFS`, `processLocalFile`) sont encadrées par des blocs `#ifdef`.
+**Contexte :** La bibliothèque incluait systématiquement les librairies SD, FFat, etc., inutile pour une WebRadio pure.
+**Amélioration :**
+- Ajout de la macro `AUDIO_ENABLE_FS` pour exclure tout le code lié aux fichiers locaux.
+**Bénéfice :** Supprime les dépendances inutiles, accélère la compilation et allège le binaire.
 
 ## 6. Contrôle Granulaire des Logs
-**Objectif :** Économiser de la Flash en supprimant physiquement les chaînes de caractères des logs lors de la compilation.
-
-- **Implémentation :** Ajout de la macro `AUDIO_LOG_LEVEL` dans `Audio.h`.
-- **Niveaux :** `0: Aucun`, `1: Erreur`, `2: Avertissement`, `3: Info`, `4: Debug`.
-- **Nuance :** Ce réglage n'affecte que les logs internes de la bibliothèque (macros `AUDIO_LOG_XXX`). Les informations envoyées à votre callback `myAudioInfo` (nom de station, bitrate, titre du flux) restent actives car il s'agit d'événements fonctionnels et non de simples logs.
+**Contexte :** Les chaînes de caractères de débogage occupent de la place en Flash.
+**Amélioration :**
+- Ajout de `AUDIO_LOG_LEVEL` (0 à 4) pour filtrer les logs à la compilation.
+**Bénéfice :** Économie de 10 à 15 Ko de Flash en supprimant les textes de debug en production.
 
 ## 7. Optimisations Performance & Mémoire
-- **Bypass DSP Dynamique :** Le filtrage IIR (Equalizer/Tone) est automatiquement contourné si tous les gains (`m_gain0`, `m_gain1`, `m_gain2`) sont à zéro, économisant des cycles CPU précieux.
-- **Conversion Constexpr :** Les tableaux de chaînes internes (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) sont passés en `static constexpr` pour résider en Flash plutôt qu'en RAM.
-
-## 8. Élimination des STL et Optimisation du Resampling
-- **Resampling :** `resampleTo48kStereo()` utilise désormais un buffer PSRAM persistant au lieu d'allouer un `std::vector` à chaque cycle.
-- **Nettoyage String :** Suppression des derniers `std::string` dans `createDecoder()` et `getChunkSize()`.
+**Contexte :**
+- L'égaliseur (IIR) consommait du CPU même avec des gains à zéro.
+- Les tableaux de chaînes internes étaient stockés en RAM.
+- Le ré-échantillonnage 48kHz réallouait un vecteur à chaque cycle.
+**Amélioration :**
+- **Bypass DSP :** Saut automatique des calculs de filtres si les gains sont nuls.
+- **Constexpr :** Déplacement des tableaux de chaînes en Flash (PROGMEM).
+- **Buffer Persistant :** Utilisation d'un buffer `ps_ptr` unique pour le resampling.
+- **Suppression STL :** Remplacement des derniers `std::string` par des chaînes C.
+**Bénéfice :** Gain significatif en cycles CPU, réduction de l'usage RAM et soulagement de l'allocateur mémoire.
 
 ***
 
@@ -217,3 +216,4 @@ Yellobyte has developed an all-in-one board. It includes an ESP32-S3 N8R2, 2x MA
 Documentation, circuit diagrams and examples can be found here: https://github.com/yellobyte/ESP32-DevBoards-Getting-Started
 ![image](https://github.com/user-attachments/assets/4002d09e-8e76-4e08-9265-188fed7628d3)
 
+```
