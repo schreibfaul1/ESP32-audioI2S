@@ -325,9 +325,9 @@ class Audio {
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
     enum : int { EXTERNAL_I2S = 0, INTERNAL_DAC = 1, INTERNAL_PDM = 2 };
     enum : int { FORMAT_NONE = 0, FORMAT_M3U = 1, FORMAT_PLS = 2, FORMAT_ASX = 3, FORMAT_M3U8 = 4 }; // playlist formats
-    const char* plsFmtStr[5] = {"NONE", "M3U", "PLS", "ASX", "M3U8"};                                // playlist format string
+    static constexpr const char* const plsFmtStr[5] = {"NONE", "M3U", "PLS", "ASX", "M3U8"};         // playlist format string
     enum : int { AUDIO_NONE, HTTP_RESPONSE_HEADER, HTTP_RANGE_HEADER, AUDIO_DATA, AUDIO_LOCALFILE, AUDIO_PLAYLISTINIT, AUDIO_PLAYLISTHEADER, AUDIO_PLAYLISTDATA };
-    const char* dataModeStr[8] = {"AUDIO_NONE", "HTTP_RESPONSE_HEADER", "HTTP_RANGE_HEADER", "AUDIO_DATA", "AUDIO_LOCALFILE", "AUDIO_PLAYLISTINIT", "AUDIO_PLAYLISTHEADER", "AUDIO_PLAYLISTDATA"};
+    static constexpr const char* const dataModeStr[8] = {"AUDIO_NONE", "HTTP_RESPONSE_HEADER", "HTTP_RANGE_HEADER", "AUDIO_DATA", "AUDIO_LOCALFILE", "AUDIO_PLAYLISTINIT", "AUDIO_PLAYLISTHEADER", "AUDIO_PLAYLISTDATA"};
     enum : int { FLAC_BEGIN = 0, FLAC_MAGIC = 1, FLAC_MBH = 2, FLAC_SINFO = 3, FLAC_PADDING = 4, FLAC_APP = 5, FLAC_SEEK = 6, FLAC_VORBIS = 7, FLAC_CUESHEET = 8, FLAC_PICTURE = 9, FLAC_OKAY = 100 };
     enum : int { MP3_BEGIN = 0, MP3_ID3HEADER, MP3_NEXTID3, MP3_EXTHEADER, MP3_ID3FRAME, MP3_FRAMESIZE, MP3_SKIP, MP3_TAG, MP3_SYLT, MP3_ID3V22, MP3_LASTFRAMES, MP3_XING, MP3_OKAY = 100 };
     enum : int {
@@ -354,9 +354,9 @@ class Audio {
         M4A_OKAY = 100,
     };
     enum : int { CODEC_NONE = 0, CODEC_WAV = 1, CODEC_MP3 = 2, CODEC_AAC = 3, CODEC_M4A = 4, CODEC_FLAC = 5, CODEC_AACP = 6, CODEC_OPUS = 7, CODEC_OGG = 8, CODEC_VORBIS = 9 };
-    const char* codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS"};
+    static constexpr const char* const codecname[10] = {"unknown", "WAV", "MP3", "AAC", "M4A", "FLAC", "AACP", "OPUS", "OGG", "VORBIS"};
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2 };
-    const char* streamTypeStr[3] = {"NONE", "WEBFILE", "WEBSTREAM"};
+    static constexpr const char* const streamTypeStr[3] = {"NONE", "WEBFILE", "WEBSTREAM"};
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
 

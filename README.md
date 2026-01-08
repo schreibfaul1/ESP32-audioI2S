@@ -54,6 +54,10 @@ This document summarizes the modifications, improvements, and bug fixes applied 
 - **Levels:** `0: None`, `1: Error`, `2: Warning`, `3: Info`, `4: Debug`.
 - **Nuance:** This setting only affects internal library logs (`AUDIO_LOG_XXX` macros). Functional data sent to your `myAudioInfo` callback (station name, bitrate, stream title) remains active, as these are functional events rather than simple logs.
 
+## 7. Performance & Memory Optimizations
+- **Dynamic DSP Bypass:** The IIR filter chain (Equalizer/Tone) is now automatically bypassed if all gains (`m_gain0`, `m_gain1`, `m_gain2`) are set to zero. This saves significant CPU cycles during playback.
+- **Static Constexpr Conversion:** Internal string arrays (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) are now `static constexpr`, moving them from RAM to Flash.
+
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
@@ -106,6 +110,10 @@ Ce document résume les modifications, améliorations et corrections apportées 
 - **Implémentation :** Ajout de la macro `AUDIO_LOG_LEVEL` dans `Audio.h`.
 - **Niveaux :** `0: Aucun`, `1: Erreur`, `2: Avertissement`, `3: Info`, `4: Debug`.
 - **Nuance :** Ce réglage n'affecte que les logs internes de la bibliothèque (macros `AUDIO_LOG_XXX`). Les informations envoyées à votre callback `myAudioInfo` (nom de station, bitrate, titre du flux) restent actives car il s'agit d'événements fonctionnels et non de simples logs.
+
+## 7. Optimisations Performance & Mémoire
+- **Bypass DSP Dynamique :** Le filtrage IIR (Equalizer/Tone) est automatiquement contourné si tous les gains (`m_gain0`, `m_gain1`, `m_gain2`) sont à zéro, économisant des cycles CPU précieux.
+- **Conversion Constexpr :** Les tableaux de chaînes internes (`plsFmtStr`, `dataModeStr`, `codecname`, `streamTypeStr`) sont passés en `static constexpr` pour résider en Flash plutôt qu'en RAM.
 
 ***
 

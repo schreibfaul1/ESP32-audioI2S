@@ -3494,9 +3494,11 @@ void IRAM_ATTR Audio::playChunk() {
                 m_plCh.s16[LEFTCHANNEL] /= m_corr;
                 m_plCh.s16[RIGHTCHANNEL] /= m_corr;
             }
-            IIR_filterChain0_s16(m_plCh.s16);
-            IIR_filterChain1_s16(m_plCh.s16);
-            IIR_filterChain2_s16(m_plCh.s16);
+            if (m_gain0 || m_gain1 || m_gain2) {
+                IIR_filterChain0_s16(m_plCh.s16);
+                IIR_filterChain1_s16(m_plCh.s16);
+                IIR_filterChain2_s16(m_plCh.s16);
+            }
 
             if (m_f_forceMono && m_channels == 2) {
                 int32_t xy = (m_plCh.s16[RIGHTCHANNEL] + m_plCh.s16[LEFTCHANNEL]) / 2;
@@ -3510,9 +3512,11 @@ void IRAM_ATTR Audio::playChunk() {
                 m_plCh.s32[LEFTCHANNEL] /= m_corr;
                 m_plCh.s32[RIGHTCHANNEL] /= m_corr;
             }
-            IIR_filterChain0_s32(m_plCh.s32);
-            IIR_filterChain1_s32(m_plCh.s32);
-            IIR_filterChain2_s32(m_plCh.s32);
+            if (m_gain0 || m_gain1 || m_gain2) {
+                IIR_filterChain0_s32(m_plCh.s32);
+                IIR_filterChain1_s32(m_plCh.s32);
+                IIR_filterChain2_s32(m_plCh.s32);
+            }
 
             if (m_f_forceMono && m_channels == 2) {
                 int32_t xy = (int32_t)((int64_t)m_plCh.s32[RIGHTCHANNEL] + (int64_t)m_plCh.s32[LEFTCHANNEL]) / 2;
