@@ -41,6 +41,12 @@ This document summarizes the modifications, improvements, and bug fixes applied 
 - **Refactoring:** Completely rewrote `openai_speech()` to use `const char*` and `ps_ptr` instead of `String`, ensuring better memory management.
 - **Selective Compilation:** Wrapped `openai_speech()` and `connecttospeech()` methods, as well as the `m_speechtxt` member, with `#ifdef` blocks.
 
+## 5. Modular File System Support
+**Goal:** Remove local file system dependencies (SD, FFat, etc.) for pure WebRadio projects.
+
+- **Implementation:** Added `AUDIO_ENABLE_FS` macro.
+- **Selective Compilation:** Wrapped all file system related includes (`FS.h`, `SD.h`...) and methods (`connecttoFS`, `processLocalFile`, `fsRange`) with `#ifdef` blocks.
+
 ***
 
 # Changements appliqués à ESP32-audioI2S (v3.4.4d)
@@ -80,6 +86,12 @@ Ce document résume les modifications, améliorations et corrections apportées 
 - **Implémentation :** Ajout de la macro `AUDIO_ENABLE_SPEECH` dans `Audio.h`.
 - **Refactorisation :** Réécriture de `openai_speech()` pour utiliser `const char*` et `ps_ptr` à la place de `String`, garantissant une meilleure gestion de la mémoire.
 - **Compilation Sélective :** Les méthodes `openai_speech()` et `connecttospeech()`, ainsi que le membre `m_speechtxt`, sont désormais conditionnels.
+
+## 5. Modularité du Système de Fichiers (FS)
+**Objectif :** Supprimer les dépendances aux fichiers locaux (SD, FFat, etc.) pour les projets purement WebRadio.
+
+- **Implémentation :** Ajout de la macro `AUDIO_ENABLE_FS`.
+- **Compilation Sélective :** Toutes les inclusions (`FS.h`, `SD.h`...) et les méthodes liées aux fichiers (`connecttoFS`, `processLocalFile`) sont encadrées par des blocs `#ifdef`.
 
 ***
 

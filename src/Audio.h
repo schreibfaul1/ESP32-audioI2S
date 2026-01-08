@@ -17,7 +17,8 @@
 //#define AUDIO_CODEC_OPUS
 //#define AUDIO_CODEC_VORBIS
 //#define AUDIO_CODEC_OGG
-#define AUDIO_ENABLE_SPEECH
+//#define AUDIO_ENABLE_SPEECH
+//#define AUDIO_ENABLE_FS
 // —————————————————————————————————————————————————————————————————————————————
 
 // 🔗 Automatic Dependencies
@@ -33,12 +34,14 @@
 #include "esp_arduino_version.h"
 #include "psram_unique_ptr.hpp"
 #include <Arduino.h>
-#include <FFat.h>
-#include <FS.h>
+#ifdef AUDIO_ENABLE_FS
+    #include <FFat.h>
+    #include <FS.h>
+    #include <SD.h>
+    #include <SD_MMC.h>
+#endif
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
-#include <SD.h>
-#include <SD_MMC.h>
 #include <WiFi.h>
 #include <atomic>
 #include <charconv>
@@ -142,7 +145,9 @@ class Audio {
 #ifdef AUDIO_ENABLE_SPEECH
     bool             connecttospeech(const char* speech, const char* lang);
 #endif
+#ifdef AUDIO_ENABLE_FS
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
+#endif
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);
     void             setConnectionBuffSize(size_t size);
     bool             setAudioPlayTime(uint16_t sec);
@@ -185,7 +190,9 @@ class Audio {
     // ------- PRIVATE MEMBERS ----------------------------------------
     std::unique_ptr<Decoder> createDecoder(const std::string& type);
     void                     destroy_decoder();
+#ifdef AUDIO_ENABLE_FS
     bool                     fsRange(uint32_t range);
+#endif
     void                     latinToUTF8(ps_ptr<char>& buff, bool UTF8check = true);
     void                     htmlToUTF8(char* str);
     void                     setDefaults(); // free buffers and set defaults
@@ -194,7 +201,9 @@ class Audio {
     void                     initInBuff();
     bool                     httpPrint(const char* host);
     bool                     httpRange(uint32_t range, uint32_t length = UINT32_MAX);
+#ifdef AUDIO_ENABLE_FS
     void                     processLocalFile();
+#endif
     void                     processWebStream();
     void                     processWebFile();
     void                     processWebStreamTS();
@@ -277,6 +286,8 @@ class Audio {
     int32_t      getChunkSize(uint16_t* readedBytes, bool first = false);
     bool         readID3V1Tag();
     int32_t      newInBuffStart(int32_t resumeFilePos);
+#ifdef AUDIO_ENABLE_FS
+#endif
     boolean      streamDetection(uint32_t bytesAvail);
     uint32_t     m4a_correctResumeFilePos();
     uint32_t     ogg_correctResumeFilePos();
@@ -358,7 +369,9 @@ class Audio {
         int pids[4];
     } pid_array;
 
+#ifdef AUDIO_ENABLE_FS
     File                m_audiofile;
+#endif
     NetworkClient       client;
     NetworkClientSecure clientsecure;
     NetworkClient*      m_client = nullptr;

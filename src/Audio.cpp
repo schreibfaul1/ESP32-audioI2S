@@ -1095,6 +1095,7 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef AUDIO_ENABLE_FS
 bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
@@ -1149,6 +1150,7 @@ exit:
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
+#endif
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 #ifdef AUDIO_ENABLE_SPEECH
 bool Audio::connecttospeech(const char* speech, const char* lang) {
@@ -3322,11 +3324,13 @@ uint32_t Audio::stopSong() {
                 info(*this, evt_info, "Closing web file \"%s\"", m_lastHost.c_get());
                 m_client->stop();
             }
+#ifdef AUDIO_ENABLE_FS
             if (m_audiofile) {
                 info(*this, evt_info, "Closing audio file \"%s\"", m_audiofile.name());
                 m_audiofile.close();
                 m_client->stop();
             }
+#endif
         }
         memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
         destroy_decoder();
@@ -3616,7 +3620,9 @@ void Audio::loop() {
 
     if (m_playlistFormat != FORMAT_M3U8) { // normal process
         switch (m_dataMode) {
+#ifdef AUDIO_ENABLE_FS
             case AUDIO_LOCALFILE: processLocalFile(); break;
+#endif
             case HTTP_RESPONSE_HEADER:
                 if (!parseHttpResponseHeader()) {
                     if (m_f_timeout && m_lVar.count < 3) {
@@ -4191,6 +4197,7 @@ ps_ptr<char> Audio::m3u8redirection(uint8_t* codec) {
     return result; // it's a redirection, a new m3u8 playlist
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef AUDIO_ENABLE_FS
 void Audio::processLocalFile() {
     if (!(m_audiofile && m_f_running && m_dataMode == AUDIO_LOCALFILE)) return; // guard
 
@@ -4283,6 +4290,7 @@ void Audio::processLocalFile() {
         return;
     }
 }
+#endif
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 void Audio::processWebStream() {
 
@@ -5961,11 +5969,13 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getFileSize() { // returns the size of webfile or local file
-    if (!m_audiofile) {
-        if (m_audioFileSize > 0) { return m_audioFileSize; }
-        return 0;
+#ifdef AUDIO_ENABLE_FS
+    if (m_audiofile) {
+        return m_audiofile.size();
     }
-    return m_audiofile.size();
+#endif
+    if (m_audioFileSize > 0) { return m_audioFileSize; }
+    return 0;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getAudioFileDuration() {
@@ -6072,8 +6082,10 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
 
     if (!buff && !len) { // read one byte
         if (m_dataMode == AUDIO_LOCALFILE) {
+#ifdef AUDIO_ENABLE_FS
             res = m_audiofile.read();
             if (res >= 0) m_audioFilePosition++;
+#endif
         } else {
             res = m_client->read();
             if (res >= 0) m_audioFilePosition++;
@@ -6082,6 +6094,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
         uint32_t t = millis();
         while (len > 0) {
             if (m_dataMode == AUDIO_LOCALFILE) {
+#ifdef AUDIO_ENABLE_FS
                 readed_bytes = m_audiofile.read(buff + offset, len);
 
                 if (readed_bytes >= 0) {
@@ -6091,6 +6104,7 @@ int32_t Audio::audioFileRead(uint8_t* buff, size_t len) {
                     res = offset;
                     t = millis();
                 }
+#endif
                 if (readed_bytes <= 0) break;
             } else {
                 readed_bytes = m_client->read(buff + offset, len);
@@ -6118,6 +6132,7 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
     int32_t res = -1;
 
     if (m_dataMode == AUDIO_LOCALFILE) {
+#ifdef AUDIO_ENABLE_FS
         uint32_t actualPos = m_audiofile.position(); // starts with 1
         if (actualPos != m_audioFilePosition) {
             AUDIO_LOG_DEBUG("actualPos != m_audioFilePosition %lu != %lu", actualPos, m_audioFilePosition);
@@ -6136,6 +6151,7 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
         } else {
             return position;
         }
+#endif
     } else {
         if (m_f_acceptRanges) {
             bool r;
@@ -6157,6 +6173,7 @@ int32_t Audio::audioFileSeek(uint32_t position, size_t len) {
     return res;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+#ifdef AUDIO_ENABLE_FS
 bool Audio::fsRange(uint32_t range) {
 
     if ((m_dataMode == AUDIO_LOCALFILE) && !m_audiofile) {
@@ -6172,6 +6189,7 @@ bool Audio::fsRange(uint32_t range) {
     m_resumeFilePos = range; // used in processLocalFile()
     return true;
 }
+#endif
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setSampleRate(uint32_t sampRate) {
 
@@ -7340,7 +7358,7 @@ bool Audio::readID3V1Tag() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
-    if ((m_controlCounter != 100) || (m_resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
+    if ((m_controlCounter != 100) || (resumeFilePos >= (int32_t)m_audioDataStart + m_audioDataSize) || ((m_codec == CODEC_M4A) && !m_stsz_position)) {
         AUDIO_LOG_WARN("timeOffset not possible");
         return 0;
     }
@@ -7350,7 +7368,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
 
     uint32_t buffFillValue = std::min<uint32_t>(m_audioDataSize - resumeFilePos, UINT16_MAX);
 
-    AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos %i, m_audioDataStart %i", m_resumeFilePos, m_audioDataStart);
+    AUDIO_LOG_DEBUG("new InBuff start at resumeFilePos %i, m_audioDataStart %i", resumeFilePos, m_audioDataStart);
 
     // --- enter critical area ------------------------------------------
     xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
@@ -7423,11 +7441,13 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     m_f_lockInBuffer = false;
     xSemaphoreGive(mutex_audioTaskIsDecoding);
 
-    return newFilePos;
-}
+        return newFilePos;
 
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-boolean Audio::streamDetection(uint32_t bytesAvail) {
+    }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    boolean Audio::streamDetection(uint32_t bytesAvail) {
     if (!m_lastHost.valid()) {
         AUDIO_LOG_ERROR("m_lastHost is empty");
         return false;
