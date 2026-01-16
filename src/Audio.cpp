@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4e                                                                                                                              ";
-/*  Updated on: 12.01.2026
+    Version 3.4.4f                                                                                                                              ";
+/*  Updated on: 16.01.2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4858,6 +4858,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if (rhl.starts_with_icase("location:")) {
             int pos = rhl.index_of_icase("http", 0);
+            if(pos == -1){
+                int doubleSlash = rhl.index_of("//"); // e.g. location: //frontend.streamonkey.net/...  host: http://webstream.radiof.de/
+                if(doubleSlash >= 9) rhl.insert("http:", doubleSlash); // ==> http://frontend.streamonkey.net/fhn-radiof945/stream/mp3?aggregator=fh-tinyurl
+                pos = rhl.index_of_icase("http", 0);
+            }
             if (pos >= 0) {
                 const char* c_host = (rhl.get() + pos);
                 if (!m_currentHost.equals(c_host)) { // prevent a loop
