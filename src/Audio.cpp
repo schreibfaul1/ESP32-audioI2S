@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4d                                                                                                                              ";
-/*  Updated on: 07.01.2026
+    Version 3.4.4e                                                                                                                              ";
+/*  Updated on: 12.01.2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -413,14 +413,22 @@ void Audio::initInBuff() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstart() {
     zeroI2Sbuff();
-    return i2s_channel_enable(m_i2s_tx_handle);
+    esp_err_t err = ESP_FAIL;
+    if(!m_f_i2s_channel_enabled) {
+        err = i2s_channel_enable(m_i2s_tx_handle);
+        if(err == ESP_OK) m_f_i2s_channel_enabled = true;
+    }
+    return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear();                                                  // Clear OutputBuffer
     m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
-    return i2s_channel_disable(m_i2s_tx_handle);
+    esp_err_t err = ESP_FAIL;
+    if(m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
+    m_f_i2s_channel_enabled = false;
+    return err;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::zeroI2Sbuff() {
