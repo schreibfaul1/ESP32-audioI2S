@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4g                                                                                                                              ";
-/*  Updated on: 16.01.2026
+    Version 3.4.4h                                                                                                                              ";
+/*  Updated on: Jan 27, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4372,8 +4372,10 @@ void Audio::processWebFile() {
             return;
         } else {
             if (m_resumeFilePos == -1) {
-                if (InBuff.bufferFilled() > 2 * InBuff.getMaxBlockSize()) { m_f_stream = true; }
-                info(*this, evt_info, "stream ready");
+                if (InBuff.bufferFilled() > 2 * InBuff.getMaxBlockSize()) {
+                    m_f_stream = true;
+                    info(*this, evt_info, "stream ready");
+                }
             }
         }
     }

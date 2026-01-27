@@ -527,17 +527,17 @@ class Audio {
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
                                                                // -------------------------------------------------------------------------------------------------------------------
         auto extract_last_number = [](std::string_view s) -> int32_t {
-            // von hinten anfangen
+            // start from the back
             auto it = s.end();
             // skip whitespaces at the end (if available)
             while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
 
-            auto end = it; // potentielles Ende der Zahl
+            auto end = it; // potential end of the number
 
             // Now only search digits backwards
             while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
 
-            // Prüfen: steht davor ein Leerzeichen?
+            // Check: is there a space before it?
             if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
                 std::string_view number{it, static_cast<size_t>(end - it)};
                 uint32_t         value{};
