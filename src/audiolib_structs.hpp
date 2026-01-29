@@ -182,8 +182,8 @@ typedef struct _cat { // used in calculateAudioTime
 
 struct cVUl_t { // used in computeVUlevel
     uint8_t sampleArray[2][4][8] = {0};
-    uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
-    bool    f_vu = false;
+    uint8_t  cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+    bool     f_vu = false;
 };
 
 struct ifCh_t { // used in IIR_filterChain0, 1, 2

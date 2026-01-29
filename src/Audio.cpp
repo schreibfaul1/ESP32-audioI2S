@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4i                                                                                                                              ";
-/*  Updated on: Jan 27, 2026
+    Version 3.4.4ij                                                                                                                             ";
+/*  Updated on: Jan 29, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6220,14 +6220,14 @@ void Audio::computeVUlevel(int32_t* sample) {
         return;
     }
 
-    auto avg = [&](uint8_t* sampArr) { // lambda, inner function, compute the average of 8 samples
+    auto avg = [&](uint8_t* sampArr) ->uint8_t { // lambda, inner function, compute the average of 8 samples
         uint16_t av = 0;
         for (int i = 0; i < 8; i++) { av += sampArr[i]; }
-        return av >> 3;
+        return (uint8_t)(av >> 3);
     };
 
-    auto largest = [&](uint8_t* sampArr) { // lambda, inner function, compute the largest of 8 samples
-        uint16_t maxValue = 0;
+    auto largest = [&](uint8_t* sampArr) ->uint8_t { // lambda, inner function, compute the largest of 8 samples
+        uint8_t maxValue = 0;
         for (int i = 0; i < 8; i++) {
             if (maxValue < sampArr[i]) maxValue = sampArr[i];
         }
@@ -6255,11 +6255,11 @@ void Audio::computeVUlevel(int32_t* sample) {
 
     if (!m_cVUl.cnt0) { // store every 64th sample in the array[0]
         if (s16) {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s16[LEFTCHANNEL] >> 7);
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s16[RIGHTCHANNEL] >> 7);
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
         } else if (s32) {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = abs(s32[LEFTCHANNEL] >> 23);
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = abs(s32[RIGHTCHANNEL] >> 23);
+            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s32[LEFTCHANNEL] >> 23);
+            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s32[RIGHTCHANNEL] >> 23);
         } else {
             m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = 0;
             m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = 0;
@@ -6279,7 +6279,7 @@ void Audio::computeVUlevel(int32_t* sample) {
     }
     if (m_cVUl.f_vu) {
         m_cVUl.f_vu = false;
-        m_vuLeft = avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
+        m_vuLeft =  avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
         m_vuRight = avg(m_cVUl.sampleArray[RIGHTCHANNEL][3]);
     }
     m_cVUl.cnt1++;
