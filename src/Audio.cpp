@@ -322,6 +322,151 @@ void AudioBuffer::showStatus() {
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// 📌📌📌  B I Q U A D   📌📌📌 biquadratic filter, lowpass, bandpass, highpass
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+StereoBiquadChain::StereoBiquadChain() { reset();}
+void StereoBiquadChain::reset(){
+    for (int i = 0; i < 3; i++) {
+        coeffs[i] = {};
+        for (int ch = 0; ch < 2; ch++) {
+            state[i][ch] = {};
+        }
+    }
+}
+
+void StereoBiquadChain::calculateCoeffs(int8_t G0, int8_t G1, int8_t G2, uint32_t sampleRate) {
+    // G1 - gain low shelf   set between -40 ... +6 dB
+    // G2 - gain peakEQ      set between -40 ... +6 dB
+    // G3 - gain high shelf  set between -40 ... +6 dB
+    // https://www.earlevel.com/main/2012/11/26/biquad-c-source-code/
+
+//    if (getSampleRate() < 1000) return; // fuse
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    reset();
+    if (G0 < -40) G0 = -40; // -40dB -> Vin*0.01
+    if (G0 > 6) G0 = 6;     // +6dB -> Vin*2
+    if (G1 < -40) G1 = -40;
+    if (G1 > 6) G1 = 6;
+    if (G2 < -40) G2 = -40;
+    if (G2 > 6) G2 = 6;
+
+    const float FcLS = 500;    // Frequency LowShelf(Hz)
+    const float FcPKEQ = 3000; // Frequency PeakEQ(Hz)
+    float       FcHS = 6000;   // Frequency HighShelf(Hz)
+
+    if (sampleRate < FcHS * 2 - 100) { // Prevent HighShelf filter from clogging
+        FcHS = sampleRate/ 2 - 100;
+        // according to the sampling theorem, the sample rate must be at least 2 * 6000 >= 12000Hz for a filter
+        // frequency of 6000Hz. If this is not the case, the filter frequency (plus a reserve of 100Hz) is lowered
+        log_w("Highshelf frequency lowered, from 6000Hz to %luHz", (long unsigned int)FcHS);
+    }
+    float K, norm, Q, Fc, V;
+
+    // LOWSHELF
+    Fc = (float)FcLS / (float)sampleRate; // Cutoff frequency
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G0) / 20.0);
+
+    if (G0 >= 0) { // boost
+        norm = 1 / (1 + sqrtf(2) * K + K * K);
+        coeffs[LOWSHELF].a0 = (1 + sqrtf(2 * V) * K + V * K * K) * norm;
+        coeffs[LOWSHELF].a1 = 2 * (V * K * K - 1) * norm;
+        coeffs[LOWSHELF].a2 = (1 - sqrtf(2 * V) * K + V * K * K) * norm;
+        coeffs[LOWSHELF].b1 = 2 * (K * K - 1) * norm;
+        coeffs[LOWSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
+    } else { // cut
+        norm = 1 / (1 + sqrtf(2 * V) * K + V * K * K);
+        coeffs[LOWSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
+        coeffs[LOWSHELF].a1 = 2 * (K * K - 1) * norm;
+        coeffs[LOWSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
+        coeffs[LOWSHELF].b1 = 2 * (V * K * K - 1) * norm;
+        coeffs[LOWSHELF].b2 = (1 - sqrtf(2 * V) * K + V * K * K) * norm;
+    }
+
+    // PEAK EQ
+    Fc = (float)FcPKEQ / (float)sampleRate; // Cutoff frequency
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G1) / 20.0);
+    Q = 2.5;       // Quality factor
+    if (G1 >= 0) { // boost
+        norm = 1 / (1 + 1 / Q * K + K * K);
+        coeffs[PEAKEQ].a0 = (1 + V / Q * K + K * K) * norm;
+        coeffs[PEAKEQ].a1 = 2 * (K * K - 1) * norm;
+        coeffs[PEAKEQ].a2 = (1 - V / Q * K + K * K) * norm;
+        coeffs[PEAKEQ].b1 = coeffs[PEAKEQ].a1;
+        coeffs[PEAKEQ].b2 = (1 - 1 / Q * K + K * K) * norm;
+    } else { // cut
+        norm = 1 / (1 + V / Q * K + K * K);
+        coeffs[PEAKEQ].a0 = (1 + 1 / Q * K + K * K) * norm;
+        coeffs[PEAKEQ].a1 = 2 * (K * K - 1) * norm;
+        coeffs[PEAKEQ].a2 = (1 - 1 / Q * K + K * K) * norm;
+        coeffs[PEAKEQ].b1 = coeffs[PEAKEQ].a1;
+        coeffs[PEAKEQ].b2 = (1 - V / Q * K + K * K) * norm;
+    }
+
+    // HIGHSHELF
+    Fc = (float)FcHS / (float)sampleRate; // Cutoff frequency
+    K = tanf((float)PI * Fc);
+    V = powf(10, fabs(G2) / 20.0);
+    if (G2 >= 0) { // boost
+        norm = 1 / (1 + sqrtf(2) * K + K * K);
+        coeffs[HIFGSHELF].a0 = (V + sqrtf(2 * V) * K + K * K) * norm;
+        coeffs[HIFGSHELF].a1 = 2 * (K * K - V) * norm;
+        coeffs[HIFGSHELF].a2 = (V - sqrtf(2 * V) * K + K * K) * norm;
+        coeffs[HIFGSHELF].b1 = 2 * (K * K - 1) * norm;
+        coeffs[HIFGSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
+    } else {
+        norm = 1 / (V + sqrtf(2 * V) * K + K * K);
+        coeffs[HIFGSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
+        coeffs[HIFGSHELF].a1 = 2 * (K * K - 1) * norm;
+        coeffs[HIFGSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
+        coeffs[HIFGSHELF].b1 = 2 * (K * K - V) * norm;
+        coeffs[HIFGSHELF].b2 = (V - sqrtf(2 * V) * K + K * K) * norm;
+    }
+    log_w("LS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[0].a0, coeffs[0].a1, coeffs[0].a2, coeffs[0].b1, coeffs[0].b2);
+    log_w("EQ a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[1].a0, coeffs[1].a1, coeffs[1].a2, coeffs[1].b1, coeffs[1].b2);
+    log_w("HS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[2].a0, coeffs[2].a1, coeffs[2].a2, coeffs[2].b1, coeffs[2].b2);
+
+}
+
+void StereoBiquadChain::process(int32_t* buff, uint16_t numSamples) {
+    float s[2];
+    int16_t* buff16 = (int16_t*)buff; // Cast to int16_t* for correct indexing
+
+    for (int i = 0; i < numSamples; i++) {
+        s[0] = (float)buff16[2 * i + 0];   // left  - now correctly reads int16_t stereo interleaved
+        s[1] = (float)buff16[2 * i + 1];   // right
+        filter_sample(s);
+        buff16[2 * i + 0] = (int16_t)lrintf(s[0]);
+        buff16[2 * i + 1] = (int16_t)lrintf(s[1]);
+    }
+}
+
+void StereoBiquadChain::filter_sample(float* s) {
+    float y;
+
+    for (int ch = 0; ch < 2; ch++) {
+        for (int f = 0; f < 3; f++) { // 0 - LOWSHELF, 1 - PEAKEQ, 2 - HIFGSHELF
+            y = coeffs[f].a0 * s[ch] +
+                coeffs[f].a1 * state[f][ch].x1 +
+                coeffs[f].a2 * state[f][ch].x2 -
+                coeffs[f].b1 * state[f][ch].y1 -
+                coeffs[f].b2 * state[f][ch].y2;
+
+            state[f][ch].x2 = state[f][ch].x1;
+            state[f][ch].x1 = s[ch];
+            state[f][ch].y2 = state[f][ch].y1;
+            state[f][ch].y1 = y;
+
+            s[ch] = y;
+            s[ch] = fminf(fmaxf(s[ch], -32768.0f), 32767.0f);
+        }
+    }
+}
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O   📌📌📌
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::Audio(uint8_t i2sPort) {
@@ -362,13 +507,6 @@ Audio::Audio(uint8_t i2sPort) {
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
-    for (int i = 0; i < 3; i++) {
-        m_filter[i].a0 = 1;
-        m_filter[i].a1 = 0;
-        m_filter[i].a2 = 0;
-        m_filter[i].b1 = 0;
-        m_filter[i].b2 = 0;
-    }
     computeLimit(); // first init, vol = 21, vol_steps = 21
     startAudioTask();
 }
@@ -3266,7 +3404,6 @@ uint32_t Audio::stopSong() {
                 m_client->stop();
             }
         }
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
         destroy_decoder();
         m_validSamples = 0;
         m_audioCurrentTime = 0;
@@ -3428,9 +3565,9 @@ void IRAM_ATTR Audio::playChunk() {
                 m_plCh.s16[LEFTCHANNEL] /= m_corr;
                 m_plCh.s16[RIGHTCHANNEL] /= m_corr;
             }
-            IIR_filterChain0_s16(m_plCh.s16);
-            IIR_filterChain1_s16(m_plCh.s16);
-            IIR_filterChain2_s16(m_plCh.s16);
+            // IIR_filterChain0_s16(m_plCh.s16);
+            // IIR_filterChain1_s16(m_plCh.s16);
+            // IIR_filterChain2_s16(m_plCh.s16);
 
             if (m_f_forceMono && m_channels == 2) {
                 int32_t xy = (m_plCh.s16[RIGHTCHANNEL] + m_plCh.s16[LEFTCHANNEL]) / 2;
@@ -3444,9 +3581,9 @@ void IRAM_ATTR Audio::playChunk() {
                 m_plCh.s32[LEFTCHANNEL] /= m_corr;
                 m_plCh.s32[RIGHTCHANNEL] /= m_corr;
             }
-            IIR_filterChain0_s32(m_plCh.s32);
-            IIR_filterChain1_s32(m_plCh.s32);
-            IIR_filterChain2_s32(m_plCh.s32);
+            // IIR_filterChain0_s32(m_plCh.s32);
+            // IIR_filterChain1_s32(m_plCh.s32);
+            // IIR_filterChain2_s32(m_plCh.s32);
 
             if (m_f_forceMono && m_channels == 2) {
                 int32_t xy = (int32_t)((int64_t)m_plCh.s32[RIGHTCHANNEL] + (int64_t)m_plCh.s32[LEFTCHANNEL]) / 2;
@@ -3462,7 +3599,7 @@ void IRAM_ATTR Audio::playChunk() {
         if (m_bitsPerSample == 24) m_plCh.i += 2;
         if (m_bitsPerSample == 32) m_plCh.i += 2;
     }
-
+    filterchain.process(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
@@ -5572,8 +5709,7 @@ void Audio::setDecoderItems() {
         stopSong();
     }
     showCodecParams();
-    memset(m_filterBuff, 0, sizeof(m_filterBuff));        // Clear FilterBuffer
-    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2); // must be recalculated after each samplerate change
+    filterchain.calculateCoeffs(m_gain0, m_gain1, m_gain2, m_sampleRate); // must be recalculated after each samplerate change
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
@@ -6304,22 +6440,10 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
     int db = max(m_gain0, max(m_gain1, m_gain2));
     m_corr = pow10f((float)db / 20);
 
-    IIR_calculateCoefficients(m_gain0, m_gain1, m_gain2);
-
-    /*
-          This will cause a clicking sound when adjusting the EQ.
-          Because when the EQ is adjusted, the IIR filter will be cleared and played,
-          mixed in the audio data frame, and a click-like sound will be produced.
-
-          int16_t tmp[2]; tmp[0] = 0; tmp[1]= 0;
-
-          IIR_filterChain0(tmp, true ); // flush the filter
-          IIR_filterChain1(tmp, true ); // flush the filter
-          IIR_filterChain2(tmp, true ); // flush the filter
-        */
+    filterchain.calculateCoeffs(m_gain0, m_gain1, m_gain2, m_sampleRate);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::forceMono(bool m) { // #100 mono option
+void Audio::forceMono(bool m) { // mono option
     m_f_forceMono = m;          // false stereo, true mono
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6418,354 +6542,6 @@ uint32_t Audio::inBufferFree() {
 uint32_t Audio::getInBufferSize() {
     // current audio input buffer size in bytes
     return InBuff.getBufsize();
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-//            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_calculateCoefficients(int8_t G0, int8_t G1, int8_t G2) { // Infinite Impulse Response (IIR) filters
-
-    // G1 - gain low shelf   set between -40 ... +6 dB
-    // G2 - gain peakEQ      set between -40 ... +6 dB
-    // G3 - gain high shelf  set between -40 ... +6 dB
-    // https://www.earlevel.com/main/2012/11/26/biquad-c-source-code/
-
-    if (getSampleRate() < 1000) return; // fuse
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    if (G0 < -40) G0 = -40; // -40dB -> Vin*0.01
-    if (G0 > 6) G0 = 6;     // +6dB -> Vin*2
-    if (G1 < -40) G1 = -40;
-    if (G1 > 6) G1 = 6;
-    if (G2 < -40) G2 = -40;
-    if (G2 > 6) G2 = 6;
-
-    const float FcLS = 500;    // Frequency LowShelf(Hz)
-    const float FcPKEQ = 3000; // Frequency PeakEQ(Hz)
-    float       FcHS = 6000;   // Frequency HighShelf(Hz)
-
-    if (getSampleRate() < FcHS * 2 - 100) { // Prevent HighShelf filter from clogging
-        FcHS = getSampleRate() / 2 - 100;
-        // according to the sampling theorem, the sample rate must be at least 2 * 6000 >= 12000Hz for a filter
-        // frequency of 6000Hz. If this is not the case, the filter frequency (plus a reserve of 100Hz) is lowered
-        info(*this, evt_info, "Highshelf frequency lowered, from 6000Hz to %luHz", (long unsigned int)FcHS);
-    }
-    float K, norm, Q, Fc, V;
-
-    // LOWSHELF
-    Fc = (float)FcLS / (float)getSampleRate(); // Cutoff frequency
-    K = tanf((float)PI * Fc);
-    V = powf(10, fabs(G0) / 20.0);
-
-    if (G0 >= 0) { // boost
-        norm = 1 / (1 + sqrtf(2) * K + K * K);
-        m_filter[LOWSHELF].a0 = (1 + sqrtf(2 * V) * K + V * K * K) * norm;
-        m_filter[LOWSHELF].a1 = 2 * (V * K * K - 1) * norm;
-        m_filter[LOWSHELF].a2 = (1 - sqrtf(2 * V) * K + V * K * K) * norm;
-        m_filter[LOWSHELF].b1 = 2 * (K * K - 1) * norm;
-        m_filter[LOWSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
-    } else { // cut
-        norm = 1 / (1 + sqrtf(2 * V) * K + V * K * K);
-        m_filter[LOWSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
-        m_filter[LOWSHELF].a1 = 2 * (K * K - 1) * norm;
-        m_filter[LOWSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
-        m_filter[LOWSHELF].b1 = 2 * (V * K * K - 1) * norm;
-        m_filter[LOWSHELF].b2 = (1 - sqrtf(2 * V) * K + V * K * K) * norm;
-    }
-
-    // PEAK EQ
-    Fc = (float)FcPKEQ / (float)getSampleRate(); // Cutoff frequency
-    K = tanf((float)PI * Fc);
-    V = powf(10, fabs(G1) / 20.0);
-    Q = 2.5;       // Quality factor
-    if (G1 >= 0) { // boost
-        norm = 1 / (1 + 1 / Q * K + K * K);
-        m_filter[PEAKEQ].a0 = (1 + V / Q * K + K * K) * norm;
-        m_filter[PEAKEQ].a1 = 2 * (K * K - 1) * norm;
-        m_filter[PEAKEQ].a2 = (1 - V / Q * K + K * K) * norm;
-        m_filter[PEAKEQ].b1 = m_filter[PEAKEQ].a1;
-        m_filter[PEAKEQ].b2 = (1 - 1 / Q * K + K * K) * norm;
-    } else { // cut
-        norm = 1 / (1 + V / Q * K + K * K);
-        m_filter[PEAKEQ].a0 = (1 + 1 / Q * K + K * K) * norm;
-        m_filter[PEAKEQ].a1 = 2 * (K * K - 1) * norm;
-        m_filter[PEAKEQ].a2 = (1 - 1 / Q * K + K * K) * norm;
-        m_filter[PEAKEQ].b1 = m_filter[PEAKEQ].a1;
-        m_filter[PEAKEQ].b2 = (1 - V / Q * K + K * K) * norm;
-    }
-
-    // HIGHSHELF
-    Fc = (float)FcHS / (float)getSampleRate(); // Cutoff frequency
-    K = tanf((float)PI * Fc);
-    V = powf(10, fabs(G2) / 20.0);
-    if (G2 >= 0) { // boost
-        norm = 1 / (1 + sqrtf(2) * K + K * K);
-        m_filter[HIFGSHELF].a0 = (V + sqrtf(2 * V) * K + K * K) * norm;
-        m_filter[HIFGSHELF].a1 = 2 * (K * K - V) * norm;
-        m_filter[HIFGSHELF].a2 = (V - sqrtf(2 * V) * K + K * K) * norm;
-        m_filter[HIFGSHELF].b1 = 2 * (K * K - 1) * norm;
-        m_filter[HIFGSHELF].b2 = (1 - sqrtf(2) * K + K * K) * norm;
-    } else {
-        norm = 1 / (V + sqrtf(2 * V) * K + K * K);
-        m_filter[HIFGSHELF].a0 = (1 + sqrtf(2) * K + K * K) * norm;
-        m_filter[HIFGSHELF].a1 = 2 * (K * K - 1) * norm;
-        m_filter[HIFGSHELF].a2 = (1 - sqrtf(2) * K + K * K) * norm;
-        m_filter[HIFGSHELF].b1 = 2 * (K * K - V) * norm;
-        m_filter[HIFGSHELF].b2 = (V - sqrtf(2 * V) * K + K * K) * norm;
-    }
-
-    //    AUDIO_LOG_INFO("LS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", m_filter[0].a0, m_filter[0].a1, m_filter[0].a2,
-    //                                                  m_filter[0].b1, m_filter[0].b2);
-    //    AUDIO_LOG_INFO("EQ a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", m_filter[1].a0, m_filter[1].a1, m_filter[1].a2,
-    //                                                  m_filter[1].b1, m_filter[1].b2);
-    //    AUDIO_LOG_INFO("HS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", m_filter[2].a0, m_filter[2].a1, m_filter[2].a2,
-    //                                                  m_filter[2].b1, m_filter[2].b2);
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain0_s16(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out0_16[0] = 0;
-        m_ifCh.iir_out0_16[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample0_16[LEFTCHANNEL] = (float)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample0_16[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample0_16[LEFTCHANNEL] = m_filter[0].a0 * m_ifCh.inSample0_16[LEFTCHANNEL] + m_filter[0].a1 * m_filterBuff[0][z1][in][LEFTCHANNEL] +
-                                        m_filter[0].a2 * m_filterBuff[0][z2][in][LEFTCHANNEL] - m_filter[0].b1 * m_filterBuff[0][z1][out][LEFTCHANNEL] -
-                                        m_filter[0].b2 * m_filterBuff[0][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[0][z2][in][LEFTCHANNEL] = m_filterBuff[0][z1][in][LEFTCHANNEL];
-    m_filterBuff[0][z1][in][LEFTCHANNEL] = m_ifCh.inSample0_16[LEFTCHANNEL];
-    m_filterBuff[0][z2][out][LEFTCHANNEL] = m_filterBuff[0][z1][out][LEFTCHANNEL];
-    m_filterBuff[0][z1][out][LEFTCHANNEL] = m_ifCh.outSample0_16[LEFTCHANNEL];
-    m_ifCh.iir_out0_16[LEFTCHANNEL] = (int16_t)m_ifCh.outSample0_16[LEFTCHANNEL];
-
-    m_ifCh.outSample0_16[RIGHTCHANNEL] = m_filter[0].a0 * m_ifCh.inSample0_16[RIGHTCHANNEL] + m_filter[0].a1 * m_filterBuff[0][z1][in][RIGHTCHANNEL] +
-                                         m_filter[0].a2 * m_filterBuff[0][z2][in][RIGHTCHANNEL] - m_filter[0].b1 * m_filterBuff[0][z1][out][RIGHTCHANNEL] -
-                                         m_filter[0].b2 * m_filterBuff[0][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[0][z2][in][RIGHTCHANNEL] = m_filterBuff[0][z1][in][RIGHTCHANNEL];
-    m_filterBuff[0][z1][in][RIGHTCHANNEL] = m_ifCh.inSample0_16[RIGHTCHANNEL];
-    m_filterBuff[0][z2][out][RIGHTCHANNEL] = m_filterBuff[0][z1][out][RIGHTCHANNEL];
-    m_filterBuff[0][z1][out][RIGHTCHANNEL] = m_ifCh.outSample0_16[RIGHTCHANNEL];
-    m_ifCh.iir_out0_16[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample0_16[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out0_16[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out0_16[RIGHTCHANNEL];
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain0_s32(int32_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out0_32[0] = 0;
-        m_ifCh.iir_out0_32[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample0_32[LEFTCHANNEL] = (double)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample0_32[RIGHTCHANNEL] = (double)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample0_32[LEFTCHANNEL] = m_filter[0].a0 * m_ifCh.inSample0_32[LEFTCHANNEL] + m_filter[0].a1 * m_filterBuff[0][z1][in][LEFTCHANNEL] +
-                                        m_filter[0].a2 * m_filterBuff[0][z2][in][LEFTCHANNEL] - m_filter[0].b1 * m_filterBuff[0][z1][out][LEFTCHANNEL] -
-                                        m_filter[0].b2 * m_filterBuff[0][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[0][z2][in][LEFTCHANNEL] = m_filterBuff[0][z1][in][LEFTCHANNEL];
-    m_filterBuff[0][z1][in][LEFTCHANNEL] = m_ifCh.inSample0_32[LEFTCHANNEL];
-    m_filterBuff[0][z2][out][LEFTCHANNEL] = m_filterBuff[0][z1][out][LEFTCHANNEL];
-    m_filterBuff[0][z1][out][LEFTCHANNEL] = m_ifCh.outSample0_32[LEFTCHANNEL];
-    m_ifCh.iir_out0_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample0_32[LEFTCHANNEL];
-
-    m_ifCh.outSample0_32[RIGHTCHANNEL] = m_filter[0].a0 * m_ifCh.inSample0_32[RIGHTCHANNEL] + m_filter[0].a1 * m_filterBuff[0][z1][in][RIGHTCHANNEL] +
-                                         m_filter[0].a2 * m_filterBuff[0][z2][in][RIGHTCHANNEL] - m_filter[0].b1 * m_filterBuff[0][z1][out][RIGHTCHANNEL] -
-                                         m_filter[0].b2 * m_filterBuff[0][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[0][z2][in][RIGHTCHANNEL] = m_filterBuff[0][z1][in][RIGHTCHANNEL];
-    m_filterBuff[0][z1][in][RIGHTCHANNEL] = m_ifCh.inSample0_32[RIGHTCHANNEL];
-    m_filterBuff[0][z2][out][RIGHTCHANNEL] = m_filterBuff[0][z1][out][RIGHTCHANNEL];
-    m_filterBuff[0][z1][out][RIGHTCHANNEL] = m_ifCh.outSample0_32[RIGHTCHANNEL];
-    m_ifCh.iir_out0_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample0_32[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out0_32[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out0_32[RIGHTCHANNEL];
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain1_s16(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out1_16[0] = 0;
-        m_ifCh.iir_out1_16[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample1_16[LEFTCHANNEL] = (float)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample1_16[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample1_16[LEFTCHANNEL] = m_filter[1].a0 * m_ifCh.inSample1_16[LEFTCHANNEL] + m_filter[1].a1 * m_filterBuff[1][z1][in][LEFTCHANNEL] +
-                                        m_filter[1].a2 * m_filterBuff[1][z2][in][LEFTCHANNEL] - m_filter[1].b1 * m_filterBuff[1][z1][out][LEFTCHANNEL] -
-                                        m_filter[1].b2 * m_filterBuff[1][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[1][z2][in][LEFTCHANNEL] = m_filterBuff[1][z1][in][LEFTCHANNEL];
-    m_filterBuff[1][z1][in][LEFTCHANNEL] = m_ifCh.inSample1_16[LEFTCHANNEL];
-    m_filterBuff[1][z2][out][LEFTCHANNEL] = m_filterBuff[1][z1][out][LEFTCHANNEL];
-    m_filterBuff[1][z1][out][LEFTCHANNEL] = m_ifCh.outSample1_16[LEFTCHANNEL];
-    m_ifCh.iir_out1_16[LEFTCHANNEL] = (int16_t)m_ifCh.outSample1_16[LEFTCHANNEL];
-
-    m_ifCh.outSample1_16[RIGHTCHANNEL] = m_filter[1].a0 * m_ifCh.inSample1_16[RIGHTCHANNEL] + m_filter[1].a1 * m_filterBuff[1][z1][in][RIGHTCHANNEL] +
-                                         m_filter[1].a2 * m_filterBuff[1][z2][in][RIGHTCHANNEL] - m_filter[1].b1 * m_filterBuff[1][z1][out][RIGHTCHANNEL] -
-                                         m_filter[1].b2 * m_filterBuff[1][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[1][z2][in][RIGHTCHANNEL] = m_filterBuff[1][z1][in][RIGHTCHANNEL];
-    m_filterBuff[1][z1][in][RIGHTCHANNEL] = m_ifCh.inSample1_16[RIGHTCHANNEL];
-    m_filterBuff[1][z2][out][RIGHTCHANNEL] = m_filterBuff[1][z1][out][RIGHTCHANNEL];
-    m_filterBuff[1][z1][out][RIGHTCHANNEL] = m_ifCh.outSample1_16[RIGHTCHANNEL];
-    m_ifCh.iir_out1_16[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample1_16[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out1_16[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out1_16[RIGHTCHANNEL];
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain1_s32(int32_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out1_32[0] = 0;
-        m_ifCh.iir_out1_32[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample1_32[LEFTCHANNEL] = (float)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample1_32[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample1_32[LEFTCHANNEL] = m_filter[1].a0 * m_ifCh.inSample1_32[LEFTCHANNEL] + m_filter[1].a1 * m_filterBuff[1][z1][in][LEFTCHANNEL] +
-                                        m_filter[1].a2 * m_filterBuff[1][z2][in][LEFTCHANNEL] - m_filter[1].b1 * m_filterBuff[1][z1][out][LEFTCHANNEL] -
-                                        m_filter[1].b2 * m_filterBuff[1][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[1][z2][in][LEFTCHANNEL] = m_filterBuff[1][z1][in][LEFTCHANNEL];
-    m_filterBuff[1][z1][in][LEFTCHANNEL] = m_ifCh.inSample1_32[LEFTCHANNEL];
-    m_filterBuff[1][z2][out][LEFTCHANNEL] = m_filterBuff[1][z1][out][LEFTCHANNEL];
-    m_filterBuff[1][z1][out][LEFTCHANNEL] = m_ifCh.outSample1_32[LEFTCHANNEL];
-    m_ifCh.iir_out1_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample1_32[LEFTCHANNEL];
-
-    m_ifCh.outSample1_32[RIGHTCHANNEL] = m_filter[1].a0 * m_ifCh.inSample1_32[RIGHTCHANNEL] + m_filter[1].a1 * m_filterBuff[1][z1][in][RIGHTCHANNEL] +
-                                         m_filter[1].a2 * m_filterBuff[1][z2][in][RIGHTCHANNEL] - m_filter[1].b1 * m_filterBuff[1][z1][out][RIGHTCHANNEL] -
-                                         m_filter[1].b2 * m_filterBuff[1][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[1][z2][in][RIGHTCHANNEL] = m_filterBuff[1][z1][in][RIGHTCHANNEL];
-    m_filterBuff[1][z1][in][RIGHTCHANNEL] = m_ifCh.inSample1_32[RIGHTCHANNEL];
-    m_filterBuff[1][z2][out][RIGHTCHANNEL] = m_filterBuff[1][z1][out][RIGHTCHANNEL];
-    m_filterBuff[1][z1][out][RIGHTCHANNEL] = m_ifCh.outSample1_32[RIGHTCHANNEL];
-    m_ifCh.iir_out1_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample1_32[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out1_32[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out1_32[RIGHTCHANNEL];
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain2_s16(int16_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out2_16[0] = 0;
-        m_ifCh.iir_out2_16[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample2_16[LEFTCHANNEL] = (float)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample2_16[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample2_16[LEFTCHANNEL] = m_filter[2].a0 * m_ifCh.inSample2_16[LEFTCHANNEL] + m_filter[2].a1 * m_filterBuff[2][z1][in][LEFTCHANNEL] +
-                                        m_filter[2].a2 * m_filterBuff[2][z2][in][LEFTCHANNEL] - m_filter[2].b1 * m_filterBuff[2][z1][out][LEFTCHANNEL] -
-                                        m_filter[2].b2 * m_filterBuff[2][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[2][z2][in][LEFTCHANNEL] = m_filterBuff[2][z1][in][LEFTCHANNEL];
-    m_filterBuff[2][z1][in][LEFTCHANNEL] = m_ifCh.inSample2_16[LEFTCHANNEL];
-    m_filterBuff[2][z2][out][LEFTCHANNEL] = m_filterBuff[2][z1][out][LEFTCHANNEL];
-    m_filterBuff[2][z1][out][LEFTCHANNEL] = m_ifCh.outSample2_16[LEFTCHANNEL];
-    m_ifCh.iir_out2_16[LEFTCHANNEL] = (int16_t)m_ifCh.outSample2_16[LEFTCHANNEL];
-
-    m_ifCh.outSample2_16[RIGHTCHANNEL] = m_filter[2].a0 * m_ifCh.inSample2_16[RIGHTCHANNEL] + m_filter[2].a1 * m_filterBuff[2][z1][in][RIGHTCHANNEL] +
-                                         m_filter[2].a2 * m_filterBuff[2][z2][in][RIGHTCHANNEL] - m_filter[2].b1 * m_filterBuff[2][z1][out][RIGHTCHANNEL] -
-                                         m_filter[2].b2 * m_filterBuff[2][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[2][z2][in][RIGHTCHANNEL] = m_filterBuff[2][z1][in][RIGHTCHANNEL];
-    m_filterBuff[2][z1][in][RIGHTCHANNEL] = m_ifCh.inSample2_16[RIGHTCHANNEL];
-    m_filterBuff[2][z2][out][RIGHTCHANNEL] = m_filterBuff[2][z1][out][RIGHTCHANNEL];
-    m_filterBuff[2][z1][out][RIGHTCHANNEL] = m_ifCh.outSample2_16[RIGHTCHANNEL];
-    m_ifCh.iir_out2_16[RIGHTCHANNEL] = (int16_t)m_ifCh.outSample2_16[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out2_16[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out2_16[RIGHTCHANNEL];
-    return;
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::IIR_filterChain2_s32(int32_t* iir_in, bool clear) { // Infinite Impulse Response (IIR) filters
-
-    uint8_t z1 = 0, z2 = 1;
-    enum : uint8_t { in = 0, out = 1 };
-
-    if (clear) {
-        memset(m_filterBuff, 0, sizeof(m_filterBuff)); // zero IIR filterbuffer
-        m_ifCh.iir_out2_32[0] = 0;
-        m_ifCh.iir_out2_32[1] = 0;
-        iir_in[0] = 0;
-        iir_in[1] = 0;
-    }
-
-    m_ifCh.inSample2_32[LEFTCHANNEL] = (float)(iir_in[LEFTCHANNEL]);
-    m_ifCh.inSample2_32[RIGHTCHANNEL] = (float)(iir_in[RIGHTCHANNEL]);
-
-    m_ifCh.outSample2_32[LEFTCHANNEL] = m_filter[2].a0 * m_ifCh.inSample2_32[LEFTCHANNEL] + m_filter[2].a1 * m_filterBuff[2][z1][in][LEFTCHANNEL] +
-                                        m_filter[2].a2 * m_filterBuff[2][z2][in][LEFTCHANNEL] - m_filter[2].b1 * m_filterBuff[2][z1][out][LEFTCHANNEL] -
-                                        m_filter[2].b2 * m_filterBuff[2][z2][out][LEFTCHANNEL];
-
-    m_filterBuff[2][z2][in][LEFTCHANNEL] = m_filterBuff[2][z1][in][LEFTCHANNEL];
-    m_filterBuff[2][z1][in][LEFTCHANNEL] = m_ifCh.inSample2_32[LEFTCHANNEL];
-    m_filterBuff[2][z2][out][LEFTCHANNEL] = m_filterBuff[2][z1][out][LEFTCHANNEL];
-    m_filterBuff[2][z1][out][LEFTCHANNEL] = m_ifCh.outSample2_32[LEFTCHANNEL];
-    m_ifCh.iir_out2_32[LEFTCHANNEL] = (int32_t)m_ifCh.outSample2_32[LEFTCHANNEL];
-
-    m_ifCh.outSample2_32[RIGHTCHANNEL] = m_filter[2].a0 * m_ifCh.inSample2_32[RIGHTCHANNEL] + m_filter[2].a1 * m_filterBuff[2][z1][in][RIGHTCHANNEL] +
-                                         m_filter[2].a2 * m_filterBuff[2][z2][in][RIGHTCHANNEL] - m_filter[2].b1 * m_filterBuff[2][z1][out][RIGHTCHANNEL] -
-                                         m_filter[2].b2 * m_filterBuff[2][z2][out][RIGHTCHANNEL];
-
-    m_filterBuff[2][z2][in][RIGHTCHANNEL] = m_filterBuff[2][z1][in][RIGHTCHANNEL];
-    m_filterBuff[2][z1][in][RIGHTCHANNEL] = m_ifCh.inSample2_32[RIGHTCHANNEL];
-    m_filterBuff[2][z2][out][RIGHTCHANNEL] = m_filterBuff[2][z1][out][RIGHTCHANNEL];
-    m_filterBuff[2][z1][out][RIGHTCHANNEL] = m_ifCh.outSample2_32[RIGHTCHANNEL];
-    m_ifCh.iir_out2_32[RIGHTCHANNEL] = (int32_t)m_ifCh.outSample2_32[RIGHTCHANNEL];
-
-    iir_in[LEFTCHANNEL] = m_ifCh.iir_out2_32[LEFTCHANNEL];
-    iir_in[RIGHTCHANNEL] = m_ifCh.iir_out2_32[RIGHTCHANNEL];
-    return;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 //    AAC - T R A N S P O R T S T R E A M
