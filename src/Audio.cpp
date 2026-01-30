@@ -335,14 +335,15 @@ void StereoBiquadChain::reset() {
     }
 }
 
-void StereoBiquadChain::calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8_t bps) {
+void StereoBiquadChain::calculateCoeffs(audiolib::gain_t gain, uint32_t sampleRate, uint8_t bps) {
 
     reset();
     const float FcLS = 500;    // Frequency LowShelf(Hz)
     const float FcPKEQ = 3000; // Frequency PeakEQ(Hz)
     float       FcHS = 6000;   // Frequency HighShelf(Hz)
     // https://www.earlevel.com/main/2012/11/26/biquad-c-source-code/
-    m_tone = tone;
+    m_gain = gain;
+
     m_bps = bps;
     if (m_bps != 16 && m_bps != 32)
         if (sampleRate < 1000) return; // fuse
@@ -360,9 +361,9 @@ void StereoBiquadChain::calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8
     // LOWSHELF
     Fc = (float)FcLS / (float)sampleRate; // Cutoff frequency
     K = tanf((float)PI * Fc);
-    V = powf(10, fabs(m_tone[0]) / 20.0);
+    V = powf(10, fabs(m_gain.lp) / 20.0);
 
-    if (m_tone[0] >= 0) { // boost
+    if (m_gain.lp >= 0) { // boost
         norm = 1 / (1 + sqrtf(2) * K + K * K);
         coeffs[LOWSHELF].a0 = (1 + sqrtf(2 * V) * K + V * K * K) * norm;
         coeffs[LOWSHELF].a1 = 2 * (V * K * K - 1) * norm;
@@ -381,9 +382,9 @@ void StereoBiquadChain::calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8
     // PEAK EQ
     Fc = (float)FcPKEQ / (float)sampleRate; // Cutoff frequency
     K = tanf((float)PI * Fc);
-    V = powf(10, fabs(m_tone[1]) / 20.0);
+    V = powf(10, fabs(m_gain.bp) / 20.0);
     Q = 2.5;              // Quality factor
-    if (m_tone[1] >= 0) { // boost
+    if (m_gain.bp >= 0) { // boost
         norm = 1 / (1 + 1 / Q * K + K * K);
         coeffs[PEAKEQ].a0 = (1 + V / Q * K + K * K) * norm;
         coeffs[PEAKEQ].a1 = 2 * (K * K - 1) * norm;
@@ -402,8 +403,8 @@ void StereoBiquadChain::calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8
     // HIGHSHELF
     Fc = (float)FcHS / (float)sampleRate; // Cutoff frequency
     K = tanf((float)PI * Fc);
-    V = powf(10, fabs(m_tone[2]) / 20.0);
-    if (m_tone[2] >= 0) { // boost
+    V = powf(10, fabs(m_gain.hp) / 20.0);
+    if (m_gain.hp >= 0) { // boost
         norm = 1 / (1 + sqrtf(2) * K + K * K);
         coeffs[HIFGSHELF].a0 = (V + sqrtf(2 * V) * K + K * K) * norm;
         coeffs[HIFGSHELF].a1 = 2 * (K * K - V) * norm;
@@ -452,7 +453,6 @@ void StereoBiquadChain::filter_sample(float* s) {
 
     for (int ch = 0; ch < 2; ch++) {
         for (int f = 0; f < 3; f++) {     // 0 - LOWSHELF, 1 - PEAKEQ, 2 - HIFGSHELF
-            if (m_tone[f] == 0) continue; // nothing todo
             y = coeffs[f].a0 * s[ch] + coeffs[f].a1 * state[f][ch].x1 + coeffs[f].a2 * state[f][ch].x2 - coeffs[f].b1 * state[f][ch].y1 - coeffs[f].b2 * state[f][ch].y2;
 
             state[f][ch].x2 = state[f][ch].x1;
@@ -5709,7 +5709,7 @@ void Audio::setDecoderItems() {
         stopSong();
     }
     showCodecParams();
-    filterchain.calculateCoeffs(m_tone, m_sampleRate, m_bitsPerSample); // must be recalculated after each samplerate change
+    filterchain.calculateCoeffs(m_gain, m_sampleRate, m_bitsPerSample); // must be recalculated after each samplerate change
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
@@ -6432,15 +6432,15 @@ void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass
     // see https://www.earlevel.com/main/2013/10/13/biquad-calculator-v2/
     // values can be between -40 ... +6 (dB)
 
-    m_tone[0] = min(max(gainLowPass, (int8_t)-40), (int8_t)6);  // gain low shelf   set between -40 ... +6 dB
-    m_tone[1] = min(max(gainBandPass, (int8_t)-40), (int8_t)6); // gain peakEQ      set between -40 ... +6 dB
-    m_tone[2] = min(max(gainHighPass, (int8_t)-40), (int8_t)6); // gain high shelf  set between -40 ... +6 dB
+    m_gain.lp = min(max(gainLowPass, (int8_t)-40), (int8_t)6);  // gain low shelf   set between -40 ... +6 dB
+    m_gain.bp = min(max(gainBandPass, (int8_t)-40), (int8_t)6); // gain peakEQ      set between -40 ... +6 dB
+    m_gain.hp = min(max(gainHighPass, (int8_t)-40), (int8_t)6); // gain high shelf  set between -40 ... +6 dB
 
     // gain, attenuation (set in digital filters)
-    int db = max(m_tone[0], max(m_tone[1], m_tone[2]));
+    int db = max(m_gain.lp, max(m_gain.bp, m_gain.hp));
     m_corr = pow10f((float)db / 20);
 
-    filterchain.calculateCoeffs(m_tone, m_sampleRate, m_bitsPerSample);
+    filterchain.calculateCoeffs(m_gain, m_sampleRate, m_bitsPerSample);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::forceMono(bool m) { // mono option

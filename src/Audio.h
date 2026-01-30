@@ -98,8 +98,8 @@ class StereoBiquadChain {
         float b1, b2;
     } coeffs[3];
 
-    int8_t* m_tone; // 0-lowshelf, 1-peak equalizer, 2-highshelf
     uint8_t m_bps = 0;
+    audiolib::gain_t m_gain;
 
   private:
     struct BiquadState {
@@ -111,7 +111,7 @@ class StereoBiquadChain {
     StereoBiquadChain();
     ~StereoBiquadChain() {}
     void reset();
-    void calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8_t bps);
+    void calculateCoeffs(audiolib::gain_t gain, uint32_t sampleRate, uint8_t bps);
     void process(int32_t* buff, uint16_t numSamples);
 
   private:
@@ -518,6 +518,7 @@ class Audio {
     audiolib::phrah_t   m_phrah;
     audiolib::sdet_t    m_sdet;
     audiolib::fnsy_t    m_fnsy;
+    audiolib::gain_t    m_gain;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
