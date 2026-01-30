@@ -92,11 +92,14 @@ class StereoBiquadChain {
   private:
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
-  public:
+
     struct BiquadCoeffs {
         float a0, a1, a2;
         float b1, b2;
     } coeffs[3];
+
+    int8_t* m_tone; // 0-lowshelf, 1-peak equalizer, 2-highshelf
+    uint8_t m_bps = 0;
 
   private:
     struct BiquadState {
@@ -108,7 +111,7 @@ class StereoBiquadChain {
     StereoBiquadChain();
     ~StereoBiquadChain() {}
     void reset();
-    void calculateCoeffs(int8_t lp, int8_t bp, int8_t hp, uint32_t sampleRate);
+    void calculateCoeffs(int8_t* tone, uint32_t sampleRate, uint8_t bps);
     void process(int32_t* buff, uint16_t numSamples);
 
   private:
@@ -483,9 +486,7 @@ class Audio {
     size_t   m_ibuffSize = 0;          // log buffer size for audio_info()
     float    m_corr = 1.0;             // correction factor for level adjustment
     size_t   m_i2s_bytesWritten = 0;   // set in i2s_write() but not used
-    int8_t   m_gain0 = 0; // cut or boost filters (EQ)
-    int8_t   m_gain1 = 0;
-    int8_t   m_gain2 = 0;
+    int8_t   m_tone[3] = {0};          // cut or boost filters (LS, EQ. HS)
 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
