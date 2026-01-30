@@ -435,8 +435,7 @@ void StereoBiquadChain::process(int32_t* buff, uint16_t numSamples) {
             buff16[2 * i + 0] = (int16_t)lrintf(s[0]);
             buff16[2 * i + 1] = (int16_t)lrintf(s[1]);
         }
-    }
-    else {
+    } else {
         int32_t* buff32 = buff;
         for (int i = 0; i < numSamples; i++) {
             s[0] = (float)buff32[2 * i + 0]; // left  - now correctly reads int16_t stereo interleaved
@@ -452,7 +451,7 @@ void StereoBiquadChain::filter_sample(float* s) {
     float y;
 
     for (int ch = 0; ch < 2; ch++) {
-        for (int f = 0; f < 3; f++) {     // 0 - LOWSHELF, 1 - PEAKEQ, 2 - HIFGSHELF
+        for (int f = 0; f < 3; f++) { // 0 - LOWSHELF, 1 - PEAKEQ, 2 - HIFGSHELF
             y = coeffs[f].a0 * s[ch] + coeffs[f].a1 * state[f][ch].x1 + coeffs[f].a2 * state[f][ch].x2 - coeffs[f].b1 * state[f][ch].y1 - coeffs[f].b2 * state[f][ch].y2;
 
             state[f][ch].x2 = state[f][ch].x1;
@@ -507,7 +506,7 @@ Audio::Audio(uint8_t i2sPort) {
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
-    computeLimit(); // first init, vol = 21, vol_steps = 21
+    calculateVolumeLimits(); // first init, vol = 21, vol_steps = 21
     startAudioTask();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -5156,7 +5155,6 @@ lastToDo:
 
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
-
     } else if (m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // AUDIO_LOG_INFO("now parse playlist");
@@ -6452,22 +6450,24 @@ void Audio::setBalance(int8_t bal) { // bal -16...16
     if (bal > 16) bal = 16;
     m_balance = bal;
 
-    computeLimit();
+    calculateVolumeLimits();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setVolume(uint8_t vol, uint8_t curve) { // curve 0: default, curve 1: flat at the beginning
 
-    if (vol > m_vol_steps)
+    if (vol > m_vol_steps) {
         m_vol = m_vol_steps;
-    else
+    } else {
         m_vol = vol;
+    }
 
-    if (curve > 1)
+    if (curve > 1) {
         m_curve = 1;
-    else
+    } else {
         m_curve = curve;
+    }
 
-    computeLimit();
+    calculateVolumeLimits();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t Audio::getVolume() {
@@ -6478,8 +6478,8 @@ uint8_t Audio::getI2sPort() {
     return m_i2s_num;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::computeLimit() {    // is calculated when the volume or balance changes
-    double l = 1, r = 1, v = 1; // assume 100%
+void Audio::calculateVolumeLimits() { // is calculated when the volume or balance changes
+    double l = 1, r = 1, v = 1;       // assume 100%
 
     /* balance is left -16...+16 right */
     /* TODO: logarithmic scaling of balance, too? */
