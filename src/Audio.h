@@ -87,7 +87,7 @@ class AudioBuffer {
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-class StereoBiquadChain {
+class StereoAudioEqualizer {
 
   private:
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
@@ -98,8 +98,10 @@ class StereoBiquadChain {
         float b1, b2;
     } coeffs[3];
 
-    uint8_t m_bps = 0;
-    audiolib::gain_t m_gain;
+    uint8_t                 m_bps = 0;
+    audiolib::audio_items_t m_items;
+    float                   m_limiter[2] = {1};
+    float                   m_corr = 1.0; // correction factor for level adjustment
 
   private:
     struct BiquadState {
@@ -108,22 +110,25 @@ class StereoBiquadChain {
     } state[3][2];
 
   public:
-    StereoBiquadChain();
-    ~StereoBiquadChain() {}
+    StereoAudioEqualizer();
+    ~StereoAudioEqualizer() {}
     void reset();
-    void calculateCoeffs(audiolib::gain_t gain, uint32_t sampleRate, uint8_t bps);
+    void update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
     void process(int32_t* buff, uint16_t numSamples);
 
   private:
+    void calculateVolumeLimits(); // balance and gain
     void filter_sample(float* s);
+    void Gain16(int16_t* sample);
+    void Gain32(int32_t* sample);
 };
 //----------------------------------------------------------------------------------------------------------------------
 
 class Audio {
   private:
-    AudioBuffer InBuff;    // instance of input buffer
-    StereoBiquadChain filterchain;
-    uint8_t     m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
+    AudioBuffer       InBuff; // instance of input buffer
+    StereoAudioEqualizer equalizer;
+    uint8_t           m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -177,7 +182,7 @@ class Audio {
     uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
-    void             inBufferStatus(){InBuff.showStatus();}
+    void             inBufferStatus() { InBuff.showStatus(); }
     void             setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
@@ -233,9 +238,6 @@ class Audio {
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
     void                     computeVUlevel(int32_t* sample);
-    void                     calculateVolumeLimits();
-    void                     Gain(int16_t* sample);
-    void                     Gain1(int32_t* sample);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(char* ct);
     bool                     parseHttpResponseHeader();
@@ -399,15 +401,11 @@ class Audio {
     int            m_readbytes = 0;         // bytes read
     uint32_t       m_metacount = 0;         // counts down bytes between metadata
     int            m_controlCounter = 0;    // Status within readID3data() and readWaveHeader()
-    int8_t         m_balance = 0;           // -16 (mute left) ... +16 (mute right)
-    uint16_t       m_vol = 21;              // volume
-    uint16_t       m_vol_steps = 21;        // default
     int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
     uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
-    double         m_limit_left = 0;        // limiter 0 ... 1, left channel
-    double         m_limit_right = 0;       // limiter 0 ... 1, right channel
+    float          m_limit_left = 0;        // limiter 0 ... 1, left channel
+    float          m_limit_right = 0;       // limiter 0 ... 1, right channel
     uint8_t        m_timeoutCounter = 0;    // timeout counter
-    uint8_t        m_curve = 0;             // volume characteristic
     uint8_t        m_bitsPerSample = 16;    // bitsPerSample
     uint8_t        m_channels = 2;
 
@@ -426,7 +424,7 @@ class Audio {
     uint16_t m_M4A_sampleRate = 0; // set in read_M4A_Header
     int16_t  m_validSamples = 0;
     int16_t  m_curSample = 0;
-    uint16_t m_dataMode = 0;         // Statemaschine
+    uint16_t m_dataMode = 0;        // Statemaschine
     uint16_t m_streamTitleHash = 0; // remember streamtitle, ignore multiple occurence in metadata
     uint16_t m_timeout_ms = 250;
     uint16_t m_timeout_ms_ssl = 2700;
@@ -472,21 +470,19 @@ class Audio {
     bool     m_f_lockInBuffer = false; // lock inBuffer for manipulation
     bool     m_f_audioTaskIsDecoding = false;
     bool     m_f_acceptRanges = false;
-    bool     m_f_reset_m3u8Codec = true;  // reset codec for m3u8 stream
-    bool     m_f_connectionClose = false; // set in parseHttpResponseHeader
+    bool     m_f_reset_m3u8Codec = true;      // reset codec for m3u8 stream
+    bool     m_f_connectionClose = false;     // set in parseHttpResponseHeader
     bool     m_f_i2s_channel_enabled = false; // true if enabled
-    uint32_t m_audioFileDuration = 0;     // seconds
-    uint32_t m_audioCurrentTime = 0;      // seconds
+    uint32_t m_audioFileDuration = 0;         // seconds
+    uint32_t m_audioCurrentTime = 0;          // seconds
     float    m_resampleError = 0.0f;
     float    m_resampleRatio = 1.0f;  // resample ratio for e.g. 44.1kHz to 48kHz
     float    m_resampleCursor = 0.0f; // next frac in resampleTo48kStereo
 
-    uint32_t m_audioDataStart = 0;     // in bytes
-    size_t   m_audioDataSize = 0;      //
-    size_t   m_ibuffSize = 0;          // log buffer size for audio_info()
-    float    m_corr = 1.0;             // correction factor for level adjustment
-    size_t   m_i2s_bytesWritten = 0;   // set in i2s_write() but not used
-    int8_t   m_tone[3] = {0};          // cut or boost filters (LS, EQ. HS)
+    uint32_t m_audioDataStart = 0;   // in bytes
+    size_t   m_audioDataSize = 0;    //
+    size_t   m_ibuffSize = 0;        // log buffer size for audio_info()
+    size_t   m_i2s_bytesWritten = 0; // set in i2s_write() but not used
 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
@@ -494,31 +490,31 @@ class Audio {
     int16_t   m_pesDataLength = 0;
 
     // audiolib structs
-    audiolib::ID3Hdr_t  m_ID3Hdr;
-    audiolib::pwsHLS_t  m_pwsHLS;
-    audiolib::pplM3u8_t m_pplM3U8;
-    audiolib::m4aHdr_t  m_m4aHdr;
-    audiolib::plCh_t    m_plCh;
-    audiolib::lVar_t    m_lVar;
-    audiolib::prlf_t    m_prlf;
-    audiolib::cat_t     m_cat;
-    audiolib::cVUl_t    m_cVUl;
-    audiolib::ifCh_t    m_ifCh;
-    audiolib::tspp_t    m_tspp;
-    audiolib::pwst_t    m_pwst;
-    audiolib::gchs_t    m_gchs;
-    audiolib::pwf_t     m_pwf;
-    audiolib::pad_t     m_pad;
-    audiolib::sbyt_t    m_sbyt;
-    audiolib::rmet_t    m_rmet;
-    audiolib::pwsts_t   m_pwsst;
-    audiolib::rwh_t     m_rwh;
-    audiolib::rflh_t    m_rflh;
-    audiolib::phreh_t   m_phreh;
-    audiolib::phrah_t   m_phrah;
-    audiolib::sdet_t    m_sdet;
-    audiolib::fnsy_t    m_fnsy;
-    audiolib::gain_t    m_gain;
+    audiolib::ID3Hdr_t      m_ID3Hdr;
+    audiolib::pwsHLS_t      m_pwsHLS;
+    audiolib::pplM3u8_t     m_pplM3U8;
+    audiolib::m4aHdr_t      m_m4aHdr;
+    audiolib::plCh_t        m_plCh;
+    audiolib::lVar_t        m_lVar;
+    audiolib::prlf_t        m_prlf;
+    audiolib::cat_t         m_cat;
+    audiolib::cVUl_t        m_cVUl;
+    audiolib::ifCh_t        m_ifCh;
+    audiolib::tspp_t        m_tspp;
+    audiolib::pwst_t        m_pwst;
+    audiolib::gchs_t        m_gchs;
+    audiolib::pwf_t         m_pwf;
+    audiolib::pad_t         m_pad;
+    audiolib::sbyt_t        m_sbyt;
+    audiolib::rmet_t        m_rmet;
+    audiolib::pwsts_t       m_pwsst;
+    audiolib::rwh_t         m_rwh;
+    audiolib::rflh_t        m_rflh;
+    audiolib::phreh_t       m_phreh;
+    audiolib::phrah_t       m_phrah;
+    audiolib::sdet_t        m_sdet;
+    audiolib::fnsy_t        m_fnsy;
+    audiolib::audio_items_t m_audio_items;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:

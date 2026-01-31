@@ -352,13 +352,16 @@ struct fnsy_t { // used in findNextSync
     uint32_t swnf = 0;
 };
 
-struct gain_t {
-    uint8_t volume = 0;
-    uint8_t volumeSteps = 0;
+struct audio_items_t {
+    uint8_t volume = 21;
+    uint8_t volume_steps = 21;
+    uint8_t volume_curve = 0;
+    uint8_t channels = 2;
+    int8_t  balance = 0;
     int8_t  lp = 0;
     int8_t  bp = 0;
     int8_t  hp = 0;
-    bool    forceMono = false;
+    bool    force_mono = false;
 };
 
 } // namespace audiolib
