@@ -105,8 +105,8 @@ class StereoAudioEqualizer {
     uint8_t                 m_VUl_cnt3 = 0;
     uint8_t                 m_VUl_cnt4 = 0;
     uint8_t                 m_sampleArray[2][4][8] = {0};
-    uint8_t                 m_vuLeft   = 0;
-    uint8_t                 m_vuRight  = 0;
+    uint8_t                 m_vuLeft = 0;
+    uint8_t                 m_vuRight = 0;
     bool                    m_f_vu = false;
     audiolib::audio_items_t m_items;
     float                   m_limiter[2] = {1};
@@ -121,11 +121,11 @@ class StereoAudioEqualizer {
   public:
     StereoAudioEqualizer();
     ~StereoAudioEqualizer() {}
-    void reset();
+    void     reset();
     uint16_t getVUlevel();
-    void computeVUlevel(int16_t* sample);
-    void update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
-    void process(int32_t* buff, uint16_t numSamples);
+    void     computeVUlevel(int16_t* sample);
+    void     update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
+    void     process(int32_t* buff, uint16_t numSamples);
 
   private:
     void calculateVolumeLimits(); // balance and gain
@@ -137,9 +137,9 @@ class StereoAudioEqualizer {
 
 class Audio {
   private:
-    AudioBuffer       InBuff; // instance of input buffer
+    AudioBuffer          InBuff; // instance of input buffer
     StereoAudioEqualizer equalizer;
-    uint8_t           m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
+    uint8_t              m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -396,99 +396,96 @@ class Audio {
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
-    ps_ptr<char>             m_lastM3U8host;
-    ps_ptr<char>             m_speechtxt;   // stores tts text
-    ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
+    ps_ptr<char>             m_lastM3U8host;   //
+    ps_ptr<char>             m_speechtxt;      // stores tts text
+    ps_ptr<char>             m_streamTitle;    // stores the last StreamTitle
     ps_ptr<char>             m_playlistBuff;
 
-    const uint16_t m_plsBuffEntryLen = 256; // length of each entry in playlistBuff
-    int            m_LFcount = 0;           // Detection of end of header
-    uint32_t       m_sampleRate = 48000;
-    uint32_t       m_avr_bitrate = 0;       // average bitrate, median calculated by VBR
-    uint32_t       m_nominal_bitrate = 0;   // given br from header
-    uint32_t       m_audioFilePosition = 0; // current position, counts every readed byte
-    uint32_t       m_audioDataReadPtr = 0;  // used in playAudioData
-    uint32_t       m_audioFileSize = 0;     // local and web files
-    int            m_readbytes = 0;         // bytes read
-    uint32_t       m_metacount = 0;         // counts down bytes between metadata
-    int            m_controlCounter = 0;    // Status within readID3data() and readWaveHeader()
-    int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
-    uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
-    float          m_limit_left = 0;        // limiter 0 ... 1, left channel
-    float          m_limit_right = 0;       // limiter 0 ... 1, right channel
-    uint8_t        m_timeoutCounter = 0;    // timeout counter
-    uint8_t        m_bitsPerSample = 16;    // bitsPerSample
-    uint8_t        m_channels = 2;
-
-    uint8_t  m_playlistFormat = 0;           // M3U, PLS, ASX
-    uint8_t  m_codec = CODEC_NONE;           //
-    uint8_t  m_m3u8Codec = CODEC_AAC;        // codec of m3u8 stream
-    uint8_t  m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
-    uint8_t  m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
-    uint8_t  m_streamType = ST_NONE;
-    uint8_t  m_ID3Size = 0; // lengt of ID3frame - ID3header
-    uint8_t  m_vuLeft = 0;  // average value of samples, left channel
-    uint8_t  m_vuRight = 0; // average value of samples, right channel
-    uint8_t  m_audioTaskCoreId = 0;
-    uint8_t  m_M4A_objectType = 0; // set in read_M4A_Header
-    uint8_t  m_M4A_chConfig = 0;   // set in read_M4A_Header
-    uint16_t m_M4A_sampleRate = 0; // set in read_M4A_Header
-    int16_t  m_validSamples = 0;
-    int16_t  m_curSample = 0;
-    uint16_t m_dataMode = 0;        // Statemaschine
-    uint16_t m_streamTitleHash = 0; // remember streamtitle, ignore multiple occurence in metadata
-    uint16_t m_timeout_ms = 250;
-    uint16_t m_timeout_ms_ssl = 2700;
-    uint32_t m_metaint = 0;              // Number of databytes between metadata
-    uint32_t m_chunkcount = 0;           // Counter for chunked transfer
-    uint32_t m_t0 = 0;                   // store millis(), is needed for a small delay
-    uint32_t m_bytesNotConsumed = 0;     // pictures or something else that comes with the stream
-    uint64_t m_lastGranulePosition = 0;  // necessary to calculate the duration in OPUS and VORBIS
-    int32_t  m_resumeFilePos = -1;       // the return value from stopSong(), (-1) is idle
-    int32_t  m_fileStartTime = -1;       // may be set in connecttoFS()
-    uint16_t m_m3u8_targetDuration = 10; //
-    uint32_t m_stsz_numEntries = 0;      // num of entries inside stsz atom (uint32_t)
-    uint32_t m_stsz_position = 0;        // pos of stsz atom within file
-    uint32_t m_haveNewFilePos = 0;       // user changed the file position
-    bool     m_f_metadata = false;       // assume stream without metadata
-    bool     m_f_unsync = false;         // set within ID3 tag but not used
-    bool     m_f_exthdr = false;         // ID3 extended header
-    bool     m_f_ssl = false;
-    bool     m_f_running = false;
-    bool     m_f_firstCall = false;         // InitSequence for processWebstream and processLokalFile
-    bool     m_f_firstLoop = false;         // InitSequence in loop()
-    bool     m_f_firstPlayCall = false;     // InitSequence for playAudioData
-    bool     m_f_ID3v1TagFound = false;     // ID3v1 tag found
-    bool     m_f_chunked = false;           // Station provides chunked transfer
-    bool     m_f_firstmetabyte = false;     // True if first metabyte (counter)
-    bool     m_f_playing = false;           // valid mp3 stream recognized
-    bool     m_f_tts = false;               // text to speech
-    bool     m_f_ogg = false;               // OGG stream
-    bool     m_f_forceMono = false;         // if true stereo -> mono
-    bool     m_f_rtsp = false;              // set if RTSP is used (m3u8 stream)
-    bool     m_f_m3u8data = false;          // used in processM3U8entries
-    bool     m_f_continue = false;          // next m3u8 chunk is available
-    bool     m_f_ts = true;                 // transport stream
-    bool     m_f_m4aID3dataAreRead = false; // has the m4a-ID3data already been read?
-    bool     m_f_psramFound = false;        // set in constructor, result of psramInit()
-    bool     m_f_timeout = false;           //
-    bool     m_f_commFMT = false;           // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
-    bool     m_f_audioTaskIsRunning = false;
-    bool     m_f_allDataReceived = false;
-    bool     m_f_stream = false;       // stream ready for output?
-    bool     m_f_decode_ready = false; // if true data for decode are ready
-    bool     m_f_eof = false;          // end of file
-    bool     m_f_lockInBuffer = false; // lock inBuffer for manipulation
-    bool     m_f_audioTaskIsDecoding = false;
-    bool     m_f_acceptRanges = false;
-    bool     m_f_reset_m3u8Codec = true;      // reset codec for m3u8 stream
-    bool     m_f_connectionClose = false;     // set in parseHttpResponseHeader
-    bool     m_f_i2s_channel_enabled = false; // true if enabled
-    uint32_t m_audioFileDuration = 0;         // seconds
-    uint32_t m_audioCurrentTime = 0;          // seconds
-    float    m_resampleError = 0.0f;
-    float    m_resampleRatio = 1.0f;  // resample ratio for e.g. 44.1kHz to 48kHz
-    float    m_resampleCursor = 0.0f; // next frac in resampleTo48kStereo
+    const uint16_t m_plsBuffEntryLen = 256;        // length of each entry in playlistBuff
+    int            m_LFcount = 0;                  // Detection of end of header
+    uint32_t       m_sampleRate = 48000;           //
+    uint32_t       m_avr_bitrate = 0;              // average bitrate, median calculated by VBR
+    uint32_t       m_nominal_bitrate = 0;          // given br from header
+    uint32_t       m_audioFilePosition = 0;        // current position, counts every readed byte
+    uint32_t       m_audioDataReadPtr = 0;         // used in playAudioData
+    uint32_t       m_audioFileSize = 0;            // local and web files
+    int            m_readbytes = 0;                // bytes read
+    uint32_t       m_metacount = 0;                // counts down bytes between metadata
+    int            m_controlCounter = 0;           // Status within readID3data() and readWaveHeader()
+    int16_t        m_inputHistory[6] = {0};        // used in resampleTo48kStereo()
+    uint16_t       m_opus_mode = 0;                // celt_only, silk_only or hybrid
+    uint8_t        m_timeoutCounter = 0;           // timeout counter
+    uint8_t        m_bitsPerSample = 16;           // bitsPerSample
+    uint8_t        m_channels = 2;                 // (1) mono, (2) stereo
+    uint8_t        m_playlistFormat = 0;           // M3U, PLS, ASX
+    uint8_t        m_codec = CODEC_NONE;           //
+    uint8_t        m_m3u8Codec = CODEC_AAC;        // codec of m3u8 stream
+    uint8_t        m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
+    uint8_t        m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
+    uint8_t        m_streamType = ST_NONE;
+    uint8_t        m_ID3Size = 0; // lengt of ID3frame - ID3header
+    uint8_t        m_vuLeft = 0;  // average value of samples, left channel
+    uint8_t        m_vuRight = 0; // average value of samples, right channel
+    uint8_t        m_audioTaskCoreId = 0;
+    uint8_t        m_M4A_objectType = 0; // set in read_M4A_Header
+    uint8_t        m_M4A_chConfig = 0;   // set in read_M4A_Header
+    uint16_t       m_M4A_sampleRate = 0; // set in read_M4A_Header
+    int16_t        m_validSamples = 0;
+    int16_t        m_curSample = 0;
+    uint16_t       m_dataMode = 0;        // Statemaschine
+    uint16_t       m_streamTitleHash = 0; // remember streamtitle, ignore multiple occurence in metadata
+    uint16_t       m_timeout_ms = 250;
+    uint16_t       m_timeout_ms_ssl = 2700;
+    uint32_t       m_metaint = 0;              // Number of databytes between metadata
+    uint32_t       m_chunkcount = 0;           // Counter for chunked transfer
+    uint32_t       m_t0 = 0;                   // store millis(), is needed for a small delay
+    uint32_t       m_bytesNotConsumed = 0;     // pictures or something else that comes with the stream
+    uint64_t       m_lastGranulePosition = 0;  // necessary to calculate the duration in OPUS and VORBIS
+    int32_t        m_resumeFilePos = -1;       // the return value from stopSong(), (-1) is idle
+    int32_t        m_fileStartTime = -1;       // may be set in connecttoFS()
+    uint16_t       m_m3u8_targetDuration = 10; //
+    uint32_t       m_stsz_numEntries = 0;      // num of entries inside stsz atom (uint32_t)
+    uint32_t       m_stsz_position = 0;        // pos of stsz atom within file
+    uint32_t       m_haveNewFilePos = 0;       // user changed the file position
+    bool           m_f_metadata = false;       // assume stream without metadata
+    bool           m_f_unsync = false;         // set within ID3 tag but not used
+    bool           m_f_exthdr = false;         // ID3 extended header
+    bool           m_f_ssl = false;
+    bool           m_f_running = false;
+    bool           m_f_firstCall = false;         // InitSequence for processWebstream and processLokalFile
+    bool           m_f_firstLoop = false;         // InitSequence in loop()
+    bool           m_f_firstPlayCall = false;     // InitSequence for playAudioData
+    bool           m_f_ID3v1TagFound = false;     // ID3v1 tag found
+    bool           m_f_chunked = false;           // Station provides chunked transfer
+    bool           m_f_firstmetabyte = false;     // True if first metabyte (counter)
+    bool           m_f_playing = false;           // valid mp3 stream recognized
+    bool           m_f_tts = false;               // text to speech
+    bool           m_f_ogg = false;               // OGG stream
+    bool           m_f_forceMono = false;         // if true stereo -> mono
+    bool           m_f_rtsp = false;              // set if RTSP is used (m3u8 stream)
+    bool           m_f_m3u8data = false;          // used in processM3U8entries
+    bool           m_f_continue = false;          // next m3u8 chunk is available
+    bool           m_f_ts = true;                 // transport stream
+    bool           m_f_m4aID3dataAreRead = false; // has the m4a-ID3data already been read?
+    bool           m_f_psramFound = false;        // set in constructor, result of psramInit()
+    bool           m_f_timeout = false;           //
+    bool           m_f_commFMT = false;           // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
+    bool           m_f_audioTaskIsRunning = false;
+    bool           m_f_allDataReceived = false;
+    bool           m_f_stream = false;       // stream ready for output?
+    bool           m_f_decode_ready = false; // if true data for decode are ready
+    bool           m_f_eof = false;          // end of file
+    bool           m_f_lockInBuffer = false; // lock inBuffer for manipulation
+    bool           m_f_audioTaskIsDecoding = false;
+    bool           m_f_acceptRanges = false;
+    bool           m_f_reset_m3u8Codec = true;      // reset codec for m3u8 stream
+    bool           m_f_connectionClose = false;     // set in parseHttpResponseHeader
+    bool           m_f_i2s_channel_enabled = false; // true if enabled
+    uint32_t       m_audioFileDuration = 0;         // seconds
+    uint32_t       m_audioCurrentTime = 0;          // seconds
+    float          m_resampleError = 0.0f;
+    float          m_resampleRatio = 1.0f;  // resample ratio for e.g. 44.1kHz to 48kHz
+    float          m_resampleCursor = 0.0f; // next frac in resampleTo48kStereo
 
     uint32_t m_audioDataStart = 0;   // in bytes
     size_t   m_audioDataSize = 0;    //
@@ -698,8 +695,8 @@ class Decoder {
     virtual uint32_t              getOutputSamples() = 0;
     virtual int32_t               decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf1) = 0;
     virtual void                  setRawBlockParams(uint8_t param1, uint32_t param2, uint8_t param3, uint32_t param4, uint32_t param5) = 0;
-    virtual const char*           getStreamTitle();
-    virtual const char*           whoIsIt();
+    virtual const char*           getStreamTitle() = 0;
+    virtual const char*           whoIsIt() = 0; // returns "AAC", "OPUS", ...
     virtual std::vector<uint32_t> getMetadataBlockPicture() = 0;
     virtual const char*           arg1() = 0; // decoder specific
     virtual const char*           arg2() = 0; // decoder specific

@@ -426,13 +426,13 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
             }
             break;
     }
-    log_w("l %f, r %f, v %f", l, r, v);
+    // log_w("l %f, r %f, v %f", l, r, v);
 
     m_limiter[LEFTCHANNEL] = l * v;
     m_limiter[RIGHTCHANNEL] = r * v;
 
-    log_w("m_limit_left %f,  m_limit_right %f, volume %i, steps %i, m_bps %i, curve %i, corr %f", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps,
-          m_items.volume_curve, m_corr);
+    // log_w("m_limit_left %f,  m_limit_right %f, volume %i, steps %i, m_bps %i, curve %i, corr %f", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps,
+    //       m_items.volume_curve, m_corr);
 }
 
 void StereoAudioEqualizer::Gain16(int16_t* sample) {
@@ -3680,6 +3680,7 @@ void IRAM_ATTR Audio::playChunk() {
                 m_outBuff[2 * i] = sample;
                 m_outBuff[2 * i + 1] = sample;
             }
+            m_validSamples *= 2;
         }
     }
     //--------------------------------------------------------------------------------------------------------------------
