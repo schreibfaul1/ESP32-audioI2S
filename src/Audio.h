@@ -99,6 +99,15 @@ class StereoAudioEqualizer {
     } coeffs[3];
 
     uint8_t                 m_bps = 0;
+    uint8_t                 m_VUl_cnt0 = 0;
+    uint8_t                 m_VUl_cnt1 = 0;
+    uint8_t                 m_VUl_cnt2 = 0;
+    uint8_t                 m_VUl_cnt3 = 0;
+    uint8_t                 m_VUl_cnt4 = 0;
+    uint8_t                 m_sampleArray[2][4][8] = {0};
+    uint8_t                 m_vuLeft   = 0;
+    uint8_t                 m_vuRight  = 0;
+    bool                    m_f_vu = false;
     audiolib::audio_items_t m_items;
     float                   m_limiter[2] = {1};
     float                   m_corr = 1.0; // correction factor for level adjustment
@@ -113,6 +122,8 @@ class StereoAudioEqualizer {
     StereoAudioEqualizer();
     ~StereoAudioEqualizer() {}
     void reset();
+    uint16_t getVUlevel();
+    void computeVUlevel(int16_t* sample);
     void update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
     void process(int32_t* buff, uint16_t numSamples);
 

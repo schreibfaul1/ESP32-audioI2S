@@ -333,6 +333,73 @@ void StereoAudioEqualizer::reset() {
         coeffs[i] = {};
         for (int ch = 0; ch < 2; ch++) { state[i][ch] = {}; }
     }
+    m_vuLeft = 0;
+    m_vuRight = 0;
+}
+
+void StereoAudioEqualizer::computeVUlevel(int16_t* sample) {
+    int16_t* s16 = sample;
+
+    auto avg = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the average of 8 samples
+        uint16_t av = 0;
+        for (int i = 0; i < 8; i++) { av += sampArr[i]; }
+        return (uint8_t)(av >> 3);
+    };
+
+    auto largest = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the largest of 8 samples
+        uint8_t maxValue = 0;
+        for (int i = 0; i < 8; i++) {
+            if (maxValue < sampArr[i]) maxValue = sampArr[i];
+        }
+        return maxValue;
+    };
+
+    if (m_VUl_cnt0 == 64) {
+        m_VUl_cnt0 = 0;
+        m_VUl_cnt1++;
+    }
+    if (m_VUl_cnt1 == 8) {
+        m_VUl_cnt1 = 0;
+        m_VUl_cnt2++;
+    }
+    if (m_VUl_cnt2 == 8) {
+        m_VUl_cnt2 = 0;
+        m_VUl_cnt3++;
+    }
+    if (m_VUl_cnt3 == 8) {
+        m_VUl_cnt3 = 0;
+        m_VUl_cnt4++;
+        m_f_vu = true;
+    }
+    if (m_VUl_cnt4 == 8) { m_VUl_cnt4 = 0; }
+
+    if (!m_VUl_cnt0) { // store every 64th sample in the array[0]
+            m_sampleArray[LEFTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
+            m_sampleArray[RIGHTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
+    }
+    if (!m_VUl_cnt1) { // store argest from 64 * 8 samples in the array[1]
+        m_sampleArray[LEFTCHANNEL][1][m_VUl_cnt2] = largest(m_sampleArray[LEFTCHANNEL][0]);
+        m_sampleArray[RIGHTCHANNEL][1][m_VUl_cnt2] = largest(m_sampleArray[RIGHTCHANNEL][0]);
+    }
+    if (!m_VUl_cnt2) { // store avg from 64 * 8 * 8 samples in the array[2]
+        m_sampleArray[LEFTCHANNEL][2][m_VUl_cnt3] = largest(m_sampleArray[LEFTCHANNEL][1]);
+        m_sampleArray[RIGHTCHANNEL][2][m_VUl_cnt3] = largest(m_sampleArray[RIGHTCHANNEL][1]);
+    }
+    if (!m_VUl_cnt3) { // store avg from 64 * 8 * 8 * 8 samples in the array[3]
+        m_sampleArray[LEFTCHANNEL][3][m_VUl_cnt4] = avg(m_sampleArray[LEFTCHANNEL][2]);
+        m_sampleArray[RIGHTCHANNEL][3][m_VUl_cnt4] = avg(m_sampleArray[RIGHTCHANNEL][2]);
+    }
+    if (m_f_vu) {
+        m_f_vu = false;
+        m_vuLeft = avg(m_sampleArray[LEFTCHANNEL][3]);
+        m_vuRight = avg(m_sampleArray[RIGHTCHANNEL][3]);
+    }
+    m_VUl_cnt1++;
+}
+
+uint16_t StereoAudioEqualizer::getVUlevel() {
+    // avg 0 ... 255
+    return (m_vuLeft << 8) + m_vuRight;
 }
 
 void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the volume or balance changes
@@ -482,9 +549,10 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         for (int i = 0; i < numSamples; i++) {
             s_float[0] = (float)buff16[2 * i + 0]; // left  - now correctly reads int16_t stereo interleaved
             s_float[1] = (float)buff16[2 * i + 1]; // right
-            filter_sample(s_float);
             s_16[0] = (int16_t)lrintf(s_float[0]);
             s_16[1] = (int16_t)lrintf(s_float[1]);
+            computeVUlevel(s_16);
+            filter_sample(s_float);
             Gain16(s_16);
             if (m_items.force_mono) {
                 int16_t xy = ((int64_t)s_16[0] + (int64_t)s_16[1]) / 2;
@@ -499,9 +567,12 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         for (int i = 0; i < numSamples; i++) {
             s_float[0] = (float)buff32[2 * i + 0]; // left  - now correctly reads int16_t stereo interleaved
             s_float[1] = (float)buff32[2 * i + 1]; // right
+            s_32[0] = (int32_t)lrintf(s_float[0]);
+            s_32[1] = (int32_t)lrintf(s_float[1]);
+            s_16[0] = s_32[0] >> 16;
+            s_16[1] = s_32[1] >> 16;
+            computeVUlevel(s_16);
             filter_sample(s_float);
-            s_32[0] = (int16_t)lrintf(s_float[0]);
-            s_32[1] = (int16_t)lrintf(s_float[1]);
             Gain32(s_32);
             if (m_items.force_mono) {
                 int32_t xy = ((int64_t)s_32[0] + (int64_t)s_32[1]) / 2;
@@ -510,6 +581,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             }
             buff32[2 * i + 0] = s_32[0];
             buff32[2 * i + 1] = s_32[1];
+
         }
     }
 }
@@ -3478,6 +3550,7 @@ uint32_t Audio::stopSong() {
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         m_f_lockInBuffer = false;
+        equalizer.reset();
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     return currTime;
@@ -3614,42 +3687,6 @@ void IRAM_ATTR Audio::playChunk() {
             }
         }
     } //--------------------------------------------------------------------------------
-
-    m_plCh.samples = m_validSamples;
-    if (getBitsPerSample() == 24 || getBitsPerSample() == 32) m_plCh.samples *= 2;
-
-    m_plCh.i = 0;
-    while (m_plCh.samples > m_plCh.i) {
-        m_plCh.sample1 = &m_outBuff[m_plCh.i];
-        computeVUlevel(m_plCh.sample1);
-
-        //---------- Filterchain, can commented out if not used-------------
-        if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
-            m_plCh.s16 = (int16_t*)m_plCh.sample1;
-
-            // if (m_f_forceMono && m_channels == 2) {
-            //     int32_t xy = (m_plCh.s16[RIGHTCHANNEL] + m_plCh.s16[LEFTCHANNEL]) / 2;
-            //     m_plCh.s16[RIGHTCHANNEL] = (int16_t)xy;
-            //     m_plCh.s16[LEFTCHANNEL] = (int16_t)xy;
-            // }
-        }
-        if (getBitsPerSample() == 24 || getBitsPerSample() == 32) {
-            m_plCh.s32 = (int32_t*)m_plCh.sample1;
-
-            // if (m_f_forceMono && m_channels == 2) {
-            //     int32_t xy = (int32_t)((int64_t)m_plCh.s32[RIGHTCHANNEL] + (int64_t)m_plCh.s32[LEFTCHANNEL]) / 2;
-            //     m_plCh.s32[RIGHTCHANNEL] = (int32_t)xy;
-            //     m_plCh.s32[LEFTCHANNEL] = (int32_t)xy;
-            // }
-        }
-        //------------------------------------------------------------------
-
-        // Gain1(m_plCh.sample1);
-        if (m_bitsPerSample == 8) m_plCh.i++;
-        if (m_bitsPerSample == 16) m_plCh.i++;
-        if (m_bitsPerSample == 24) m_plCh.i += 2;
-        if (m_bitsPerSample == 32) m_plCh.i += 2;
-    }
     equalizer.process(m_outBuff.get(), m_validSamples); // gain, balance, lowshelf, peakEQ, highshelf, VUlevel, forceMono
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
@@ -3668,7 +3705,6 @@ void IRAM_ATTR Audio::playChunk() {
         }
     }
 #endif
-
     //------------------------------------------------------------------------------------------------------
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
         if (audio_process_i2s) {
@@ -6476,7 +6512,7 @@ void Audio::computeVUlevel(int32_t* sample) {
 uint16_t Audio::getVUlevel() {
     // avg 0 ... 127
     if (!m_f_running) return 0;
-    return (m_vuLeft << 8) + m_vuRight;
+    return equalizer.getVUlevel();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass) {
