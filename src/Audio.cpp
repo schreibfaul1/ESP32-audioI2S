@@ -322,7 +322,7 @@ void AudioBuffer::showStatus() {
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-// 📌📌📌  B I Q U A D   📌📌📌 biquadratic filter, lowpass, bandpass, highpass
+// 📌📌📌  A U D I O E Q U A L I Z E R   📌📌📌 mono/stereo, balance, gain,  biquadratic filter [lowpass, bandpass, highpass]
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 StereoAudioEqualizer::StereoAudioEqualizer() {
@@ -373,9 +373,9 @@ void StereoAudioEqualizer::computeVUlevel(int16_t* sample) {
     }
     if (m_VUl_cnt4 == 8) { m_VUl_cnt4 = 0; }
 
-    if (!m_VUl_cnt0) { // store every 64th sample in the array[0]
-            m_sampleArray[LEFTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
-            m_sampleArray[RIGHTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
+    if (!m_VUl_cnt0) {                                                                   // store every 64th sample in the array[0]
+        m_sampleArray[LEFTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
+        m_sampleArray[RIGHTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
     }
     if (!m_VUl_cnt1) { // store argest from 64 * 8 samples in the array[1]
         m_sampleArray[LEFTCHANNEL][1][m_VUl_cnt2] = largest(m_sampleArray[LEFTCHANNEL][0]);
@@ -533,9 +533,9 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uin
         coeffs[HIFGSHELF].b1 = 2 * (K * K - V) * norm;
         coeffs[HIFGSHELF].b2 = (V - sqrtf(2 * V) * K + K * K) * norm;
     }
-    log_w("LS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[0].a0, coeffs[0].a1, coeffs[0].a2, coeffs[0].b1, coeffs[0].b2);
-    log_w("EQ a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[1].a0, coeffs[1].a1, coeffs[1].a2, coeffs[1].b1, coeffs[1].b2);
-    log_w("HS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[2].a0, coeffs[2].a1, coeffs[2].a2, coeffs[2].b1, coeffs[2].b2);
+    // log_w("LS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[0].a0, coeffs[0].a1, coeffs[0].a2, coeffs[0].b1, coeffs[0].b2);
+    // log_w("EQ a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[1].a0, coeffs[1].a1, coeffs[1].a2, coeffs[1].b1, coeffs[1].b2);
+    // log_w("HS a0=%f, a1=%f, a2=%f, b1=%f, b2=%f", coeffs[2].a0, coeffs[2].a1, coeffs[2].a2, coeffs[2].b1, coeffs[2].b2);
 
     calculateVolumeLimits();
 }
@@ -581,7 +581,6 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             }
             buff32[2 * i + 0] = s_32[0];
             buff32[2 * i + 1] = s_32[1];
-
         }
     }
 }
@@ -3648,22 +3647,18 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
-
-    m_plCh.validSamples = 0;
+    if (m_plCh.count > 0) goto i2swrite; // next round (I2S dma was full)
+    m_plCh.validSamples = m_validSamples;
     m_plCh.i2s_bytesConsumed = 0;
-    m_plCh.s16 = 0;
+
     if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // 1 byte upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels(); // 2 bytes per sample (int16_t) * channels
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
     if (m_bitsPerSample == 32) m_plCh.sampleSize = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
     m_plCh.err = ESP_OK;
-    m_plCh.i = 0;
 
-    if (m_plCh.count > 0) goto i2swrite;
-
-    m_plCh.validSamples = m_validSamples;
-
-    if (getChannels() == 1) {                                //------------- mono to stereo ----------------------------
+    //------------- mono to stereo ---------------------------------------------------------------------------------------
+    if (getChannels() == 1) {
         if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
             int16_t* in = (int16_t*)m_outBuff.get();
             int32_t* out = (int32_t*)m_outBuff.get();
@@ -3686,9 +3681,10 @@ void IRAM_ATTR Audio::playChunk() {
                 m_outBuff[2 * i + 1] = sample;
             }
         }
-    } //--------------------------------------------------------------------------------
+    }
+    //--------------------------------------------------------------------------------------------------------------------
     equalizer.process(m_outBuff.get(), m_validSamples); // gain, balance, lowshelf, peakEQ, highshelf, VUlevel, forceMono
-    //------------------------------------------------------------------------------------------
+    //--------------------------------------------------------------------------------------------------------------------
 #ifdef SR_48K
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
         if (m_plCh.count == 0) {
@@ -3705,10 +3701,9 @@ void IRAM_ATTR Audio::playChunk() {
         }
     }
 #endif
-    //------------------------------------------------------------------------------------------------------
+    //--------------------------------------------------------------------------------------------------------------------
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
-        if (audio_process_i2s) {
-            // processing the audio samples from external before forwarding them to i2s
+        if (audio_process_i2s) { // processing the audio samples from external before forwarding them to i2s
             bool continueI2S = false;
 #ifdef SR_48K
             audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
@@ -3722,7 +3717,7 @@ void IRAM_ATTR Audio::playChunk() {
             }
         }
     }
-    //------------------------------------------------------------------------------------------------------
+    //--------------------------------------------------------------------------------------------------------------------
 
 i2swrite:
 #ifdef SR_48K
