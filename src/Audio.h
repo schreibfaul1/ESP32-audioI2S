@@ -3,7 +3,7 @@
  *
  */
 
-// #define SR_48K
+// #define SR_48K // I2S output always 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -30,6 +30,9 @@
 #include <memory>
 #include <span>
 #include <vector>
+#if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
+    #include "dsps_biquad.h" // DSP libs
+#endif
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5

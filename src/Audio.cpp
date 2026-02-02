@@ -441,8 +441,8 @@ void StereoAudioEqualizer::Gain16(int16_t* sample) {
 }
 
 void StereoAudioEqualizer::Gain32(int32_t* sample) {
-    sample[LEFTCHANNEL] *= m_limiter[LEFTCHANNEL];
-    sample[RIGHTCHANNEL] *= m_limiter[RIGHTCHANNEL];
+    sample[LEFTCHANNEL] *= (m_limiter[LEFTCHANNEL] / m_corr);
+    sample[RIGHTCHANNEL] *= (m_limiter[RIGHTCHANNEL] / m_corr);
 }
 
 void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uint32_t sampleRate, uint8_t bps) {
