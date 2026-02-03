@@ -99,7 +99,6 @@ class StereoAudioEqualizer {
     alignas(16) float m_block[BLOCK_SAMPLES * 2]; // interleaved L/R
 
     float                   m_coeffs[3][5] = {0};
-    uint8_t                 m_bps = 0;
     uint8_t                 m_vuLeft = 0;
     uint8_t                 m_vuRight = 0;
     bool                    m_f_vu = false;
@@ -113,7 +112,7 @@ class StereoAudioEqualizer {
     StereoAudioEqualizer();
     ~StereoAudioEqualizer() {}
     uint16_t getVUlevel();
-    void     update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
+    void     update_audio_items(audiolib::audio_items_t items);
     void     reset_all();
     void process(int32_t* buff, uint16_t numSamples);
 

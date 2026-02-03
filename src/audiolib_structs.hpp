@@ -50,9 +50,7 @@ struct ID3Hdr_t { // used only in readID3header()
     bool                  byteOrderMark = {};
     ps_ptr<char>          iBuff;
 
-    void reset() {
-        *this = ID3Hdr_t{};
-    }
+    void reset() { *this = ID3Hdr_t{}; }
 };
 
 struct pwsHLS_t { // used in processWebStreamHLS()
@@ -172,15 +170,13 @@ typedef struct _cat { // used in calculateAudioTime
     uint32_t brCounter{};
     bool     firstCall{};
 
-    void reset() {
-        *this = _cat{};
-    }
+    void reset() { *this = _cat{}; }
 } cat_t;
 
 struct cVUl_t { // used in computeVUlevel
     uint8_t sampleArray[2][4][8] = {0};
-    uint8_t  cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
-    bool     f_vu = false;
+    uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+    bool    f_vu = false;
 };
 
 struct ifCh_t { // used in IIR_filterChain0, 1, 2
@@ -350,14 +346,16 @@ struct fnsy_t { // used in findNextSync
 };
 
 struct audio_items_t {
-    uint8_t volume = 21;
-    uint8_t volume_steps = 21;
-    uint8_t channels = 2;
-    int8_t  balance = 0;
-    float   gain_ls = 0;   // gain -12dB ... +9dB
-    float   gain_peq = 0;  // gain -12dB ... +12dB
-    float   gain_hs = 0;   // gain -12dB ... +9dB
-    bool    force_mono = false;
+    uint32_t sampleRate = 44100;
+    uint8_t  volume = 21;
+    uint8_t  volume_steps = 21;
+    uint8_t  channels = 2;
+    uint8_t  bitsPerSample = 16;
+    int8_t   balance = 0;
+    float    gain_ls = 0;  // gain -12dB ... +9dB
+    float    gain_peq = 0; // gain -12dB ... +12dB
+    float    gain_hs = 0;  // gain -12dB ... +9dB
+    bool     force_mono = false;
 };
 
 } // namespace audiolib

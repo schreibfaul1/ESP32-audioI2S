@@ -338,7 +338,7 @@ void StereoAudioEqualizer::reset_filters() {
 }
 
 void StereoAudioEqualizer::reset_vu() {
-    m_vuLeft  = 0;
+    m_vuLeft = 0;
     m_vuRight = 0;
 }
 
@@ -352,8 +352,8 @@ void StereoAudioEqualizer::computeVUlevel(int32_t* sample) { // Envelope-Followe
 
     constexpr uint8_t RELEASE = 2; // the bigger, the more sluggish
 
-    uint8_t l = vu_from_sample(sample[LEFTCHANNEL], m_bps);
-    uint8_t r = vu_from_sample(sample[RIGHTCHANNEL], m_bps);
+    uint8_t l = vu_from_sample(sample[LEFTCHANNEL], m_items.bitsPerSample);
+    uint8_t r = vu_from_sample(sample[RIGHTCHANNEL], m_items.bitsPerSample);
 
     // Attack immediately
     if (l > m_vuLeft)
@@ -406,7 +406,7 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
     // log_w("m_limit_left: %f,  m_limit_right: %f, volume: %i, steps: %i, m_bps: %i", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps);
 }
 
-void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uint32_t sampleRate, uint8_t bps) {
+void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
 
     auto loudnessFactor = [&](float vol) -> float {
         constexpr float LOUDNESS_START = 0.4f; // from here
@@ -415,8 +415,7 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uin
         return t; // 0…1
     };
 
-    reset_all();
-    m_bps = bps;
+    if(m_items.sampleRate != items.sampleRate) reset_all();
     m_items = items;
 
     constexpr float LOUD_BASS_DB = +8.0f;
@@ -425,14 +424,14 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uin
     float           ls_gain = m_items.gain_ls + loud * LOUD_BASS_DB;
     float           hs_gain = m_items.gain_hs + loud * LOUD_TREBLE_DB;
 
-    const float FcLS = 80;                         // Frequency LowShelf(Hz)
-    const float FcPKEQ = 1000;                     // Frequency PeakEQ(Hz)
-    const float FcHS = 8000;                       // Frequency HighShelf(Hz)
-    const float QP = 0.707;                        // Quality (Peak)
-    const float QS = 0.0;                          // Quality Slope (Shelf)
-    float       normFreqLS = FcLS / sampleRate;    // filter cut off frequency
-    float       normFreqPEQ = FcPKEQ / sampleRate; // filter center frequency
-    float       normFreqHS = FcHS / sampleRate;    // filter cut off frequency
+    const float FcLS = 80;                                 // Frequency LowShelf(Hz)
+    const float FcPKEQ = 1000;                             // Frequency PeakEQ(Hz)
+    const float FcHS = 8000;                               // Frequency HighShelf(Hz)
+    const float QP = 0.707;                                // Quality (Peak)
+    const float QS = 0.0;                                  // Quality Slope (Shelf)
+    float       normFreqLS = FcLS / m_items.sampleRate;    // filter cut off frequency
+    float       normFreqPEQ = FcPKEQ / m_items.sampleRate; // filter center frequency
+    float       normFreqHS = FcHS / m_items.sampleRate;    // filter cut off frequency
     float       c[5];
 
     dsps_biquad_gen_lowShelf_f32(m_coeffs[LOWSHELF], normFreqLS, ls_gain, QS);
@@ -468,7 +467,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         // 🔁 INT → FLOAT + VU
         float* p = m_block;
         for (uint16_t j = 0; j < n; j++) {
-            if (m_bps == 8 || m_bps == 16) {
+            if (m_items.bitsPerSample == 8 || m_items.bitsPerSample == 16) {
                 int16_t l = buff16[2 * (i + j) + 0];
                 int16_t r = buff16[2 * (i + j) + 1];
                 p[0] = (float)l;
@@ -505,7 +504,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             }
 
             // Clip
-            if (m_bps == 8 || m_bps == 16) {
+            if (m_items.bitsPerSample == 8 || m_items.bitsPerSample == 16) {
                 p[0] = fminf(fmaxf(p[0], -32768.0f), 32767.0f);
                 p[1] = fminf(fmaxf(p[1], -32768.0f), 32767.0f);
             } else { // bps is 24 or 32
@@ -514,7 +513,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             }
 
             // FLOAT → INT
-            if (m_bps == 8 || m_bps == 16) {
+            if (m_items.bitsPerSample == 8 || m_items.bitsPerSample == 16) {
                 buff16[2 * (i + j) + 0] = (int16_t)lrintf(p[0]);
                 buff16[2 * (i + j) + 1] = (int16_t)lrintf(p[1]);
             } else {
@@ -578,9 +577,9 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
+    m_audio_items.sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
-    equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample); // first init, vol = 21, vol_steps = 21
+    equalizer.update_audio_items(m_audio_items); // first init, vol = 21, vol_steps = 21
     startAudioTask();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3509,7 +3508,7 @@ bool Audio::pauseResume() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 
-    float ratio = static_cast<float>(m_sampleRate) / 48000.0f;
+    float ratio = static_cast<float>(m_audio_items.sampleRate) / 48000.0f;
     float cursor = m_resampleCursor;
 
     // Anzahl Input-Samples + 3 History-Samples (vorherige 3 Stereo-Frames)
@@ -3587,15 +3586,15 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.validSamples = m_validSamples;
     m_plCh.i2s_bytesConsumed = 0;
 
-    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // 1 byte upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
-    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels(); // 2 bytes per sample (int16_t) * channels
-    if (m_bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
-    if (m_bitsPerSample == 32) m_plCh.sampleSize = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
+    if (m_audio_items.bitsPerSample == 8) m_plCh.sampleSize = 2 * getChannels();  // 1 byte upsampled (8 -> 16 bit) 2 bytes per sample (int16_t) * channels
+    if (m_audio_items.bitsPerSample == 16) m_plCh.sampleSize = 2 * getChannels(); // 2 bytes per sample (int16_t) * channels
+    if (m_audio_items.bitsPerSample == 24) m_plCh.sampleSize = 4 * getChannels(); // 3 bytes + padding per sample (int32_t) * channels
+    if (m_audio_items.bitsPerSample == 32) m_plCh.sampleSize = 4 * getChannels(); // 4 bytes per sample (int32_t) * channels
     m_plCh.err = ESP_OK;
 
     //------------- mono to stereo ---------------------------------------------------------------------------------------
     if (getChannels() == 1) {
-        if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
+        if (m_audio_items.bitsPerSample == 8 || m_audio_items.bitsPerSample == 16) { // 16bit
             int16_t* in = (int16_t*)m_outBuff.get();
             int32_t* out = (int32_t*)m_outBuff.get();
             int16_t  s;
@@ -3610,7 +3609,7 @@ void IRAM_ATTR Audio::playChunk() {
             }
             m_validSamples *= 2;
         }
-        if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
+        if (m_audio_items.bitsPerSample == 24 || m_audio_items.bitsPerSample == 32) { // 32bit
             for (int i = m_validSamples - 1; i >= 0; --i) {
                 int32_t sample = m_outBuff[i];
                 m_outBuff[2 * i] = sample;
@@ -5708,8 +5707,8 @@ void Audio::setDecoderItems() {
         info(*this, evt_info, "AudioDataStart: %i", m_audioDataStart);
         if (m_audioFileSize && !m_audioDataSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
     }
-    if (m_lastGranulePosition && m_audioFileSize && m_sampleRate) {
-        m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
+    if (m_lastGranulePosition && m_audioFileSize && m_audio_items.sampleRate) {
+        m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_audio_items.sampleRate);
         m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
         AUDIO_LOG_DEBUG("m_nominal_bitrate %i, m_lastGranulePosition %i", m_nominal_bitrate, m_lastGranulePosition);
         info(*this, evt_bitrate, "%i", m_nominal_bitrate);
@@ -5727,7 +5726,7 @@ void Audio::setDecoderItems() {
         stopSong();
     }
     showCodecParams();
-    equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample); // must be recalculated after each samplerate change
+    equalizer.update_audio_items(m_audio_items); // must be recalculated after each samplerate change
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::decodeError(int8_t res, uint8_t* data, int32_t bytesDecoded) {
@@ -5911,7 +5910,7 @@ int Audio::sendBytes(uint8_t* data, size_t len) {
     }
     samples_out = m_validSamples;
     if (m_channels == 2) samples_out /= 2;
-    if (m_bitsPerSample != 8) samples_out *= 2;
+    if (m_audio_items.bitsPerSample != 8) samples_out *= 2;
 exit:
     m_curSample = 0;
     if (m_validSamples) {
@@ -5942,7 +5941,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
             if (m_lastGranulePosition)
                 m_cat.tota_samples = m_lastGranulePosition;
             else
-                m_cat.tota_samples = m_audioFileDuration * m_sampleRate;
+                m_cat.tota_samples = m_audioFileDuration * m_audio_items.sampleRate;
         }
     }
 
@@ -5955,8 +5954,8 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         uint32_t delta_t = t - m_cat.timeStamp; //    ---"---
         m_cat.timeStamp = t;                    //    ---"---
 
-        if (m_cat.nominalBitRate) {
-            audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_sampleRate);
+        if (m_cat.nominalBitRate && m_audio_items.sampleRate) {
+            audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_audio_items.sampleRate);
         } else {
             double instBitRate = (m_cat.deltaBytesIn * 8000.0) / delta_t;
             m_cat.counter++;
@@ -6258,23 +6257,23 @@ bool Audio::setSampleRate(uint32_t sampRate) {
         AUDIO_LOG_WARN("Sample rate must not be smaller than 8kHz, found: %lu", sampRate);
         return false;
     }
-    m_sampleRate = sampRate;
+    m_audio_items.sampleRate = sampRate;
     reconfigI2S();
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getSampleRate() {
-    return m_sampleRate;
+    return m_audio_items.sampleRate;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setBitsPerSample(int bits) {
     if ((bits != 32) && (bits != 24) && (bits != 16) && (bits != 8)) return false;
-    m_bitsPerSample = bits;
+    m_audio_items.bitsPerSample = bits;
     reconfigI2S();
     return true;
 }
 uint8_t Audio::getBitsPerSample() {
-    return m_bitsPerSample;
+    return m_audio_items.bitsPerSample;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setChannels(int ch) {
@@ -6339,7 +6338,7 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
 void Audio::reconfigI2S() {
 
     i2s_channel_disable(m_i2s_tx_handle);
-    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) {
+    if (m_audio_items.bitsPerSample == 8 || m_audio_items.bitsPerSample == 16) {
         if (m_f_commFMT) {
             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
         } else {
@@ -6348,7 +6347,7 @@ void Audio::reconfigI2S() {
         i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     }
 
-    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
+    if (m_audio_items.bitsPerSample == 24 || m_audio_items.bitsPerSample == 32) {
         if (m_f_commFMT) {
             m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
         } else {
@@ -6357,8 +6356,8 @@ void Audio::reconfigI2S() {
         i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
     }
 
-    m_resampleRatio = (float)m_sampleRate / 48000.0f;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    m_resampleRatio = (float)m_audio_items.sampleRate / 48000.0f;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_audio_items.sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
 }
@@ -6375,7 +6374,7 @@ void Audio::setTone(float gainLowShelf, float gainPeakingEQ, float gainHighShelf
     m_audio_items.gain_peq = min(max(gainPeakingEQ, (float)-12.0), (float)+12.0); // gain peakingEQ   set between -12 ... +12 dB
     m_audio_items.gain_hs = min(max(gainHighShelf, (float)-12.0), (float)+9.0);   // gain high shelf  set between -12 ...  +9 dB
 
-    equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample);
+    equalizer.update_audio_items(m_audio_items);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::forceMono(bool m) {   // mono option
@@ -6384,13 +6383,13 @@ void Audio::forceMono(bool m) {   // mono option
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setBalance(int8_t bal) { // bal -16...16
     m_audio_items.balance = min(max(bal, (int8_t)-16), (int8_t)16);
-    equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample);
+    equalizer.update_audio_items(m_audio_items);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setVolume(uint8_t vol, uint8_t curve) { // curve 0: default, curve 1: flat at the beginning
     if (curve) { log_w("Setting the curve is obsolete"); }
     m_audio_items.volume = min(vol, m_audio_items.volume_steps); // curve + loudness described in ISO226
-    equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample);
+    equalizer.update_audio_items(m_audio_items);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t Audio::getVolume() {
