@@ -416,9 +416,9 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
         return t; // 0…1
     };
 
-    if(m_items.sampleRate != items.sampleRate) reset_all();
-    if(m_items.balance != items.balance) start_gain_ramp();
-    if((m_items.gain_hs != items.gain_hs) || (m_items.gain_peq != items.gain_peq) || (m_items.gain_ls != items.gain_ls)) start_gain_ramp();
+    if (m_items.sampleRate != items.sampleRate) reset_all();
+    if (m_items.balance != items.balance) start_gain_ramp();
+    if ((m_items.gain_hs != items.gain_hs) || (m_items.gain_peq != items.gain_peq) || (m_items.gain_ls != items.gain_ls)) start_gain_ramp();
     m_items = items;
 
     constexpr float LOUD_BASS_DB = +8.0f;
@@ -464,10 +464,7 @@ void StereoAudioEqualizer::start_gain_ramp() {
 
     m_gain_ramp_samples = samples;
 
-    for (int ch = 0; ch < 2; ch++) {
-        m_gain_step[ch] =
-            (m_limiter[ch] - m_gain_cur[ch]) / (float)samples;
-    }
+    for (int ch = 0; ch < 2; ch++) { m_gain_step[ch] = (m_limiter[ch] - m_gain_cur[ch]) / (float)samples; }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
@@ -489,14 +486,14 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
                 int16_t r = buff16[2 * (i + j) + 1];
                 p[0] = (float)l;
                 p[1] = (float)r;
-                int32_t vu[2] = { l, r };
+                int32_t vu[2] = {l, r};
                 computeVUlevel(vu);
             } else {
                 int32_t l = buff32[2 * (i + j) + 0];
                 int32_t r = buff32[2 * (i + j) + 1];
                 p[0] = (float)l;
                 p[1] = (float)r;
-                int32_t vu[2] = { l, r };
+                int32_t vu[2] = {l, r};
                 computeVUlevel(vu);
             }
             p += 2;
@@ -553,7 +550,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         }
 
         // Save gain state
-        m_gain_cur[LEFTCHANNEL]  = gl;
+        m_gain_cur[LEFTCHANNEL] = gl;
         m_gain_cur[RIGHTCHANNEL] = gr;
     }
 }
@@ -563,9 +560,17 @@ void StereoAudioEqualizer::filter_block(float* block, int frames) {
 #if CONFIG_IDF_TARGET_ESP32
         dsps_biquad_sf32_ae32(block, block, frames, m_coeffs[f], m_state_biquad[f]);
 #elif CONFIG_IDF_TARGET_ESP32S3
-        dsps_biquad_sf32_aes3(block, block, frames, m_coeffs[f], m_state_biquad[f]);
+    #ifdef CONFIG_DSP_OPTIMIZED
+        dsps_biquad_sf32_aes3(block, block, frames, m_coeffs[f], m_state_biquad[f]); // much faster
+    #else
+        dsps_biquad_sf32_ansi(block, block, frames, m_coeffs[f], m_state_biquad[f]);
+    #endif
 #elif CONFIG_IDF_TARGET_ESP32P4
-        dsps_biquad_sf32_arp4(block, block, frames, m_coeffs[f], m_state_biquad[f]);
+    #ifdef CONFIG_DSP_OPTIMIZED
+        dsps_biquad_sf32_arp4(block, block, frames, m_coeffs[f], m_state_biquad[f]); // much faster
+    #else
+        dsps_biquad_sf32_ansi(block, block, frames, m_coeffs[f], m_state_biquad[f]);
+    #endif
 #endif
     }
 }
