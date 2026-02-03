@@ -355,9 +355,9 @@ struct audio_items_t {
     uint8_t volume_curve = 0;
     uint8_t channels = 2;
     int8_t  balance = 0;
-    int8_t  lp = 0;
-    int8_t  bp = 0;
-    int8_t  hp = 0;
+    float   gain_ls = 0;   // gain -12dB ... +9dB
+    float   gain_peq = 0;  // gain -12dB ... +12dB
+    float   gain_hs = 0;   // gain -12dB ... +9dB
     bool    force_mono = false;
 };
 

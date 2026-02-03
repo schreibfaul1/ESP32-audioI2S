@@ -8,6 +8,8 @@
 #pragma once
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
+#include "dsps_biquad.h"
+#include "dsps_biquad_gen.h"
 #include "esp_arduino_version.h"
 #include "psram_unique_ptr.hpp"
 #include <Arduino.h>
@@ -30,9 +32,6 @@
 #include <memory>
 #include <span>
 #include <vector>
-#if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
-    #include "dsps_biquad.h" // DSP libs
-#endif
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -94,13 +93,12 @@ class StereoAudioEqualizer {
 
   private:
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
-    typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
+    typedef enum { LOWSHELF = 0, PEAKINGEQ = 1, HIFGSHELF = 2 } FilterType;
 
-    struct BiquadCoeffs {
-        float a0, a1, a2;
-        float b1, b2;
-    } coeffs[3];
+#define BLOCK_SAMPLES 64              // Frames (Stereo!)
+    float m_block[BLOCK_SAMPLES * 2]; // interleaved L/R
 
+    float                   m_coeffs[3][5] = {0};
     uint8_t                 m_bps = 0;
     uint8_t                 m_VUl_cnt0 = 0;
     uint8_t                 m_VUl_cnt1 = 0;
@@ -113,13 +111,9 @@ class StereoAudioEqualizer {
     bool                    m_f_vu = false;
     audiolib::audio_items_t m_items;
     float                   m_limiter[2] = {1};
-    float                   m_corr = 1.0; // correction factor for level adjustment
 
   private:
-    struct BiquadState {
-        float x1 = 0.0f, x2 = 0.0f;
-        float y1 = 0.0f, y2 = 0.0f;
-    } state[3][2];
+    float m_state_biquad[3][4] = {0};
 
   public:
     StereoAudioEqualizer();
@@ -132,7 +126,7 @@ class StereoAudioEqualizer {
 
   private:
     void calculateVolumeLimits(); // balance and gain
-    void filter_sample(float* s);
+    void filter_block(float* block, int frames);
     void Gain16(int16_t* sample);
     void Gain32(int32_t* sample);
 };
@@ -197,7 +191,7 @@ class Audio {
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
     void             inBufferStatus() { InBuff.showStatus(); }
-    void             setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
+    void             setTone(float gainLowShelf, float gainPeakingEQ, float gainHighShelf); // -10.0dB ... +10.0dB
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
     const char*      getCodecname() { return codecname[m_codec]; }
@@ -251,7 +245,6 @@ class Audio {
     bool                     setChannels(int channels);
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
-    void                     computeVUlevel(int32_t* sample);
     void                     showstreamtitle(char* ml);
     bool                     parseContentType(char* ct);
     bool                     parseHttpResponseHeader();
@@ -347,7 +340,7 @@ class Audio {
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2 };
     const char* streamTypeStr[3] = {"NONE", "WEBFILE", "WEBSTREAM"};
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
-    typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
+    typedef enum { LOWSHELF = 0, PEAKINGEQ = 1, HIFGSHELF = 2 } FilterType;
 
   private:
     typedef struct _filter {
