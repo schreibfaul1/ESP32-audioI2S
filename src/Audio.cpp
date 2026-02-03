@@ -328,20 +328,21 @@ void AudioBuffer::showStatus() {
 StereoAudioEqualizer::StereoAudioEqualizer() {
     reset_all();
 }
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::reset_all() {
     reset_filters();
     reset_vu();
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::reset_filters() {
     memset(m_state_biquad, 0, sizeof(m_state_biquad));
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::reset_vu() {
     m_vuLeft = 0;
     m_vuRight = 0;
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::computeVUlevel(int32_t* sample) { // Envelope-Follower
 
     auto vu_from_sample = [&](int32_t s, uint8_t bps) -> uint8_t {
@@ -366,12 +367,12 @@ void StereoAudioEqualizer::computeVUlevel(int32_t* sample) { // Envelope-Followe
     else if (m_vuRight > RELEASE)
         m_vuRight -= RELEASE;
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 uint16_t StereoAudioEqualizer::getVUlevel() {
     // avg 0 ... 255
     return (m_vuLeft << 8) + m_vuRight;
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the volume or balance changes
 
     constexpr float BALANCE_DB = -6.0f;
@@ -405,7 +406,7 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
 
     // log_w("m_limit_left: %f,  m_limit_right: %f, volume: %i, steps: %i, m_bps: %i", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps);
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
 
     auto loudnessFactor = [&](float vol) -> float {
@@ -416,6 +417,8 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
     };
 
     if(m_items.sampleRate != items.sampleRate) reset_all();
+    if(m_items.balance != items.balance) start_gain_ramp();
+    if((m_items.gain_hs != items.gain_hs) || (m_items.gain_peq != items.gain_peq) || (m_items.gain_ls != items.gain_ls)) start_gain_ramp();
     m_items = items;
 
     constexpr float LOUD_BASS_DB = +8.0f;
@@ -449,16 +452,29 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
     // log_w("HS b0: %f, b1: %f, b2: %f, a1: %f, a2: %f", m_coeffs[HIFGSHELF][0], m_coeffs[HIFGSHELF][1], m_coeffs[HIFGSHELF][2], m_coeffs[HIFGSHELF][3], m_coeffs[HIFGSHELF][4]);
 
     calculateVolumeLimits();
+    start_gain_ramp();
 }
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void StereoAudioEqualizer::start_gain_ramp() {
 
+    constexpr float RAMP_TIME_MS = 2.0f; // 1–5 ms sind ideal
+
+    uint16_t samples = (uint16_t)((RAMP_TIME_MS * m_items.sampleRate) / 1000.0f);
+    if (samples < 1) samples = 1;
+
+    m_gain_ramp_samples = samples;
+
+    for (int ch = 0; ch < 2; ch++) {
+        m_gain_step[ch] =
+            (m_limiter[ch] - m_gain_cur[ch]) / (float)samples;
+    }
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
 
     int16_t* buff16 = (int16_t*)buff;
     int32_t* buff32 = (int32_t*)buff;
     uint16_t frames = numSamples;
-
-    // Gain as a small array → SIMD friendly
-    float gainLR[2] = {m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL]};
 
     for (uint16_t i = 0; i < frames; i += BLOCK_SAMPLES) {
 
@@ -467,19 +483,20 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         // 🔁 INT → FLOAT + VU
         float* p = m_block;
         for (uint16_t j = 0; j < n; j++) {
+
             if (m_items.bitsPerSample == 8 || m_items.bitsPerSample == 16) {
                 int16_t l = buff16[2 * (i + j) + 0];
                 int16_t r = buff16[2 * (i + j) + 1];
                 p[0] = (float)l;
                 p[1] = (float)r;
-                int32_t vu[2] = {l, r};
+                int32_t vu[2] = { l, r };
                 computeVUlevel(vu);
             } else {
                 int32_t l = buff32[2 * (i + j) + 0];
                 int32_t r = buff32[2 * (i + j) + 1];
                 p[0] = (float)l;
                 p[1] = (float)r;
-                int32_t vu[2] = {l, r};
+                int32_t vu[2] = { l, r };
                 computeVUlevel(vu);
             }
             p += 2;
@@ -488,13 +505,17 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         // 🎛 FILTER BLOCK
         filter_block(m_block, n);
 
-        // 🎚 SIMD-frendly Gain + Mono + Clip
+        // 🎚 Gain-Ramp + Mono + Clip + INT
         p = m_block;
+
+        float gl = m_gain_cur[LEFTCHANNEL];
+        float gr = m_gain_cur[RIGHTCHANNEL];
+
         for (uint16_t j = 0; j < n; j++) {
 
-            // Gain (Compiler does here 2-wide SIMD)
-            p[0] *= gainLR[0];
-            p[1] *= gainLR[1];
+            // Gain (SIMD friendly)
+            p[0] *= gl;
+            p[1] *= gr;
 
             // Mono optional
             if (m_items.force_mono) {
@@ -507,7 +528,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             if (m_items.bitsPerSample == 8 || m_items.bitsPerSample == 16) {
                 p[0] = fminf(fmaxf(p[0], -32768.0f), 32767.0f);
                 p[1] = fminf(fmaxf(p[1], -32768.0f), 32767.0f);
-            } else { // bps is 24 or 32
+            } else {
                 p[0] = fminf(fmaxf(p[0], -2147483648.0f), 2147483647.0f);
                 p[1] = fminf(fmaxf(p[1], -2147483648.0f), 2147483647.0f);
             }
@@ -521,11 +542,22 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
                 buff32[2 * (i + j) + 1] = (int32_t)lrintf(p[1]);
             }
 
+            // 🔄 Continue the gain ramp
+            if (m_gain_ramp_samples) {
+                gl += m_gain_step[LEFTCHANNEL];
+                gr += m_gain_step[RIGHTCHANNEL];
+                m_gain_ramp_samples--;
+            }
+
             p += 2;
         }
+
+        // Save gain state
+        m_gain_cur[LEFTCHANNEL]  = gl;
+        m_gain_cur[RIGHTCHANNEL] = gr;
     }
 }
-
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::filter_block(float* block, int frames) {
     for (int f = 0; f < 3; f++) {
 #if CONFIG_IDF_TARGET_ESP32
@@ -3503,6 +3535,7 @@ bool Audio::pauseResume() {
         }
     }
     xSemaphoreGive(mutex_audioTask);
+    equalizer.reset_vu();
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
