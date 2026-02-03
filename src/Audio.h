@@ -95,17 +95,11 @@ class StereoAudioEqualizer {
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
     typedef enum { LOWSHELF = 0, PEAKINGEQ = 1, HIFGSHELF = 2 } FilterType;
 
-#define BLOCK_SAMPLES 64              // Frames (Stereo!)
-    float m_block[BLOCK_SAMPLES * 2]; // interleaved L/R
+#define BLOCK_SAMPLES 64                          // Frames (Stereo!)
+    alignas(16) float m_block[BLOCK_SAMPLES * 2]; // interleaved L/R
 
     float                   m_coeffs[3][5] = {0};
     uint8_t                 m_bps = 0;
-    uint8_t                 m_VUl_cnt0 = 0;
-    uint8_t                 m_VUl_cnt1 = 0;
-    uint8_t                 m_VUl_cnt2 = 0;
-    uint8_t                 m_VUl_cnt3 = 0;
-    uint8_t                 m_VUl_cnt4 = 0;
-    uint8_t                 m_sampleArray[2][4][8] = {0};
     uint8_t                 m_vuLeft = 0;
     uint8_t                 m_vuRight = 0;
     bool                    m_f_vu = false;
@@ -118,17 +112,17 @@ class StereoAudioEqualizer {
   public:
     StereoAudioEqualizer();
     ~StereoAudioEqualizer() {}
-    void     reset();
     uint16_t getVUlevel();
-    void     computeVUlevel(int16_t* sample);
     void     update_audio_items(audiolib::audio_items_t gain, uint32_t sampleRate, uint8_t bps);
-    void     process(int32_t* buff, uint16_t numSamples);
+    void     reset_all();
+    void process(int32_t* buff, uint16_t numSamples);
 
   private:
+    void reset_filters();
+    void reset_vu();
+    void computeVUlevel(int32_t* sample);
     void calculateVolumeLimits(); // balance and gain
     void filter_block(float* block, int frames);
-    void Gain16(int16_t* sample);
-    void Gain32(int32_t* sample);
 };
 //----------------------------------------------------------------------------------------------------------------------
 

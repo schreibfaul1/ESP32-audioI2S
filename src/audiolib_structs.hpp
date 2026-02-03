@@ -352,7 +352,6 @@ struct fnsy_t { // used in findNextSync
 struct audio_items_t {
     uint8_t volume = 21;
     uint8_t volume_steps = 21;
-    uint8_t volume_curve = 0;
     uint8_t channels = 2;
     int8_t  balance = 0;
     float   gain_ls = 0;   // gain -12dB ... +9dB

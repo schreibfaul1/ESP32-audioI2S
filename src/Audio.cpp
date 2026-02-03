@@ -326,75 +326,45 @@ void AudioBuffer::showStatus() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 StereoAudioEqualizer::StereoAudioEqualizer() {
-    reset();
+    reset_all();
 }
-void StereoAudioEqualizer::reset() {
-    for (int i = 0; i < 3; i++) {
-        for (int c = 0; c < 5; c++) { m_coeffs[i][c] = 0; }
-        for (int ch = 0; ch < 2; ch++) { m_state_biquad[i][ch] = 0; }
-    }
-    m_vuLeft = 0;
+void StereoAudioEqualizer::reset_all() {
+    reset_filters();
+    reset_vu();
+}
+
+void StereoAudioEqualizer::reset_filters() {
+    memset(m_state_biquad, 0, sizeof(m_state_biquad));
+}
+
+void StereoAudioEqualizer::reset_vu() {
+    m_vuLeft  = 0;
     m_vuRight = 0;
 }
 
-void StereoAudioEqualizer::computeVUlevel(int16_t* sample) {
-    int16_t* s16 = sample;
+void StereoAudioEqualizer::computeVUlevel(int32_t* sample) { // Envelope-Follower
 
-    auto avg = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the average of 8 samples
-        uint16_t av = 0;
-        for (int i = 0; i < 8; i++) { av += sampArr[i]; }
-        return (uint8_t)(av >> 3);
+    auto vu_from_sample = [&](int32_t s, uint8_t bps) -> uint8_t {
+        // bps = 16 oder 32
+        uint32_t a = abs(s);
+        return (bps == 8 || bps == 16) ? (a >> 7) : (a >> 23);
     };
 
-    auto largest = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the largest of 8 samples
-        uint8_t maxValue = 0;
-        for (int i = 0; i < 8; i++) {
-            if (maxValue < sampArr[i]) maxValue = sampArr[i];
-        }
-        return maxValue;
-    };
+    constexpr uint8_t RELEASE = 2; // the bigger, the more sluggish
 
-    if (m_VUl_cnt0 == 64) {
-        m_VUl_cnt0 = 0;
-        m_VUl_cnt1++;
-    }
-    if (m_VUl_cnt1 == 8) {
-        m_VUl_cnt1 = 0;
-        m_VUl_cnt2++;
-    }
-    if (m_VUl_cnt2 == 8) {
-        m_VUl_cnt2 = 0;
-        m_VUl_cnt3++;
-    }
-    if (m_VUl_cnt3 == 8) {
-        m_VUl_cnt3 = 0;
-        m_VUl_cnt4++;
-        m_f_vu = true;
-    }
-    if (m_VUl_cnt4 == 8) { m_VUl_cnt4 = 0; }
+    uint8_t l = vu_from_sample(sample[LEFTCHANNEL], m_bps);
+    uint8_t r = vu_from_sample(sample[RIGHTCHANNEL], m_bps);
 
-    if (!m_VUl_cnt0) {                                                                   // store every 64th sample in the array[0]
-        m_sampleArray[LEFTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
-        m_sampleArray[RIGHTCHANNEL][0][m_VUl_cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
-    }
-    if (!m_VUl_cnt1) { // store argest from 64 * 8 samples in the array[1]
-        m_sampleArray[LEFTCHANNEL][1][m_VUl_cnt2] = largest(m_sampleArray[LEFTCHANNEL][0]);
-        m_sampleArray[RIGHTCHANNEL][1][m_VUl_cnt2] = largest(m_sampleArray[RIGHTCHANNEL][0]);
-    }
-    if (!m_VUl_cnt2) { // store avg from 64 * 8 * 8 samples in the array[2]
-        m_sampleArray[LEFTCHANNEL][2][m_VUl_cnt3] = largest(m_sampleArray[LEFTCHANNEL][1]);
-        m_sampleArray[RIGHTCHANNEL][2][m_VUl_cnt3] = largest(m_sampleArray[RIGHTCHANNEL][1]);
-    }
-    if (!m_VUl_cnt3) { // store avg from 64 * 8 * 8 * 8 samples in the array[3]
-        m_sampleArray[LEFTCHANNEL][3][m_VUl_cnt4] = avg(m_sampleArray[LEFTCHANNEL][2]);
-        m_sampleArray[RIGHTCHANNEL][3][m_VUl_cnt4] = avg(m_sampleArray[RIGHTCHANNEL][2]);
-    }
-    if (m_f_vu) {
-        m_f_vu = false;
-        m_vuLeft = avg(m_sampleArray[LEFTCHANNEL][3]);
-        m_vuRight = avg(m_sampleArray[RIGHTCHANNEL][3]);
-    }
-    m_VUl_cnt1++;
+    // Attack immediately
+    if (l > m_vuLeft)
+        m_vuLeft = l;
+    else if (m_vuLeft > RELEASE)
+        m_vuLeft -= RELEASE;
+
+    if (r > m_vuRight)
+        m_vuRight = r;
+    else if (m_vuRight > RELEASE)
+        m_vuRight -= RELEASE;
 }
 
 uint16_t StereoAudioEqualizer::getVUlevel() {
@@ -433,29 +403,31 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
     m_limiter[LEFTCHANNEL] = vol * powf(10.0f, l_db / 20.0f);
     m_limiter[RIGHTCHANNEL] = vol * powf(10.0f, r_db / 20.0f);
 
-    log_w("m_limit_left: %f,  m_limit_right: %f, volume: %i, steps: %i, m_bps: %i, curve: %i", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps,
-          m_items.volume_curve);
-}
-
-void StereoAudioEqualizer::Gain16(int16_t* sample) {
-    sample[LEFTCHANNEL] *= (m_limiter[LEFTCHANNEL]);
-    sample[RIGHTCHANNEL] *= (m_limiter[RIGHTCHANNEL]);
-}
-
-void StereoAudioEqualizer::Gain32(int32_t* sample) {
-    sample[LEFTCHANNEL] *= (m_limiter[LEFTCHANNEL]);
-    sample[RIGHTCHANNEL] *= (m_limiter[RIGHTCHANNEL]);
+    // log_w("m_limit_left: %f,  m_limit_right: %f, volume: %i, steps: %i, m_bps: %i", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps);
 }
 
 void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uint32_t sampleRate, uint8_t bps) {
 
-    reset();
+    auto loudnessFactor = [&](float vol) -> float {
+        constexpr float LOUDNESS_START = 0.4f; // from here
+        if (vol >= LOUDNESS_START) { return 0.0f; }
+        float t = 1.0f - (vol / LOUDNESS_START);
+        return t; // 0…1
+    };
+
+    reset_all();
     m_bps = bps;
     m_items = items;
 
+    constexpr float LOUD_BASS_DB = +8.0f;
+    constexpr float LOUD_TREBLE_DB = +4.0f;
+    float           loud = loudnessFactor(items.volume); // ISO 226 (Acoustics — Normal equal-loudness-level contours)
+    float           ls_gain = m_items.gain_ls + loud * LOUD_BASS_DB;
+    float           hs_gain = m_items.gain_hs + loud * LOUD_TREBLE_DB;
+
     const float FcLS = 80;                         // Frequency LowShelf(Hz)
     const float FcPKEQ = 1000;                     // Frequency PeakEQ(Hz)
-    const float FcHS = 6000;                       // Frequency HighShelf(Hz)
+    const float FcHS = 8000;                       // Frequency HighShelf(Hz)
     const float QP = 0.707;                        // Quality (Peak)
     const float QS = 0.0;                          // Quality Slope (Shelf)
     float       normFreqLS = FcLS / sampleRate;    // filter cut off frequency
@@ -463,13 +435,13 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uin
     float       normFreqHS = FcHS / sampleRate;    // filter cut off frequency
     float       c[5];
 
-    dsps_biquad_gen_lowShelf_f32(m_coeffs[LOWSHELF], normFreqLS, m_items.gain_ls, QS);
+    dsps_biquad_gen_lowShelf_f32(m_coeffs[LOWSHELF], normFreqLS, ls_gain, QS);
     dsps_biquad_gen_peakingEQ_f32(m_coeffs[PEAKINGEQ], normFreqPEQ, QP);
     float g = powf(10.0f, m_items.gain_peq / 20.0f);
     m_coeffs[PEAKINGEQ][0] *= g;
     m_coeffs[PEAKINGEQ][1] *= g;
     m_coeffs[PEAKINGEQ][2] *= g;
-    dsps_biquad_gen_highShelf_f32(m_coeffs[HIFGSHELF], normFreqHS, m_items.gain_hs, QS);
+    dsps_biquad_gen_highShelf_f32(m_coeffs[HIFGSHELF], normFreqHS, hs_gain, QS);
 
     // log_w("gainLS: %f, gainPEQ: %f, gainHS: %f, sampleRate %lu", m_items.gain_ls, m_items.gain_peq, m_items.gain_hs, sampleRate);
     // log_w("normFreqLS: %f, normFreqPEQ: %f, normFreqHS; %f", normFreqLS, normFreqPEQ, normFreqHS);
@@ -481,52 +453,87 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items, uin
 }
 
 void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
+
     int16_t* buff16 = (int16_t*)buff;
+    int32_t* buff32 = (int32_t*)buff;
     uint16_t frames = numSamples;
+
+    // Gain as a small array → SIMD friendly
+    float gainLR[2] = {m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL]};
 
     for (uint16_t i = 0; i < frames; i += BLOCK_SAMPLES) {
 
         uint16_t n = min(BLOCK_SAMPLES, frames - i);
 
-        // 🔁 INT → FLOAT
+        // 🔁 INT → FLOAT + VU
+        float* p = m_block;
         for (uint16_t j = 0; j < n; j++) {
-            m_block[2 * j + 0] = (float)buff16[2 * (i + j) + 0];
-            m_block[2 * j + 1] = (float)buff16[2 * (i + j) + 1];
-
-            int16_t vu[2] = {buff16[2 * (i + j) + 0], buff16[2 * (i + j) + 1]};
-            computeVUlevel(vu); // VU bleibt sample-weise
+            if (m_bps == 8 || m_bps == 16) {
+                int16_t l = buff16[2 * (i + j) + 0];
+                int16_t r = buff16[2 * (i + j) + 1];
+                p[0] = (float)l;
+                p[1] = (float)r;
+                int32_t vu[2] = {l, r};
+                computeVUlevel(vu);
+            } else {
+                int32_t l = buff32[2 * (i + j) + 0];
+                int32_t r = buff32[2 * (i + j) + 1];
+                p[0] = (float)l;
+                p[1] = (float)r;
+                int32_t vu[2] = {l, r};
+                computeVUlevel(vu);
+            }
+            p += 2;
         }
 
         // 🎛 FILTER BLOCK
         filter_block(m_block, n);
 
-        // 🎚 GAIN + MONO + CLIP + FLOAT → INT
+        // 🎚 SIMD-frendly Gain + Mono + Clip
+        p = m_block;
         for (uint16_t j = 0; j < n; j++) {
 
-            float l = m_block[2 * j + 0] * m_limiter[LEFTCHANNEL];
-            float r = m_block[2 * j + 1] * m_limiter[RIGHTCHANNEL];
+            // Gain (Compiler does here 2-wide SIMD)
+            p[0] *= gainLR[0];
+            p[1] *= gainLR[1];
 
+            // Mono optional
             if (m_items.force_mono) {
-                float m = 0.5f * (l + r);
-                l = r = m;
+                float m = 0.5f * (p[0] + p[1]);
+                p[0] = m;
+                p[1] = m;
             }
 
-            l = fminf(fmaxf(l, -32768.0f), 32767.0f); // Limiting/Clipping
-            r = fminf(fmaxf(r, -32768.0f), 32767.0f);
+            // Clip
+            if (m_bps == 8 || m_bps == 16) {
+                p[0] = fminf(fmaxf(p[0], -32768.0f), 32767.0f);
+                p[1] = fminf(fmaxf(p[1], -32768.0f), 32767.0f);
+            } else { // bps is 24 or 32
+                p[0] = fminf(fmaxf(p[0], -2147483648.0f), 2147483647.0f);
+                p[1] = fminf(fmaxf(p[1], -2147483648.0f), 2147483647.0f);
+            }
 
-            buff16[2 * (i + j) + 0] = (int16_t)lrintf(l);
-            buff16[2 * (i + j) + 1] = (int16_t)lrintf(r);
+            // FLOAT → INT
+            if (m_bps == 8 || m_bps == 16) {
+                buff16[2 * (i + j) + 0] = (int16_t)lrintf(p[0]);
+                buff16[2 * (i + j) + 1] = (int16_t)lrintf(p[1]);
+            } else {
+                buff32[2 * (i + j) + 0] = (int32_t)lrintf(p[0]);
+                buff32[2 * (i + j) + 1] = (int32_t)lrintf(p[1]);
+            }
+
+            p += 2;
         }
     }
 }
 
 void StereoAudioEqualizer::filter_block(float* block, int frames) {
     for (int f = 0; f < 3; f++) {
-#if CONFIG_IDF_TARGET_ESP32S3
-        // input  interleaved, output interleaved, number of stereo frames, [b0,b1,b2,a1,a2], 4 floats!
+#if CONFIG_IDF_TARGET_ESP32
+        dsps_biquad_sf32_ae32(block, block, frames, m_coeffs[f], m_state_biquad[f]);
+#elif CONFIG_IDF_TARGET_ESP32S3
         dsps_biquad_sf32_aes3(block, block, frames, m_coeffs[f], m_state_biquad[f]);
 #elif CONFIG_IDF_TARGET_ESP32P4
-        // input  interleaved, output interleaved, number of stereo frames, [b0,b1,b2,a1,a2], 4 floats!
         dsps_biquad_sf32_arp4(block, block, frames, m_coeffs[f], m_state_biquad[f]);
 #endif
     }
@@ -3478,7 +3485,7 @@ uint32_t Audio::stopSong() {
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         m_f_lockInBuffer = false;
-        equalizer.reset();
+        equalizer.reset_all();
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     return currTime;
@@ -6381,9 +6388,8 @@ void Audio::setBalance(int8_t bal) { // bal -16...16
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setVolume(uint8_t vol, uint8_t curve) { // curve 0: default, curve 1: flat at the beginning
-
-    m_audio_items.volume = min(vol, m_audio_items.volume_steps);
-    m_audio_items.volume_curve = min(curve, (uint8_t)1);
+    if (curve) { log_w("Setting the curve is obsolete"); }
+    m_audio_items.volume = min(vol, m_audio_items.volume_steps); // curve + loudness described in ISO226
     equalizer.update_audio_items(m_audio_items, m_sampleRate, m_bitsPerSample);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
