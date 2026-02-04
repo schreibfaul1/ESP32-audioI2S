@@ -403,13 +403,12 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
 
     m_limiter[LEFTCHANNEL] = vol * powf(10.0f, l_db / 20.0f);
     m_limiter[RIGHTCHANNEL] = vol * powf(10.0f, r_db / 20.0f);
-
-    // log_w("m_limit_left: %f,  m_limit_right: %f, volume: %i, steps: %i, m_bps: %i", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL], m_items.volume, m_items.volume_steps, m_bps);
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
 
     auto loudnessFactor = [&](float vol) -> float {
+        if(vol == 0) { return 0.0f; }
         constexpr float LOUDNESS_START = 0.4f; // from here
         if (vol >= LOUDNESS_START) { return 0.0f; }
         float t = 1.0f - (vol / LOUDNESS_START);
@@ -417,8 +416,6 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
     };
 
     if (m_items.sampleRate != items.sampleRate) reset_all();
-    if (m_items.balance != items.balance) start_gain_ramp();
-    if ((m_items.gain_hs != items.gain_hs) || (m_items.gain_peq != items.gain_peq) || (m_items.gain_ls != items.gain_ls)) start_gain_ramp();
     m_items = items;
 
     constexpr float LOUD_BASS_DB = +8.0f;
@@ -445,26 +442,29 @@ void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
     m_coeffs[PEAKINGEQ][2] *= g;
     dsps_biquad_gen_highShelf_f32(m_coeffs[HIFGSHELF], normFreqHS, hs_gain, QS);
 
-    // log_w("gainLS: %f, gainPEQ: %f, gainHS: %f, sampleRate %lu", m_items.gain_ls, m_items.gain_peq, m_items.gain_hs, sampleRate);
-    // log_w("normFreqLS: %f, normFreqPEQ: %f, normFreqHS; %f", normFreqLS, normFreqPEQ, normFreqHS);
-    // log_w("LS b0: %f, b1: %f, b2: %f, a1: %f, a2: %f", m_coeffs[LOWSHELF][0], m_coeffs[LOWSHELF][1], m_coeffs[LOWSHELF][2], m_coeffs[LOWSHELF][3], m_coeffs[LOWSHELF][4]);
-    // log_w("EQ b0: %f, b1: %f, b2: %f, a1: %f, a2: %f", m_coeffs[PEAKINGEQ][0], m_coeffs[PEAKINGEQ][1], m_coeffs[PEAKINGEQ][2], m_coeffs[PEAKINGEQ][3], m_coeffs[PEAKINGEQ][4]);
-    // log_w("HS b0: %f, b1: %f, b2: %f, a1: %f, a2: %f", m_coeffs[HIFGSHELF][0], m_coeffs[HIFGSHELF][1], m_coeffs[HIFGSHELF][2], m_coeffs[HIFGSHELF][3], m_coeffs[HIFGSHELF][4]);
-
     calculateVolumeLimits();
     start_gain_ramp();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::start_gain_ramp() {
 
-    constexpr float RAMP_TIME_MS = 2.0f; // 1–5 ms sind ideal
+    constexpr float RAMP_TIME_MS = 300.0f; // fading 0,3s
 
-    uint16_t samples = (uint16_t)((RAMP_TIME_MS * m_items.sampleRate) / 1000.0f);
+    uint32_t samples = (uint32_t)((RAMP_TIME_MS * (float)m_items.sampleRate) / 1000.0f);
     if (samples < 1) samples = 1;
 
     m_gain_ramp_samples = samples;
 
-    for (int ch = 0; ch < 2; ch++) { m_gain_step[ch] = (m_limiter[ch] - m_gain_cur[ch]) / (float)samples; }
+    // target gain
+    float targetL, targetR;
+
+    targetL = m_limiter[LEFTCHANNEL];
+    targetR = m_limiter[RIGHTCHANNEL];
+
+    // Calculate step per sample (from current gain!)
+    m_gain_step[LEFTCHANNEL] = (targetL - m_gain_cur[LEFTCHANNEL]) / (float)samples;
+    m_gain_step[RIGHTCHANNEL] = (targetR - m_gain_cur[RIGHTCHANNEL]) / (float)samples;
+
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
@@ -505,14 +505,18 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
         // 🎚 Gain-Ramp + Mono + Clip + INT
         p = m_block;
 
-        float gl = m_gain_cur[LEFTCHANNEL];
-        float gr = m_gain_cur[RIGHTCHANNEL];
-
         for (uint16_t j = 0; j < n; j++) {
 
+            // 🔄 gain ramp
+            if (m_gain_ramp_samples) {
+                m_gain_cur[LEFTCHANNEL] += m_gain_step[LEFTCHANNEL];
+                m_gain_cur[RIGHTCHANNEL] += m_gain_step[RIGHTCHANNEL];
+                m_gain_ramp_samples--;
+            }
+
             // Gain (SIMD friendly)
-            p[0] *= gl;
-            p[1] *= gr;
+            p[0] *= m_gain_cur[LEFTCHANNEL];
+            p[1] *= m_gain_cur[RIGHTCHANNEL];
 
             // Mono optional
             if (m_items.force_mono) {
@@ -538,20 +542,8 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
                 buff32[2 * (i + j) + 0] = (int32_t)lrintf(p[0]);
                 buff32[2 * (i + j) + 1] = (int32_t)lrintf(p[1]);
             }
-
-            // 🔄 Continue the gain ramp
-            if (m_gain_ramp_samples) {
-                gl += m_gain_step[LEFTCHANNEL];
-                gr += m_gain_step[RIGHTCHANNEL];
-                m_gain_ramp_samples--;
-            }
-
             p += 2;
         }
-
-        // Save gain state
-        m_gain_cur[LEFTCHANNEL] = gl;
-        m_gain_cur[RIGHTCHANNEL] = gr;
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

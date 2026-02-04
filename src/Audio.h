@@ -104,9 +104,11 @@ class StereoAudioEqualizer {
     bool                    m_f_vu = false;
     audiolib::audio_items_t m_items;
     float                   m_limiter[2] = {1};
-    float                   m_gain_cur[2] = {1.0f, 1.0f};  // current Gain
+    float                   m_gain_cur[2] = {0.0f, 0.0f};  // current Gain
     float                   m_gain_step[2] = {0.0f, 0.0f}; // increment per Sample
-    uint16_t                m_gain_ramp_samples = 0;
+    uint32_t                m_gain_ramp_samples = 0;
+    bool                    m_mute_target = false;
+    bool                    m_up_down = 0;
 
   private:
     float m_state_biquad[3][4] = {0};
@@ -119,6 +121,7 @@ class StereoAudioEqualizer {
     void     reset_all();
     void     reset_vu();
     void     process(int32_t* buff, uint16_t numSamples);
+    bool     isMuted() const { return m_mute_target && m_gain_ramp_samples == 0; }
 
   private:
     void reset_filters();

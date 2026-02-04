@@ -345,7 +345,7 @@ struct fnsy_t { // used in findNextSync
     uint32_t swnf = 0;
 };
 
-struct audio_items_t {
+typedef struct _audio_items_t {
     uint32_t sampleRate = 44100;
     uint8_t  volume = 21;
     uint8_t  volume_steps = 21;
@@ -356,6 +356,6 @@ struct audio_items_t {
     float    gain_peq = 0; // gain -12dB ... +12dB
     float    gain_hs = 0;  // gain -12dB ... +9dB
     bool     force_mono = false;
-};
+}audio_items_t;
 
 } // namespace audiolib
