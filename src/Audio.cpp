@@ -326,6 +326,9 @@ void AudioBuffer::showStatus() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 StereoAudioEqualizer::StereoAudioEqualizer() {
+    for (int i = 0; i < FFT_SIZE; i++) { // Hann window
+        m_fft_window[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (FFT_SIZE - 1)));
+    }
     reset_all();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -373,6 +376,70 @@ uint16_t StereoAudioEqualizer::getVUlevel() {
     return (m_vuLeft << 8) + m_vuRight;
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void StereoAudioEqualizer::updateSpectrum() {
+
+    uint32_t now = millis();
+    if (now - m_fft_last_ms < 100) return; // 10 Hz
+    m_fft_last_ms = now;
+
+    if (!m_fft_ready) return;
+    m_fft_ready = false;
+
+    // Window + copy
+    for (int i = 0; i < FFT_SIZE; i++) { m_fft_work[i] = m_fft_in[i] * m_fft_window[i]; }
+
+    // FFT
+    dsps_fft2r_fc32(m_fft_work, FFT_SIZE);
+    dsps_bit_rev_fc32(m_fft_work, FFT_SIZE);
+    dsps_cplx2reC_fc32(m_fft_work, FFT_SIZE);
+
+    float bass = 0, mid = 0, treble = 0;
+    float bin_hz = (float)m_items.sampleRate / FFT_SIZE;
+
+    for (int i = 1; i < FFT_SIZE / 2; i++) {
+
+        float mag = fabsf(m_fft_work[i]);
+        float f = i * bin_hz;
+
+        if (f < 200.0f)
+            bass += mag;
+        else if (f < 2000.0f)
+            mid += mag;
+        else
+            treble += mag;
+    }
+
+    // log scale
+    bass = log10f(bass + 1.0f);
+    mid = log10f(mid + 1.0f);
+    treble = log10f(treble + 1.0f);
+
+    // smoothing
+    auto smooth = [](float old, float in) {
+        constexpr float A = 0.6f;
+        constexpr float R = 0.15f;
+        return (in > old) ? old + A * (in - old) : old + R * (in - old);
+    };
+
+    m_spec_smooth[0] = smooth(m_spec_smooth[0], bass);
+    m_spec_smooth[1] = smooth(m_spec_smooth[1], mid);
+    m_spec_smooth[2] = smooth(m_spec_smooth[2], treble);
+
+    // normalize → 0..255
+    constexpr float SCALE = 85.0f; // empirisch gut
+
+    for (int i = 0; i < FFT_BANDS; i++) {
+        int v = (int)(m_spec_smooth[i] * SCALE);
+        if (v > 255) v = 255;
+        if (v < 0) v = 0;
+        m_spectrum[i] = (uint8_t)v;
+    }
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+uint8_t* StereoAudioEqualizer::getSpectrum() {
+    return m_spectrum;
+}
+//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the volume or balance changes
 
     constexpr float BALANCE_DB = -6.0f;
@@ -408,7 +475,7 @@ void StereoAudioEqualizer::calculateVolumeLimits() { // is calculated when the v
 void StereoAudioEqualizer::update_audio_items(audiolib::audio_items_t items) {
 
     auto loudnessFactor = [&](float vol) -> float {
-        if(vol == 0) { return 0.0f; }
+        if (vol == 0) { return 0.0f; }
         constexpr float LOUDNESS_START = 0.4f; // from here
         if (vol >= LOUDNESS_START) { return 0.0f; }
         float t = 1.0f - (vol / LOUDNESS_START);
@@ -464,7 +531,6 @@ void StereoAudioEqualizer::start_gain_ramp() {
     // Calculate step per sample (from current gain!)
     m_gain_step[LEFTCHANNEL] = (targetL - m_gain_cur[LEFTCHANNEL]) / (float)samples;
     m_gain_step[RIGHTCHANNEL] = (targetR - m_gain_cur[RIGHTCHANNEL]) / (float)samples;
-
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
@@ -507,6 +573,14 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
 
         for (uint16_t j = 0; j < n; j++) {
 
+            // mono sample for FFT
+            float mono = 0.5f * (p[0] + p[1]);
+            m_fft_in[m_fft_pos++] = mono;
+            if (m_fft_pos >= FFT_SIZE) {
+                m_fft_pos = 0;
+                m_fft_ready = true;
+            }
+
             // 🔄 gain ramp
             if (m_gain_ramp_samples) {
                 m_gain_cur[LEFTCHANNEL] += m_gain_step[LEFTCHANNEL];
@@ -545,6 +619,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
             p += 2;
         }
     }
+    updateSpectrum();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::filter_block(float* block, int frames) {
@@ -6390,6 +6465,16 @@ void Audio::reconfigI2S() {
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_audio_items.sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+uint8_t* Audio::getSpectrum() {
+    if (!m_f_running) {
+        memset(m_spectrum, 0, sizeof(m_spectrum));
+    } else {
+        uint8_t* s = equalizer.getSpectrum();
+        for (int i = 0; i < sizeof(m_spectrum); i++) m_spectrum[i] = s[i];
+    }
+    return m_spectrum;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint16_t Audio::getVUlevel() {

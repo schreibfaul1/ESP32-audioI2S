@@ -8,6 +8,7 @@
 #pragma once
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
+#include "dsps_fft2r.h"
 #include "dsps_biquad.h"
 #include "dsps_biquad_gen.h"
 #include "esp_arduino_version.h"
@@ -109,14 +110,25 @@ class StereoAudioEqualizer {
     uint32_t                m_gain_ramp_samples = 0;
     bool                    m_mute_target = false;
     bool                    m_up_down = 0;
+    float                   m_state_biquad[3][4] = {0};
 
-  private:
-    float m_state_biquad[3][4] = {0};
+  private: // ---------- FFT section -----------
+#define FFT_SIZE  256
+#define FFT_BANDS 3
+    float    m_fft_in[FFT_SIZE];             // FFT buffers
+    float    m_fft_work[FFT_SIZE];           // FFT buffers
+    float    m_fft_window[FFT_SIZE];         // FFT buffers
+    uint16_t m_fft_pos = 0;                  // FFT state
+    bool     m_fft_ready = false;            // FFT state
+    uint8_t  m_spectrum[FFT_BANDS] = {0};    // Spectrum result (0..255)
+    float    m_spec_smooth[FFT_BANDS] = {0}; // smoothing
+    uint32_t m_fft_last_ms = 0;              // timing (10 Hz)
 
   public:
     StereoAudioEqualizer();
     ~StereoAudioEqualizer() {}
     uint16_t getVUlevel();
+    uint8_t* getSpectrum();
     void     update_audio_items(audiolib::audio_items_t items);
     void     reset_all();
     void     reset_vu();
@@ -129,6 +141,7 @@ class StereoAudioEqualizer {
     void computeVUlevel(int32_t* sample);
     void calculateVolumeLimits(); // balance and gain
     void filter_block(float* block, int frames);
+    void updateSpectrum();
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -187,6 +200,7 @@ class Audio {
     uint32_t         getAudioFilePosition();
     bool             setAudioFilePosition(uint32_t pos);
     uint16_t         getVUlevel();
+    uint8_t*         getSpectrum();
     uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
@@ -425,6 +439,7 @@ class Audio {
     uint8_t        m_audioTaskCoreId = 0;
     uint8_t        m_M4A_objectType = 0; // set in read_M4A_Header
     uint8_t        m_M4A_chConfig = 0;   // set in read_M4A_Header
+    uint8_t        m_spectrum[3] = {0};  // spectrum analyzer
     uint16_t       m_M4A_sampleRate = 0; // set in read_M4A_Header
     int16_t        m_validSamples = 0;
     int16_t        m_curSample = 0;
