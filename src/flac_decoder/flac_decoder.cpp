@@ -93,6 +93,42 @@ bool FlacDecoder::isValid() {
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
 //----------------------------------------------------------------------------------------------------------------------
+uint32_t FlacDecoder::countLeadingZeros(int32_t* bytesLeft) {
+
+    uint32_t zeros = 0;
+    uint32_t savedBitLen = m_flacBitBufferLen;
+    uint32_t savedBitBuf = m_flac_bitBuffer;
+    uint32_t savedIndex  = m_rIndex;
+    int32_t  savedBytes  = *bytesLeft;
+
+    while (true) {
+
+        if (savedBitLen == 0) {
+            if (savedBytes <= 0) {
+                m_f_bitReaderError = true;
+                return zeros;
+            }
+            uint8_t temp = *(m_flacInptr + savedIndex++);
+            savedBytes--;
+            savedBitBuf = (savedBitBuf << 8) | temp;
+            savedBitLen = 8;
+        }
+
+        uint32_t n = savedBitLen;
+        if (n > 8) n = 8;
+
+        uint8_t b = (savedBitBuf >> (savedBitLen - n)) & ((1u << n) - 1);
+
+        for (uint32_t i = 0; i < n; i++) {
+            if (b & (1u << (n - 1 - i))) {
+                return zeros;
+            }
+            zeros++;
+        }
+
+        savedBitLen -= n;
+    }
+}
 
 uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
 
@@ -301,6 +337,7 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
+
     int8_t                    ret = FLAC_PARSE_OGG_DONE;
     uint16_t                  pos = 0;
     int32_t                   blockLength = 0;
@@ -401,10 +438,10 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 // FLAC_LOG_INFO("nrOfChannels %i", nrOfChannels);
                 FLACMetadataBlock->numChannels = nrOfChannels;
 
-                bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 5;
+                bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 4;
                 bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
                 FLACMetadataBlock->bitsPerSample = bitsPerSample;
-                // FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
+                FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
 
                 totalSamplesInStream = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
@@ -1017,7 +1054,6 @@ int8_t FlacDecoder::decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sam
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32_t sampleDepth, uint8_t ch, int32_t* bytesLeft) {
-
     int8_t ret = 0;
     for (int32_t i = 0; i < lpcOrder; i++) {
         m_samplesBuffer[ch][i] = readSignedInt(sampleDepth, bytesLeft); // Unencoded warm-up samples (n = frame's bits-per-sample * lpc order).
@@ -1067,14 +1103,9 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
             while (dst < dstEnd) {
                 if (m_f_bitReaderError) break;
 
-                uint32_t val = 0;
-                // Inline Rice unary prefix
-                while (readUint(1, bytesLeft) == 0) {
-                    val++;
-                    if (m_f_bitReaderError) break;
-                }
-                // Append remainder bits
-                val = (val << param) | readUint(param, bytesLeft);
+                uint32_t zeros = countLeadingZeros(bytesLeft);
+                readUint(zeros + 1, bytesLeft);   // skip unary 1
+                uint32_t val = (zeros << param) | readUint(param, bytesLeft);
 
                 // Convert to signed
                 int64_t signedVal = (val >> 1) ^ -(val & 1);
