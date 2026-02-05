@@ -329,6 +329,13 @@ StereoAudioEqualizer::StereoAudioEqualizer() {
     for (int i = 0; i < FFT_SIZE; i++) { // Hann window
         m_fft_window[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (FFT_SIZE - 1)));
     }
+
+    if (dsps_fft2r_init_fc32(nullptr, FFT_SIZE) == ESP_OK) {
+        m_fft_initialized = true;
+    } else {
+        log_e("FFT init failed (size=%d)", FFT_SIZE);
+    }
+
     reset_all();
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -378,61 +385,100 @@ uint16_t StereoAudioEqualizer::getVUlevel() {
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::updateSpectrum() {
 
+    // --- 10 Hz update ---
     uint32_t now = millis();
-    if (now - m_fft_last_ms < 100) return; // 10 Hz
+    if (now - m_fft_last_ms < 100) return;
     m_fft_last_ms = now;
 
-    if (!m_fft_ready) return;
+    if (!m_fft_ready || !m_fft_initialized) return;
     m_fft_ready = false;
 
-    // Window + copy
-    for (int i = 0; i < FFT_SIZE; i++) { m_fft_work[i] = m_fft_in[i] * m_fft_window[i]; }
+    // --- Window + real → complex ---
+    for (int i = 0; i < FFT_SIZE; i++) {
+        m_fft_work[2 * i] = m_fft_in[i] * m_fft_window[i];
+        m_fft_work[2 * i + 1] = 0.0f;
+    }
 
-    // FFT
+    // --- FFT ---
     dsps_fft2r_fc32(m_fft_work, FFT_SIZE);
     dsps_bit_rev_fc32(m_fft_work, FFT_SIZE);
     dsps_cplx2reC_fc32(m_fft_work, FFT_SIZE);
 
-    float bass = 0, mid = 0, treble = 0;
-    float bin_hz = (float)m_items.sampleRate / FFT_SIZE;
+    const float bin_hz = (float)m_items.sampleRate / FFT_SIZE;
+    const float norm = 2.0f / FFT_SIZE;
+
+    // --- 5 internal bands ---
+    float band[5] = {0};
+    int   bins[5] = {0};
 
     for (int i = 1; i < FFT_SIZE / 2; i++) {
 
-        float mag = fabsf(m_fft_work[i]);
+        float re = m_fft_work[2 * i];
+        float im = m_fft_work[2 * i + 1];
+        float mag = sqrtf(re * re + im * im) * norm;
         float f = i * bin_hz;
 
-        if (f < 200.0f)
-            bass += mag;
-        else if (f < 2000.0f)
-            mid += mag;
+        int b = -1;
+        if (f < 250.0f)
+            b = 0; // Bass
+        else if (f < 600.0f)
+            b = 1; // Low-Mid (Puffer)
+        else if (f < 2500.0f)
+            b = 2; // Mid
+        else if (f < 4000.0f)
+            b = 3; // High-Mid (Puffer)
         else
-            treble += mag;
+            b = 4; // Treble
+
+        if (b >= 0) {
+            band[b] += mag * mag;
+            bins[b]++;
+        }
     }
 
-    // log scale
-    bass = log10f(bass + 1.0f);
-    mid = log10f(mid + 1.0f);
-    treble = log10f(treble + 1.0f);
+    // --- RMS + weighting ---
+    for (int i = 0; i < 5; i++) {
+        if (bins[i])
+            band[i] = sqrtf(band[i] / bins[i]);
+        else
+            band[i] = 0.0f;
+    }
 
-    // smoothing
+    // band weighting (psychoacoustic / UI)
+    band[0] *= 0.5f; // Bass
+    band[1] *= 0.8f; // Puffer
+    band[2] *= 1.0f; // Mid
+    band[3] *= 0.8f; // Puffer
+    band[4] *= 2.0f; // Treble
+
+    // log scale
+    for (int i = 0; i < 5; i++) { band[i] = log10f(band[i] + 1e-6f); }
+
+    // --- temporal smoothing (only displayed bands) ---
     auto smooth = [](float old, float in) {
-        constexpr float A = 0.6f;
-        constexpr float R = 0.15f;
-        return (in > old) ? old + A * (in - old) : old + R * (in - old);
+        constexpr float ATTACK = 0.6f;
+        constexpr float RELEASE = 0.6f;
+        return (in > old) ? old + ATTACK * (in - old) : old + RELEASE * (in - old);
     };
 
-    m_spec_smooth[0] = smooth(m_spec_smooth[0], bass);
-    m_spec_smooth[1] = smooth(m_spec_smooth[1], mid);
-    m_spec_smooth[2] = smooth(m_spec_smooth[2], treble);
+    m_spec_smooth[0] = smooth(m_spec_smooth[0], band[0]); // Bass
+    m_spec_smooth[1] = smooth(m_spec_smooth[1], band[2]); // Mid
+    m_spec_smooth[2] = smooth(m_spec_smooth[2], band[4]); // Treble
 
-    // normalize → 0..255
-    constexpr float SCALE = 85.0f; // empirisch gut
+    // --- map to 0..255 using dB window ---
+    constexpr float DB_MIN = -50.0f;
+    constexpr float DB_MAX = 0.0f;
 
     for (int i = 0; i < FFT_BANDS; i++) {
-        int v = (int)(m_spec_smooth[i] * SCALE);
-        if (v > 255) v = 255;
-        if (v < 0) v = 0;
-        m_spectrum[i] = (uint8_t)v;
+
+        float db = m_spec_smooth[i] * 20.0f;
+
+        if (db < DB_MIN) db = DB_MIN;
+        if (db > DB_MAX) db = DB_MAX;
+
+        float norm = (db - DB_MIN) / (DB_MAX - DB_MIN);
+
+        m_spectrum[i] = (uint8_t)(norm * 255.0f);
     }
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -575,6 +621,24 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
 
             // mono sample for FFT
             float mono = 0.5f * (p[0] + p[1]);
+
+            // --- FFT analyzer AGC ---
+            constexpr float TARGET = 0.1f; // gewünschte RMS-Amplitude
+            constexpr float ATTACK = 0.05f;
+            constexpr float RELEASE = 0.005f;
+
+            float level = fabsf(mono);
+
+            if (level > 1e-6f) {
+                float desired = TARGET / level;
+                if (desired < m_fft_gain)
+                    m_fft_gain += ATTACK * (desired - m_fft_gain);
+                else
+                    m_fft_gain += RELEASE * (desired - m_fft_gain);
+            }
+            if (fabsf(mono) < 1e-4f) mono = 0.0f;
+            mono *= m_fft_gain;
+
             m_fft_in[m_fft_pos++] = mono;
             if (m_fft_pos >= FFT_SIZE) {
                 m_fft_pos = 0;
@@ -623,23 +687,7 @@ void StereoAudioEqualizer::process(int32_t* buff, uint16_t numSamples) {
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void StereoAudioEqualizer::filter_block(float* block, int frames) {
-    for (int f = 0; f < 3; f++) {
-#if CONFIG_IDF_TARGET_ESP32
-        dsps_biquad_sf32_ae32(block, block, frames, m_coeffs[f], m_state_biquad[f]);
-#elif CONFIG_IDF_TARGET_ESP32S3
-    #ifdef CONFIG_DSP_OPTIMIZED
-        dsps_biquad_sf32_aes3(block, block, frames, m_coeffs[f], m_state_biquad[f]); // much faster
-    #else
-        dsps_biquad_sf32_ansi(block, block, frames, m_coeffs[f], m_state_biquad[f]);
-    #endif
-#elif CONFIG_IDF_TARGET_ESP32P4
-    #ifdef CONFIG_DSP_OPTIMIZED
-        dsps_biquad_sf32_arp4(block, block, frames, m_coeffs[f], m_state_biquad[f]); // much faster
-    #else
-        dsps_biquad_sf32_ansi(block, block, frames, m_coeffs[f], m_state_biquad[f]);
-    #endif
-#endif
-    }
+    for (int f = 0; f < 3; f++) { dsps_biquad_sf32(block, block, frames, m_coeffs[f], m_state_biquad[f]); }
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

@@ -8,9 +8,7 @@
 #pragma once
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
-#include "dsps_fft2r.h"
-#include "dsps_biquad.h"
-#include "dsps_biquad_gen.h"
+#include "esp_dsp.h"
 #include "esp_arduino_version.h"
 #include "psram_unique_ptr.hpp"
 #include <Arduino.h>
@@ -115,14 +113,16 @@ class StereoAudioEqualizer {
   private: // ---------- FFT section -----------
 #define FFT_SIZE  256
 #define FFT_BANDS 3
-    float    m_fft_in[FFT_SIZE];             // FFT buffers
-    float    m_fft_work[FFT_SIZE];           // FFT buffers
-    float    m_fft_window[FFT_SIZE];         // FFT buffers
+    float    m_fft_in[FFT_SIZE];             // FFT input (real)
+    alignas(16) float m_fft_work[FFT_SIZE * 2]; // FFT work buffer (complex interleaved)
+    float    m_fft_window[FFT_SIZE];         // FFT window
     uint16_t m_fft_pos = 0;                  // FFT state
     bool     m_fft_ready = false;            // FFT state
+    bool     m_fft_initialized = false;      // FFT state
     uint8_t  m_spectrum[FFT_BANDS] = {0};    // Spectrum result (0..255)
     float    m_spec_smooth[FFT_BANDS] = {0}; // smoothing
     uint32_t m_fft_last_ms = 0;              // timing (10 Hz)
+    float    m_fft_gain = 1.0f;              // AGC in process()
 
   public:
     StereoAudioEqualizer();
