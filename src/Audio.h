@@ -85,44 +85,11 @@ class AudioBuffer {
   private:
     SemaphoreHandle_t m_mutex = nullptr;
 };
-
-//----------------------------------------------------------------------------------------------------------------------
-class StereoBiquadChain {
-
-  private:
-    typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
-    typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
-
-    struct BiquadCoeffs {
-        float a0, a1, a2;
-        float b1, b2;
-    } coeffs[3];
-
-    uint8_t m_bps = 0;
-    audiolib::gain_t m_gain;
-
-  private:
-    struct BiquadState {
-        float x1 = 0.0f, x2 = 0.0f;
-        float y1 = 0.0f, y2 = 0.0f;
-    } state[3][2];
-
-  public:
-    StereoBiquadChain();
-    ~StereoBiquadChain() {}
-    void reset();
-    void calculateCoeffs(audiolib::gain_t gain, uint32_t sampleRate, uint8_t bps);
-    void process(int32_t* buff, uint16_t numSamples);
-
-  private:
-    void filter_sample(float* s);
-};
 //----------------------------------------------------------------------------------------------------------------------
 
 class Audio {
   private:
     AudioBuffer InBuff;    // instance of input buffer
-    StereoBiquadChain filterchain;
     uint8_t     m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
   public:
@@ -233,7 +200,7 @@ class Audio {
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
     void                     computeVUlevel(int32_t* sample);
-    void                     calculateVolumeLimits();
+    void                     computeLimit();
     void                     Gain(int16_t* sample);
     void                     Gain1(int32_t* sample);
     void                     showstreamtitle(char* ml);
@@ -245,7 +212,14 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
+    void                     IIR_filterChain0_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain1_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain2_s16(int16_t* iir_in, bool clear = false);
+    void                     IIR_filterChain0_s32(int32_t* iir_in, bool clear = false);
+    void                     IIR_filterChain1_s32(int32_t* iir_in, bool clear = false);
+    void                     IIR_filterChain2_s32(int32_t* iir_in, bool clear = false);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
+    void                     IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition();
 
@@ -388,6 +362,7 @@ class Audio {
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_playlistBuff;
 
+    filter_t       m_filter[3];             // digital filters
     const uint16_t m_plsBuffEntryLen = 256; // length of each entry in playlistBuff
     int            m_LFcount = 0;           // Detection of end of header
     uint32_t       m_sampleRate = 48000;
@@ -416,6 +391,7 @@ class Audio {
     uint8_t  m_m3u8Codec = CODEC_AAC;        // codec of m3u8 stream
     uint8_t  m_expectedCodec = CODEC_NONE;   // set in connecttohost (e.g. http://url.mp3 -> CODEC_MP3)
     uint8_t  m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
+    uint8_t  m_filterType[2];                // lowpass, highpass
     uint8_t  m_streamType = ST_NONE;
     uint8_t  m_ID3Size = 0; // lengt of ID3frame - ID3header
     uint8_t  m_vuLeft = 0;  // average value of samples, left channel
@@ -484,9 +460,13 @@ class Audio {
     uint32_t m_audioDataStart = 0;     // in bytes
     size_t   m_audioDataSize = 0;      //
     size_t   m_ibuffSize = 0;          // log buffer size for audio_info()
+    float    m_filterBuff[3][2][2][2]; // IIR filters memory for Audio DSP
     float    m_corr = 1.0;             // correction factor for level adjustment
     size_t   m_i2s_bytesWritten = 0;   // set in i2s_write() but not used
-    int8_t   m_tone[3] = {0};          // cut or boost filters (LS, EQ. HS)
+    uint16_t m_filterFrequency[2];
+    int8_t   m_gain0 = 0; // cut or boost filters (EQ)
+    int8_t   m_gain1 = 0;
+    int8_t   m_gain2 = 0;
 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
@@ -518,7 +498,6 @@ class Audio {
     audiolib::phrah_t   m_phrah;
     audiolib::sdet_t    m_sdet;
     audiolib::fnsy_t    m_fnsy;
-    audiolib::gain_t    m_gain;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
