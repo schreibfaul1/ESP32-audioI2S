@@ -215,6 +215,8 @@ private:
     bool            m_f_lastMetaDataBlock = false;
     bool            m_f_flacNewMetadataBlockPicture = false;
     bool            m_valid = false;
+    bool            m_continued_page = false;
+    bool            m_f_first_flac_frame = false;
     uint8_t         m_flacPageNr = 0;
     ps_ptr<int64_t> m_samplesBuffer[2];
     uint16_t        m_maxBlocksize = FLAC_MAX_BLOCKSIZE;
@@ -229,7 +231,6 @@ private:
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
     uint64_t getTotoalSamplesInStream();
-    uint32_t countLeadingZeros(int32_t* bytesLeft);
     uint32_t readUint(uint8_t nBits, int32_t* bytesLeft);
     void     alignToByte();
     int8_t   decodeSubframes(int32_t* bytesLeft);
