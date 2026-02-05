@@ -229,6 +229,7 @@ private:
     int8_t   decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf);
     int8_t   decodeFrame(uint8_t* inbuf, int32_t* bytesLeft);
     uint64_t getTotoalSamplesInStream();
+    uint32_t countLeadingZeros(int32_t* bytesLeft);
     uint32_t readUint(uint8_t nBits, int32_t* bytesLeft);
     void     alignToByte();
     int8_t   decodeSubframes(int32_t* bytesLeft);
