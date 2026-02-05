@@ -93,42 +93,6 @@ bool FlacDecoder::isValid() {
 //----------------------------------------------------------------------------------------------------------------------
 //            B I T R E A D E R
 //----------------------------------------------------------------------------------------------------------------------
-uint32_t FlacDecoder::countLeadingZeros(int32_t* bytesLeft) {
-
-    uint32_t zeros = 0;
-    uint32_t savedBitLen = m_flacBitBufferLen;
-    uint32_t savedBitBuf = m_flac_bitBuffer;
-    uint32_t savedIndex  = m_rIndex;
-    int32_t  savedBytes  = *bytesLeft;
-
-    while (true) {
-
-        if (savedBitLen == 0) {
-            if (savedBytes <= 0) {
-                m_f_bitReaderError = true;
-                return zeros;
-            }
-            uint8_t temp = *(m_flacInptr + savedIndex++);
-            savedBytes--;
-            savedBitBuf = (savedBitBuf << 8) | temp;
-            savedBitLen = 8;
-        }
-
-        uint32_t n = savedBitLen;
-        if (n > 8) n = 8;
-
-        uint8_t b = (savedBitBuf >> (savedBitLen - n)) & ((1u << n) - 1);
-
-        for (uint32_t i = 0; i < n; i++) {
-            if (b & (1u << (n - 1 - i))) {
-                return zeros;
-            }
-            zeros++;
-        }
-
-        savedBitLen -= n;
-    }
-}
 
 uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
 
@@ -146,7 +110,7 @@ uint32_t FlacDecoder::readUint(uint8_t nBits, int32_t* bytesLeft) {
                 (*bytesLeft)++;
                 // If the Flac frame is larger than the OGG frame, we are looking for the OGG's identifier
                 if (specialIndexOf(m_flacInptr + m_rIndex, "OggS", 4) == 0) { // next OGG recognized
-                    parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG an set segment tables, bytesLeft is now negative
+                    parseOGG(m_flacInptr + m_rIndex, bytesLeft);              // parse OGG and set segment tables, bytesLeft is now negative
                     m_segmLength = m_flacSegmTableVec.back();                 // read the first table
                     m_flacSegmTableVec.pop_back();                            // and remove them
                     m_f_flacParseOgg = false;                                 // no next OGG parse necessary
@@ -299,8 +263,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
     bool lastPage = headerType & 0x04;      // set: this is the last page of a logical bitstream (eos)
-
-    (void)continuedPage;
+    m_continued_page = continuedPage;
     (void)lastPage;
 
     // FLAC_LOG_INFO("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
@@ -441,7 +404,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 4;
                 bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
                 FLACMetadataBlock->bitsPerSample = bitsPerSample;
-                FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
+                // FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
 
                 totalSamplesInStream = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
@@ -575,6 +538,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         if (specialIndexOf(inbuf, "OggS", 5) == 0) {
             m_f_oggWrapper = true;
             m_f_flacParseOgg = true;
+            m_f_first_flac_frame = true;
         }
     }
 
@@ -789,6 +753,12 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         return FLAC_OGG_SYNC_FOUND;
     }
     if (inbuf[0] != 0xFF || inbuf[1] != 0xF8) {
+        if(m_f_first_flac_frame && m_continued_page){ // these are the remains of a previous FLAC frame that was interrupted by OGG. We continue with the next segment,
+            // FLAC_LOG_WARN("need next segment");
+            m_f_first_flac_frame = false;
+            *bytesLeft -= m_segmLength;
+            return FLAC_NONE;
+        }
         FLAC_LOG_ERROR("Sync 0xFFF8 not found");
         return FLAC_ERR;
     }
@@ -1103,9 +1073,15 @@ int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLe
             while (dst < dstEnd) {
                 if (m_f_bitReaderError) break;
 
-                uint32_t zeros = countLeadingZeros(bytesLeft);
-                readUint(zeros + 1, bytesLeft);   // skip unary 1
-                uint32_t val = (zeros << param) | readUint(param, bytesLeft);
+               uint32_t val = 0;
+                // Inline Rice unary prefix
+                while (readUint(1, bytesLeft) == 0) {
+                    val++;
+                    if (m_f_bitReaderError) { break; }
+                }
+
+                // Append remainder bits
+                val = (val << param) | readUint(param, bytesLeft);
 
                 // Convert to signed
                 int64_t signedVal = (val >> 1) ^ -(val & 1);
