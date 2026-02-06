@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4ij                                                                                                                             ";
-/*  Updated on: Jan 29, 2026
+    Version 3.4.4j                                                                                                                             ";
+/*  Updated on: Feb 06, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -414,9 +414,9 @@ void Audio::initInBuff() {
 esp_err_t Audio::I2Sstart() {
     zeroI2Sbuff();
     esp_err_t err = ESP_FAIL;
-    if(!m_f_i2s_channel_enabled) {
+    if (!m_f_i2s_channel_enabled) {
         err = i2s_channel_enable(m_i2s_tx_handle);
-        if(err == ESP_OK) m_f_i2s_channel_enabled = true;
+        if (err == ESP_OK) m_f_i2s_channel_enabled = true;
     }
     return err;
 }
@@ -426,7 +426,7 @@ esp_err_t Audio::I2Sstop() {
     m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     esp_err_t err = ESP_FAIL;
-    if(m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
+    if (m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
     m_f_i2s_channel_enabled = false;
     return err;
 }
@@ -3257,13 +3257,13 @@ uint32_t Audio::stopSong() {
         if (m_f_running) {
             m_f_running = false;
             if (m_client->connected()) {
-                info(*this, evt_info, "Closing web file \"%s\"", m_lastHost.c_get());
+                if (m_streamType == ST_WEBSTREAM) { info(*this, evt_info, "Closing web stream \"%s\"", m_lastHost.c_get()); }
+                if (m_streamType == ST_WEBFILE) { info(*this, evt_info, "Closing web file \"%s\"", m_lastHost.c_get()); }
                 m_client->stop();
             }
             if (m_audiofile) {
                 info(*this, evt_info, "Closing audio file \"%s\"", m_audiofile.name());
                 m_audiofile.close();
-                m_client->stop();
             }
         }
         memset(m_filterBuff, 0, sizeof(m_filterBuff)); // Clear FilterBuffer
@@ -3388,7 +3388,7 @@ void IRAM_ATTR Audio::playChunk() {
 
     m_plCh.validSamples = m_validSamples;
 
-    if (getChannels() == 1) { //------------- mono to stereo ----------------------------
+    if (getChannels() == 1) {                                //------------- mono to stereo ----------------------------
         if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
             int16_t* in = (int16_t*)m_outBuff.get();
             int32_t* out = (int32_t*)m_outBuff.get();
@@ -4860,9 +4860,9 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         else if (rhl.starts_with_icase("location:")) {
             int pos = rhl.index_of_icase("http", 0);
-            if(pos == -1){
-                int doubleSlash = rhl.index_of("//"); // e.g. location: //frontend.streamonkey.net/...  host: http://webstream.radiof.de/
-                if(doubleSlash >= 9) rhl.insert("http:", doubleSlash); // ==> http://frontend.streamonkey.net/fhn-radiof945/stream/mp3?aggregator=fh-tinyurl
+            if (pos == -1) {
+                int doubleSlash = rhl.index_of("//");                   // e.g. location: //frontend.streamonkey.net/...  host: http://webstream.radiof.de/
+                if (doubleSlash >= 9) rhl.insert("http:", doubleSlash); // ==> http://frontend.streamonkey.net/fhn-radiof945/stream/mp3?aggregator=fh-tinyurl
                 pos = rhl.index_of_icase("http", 0);
             }
             if (pos >= 0) {
@@ -6220,13 +6220,13 @@ void Audio::computeVUlevel(int32_t* sample) {
         return;
     }
 
-    auto avg = [&](uint8_t* sampArr) ->uint8_t { // lambda, inner function, compute the average of 8 samples
+    auto avg = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the average of 8 samples
         uint16_t av = 0;
         for (int i = 0; i < 8; i++) { av += sampArr[i]; }
         return (uint8_t)(av >> 3);
     };
 
-    auto largest = [&](uint8_t* sampArr) ->uint8_t { // lambda, inner function, compute the largest of 8 samples
+    auto largest = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the largest of 8 samples
         uint8_t maxValue = 0;
         for (int i = 0; i < 8; i++) {
             if (maxValue < sampArr[i]) maxValue = sampArr[i];
@@ -6279,7 +6279,7 @@ void Audio::computeVUlevel(int32_t* sample) {
     }
     if (m_cVUl.f_vu) {
         m_cVUl.f_vu = false;
-        m_vuLeft =  avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
+        m_vuLeft = avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
         m_vuRight = avg(m_cVUl.sampleArray[RIGHTCHANNEL][3]);
     }
     m_cVUl.cnt1++;
