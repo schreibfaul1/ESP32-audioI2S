@@ -10,6 +10,7 @@
 #include "audiolib_structs.hpp"
 #include "esp_arduino_version.h"
 #include "psram_unique_ptr.hpp"
+#include "esp_dsp.h"
 #include <Arduino.h>
 #include <FFat.h>
 #include <FS.h>
@@ -92,6 +93,11 @@ class Audio {
     AudioBuffer InBuff;    // instance of input buffer
     uint8_t     m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
+
+
+
+    
+
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
     ~Audio();
@@ -145,7 +151,7 @@ class Audio {
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
     void             inBufferStatus(){InBuff.showStatus();}
-    void             setTone(int8_t gainLowPass, int8_t gainBandPass, int8_t gainHighPass);
+    void             setTone(float gainLowPass, float gainBandPass, float gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
     const char*      getCodecname() { return codecname[m_codec]; }
@@ -212,14 +218,9 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
-    void                     IIR_filterChain0_s16(int16_t* iir_in, bool clear = false);
-    void                     IIR_filterChain1_s16(int16_t* iir_in, bool clear = false);
-    void                     IIR_filterChain2_s16(int16_t* iir_in, bool clear = false);
-    void                     IIR_filterChain0_s32(int32_t* iir_in, bool clear = false);
-    void                     IIR_filterChain1_s32(int32_t* iir_in, bool clear = false);
-    void                     IIR_filterChain2_s32(int32_t* iir_in, bool clear = false);
+    void                     IIR_filter(int16_t* iir_in);
+    void                     IIR_calculateCoefficients();
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
-    void                     IIR_calculateCoefficients(int8_t G1, int8_t G2, int8_t G3);
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition();
 
@@ -305,7 +306,7 @@ class Audio {
     enum : int { ST_NONE = 0, ST_WEBFILE = 1, ST_WEBSTREAM = 2 };
     const char* streamTypeStr[3] = {"NONE", "WEBFILE", "WEBSTREAM"};
     typedef enum { LEFTCHANNEL = 0, RIGHTCHANNEL = 1 } SampleIndex;
-    typedef enum { LOWSHELF = 0, PEAKEQ = 1, HIFGSHELF = 2 } FilterType;
+    typedef enum { LOWSHELF = 0, PEAKINGEQ = 1, HIFGSHELF = 2 } FilterType;
 
   private:
     typedef struct _filter {
@@ -363,6 +364,8 @@ class Audio {
     ps_ptr<char>             m_playlistBuff;
 
     filter_t       m_filter[3];             // digital filters
+    float m_coeffs[3][5] = {0};
+    float                   m_state_biquad[3][4] = {0};
     const uint16_t m_plsBuffEntryLen = 256; // length of each entry in playlistBuff
     int            m_LFcount = 0;           // Detection of end of header
     uint32_t       m_sampleRate = 48000;
@@ -378,7 +381,6 @@ class Audio {
     uint16_t       m_vol = 21;              // volume
     uint16_t       m_vol_steps = 21;        // default
     int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
-    uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
     double         m_limit_left = 0;        // limiter 0 ... 1, left channel
     double         m_limit_right = 0;       // limiter 0 ... 1, right channel
     uint8_t        m_timeoutCounter = 0;    // timeout counter
@@ -460,14 +462,8 @@ class Audio {
     uint32_t m_audioDataStart = 0;     // in bytes
     size_t   m_audioDataSize = 0;      //
     size_t   m_ibuffSize = 0;          // log buffer size for audio_info()
-    float    m_filterBuff[3][2][2][2]; // IIR filters memory for Audio DSP
-    float    m_corr = 1.0;             // correction factor for level adjustment
     size_t   m_i2s_bytesWritten = 0;   // set in i2s_write() but not used
-    uint16_t m_filterFrequency[2];
-    int8_t   m_gain0 = 0; // cut or boost filters (EQ)
-    int8_t   m_gain1 = 0;
-    int8_t   m_gain2 = 0;
-
+ 
     pid_array m_pidsOfPMT;
     int16_t   m_pidOfAAC;
     uint8_t   m_packetBuff[m_tsPacketSize];
@@ -498,6 +494,7 @@ class Audio {
     audiolib::phrah_t   m_phrah;
     audiolib::sdet_t    m_sdet;
     audiolib::fnsy_t    m_fnsy;
+    audiolib::tone_t    m_tone;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:

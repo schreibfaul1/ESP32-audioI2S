@@ -50,9 +50,7 @@ struct ID3Hdr_t { // used only in readID3header()
     bool                  byteOrderMark = {};
     ps_ptr<char>          iBuff;
 
-    void reset() {
-        *this = ID3Hdr_t{};
-    }
+    void reset() { *this = ID3Hdr_t{}; }
 };
 
 struct pwsHLS_t { // used in processWebStreamHLS()
@@ -175,15 +173,13 @@ typedef struct _cat { // used in calculateAudioTime
     uint32_t brCounter{};
     bool     firstCall{};
 
-    void reset() {
-        *this = _cat{};
-    }
+    void reset() { *this = _cat{}; }
 } cat_t;
 
 struct cVUl_t { // used in computeVUlevel
     uint8_t sampleArray[2][4][8] = {0};
-    uint8_t  cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
-    bool     f_vu = false;
+    uint8_t cnt0 = 0, cnt1 = 0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+    bool    f_vu = false;
 };
 
 struct ifCh_t { // used in IIR_filterChain0, 1, 2
@@ -350,6 +346,16 @@ struct sdet_t { // used in streamDetection
 struct fnsy_t { // used in findNextSync
     int      nextSync = 0;
     uint32_t swnf = 0;
+};
+
+struct tone_t {
+    uint16_t freq_ls_Hz = 500;  // lowshelf
+    uint16_t freq_peq_Hz = 1800; // peakingEQ
+    uint16_t freq_hs_Hz = 6000;  // highshelf
+    float    gain_ls_db = 0.0;
+    float    gain_peq_db = 0.0;
+    float    gain_hs_db = 0.0;
+    float    pre_gain = 0.0; // correction factor for level adjustment
 };
 
 } // namespace audiolib
