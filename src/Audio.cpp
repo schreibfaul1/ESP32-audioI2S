@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4m                                                                                                                            ";
+    Version 3.4.4n                                                                                                                            ";
 /*  Updated on: Feb 10, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3375,42 +3375,19 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_plCh.count > 0) goto i2swrite;
     m_plCh.validSamples = m_validSamples;
 
-    if (getChannels() == 1) {                                //------------- mono to stereo ----------------------------
-        if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit
-            int16_t* in = (int16_t*)m_outBuff.get();
-            int32_t* out = (int32_t*)m_outBuff.get();
-            int16_t  s;
-
-            for (int i = m_validSamples - 1; i >= 0; --i) {
-                s = in[i * 2];
-                uint32_t packed_l = ((uint32_t)(uint16_t)s << 16) | (uint16_t)s;
-                s = in[i * 2 + 1];
-                uint32_t packed_r = ((uint32_t)(uint16_t)s << 16) | (uint16_t)s;
-                out[2 * i + 1] = packed_r;
-                out[2 * i] = packed_l;
-            }
-        }
-        if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit
-            for (int i = m_validSamples - 1; i >= 0; --i) {
-                int32_t sample = m_outBuff[i];
-                m_outBuff[2 * i] = sample;
-                m_outBuff[2 * i + 1] = sample;
-            }
-        }
-    } //--------------------------------------------------------------------------------
-
     if (m_bitsPerSample == 8) m_plCh.sampleSize = 2;  // upsampled (8 -> 16 bit), 2 bytes per sample * 2 ch
     if (m_bitsPerSample == 16) m_plCh.sampleSize = 2; // 2 bytes per sample * 2 ch
     if (m_bitsPerSample == 24) m_plCh.sampleSize = 4; // upsampled (24-> 32 bit), 4 bytes per sample * 2 ch
     if (m_bitsPerSample == 32) m_plCh.sampleSize = 4; // 4 bytes per smple * 2 ch
-
     ss = m_plCh.sampleSize / 2;
-    for (int i = 0; i < m_validSamples * ss; i += ss ){
+    //------------------------------------------------------------------------------------------
+    if (getChannels() == 1) mono2stereo(m_outBuff.get(), m_validSamples);
+    for (int i = 0; i < m_validSamples * ss; i += ss) {
         computeVUlevel(&m_outBuff[i]);
         IIR_filter(&m_outBuff[i]);
         Gain(&m_outBuff[i]);
     }
-
+    if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
@@ -6256,7 +6233,7 @@ void Audio::forceMono(bool m) { // #100 mono option
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setBalance(float balance) { // left -16.0dB ... 0dB ... -16.0dB right
-    m_balance= fminf(fmaxf(balance, -16.0f), 16.0f);
+    m_balance = fminf(fmaxf(balance, -16.0f), 16.0f);
     calculateVolumeLimits();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6313,7 +6290,7 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
 
     m_limiter[LEFTCHANNEL] = vol * powf(10.0f, l_db / 20.0f);
     m_limiter[RIGHTCHANNEL] = vol * powf(10.0f, r_db / 20.0f);
-    AUDIO_LOG_INFO("m_limiter[LEFTCHANNEL] %f, m_limiter[RIGHTCHANNEL] %f", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL]);
+    AUDIO_LOG_DEBUG("m_limiter[LEFTCHANNEL] %f, m_limiter[RIGHTCHANNEL] %f", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {
@@ -6343,6 +6320,53 @@ uint32_t Audio::inBufferFree() {
 uint32_t Audio::getInBufferSize() {
     // current audio input buffer size in bytes
     return InBuff.getBufsize();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::mono2stereo(int32_t* buff, uint16_t validSamples) {
+
+    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit samples
+        int16_t* s = (int16_t*)buff;
+
+        int32_t src = validSamples - 1;
+        int32_t dst = (validSamples * 2) - 1;
+
+        while (src >= 0) {
+            int16_t v = s[src--];
+            s[dst--] = v; // Right
+            s[dst--] = v; // Left
+        }
+    }
+
+    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit samples
+        for (int i = validSamples - 1; i >= 0; --i) {
+            int32_t sample = buff[i];
+            buff[2 * i] = sample;
+            buff[2 * i + 1] = sample;
+        }
+    }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::stereo2mono(int32_t* buff, uint16_t validSamples) {
+    if ((m_bitsPerSample == 8 || m_bitsPerSample == 16) && m_channels == 2) {
+        int16_t* s = (int16_t*)buff;
+        for (uint16_t i = 0; i < validSamples * 2; i += 2) {
+            int32_t l = s[i];
+            int32_t r = s[i + 1];
+            int16_t m = (int16_t)((l + r) >> 1); // average, without overflow
+            s[i] = m;     // Left
+            s[i + 1] = m; // Right
+        }
+    }
+
+    if ((m_bitsPerSample == 24 || m_bitsPerSample == 32) && m_channels == 2) {
+        for (uint16_t i = 0; i < validSamples * 2; i += 2) {
+            int64_t l = buff[i];
+            int64_t r = buff[i + 1];
+            int32_t m = (int32_t)((l + r) >> 1); // average, without overflow
+            buff[i] = m;     // Left
+            buff[i + 1] = m; // Right
+        }
+    }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //            ***     D i g i t a l   b i q u a d r a t i c     f i l t e r     ***
@@ -6387,8 +6411,8 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_highShelf_f32(m_tone.coeffs[HIFGSHELF], normFreqHS, m_tone.gain_hs_db, QS);
 
     AUDIO_LOG_DEBUG("\n([%f, %f, %f], [1.0, %f, %f]), # LOWSHELF\n([%f,  %f,  %f ], [1.0, %f,  %f ]), # PEAKINGEQ\n([%f, %f, %f], [1.0, %f, %f]), # HIGHSHELF\n", m_tone.coeffs[0][0],
-                   m_tone.coeffs[0][1], m_tone.coeffs[0][2], m_tone.coeffs[0][3], m_tone.coeffs[0][4], m_tone.coeffs[1][0], m_tone.coeffs[1][1], m_tone.coeffs[1][2], m_tone.coeffs[1][3],
-                   m_tone.coeffs[1][4], m_tone.coeffs[2][0], m_tone.coeffs[2][1], m_tone.coeffs[2][2], m_tone.coeffs[2][3], m_tone.coeffs[2][4]);
+                    m_tone.coeffs[0][1], m_tone.coeffs[0][2], m_tone.coeffs[0][3], m_tone.coeffs[0][4], m_tone.coeffs[1][0], m_tone.coeffs[1][1], m_tone.coeffs[1][2], m_tone.coeffs[1][3],
+                    m_tone.coeffs[1][4], m_tone.coeffs[2][0], m_tone.coeffs[2][1], m_tone.coeffs[2][2], m_tone.coeffs[2][3], m_tone.coeffs[2][4]);
     AUDIO_LOG_DEBUG("m_tone.pre_gain %f", m_tone.pre_gain);
     memset(m_tone.state_biquad, 0, sizeof(m_tone.state_biquad));
 }
