@@ -200,7 +200,7 @@ class Audio {
     bool                     setChannels(int channels);
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
-    void                     computeVUlevel(int32_t* sample);
+    void                     calculateVUlevel(int32_t* sample);
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
     void                     showstreamtitle(char* ml);
@@ -474,7 +474,6 @@ class Audio {
     audiolib::lVar_t    m_lVar;
     audiolib::prlf_t    m_prlf;
     audiolib::cat_t     m_cat;
-    audiolib::cVUl_t    m_cVUl;
     audiolib::ifCh_t    m_ifCh;
     audiolib::tspp_t    m_tspp;
     audiolib::pwst_t    m_pwst;

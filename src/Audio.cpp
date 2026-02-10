@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4n                                                                                                                            ";
+    Version 3.4.4o                                                                                                                            ";
 /*  Updated on: Feb 10, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3383,7 +3383,7 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------
     if (getChannels() == 1) mono2stereo(m_outBuff.get(), m_validSamples);
     for (int i = 0; i < m_validSamples * ss; i += ss) {
-        computeVUlevel(&m_outBuff[i]);
+        calculateVUlevel(&m_outBuff[i]);
         IIR_filter(&m_outBuff[i]);
         Gain(&m_outBuff[i]);
     }
@@ -6131,83 +6131,32 @@ void Audio::reconfigI2S() {
     i2s_channel_enable(m_i2s_tx_handle);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
 
-void Audio::computeVUlevel(int32_t* sample) {
-    int16_t* s16 = NULL;
-    int32_t* s32 = NULL;
-    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
-        s16 = (int16_t*)sample;
-    } else if (getBitsPerSample() == 24 || getBitsPerSample() == 32) {
-        s32 = sample;
-    } else {
-        return;
+    uint8_t l = 0, r = 0;
+    if(m_bitsPerSample == 8 || m_bitsPerSample == 16) {
+        int16_t* s16 = (int16_t*)sample;
+        l = abs(s16[LEFTCHANNEL] >> 7);
+        r = abs(s16[RIGHTCHANNEL] >> 7);
+    }
+    if(m_bitsPerSample == 24 || m_bitsPerSample == 32) {
+        l = abs(sample[LEFTCHANNEL] >> 23);
+        r = abs(sample[RIGHTCHANNEL] >> 23);
     }
 
-    auto avg = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the average of 8 samples
-        uint16_t av = 0;
-        for (int i = 0; i < 8; i++) { av += sampArr[i]; }
-        return (uint8_t)(av >> 3);
-    };
+    constexpr uint8_t RELEASE = 1; // the bigger, the more sluggish
 
-    auto largest = [&](uint8_t* sampArr) -> uint8_t { // lambda, inner function, compute the largest of 8 samples
-        uint8_t maxValue = 0;
-        for (int i = 0; i < 8; i++) {
-            if (maxValue < sampArr[i]) maxValue = sampArr[i];
-        }
-        return maxValue;
-    };
+    // Attack immediately
+    if (l > m_vuLeft)
+        m_vuLeft = l;
+    else if (m_vuLeft > RELEASE)
+        m_vuLeft -= RELEASE;
 
-    if (m_cVUl.cnt0 == 64) {
-        m_cVUl.cnt0 = 0;
-        m_cVUl.cnt1++;
-    }
-    if (m_cVUl.cnt1 == 8) {
-        m_cVUl.cnt1 = 0;
-        m_cVUl.cnt2++;
-    }
-    if (m_cVUl.cnt2 == 8) {
-        m_cVUl.cnt2 = 0;
-        m_cVUl.cnt3++;
-    }
-    if (m_cVUl.cnt3 == 8) {
-        m_cVUl.cnt3 = 0;
-        m_cVUl.cnt4++;
-        m_cVUl.f_vu = true;
-    }
-    if (m_cVUl.cnt4 == 8) { m_cVUl.cnt4 = 0; }
-
-    if (!m_cVUl.cnt0) { // store every 64th sample in the array[0]
-        if (s16) {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s16[LEFTCHANNEL] >> 7); // first bit is sign
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s16[RIGHTCHANNEL] >> 7);
-        } else if (s32) {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s32[LEFTCHANNEL] >> 23);
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = (uint8_t)abs(s32[RIGHTCHANNEL] >> 23);
-        } else {
-            m_cVUl.sampleArray[LEFTCHANNEL][0][m_cVUl.cnt1] = 0;
-            m_cVUl.sampleArray[RIGHTCHANNEL][0][m_cVUl.cnt1] = 0;
-        }
-    }
-    if (!m_cVUl.cnt1) { // store argest from 64 * 8 samples in the array[1]
-        m_cVUl.sampleArray[LEFTCHANNEL][1][m_cVUl.cnt2] = largest(m_cVUl.sampleArray[LEFTCHANNEL][0]);
-        m_cVUl.sampleArray[RIGHTCHANNEL][1][m_cVUl.cnt2] = largest(m_cVUl.sampleArray[RIGHTCHANNEL][0]);
-    }
-    if (!m_cVUl.cnt2) { // store avg from 64 * 8 * 8 samples in the array[2]
-        m_cVUl.sampleArray[LEFTCHANNEL][2][m_cVUl.cnt3] = largest(m_cVUl.sampleArray[LEFTCHANNEL][1]);
-        m_cVUl.sampleArray[RIGHTCHANNEL][2][m_cVUl.cnt3] = largest(m_cVUl.sampleArray[RIGHTCHANNEL][1]);
-    }
-    if (!m_cVUl.cnt3) { // store avg from 64 * 8 * 8 * 8 samples in the array[3]
-        m_cVUl.sampleArray[LEFTCHANNEL][3][m_cVUl.cnt4] = avg(m_cVUl.sampleArray[LEFTCHANNEL][2]);
-        m_cVUl.sampleArray[RIGHTCHANNEL][3][m_cVUl.cnt4] = avg(m_cVUl.sampleArray[RIGHTCHANNEL][2]);
-    }
-    if (m_cVUl.f_vu) {
-        m_cVUl.f_vu = false;
-        m_vuLeft = avg(m_cVUl.sampleArray[LEFTCHANNEL][3]);
-        m_vuRight = avg(m_cVUl.sampleArray[RIGHTCHANNEL][3]);
-    }
-    m_cVUl.cnt1++;
+    if (r > m_vuRight)
+        m_vuRight = r;
+    else if (m_vuRight > RELEASE)
+        m_vuRight -= RELEASE;
 }
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint16_t Audio::getVUlevel() {
     // avg 0 ... 127
