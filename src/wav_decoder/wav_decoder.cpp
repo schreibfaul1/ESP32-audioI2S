@@ -119,7 +119,7 @@ int32_t WavDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     }
     // ------------ 32-BIT PCM ------------
     if (m_bps == 32) {
-        if (frame > 3072) frame = 3072;
+        if (frame > 4096) frame = 4096;
         for (int i = 0; i < frame / 4; i++) {
             outbuf[i] = (p[3] << 24) | (p[2] << 16) | (p[1] << 8) | (p[0]);
             p += 4;

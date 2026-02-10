@@ -246,12 +246,12 @@ int32_t FlacDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     }
 
     // FLAC native search
-    for (int32_t i = 0; i < nBytes - 16; i++) { // Mindestens 16 Bytes für vollständigen Header
+    for (int32_t i = 0; i < nBytes - 16; i++) { // Less than 16 bytes for full download
 
         // 1. Sync check (14 bits): 0xFFF8 bis 0xFFFF im ersten Word
         if (buf[i] != 0xFF || (buf[i + 1] & 0xFC) != 0xF8) { continue; }
 
-        // Optional: Verhindere Splitted Sync (wenn vorheriges Byte 0xFF war)
+        // Optional: Prevent split sync (if previous byte was 0xFF)
         if (i > 0 && buf[i - 1] == 0xFF) { continue; }
 
         // 2. Extract header fields

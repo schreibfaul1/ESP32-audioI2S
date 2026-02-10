@@ -352,4 +352,16 @@ struct fnsy_t { // used in findNextSync
     uint32_t swnf = 0;
 };
 
+struct tone_t {
+    uint16_t freq_ls_Hz = 500;  // lowshelf
+    uint16_t freq_peq_Hz = 1800; // peakingEQ
+    uint16_t freq_hs_Hz = 6000;  // highshelf
+    float    gain_ls_db = 0.0;
+    float    gain_peq_db = 0.0;
+    float    gain_hs_db = 0.0;
+    float    pre_gain = 0.0; // correction factor for level adjustment
+    float    coeffs[3][5] = {0};
+    float    state_biquad[3][4] = {0};
+};
+
 } // namespace audiolib
