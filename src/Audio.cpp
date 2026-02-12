@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4p                                                                                                                            ";
+    Version 3.4.4q                                                                                                                            ";
 /*  Updated on: Feb 12, 2026
 
     Author: Wolle (schreibfaul1)
@@ -6447,7 +6447,7 @@ void Audio::IIR_filter(int32_t* sample) {
         dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
         dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
         s32[LEFTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[LEFTCHANNEL])));
-        s32[RIGHTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[LEFTCHANNEL])));
+        s32[RIGHTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[RIGHTCHANNEL])));
 
         s32[LEFTCHANNEL] = (int32_t)s[LEFTCHANNEL];
         s32[RIGHTCHANNEL] = (int32_t)s[RIGHTCHANNEL];
