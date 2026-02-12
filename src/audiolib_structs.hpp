@@ -128,11 +128,8 @@ struct plCh_t { // used in playChunk
     uint16_t  samples;
     int16_t*  sample[2];
     int32_t*  sample1;
-    int16_t*  s16;
-    int32_t*  s32;
     int       sampleSize;
     esp_err_t err;
-    int       i;
 };
 
 struct lVar_t { // used in loop
@@ -347,7 +344,7 @@ struct fnsy_t { // used in findNextSync
     uint32_t swnf = 0;
 };
 
-struct tone_t {
+struct audioItems_t {
     uint16_t freq_ls_Hz = 500;  // lowshelf
     uint16_t freq_peq_Hz = 1800; // peakingEQ
     uint16_t freq_hs_Hz = 6000;  // highshelf
@@ -357,6 +354,12 @@ struct tone_t {
     float    pre_gain = 0.0; // correction factor for level adjustment
     float    coeffs[3][5] = {0};
     float    state_biquad[3][4] = {0};
+    float    vuLeft = 0;  // average value of samples, left channel
+    float    vuRight = 0; // average value of samples, right channel
+    uint8_t  volume = 0;
+    uint8_t  volume_steps = 21;
+    float    cur_volume = 0.0f;
+    bool     mute = false;
 };
 
 } // namespace audiolib

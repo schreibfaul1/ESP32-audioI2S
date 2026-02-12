@@ -9,8 +9,8 @@
 #pragma GCC optimize("Ofast")
 #include "audiolib_structs.hpp"
 #include "esp_arduino_version.h"
-#include "psram_unique_ptr.hpp"
 #include "esp_dsp.h"
+#include "psram_unique_ptr.hpp"
 #include <Arduino.h>
 #include <FFat.h>
 #include <FS.h>
@@ -128,9 +128,11 @@ class Audio {
     void             forceMono(bool m);
     void             setBalance(float balance = 0.0f);
     void             setVolumeSteps(uint8_t steps);
+    uint8_t          getVolumeSteps();
     void             setVolume(uint8_t vol, uint8_t curve = 0);
     uint8_t          getVolume();
-    uint8_t          maxVolume();
+    void             setMute(bool mute);
+    bool             getMute();
     uint8_t          getI2sPort();
     uint32_t         getFileSize();
     uint32_t         getSampleRate();
@@ -145,7 +147,7 @@ class Audio {
     uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
-    void             inBufferStatus(){InBuff.showStatus();}
+    void             inBufferStatus() { InBuff.showStatus(); }
     void             setTone(float gainLowPass, float gainBandPass, float gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
     int              getCodec() { return m_codec; }
@@ -200,7 +202,8 @@ class Audio {
     bool                     setChannels(int channels);
     size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
     void                     playChunk();
-    void                     calculateVUlevel(int32_t* sample);
+    void                     calculateVUlevel(int32_t* sample, bool release = false);
+    void                     gain_ramp();
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
     void                     showstreamtitle(char* ml);
@@ -228,7 +231,7 @@ class Audio {
   private:
     void        startAudioTask(); // starts a task for decode and play
     void        stopAudioTask();  // stops task for audio
-    static void taskWrapper(void* param);
+    static void audioTaskWrapper(void* param);
     void        audioTask();
     void        performAudioTask();
 
@@ -371,14 +374,12 @@ class Audio {
     uint32_t       m_metacount = 0;         // counts down bytes between metadata
     int            m_controlCounter = 0;    // Status within readID3data() and readWaveHeader()
     float          m_balance = 0.0f;        // -16 (mute left) ... +16 (mute right)
-    uint16_t       m_vol = 21;              // volume
-    uint16_t       m_vol_steps = 21;        // default
     int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
     uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
     float          m_limiter[2] = {0};
-    uint8_t        m_timeoutCounter = 0;    // timeout counter
-    uint8_t        m_curve = 0;             // volume characteristic
-    uint8_t        m_bitsPerSample = 16;    // bitsPerSample
+    uint8_t        m_timeoutCounter = 0; // timeout counter
+    uint8_t        m_curve = 0;          // volume characteristic
+    uint8_t        m_bitsPerSample = 16; // bitsPerSample
     uint8_t        m_channels = 2;
 
     uint8_t  m_playlistFormat = 0;           // M3U, PLS, ASX
@@ -388,15 +389,13 @@ class Audio {
     uint8_t  m_expectedPlsFmt = FORMAT_NONE; // set in connecttohost (e.g. streaming01.m3u) -> FORMAT_M3U)
     uint8_t  m_streamType = ST_NONE;
     uint8_t  m_ID3Size = 0; // lengt of ID3frame - ID3header
-    uint8_t  m_vuLeft = 0;  // average value of samples, left channel
-    uint8_t  m_vuRight = 0; // average value of samples, right channel
     uint8_t  m_audioTaskCoreId = 0;
     uint8_t  m_M4A_objectType = 0; // set in read_M4A_Header
     uint8_t  m_M4A_chConfig = 0;   // set in read_M4A_Header
     uint16_t m_M4A_sampleRate = 0; // set in read_M4A_Header
     int16_t  m_validSamples = 0;
     int16_t  m_curSample = 0;
-    uint16_t m_dataMode = 0;         // Statemaschine
+    uint16_t m_dataMode = 0;        // Statemaschine
     uint16_t m_streamTitleHash = 0; // remember streamtitle, ignore multiple occurence in metadata
     uint16_t m_timeout_ms = 250;
     uint16_t m_timeout_ms_ssl = 2700;
@@ -442,21 +441,21 @@ class Audio {
     bool     m_f_lockInBuffer = false; // lock inBuffer for manipulation
     bool     m_f_audioTaskIsDecoding = false;
     bool     m_f_acceptRanges = false;
-    bool     m_f_reset_m3u8Codec = true;  // reset codec for m3u8 stream
-    bool     m_f_connectionClose = false; // set in parseHttpResponseHeader
+    bool     m_f_reset_m3u8Codec = true;      // reset codec for m3u8 stream
+    bool     m_f_connectionClose = false;     // set in parseHttpResponseHeader
     bool     m_f_i2s_channel_enabled = false; // true if enabled
-    uint32_t m_audioFileDuration = 0;     // seconds
-    uint32_t m_audioCurrentTime = 0;      // seconds
+    uint32_t m_audioFileDuration = 0;         // seconds
+    uint32_t m_audioCurrentTime = 0;          // seconds
     float    m_resampleError = 0.0f;
     float    m_resampleRatio = 1.0f;  // resample ratio for e.g. 44.1kHz to 48kHz
     float    m_resampleCursor = 0.0f; // next frac in resampleTo48kStereo
 
-    uint32_t m_audioDataStart = 0;     // in bytes
-    size_t   m_audioDataSize = 0;      //
-    size_t   m_ibuffSize = 0;          // log buffer size for audio_info()
-    float    m_corr = 1.0;             // correction factor for level adjustment
-    size_t   m_i2s_bytesWritten = 0;   // set in i2s_write() but not used
-    int8_t   m_gain0 = 0; // cut or boost filters (EQ)
+    uint32_t m_audioDataStart = 0;   // in bytes
+    size_t   m_audioDataSize = 0;    //
+    size_t   m_ibuffSize = 0;        // log buffer size for audio_info()
+    float    m_corr = 1.0;           // correction factor for level adjustment
+    size_t   m_i2s_bytesWritten = 0; // set in i2s_write() but not used
+    int8_t   m_gain0 = 0;            // cut or boost filters (EQ)
     int8_t   m_gain1 = 0;
     int8_t   m_gain2 = 0;
 
@@ -466,30 +465,30 @@ class Audio {
     int16_t   m_pesDataLength = 0;
 
     // audiolib structs
-    audiolib::ID3Hdr_t  m_ID3Hdr;
-    audiolib::pwsHLS_t  m_pwsHLS;
-    audiolib::pplM3u8_t m_pplM3U8;
-    audiolib::m4aHdr_t  m_m4aHdr;
-    audiolib::plCh_t    m_plCh;
-    audiolib::lVar_t    m_lVar;
-    audiolib::prlf_t    m_prlf;
-    audiolib::cat_t     m_cat;
-    audiolib::ifCh_t    m_ifCh;
-    audiolib::tspp_t    m_tspp;
-    audiolib::pwst_t    m_pwst;
-    audiolib::gchs_t    m_gchs;
-    audiolib::pwf_t     m_pwf;
-    audiolib::pad_t     m_pad;
-    audiolib::sbyt_t    m_sbyt;
-    audiolib::rmet_t    m_rmet;
-    audiolib::pwsts_t   m_pwsst;
-    audiolib::rwh_t     m_rwh;
-    audiolib::rflh_t    m_rflh;
-    audiolib::phreh_t   m_phreh;
-    audiolib::phrah_t   m_phrah;
-    audiolib::sdet_t    m_sdet;
-    audiolib::fnsy_t    m_fnsy;
-    audiolib::tone_t    m_tone;
+    audiolib::ID3Hdr_t     m_ID3Hdr;
+    audiolib::pwsHLS_t     m_pwsHLS;
+    audiolib::pplM3u8_t    m_pplM3U8;
+    audiolib::m4aHdr_t     m_m4aHdr;
+    audiolib::plCh_t       m_plCh;
+    audiolib::lVar_t       m_lVar;
+    audiolib::prlf_t       m_prlf;
+    audiolib::cat_t        m_cat;
+    audiolib::ifCh_t       m_ifCh;
+    audiolib::tspp_t       m_tspp;
+    audiolib::pwst_t       m_pwst;
+    audiolib::gchs_t       m_gchs;
+    audiolib::pwf_t        m_pwf;
+    audiolib::pad_t        m_pad;
+    audiolib::sbyt_t       m_sbyt;
+    audiolib::rmet_t       m_rmet;
+    audiolib::pwsts_t      m_pwsst;
+    audiolib::rwh_t        m_rwh;
+    audiolib::rflh_t       m_rflh;
+    audiolib::phreh_t      m_phreh;
+    audiolib::phrah_t      m_phrah;
+    audiolib::sdet_t       m_sdet;
+    audiolib::fnsy_t       m_fnsy;
+    audiolib::audioItems_t m_audio_items;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
