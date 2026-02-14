@@ -1562,7 +1562,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
     if (m_controlCounter == 5) {
         m_controlCounter++;
         uint16_t fc = (uint16_t)(*(data + 0) + (*(data + 1) << 8));                                               // Format code
-        uint16_t nic = (uint16_t)(*(data + 2) + (*(data + 3) << 8));                                              // Number of interleaved channels
+        uint16_t ch = (uint16_t)(*(data + 2) + (*(data + 3) << 8));                                               // Number of interleaved channels
         uint32_t sr = (uint32_t)(*(data + 4) + (*(data + 5) << 8) + (*(data + 6) << 16) + (*(data + 7) << 24));   // Samplerate
         uint32_t dr = (uint32_t)(*(data + 8) + (*(data + 9) << 8) + (*(data + 10) << 16) + (*(data + 11) << 24)); // Datarate
         uint16_t dbs = (uint16_t)(*(data + 12) + (*(data + 13) << 8));                                            // Data block size
@@ -1580,8 +1580,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             stopSong();
             return -1;
         }
-        if ((nic != 1) && (nic != 2)) {
-            info(*this, evt_info, "num channels is %u,  must be 1 or 2", nic);
+        if ((ch != 1) && (ch != 2)) {
+            info(*this, evt_info, "num channels is %u,  must be 1 or 2", ch);
             stopSong();
             return -1;
         }
@@ -1590,11 +1590,8 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
             stopSong();
             return -1; // false;
         }
-        m_decoder->setRawBlockParams(nic, sr, bps, 0, 0);
-        setBitsPerSample(bps);
-        setChannels(nic);
-        setSampleRate(sr);
-        m_nominal_bitrate = nic * sr * bps;
+        m_decoder->setRawBlockParams(ch, sr, bps, 0, 0);
+        m_nominal_bitrate = ch * sr * bps;
         m_rwh.headerSize += 16;
         return 16; // ok
     }
@@ -3372,13 +3369,9 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_plCh.count > 0) goto i2swrite;
     m_plCh.validSamples = m_validSamples;
 
-    if (m_bitsPerSample == 8) m_plCh.sampleSize = 2;  // upsampled (8 -> 16 bit), 2 bytes per sample * 2 ch
-    if (m_bitsPerSample == 16) m_plCh.sampleSize = 2; // 2 bytes per sample * 2 ch
-    if (m_bitsPerSample == 24) m_plCh.sampleSize = 4; // upsampled (24-> 32 bit), 4 bytes per sample * 2 ch
-    if (m_bitsPerSample == 32) m_plCh.sampleSize = 4; // 4 bytes per smple * 2 ch
+    m_plCh.sampleSize = 4; // 4 bytes per smple * 2 ch
     ss = m_plCh.sampleSize / 2;
     //------------------------------------------------------------------------------------------
-    if (getChannels() == 1) mono2stereo(m_outBuff.get(), m_validSamples);
     for (int i = 0; i < m_validSamples * ss; i += ss) {
         calculateVUlevel(&m_outBuff[i]);
         IIR_filter(&m_outBuff[i]);
@@ -6173,15 +6166,8 @@ void Audio::calculateVUlevel(int32_t* sample, bool release) { // Envelope-Follow
     }
 
     uint8_t l = 0, r = 0;
-    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) {
-        int16_t* s16 = (int16_t*)sample;
-        l = abs(s16[LEFTCHANNEL] >> 7);
-        r = abs(s16[RIGHTCHANNEL] >> 7);
-    }
-    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
-        l = abs(sample[LEFTCHANNEL] >> 23);
-        r = abs(sample[RIGHTCHANNEL] >> 23);
-    }
+    l = abs(sample[LEFTCHANNEL] >> 23);
+    r = abs(sample[RIGHTCHANNEL] >> 23);
 
     // Attack immediately
     constexpr uint8_t RELEASE = 1.0f; // the bigger, the more sluggish
@@ -6302,16 +6288,9 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {
     /* important: these multiplications must all be signed ints, or the result will be invalid */
-    if (m_bitsPerSample == 16 || m_bitsPerSample == 16) {
-        int16_t* s16 = (int16_t*)sample;
-        s16[LEFTCHANNEL] *= m_limiter[LEFTCHANNEL];
-        s16[RIGHTCHANNEL] *= m_limiter[RIGHTCHANNEL];
-    }
-    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
-        int32_t* s32 = (int32_t*)sample;
-        s32[LEFTCHANNEL] *= m_limiter[LEFTCHANNEL];
-        s32[RIGHTCHANNEL] *= m_limiter[RIGHTCHANNEL];
-    }
+    int32_t* s32 = (int32_t*)sample;
+    s32[LEFTCHANNEL] *= m_limiter[LEFTCHANNEL];
+    s32[RIGHTCHANNEL] *= m_limiter[RIGHTCHANNEL];
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::inBufferFilled() {
@@ -6329,50 +6308,14 @@ uint32_t Audio::getInBufferSize() {
     return InBuff.getBufsize();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::mono2stereo(int32_t* buff, uint16_t validSamples) {
-
-    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) { // 16bit samples
-        int16_t* s = (int16_t*)buff;
-
-        int32_t src = validSamples - 1;
-        int32_t dst = (validSamples * 2) - 1;
-
-        while (src >= 0) {
-            int16_t v = s[src--];
-            s[dst--] = v; // Right
-            s[dst--] = v; // Left
-        }
-    }
-
-    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) { // 32bit samples
-        for (int i = validSamples - 1; i >= 0; --i) {
-            int32_t sample = buff[i];
-            buff[2 * i] = sample;
-            buff[2 * i + 1] = sample;
-        }
-    }
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::stereo2mono(int32_t* buff, uint16_t validSamples) {
-    if ((m_bitsPerSample == 8 || m_bitsPerSample == 16) && m_channels == 2) {
-        int16_t* s = (int16_t*)buff;
-        for (uint16_t i = 0; i < validSamples * 2; i += 2) {
-            int32_t l = s[i];
-            int32_t r = s[i + 1];
-            int16_t m = (int16_t)((l + r) >> 1); // average, without overflow
-            s[i] = m;                            // Left
-            s[i + 1] = m;                        // Right
-        }
-    }
 
-    if ((m_bitsPerSample == 24 || m_bitsPerSample == 32) && m_channels == 2) {
-        for (uint16_t i = 0; i < validSamples * 2; i += 2) {
-            int64_t l = buff[i];
-            int64_t r = buff[i + 1];
-            int32_t m = (int32_t)((l + r) >> 1); // average, without overflow
-            buff[i] = m;                         // Left
-            buff[i + 1] = m;                     // Right
-        }
+    for (uint16_t i = 0; i < validSamples * 2; i += 2) {
+        int64_t l = buff[i];
+        int64_t r = buff[i + 1];
+        int32_t m = (int32_t)((l + r) >> 1); // average, without overflow
+        buff[i] = m;                         // Left
+        buff[i + 1] = m;                     // Right
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6427,31 +6370,19 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::IIR_filter(int32_t* sample) {
 
-    if (m_bitsPerSample == 8 || m_bitsPerSample == 16) {
-        int16_t* s16 = (int16_t*)sample;
-        float    s[2];
-        s[LEFTCHANNEL] = (float)(s16[LEFTCHANNEL] * m_audio_items.pre_gain);
-        s[RIGHTCHANNEL] = (float)(s16[RIGHTCHANNEL] * m_audio_items.pre_gain);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
-        s16[LEFTCHANNEL] = (int16_t)lrintf(fminf(32767.0f, fmaxf(-32768.0f, s[LEFTCHANNEL])));
-        s16[RIGHTCHANNEL] = (int16_t)lrintf(fminf(32767.0f, fmaxf(-32768.0f, s[RIGHTCHANNEL])));
-    }
-    if (m_bitsPerSample == 24 || m_bitsPerSample == 32) {
-        int32_t* s32 = sample;
-        float    s[2];
-        s[LEFTCHANNEL] = (float)(s32[LEFTCHANNEL] * m_audio_items.pre_gain);
-        s[RIGHTCHANNEL] = (float)(s32[RIGHTCHANNEL] * m_audio_items.pre_gain);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
-        dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
-        s32[LEFTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[LEFTCHANNEL])));
-        s32[RIGHTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[RIGHTCHANNEL])));
+    int32_t* s32 = sample;
+    float    s[2];
+    s[LEFTCHANNEL] = (float)(s32[LEFTCHANNEL] * m_audio_items.pre_gain);
+    s[RIGHTCHANNEL] = (float)(s32[RIGHTCHANNEL] * m_audio_items.pre_gain);
+    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
+    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
+    dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
+    s32[LEFTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[LEFTCHANNEL])));
+    s32[RIGHTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[RIGHTCHANNEL])));
 
-        s32[LEFTCHANNEL] = (int32_t)s[LEFTCHANNEL];
-        s32[RIGHTCHANNEL] = (int32_t)s[RIGHTCHANNEL];
-    }
+    s32[LEFTCHANNEL] = (int32_t)s[LEFTCHANNEL];
+    s32[RIGHTCHANNEL] = (int32_t)s[RIGHTCHANNEL];
+
     return;
 }
 

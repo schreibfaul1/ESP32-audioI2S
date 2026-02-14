@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 09.02,2026
+ * Updated on: 14.02,2026
  *
  * Author: Wolle
  *
@@ -1011,9 +1011,8 @@ uint64_t FlacDecoder::getTotoalSamplesInStream() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t FlacDecoder::getBitsPerSample() {
-    return 32;
-    //if (!FLACMetadataBlock) return 0;
-    //return FLACMetadataBlock->bitsPerSample;
+    if (!FLACMetadataBlock) return 0;
+    return FLACMetadataBlock->bitsPerSample;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t FlacDecoder::getChannels() {

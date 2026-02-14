@@ -215,7 +215,6 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
-    void                     mono2stereo(int32_t* buff, uint16_t validSamples);
     void                     stereo2mono(int32_t* buff, uint16_t validSamples);
     void                     IIR_calculateCoefficients();
     void                     IIR_filter(int32_t* iir_in);
