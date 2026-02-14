@@ -19,7 +19,7 @@ bool MP3Decoder::init() {
     m_IMDCTInfo.alloc("m_IMDCTInfo");
     m_SubbandInfo.alloc("m_SubbandInfo");
     m_MP3FrameInfo.alloc("m_MP3FrameInfo");
-    m_out16.alloc(4608 * 2, "m_out16");
+    m_out16.alloc_array(4608 * 2, "m_out16");
 
     if (!m_MP3DecInfo.valid() || !m_FrameHeader.valid() || !m_SideInfo.valid() || !m_ScaleFactorJS.valid() || !m_HuffmanInfo.valid() || !m_DequantInfo.valid() || !m_IMDCTInfo.valid() ||
         !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid() || !m_out16.valid()) {

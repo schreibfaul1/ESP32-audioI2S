@@ -36,7 +36,7 @@ bool OpusDecoder::init() {
     ;
     celtdec->clear();
 
-    m_out16.alloc(4608 * 2, "m_out16");
+    m_out16.alloc_array(4608 * 2, "m_out16");
     if(!m_out16.valid()) return false;
 
     clear();

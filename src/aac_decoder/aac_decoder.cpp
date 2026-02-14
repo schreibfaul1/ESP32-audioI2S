@@ -21,7 +21,7 @@ AACDecoder::AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef), m_
 bool AACDecoder::init() {
     m_hAac = m_neaacdec->NeAACDecOpen();
     m_conf = m_neaacdec->NeAACDecGetCurrentConfiguration(m_hAac);
-    m_out16.alloc(4608 * 2, "m_out16");
+    m_out16.alloc_array(4608 * 2, "m_out16");
 
     if (m_hAac && m_out16.valid()) m_f_decoderIsInit = true;
     m_f_firstCall = false;
