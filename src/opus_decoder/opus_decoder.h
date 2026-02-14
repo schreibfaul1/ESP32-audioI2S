@@ -101,40 +101,41 @@ class OpusDecoder : public Decoder {
     enum { OPUS_BANDWIDTH_NARROWBAND = 1101, OPUS_BANDWIDTH_MEDIUMBAND = 1102, OPUS_BANDWIDTH_WIDEBAND = 1103, OPUS_BANDWIDTH_SUPERWIDEBAND = 1104, OPUS_BANDWIDTH_FULLBAND = 1105 };
     enum ParseResult { OPUS_COMMENT_INVALID = -1, OPUS_COMMENT_NEED_MORE = 1, OPUS_COMMENT_DONE = 2 };
 
-    uint8_t  m_opusChannels = 0;
-    uint8_t  m_opusCountCode = 0;
-    uint8_t  m_opusPageNr = 0;
-    uint8_t  m_frameCount = 0;
-    uint8_t  m_opusSegmentTableSize = 0;
-    uint16_t m_mode = 0;
-    uint16_t m_opusOggHeaderSize = 0;
-    uint16_t m_bandWidth = 0;
-    uint16_t m_internalSampleRate = 0;
-    uint16_t m_endband = 0;
-    uint32_t m_opusSamplerate = 0;
-    uint32_t m_opusSegmentLength = 0;
-    uint32_t m_opusCurrentFilePos = 0;
-    uint32_t m_opusAudioDataStart = 0;
-    uint32_t m_opusBlockPicPos = 0;
-    uint32_t m_opusBlockLen = 0;
-    bool     m_f_opusParseOgg = false;
-    bool     m_f_newSteamTitle = false;               // streamTitle
-    bool     m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
-    bool     m_f_opusStereoFlag = false;
-    bool     m_f_continuedPage = false;
-    bool     m_f_firstPage = false;
-    bool     m_f_lastPage = false;
-    bool     m_f_nextChunk = false;
-    bool     m_isValid = false;
-    int8_t   m_opusError = 0;
-    int16_t  m_opusSegmentTableRdPtr = -1;
-    int16_t  m_prev_mode = 0;
-    int32_t  m_opusValidSamples = 0;
-    int32_t  m_opusBlockPicLen = 0;
-    int32_t  m_blockPicLenUntilFrameEnd = 0;
-    int32_t  m_opusRemainBlockPicLen = 0;
-    int32_t  m_opusCommentBlockSize = 0;
-    float    m_opusCompressionRatio = 0;
+    uint8_t         m_opusChannels = 0;
+    uint8_t         m_opusCountCode = 0;
+    uint8_t         m_opusPageNr = 0;
+    uint8_t         m_frameCount = 0;
+    uint8_t         m_opusSegmentTableSize = 0;
+    uint16_t        m_mode = 0;
+    uint16_t        m_opusOggHeaderSize = 0;
+    uint16_t        m_bandWidth = 0;
+    uint16_t        m_internalSampleRate = 0;
+    uint16_t        m_endband = 0;
+    uint32_t        m_opusSamplerate = 0;
+    uint32_t        m_opusSegmentLength = 0;
+    uint32_t        m_opusCurrentFilePos = 0;
+    uint32_t        m_opusAudioDataStart = 0;
+    uint32_t        m_opusBlockPicPos = 0;
+    uint32_t        m_opusBlockLen = 0;
+    bool            m_f_opusParseOgg = false;
+    bool            m_f_newSteamTitle = false;               // streamTitle
+    bool            m_f_opusNewMetadataBlockPicture = false; // new metadata block picture
+    bool            m_f_opusStereoFlag = false;
+    bool            m_f_continuedPage = false;
+    bool            m_f_firstPage = false;
+    bool            m_f_lastPage = false;
+    bool            m_f_nextChunk = false;
+    bool            m_isValid = false;
+    int8_t          m_opusError = 0;
+    int16_t         m_opusSegmentTableRdPtr = -1;
+    int16_t         m_prev_mode = 0;
+    int32_t         m_opusValidSamples = 0;
+    int32_t         m_opusBlockPicLen = 0;
+    int32_t         m_blockPicLenUntilFrameEnd = 0;
+    int32_t         m_opusRemainBlockPicLen = 0;
+    int32_t         m_opusCommentBlockSize = 0;
+    float           m_opusCompressionRatio = 0;
+    ps_ptr<int16_t> m_out16;
 
     struct picture_segment_t {
         uint32_t start_page_index{};
