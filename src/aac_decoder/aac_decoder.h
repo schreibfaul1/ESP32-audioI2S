@@ -48,6 +48,7 @@ class AACDecoder : public Decoder {
   private:
     Audio&       audio;
     ps_ptr<char> m_arg1;
+    ps_ptr<int16_t> m_out16;
     void         createAudioSpecificConfig(uint8_t* config, uint8_t audioObjectType, uint8_t samplingFrequencyIndex, uint8_t channelConfiguration);
     const char*  getErrorMessage(int8_t err);
 
