@@ -5,7 +5,7 @@
 
 #define DMA_DESC_NUM  32  // number of I2S DMA buffer
 #define DMA_FRAME_NUM 222 // number of frames in one DMA buffer
-// #define SR_48K
+#define SR_48K
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -38,7 +38,7 @@
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool* continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int32_t validSamples, bool* continueI2S); // record audiodata or send via BT
 extern char                       audioI2SVers[];
 class Decoder; // prototype
 
@@ -202,7 +202,7 @@ class Audio {
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
-    size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
+    size_t                   resampleTo48kStereo(const int32_t* input, size_t inputFrames);
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum(int32_t* sample);
@@ -373,7 +373,7 @@ class Audio {
 
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
-    ps_ptr<int16_t>          m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<int32_t>          m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
@@ -394,7 +394,7 @@ class Audio {
     uint32_t       m_metacount = 0;         // counts down bytes between metadata
     int            m_controlCounter = 0;    // Status within readID3data() and readWaveHeader()
     float          m_balance = 0.0f;        // -16 (mute left) ... +16 (mute right)
-    int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
+    int32_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
     uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
     float          m_limiter[2] = {0};
     uint8_t        m_timeoutCounter = 0; // timeout counter

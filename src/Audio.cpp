@@ -3296,7 +3296,7 @@ bool Audio::pauseResume() {
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
+size_t Audio::resampleTo48kStereo(const int32_t* input, size_t inputSamples) {
 
     float ratio = static_cast<float>(m_sampleRate) / 48000.0f;
     float cursor = m_resampleCursor;
@@ -3305,38 +3305,26 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
     size_t extendedSamples = inputSamples + 3;
 
     // Temporärer Buffer: History + aktueller Input
-    std::vector<int16_t> extendedInput(extendedSamples * 2);
+    std::vector<int32_t> extendedInput(extendedSamples * 2);
 
     // Historie an den Anfang kopieren (6 Werte = 3 Stereo-Samples)
-    memcpy(&extendedInput[0], m_inputHistory, 6 * sizeof(int16_t));
+    memcpy(&extendedInput[0], m_inputHistory, 6 * sizeof(int32_t));
 
     // Aktuelles Input danach einfügen
-    memcpy(&extendedInput[6], input, inputSamples * 2 * sizeof(int16_t));
+    memcpy(&extendedInput[6], input, inputSamples * 2 * sizeof(int32_t));
 
     size_t outputIndex = 0;
 
-    auto clipToInt16 = [this](float value) -> int16_t {
-        if (value > 32767.0f) {
-            AUDIO_LOG_INFO("overflow +");
-            return 32767;
-        }
-        if (value < -32768.0f) {
-            AUDIO_LOG_ERROR("overflow -");
-            return -32768;
-        }
-        return static_cast<int16_t>(value);
-    };
-
     for (size_t inIdx = 1; inIdx < extendedSamples - 2; ++inIdx) {
-        int32_t xm1_l = clipToInt16(extendedInput[(inIdx - 1) * 2]);
-        int32_t x0_l = clipToInt16(extendedInput[(inIdx + 0) * 2]);
-        int32_t x1_l = clipToInt16(extendedInput[(inIdx + 1) * 2]);
-        int32_t x2_l = clipToInt16(extendedInput[(inIdx + 2) * 2]);
+        int32_t xm1_l = (extendedInput[(inIdx - 1) * 2]);
+        int32_t x0_l = (extendedInput[(inIdx + 0) * 2]);
+        int32_t x1_l =  (extendedInput[(inIdx + 1) * 2]);
+        int32_t x2_l =  (extendedInput[(inIdx + 2) * 2]);
 
-        int32_t xm1_r = clipToInt16(extendedInput[(inIdx - 1) * 2 + 1]);
-        int32_t x0_r = clipToInt16(extendedInput[(inIdx + 0) * 2 + 1]);
-        int32_t x1_r = clipToInt16(extendedInput[(inIdx + 1) * 2 + 1]);
-        int32_t x2_r = clipToInt16(extendedInput[(inIdx + 2) * 2 + 1]);
+        int32_t xm1_r = (extendedInput[(inIdx - 1) * 2 + 1]);
+        int32_t x0_r =  (extendedInput[(inIdx + 0) * 2 + 1]);
+        int32_t x1_r =  (extendedInput[(inIdx + 1) * 2 + 1]);
+        int32_t x2_r =  (extendedInput[(inIdx + 2) * 2 + 1]);
 
         while (cursor < 1.0f) {
             float t = cursor;
@@ -3346,11 +3334,11 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
                 return 0.5f * ((2.0f * x0) + (-xm1 + x1) * t + (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2) * t * t + (-xm1 + 3.0f * x0 - 3.0f * x1 + x2) * t * t * t);
             };
 
-            int16_t outLeft = static_cast<int16_t>(catmullRom(t, xm1_l, x0_l, x1_l, x2_l));
-            int16_t outRight = static_cast<int16_t>(catmullRom(t, xm1_r, x0_r, x1_r, x2_r));
+            int32_t outLeft = (catmullRom(t, xm1_l, x0_l, x1_l, x2_l));
+            int32_t outRight = (catmullRom(t, xm1_r, x0_r, x1_r, x2_r));
 
-            m_samplesBuff48K[outputIndex * 2] = clipToInt16(outLeft);
-            m_samplesBuff48K[outputIndex * 2 + 1] = clipToInt16(outRight);
+            m_samplesBuff48K[outputIndex * 2] = (outLeft);
+            m_samplesBuff48K[outputIndex * 2 + 1] = (outRight);
 
             ++outputIndex;
             cursor += ratio;
@@ -3359,7 +3347,7 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
         cursor -= 1.0f;
     }
 
-    // Letzte 3 Stereo-Samples als neue Historie sichern
+    // Save the last 3 stereo samples as a new history
     for (int i = 0; i < 3; ++i) {
         size_t idx = inputSamples - 3 + i;
         m_inputHistory[i * 2] = input[idx * 2];
@@ -3373,6 +3361,7 @@ size_t Audio::resampleTo48kStereo(const int16_t* input, size_t inputSamples) {
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
+    bool continueI2S = false;
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
@@ -3395,7 +3384,7 @@ void IRAM_ATTR Audio::playChunk() {
     if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
         if (m_plCh.count == 0) {
             m_plCh.validSamples = m_validSamples;
-            m_plCh.samples48K = resampleTo48kStereo((int16_t*)m_outBuff.get(), m_plCh.validSamples);
+            m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
             m_validSamples = m_plCh.samples48K;
 
             if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
@@ -3409,21 +3398,17 @@ void IRAM_ATTR Audio::playChunk() {
 #endif
 
     //------------------------------------------------------------------------------------------------------
-    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
-        if (audio_process_i2s) {
-            // processing the audio samples from external before forwarding them to i2s
-            bool continueI2S = false;
+    // processing the audio samples from external before forwarding them to i2s
+
 #ifdef SR_48K
-            audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
+    audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
 #else
-            audio_process_i2s((int16_t*)m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+    audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
 #endif
-            if (!continueI2S) {
-                m_validSamples = 0;
-                m_plCh.count = 0;
-                return;
-            }
-        }
+    if (!continueI2S) {
+        m_validSamples = 0;
+        m_plCh.count = 0;
+        return;
     }
     //------------------------------------------------------------------------------------------------------
 
@@ -3432,7 +3417,7 @@ i2swrite:
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize * 2, &m_plCh.i2s_bytesConsumed, 50);
 #else
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize * 2, &m_plCh.i2s_bytesConsumed, 20);
-    //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
+//     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 #endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / (m_plCh.sampleSize * 2);
