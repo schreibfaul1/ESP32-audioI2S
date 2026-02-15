@@ -2791,7 +2791,7 @@ template <typename... Args> inline void free_fields(Args&... fields) {
 // ps_array2d<int32_t> s_samples; // standard constructor
 // s_samples.alloc(2, 1152);      // mem alloc for [2][1152]
 //
-// int ch = 0; // exanole: channel 0
+// int ch = 0; // exanple: channel 0
 //
 // declaration of PCM1 as a pointer on the first element of the line (similar to samples [CH])
 // int32_t* pcm1;
