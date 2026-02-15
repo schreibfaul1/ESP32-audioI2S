@@ -363,8 +363,12 @@ struct audioItems_t {
     ps_ptr<int32_t> vu_delay_l;
     ps_ptr<int32_t> vu_delay_r;
     uint16_t        vu_delay_line_index = 0;
-    ps_ptr<float>   fft_buffer;
-    uint16_t        fft_index = 0;
+
+    const uint16_t FFT_SIZE = 256;
+    ps_ptr<float>  fft_buffer; // FFT input (real)
+    ps_ptr<float>  fft_window; // FFT window
+    uint16_t       fft_index = 0;
+    alignas(16) ps_ptr<float>  fft_work; // FFT work buffer (complex interleaved)
 };
 
 } // namespace audiolib

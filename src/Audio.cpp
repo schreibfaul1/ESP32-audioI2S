@@ -368,17 +368,6 @@ Audio::Audio(uint8_t i2sPort) {
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
     m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
-    //---------------------------- FFT INIT-----------------------------------------
-    for (int i = 0; i < FFT_SIZE; i++) { // Hann window
-        m_fft_window[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (FFT_SIZE - 1)));
-    }
-
-    if (dsps_fft2r_init_fc32(nullptr, FFT_SIZE) == ESP_OK) {
-        m_fft_initialized = true;
-    } else {
-        AUDIO_LOG_ERROR("FFT init failed (size=%d)", FFT_SIZE);
-    }
-    //-----------------------------------------------------------------------------
     calculateVolumeLimits(); // first init, vol = 21, vol_steps = 21
     startAudioTask();
 }
@@ -3379,10 +3368,10 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
         calculateVUlevel(&m_outBuff[i * 2]);
-        //    processSpectrum(&m_outBuff[i * 2]);
         IIR_filter(&m_outBuff[i * 2]);
         Gain(&m_outBuff[i * 2]);
     }
+    processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
@@ -5765,21 +5754,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
-    m_f_psramFound = psramInit();
-
-    m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
-    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int32_t), "m_samplesBuff48K");
-    m_audio_items.vu_delay_l.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_l");
-    m_audio_items.vu_delay_r.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_r");
-    m_audio_items.fft_buffer.alloc_array(256, "fft_buffer");
-
-    esp_err_t result = ESP_OK;
-
-#if (ESP_ARDUINO_VERSION_MAJOR < 3)
-    AUDIO_LOG_ERROR("Arduino Version must be 3.0.0 or higher!");
-#endif
-    trim(audioI2SVers);
-    info(*this, evt_info, "audioI2S %s", audioI2SVers);
+    bool result = true;
 
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
@@ -5787,13 +5762,61 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     gpio_cfg.dout = (gpio_num_t)DOUT;
     gpio_cfg.mclk = (gpio_num_t)MCLK;
     gpio_cfg.ws = (gpio_num_t)LRC;
-    I2Sstop();
-    result = i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg);
-    I2Sstart();
-    if (result == ESP_OK && m_outBuff.valid() && m_audio_items.vu_delay_l.valid() && m_audio_items.vu_delay_r.valid() && m_samplesBuff48K.valid() && m_audio_items.fft_buffer.valid()) {
-        m_f_I2S_init = true;
+
+#if (ESP_ARDUINO_VERSION_MAJOR < 3)
+    AUDIO_LOG_ERROR("Arduino Version must be 3.0.0 or higher!");
+    result = false;
+    goto exit;
+#endif
+
+    m_f_psramFound = psramInit();
+    if (!m_f_psramFound) {
+        AUDIO_LOG_ERROR("PSRAM not found");
+        result = false;
+        goto exit;
     }
-    return (result == ESP_OK);
+
+    m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
+    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int32_t), "m_samplesBuff48K");
+    m_audio_items.vu_delay_l.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_l");
+    m_audio_items.vu_delay_r.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_r");
+    m_audio_items.fft_buffer.alloc_array(m_audio_items.FFT_SIZE, "fft_buffer");
+    m_audio_items.fft_window.alloc_array(m_audio_items.FFT_SIZE, "fft_window");
+    m_audio_items.fft_work.alloc_array(m_audio_items.FFT_SIZE * 2, "fft_work");
+
+    if (!m_outBuff.valid() || !m_audio_items.vu_delay_l.valid() || !m_audio_items.vu_delay_r.valid() || !m_samplesBuff48K.valid() || !m_audio_items.fft_buffer.valid() ||
+        !m_audio_items.fft_buffer.valid() || !m_audio_items.fft_work.valid()) {
+        result = false;
+        goto exit;
+    }
+
+    //---------------------------- FFT INIT-----------------------------------------
+    for (int i = 0; i < m_audio_items.FFT_SIZE; i++) { // Hann window
+        m_audio_items.fft_window[i] = 0.5f * (1.0f - cosf(2.0f * M_PI * i / (m_audio_items.FFT_SIZE - 1)));
+    }
+
+    if (dsps_fft2r_init_fc32(nullptr, m_audio_items.FFT_SIZE) == ESP_OK) {
+        m_fft_initialized = true;
+    } else {
+        AUDIO_LOG_ERROR("FFT init failed (size=%d)", m_audio_items.FFT_SIZE);
+        result = false;
+        goto exit;
+    }
+    //-----------------------------------------------------------------------------
+
+    trim(audioI2SVers);
+    info(*this, evt_info, "audioI2S %s", audioI2SVers);
+
+    I2Sstop();
+    if (i2s_channel_reconfig_std_gpio(m_i2s_tx_handle, &gpio_cfg) != ESP_OK) {
+        result = false;
+        goto exit;
+    }
+    I2Sstart();
+
+exit:
+    m_f_I2S_init = result;
+    return m_f_I2S_init;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getFileSize() { // returns the size of webfile or local file
@@ -6150,16 +6173,35 @@ void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
     if (pos == -1) pos = m_audio_items.VU_DELAY_BUFFER_SIZE - 1;
 
     // FFT buffer
-    m_audio_items.fft_buffer[m_audio_items.fft_index] = 0.5f * (float)(m_audio_items.vu_delay_l[pos] + m_audio_items.vu_delay_r[pos]);
+    float mono = 0.5f * (float)((m_audio_items.vu_delay_l[pos] >> 20) + (m_audio_items.vu_delay_r[pos] >> 20));
+
+    // --- FFT analyzer AGC ---
+    constexpr float TARGET = 0.1f; // gewünschte RMS-Amplitude
+    constexpr float ATTACK = 0.05f;
+    constexpr float RELEASE_FFT = 0.005f;
+
+    float level = fabsf(mono);
+
+    if (level > 1e-6f) {
+        float desired = TARGET / level;
+        if (desired < m_fft_gain)
+            m_fft_gain += ATTACK * (desired - m_fft_gain);
+        else
+            m_fft_gain += RELEASE_FFT * (desired - m_fft_gain);
+    }
+    if (fabsf(mono) < 1e-4f) mono = 0.0f;
+    mono *= m_fft_gain;
+
+    m_audio_items.fft_buffer[m_audio_items.fft_index] = mono;
     m_audio_items.fft_index++;
-    if (m_audio_items.fft_index == 256) m_audio_items.fft_index = 0;
+    if (m_audio_items.fft_index == m_audio_items.FFT_SIZE) m_audio_items.fft_index = 0;
 
     uint8_t l = 0, r = 0;
     l = abs(m_audio_items.vu_delay_l[pos] >> 23);
     r = abs(m_audio_items.vu_delay_r[pos] >> 23);
 
     // Attack immediately
-    constexpr uint8_t RELEASE = 1.0f; // the bigger, the more sluggish
+    constexpr float RELEASE = 1.0f; // the bigger, the more sluggish
     if (l > m_audio_items.vuLeft) {
         m_audio_items.vuLeft = l;
     } else if (m_audio_items.vuLeft > RELEASE) {
@@ -6303,69 +6345,35 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
     AUDIO_LOG_DEBUG("m_limiter[LEFTCHANNEL] %f, m_limiter[RIGHTCHANNEL] %f", m_limiter[LEFTCHANNEL], m_limiter[RIGHTCHANNEL]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::processSpectrum(int32_t* sample) {
-    if (m_lr_switch)
-        r_sample = sample[0];
-    else
-        l_sample = sample[0];
-    m_lr_switch = !m_lr_switch;
-    if (!m_lr_switch) return;
-
-    float mono = 0.5f * (r_sample + l_sample);
-
-    // --- FFT analyzer AGC ---
-    constexpr float TARGET = 0.1f; // gewünschte RMS-Amplitude
-    constexpr float ATTACK = 0.05f;
-    constexpr float RELEASE = 0.005f;
-
-    float level = fabsf(mono);
-
-    if (level > 1e-6f) {
-        float desired = TARGET / level;
-        if (desired < m_fft_gain)
-            m_fft_gain += ATTACK * (desired - m_fft_gain);
-        else
-            m_fft_gain += RELEASE * (desired - m_fft_gain);
-    }
-    if (fabsf(mono) < 1e-4f) mono = 0.0f;
-    mono *= m_fft_gain;
-
-    m_fft_in[m_fft_pos++] = mono;
-    if (m_fft_pos >= FFT_SIZE) { m_fft_pos = 0; }
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::updateSpectrum() {
+void Audio::processSpectrum() {
 
     // --- 10 Hz update ---
     uint32_t now = millis();
     if (now - m_fft_last_ms < 100) return;
     m_fft_last_ms = now;
 
-    if (!m_fft_ready || !m_fft_initialized) return;
-    m_fft_ready = false;
-
     // --- Window + real → complex ---
-    for (int i = 0; i < FFT_SIZE; i++) {
-        m_fft_work[2 * i] = m_fft_in[i] * m_fft_window[i];
-        m_fft_work[2 * i + 1] = 0.0f;
+    for (int i = 0; i < m_audio_items.FFT_SIZE; i++) {
+        m_audio_items.fft_work[2 * i] = m_audio_items.fft_buffer[i] * m_audio_items.fft_window[i];
+        m_audio_items.fft_work[2 * i + 1] = 0.0f;
     }
 
     // --- FFT ---
-    dsps_fft2r_fc32(m_fft_work, FFT_SIZE);
-    dsps_bit_rev_fc32(m_fft_work, FFT_SIZE);
-    dsps_cplx2reC_fc32(m_fft_work, FFT_SIZE);
+    dsps_fft2r_fc32(m_audio_items.fft_work.get(), m_audio_items.FFT_SIZE);
+    dsps_bit_rev_fc32(m_audio_items.fft_work.get(), m_audio_items.FFT_SIZE);
+    dsps_cplx2reC_fc32(m_audio_items.fft_work.get(), m_audio_items.FFT_SIZE);
 
-    const float bin_hz = (float)m_sampleRate / FFT_SIZE;
-    const float norm = 2.0f / FFT_SIZE;
+    const float bin_hz = (float)m_sampleRate / m_audio_items.FFT_SIZE;
+    const float norm = 2.0f / m_audio_items.FFT_SIZE;
 
     // --- 5 internal bands ---
     float band[5] = {0};
     int   bins[5] = {0};
 
-    for (int i = 1; i < FFT_SIZE / 2; i++) {
+    for (int i = 1; i < m_audio_items.FFT_SIZE / 2; i++) {
 
-        float re = m_fft_work[2 * i];
-        float im = m_fft_work[2 * i + 1];
+        float re = m_audio_items.fft_work[2 * i];
+        float im = m_audio_items.fft_work[2 * i + 1];
         float mag = sqrtf(re * re + im * im) * norm;
         float f = i * bin_hz;
 
@@ -6431,6 +6439,7 @@ void Audio::updateSpectrum() {
 
         m_spectrum[i] = (uint8_t)(norm * 255.0f);
     }
+    AUDIO_LOG_INFO("%i, %i, %i", m_spectrum[0], m_spectrum[1], m_spectrum[2]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {

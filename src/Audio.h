@@ -205,8 +205,7 @@ class Audio {
     size_t                   resampleTo48kStereo(const int32_t* input, size_t inputFrames);
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
-    void                     processSpectrum(int32_t* sample);
-    void                     updateSpectrum();
+    void                     processSpectrum();
     void                     gain_ramp();
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
@@ -344,21 +343,17 @@ class Audio {
 #pragma GCC diagnostic pop
 
   private: // ---------- FFT section -----------
-#define FFT_SIZE  256
 #define FFT_BANDS 3
-    float m_fft_in[FFT_SIZE];                   // FFT input (real)
-    alignas(16) float m_fft_work[FFT_SIZE * 2]; // FFT work buffer (complex interleaved)
-    float    m_fft_window[FFT_SIZE];            // FFT window
+
+    
     uint16_t m_fft_pos = 0;                     // FFT state
-    bool     m_fft_ready = false;               // FFT state
     bool     m_fft_initialized = false;         // FFT state
     uint8_t  m_spectrum[FFT_BANDS] = {0};       // Spectrum result (0..255)
     float    m_spec_smooth[FFT_BANDS] = {0};    // smoothing
     uint32_t m_fft_last_ms = 0;                 // timing (10 Hz)
     float    m_fft_gain = 1.0f;                 // AGC in process()
     bool     m_lr_switch = false;               // start/stop
-    int32_t  l_sample = 0;
-    int32_t  r_sample = 0;
+
 
     std::vector<ps_ptr<char>> m_playlistContent; // m3u8 playlist buffer from responseHeader
     std::vector<ps_ptr<char>> m_playlistURL;     // m3u8 streamURLs buffer
