@@ -5,7 +5,7 @@
 
 #define DMA_DESC_NUM  32  // number of I2S DMA buffer
 #define DMA_FRAME_NUM 222 // number of frames in one DMA buffer
-#define SR_48K
+// #define SR_48K         // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -38,7 +38,7 @@
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int32_t validSamples, bool* continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S); // record audiodata or send via BT
 extern char                       audioI2SVers[];
 class Decoder; // prototype
 

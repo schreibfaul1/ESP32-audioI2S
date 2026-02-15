@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4r                                                                                                                            ";
+    Version 3.4.4s                                                                                                                            ";
 /*  Updated on: Feb 15, 2026
 
     Author: Wolle (schreibfaul1)
@@ -32,13 +32,18 @@ constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
-constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // 131072KB  SRmin: 6KHz -> SRmax: 48K
+constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
 
 constexpr size_t AUDIO_STACK_SIZE = 3500;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
 StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
+
+// weak default implementation - can be overridden by user
+__attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S) {
+    // Default: do nothing. User can provide their own implementation to process audio data.
+}
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  A U D I O B U F F E R  📌📌📌
@@ -3318,13 +3323,13 @@ size_t Audio::resampleTo48kStereo(const int32_t* input, size_t inputSamples) {
     for (size_t inIdx = 1; inIdx < extendedSamples - 2; ++inIdx) {
         int32_t xm1_l = (extendedInput[(inIdx - 1) * 2]);
         int32_t x0_l = (extendedInput[(inIdx + 0) * 2]);
-        int32_t x1_l =  (extendedInput[(inIdx + 1) * 2]);
-        int32_t x2_l =  (extendedInput[(inIdx + 2) * 2]);
+        int32_t x1_l = (extendedInput[(inIdx + 1) * 2]);
+        int32_t x2_l = (extendedInput[(inIdx + 2) * 2]);
 
         int32_t xm1_r = (extendedInput[(inIdx - 1) * 2 + 1]);
-        int32_t x0_r =  (extendedInput[(inIdx + 0) * 2 + 1]);
-        int32_t x1_r =  (extendedInput[(inIdx + 1) * 2 + 1]);
-        int32_t x2_r =  (extendedInput[(inIdx + 2) * 2 + 1]);
+        int32_t x0_r = (extendedInput[(inIdx + 0) * 2 + 1]);
+        int32_t x1_r = (extendedInput[(inIdx + 1) * 2 + 1]);
+        int32_t x2_r = (extendedInput[(inIdx + 2) * 2 + 1]);
 
         while (cursor < 1.0f) {
             float t = cursor;
@@ -3361,7 +3366,7 @@ size_t Audio::resampleTo48kStereo(const int32_t* input, size_t inputSamples) {
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
-    bool continueI2S = false;
+    bool continueI2S = true;
     m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
@@ -3374,35 +3379,28 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
         calculateVUlevel(&m_outBuff[i * 2]);
-        processSpectrum(&m_outBuff[i * 2]);
+        //    processSpectrum(&m_outBuff[i * 2]);
         IIR_filter(&m_outBuff[i * 2]);
         Gain(&m_outBuff[i * 2]);
     }
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
-    if (getBitsPerSample() == 8 || getBitsPerSample() == 16) {
-        if (m_plCh.count == 0) {
-            m_plCh.validSamples = m_validSamples;
-            m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
-            m_validSamples = m_plCh.samples48K;
+    if (m_plCh.count == 0) {
+        m_plCh.validSamples = m_validSamples;
+        m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
+        m_validSamples = m_plCh.samples48K;
 
-            if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
-                m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-                i2s_channel_disable(m_i2s_tx_handle);
-                i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-                i2s_channel_enable(m_i2s_tx_handle);
-            }
+        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
+            m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+            i2s_channel_disable(m_i2s_tx_handle);
+            i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
+            i2s_channel_enable(m_i2s_tx_handle);
         }
     }
-#endif
-
-    //------------------------------------------------------------------------------------------------------
-    // processing the audio samples from external before forwarding them to i2s
-
-#ifdef SR_48K
-    audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 16bps
+    audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
 #else
+    //------------------------------------------------------------------------------------------------------
     audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
 #endif
     if (!continueI2S) {
@@ -5770,7 +5768,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_f_psramFound = psramInit();
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
-    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t), "m_samplesBuff48K");
+    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int32_t), "m_samplesBuff48K");
     m_audio_items.vu_delay_l.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_l");
     m_audio_items.vu_delay_r.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_r");
     m_audio_items.fft_buffer.alloc_array(256, "fft_buffer");
