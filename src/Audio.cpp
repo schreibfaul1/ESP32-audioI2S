@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4q                                                                                                                            ";
-/*  Updated on: Feb 12, 2026
+    Version 3.4.4r                                                                                                                            ";
+/*  Updated on: Feb 15, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5785,7 +5785,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_f_psramFound = psramInit();
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
-    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t));
+    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int16_t), "m_samplesBuff48K");
     m_audio_items.vu_delay_l.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_l");
     m_audio_items.vu_delay_r.alloc_array(m_audio_items.VU_DELAY_BUFFER_SIZE, "vu_delay_r");
     m_audio_items.fft_buffer.alloc_array(256, "fft_buffer");
