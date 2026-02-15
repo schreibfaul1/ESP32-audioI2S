@@ -21,13 +21,15 @@ AACDecoder::AACDecoder(Audio& audioRef) : Decoder(audioRef), audio(audioRef), m_
 bool AACDecoder::init() {
     m_hAac = m_neaacdec->NeAACDecOpen();
     m_conf = m_neaacdec->NeAACDecGetCurrentConfiguration(m_hAac);
+    m_out16.alloc_array(4608 * 2, "m_out16");
 
-    if (m_hAac) m_f_decoderIsInit = true;
+    if (m_hAac && m_out16.valid()) m_f_decoderIsInit = true;
     m_f_firstCall = false;
     m_f_setRaWBlockParams = false;
     return m_f_decoderIsInit;
 }
 void AACDecoder::clear() {
+    m_out16.clear();
     return; // nothing todo
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -36,6 +38,7 @@ void AACDecoder::reset() {
     m_hAac = NULL;
     m_f_decoderIsInit = false;
     m_f_firstCall = false;
+    m_out16.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool AACDecoder::isValid() {
@@ -118,9 +121,7 @@ const char* AACDecoder::getErrorMessage(int8_t err) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-
-    uint8_t* ob = (uint8_t*)out16;
+    uint8_t* ob = (uint8_t*)m_out16.get();
     if (m_f_firstCall == false) {
         if (m_f_setRaWBlockParams) { // set raw AAC values, e.g. for M4A config.
             m_f_setRaWBlockParams = false;
@@ -154,6 +155,18 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             AAC_LOG_INFO("%s", getErrorMessage(abs(err)));
         } else {
             AAC_LOG_ERROR("%s", getErrorMessage(abs(err)));
+        }
+    } else {
+
+        if (m_aacChannels == 1) {
+            for (int i = 0; i < m_validSamples; i++) {
+                outbuf[i * 2] = m_out16[i] << 16;
+                outbuf[i * 2 + 1] = m_out16[i] << 16;
+            }
+        }
+
+        if (m_aacChannels == 2) {
+            for (int i = 0; i < m_validSamples * 2; i++) { outbuf[i] = m_out16[i] << 16; }
         }
     }
     return err;

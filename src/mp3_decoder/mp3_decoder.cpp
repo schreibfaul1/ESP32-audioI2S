@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 21.11.2025
+ *  Updated on: 14.02.2026
  */
 #include "mp3_decoder.h"
 
@@ -19,9 +19,10 @@ bool MP3Decoder::init() {
     m_IMDCTInfo.alloc("m_IMDCTInfo");
     m_SubbandInfo.alloc("m_SubbandInfo");
     m_MP3FrameInfo.alloc("m_MP3FrameInfo");
+    m_out16.alloc_array(4608 * 2, "m_out16");
 
     if (!m_MP3DecInfo.valid() || !m_FrameHeader.valid() || !m_SideInfo.valid() || !m_ScaleFactorJS.valid() || !m_HuffmanInfo.valid() || !m_DequantInfo.valid() || !m_IMDCTInfo.valid() ||
-        !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid()) {
+        !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid() || !m_out16.valid()) {
         reset();
         MP3_LOG_ERROR("not enough memory to allocate mp3decoder buffers");
         return false;
@@ -42,6 +43,7 @@ void MP3Decoder::reset() {
     m_SubbandInfo.reset();
     m_MP3FrameInfo.reset();
     m_mpeg_version_str.reset();
+    m_out16.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void MP3Decoder::clear() {
@@ -56,6 +58,7 @@ void MP3Decoder::clear() {
     m_SubbandInfo.clear();
     m_MP3FrameInfo.clear();
     m_mpeg_version_str.clear();
+    m_out16.clear();
     memset(&m_SFBandTable, 0, sizeof(SFBandTable_t));                                         // Clear SFBandTable
     memset(&m_ScaleFactorInfoSub, 0, sizeof(ScaleFactorInfoSub_t) * (MAX_NGRAN * MAX_NCHAN)); // Clear ScaleFactorInfo
     memset(&m_CriticalBandInfo, 0, sizeof(CriticalBandInfo_t) * MAX_NCHAN);                   // Clear CriticalBandInfo
@@ -65,7 +68,7 @@ void MP3Decoder::clear() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool MP3Decoder::isValid() {
     if (!m_MP3DecInfo.valid() || !m_FrameHeader.valid() || !m_SideInfo.valid() || !m_ScaleFactorJS.valid() || !m_HuffmanInfo.valid() || !m_DequantInfo.valid() || !m_IMDCTInfo.valid() ||
-        !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid()) {
+        !m_SubbandInfo.valid() || !m_MP3FrameInfo.valid() || !m_out16.valid()) {
         return false;
     }
     return true;
@@ -1091,22 +1094,20 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
 
 int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-
     // Skip fake frames
     int frameLen = IsLikelyRealFrame(inbuf, *bytesLeft);
-    if(frameLen == 0){
-        if (memcmp(inbuf, "APETAGEX", 8) == 0){
+    if (frameLen == 0) {
+        if (memcmp(inbuf, "APETAGEX", 8) == 0) {
             MP3_LOG_DEBUG("APETAGEX gefunden");
             uint32_t version = inbuf[8] | (inbuf[9] << 8) | (inbuf[10] << 16) | (inbuf[11] << 24);
-            uint32_t size    = inbuf[12] | (inbuf[13] << 8) | (inbuf[14] << 16) | (inbuf[15] << 24);
+            uint32_t size = inbuf[12] | (inbuf[13] << 8) | (inbuf[14] << 16) | (inbuf[15] << 24);
             MP3_LOG_DEBUG("version %i size %i", version, size);
             *bytesLeft -= min(*bytesLeft, (int32_t)size);
             return MP3_NEXT_FRAME;
         }
     }
 
-    if(m_invalid_frame.start == true && m_invalid_frame.timer + 3000 > millis()) m_invalid_frame.start = false;
+    if (m_invalid_frame.start == true && m_invalid_frame.timer + 3000 > millis()) m_invalid_frame.start = false;
 
     if (frameLen <= 0) {
         int skip = abs(frameLen);
@@ -1151,7 +1152,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     /* unpack side info */
     siBytes = UnpackSideInfo(inbuf);
     if (siBytes < 0) {
-        MP3ClearBadFrame(out16);
+        MP3ClearBadFrame(m_out16.get());
         MP3_LOG_ERROR("MP3 invalid sideinfo");
         return MP3_ERR;
     }
@@ -1165,7 +1166,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             m_MP3DecInfo->freeBitrateFlag = 1;
             m_MP3DecInfo->freeBitrateSlots = MP3FindFreeSync(inbuf, inbuf - fhBytes - siBytes, *bytesLeft);
             if (m_MP3DecInfo->freeBitrateSlots < 0) {
-                MP3ClearBadFrame(out16);
+                MP3ClearBadFrame(m_out16.get());
                 m_MP3DecInfo->freeBitrateFlag = 0;
                 MP3_LOG_ERROR("MP3, ca'nt find free bitrate slot");
                 return MP3_ERR;
@@ -1177,7 +1178,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     }
 
     if (m_MP3DecInfo->nSlots > *bytesLeft) {
-        MP3ClearBadFrame(out16);
+        MP3ClearBadFrame(m_out16.get());
         MP3_LOG_DEBUG("MP3, indata underflow");
         return MP3_MAIN_DATA_UNDERFLOW;
     }
@@ -1201,7 +1202,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
         inbuf += m_MP3DecInfo->nSlots;
         *bytesLeft -= (m_MP3DecInfo->nSlots);
         if (underflowCounter < 4) { return MP3_NONE; }
-        MP3ClearBadFrame(out16);
+        MP3ClearBadFrame(m_out16.get());
         MP3_LOG_DEBUG("MP3, maindata underflow");
         return MP3_NONE;
     }
@@ -1221,7 +1222,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             mainBits -= sfBlockBits;
 
             if (offset < 0 || mainBits < huffBlockBits) {
-                MP3ClearBadFrame(out16);
+                MP3ClearBadFrame(m_out16.get());
                 MP3_LOG_ERROR("MP3, invalid scalefact");
                 return MP3_ERR;
             }
@@ -1229,7 +1230,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             prevBitOffset = bitOffset;
             offset = DecodeHuffman(mainPtr, &bitOffset, huffBlockBits, gr, ch);
             if (offset < 0) {
-                MP3ClearBadFrame(out16);
+                MP3ClearBadFrame(m_out16.get());
                 MP3_LOG_ERROR("MP3, invalid Huffman code words");
                 return MP3_ERR;
             }
@@ -1238,7 +1239,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
         }
         /* dequantize coefficients, decode stereo, reorder int16_t blocks */
         if (MP3Dequantize(gr) < 0) {
-            MP3ClearBadFrame(out16);
+            MP3ClearBadFrame(m_out16.get());
             MP3_LOG_ERROR("MP3, invalid dequantize coefficients");
             return MP3_ERR;
         }
@@ -1246,19 +1247,31 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
         /* alias reduction, inverse MDCT, overlap-add, frequency inversion */
         for (ch = 0; ch < m_MP3DecInfo->nChans; ch++) {
             if (IMDCT(gr, ch) < 0) {
-                MP3ClearBadFrame(out16);
+                MP3ClearBadFrame(m_out16.get());
                 MP3_LOG_ERROR("MP3, invalid inverse MDCT");
                 return MP3_ERR;
             }
         }
         /* subband transform - if stereo, interleaves pcm LRLRLR */
-        if (Subband(out16 + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans) < 0) {
-            MP3ClearBadFrame(out16);
+        if (Subband(m_out16.get() + gr * m_MP3DecInfo->nGranSamps * m_MP3DecInfo->nChans) < 0) {
+            MP3ClearBadFrame(m_out16.get());
             MP3_LOG_ERROR("MP3, invalid subband");
             return MP3_ERR;
         }
     }
     MP3GetLastFrameInfo();
+
+    if (m_MP3FrameInfo->nChans == 1) {
+        for (int i = 0; i < m_MP3FrameInfo->outputSamps; i++) {
+            outbuf[i * 2] = m_out16[i] << 16;
+            outbuf[i * 2 + 1] = m_out16[i] << 16;
+        }
+    }
+
+    if (m_MP3FrameInfo->nChans == 2) {
+        for (int i = 0; i < m_MP3FrameInfo->outputSamps * 2; i++) { outbuf[i] = m_out16[i] << 16; }
+    }
+
     return MP3_NONE;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

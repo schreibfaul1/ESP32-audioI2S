@@ -32,7 +32,7 @@ class WavDecoder : public Decoder {
     Audio&   audio;
     bool     m_valid = false;
     uint8_t  m_channels = 0;
-    uint8_t  m_bps = 0;
+    uint8_t  m_bits_per_sample = 0;
     uint32_t m_sampleRate = 0;
     uint32_t m_validSamples = 0;
 };

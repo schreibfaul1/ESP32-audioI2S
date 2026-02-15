@@ -4,7 +4,7 @@
  * adapted to ESP32
  *
  * Created on: 03.07,2020
- * Updated on: 09.02,2026
+ * Updated on: 14.02,2026
  *
  * Author: Wolle
  *
@@ -782,9 +782,6 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-    int32_t* out32 = outbuf;
-
     int32_t        bl = *bytesLeft;
     static int32_t sbl = 0;
 
@@ -827,11 +824,17 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                 int32_t val = *src++;
                 if (FLACMetadataBlock->bitsPerSample == 8) {
                     val += 128;
-                    *out16++ = val << 8;
+                    outbuf[i * 2] = (val << 24);
+                    outbuf[i * 2 + 1] = (val << 24);
                 } else if (FLACMetadataBlock->bitsPerSample == 16) {
-                    *out16++ = val;
+                    outbuf[i * 2] = (val << 16);
+                    outbuf[i * 2 + 1] = (val << 16);
                 } else if (FLACMetadataBlock->bitsPerSample == 24) {
-                    *out32++ = val << 8;
+                    outbuf[i * 2] = (val << 8);
+                    outbuf[i * 2 + 1] = (val << 8);
+                } else if (FLACMetadataBlock->bitsPerSample == 32) {
+                    outbuf[i * 2] = (val);
+                    outbuf[i * 2 + 1] = (val);
                 }
             }
         }
@@ -846,14 +849,17 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
                 if (FLACMetadataBlock->bitsPerSample == 8) {
                     l += 128;
                     r += 128;
-                    *out16++ = (l << 8);
-                    *out16++ = (r << 8);
+                    outbuf[i * 2] = (l << 24);
+                    outbuf[i * 2 + 1] = (r << 24);
                 } else if (FLACMetadataBlock->bitsPerSample == 16) {
-                    *out16++ = l;
-                    *out16++ = r;
+                    outbuf[i * 2] = l = (l << 16);
+                    outbuf[i * 2 + 1] = (r << 16);
                 } else if (FLACMetadataBlock->bitsPerSample == 24) {
-                    *out32++ = (l << 8);
-                    *out32++ = (r << 8);
+                    outbuf[i * 2] = (l << 8);
+                    outbuf[i * 2 + 1] = (r << 8);
+                } else if (FLACMetadataBlock->bitsPerSample == 32) {
+                    outbuf[i * 2] = l;
+                    outbuf[i * 2 + 1] = r;
                 }
             }
         }

@@ -61,6 +61,7 @@ class MP3Decoder : public Decoder {
     ps_ptr<SubbandInfo_t>   m_SubbandInfo;
     ps_ptr<MP3FrameInfo_t>  m_MP3FrameInfo;
     ps_ptr<char>            m_mpeg_version_str;
+    ps_ptr<int16_t>         m_out16;
 
     invalid_frame m_invalid_frame;
 

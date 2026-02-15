@@ -3,7 +3,7 @@
  * based on Xiph.Org Foundation celt decoder
  *
  *  Created on: 26.01.2023
- *  Updated on: 17.11.2025
+ *  Updated on: 14.02.2026
  */
 //----------------------------------------------------------------------------------------------------------------------
 //                                     O G G / O P U S     I M P L.
@@ -36,6 +36,9 @@ bool OpusDecoder::init() {
     ;
     celtdec->clear();
 
+    m_out16.alloc_array(4608 * 2, "m_out16");
+    if(!m_out16.valid()) return false;
+
     clear();
     // allocate CELT buffers after OPUS head (nr of channels is needed)
     m_opusError = celtdec->celt_decoder_init(2);
@@ -67,6 +70,7 @@ void OpusDecoder::reset() {
     m_opusSegmentTableRdPtr = -1;
     m_opusCountCode = 0;
     m_isValid = false;
+    m_out16.reset();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void OpusDecoder::clear() {
@@ -80,6 +84,7 @@ void OpusDecoder::clear() {
     m_opusCountCode = 0;
     m_opusCurrentFilePos = 0;
     m_comment.reset();
+    m_out16.clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool OpusDecoder::isValid() {
@@ -126,8 +131,6 @@ void OpusDecoder::OPUSsetDefaults() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-
     int32_t ret = OPUS_NONE;
     int32_t segmLen = 0;
     int32_t bytesLeft_begin = *bytesLeft;
@@ -142,7 +145,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     }
 
     if (m_frameCount > 0) { // decode audio, next part
-        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, out16);
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, m_out16.get());
         goto exit;
     }
 
@@ -185,7 +188,7 @@ int32_t OpusDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
     }
 
     else if (m_opusPageNr == 3) {
-        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, out16); // decode audio
+        ret = opusDecodePage3(inbuf, bytesLeft, segmLen, m_out16.get()); // decode audio
         goto exit;
     }
 
@@ -198,6 +201,22 @@ exit:
     }
 
     if (ret >= 0) { m_opusCurrentFilePos += bytesLeft_begin - (*bytesLeft); }
+
+    if(ret == 0){
+
+        if (m_opusChannels == 1) {
+            for (int i = 0; i < m_opusValidSamples; i++) {
+                outbuf[i * 2] = m_out16[i] << 16;
+                outbuf[i * 2 + 1] = m_out16[i] << 16;
+            }
+        }
+
+        if (m_opusChannels == 2) {
+            for (int i = 0; i < m_opusValidSamples * 2; i++) { outbuf[i] = m_out16[i] << 16; }
+        }
+
+    }
+
     return ret;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

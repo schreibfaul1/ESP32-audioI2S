@@ -15,7 +15,7 @@
  * adapted for the ESP32 by schreibfaul1
  *
  *  Created on: 13.02.2023
- *  Updated on: 26.10.2025
+ *  Updated on: 14.02.2026
  */
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 //                                     O G G    I M P L.
@@ -27,8 +27,9 @@
 bool VorbisDecoder::init() {
     setDefaults();
     m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
-    m_f_isValid = true;
-    return true;
+    m_out16.alloc_array(4608 * 2, "m_out16");
+    if (m_ogg_items.lastSegmentTable.valid() && m_out16.valid()) m_f_isValid = true;
+    return m_f_isValid;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void VorbisDecoder::reset() {
@@ -41,6 +42,7 @@ void VorbisDecoder::reset() {
     if (m_mode_param.valid()) m_mode_param.reset();
     if (m_dsp_state.valid()) m_dsp_state.reset();
     m_ogg_items.segment_table.clear();
+    m_out16.reset();
     m_f_isValid = false;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -49,6 +51,7 @@ void VorbisDecoder::clear() {
     m_ogg_items.reset();
     m_ogg_items.lastSegmentTable.alloc(4096, "m_lastSegmentTable");
     m_vorbisBlockPicItem.clear();
+    m_out16.clear();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool VorbisDecoder::isValid() {
@@ -125,8 +128,6 @@ void VorbisDecoder::clearGlobalConfigurations() { // mode, mapping, floor etc
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) {
 
-    int16_t* out16 = reinterpret_cast<int16_t*>(outbuf);
-
     int32_t ret = 0;
     int32_t bytesLeft_begin = *bytesLeft;
     m_ogg_items.data_ptr = inbuf; // save for bitReader underrun
@@ -166,7 +167,7 @@ int32_t VorbisDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbu
             ret = vorbisDecodePage3(inbuf, bytesLeft, m_vorbis_segment_length); // codebooks
             break;
         case 4:
-            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, out16); // decode audio
+            ret = vorbisDecodePage4(inbuf, bytesLeft, m_vorbis_segment_length, m_out16.get()); // decode audio
             break;
         default:
             VORBIS_LOG_ERROR("unknown page %s", m_pageNr);
@@ -182,6 +183,18 @@ exit:
     if (ret < 0) {
         VORBIS_LOG_ERROR("ret %i", ret);
         m_ogg_items.segment_table.clear();
+    }
+    if (ret == 0) {
+        if (m_vorbisChannels == 1) {
+            for (int i = 0; i < m_vorbisValidSamples; i++) {
+                outbuf[i * 2] = m_out16[i] << 16;
+                outbuf[i * 2 + 1] = m_out16[i] << 16;
+            }
+        }
+
+        if (m_vorbisChannels == 2) {
+            for (int i = 0; i < m_vorbisValidSamples * 2; i++) { outbuf[i] = m_out16[i] << 16; }
+        }
     }
     return ret;
 }
@@ -481,27 +494,13 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
             }
             audio.info(audio, Audio::evt_id3data, "Title: %s", val.c_get());
         }
-        if (key.starts_with_icase("work")) {
-            audio.info(audio, Audio::evt_id3data, "Work: %s", val.c_get());
-        }
-        if (key.starts_with_icase("composer")) {
-            audio.info(audio, Audio::evt_id3data, "Composer: %s", val.c_get());
-        }
-        if (key.starts_with_icase("genre")) {
-            audio.info(audio, Audio::evt_id3data, "Genre: %s", val.c_get());
-        }
-        if (key.starts_with_icase("date")) {
-            audio.info(audio, Audio::evt_id3data, "Date: %s", val.c_get());
-        }
-        if (key.starts_with_icase("album")) {
-            audio.info(audio, Audio::evt_id3data, "Album: %s", val.c_get());
-        }
-        if (key.starts_with_icase("comment")) {
-            audio.info(audio, Audio::evt_id3data, "Comments: %s", val.c_get());
-        }
-        if (key.starts_with_icase("tracknumber")) {
-            audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", val.c_get());
-        }
+        if (key.starts_with_icase("work")) { audio.info(audio, Audio::evt_id3data, "Work: %s", val.c_get()); }
+        if (key.starts_with_icase("composer")) { audio.info(audio, Audio::evt_id3data, "Composer: %s", val.c_get()); }
+        if (key.starts_with_icase("genre")) { audio.info(audio, Audio::evt_id3data, "Genre: %s", val.c_get()); }
+        if (key.starts_with_icase("date")) { audio.info(audio, Audio::evt_id3data, "Date: %s", val.c_get()); }
+        if (key.starts_with_icase("album")) { audio.info(audio, Audio::evt_id3data, "Album: %s", val.c_get()); }
+        if (key.starts_with_icase("comment")) { audio.info(audio, Audio::evt_id3data, "Comments: %s", val.c_get()); }
+        if (key.starts_with_icase("tracknumber")) { audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", val.c_get()); }
 
         if (m_comment.stream_title.valid()) m_f_newSteamTitle = true;
         // comment.println(); // optional output
@@ -543,7 +542,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
         int64_t tmp_to_read = (int64_t)m_comment.comment_size - (int64_t)m_comment.save_len;
         if (tmp_to_read < 0) tmp_to_read = 0;
         uint32_t to_read = (uint32_t)tmp_to_read;
-        if (available_bytes <= 0) {  // clamp to available_bytes (available_bytes ist signed int)
+        if (available_bytes <= 0) { // clamp to available_bytes (available_bytes ist signed int)
             // nothing to do
             if (m_comment.list_length == 0) return VORBIS_COMMENT_DONE;
             return VORBIS_COMMENT_NEED_MORE;

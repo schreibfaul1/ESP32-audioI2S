@@ -50,9 +50,7 @@ struct ID3Hdr_t { // used only in readID3header()
     bool                  byteOrderMark = {};
     ps_ptr<char>          iBuff;
 
-    void reset() {
-        *this = ID3Hdr_t{};
-    }
+    void reset() { *this = ID3Hdr_t{}; }
 };
 
 struct pwsHLS_t { // used in processWebStreamHLS()
@@ -172,11 +170,8 @@ typedef struct _cat { // used in calculateAudioTime
     uint32_t brCounter{};
     bool     firstCall{};
 
-    void reset() {
-        *this = _cat{};
-    }
+    void reset() { *this = _cat{}; }
 } cat_t;
-
 
 struct ifCh_t { // used in IIR_filterChain0, 1, 2
     // s16
@@ -345,21 +340,31 @@ struct fnsy_t { // used in findNextSync
 };
 
 struct audioItems_t {
-    uint16_t freq_ls_Hz = 500;  // lowshelf
-    uint16_t freq_peq_Hz = 1800; // peakingEQ
-    uint16_t freq_hs_Hz = 6000;  // highshelf
-    float    gain_ls_db = 0.0;
-    float    gain_peq_db = 0.0;
-    float    gain_hs_db = 0.0;
-    float    pre_gain = 0.0; // correction factor for level adjustment
-    float    coeffs[3][5] = {0};
-    float    state_biquad[3][4] = {0};
-    float    vuLeft = 0;  // average value of samples, left channel
-    float    vuRight = 0; // average value of samples, right channel
-    uint8_t  volume = 0;
-    uint8_t  volume_steps = 21;
-    float    cur_volume = 0.0f;
-    bool     mute = false;
+    uint16_t        freq_ls_Hz = 500;   // lowshelf
+    uint16_t        freq_peq_Hz = 1800; // peakingEQ
+    uint16_t        freq_hs_Hz = 6000;  // highshelf
+    float           gain_ls_db = 0.0;
+    float           gain_peq_db = 0.0;
+    float           gain_hs_db = 0.0;
+    float           pre_gain = 0.0; // correction factor for level adjustment
+    float           coeffs[3][5] = {0};
+    float           state_biquad[3][4] = {0};
+    float           vuLeft = 0;  // average value of samples, left channel
+    float           vuRight = 0; // average value of samples, right channel
+    uint8_t         vuLeftPeak = 0;
+    uint8_t         vuRightPeak = 0;
+    uint16_t        vuLeftHold = 0;
+    uint16_t        vuRightHold = 0;
+    uint8_t         volume = 0;
+    uint8_t         volume_steps = 21;
+    float           cur_volume = 0.0f;
+    bool            mute = false;
+    const uint16_t  VU_DELAY_BUFFER_SIZE = DMA_DESC_NUM * DMA_FRAME_NUM; // Runtime in I2S-DMA
+    ps_ptr<int32_t> vu_delay_l;
+    ps_ptr<int32_t> vu_delay_r;
+    uint16_t        vu_delay_line_index = 0;
+    ps_ptr<float>   fft_buffer;
+    uint16_t        fft_index = 0;
 };
 
 } // namespace audiolib

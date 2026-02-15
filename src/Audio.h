@@ -3,7 +3,9 @@
  *
  */
 
-// #define SR_48K
+#define DMA_DESC_NUM  32  // number of I2S DMA buffer
+#define DMA_FRAME_NUM 222 // number of frames in one DMA buffer
+// #define SR_48K         // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -36,7 +38,7 @@
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_process_i2s(int16_t* outBuff, int32_t validSamples, bool* continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S); // record audiodata or send via BT
 extern char                       audioI2SVers[];
 class Decoder; // prototype
 
@@ -200,9 +202,11 @@ class Audio {
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
-    size_t                   resampleTo48kStereo(const int16_t* input, size_t inputFrames);
+    size_t                   resampleTo48kStereo(const int32_t* input, size_t inputFrames);
     void                     playChunk();
-    void                     calculateVUlevel(int32_t* sample, bool release = false);
+    void                     calculateVUlevel(int32_t* sample);
+    void                     processSpectrum(int32_t* sample);
+    void                     updateSpectrum();
     void                     gain_ramp();
     void                     calculateVolumeLimits();
     void                     Gain(int32_t* sample);
@@ -215,7 +219,6 @@ class Audio {
     esp_err_t                I2Sstop();
     void                     zeroI2Sbuff();
     void                     reconfigI2S();
-    void                     mono2stereo(int32_t* buff, uint16_t validSamples);
     void                     stereo2mono(int32_t* buff, uint16_t validSamples);
     void                     IIR_calculateCoefficients();
     void                     IIR_filter(int32_t* iir_in);
@@ -340,6 +343,23 @@ class Audio {
 
 #pragma GCC diagnostic pop
 
+  private: // ---------- FFT section -----------
+#define FFT_SIZE  256
+#define FFT_BANDS 3
+    float m_fft_in[FFT_SIZE];                   // FFT input (real)
+    alignas(16) float m_fft_work[FFT_SIZE * 2]; // FFT work buffer (complex interleaved)
+    float    m_fft_window[FFT_SIZE];            // FFT window
+    uint16_t m_fft_pos = 0;                     // FFT state
+    bool     m_fft_ready = false;               // FFT state
+    bool     m_fft_initialized = false;         // FFT state
+    uint8_t  m_spectrum[FFT_BANDS] = {0};       // Spectrum result (0..255)
+    float    m_spec_smooth[FFT_BANDS] = {0};    // smoothing
+    uint32_t m_fft_last_ms = 0;                 // timing (10 Hz)
+    float    m_fft_gain = 1.0f;                 // AGC in process()
+    bool     m_lr_switch = false;               // start/stop
+    int32_t  l_sample = 0;
+    int32_t  r_sample = 0;
+
     std::vector<ps_ptr<char>> m_playlistContent; // m3u8 playlist buffer from responseHeader
     std::vector<ps_ptr<char>> m_playlistURL;     // m3u8 streamURLs buffer
     std::deque<ps_ptr<char>>  m_linesWithURL;    // extract from m_playlistContent, contains URL and MediaSequenceNumber
@@ -353,7 +373,7 @@ class Audio {
 
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
-    ps_ptr<int16_t>          m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<int32_t>          m_samplesBuff48K; // Interleaved L/R
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
@@ -374,7 +394,7 @@ class Audio {
     uint32_t       m_metacount = 0;         // counts down bytes between metadata
     int            m_controlCounter = 0;    // Status within readID3data() and readWaveHeader()
     float          m_balance = 0.0f;        // -16 (mute left) ... +16 (mute right)
-    int16_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
+    int32_t        m_inputHistory[6] = {0}; // used in resampleTo48kStereo()
     uint16_t       m_opus_mode = 0;         // celt_only, silk_only or hybrid
     float          m_limiter[2] = {0};
     uint8_t        m_timeoutCounter = 0; // timeout counter
@@ -399,22 +419,23 @@ class Audio {
     uint16_t m_streamTitleHash = 0; // remember streamtitle, ignore multiple occurence in metadata
     uint16_t m_timeout_ms = 250;
     uint16_t m_timeout_ms_ssl = 2700;
-    uint32_t m_metaint = 0;              // Number of databytes between metadata
-    uint32_t m_chunkcount = 0;           // Counter for chunked transfer
-    uint32_t m_t0 = 0;                   // store millis(), is needed for a small delay
-    uint32_t m_bytesNotConsumed = 0;     // pictures or something else that comes with the stream
-    uint64_t m_lastGranulePosition = 0;  // necessary to calculate the duration in OPUS and VORBIS
-    int32_t  m_resumeFilePos = -1;       // the return value from stopSong(), (-1) is idle
-    int32_t  m_fileStartTime = -1;       // may be set in connecttoFS()
-    uint16_t m_m3u8_targetDuration = 10; //
-    uint32_t m_stsz_numEntries = 0;      // num of entries inside stsz atom (uint32_t)
-    uint32_t m_stsz_position = 0;        // pos of stsz atom within file
-    uint32_t m_haveNewFilePos = 0;       // user changed the file position
-    bool     m_f_metadata = false;       // assume stream without metadata
-    bool     m_f_unsync = false;         // set within ID3 tag but not used
-    bool     m_f_exthdr = false;         // ID3 extended header
-    bool     m_f_ssl = false;
-    bool     m_f_running = false;
+    uint32_t m_metaint = 0;                 // Number of databytes between metadata
+    uint32_t m_chunkcount = 0;              // Counter for chunked transfer
+    uint32_t m_t0 = 0;                      // store millis(), is needed for a small delay
+    uint32_t m_bytesNotConsumed = 0;        // pictures or something else that comes with the stream
+    uint64_t m_lastGranulePosition = 0;     // necessary to calculate the duration in OPUS and VORBIS
+    int32_t  m_resumeFilePos = -1;          // the return value from stopSong(), (-1) is idle
+    int32_t  m_fileStartTime = -1;          // may be set in connecttoFS()
+    uint16_t m_m3u8_targetDuration = 10;    //
+    uint32_t m_stsz_numEntries = 0;         // num of entries inside stsz atom (uint32_t)
+    uint32_t m_stsz_position = 0;           // pos of stsz atom within file
+    uint32_t m_haveNewFilePos = 0;          // user changed the file position
+    bool     m_f_metadata = false;          // assume stream without metadata
+    bool     m_f_I2S_init = false;          //
+    bool     m_f_unsync = false;            // set within ID3 tag but not used
+    bool     m_f_exthdr = false;            // ID3 extended header
+    bool     m_f_ssl = false;               //
+    bool     m_f_running = false;           //
     bool     m_f_firstCall = false;         // InitSequence for processWebstream and processLokalFile
     bool     m_f_firstLoop = false;         // InitSequence in loop()
     bool     m_f_firstPlayCall = false;     // InitSequence for playAudioData
