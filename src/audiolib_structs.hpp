@@ -340,35 +340,48 @@ struct fnsy_t { // used in findNextSync
 };
 
 struct audioItems_t {
-    uint16_t        freq_ls_Hz = 500;   // lowshelf
-    uint16_t        freq_peq_Hz = 1800; // peakingEQ
-    uint16_t        freq_hs_Hz = 6000;  // highshelf
-    float           gain_ls_db = 0.0;
-    float           gain_peq_db = 0.0;
-    float           gain_hs_db = 0.0;
-    float           pre_gain = 0.0; // correction factor for level adjustment
-    float           coeffs[3][5] = {0};
-    float           state_biquad[3][4] = {0};
-    float           vuLeft = 0;  // average value of samples, left channel
-    float           vuRight = 0; // average value of samples, right channel
-    uint8_t         vuLeftPeak = 0;
-    uint8_t         vuRightPeak = 0;
-    uint16_t        vuLeftHold = 0;
-    uint16_t        vuRightHold = 0;
-    uint8_t         volume = 0;
-    uint8_t         volume_steps = 21;
-    float           cur_volume = 0.0f;
-    bool            mute = false;
-    const uint16_t  VU_DELAY_BUFFER_SIZE = DMA_DESC_NUM * DMA_FRAME_NUM; // Runtime in I2S-DMA
-    ps_ptr<int32_t> vu_delay_l;
-    ps_ptr<int32_t> vu_delay_r;
-    uint16_t        vu_delay_line_index = 0;
+    uint16_t freq_ls_Hz = 500;   // lowshelf
+    uint16_t freq_peq_Hz = 1800; // peakingEQ
+    uint16_t freq_hs_Hz = 6000;  // highshelf
+    float    gain_ls_db = 0.0;   // lowshelf
+    float    gain_peq_db = 0.0;  // peakingEQ
+    float    gain_hs_db = 0.0;   // highshelf
+    float    pre_gain = 0.0;     // correction factor for level adjustment
+    float    coeffs[3][5] = {0};
+    float    state_biquad[3][4] = {0};
+    uint8_t  volume = 0;
+    uint8_t  volume_steps = 21;
+    float    cur_volume = 0.0f;
+    float    limiter[2] = {0};
+    float    balance = 0.0f; // -16.0 dB left ... 0 ... -16 db right
+    bool     mute = false;
+};
 
-    const uint16_t FFT_SIZE = 256;
-    ps_ptr<float>  fft_buffer; // FFT input (real)
-    ps_ptr<float>  fft_window; // FFT window
-    uint16_t       fft_index = 0;
-    alignas(16) ps_ptr<float>  fft_work; // FFT work buffer (complex interleaved)
+struct vu_items_t {
+    const uint16_t  DELAY_BUFFER_SIZE = DMA_DESC_NUM * DMA_FRAME_NUM; // Runtime in I2S-DMA
+    ps_ptr<int32_t> delay_l;
+    ps_ptr<int32_t> delay_r;
+    uint16_t        delay_line_index = 0;
+    float           left = 0;  // average value of samples, left channel
+    float           right = 0; // average value of samples, right channel
+    uint8_t         left_peak = 0;
+    uint8_t         right_peak = 0;
+    uint16_t        left_hold = 0;
+    uint16_t        right_hold = 0;
+};
+
+struct fft_items_t {
+    const uint16_t SIZE = 256;
+    ps_ptr<float>  buffer; // FFT input (real)
+    ps_ptr<float>  window; // FFT window
+    uint16_t       buffer_index = 0;
+    uint16_t       pos = 0;
+    bool           initialized = false;          // FFT state
+    float          spec_smooth[FFT_BANDS] = {0}; // smoothing
+    uint32_t       last_ms = 0;                  // timing (10 Hz)
+    float          gain = 1.0f;                  // AGC in process()
+    bool           lr_switch = false;            // start/stop
+    ps_ptr<float>  work;                         // FFT work buffer (complex interleaved)
 };
 
 } // namespace audiolib
