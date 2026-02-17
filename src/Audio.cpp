@@ -339,15 +339,15 @@ Audio::Audio(uint8_t i2sPort) {
     if (!psramFound()) AUDIO_LOG_ERROR("audioI2S requires PSRAM!");
 
     clientsecure.setInsecure();
-    m_i2s_num = i2sPort; // i2s port number
+    m_i2s_items.i2s_num = i2sPort; // i2s port number
 
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
-    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_num;    // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
-    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;        // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = DMA_DESC_NUM;   // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = DMA_FRAME_NUM; // I2S frame number in one DMA buffer.
-    m_i2s_chan_cfg.auto_clear = true;             // i2s will always send zero automatically if no data to send
+    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_items.i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
+    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
+    m_i2s_chan_cfg.dma_desc_num = m_i2s_items.DESC_NUM;   // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = m_i2s_items.FRAME_NUM; // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.auto_clear = true;                     // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
     m_i2s_chan_cfg.intr_priority = 2;
     i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
@@ -362,11 +362,10 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    m_sampleRate = m_i2s_std_cfg.clk_cfg.sample_rate_hz;
 
     calculateVolumeLimits(); // first init, vol = 21, vol_steps = 21
     startAudioTask();
@@ -3291,7 +3290,7 @@ bool Audio::pauseResume() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 size_t Audio::resampleTo48kStereo(const int32_t* input, size_t inputSamples) {
 
-    float ratio = static_cast<float>(m_sampleRate) / 48000.0f;
+    float ratio = static_cast<float>(m_i2s_items.sampleRate) / 48000.0f;
     float cursor = m_resampleCursor;
 
     // Anzahl Input-Samples + 3 History-Samples (vorherige 3 Stereo-Frames)
@@ -5451,8 +5450,8 @@ void Audio::setDecoderItems() {
         info(*this, evt_info, "AudioDataStart: %i", m_audioDataStart);
         if (m_audioFileSize && !m_audioDataSize) m_audioDataSize = m_audioFileSize - m_audioDataStart;
     }
-    if (m_lastGranulePosition && m_audioFileSize && m_sampleRate) {
-        m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_sampleRate);
+    if (m_lastGranulePosition && m_audioFileSize && m_i2s_items.sampleRate) {
+        m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_i2s_items.sampleRate);
         m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
         AUDIO_LOG_DEBUG("m_nominal_bitrate %i, m_lastGranulePosition %i", m_nominal_bitrate, m_lastGranulePosition);
         info(*this, evt_bitrate, "%i", m_nominal_bitrate);
@@ -5683,7 +5682,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
             if (m_lastGranulePosition)
                 m_cat.tota_samples = m_lastGranulePosition;
             else
-                m_cat.tota_samples = m_audioFileDuration * m_sampleRate;
+                m_cat.tota_samples = m_audioFileDuration * m_i2s_items.sampleRate;
         }
     }
 
@@ -5697,7 +5696,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         m_cat.timeStamp = t;                    //    ---"---
 
         if (m_cat.nominalBitRate) {
-            audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_sampleRate);
+            audioCurrentTime = (uint32_t)(m_cat.sum_samples / m_i2s_items.sampleRate);
         } else {
             double instBitRate = (m_cat.deltaBytesIn * 8000.0) / delta_t;
             m_cat.counter++;
@@ -5783,8 +5782,8 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
 
-    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_samplesBuff48K.valid() || !m_fft_items.buffer.valid() ||
-        !m_fft_items.buffer.valid() || !m_fft_items.work.valid()) {
+    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_samplesBuff48K.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
+        !m_fft_items.work.valid()) {
         result = false;
         goto exit;
     }
@@ -6065,14 +6064,14 @@ bool Audio::setSampleRate(uint32_t sampRate) {
         AUDIO_LOG_WARN("Sample rate must not be smaller than 8kHz, found: %lu", sampRate);
         return false;
     }
-    m_sampleRate = sampRate;
+    m_i2s_items.sampleRate = sampRate;
     reconfigI2S();
     IIR_calculateCoefficients();
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getSampleRate() {
-    return m_sampleRate;
+    return m_i2s_items.sampleRate;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setBitsPerSample(int bits) {
@@ -6138,7 +6137,7 @@ void Audio::setI2SCommFMT_LSB(bool commFMT) {
     } else {
         info(*this, evt_info, "commFMT = Philips");
     }
-    m_f_commFMT = commFMT;
+    m_i2s_items.commFMT = commFMT;
     reconfigI2S();
     return;
 }
@@ -6147,15 +6146,15 @@ void Audio::reconfigI2S() {
 
     i2s_channel_disable(m_i2s_tx_handle);
 
-    if (m_f_commFMT) {
+    if (m_i2s_items.commFMT) {
         m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
     } else {
         m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    m_resampleRatio = (float)m_sampleRate / 48000.0f;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_sampleRate;
+    m_resampleRatio = (float)m_i2s_items.sampleRate / 48000.0f;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
 }
@@ -6282,7 +6281,7 @@ uint8_t Audio::getVolume() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t Audio::getI2sPort() {
-    return m_i2s_num;
+    return m_i2s_items.i2s_num;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::gain_ramp() {
@@ -6362,12 +6361,12 @@ void Audio::processSpectrum() {
     dsps_bit_rev_fc32(m_fft_items.work.get(), m_fft_items.SIZE);
     dsps_cplx2reC_fc32(m_fft_items.work.get(), m_fft_items.SIZE);
 
-    const float bin_hz = (float)m_sampleRate / m_fft_items.SIZE;
+    const float bin_hz = (float)m_i2s_items.sampleRate / m_fft_items.SIZE;
     const float norm = 2.0f / m_fft_items.SIZE;
 
     // --- 5 internal bands ---
-    float band[5] = {0};
-    int   bins[5] = {0};
+    float band[m_fft_items.BANDS] = {0};
+    int   bins[m_fft_items.BANDS] = {0};
 
     for (int i = 1; i < m_fft_items.SIZE / 2; i++) {
 
@@ -6377,16 +6376,18 @@ void Audio::processSpectrum() {
         float f = i * bin_hz;
 
         int b = -1;
-        if (f < 250.0f)
-            b = 0; // Bass
-        else if (f < 600.0f)
-            b = 1; // Low-Mid (Puffer)
-        else if (f < 2500.0f)
-            b = 2; // Mid
-        else if (f < 4000.0f)
-            b = 3; // High-Mid (Puffer)
+        if      (f < 250)   b = 0;
+        else if (f < 400)   b = -1;
+        else if (f < 700)   b = 1;
+        else if (f < 1000)  b = -1;
+        else if (f < 1550)  b = 2;
+        else if (f < 2200)  b = -1;
+        else if (f < 4250)  b = 3;
+        else if (f < 6300)  b = -1;
+        else if (f < 11150) b = 4;
+        else if (f < 16000) b = 5;
         else
-            b = 4; // Treble
+            b = -1;
 
         if (b >= 0) {
             band[b] += mag * mag;
@@ -6395,7 +6396,7 @@ void Audio::processSpectrum() {
     }
 
     // --- RMS + weighting ---
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < m_fft_items.BANDS; i++) {
         if (bins[i])
             band[i] = sqrtf(band[i] / bins[i]);
         else
@@ -6403,14 +6404,15 @@ void Audio::processSpectrum() {
     }
 
     // band weighting (psychoacoustic / UI)
-    band[0] *= 0.5f; // Bass
-    band[1] *= 0.8f; // Puffer
-    band[2] *= 1.0f; // Mid
-    band[3] *= 0.8f; // Puffer
-    band[4] *= 2.0f; // Treble
+    band[0] *= 0.5f;
+    band[1] *= 0.8f;
+    band[2] *= 3.0f;
+    band[3] *= 2.8f;
+    band[4] *= 1.5f;
+    band[5] *= 1.5f;
 
     // log scale
-    for (int i = 0; i < 5; i++) { band[i] = log10f(band[i] + 1e-6f); }
+    for (int i = 0; i < m_fft_items.BANDS; i++) { band[i] = log10f(band[i] + 1e-6f); }
 
     // --- temporal smoothing (only displayed bands) ---
     auto smooth = [](float old, float in) {
@@ -6419,15 +6421,13 @@ void Audio::processSpectrum() {
         return (in > old) ? old + ATTACK * (in - old) : old + RELEASE * (in - old);
     };
 
-    m_fft_items.spec_smooth[0] = smooth(m_fft_items.spec_smooth[0], band[0]); // Bass
-    m_fft_items.spec_smooth[1] = smooth(m_fft_items.spec_smooth[1], band[2]); // Mid
-    m_fft_items.spec_smooth[2] = smooth(m_fft_items.spec_smooth[2], band[4]); // Treble
+    for (int i = 0; i < m_fft_items.BANDS; i++) { m_fft_items.spec_smooth[i] = smooth(m_fft_items.spec_smooth[i], band[i]); }
 
     // --- map to 0..255 using dB window ---
     constexpr float DB_MIN = -50.0f;
     constexpr float DB_MAX = 0.0f;
 
-    for (int i = 0; i < FFT_BANDS; i++) {
+    for (int i = 0; i < m_fft_items.BANDS; i++) {
 
         float db = m_fft_items.spec_smooth[i] * 20.0f;
 
@@ -6436,9 +6436,9 @@ void Audio::processSpectrum() {
 
         float norm = (db - DB_MIN) / (DB_MAX - DB_MIN);
 
-        m_spectrum[i] = (uint8_t)(norm * 255.0f);
+         m_fft_items.spectrum[i] = (uint8_t)(norm * 255.0f);
     }
-    AUDIO_LOG_INFO("%i, %i, %i", m_spectrum[0], m_spectrum[1], m_spectrum[2]);
+    AUDIO_LOG_INFO("% 4i, % 4i, % 4i, % 4i, % 4i, % 4i ", m_fft_items.spectrum[0], m_fft_items.spectrum[1],  m_fft_items.spectrum[2],  m_fft_items.spectrum[3],  m_fft_items.spectrum[4],  m_fft_items.spectrum[3]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {
@@ -6484,10 +6484,10 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     const float FcPKEQ = m_audio_items.freq_peq_Hz; // Frequency PeakEQ(Hz)
     const float FcHS = m_audio_items.freq_hs_Hz;    // Frequency HighShelf(Hz)
 
-    float       normFreqLS = FcLS / m_sampleRate;    // filter cut off frequency
-    float       normFreqPEQ = FcPKEQ / m_sampleRate; // filter center frequency
-    float       normFreqHS = FcHS / m_sampleRate;    // filter cut off frequency
-    const float QS = 0.707;                          // Quality Slope (Shelf)
+    float       normFreqLS = FcLS / m_i2s_items.sampleRate;    // filter cut off frequency
+    float       normFreqPEQ = FcPKEQ / m_i2s_items.sampleRate; // filter center frequency
+    float       normFreqHS = FcHS / m_i2s_items.sampleRate;    // filter cut off frequency
+    const float QS = 0.707;                                    // Quality Slope (Shelf)
 
     float total_boost_db = fmax(fmax(fmax(0, m_audio_items.gain_ls_db), m_audio_items.gain_peq_db), m_audio_items.gain_hs_db); // dynamic headroom
     m_audio_items.pre_gain = powf(10.0, -total_boost_db / 20);

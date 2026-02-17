@@ -3,9 +3,6 @@
  *
  */
 
-#define DMA_DESC_NUM  32  // number of I2S DMA buffer
-#define DMA_FRAME_NUM 222 // number of frames in one DMA buffer
-#define FFT_BANDS     3
 // #define SR_48K         // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
@@ -94,7 +91,6 @@ class AudioBuffer {
 class Audio {
   private:
     AudioBuffer InBuff;    // instance of input buffer
-    uint8_t     m_i2s_num; // I2S_NUM_0 or I2S_NUM_1
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -367,7 +363,6 @@ class Audio {
 
     const uint16_t m_plsBuffEntryLen = 256;         // length of each entry in playlistBuff
     int            m_LFcount = 0;                   // Detection of end of header
-    uint32_t       m_sampleRate = 48000;            //
     uint32_t       m_avr_bitrate = 0;               // average bitrate, median calculated by VBR
     uint32_t       m_nominal_bitrate = 0;           // given br from header
     uint32_t       m_audioFilePosition = 0;         // current position, counts every readed byte
@@ -380,7 +375,6 @@ class Audio {
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample
     uint8_t        m_channels = 2;                  //
-    uint8_t        m_spectrum[FFT_BANDS] = {0};     // Spectrum result (0..255)
     uint8_t        m_playlistFormat = 0;            // M3U, PLS, ASX
     uint8_t        m_codec = CODEC_NONE;            //
     uint8_t        m_m3u8Codec = CODEC_AAC;         // codec of m3u8 stream
@@ -432,7 +426,6 @@ class Audio {
     bool           m_f_m4aID3dataAreRead = false;   // has the m4a-ID3data already been read?
     bool           m_f_psramFound = false;          // set in constructor, result of psramInit()
     bool           m_f_timeout = false;             //
-    bool           m_f_commFMT = false;             // false: default (PHILIPS), true: Least Significant Bit Justified (japanese format)
     bool           m_f_audioTaskIsRunning = false;  //
     bool           m_f_allDataReceived = false;     //
     bool           m_f_stream = false;              // stream ready for output?
@@ -486,6 +479,7 @@ class Audio {
     audiolib::audioItems_t m_audio_items;
     audiolib::vu_items_t   m_vu_items;
     audiolib::fft_items_t  m_fft_items;
+    audiolib::i2s_items_t  m_i2s_items;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
@@ -550,7 +544,7 @@ class Audio {
         i.e = e;
         i.s = eventStr[e];
         i.arg1 = extract_last_number(result.c_get());
-        i.i2s_num = instance.m_i2s_num;
+        i.i2s_num = instance.m_i2s_items.i2s_num;
         audio_info_callback(i);
         result.reset();
         return true;
@@ -564,7 +558,7 @@ class Audio {
         i.msg = apic.c_get();
         i.e = e;
         i.s = eventStr[e];
-        i.i2s_num = instance.m_i2s_num;
+        i.i2s_num = instance.m_i2s_items.i2s_num;
         i.vec = v;
         audio_info_callback(i);
         return true;

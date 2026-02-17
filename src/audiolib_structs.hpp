@@ -357,6 +357,16 @@ struct audioItems_t {
     bool     mute = false;
 };
 
+#define DMA_DESC_NUM  32  // number of I2S DMA buffer
+#define DMA_FRAME_NUM 222 // number of frames in one DMA buffer
+struct i2s_items_t {
+    uint16_t DESC_NUM = DMA_DESC_NUM;
+    uint16_t FRAME_NUM = DMA_FRAME_NUM;
+    uint8_t  i2s_num = 0;
+    uint32_t sampleRate = 48000;
+    bool     commFMT = false;
+};
+
 struct vu_items_t {
     const uint16_t  DELAY_BUFFER_SIZE = DMA_DESC_NUM * DMA_FRAME_NUM; // Runtime in I2S-DMA
     ps_ptr<int32_t> delay_l;
@@ -370,8 +380,11 @@ struct vu_items_t {
     uint16_t        right_hold = 0;
 };
 
+#define FFT_BANDS 6
+#define FFT_SIZE  256
 struct fft_items_t {
-    const uint16_t SIZE = 256;
+    const uint16_t SIZE = FFT_SIZE;
+    const uint16_t BANDS = FFT_BANDS;
     ps_ptr<float>  buffer; // FFT input (real)
     ps_ptr<float>  window; // FFT window
     uint16_t       buffer_index = 0;
@@ -382,6 +395,7 @@ struct fft_items_t {
     float          gain = 1.0f;                  // AGC in process()
     bool           lr_switch = false;            // start/stop
     ps_ptr<float>  work;                         // FFT work buffer (complex interleaved)
+    uint8_t        spectrum[FFT_BANDS] = {0};    // output
 };
 
 } // namespace audiolib
