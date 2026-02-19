@@ -3358,10 +3358,11 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
+
+    constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
+
     if (m_plCh.count > 0) goto i2swrite;
     m_plCh.validSamples = m_validSamples;
-
-    m_plCh.sampleSize = 4; // 4 bytes per smple * 2 ch
 
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
@@ -3399,13 +3400,13 @@ void IRAM_ATTR Audio::playChunk() {
 
 i2swrite:
 #ifdef SR_48K
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize * 2, &m_plCh.i2s_bytesConsumed, 50);
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
 #else
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * m_plCh.sampleSize * 2, &m_plCh.i2s_bytesConsumed, 20);
+    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
 //     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 #endif
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
-    m_validSamples -= m_plCh.i2s_bytesConsumed / (m_plCh.sampleSize * 2);
+    m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_FRAME;
     m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
     if (m_validSamples <= 0) {
         m_validSamples = 0;
@@ -6438,7 +6439,7 @@ void Audio::processSpectrum() {
 
          m_fft_items.spectrum[i] = (uint8_t)(norm * 255.0f);
     }
-    AUDIO_LOG_INFO("% 4i, % 4i, % 4i, % 4i, % 4i, % 4i ", m_fft_items.spectrum[0], m_fft_items.spectrum[1],  m_fft_items.spectrum[2],  m_fft_items.spectrum[3],  m_fft_items.spectrum[4],  m_fft_items.spectrum[3]);
+//    AUDIO_LOG_INFO("% 4i, % 4i, % 4i, % 4i, % 4i, % 4i ", m_fft_items.spectrum[0], m_fft_items.spectrum[1],  m_fft_items.spectrum[2],  m_fft_items.spectrum[3],  m_fft_items.spectrum[4],  m_fft_items.spectrum[3]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {
