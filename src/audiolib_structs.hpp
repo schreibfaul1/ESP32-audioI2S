@@ -119,13 +119,10 @@ struct m4aHdr_t { // used in read_M4A_Header
 };
 
 struct plCh_t { // used in playChunk
-    int32_t   validSamples;
-    int32_t   samples48K = 0;
     uint32_t  count = 0;
     size_t    i2s_bytesConsumed;
     uint16_t  samples;
     int16_t*  sample[2];
-    int32_t*  sample1;
     esp_err_t err;
 };
 
@@ -395,6 +392,30 @@ struct fft_items_t {
     bool           lr_switch = false;            // start/stop
     ps_ptr<float>  work;                         // FFT work buffer (complex interleaved)
     uint8_t        spectrum[FFT_BANDS] = {0};    // output
+};
+
+struct Biquad {
+    int64_t z1 = 0;
+    int64_t z2 = 0;
+};
+
+struct BiquadCoeffs {
+    int64_t b0;
+    int64_t b1;
+    int64_t b2;
+    int64_t a1;
+    int64_t a2;
+};
+
+struct resampler_t {
+    static constexpr size_t MAX_IN_FRAMES = 4608;
+    static constexpr size_t MAX_OUT_FRAMES = 10500;
+    uint64_t                phase = 0;
+    uint64_t                phaseStep = 0;
+    Biquad                  lpLeft;
+    Biquad                  lpRight;
+    uint32_t                outFrames = 0;
+    BiquadCoeffs            g_lpCoeffs;
 };
 
 } // namespace audiolib
