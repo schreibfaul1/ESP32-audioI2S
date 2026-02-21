@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4u                                                                                                                            ";
-/*  Updated on: Feb 21, 2026
+    Version 3.4.4v                                                                                                                            ";
+/*  Updated on: Feb 22, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3288,6 +3288,41 @@ bool Audio::pauseResume() {
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs, float fc) { // Calculation of the biquad coefficients for the 48K resampler
+    constexpr float Q = 0.70710678f;
+
+    float w0 = 2.0f * M_PI * fc / fs;
+    float cw = cosf(w0);
+    float sw = sinf(w0);
+    float alpha = sw / (2.0f * Q);
+
+    float b0 = (1.0f - cw) * 0.5f;
+    float b1 = 1.0f - cw;
+    float b2 = (1.0f - cw) * 0.5f;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cw;
+    float a2 = 1.0f - alpha;
+
+    // normalize
+    b0 /= a0;
+    b1 /= a0;
+    b2 /= a0;
+    a1 /= a0;
+    a2 /= a0;
+
+    // convert to Q31
+    constexpr float Q31 = 2147483648.0f; // 2^31
+
+    audiolib::BiquadCoeffs c;
+    c.b0 = (int32_t)lrintf(b0 * Q31);
+    c.b1 = (int32_t)lrintf(b1 * Q31);
+    c.b2 = (int32_t)lrintf(b2 * Q31);
+    c.a1 = (int32_t)lrintf(a1 * Q31);
+    c.a2 = (int32_t)lrintf(a2 * Q31);
+
+    return c;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint16_t inputSamples, int32_t* output) {
     uint32_t outFrames = 0;
 
@@ -3359,42 +3394,35 @@ void IRAM_ATTR Audio::playChunk() {
             i2s_channel_enable(m_i2s_tx_handle);
             m_resampler.phase = 0;
             m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
+
+            if (m_i2s_items.sampleRate <= 22050) {
+                // 22.05 kHz source → fc ≈ 10 kHz
+                m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(48000.0f, 10000.0f);
+            } else {
+                // 44.1 kHz source → fc ≈ 18–20 kHz (20 kHz ist okay)
+                m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(48000.0f, 18000.0f);
+            }
+
             m_resampler.lpLeft = {};
             m_resampler.lpRight = {};
-            if (m_i2s_items.sampleRate <= 22050) { // 22.05 kHz source, 2nd-order Butterworth LPF, fs = 48 kHz, fc ≈ 20 kHz
-                m_resampler.g_lpCoeffs = { // Q31 coefficients
-                    .b0 = 396431272,  //  0.184900 * 2^31
-                    .b1 = 792862544,  //  0.369800 * 2^31
-                    .b2 = 396431272,  //  0.184900 * 2^31
-                    .a1 = -507196666, // -0.236800 * 2^31
-                    .a2 = 290114548   //  0.135200 * 2^31
-                };
-            } else { // 44.1 kHz source, 2nd-order Butterworth LPF, fs = 48 kHz, fc ≈ 10 kHz
-                m_resampler.g_lpCoeffs = { // Q31 coefficients
-                    .b0 = 1322630956, //  0.616244 * 2^31
-                    .b1 = 2645261912, //  1.232488 * 2^31
-                    .b2 = 1322630956, //  0.616244 * 2^31
-                    .a1 = 2269663676, // -1.056999 * 2^31 (sign already handled in biquad)
-                    .a2 = -936625062  //  0.435535 * 2^31
-                };
-            }
+
             // AUDIO_LOG_DEBUG("(sampleRate %li ==> 48KHz", m_i2s_items.sampleRate);
         }
         uint32_t samples48K = 0;
         samples48K = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get());
         m_validSamples = samples48K; // new amount of samples
 
-        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
+        // audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
     }
 #else
     //------------------------------------------------------------------------------------------------------
     //  audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
 #endif
-    if (!continueI2S) {
-        m_validSamples = 0;
-        m_plCh.count = 0;
-        return;
-    }
+    // if (!continueI2S) {
+    //     m_validSamples = 0;
+    //     m_plCh.count = 0;
+    //     return;
+    // }
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:

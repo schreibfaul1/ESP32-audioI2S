@@ -3,7 +3,7 @@
  *
  */
 
-// #define SR_48K // only for I2S devices (DAC, BT etc.) that require 48KHz
+#define SR_48K // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -266,6 +266,7 @@ class Audio {
     ps_ptr<char> urlencode(const char* str, bool spacesOnly);
     uint32_t     bswap32(uint32_t x);
     uint64_t     bswap64(uint64_t x);
+    audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs, float fc);
 
     IRAM_ATTR inline int32_t lerp_q32(int32_t a, int32_t b, uint32_t frac) { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); }
     IRAM_ATTR inline int32_t biquadProcess(audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) {
@@ -278,6 +279,10 @@ class Audio {
         if (y < INT32_MIN) return INT32_MIN;
         return (int32_t)y;
     }
+
+
+
+
 
   private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
