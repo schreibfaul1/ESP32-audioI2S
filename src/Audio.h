@@ -3,7 +3,7 @@
  *
  */
 
-// #define SR_48K         // only for I2S devices (DAC, BT etc.) that require 48KHz
+// #define SR_48K // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
@@ -90,7 +90,7 @@ class AudioBuffer {
 
 class Audio {
   private:
-    AudioBuffer InBuff;    // instance of input buffer
+    AudioBuffer InBuff; // instance of input buffer
 
   public:
     Audio(uint8_t i2sPort = I2S_NUM_0);
@@ -199,7 +199,7 @@ class Audio {
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
-    size_t                   resampleTo48kStereo(const int32_t* input, size_t inputFrames);
+    uint32_t                 resampleTo48kStereo(audiolib::resampler_t& resampler, int32_t* input, uint16_t inputSamples, int32_t* output);
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
@@ -266,6 +266,18 @@ class Audio {
     ps_ptr<char> urlencode(const char* str, bool spacesOnly);
     uint32_t     bswap32(uint32_t x);
     uint64_t     bswap64(uint64_t x);
+
+    IRAM_ATTR inline int32_t lerp_q32(int32_t a, int32_t b, uint32_t frac) { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); }
+    IRAM_ATTR inline int32_t biquadProcess(audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) {
+        // Q31 signal, Q31 coeffs → Q62 acc
+        int64_t acc = (int64_t)c.b0 * x + s.z1;
+        s.z1 = (int64_t)c.b1 * x - (int64_t)c.a1 * (acc >> 31) + s.z2;
+        s.z2 = (int64_t)c.b2 * x - (int64_t)c.a2 * (acc >> 31);
+        int64_t y = acc >> 31;
+        if (y > INT32_MAX) return INT32_MAX;
+        if (y < INT32_MIN) return INT32_MIN;
+        return (int32_t)y;
+    }
 
   private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -480,6 +492,7 @@ class Audio {
     audiolib::vu_items_t   m_vu_items;
     audiolib::fft_items_t  m_fft_items;
     audiolib::i2s_items_t  m_i2s_items;
+    audiolib::resampler_t  m_resampler;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:

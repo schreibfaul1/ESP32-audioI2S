@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4t                                                                                                                            ";
-/*  Updated on: Feb 19, 2026
+    Version 3.4.4u                                                                                                                            ";
+/*  Updated on: Feb 21, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3288,82 +3288,58 @@ bool Audio::pauseResume() {
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-size_t Audio::resampleTo48kStereo(const int32_t* input, size_t inputSamples) {
+uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint16_t inputSamples, int32_t* output) {
+    uint32_t outFrames = 0;
 
-    float ratio = static_cast<float>(m_i2s_items.sampleRate) / 48000.0f;
-    float cursor = m_resampleCursor;
+    // We always need frame i and i+1
+    for (uint32_t i = 0; i + 1 < inputSamples; ++i) {
 
-    // Anzahl Input-Samples + 3 History-Samples (vorherige 3 Stereo-Frames)
-    size_t extendedSamples = inputSamples + 3;
+        int32_t l0 = input[i * 2];
+        int32_t r0 = input[i * 2 + 1];
+        int32_t l1 = input[(i + 1) * 2];
+        int32_t r1 = input[(i + 1) * 2 + 1];
 
-    // Temporärer Buffer: History + aktueller Input
-    std::vector<int32_t> extendedInput(extendedSamples * 2);
+        // As long as we still generate output samples from this input interval
+        while ((rs.phase >> 32) == 0) {
 
-    // Historie an den Anfang kopieren (6 Werte = 3 Stereo-Samples)
-    memcpy(&extendedInput[0], m_inputHistory, 6 * sizeof(int32_t));
+            uint32_t frac = (uint32_t)rs.phase;
 
-    // Aktuelles Input danach einfügen
-    memcpy(&extendedInput[6], input, inputSamples * 2 * sizeof(int32_t));
+            // interpolate linear
+            int32_t l = lerp_q32(l0, l1, frac);
+            int32_t r = lerp_q32(r0, r1, frac);
 
-    size_t outputIndex = 0;
+            // filter lowpass
+            l = biquadProcess(rs.lpLeft, rs.g_lpCoeffs, l);
+            r = biquadProcess(rs.lpRight, rs.g_lpCoeffs, r);
 
-    for (size_t inIdx = 1; inIdx < extendedSamples - 2; ++inIdx) {
-        int32_t xm1_l = (extendedInput[(inIdx - 1) * 2]);
-        int32_t x0_l = (extendedInput[(inIdx + 0) * 2]);
-        int32_t x1_l = (extendedInput[(inIdx + 1) * 2]);
-        int32_t x2_l = (extendedInput[(inIdx + 2) * 2]);
+            // write output
+            output[outFrames * 2] = l;
+            output[outFrames * 2 + 1] = r;
+            ++outFrames;
 
-        int32_t xm1_r = (extendedInput[(inIdx - 1) * 2 + 1]);
-        int32_t x0_r = (extendedInput[(inIdx + 0) * 2 + 1]);
-        int32_t x1_r = (extendedInput[(inIdx + 1) * 2 + 1]);
-        int32_t x2_r = (extendedInput[(inIdx + 2) * 2 + 1]);
+            rs.phase += rs.phaseStep;
 
-        while (cursor < 1.0f) {
-            float t = cursor;
-
-            // Catmull-Rom spline, construct a cubic curve
-            auto catmullRom = [](float t, float xm1, float x0, float x1, float x2) {
-                return 0.5f * ((2.0f * x0) + (-xm1 + x1) * t + (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2) * t * t + (-xm1 + 3.0f * x0 - 3.0f * x1 + x2) * t * t * t);
-            };
-
-            int32_t outLeft = (catmullRom(t, xm1_l, x0_l, x1_l, x2_l));
-            int32_t outRight = (catmullRom(t, xm1_r, x0_r, x1_r, x2_r));
-
-            m_samplesBuff48K[outputIndex * 2] = (outLeft);
-            m_samplesBuff48K[outputIndex * 2 + 1] = (outRight);
-
-            ++outputIndex;
-            cursor += ratio;
+            // Security (should practically never apply)
+            if (outFrames >= audiolib::resampler_t::MAX_OUT_FRAMES) return outFrames;
         }
 
-        cursor -= 1.0f;
+        // One input frame further
+        rs.phase -= (1ULL << 32);
     }
 
-    // Save the last 3 stereo samples as a new history
-    for (int i = 0; i < 3; ++i) {
-        size_t idx = inputSamples - 3 + i;
-        m_inputHistory[i * 2] = input[idx * 2];
-        m_inputHistory[i * 2 + 1] = input[idx * 2 + 1];
-    }
-    m_resampleCursor = cursor;
-    return outputIndex;
+    return outFrames;
 }
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
     bool continueI2S = true;
-    m_plCh.validSamples = 0;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-
     constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
 
-    if (m_plCh.count > 0) goto i2swrite;
-    m_plCh.validSamples = m_validSamples;
-
+    if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
         calculateVUlevel(&m_outBuff[i * 2]);
@@ -3374,22 +3350,45 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
 #ifdef SR_48K
-    if (m_plCh.count == 0) {
-        m_plCh.validSamples = m_validSamples;
-        m_plCh.samples48K = resampleTo48kStereo(m_outBuff.get(), m_plCh.validSamples);
-        m_validSamples = m_plCh.samples48K;
-
-        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) {
+    if (m_i2s_items.sampleRate != 48000) {
+        // zu Beginn I2S auf 48KHz konfigurieren
+        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) { // only once
             m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
             i2s_channel_disable(m_i2s_tx_handle);
             i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
             i2s_channel_enable(m_i2s_tx_handle);
+            m_resampler.phase = 0;
+            m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
+            m_resampler.lpLeft = {};
+            m_resampler.lpRight = {};
+            if (m_i2s_items.sampleRate <= 22050) { // 22.05 kHz source, 2nd-order Butterworth LPF, fs = 48 kHz, fc ≈ 20 kHz
+                m_resampler.g_lpCoeffs = { // Q31 coefficients
+                    .b0 = 396431272,  //  0.184900 * 2^31
+                    .b1 = 792862544,  //  0.369800 * 2^31
+                    .b2 = 396431272,  //  0.184900 * 2^31
+                    .a1 = -507196666, // -0.236800 * 2^31
+                    .a2 = 290114548   //  0.135200 * 2^31
+                };
+            } else { // 44.1 kHz source, 2nd-order Butterworth LPF, fs = 48 kHz, fc ≈ 10 kHz
+                m_resampler.g_lpCoeffs = { // Q31 coefficients
+                    .b0 = 1322630956, //  0.616244 * 2^31
+                    .b1 = 2645261912, //  1.232488 * 2^31
+                    .b2 = 1322630956, //  0.616244 * 2^31
+                    .a1 = 2269663676, // -1.056999 * 2^31 (sign already handled in biquad)
+                    .a2 = -936625062  //  0.435535 * 2^31
+                };
+            }
+            // AUDIO_LOG_DEBUG("(sampleRate %li ==> 48KHz", m_i2s_items.sampleRate);
         }
+        uint32_t samples48K = 0;
+        samples48K = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get());
+        m_validSamples = samples48K; // new amount of samples
+
+        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
     }
-    audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
 #else
     //------------------------------------------------------------------------------------------------------
-    audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+    //  audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
 #endif
     if (!continueI2S) {
         m_validSamples = 0;
@@ -5776,7 +5775,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     }
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
-    m_samplesBuff48K.alloc(m_samplesBuff48KSize * sizeof(int32_t), "m_samplesBuff48K");
+    m_samplesBuff48K.alloc_array(m_samplesBuff48KSize, "m_samplesBuff48K");
     m_vu_items.delay_l.alloc_array(m_vu_items.DELAY_BUFFER_SIZE, "delay_l");
     m_vu_items.delay_r.alloc_array(m_vu_items.DELAY_BUFFER_SIZE, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
@@ -6377,16 +6376,26 @@ void Audio::processSpectrum() {
         float f = i * bin_hz;
 
         int b = -1;
-        if      (f < 250)   b = 0;
-        else if (f < 400)   b = -1;
-        else if (f < 700)   b = 1;
-        else if (f < 1000)  b = -1;
-        else if (f < 1550)  b = 2;
-        else if (f < 2200)  b = -1;
-        else if (f < 4250)  b = 3;
-        else if (f < 6300)  b = -1;
-        else if (f < 11150) b = 4;
-        else if (f < 16000) b = 5;
+        if (f < 250)
+            b = 0;
+        else if (f < 400)
+            b = -1;
+        else if (f < 700)
+            b = 1;
+        else if (f < 1000)
+            b = -1;
+        else if (f < 1550)
+            b = 2;
+        else if (f < 2200)
+            b = -1;
+        else if (f < 4250)
+            b = 3;
+        else if (f < 6300)
+            b = -1;
+        else if (f < 11150)
+            b = 4;
+        else if (f < 16000)
+            b = 5;
         else
             b = -1;
 
@@ -6437,9 +6446,10 @@ void Audio::processSpectrum() {
 
         float norm = (db - DB_MIN) / (DB_MAX - DB_MIN);
 
-         m_fft_items.spectrum[i] = (uint8_t)(norm * 255.0f);
+        m_fft_items.spectrum[i] = (uint8_t)(norm * 255.0f);
     }
-//    AUDIO_LOG_INFO("% 4i, % 4i, % 4i, % 4i, % 4i, % 4i ", m_fft_items.spectrum[0], m_fft_items.spectrum[1],  m_fft_items.spectrum[2],  m_fft_items.spectrum[3],  m_fft_items.spectrum[4],  m_fft_items.spectrum[3]);
+    //    AUDIO_LOG_INFO("% 4i, % 4i, % 4i, % 4i, % 4i, % 4i ", m_fft_items.spectrum[0], m_fft_items.spectrum[1],  m_fft_items.spectrum[2],  m_fft_items.spectrum[3],  m_fft_items.spectrum[4],
+    //    m_fft_items.spectrum[3]);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::Gain(int32_t* sample) {
