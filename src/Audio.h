@@ -3,7 +3,7 @@
  *
  */
 
-#define SR_48K // only for I2S devices (DAC, BT etc.) that require 48KHz
+// #define SR_48K // only for I2S devices (DAC, BT etc.) that require 48KHz
 
 #pragma once
 #pragma GCC optimize("Ofast")
