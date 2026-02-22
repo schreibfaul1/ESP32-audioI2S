@@ -199,7 +199,7 @@ class Audio {
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
-    uint32_t                 resampleTo48kStereo(audiolib::resampler_t& resampler, int32_t* input, uint16_t inputSamples, int32_t* output);
+    uint32_t                 resampleTo48kStereo(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
@@ -235,54 +235,38 @@ class Audio {
     void        performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
-    bool         readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
-    int32_t      getChunkSize(uint16_t* readedBytes, bool first = false);
-    bool         readID3V1Tag();
-    int32_t      newInBuffStart(int32_t resumeFilePos);
-    boolean      streamDetection(uint32_t bytesAvail);
-    uint32_t     m4a_correctResumeFilePos();
-    uint32_t     ogg_correctResumeFilePos();
-    int32_t      flac_correctResumeFilePos();
-    int32_t      mp3_correctResumeFilePos();
-    int32_t      wav_correctResumeFilePos();
-    uint8_t      determineOggCodec();
-    void         strlower(char* str);
-    void         trim(char* str);
-    bool         startsWith(const char* base, const char* str);
-    bool         endsWith(const char* base, const char* searchString);
-    int          indexOf(const char* base, const char* str, int startIndex = 0);
-    int          indexOf(const char* base, char ch, int startIndex = 0);
-    int          lastIndexOf(const char* haystack, const char* needle);
-    int          lastIndexOf(const char* haystack, const char needle);
-    int          specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
-    int          specialIndexOfLast(uint8_t* base, const char* str, int baselen);
-    int          find_utf16_null_terminator(const uint8_t* buf, int start, int max);
-    int32_t      min3(int32_t a, int32_t b, int32_t c);
-    uint64_t     bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
-    bool         b64encode(const char* source, uint16_t sourceLength, char* dest);
-    void         vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec);
-    void         deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
-    uint32_t     simpleHash(const char* str);
-    ps_ptr<char> urlencode(const char* str, bool spacesOnly);
-    uint32_t     bswap32(uint32_t x);
-    uint64_t     bswap64(uint64_t x);
-    audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs, float fc);
-
-    IRAM_ATTR inline int32_t lerp_q32(int32_t a, int32_t b, uint32_t frac) { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); }
-    IRAM_ATTR inline int32_t biquadProcess(audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) {
-        // Q31 signal, Q31 coeffs → Q62 acc
-        int64_t acc = (int64_t)c.b0 * x + s.z1;
-        s.z1 = (int64_t)c.b1 * x - (int64_t)c.a1 * (acc >> 31) + s.z2;
-        s.z2 = (int64_t)c.b2 * x - (int64_t)c.a2 * (acc >> 31);
-        int64_t y = acc >> 31;
-        if (y > INT32_MAX) return INT32_MAX;
-        if (y < INT32_MIN) return INT32_MIN;
-        return (int32_t)y;
-    }
-
-
-
-
+    bool                   readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
+    int32_t                getChunkSize(uint16_t* readedBytes, bool first = false);
+    bool                   readID3V1Tag();
+    int32_t                newInBuffStart(int32_t resumeFilePos);
+    boolean                streamDetection(uint32_t bytesAvail);
+    uint32_t               m4a_correctResumeFilePos();
+    uint32_t               ogg_correctResumeFilePos();
+    int32_t                flac_correctResumeFilePos();
+    int32_t                mp3_correctResumeFilePos();
+    int32_t                wav_correctResumeFilePos();
+    uint8_t                determineOggCodec();
+    void                   strlower(char* str);
+    void                   trim(char* str);
+    bool                   startsWith(const char* base, const char* str);
+    bool                   endsWith(const char* base, const char* searchString);
+    int                    indexOf(const char* base, const char* str, int startIndex = 0);
+    int                    indexOf(const char* base, char ch, int startIndex = 0);
+    int                    lastIndexOf(const char* haystack, const char* needle);
+    int                    lastIndexOf(const char* haystack, const char needle);
+    int                    specialIndexOf(uint8_t* base, const char* str, int baselen, bool exact = false);
+    int                    specialIndexOfLast(uint8_t* base, const char* str, int baselen);
+    int                    find_utf16_null_terminator(const uint8_t* buf, int start, int max);
+    int32_t                min3(int32_t a, int32_t b, int32_t c);
+    uint64_t               bigEndian(uint8_t* base, uint8_t numBytes, uint8_t shiftLeft = 8);
+    bool                   b64encode(const char* source, uint16_t sourceLength, char* dest);
+    void                   vector_clear_and_shrink(std::vector<ps_ptr<char>>& vec);
+    void                   deque_clear_and_shrink(std::deque<ps_ptr<char>>& deq);
+    uint32_t               simpleHash(const char* str);
+    ps_ptr<char>           urlencode(const char* str, bool spacesOnly);
+    uint32_t               bswap32(uint32_t x);
+    uint64_t               bswap64(uint64_t x);
+    audiolib::BiquadCoeffs makeButterworthLPF_Q31(float fs);
 
   private:
     enum : int { APLL_AUTO = -1, APLL_ENABLE = 1, APLL_DISABLE = 0 };
@@ -456,9 +440,6 @@ class Audio {
     bool           m_f_i2s_channel_enabled = false; // true if enabled
     uint32_t       m_audioFileDuration = 0;         // seconds
     uint32_t       m_audioCurrentTime = 0;          // seconds
-    float          m_resampleError = 0.0f;          //
-    float          m_resampleRatio = 1.0f;          // resample ratio for e.g. 44.1kHz to 48kHz
-    float          m_resampleCursor = 0.0f;         // next frac in resampleTo48kStereo
     uint32_t       m_audioDataStart = 0;            // in bytes
     size_t         m_audioDataSize = 0;             //
     size_t         m_ibuffSize = 0;                 // log buffer size for audio_info()
