@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4w                                                                                                                            ";
+    Version 3.4.4x                                                                                                                            ";
 /*  Updated on: Feb 22, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3423,31 +3423,13 @@ void IRAM_ATTR Audio::playChunk() {
     processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-#ifdef SR_48K
-    if (m_i2s_items.sampleRate != 48000) {
-        // zu Beginn I2S auf 48KHz konfigurieren
-        if (m_i2s_std_cfg.clk_cfg.sample_rate_hz != 48000) { // only once
-            m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-            i2s_channel_disable(m_i2s_tx_handle);
-            i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
-            i2s_channel_enable(m_i2s_tx_handle);
-            m_resampler.phase = 0;
-            m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
-            m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
-            m_resampler.lpLeft = {};
-            m_resampler.lpRight = {};
-            // AUDIO_LOG_DEBUG("(sampleRate %li ==> 48KHz", m_i2s_items.sampleRate);
-        }
-        uint32_t samples48K = 0;
-        samples48K = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get());
-        m_validSamples = samples48K; // new amount of samples
-
+    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) {
+        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
         audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
+    } else {
+        audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
-#else
     //------------------------------------------------------------------------------------------------------
-    audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
-#endif
     if (!continueI2S) {
         m_validSamples = 0;
         m_plCh.count = 0;
@@ -3456,11 +3438,11 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
-#ifdef SR_48K
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
-#else
-    m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
-#endif
+    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) { // with resampler
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
+    } else { // without resampler
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
+    }
 
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_FRAME;
@@ -6211,7 +6193,16 @@ void Audio::reconfigI2S() {
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
+    if (m_f_output48KHz) {
+        m_resampler.phase = 0; // prepare resampler
+        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
+        m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
+        m_resampler.lpLeft = {};
+        m_resampler.lpRight = {};
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+    } else {
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
+    }
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
 }
@@ -6318,6 +6309,11 @@ void Audio::setTone(float gainLowPass, float gainBandPass, float gainHighPass) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::forceMono(bool m) { // #100 mono option
     m_f_forceMono = m;          // false stereo, true mono
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setOutput48KHz(bool f48) { //
+    m_f_output48KHz = f48;          // false f_out is the origin sample rate, true f_out is always 48000 Hz
+    reconfigI2S();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setBalance(float balance) { // left -16.0dB ... 0dB ... -16.0dB right
