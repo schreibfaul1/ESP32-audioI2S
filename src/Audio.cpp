@@ -515,7 +515,6 @@ void Audio::setDefaults() {
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
     if (m_f_reset_m3u8Codec) { m_m3u8Codec = CODEC_AAC; } // reset to default
     m_f_reset_m3u8Codec = true;
-    m_resampleCursor = 0.0f;
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3288,7 +3287,12 @@ bool Audio::pauseResume() {
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs, float fc) { // Calculation of the biquad coefficients for the 48K resampler
+audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs) { // Calculation of the biquad coefficients for the 48K resampler
+
+    float fc = 0.45f * fs;
+    if (fc > 20000.0f) fc = 20000.0f; // absolute upper limit (security)
+    if (fc < 3000.0f) fc = 3000.0f;   // absolute lower limit (prevents “thin” sound)
+
     constexpr float Q = 0.70710678f;
 
     float w0 = 2.0f * M_PI * fc / fs;
@@ -3323,7 +3327,21 @@ audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs, float fc) { // Ca
     return c;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint16_t inputSamples, int32_t* output) {
+uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint32_t inputSamples, int32_t* output) {
+
+    auto biquadProcess = [&](audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) -> int32_t {
+        // Q31 signal, Q31 coeffs → Q62 acc
+        int64_t acc = (int64_t)c.b0 * x + s.z1;
+        s.z1 = (int64_t)c.b1 * x - (int64_t)c.a1 * (acc >> 31) + s.z2;
+        s.z2 = (int64_t)c.b2 * x - (int64_t)c.a2 * (acc >> 31);
+        int64_t y = acc >> 31;
+        if (y > INT32_MAX) return INT32_MAX;
+        if (y < INT32_MIN) return INT32_MIN;
+        return (int32_t)y;
+    };
+
+    auto lerp_q32 = [&](int32_t a, int32_t b, uint32_t frac) -> int32_t { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); };
+
     uint32_t outFrames = 0;
 
     // We always need frame i and i+1
@@ -3394,35 +3412,26 @@ void IRAM_ATTR Audio::playChunk() {
             i2s_channel_enable(m_i2s_tx_handle);
             m_resampler.phase = 0;
             m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
-
-            if (m_i2s_items.sampleRate <= 22050) {
-                // 22.05 kHz source → fc ≈ 10 kHz
-                m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(48000.0f, 10000.0f);
-            } else {
-                // 44.1 kHz source → fc ≈ 18–20 kHz (20 kHz ist okay)
-                m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(48000.0f, 18000.0f);
-            }
-
+            m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
             m_resampler.lpLeft = {};
             m_resampler.lpRight = {};
-
             // AUDIO_LOG_DEBUG("(sampleRate %li ==> 48KHz", m_i2s_items.sampleRate);
         }
         uint32_t samples48K = 0;
         samples48K = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get());
         m_validSamples = samples48K; // new amount of samples
 
-        // audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
+        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
     }
 #else
     //------------------------------------------------------------------------------------------------------
-    //  audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
+    audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
 #endif
-    // if (!continueI2S) {
-    //     m_validSamples = 0;
-    //     m_plCh.count = 0;
-    //     return;
-    // }
+    if (!continueI2S) {
+        m_validSamples = 0;
+        m_plCh.count = 0;
+        return;
+    }
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
@@ -3430,8 +3439,8 @@ i2swrite:
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
 #else
     m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
-//     AUDIO_LOG_INFO("m_validSamples %i, m_outBuff1[0] %i", m_validSamples, m_outBuff1[0]);
 #endif
+
     if (!(m_plCh.err == ESP_OK || m_plCh.err == ESP_ERR_TIMEOUT)) goto exit;
     m_validSamples -= m_plCh.i2s_bytesConsumed / BYTES_PER_FRAME;
     m_plCh.count += m_plCh.i2s_bytesConsumed / 2;
@@ -6181,7 +6190,6 @@ void Audio::reconfigI2S() {
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    m_resampleRatio = (float)m_i2s_items.sampleRate / 48000.0f;
     m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     i2s_channel_reconfig_std_clock(m_i2s_tx_handle, &m_i2s_std_cfg.clk_cfg);
     i2s_channel_enable(m_i2s_tx_handle);
