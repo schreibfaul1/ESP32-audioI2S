@@ -416,6 +416,10 @@ struct resampler_t {
     Biquad                  lpRight;
     uint32_t                outFrames = 0;
     BiquadCoeffs            g_lpCoeffs;
+    // Condition for continuous interpolation between frames
+    int32_t lastL = 0;  // Last left sample from previous frame
+    int32_t lastR = 0;  // Last right sample from previous frame
+    bool hasLast = false;  // First frame has no “last”
 };
 
 } // namespace audiolib

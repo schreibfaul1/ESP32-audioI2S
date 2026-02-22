@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4v                                                                                                                            ";
+    Version 3.4.4w                                                                                                                            ";
 /*  Updated on: Feb 22, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3329,6 +3329,7 @@ audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs) { // Calculation 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint32_t inputSamples, int32_t* output) {
 
+    auto lerp_q32 = [&](int32_t a, int32_t b, uint32_t frac) -> int32_t { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); };
     auto biquadProcess = [&](audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) -> int32_t {
         // Q31 signal, Q31 coeffs → Q62 acc
         int64_t acc = (int64_t)c.b0 * x + s.z1;
@@ -3340,44 +3341,64 @@ uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, u
         return (int32_t)y;
     };
 
-    auto lerp_q32 = [&](int32_t a, int32_t b, uint32_t frac) -> int32_t { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); };
-
     uint32_t outFrames = 0;
+    uint32_t i = 0;
 
-    // We always need frame i and i+1
-    for (uint32_t i = 0; i + 1 < inputSamples; ++i) {
+    // If we have a "last" from the previous frame, start with that
+    if (rs.hasLast && inputSamples > 0) {
+        int32_t l0 = rs.lastL;
+        int32_t r0 = rs.lastR;
+        int32_t l1 = input[0];
+        int32_t r1 = input[1];
 
-        int32_t l0 = input[i * 2];
-        int32_t r0 = input[i * 2 + 1];
-        int32_t l1 = input[(i + 1) * 2];
-        int32_t r1 = input[(i + 1) * 2 + 1];
-
-        // As long as we still generate output samples from this input interval
+        // Continue processing with the old phase value
         while ((rs.phase >> 32) == 0) {
-
             uint32_t frac = (uint32_t)rs.phase;
+            int32_t  l = lerp_q32(l0, l1, frac);
+            int32_t  r = lerp_q32(r0, r1, frac);
 
-            // interpolate linear
-            int32_t l = lerp_q32(l0, l1, frac);
-            int32_t r = lerp_q32(r0, r1, frac);
-
-            // filter lowpass
             l = biquadProcess(rs.lpLeft, rs.g_lpCoeffs, l);
             r = biquadProcess(rs.lpRight, rs.g_lpCoeffs, r);
 
-            // write output
             output[outFrames * 2] = l;
             output[outFrames * 2 + 1] = r;
             ++outFrames;
 
             rs.phase += rs.phaseStep;
-
-            // Security (should practically never apply)
-            if (outFrames >= audiolib::resampler_t::MAX_OUT_FRAMES) return outFrames;
         }
-
-        // One input frame further
         rs.phase -= (1ULL << 32);
+        // i remains 0, we haven't used input[0] as "l0" yet!
+    }
+
+    // Rest of the frame as usual
+    for (; i + 1 < inputSamples; ++i) {
+        int32_t l0 = input[i * 2];
+        int32_t r0 = input[i * 2 + 1];
+        int32_t l1 = input[(i + 1) * 2];
+        int32_t r1 = input[(i + 1) * 2 + 1];
+
+        while ((rs.phase >> 32) == 0) {
+            uint32_t frac = (uint32_t)rs.phase;
+            int32_t  l = lerp_q32(l0, l1, frac);
+            int32_t  r = lerp_q32(r0, r1, frac);
+
+            l = biquadProcess(rs.lpLeft, rs.g_lpCoeffs, l);
+            r = biquadProcess(rs.lpRight, rs.g_lpCoeffs, r);
+
+            output[outFrames * 2] = l;
+            output[outFrames * 2 + 1] = r;
+            ++outFrames;
+
+            rs.phase += rs.phaseStep;
+        }
+        rs.phase -= (1ULL << 32);
+    }
+
+    // Save last sample for next frame
+    if (inputSamples > 0) {
+        rs.lastL = input[(inputSamples - 1) * 2];
+        rs.lastR = input[(inputSamples - 1) * 2 + 1];
+        rs.hasLast = true;
     }
 
     return outFrames;
