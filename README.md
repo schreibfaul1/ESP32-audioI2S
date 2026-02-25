@@ -79,13 +79,14 @@ void my_audio_info(Audio::msg_t m) {
 | flac       | y           | y                           |blocksize max 24576 bytes |
 | vorbis     | y           | y                           | <=196Kbit/s              |
 | m4a        | y           | y                           |                          |
-| opus       | y           | y                           |hybrid mode not impl yet  |
+| opus       | y           | y                           |                          |
 
 <br>
 
 ***
 Wiring
-![Wiring ESP32-S3](https://github.com/user-attachments/assets/15dd1766-0fc1-4079-b378-bc566583e80d)
+![schematic](https://github.com/user-attachments/assets/77ce30d2-acb1-4b5d-a9d6-4f1e3d56e385)
+
 ***
 Impulse diagram
 ![Impulse diagram](https://github.com/schreibfaul1/ESP32-audioI2S/blob/master/additional_info/Impulsdiagramm.jpg)
