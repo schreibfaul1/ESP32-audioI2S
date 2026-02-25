@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4x                                                                                                                            ";
-/*  Updated on: Feb 22, 2026
+    Version 3.4.4y                                                                                                                            ";
+/*  Updated on: Feb 25, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3071,10 +3071,11 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             } else
                 AUDIO_LOG_DEBUG("%s tag not supported", san);
 
-            if (consumed > len) {
+            if (consumed > len + m_m4aHdr.ilst_already_consumed) {  // ILST > len can happen
+                m_m4aHdr.ilst_already_consumed += len;
                 m_m4aHdr.retvalue = consumed;
                 m_m4aHdr.headerSize += consumed;
-                m_controlCounter = M4A_META;
+                m_controlCounter = M4A_ILST;
                 return 0;
             }
 

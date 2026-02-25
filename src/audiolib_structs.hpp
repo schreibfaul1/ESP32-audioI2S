@@ -113,6 +113,7 @@ struct m4aHdr_t { // used in read_M4A_Header
     uint8_t  aac_profile;
     uint32_t stsz_num_entries;
     uint32_t stsz_table_pos;
+    uint32_t ilst_already_consumed;
     bool     progressive; // Progressive (moov before mdat)
     bool     version_flags;
     bool     mdat_seen;
