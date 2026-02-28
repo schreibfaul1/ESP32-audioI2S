@@ -34,7 +34,8 @@
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S); // record audiodata or send via BT
+extern __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t validSamples); // before volume, gain and equalizer, record audiodata
+extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S); // after volume, gain and equalizer, send via BT
 extern char                       audioI2SVers[];
 class Decoder; // prototype
 

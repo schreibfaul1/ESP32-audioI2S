@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4y                                                                                                                            ";
-/*  Updated on: Feb 25, 2026
+    Version 3.4.4z                                                                                                                            ";
+/*  Updated on: Feb 28, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -42,6 +42,9 @@ StackType_t __attribute__((unused))  xAudioStack[AUDIO_STACK_SIZE];
 
 // weak default implementation - can be overridden by user
 __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S) {
+    // Default: do nothing. User can provide their own implementation to process audio data.
+}
+__attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t validSamples) {
     // Default: do nothing. User can provide their own implementation to process audio data.
 }
 
@@ -3415,6 +3418,7 @@ void IRAM_ATTR Audio::playChunk() {
     constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
+    audio_process_raw_samples(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
         calculateVUlevel(&m_outBuff[i * 2]);
