@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.4z                                                                                                                            ";
-/*  Updated on: Feb 28, 2026
+    Version 3.4.5a                                                                                                                            ";
+/*  Updated on: Mar 10, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6827,7 +6827,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
     ps_ptr<char> buff;
-    buff.alloc(4096);
+    buff.alloc(4096 + 1); // max 4096 + 1 for null terminator, just to make library code 'safe'
     buff.clear(); // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (first) {
