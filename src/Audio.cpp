@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5a                                                                                                                            ";
-/*  Updated on: Mar 10, 2026
+    Version 3.4.5b                                                                                                                            ";
+/*  Updated on: Mar 11, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3074,7 +3074,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             } else
                 AUDIO_LOG_DEBUG("%s tag not supported", san);
 
-            if (consumed > len + m_m4aHdr.ilst_already_consumed) {  // ILST > len can happen
+            if (consumed > len + m_m4aHdr.ilst_already_consumed) { // ILST > len can happen
                 m_m4aHdr.ilst_already_consumed += len;
                 m_m4aHdr.retvalue = consumed;
                 m_m4aHdr.headerSize += consumed;
@@ -3430,7 +3430,7 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------
     if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) {
         m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
-        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S); // 48KHz stereo 32bps
+        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
     } else {
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
@@ -6317,7 +6317,7 @@ void Audio::forceMono(bool m) { // #100 mono option
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setOutput48KHz(bool f48) { //
-    m_f_output48KHz = f48;          // false f_out is the origin sample rate, true f_out is always 48000 Hz
+    m_f_output48KHz = f48;             // false f_out is the origin sample rate, true f_out is always 48000 Hz
     reconfigI2S();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -6380,7 +6380,9 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
         }
 
         float t = (float)volume / (float)steps; // 0…1
-        float dB = MIN_DB + t * (MAX_DB - MIN_DB);
+
+        //    float dB = MIN_DB + t * (MAX_DB - MIN_DB);
+        float dB = -112.0f * t * t * t + 172.0f * t * t + MIN_DB;
 
         return powf(10.0f, dB / 20.0f);
     };
@@ -6828,7 +6830,7 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
     ps_ptr<char> buff;
     buff.alloc(4096 + 1); // max 4096 + 1 for null terminator, just to make library code 'safe'
-    buff.clear(); // is max 256 *16
+    buff.clear();         // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (first) {
         m_rmet.pos_ml = 0; // determines the current position in metaline
