@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5b                                                                                                                            ";
-/*  Updated on: Mar 11, 2026
+    Version 3.4.5c                                                                                                                            ";
+/*  Updated on: Mar 12, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5069,12 +5069,8 @@ bool Audio::initializeDecoder() {
         AUDIO_LOG_WARN("stopSong first");
         return true;
     }
-    if (m_codec == CODEC_OGG) {
-        m_codec = determineOggCodec();
-        m_lastGranulePosition = getLastGranulePosition();
-        audioFileSeek(0);
-        AUDIO_LOG_DEBUG("lastGranulePosition %llu", m_lastGranulePosition);
-    }
+    m_codec = determineCodec(m_codec); // OGG cn be VORBIS, FLAC or OPUS, contentType must not always be correct
+
     const char* type = nullptr;
     switch (m_codec) {
         case CODEC_MP3:
@@ -6145,9 +6141,9 @@ uint32_t Audio::getBitRate() {
     return m_avr_bitrate;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-uint64_t Audio::getLastGranulePosition() {
-    if (m_codec != CODEC_OPUS && m_codec != CODEC_VORBIS) return 0;
-    if (m_audioFileSize == 0) { return 0; } // only files
+uint64_t Audio::getLastGranulePosition(uint8_t codec) {
+    if (codec != CODEC_OPUS && codec != CODEC_VORBIS) return 0; // only opus or vorbis
+    if (m_audioFileSize == 0) { return 0; }                     // only files
 
     uint64_t granulePos = 0;
     uint8_t* buff = (uint8_t*)ps_malloc(UINT16_MAX);
@@ -7364,22 +7360,52 @@ int32_t Audio::wav_correctResumeFilePos() {
     return offset;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-uint8_t Audio::determineOggCodec() {
-    // if we have contentType == application/ogg; codec cn be OPUS, FLAC or VORBIS
-    // let's have a look, what it is
-    uint8_t res = CODEC_NONE;
-    int     idx = -1;
-    idx = specialIndexOf(InBuff.getReadPtr(), "OggS", 127);
-    AUDIO_LOG_DEBUG("idx %i", idx);
-    if (idx == 0) {
-        idx = specialIndexOf(InBuff.getReadPtr(), "OpusHead", 127);
-        if (idx >= 28) { res = CODEC_OPUS; }
-        idx = specialIndexOf(InBuff.getReadPtr(), "fLaC", 127);
-        if (idx >= 28) { res = CODEC_FLAC; }
-        idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
-        if (idx >= 28) { res = CODEC_VORBIS; }
+uint8_t Audio::determineCodec(uint8_t presumed_codec) {
+    if (presumed_codec == CODEC_OGG) {
+        // if we have contentType == application/ogg; codec cn be OPUS, FLAC or VORBIS
+        // let's have a look, what it is
+        uint8_t res = CODEC_NONE;
+        int     idx = -1;
+        idx = specialIndexOf(InBuff.getReadPtr(), "OggS", 127);
+        AUDIO_LOG_DEBUG("idx %i", idx);
+        if (idx == 0) {
+            idx = specialIndexOf(InBuff.getReadPtr(), "OpusHead", 127);
+            if (idx >= 28) { res = CODEC_OPUS; }
+            idx = specialIndexOf(InBuff.getReadPtr(), "fLaC", 127);
+            if (idx >= 28) { res = CODEC_FLAC; }
+            idx = specialIndexOf(InBuff.getReadPtr(), "vorbis", 127);
+            if (idx >= 28) { res = CODEC_VORBIS; }
+
+            m_lastGranulePosition = getLastGranulePosition(res); // VORBIS or OPUS only
+            audioFileSeek(0); // if isFile?
+            AUDIO_LOG_DEBUG("lastGranulePosition %llu", m_lastGranulePosition);
+        }
+        return res;
     }
-    return res;
+    if (presumed_codec == CODEC_AAC || presumed_codec == CODEC_AAC) { // is AAC or MP3?
+        uint8_t* data = InBuff.getReadPtr();
+        uint8_t  b0 = data[0];
+        uint8_t  b1 = data[1];
+        int8_t mimeType = CODEC_NONE;
+        if (b0 == 0xFF && (b1 & 0xF6) == 0xF0) { // AAC ADTS
+            mimeType = CODEC_AAC;
+        }
+
+        if (b0 == 0x56 && (b1 & 0xE0) == 0xE0) { // AAC LATM
+            mimeType = CODEC_AAC;
+        }
+
+        if (b0 == 0xFF && (b1 & 0xE0) == 0xE0) { // MP3
+            mimeType = CODEC_MP3;
+        }
+
+        if(presumed_codec == mimeType) return presumed_codec;
+        if(mimeType == CODEC_NONE) return presumed_codec; // Transportstream?
+        info(*this, evt_info, "contentType is %s, but %s found", codecname[presumed_codec], codecname[mimeType]);
+        return mimeType;
+    }
+
+    return presumed_codec; // all other (native FLAC or WAV)
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::strlower(char* str) {

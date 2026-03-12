@@ -220,7 +220,7 @@ class Audio {
     void                     IIR_filter(int32_t* iir_in);
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
-    uint64_t                 getLastGranulePosition();
+    uint64_t                 getLastGranulePosition(uint8_t codec);
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -245,7 +245,7 @@ class Audio {
     int32_t                flac_correctResumeFilePos();
     int32_t                mp3_correctResumeFilePos();
     int32_t                wav_correctResumeFilePos();
-    uint8_t                determineOggCodec();
+    uint8_t                determineCodec(uint8_t presumed_codec);
     void                   strlower(char* str);
     void                   trim(char* str);
     bool                   startsWith(const char* base, const char* str);
