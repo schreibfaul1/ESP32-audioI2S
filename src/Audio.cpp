@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5c                                                                                                                            ";
+    Version 3.4.5d                                                                                                                            ";
 /*  Updated on: Mar 12, 2026
 
     Author: Wolle (schreibfaul1)
@@ -7377,30 +7377,37 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
             if (idx >= 28) { res = CODEC_VORBIS; }
 
             m_lastGranulePosition = getLastGranulePosition(res); // VORBIS or OPUS only
-            audioFileSeek(0); // if isFile?
+            audioFileSeek(0);                                    // if isFile?
             AUDIO_LOG_DEBUG("lastGranulePosition %llu", m_lastGranulePosition);
         }
         return res;
     }
-    if (presumed_codec == CODEC_AAC || presumed_codec == CODEC_AAC) { // is AAC or MP3?
+
+    if (m_playlistFormat == FORMAT_M3U8) return presumed_codec; // HLS or TS, nothing todo
+    if (m_streamType != ST_WEBSTREAM) return presumed_codec;    // is webfile, nothing todo
+
+    if (presumed_codec == CODEC_AAC || presumed_codec == CODEC_MP3) { // only webstream, is AAC or MP3?
         uint8_t* data = InBuff.getReadPtr();
         uint8_t  b0 = data[0];
         uint8_t  b1 = data[1];
-        int8_t mimeType = CODEC_NONE;
+        int8_t   mimeType = CODEC_NONE;
         if (b0 == 0xFF && (b1 & 0xF6) == 0xF0) { // AAC ADTS
             mimeType = CODEC_AAC;
         }
 
-        if (b0 == 0x56 && (b1 & 0xE0) == 0xE0) { // AAC LATM
+        else if (b0 == 0x56 && (b1 & 0xE0) == 0xE0) { // AAC LATM
             mimeType = CODEC_AAC;
         }
 
-        if (b0 == 0xFF && (b1 & 0xE0) == 0xE0) { // MP3
-            mimeType = CODEC_MP3;
+        else if (b0 == 0xFF && (b1 & 0xE0) == 0xE0) { // MP3
+            uint8_t layer = (b1 >> 1) & 0x03;
+            if (layer != 0) { // layer must not be "reserved".
+                mimeType = CODEC_MP3;
+            }
         }
 
-        if(presumed_codec == mimeType) return presumed_codec;
-        if(mimeType == CODEC_NONE) return presumed_codec; // Transportstream?
+        if (presumed_codec == mimeType) return presumed_codec;
+        if (mimeType == CODEC_NONE) return presumed_codec; // is not AAC or MP3
         info(*this, evt_info, "contentType is %s, but %s found", codecname[presumed_codec], codecname[mimeType]);
         return mimeType;
     }
