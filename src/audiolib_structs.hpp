@@ -212,6 +212,7 @@ struct pwst_t { // used in processWebStream
     bool     f_skipCRLF = false;
     uint32_t availableBytes;
     bool     f_clientIsConnected;
+    bool     f_second_round = false;
     uint16_t readedBytes;
 };
 

@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5d                                                                                                                            ";
-/*  Updated on: Mar 12, 2026
+    Version 3.4.5e                                                                                                                            ";
+/*  Updated on: Mar 16, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4180,8 +4180,8 @@ void Audio::processWebStream() {
         getChunkSize(0, true);
         m_audioFilePosition = 0;
     }
+second_round:
     if (m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
-
     // chunked data tramsfer
     if (m_f_chunked && m_pwst.availableBytes) {
         if (m_pwst.chunkSize == 0) {
@@ -4226,6 +4226,12 @@ void Audio::processWebStream() {
             if (m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
+        m_pwst.f_second_round = ! m_pwst.f_second_round;
+        if(m_client->available() && m_pwst.f_second_round){ // are more data available?
+            AUDIO_LOG_DEBUG("av %i", m_client->available());
+            goto second_round;
+        }
+
     }
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (initializeDecoder())
