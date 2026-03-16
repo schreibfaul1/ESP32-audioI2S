@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5e                                                                                                                            ";
+    Version 3.4.5f                                                                                                                            ";
 /*  Updated on: Mar 16, 2026
 
     Author: Wolle (schreibfaul1)
@@ -4168,6 +4168,7 @@ void Audio::processWebStream() {
 
     m_pwst.availableBytes = 0; // available from stream
     m_pwst.f_clientIsConnected = m_client->connected();
+    m_pwst.writeSpace = UINT16_MAX;
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
@@ -4180,7 +4181,7 @@ void Audio::processWebStream() {
         getChunkSize(0, true);
         m_audioFilePosition = 0;
     }
-second_round:
+
     if (m_pwst.f_clientIsConnected) m_pwst.availableBytes = m_client->available(); // available from stream
     // chunked data tramsfer
     if (m_f_chunked && m_pwst.availableBytes) {
@@ -4192,7 +4193,7 @@ second_round:
             m_pwst.chunkSize = chunkLen;
             m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
         }
-        m_pwst.availableBytes = min(m_pwst.availableBytes, m_pwst.chunkSize);
+        m_pwst.writeSpace = min(m_pwst.writeSpace, m_pwst.chunkSize);
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4206,7 +4207,7 @@ second_round:
         m_metacount = m_metaint;
         return;
     }
-    if (m_f_metadata) m_pwst.availableBytes = min(m_pwst.availableBytes, m_metacount);
+    if (m_f_metadata) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
@@ -4219,19 +4220,15 @@ second_round:
 
     // buffer fill routine - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_pwst.availableBytes) {
-        m_pwst.availableBytes = min(m_pwst.availableBytes, (uint32_t)InBuff.writeSpace());
-        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwst.availableBytes, (uint32_t)UINT16_MAX));
+        m_pwst.writeSpace = min(m_pwst.writeSpace, (uint32_t)InBuff.writeSpace());
+        int32_t bytesAddedToBuffer = audioFileRead(InBuff.getWritePtr(), min(m_pwst.writeSpace, (uint32_t)UINT16_MAX));
+        m_pwst.writeSpace -= bytesAddedToBuffer;
+
         if (bytesAddedToBuffer > 0) {
             if (m_f_metadata) m_metacount -= bytesAddedToBuffer;
             if (m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
-        m_pwst.f_second_round = ! m_pwst.f_second_round;
-        if(m_client->available() && m_pwst.f_second_round){ // are more data available?
-            AUDIO_LOG_DEBUG("av %i", m_client->available());
-            goto second_round;
-        }
-
     }
     if (!m_decoder && InBuff.bufferFilled() > 127) {
         if (initializeDecoder())
