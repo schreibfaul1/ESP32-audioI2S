@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5g                                                                                                                            ";
-/*  Updated on: Mar 17, 2026
+    Version 3.4.5h                                                                                                                            ";
+/*  Updated on: Mar 18, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -367,10 +367,6 @@ Audio::Audio(uint8_t i2sPort) {
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-
-
-
-
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
@@ -6266,30 +6262,27 @@ void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
         m_vu_items.right -= RELEASE;
     }
 
-    constexpr uint16_t PEAK_HOLD_SAMPLES = 2000; // ca. 20 ms @ 48 kHz
-    constexpr uint8_t  PEAK_RELEASE = 1;         // Fall rate
-
     // LEFT
     if (m_vu_items.left > m_vu_items.left_peak) {
         m_vu_items.left_peak = m_vu_items.left;
-        m_vu_items.left_hold = PEAK_HOLD_SAMPLES;
+        m_vu_items.left_hold = settings.PEAK_HOLD_SAMPLES;
     } else {
         if (m_vu_items.left_hold > 0) {
             m_vu_items.left_hold--;
-        } else if (m_vu_items.left_peak > PEAK_RELEASE) {
-            m_vu_items.left_peak -= PEAK_RELEASE;
+        } else if (m_vu_items.left_peak > settings.PEAK_RELEASE) {
+            m_vu_items.left_peak -= settings.PEAK_RELEASE;
         }
     }
 
     // RIGHT
     if (m_vu_items.right > m_vu_items.right_peak) {
         m_vu_items.right_peak = m_vu_items.right;
-        m_vu_items.right_hold = PEAK_HOLD_SAMPLES;
+        m_vu_items.right_hold = settings.PEAK_HOLD_SAMPLES;
     } else {
         if (m_vu_items.right_hold > 0) {
             m_vu_items.right_hold--;
-        } else if (m_vu_items.right_peak > PEAK_RELEASE) {
-            m_vu_items.right_peak -= PEAK_RELEASE;
+        } else if (m_vu_items.right_peak > settings.PEAK_RELEASE) {
+            m_vu_items.right_peak -= settings.PEAK_RELEASE;
         }
     }
 }
@@ -6553,14 +6546,14 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
 
     AUDIO_LOG_DEBUG("gain gain_ls_db %f, gain gain_peq_db %f, gain gain_hs_db %f", m_audio_items.gain_ls_db, m_audio_items.gain_peq_db, m_audio_items.gain_hs_db);
 
-    const float FcLS = m_audio_items.freq_ls_Hz;    // Frequency LowShelf(Hz)
-    const float FcPKEQ = m_audio_items.freq_peq_Hz; // Frequency PeakEQ(Hz)
-    const float FcHS = m_audio_items.freq_hs_Hz;    // Frequency HighShelf(Hz)
+    const float FcLS = settings.FREQ_LS_HZ;     // Frequency LowShelf(Hz)
+    const float FcPKEQ = settings.FREQ_PEAK_HZ; // Frequency PeakEQ(Hz)
+    const float FcHS = settings.FREQ_HS_HZ;     // Frequency HighShelf(Hz)
+    const float QS = settings.QUALITY_SLOPE;    // Quality Slope (Shelf)
 
-    float       normFreqLS = FcLS / m_i2s_items.sampleRate;    // filter cut off frequency
-    float       normFreqPEQ = FcPKEQ / m_i2s_items.sampleRate; // filter center frequency
-    float       normFreqHS = FcHS / m_i2s_items.sampleRate;    // filter cut off frequency
-    const float QS = 0.707;                                    // Quality Slope (Shelf)
+    float normFreqLS = FcLS / m_i2s_items.sampleRate;    // filter cut off frequency
+    float normFreqPEQ = FcPKEQ / m_i2s_items.sampleRate; // filter center frequency
+    float normFreqHS = FcHS / m_i2s_items.sampleRate;    // filter cut off frequency
 
     float total_boost_db = fmax(fmax(fmax(0, m_audio_items.gain_ls_db), m_audio_items.gain_peq_db), m_audio_items.gain_hs_db); // dynamic headroom
     m_audio_items.pre_gain = powf(10.0, -total_boost_db / 20);

@@ -34,7 +34,7 @@
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
 #endif
 
-extern __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t validSamples); // before volume, gain and equalizer, record audiodata
+extern __attribute__((weak)) void audio_process_raw_samples(int32_t* outBuff, int16_t validSamples);            // before volume, gain and equalizer, record audiodata
 extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t validSamples, bool* continueI2S); // after volume, gain and equalizer, send via BT
 extern char                       audioI2SVers[];
 class Decoder; // prototype
@@ -321,6 +321,17 @@ class Audio {
         int pids[4];
     } pid_array;
 
+  public:
+    struct audioSettings {
+        uint16_t FREQ_LS_HZ = 500;         // IIR Filter, lowshelf
+        uint16_t FREQ_PEAK_HZ = 1800;      // IIR Filter, peakingEQ
+        uint16_t FREQ_HS_HZ = 6000;        // IIR Filter, highshelf
+        float    QUALITY_SLOPE = 0.707;    // Quality (all shelfes)
+        uint16_t PEAK_HOLD_SAMPLES = 2000; // VU_meter, (2000) ca. 20 ms @ 48 kHz
+        uint8_t  PEAK_RELEASE = 1;         // VU_meter, Fall rate
+    } settings;
+
+  private:
     File                m_audiofile;
     NetworkClient       client;
     NetworkClientSecure clientsecure;
