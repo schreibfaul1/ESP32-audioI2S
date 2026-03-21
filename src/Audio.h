@@ -157,6 +157,7 @@ class Audio {
 
   private:
     // ------- PRIVATE MEMBERS ----------------------------------------
+    bool                     i2s_config();
     std::unique_ptr<Decoder> createDecoder(const std::string& type);
     void                     destroy_decoder();
     bool                     fsRange(uint32_t range);
