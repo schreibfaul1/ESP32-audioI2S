@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5h                                                                                                                            ";
-/*  Updated on: Mar 18, 2026
+    Version 3.4.5i                                                                                                                            ";
+/*  Updated on: Mar 21, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -342,31 +342,7 @@ Audio::Audio(uint8_t i2sPort) {
     clientsecure.setInsecure();
     m_i2s_items.i2s_num = i2sPort; // i2s port number
 
-    // -------- I2S configuration -------------------------------------------------------------------------------------------
-    memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
-    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_items.i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
-    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = m_i2s_items.DESC_NUM;   // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = m_i2s_items.FRAME_NUM; // I2S frame number in one DMA buffer.
-    m_i2s_chan_cfg.auto_clear = true;                     // i2s will always send zero automatically if no data to send
-    m_i2s_chan_cfg.allow_pd = false;
-    m_i2s_chan_cfg.intr_priority = 2;
-    i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
 
-    memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
-    m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
-    m_i2s_std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;                                                                // BCLK, Assignment in setPinout()
-    m_i2s_std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;                                                                 // not used
-    m_i2s_std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;                                                                // DOUT, Assignment in setPinout()
-    m_i2s_std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;                                                                // MCLK, Assignment in setPinout()
-    m_i2s_std_cfg.gpio_cfg.ws = I2S_GPIO_UNUSED;                                                                  // LRC,  Assignment in setPinout()
-    m_i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
-    m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
-    m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
-    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
-    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
@@ -5789,9 +5765,48 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::i2s_config(){
+    esp_err_t result = ESP_OK;
+    // -------- I2S configuration -------------------------------------------------------------------------------------------
+    memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
+    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_items.i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
+    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
+    m_i2s_chan_cfg.dma_desc_num = m_i2s_items.DESC_NUM;   // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = m_i2s_items.FRAME_NUM; // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.auto_clear = true;                     // i2s will always send zero automatically if no data to send
+    m_i2s_chan_cfg.allow_pd = false;
+    m_i2s_chan_cfg.intr_priority = 2;
+    result = i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
+    if(result != ESP_OK){ // ESP_ERR_INVALID_ARG?
+        AUDIO_LOG_ERROR("I2S channel: invalid argument");
+        return false;
+    }
+
+    memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
+    m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
+    m_i2s_std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;                                                                // BCLK, Assignment in setPinout()
+    m_i2s_std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;                                                                 // not used
+    m_i2s_std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;                                                                // DOUT, Assignment in setPinout()
+    m_i2s_std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;                                                                // MCLK, Assignment in setPinout()
+    m_i2s_std_cfg.gpio_cfg.ws = I2S_GPIO_UNUSED;                                                                  // LRC,  Assignment in setPinout()
+    m_i2s_std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    m_i2s_std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    m_i2s_std_cfg.gpio_cfg.invert_flags.ws_inv = false;
+    m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
+    m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
+    m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    result = i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
+    if(result != ESP_OK){
+        if(result == ESP_ERR_INVALID_ARG)  AUDIO_LOG_ERROR("invalid i2s configuration or i2s not standard mode");
+        if(result == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("This i2s channel is not initialized or not stopped");
+        return false;
+    }
+    return true;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
-    bool result = true;
+    bool result = i2s_config();
 
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
