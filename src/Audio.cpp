@@ -4930,6 +4930,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     } // outer while
 
 exit: // termination condition
+    m_f_alt_user_agent = false;
     info(*this, evt_name, "");
     info(*this, evt_icydescription, "");
     info(*this, evt_icyurl, "");
@@ -4938,6 +4939,7 @@ exit: // termination condition
     return false;
 
 lastToDo:
+    m_f_alt_user_agent = false;
     m_streamType = ST_WEBSTREAM;
     if (m_audioFileSize > 0) m_streamType = ST_WEBFILE; // content length found
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;

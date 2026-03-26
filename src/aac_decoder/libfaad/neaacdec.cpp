@@ -1092,7 +1092,7 @@ void* NeaacDecoder::aac_frame_decode(NeAACDecStruct* hDecoder, NeAACDecFrameInfo
 #endif
         /* check if we want to use internal sample_buffer */
         if (sample_buffer_size == 0) {
-            m_sample_buffer.alloc(frame_len * output_channels * stride);
+            m_sample_buffer.alloc(frame_len * output_channels * stride, "m_sample_buffer");
             hDecoder->sample_buffer = m_sample_buffer.get();
         } else if (sample_buffer_size < frame_len * output_channels * stride) {
             /* provided sample buffer is not big enough */
@@ -2251,19 +2251,19 @@ void NeaacDecoder::cffti(uint16_t mdct_len, uint16_t n) {
 
     switch (mdct_len) {
         case 256:
-            m_ccft256.alloc();
+            m_ccft256.alloc("m_ccft256");
             cfft_select = m_ccft256.get();
-            m_work256.alloc_array(n * sizeof(complex_t));
+            m_work256.alloc_array(n * sizeof(complex_t), "m_work256");
             break;
         case 1024:
-            m_ccft1024.alloc();
+            m_ccft1024.alloc("m_ccft1024");
             cfft_select = m_ccft1024.get();
-            m_work1024.alloc_array(n * sizeof(complex_t));
+            m_work1024.alloc_array(n * sizeof(complex_t), "m_work1024");
             break;
         case 2048:
-            m_ccft2048.alloc();
+            m_ccft2048.alloc("m_ccft2048");
             cfft_select = m_ccft2048.get();
-            m_work2048.alloc_array(n * sizeof(complex_t));
+            m_work2048.alloc_array(n * sizeof(complex_t), "m_work2048");
             break;
         default: AAC_LOG_ERROR("wrong length %i", mdct_len);
     }
@@ -3729,15 +3729,15 @@ void NeaacDecoder::faad_mdct_init(uint16_t mdct_len, uint16_t N) {
     mdct_info* mdct_new = nullptr;
     switch (mdct_len) {
         case 256:
-            m_mdct256.alloc();
+            m_mdct256.alloc("m_mdct256");
             mdct_new = m_mdct256.get();
             break;
         case 1024:
-            m_mdct1024.alloc();
+            m_mdct1024.alloc("m_mdct1024");
             mdct_new = m_mdct1024.get();
             break;
         case 2048:
-            m_mdct2048.alloc();
+            m_mdct2048.alloc("m_mdct2048");
             mdct_new = m_mdct2048.get();
             break;
         default: AAC_LOG_ERROR("wrong length %i", mdct_len);
@@ -6991,7 +6991,7 @@ uint8_t NeaacDecoder::allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t ch
         }
     }
 #endif
-    if (hDecoder->time_out[channel] == NULL) {
+    {
         mul = 1;
 #ifdef SBR_DEC
         hDecoder->sbr_alloced[hDecoder->fr_ch_ele] = 0;
@@ -7001,21 +7001,35 @@ uint8_t NeaacDecoder::allocate_channel_pair(NeAACDecStruct* hDecoder, uint8_t ch
             hDecoder->sbr_alloced[hDecoder->fr_ch_ele] = 1;
         }
 #endif
-        hDecoder->time_out[channel] = (real_t*)faad_malloc(mul * hDecoder->frameLength * sizeof(real_t));
-        memset(hDecoder->time_out[channel], 0, mul * hDecoder->frameLength * sizeof(real_t));
     }
-    if (hDecoder->time_out[paired_channel] == NULL) {
-        hDecoder->time_out[paired_channel] = (real_t*)faad_malloc(mul * hDecoder->frameLength * sizeof(real_t));
-        memset(hDecoder->time_out[paired_channel], 0, mul * hDecoder->frameLength * sizeof(real_t));
+
+    if (hDecoder->time_out[channel] != NULL) {
+        faad_free(&hDecoder->time_out[channel]);
+        hDecoder->time_out[channel] = NULL;
     }
-    if (hDecoder->fb_intermed[channel] == NULL) {
-        hDecoder->fb_intermed[channel] = (real_t*)faad_malloc(hDecoder->frameLength * sizeof(real_t));
-        memset(hDecoder->fb_intermed[channel], 0, hDecoder->frameLength * sizeof(real_t));
+    hDecoder->time_out[channel] = (real_t*)faad_malloc(mul * hDecoder->frameLength * sizeof(real_t));
+    memset(hDecoder->time_out[channel], 0, mul * hDecoder->frameLength * sizeof(real_t));
+
+    if (hDecoder->time_out[paired_channel] != NULL) {
+        faad_free(&hDecoder->time_out[paired_channel]);
+        hDecoder->time_out[paired_channel] = NULL;
     }
-    if (hDecoder->fb_intermed[paired_channel] == NULL) {
-        hDecoder->fb_intermed[paired_channel] = (real_t*)faad_malloc(hDecoder->frameLength * sizeof(real_t));
-        memset(hDecoder->fb_intermed[paired_channel], 0, hDecoder->frameLength * sizeof(real_t));
+    hDecoder->time_out[paired_channel] = (real_t*)faad_malloc(mul * hDecoder->frameLength * sizeof(real_t));
+    memset(hDecoder->time_out[paired_channel], 0, mul * hDecoder->frameLength * sizeof(real_t));
+
+    if (hDecoder->fb_intermed[channel] != NULL) {
+        faad_free(&hDecoder->fb_intermed[channel]);
+        hDecoder->fb_intermed[channel] = NULL;
     }
+    hDecoder->fb_intermed[channel] = (real_t*)faad_malloc(hDecoder->frameLength * sizeof(real_t));
+    memset(hDecoder->fb_intermed[channel], 0, hDecoder->frameLength * sizeof(real_t));
+
+    if (hDecoder->fb_intermed[paired_channel] != NULL) {
+        faad_free(&hDecoder->fb_intermed[paired_channel]);
+        hDecoder->fb_intermed[paired_channel] = NULL;
+    }
+    hDecoder->fb_intermed[paired_channel] = (real_t*)faad_malloc(hDecoder->frameLength * sizeof(real_t));
+    memset(hDecoder->fb_intermed[paired_channel], 0, hDecoder->frameLength * sizeof(real_t));
 #ifdef SSR_DEC
     if (hDecoder->object_type == SSR) {
         if (hDecoder->ssr_overlap[channel] == NULL) {
@@ -9044,7 +9058,7 @@ void NeaacDecoder::get_adif_header(adif_header* adif, bitfile* ld) {
 uint8_t NeaacDecoder::adts_frame(adts_header* adts, bitfile* ld) {
     /* faad_byte_align(ld); */
     uint8_t ret = adts_fixed_header(adts, ld);
-    if(ret) return ret;
+    if (ret) return ret;
     adts_variable_header(adts, ld);
     adts_error_check(adts, ld);
     return 0;
@@ -9053,17 +9067,17 @@ uint8_t NeaacDecoder::adts_frame(adts_header* adts, bitfile* ld) {
 /* Table 1.A.6 */
 uint8_t NeaacDecoder::adts_fixed_header(adts_header* adts, bitfile* ld) {
     uint16_t i;
-    uint8_t id3[3] = {0};
+    uint8_t  id3[3] = {0};
     uint8_t  sync_err = 1;
     /* try to recover from sync errors */
     for (i = 0; i < 768; i++) {
         adts->syncword = (uint16_t)faad_showbits(ld, 12);
 
         if (adts->syncword != 0xFFF) {
-        if(i < 3 )id3[i] = (uint8_t)faad_showbits(ld, 8);
-        if(i == 3){
-            if(id3[0] == 73 && id3[1] == 68 && id3[2] == 51) {return 100;} // ID3 header found
-        }
+            if (i < 3) id3[i] = (uint8_t)faad_showbits(ld, 8);
+            if (i == 3) {
+                if (id3[0] == 73 && id3[1] == 68 && id3[2] == 51) { return 100; } // ID3 header found
+            }
             faad_getbits(ld, 8);
         } else {
             sync_err = 0;
@@ -11599,13 +11613,13 @@ sbr_info* NeaacDecoder::sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint
         sbr->qmfs[0] = qmfs_init((downSampledSBR) ? 32 : 64);
         sbr->qmfs[1] = qmfs_init((downSampledSBR) ? 32 : 64);
         for (j = 0; j < 5; j++) {
-            m_G_temp_prev[id_aac][0][j].alloc_array(64);
+            m_G_temp_prev[id_aac][0][j].alloc_array(64, "m_G_temp_prev[0]");
             sbr->G_temp_prev[0][j] = m_G_temp_prev[id_aac][0][j].get();
-            m_G_temp_prev[id_aac][1][j].alloc_array(64);
+            m_G_temp_prev[id_aac][1][j].alloc_array(64, "m_G_temp_prev[1]");
             sbr->G_temp_prev[1][j] = m_G_temp_prev[id_aac][1][j].get();
-            m_Q_temp_prev[id_aac][0][j].alloc_array(64);
+            m_Q_temp_prev[id_aac][0][j].alloc_array(64, "m_Q_temp_prev[0]");
             sbr->Q_temp_prev[0][j] = m_Q_temp_prev[id_aac][0][j].get();
-            m_Q_temp_prev[id_aac][1][j].alloc_array(64);
+            m_Q_temp_prev[id_aac][1][j].alloc_array(64, "m_Q_temp_prev[1]");
             sbr->Q_temp_prev[1][j] = m_Q_temp_prev[id_aac][1][j].get();
         }
         memset(sbr->Xsbr[0], 0, (sbr->numTimeSlotsRate + sbr->tHFGen) * 64 * sizeof(qmf_t));
@@ -11617,9 +11631,9 @@ sbr_info* NeaacDecoder::sbrDecodeInit(uint16_t framelength, uint8_t id_aac, uint
         sbr->qmfs[0] = qmfs_init((downSampledSBR) ? 32 : 64);
         sbr->qmfs[1] = NULL;
         for (j = 0; j < 5; j++) {
-            m_G_temp_prev[id_aac][0][j].alloc_array(64);
+            m_G_temp_prev[id_aac][0][j].alloc_array(64, "m_G_temp_prev");
             sbr->G_temp_prev[0][j] = m_G_temp_prev[id_aac][0][j].get();
-            m_Q_temp_prev[id_aac][0][j].alloc_array(64);
+            m_Q_temp_prev[id_aac][0][j].alloc_array(64, "m_Q_temp_prev");
             sbr->Q_temp_prev[0][j] = m_Q_temp_prev[id_aac][0][j].get();
         }
         memset(sbr->Xsbr[0], 0, (sbr->numTimeSlotsRate + sbr->tHFGen) * 64 * sizeof(qmf_t));
