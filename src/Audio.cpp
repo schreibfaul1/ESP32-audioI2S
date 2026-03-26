@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5i                                                                                                                            ";
-/*  Updated on: Mar 21, 2026
+    Version 3.4.5j                                                                                                                            ";
+/*  Updated on: Mar 26, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -686,6 +686,9 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         return false;
     } // max length in Chrome DevTools
 
+    const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
+    const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
+
     bool     res = false;   // return value
     uint16_t port = 0;      // port number
     uint16_t authLen = 0;   // length of authorization
@@ -734,7 +737,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     if (user && pwd) authLen = strlen(user) + strlen(pwd);
     ps_ptr<char> authorization;
     ps_ptr<char> toEncode;
-    authorization.alloc(base64_encode_expected_len(authLen + 1) + 1);
+    authorization.alloc(base64_encode_expected_len(authLen + 1) + 1, "authorization");
     authorization.clear();
     if (authLen > 0) {
         toEncode.assign(user);
@@ -755,7 +758,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept: */*\r\n");
-    rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
+    rqh.appendf("User-Agent: %s\r\n", m_f_alt_user_agent? user_agent_0 : user_agent_1);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
         rqh.append(authorization.get());
@@ -1824,7 +1827,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         }
         ps_ptr<char> tmp;
         ps_ptr<char> timestamp;
-        timestamp.alloc(12);
+        timestamp.alloc(12, "timestamp");
         if (lyricsBuffer.valid()) {
             lyricsBuffer.remove_prefix("LYRICS=");
             idx = 0;
@@ -2932,7 +2935,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
             // extract decoderSpecificInfo-data
             ps_ptr<char> dec_specific_data;
-            dec_specific_data.alloc(dec_specific_length);
+            dec_specific_data.alloc(dec_specific_length, "dec_specific_data");
             memcpy(dec_specific_data.get(), (uint8_t*)esds_buffer.get() + dec_specific_offset + 5, dec_specific_length);
             m_m4aHdr.aac_profile = (uint8_t)dec_specific_data.get()[0] >> 3;
             if (m_m4aHdr.aac_profile > 4) {
@@ -3057,7 +3060,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
 
                 ps_ptr<char> tmp; // last todo if we have lyrics
                 ps_ptr<char> timestamp;
-                timestamp.alloc(12);
+                timestamp.alloc(12, "timestamp");
                 if (lyricsBuffer.valid()) {
                     lyricsBuffer.remove_prefix("LYRICS=");
                     idx = 0;
@@ -3599,7 +3602,7 @@ bool Audio::readPlayListData() {
     while (true) { // outer while
         uint32_t ctime = millis();
         uint32_t timeout = 2000; // ms
-        pl.alloc(1024);
+        pl.alloc(2048, "pl");
         pl.clear(); // playlistLine
 
         while (true) { // inner while
@@ -3637,7 +3640,7 @@ bool Audio::readPlayListData() {
             if (ctl == plSize) break;
             if (detectTimeout()) goto exit;
         } // inner while
-
+        AUDIO_LOG_DEBUG("PL: %s", pl.c_get());
         if (pl.starts_with_icase("<!DOCTYPE")) {
             AUDIO_LOG_WARN("url is a webpage!");
             goto exit;
@@ -4759,6 +4762,13 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             statusCode[2] = rhl[11];
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
+            if(sc == 403 && !m_f_alt_user_agent){ // HTTP/1.1 403 Forbidden
+                m_f_alt_user_agent = true;
+                AUDIO_LOG_WARN("403 Forbidden, test alternative user agent");
+                connecttohost(m_lastHost.c_get());
+                return true;
+            }
+            m_f_alt_user_agent = false;
             if (sc > 310) { // e.g. HTTP/1.1 301 Moved Permanently
                 info(*this, evt_streamtitle, "%s", rhl.get());
                 goto exit;
@@ -4951,7 +4961,7 @@ lastToDo:
 bool Audio::parseHttpRangeHeader() { // this is the response to a Range request
 
     ps_ptr<char> rhl;
-    rhl.alloc(1024); // responseHeaderline
+    rhl.alloc(1024, "rhl"); // responseHeaderline
     bool ct_seen = false;
 
     if (m_dataMode != HTTP_RANGE_HEADER) {
@@ -5112,6 +5122,7 @@ bool Audio::parseContentType(char* ct) {
         {"audio/aacp", CT_AAC},
         {"video/mp2t", CT_AAC},
         {"audio/mp2t", CT_AAC},
+        {"video/m2ts", CT_AAC},
         {"audio/mp4", CT_M4A},
         {"audio/m4a", CT_M4A},
         {"audio/x-m4a", CT_M4A},
@@ -6839,7 +6850,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
     ps_ptr<char> buff;
-    buff.alloc(4096 + 1); // max 4096 + 1 for null terminator, just to make library code 'safe'
+    buff.alloc(4096 + 1, "buff"); // max 4096 + 1 for null terminator, just to make library code 'safe'
     buff.clear();         // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (first) {
@@ -6996,7 +7007,7 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
 bool Audio::readID3V1Tag() {
     if (m_codec != CODEC_MP3) return false;
     ps_ptr<char> chBuff;
-    chBuff.alloc(256);
+    chBuff.alloc(256, "chBuff");
 
     const uint8_t* p = InBuff.getReadPtr();
 
@@ -7621,7 +7632,7 @@ ps_ptr<char> Audio::urlencode(const char* str, bool spacesOnly) {
     size_t       inputLength = strlen(str);
     size_t       bufferSize = inputLength * 3 + 1; // Worst-case-Szenario
     ps_ptr<char> encoded;
-    encoded.alloc(bufferSize);
+    encoded.alloc(bufferSize, "encoded");
     if (!encoded.valid()) { return {}; } // memory allocation failed
 
     const char* p_input = str;               // Copy of the input pointer

@@ -417,6 +417,7 @@ class Audio {
     uint32_t       m_stsz_position = 0;             // pos of stsz atom within file
     uint32_t       m_haveNewFilePos = 0;            // user changed the file position
     bool           m_f_metadata = false;            // assume stream without metadata
+    bool           m_f_alt_user_agent = false;      // use default or alternative user agent
     bool           m_f_I2S_init = false;            //
     bool           m_f_unsync = false;              // set within ID3 tag but not used
     bool           m_f_exthdr = false;              // ID3 extended header

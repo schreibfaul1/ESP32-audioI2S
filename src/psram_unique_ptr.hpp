@@ -2361,7 +2361,7 @@ class ps_ptr {
     // Safe operator[] with logging
     T& operator[](std::size_t index) noexcept {
         if (index >= allocated_size) {
-            log_e("ps_ptr[]: Index %zu out of bounds (size = %zu)", index, allocated_size);
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
             return dummy; // Access allowed, but ineffective
         }
         return mem[index];
@@ -2369,7 +2369,7 @@ class ps_ptr {
 
     const T& operator[](std::size_t index) const noexcept {
         if (index >= allocated_size) {
-            log_e("ps_ptr[] (const): Index %zu out of bounds (size = %zu)", index, allocated_size);
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
             return dummy;
         }
         return mem[index];
