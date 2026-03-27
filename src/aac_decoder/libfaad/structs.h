@@ -29,39 +29,35 @@
 **/
 #pragma once
 #include "Arduino.h"
-#include "settings.h"
 #include "defines.h"
+#include "settings.h"
 
-
-
-typedef void *NeAACDecHandle;
-typedef struct mp4AudioSpecificConfig
-{
+typedef void* NeAACDecHandle;
+typedef struct mp4AudioSpecificConfig {
     /* Audio Specific Info */
     unsigned char objectTypeIndex;
     unsigned char samplingFrequencyIndex;
-    uint32_t samplingFrequency;
+    uint32_t      samplingFrequency;
     unsigned char channelsConfiguration;
     /* GA Specific Info */
-    unsigned char frameLengthFlag;
-    unsigned char dependsOnCoreCoder;
+    unsigned char  frameLengthFlag;
+    unsigned char  dependsOnCoreCoder;
     unsigned short coreCoderDelay;
-    unsigned char extensionFlag;
-    unsigned char aacSectionDataResilienceFlag;
-    unsigned char aacScalefactorDataResilienceFlag;
-    unsigned char aacSpectralDataResilienceFlag;
-    unsigned char epConfig;
-    char sbr_present_flag;
-    char forceUpSampling;
-    char downSampledSBR;
+    unsigned char  extensionFlag;
+    unsigned char  aacSectionDataResilienceFlag;
+    unsigned char  aacScalefactorDataResilienceFlag;
+    unsigned char  aacSpectralDataResilienceFlag;
+    unsigned char  epConfig;
+    char           sbr_present_flag;
+    char           forceUpSampling;
+    char           downSampledSBR;
 } mp4AudioSpecificConfig;
-typedef struct NeAACDecFrameInfo
-{
-    uint32_t bytesconsumed;
-    uint32_t samples;
+typedef struct NeAACDecFrameInfo {
+    uint32_t      bytesconsumed;
+    uint32_t      samples;
     unsigned char channels;
     unsigned char error;
-    uint32_t samplerate;
+    uint32_t      samplerate;
     /* SBR: 0: off, 1: on; upsample, 2: on; downsampled, 3: off; upsampled */
     unsigned char sbr;
     /* MPEG-4 ObjectType */
@@ -76,7 +72,7 @@ typedef struct NeAACDecFrameInfo
     unsigned char channel_position[64];
     /* PS: 0: off, 1: on */
     unsigned char ps;
-    uint8_t  isPS;
+    uint8_t       isPS;
 } NeAACDecFrameInfo;
 
 /* used to save the prediction state */
@@ -95,14 +91,14 @@ typedef struct {
     uint16_t   N;
     cfft_info* cfft;
     complex_t* sincos;
-    int64_t cycles;
-    int64_t fft_cycles;
+    int64_t    cycles;
+    int64_t    fft_cycles;
 } mdct_info;
 typedef struct {
     const real_t* long_window[2];
     const real_t* short_window[2];
     const real_t* ld_window[2];
-    int64_t cycles;
+    int64_t       cycles;
 } fb_info;
 typedef struct {
     uint8_t present;
@@ -173,7 +169,7 @@ typedef struct {
     uint16_t adts_buffer_fullness;
     uint8_t  no_raw_data_blocks_in_frame;
     uint16_t crc_check;
-    uint8_t old_format;/* control param */
+    uint8_t  old_format; /* control param */
 } adts_header;
 typedef struct {
     uint8_t  copyright_id_present;
@@ -254,19 +250,19 @@ typedef struct {
     uint8_t    predictor_data_present;
     pulse_info pul;
     tns_info   tns;
-    pred_info pred;
-    ltp_info ltp;
-    ltp_info ltp2;
-    ssr_info ssr;
-    uint16_t length_of_reordered_spectral_data; /* ER HCR data */
-    uint8_t  length_of_longest_codeword;
-    uint8_t  sf_concealment;/* ER RLVC data */
-    uint8_t  rev_global_gain;
-    uint16_t length_of_rvlc_sf;
-    uint16_t dpcm_noise_nrg;
-    uint8_t  sf_escapes_present;
-    uint8_t  length_of_rvlc_escapes;
-    uint16_t dpcm_noise_last_position;
+    pred_info  pred;
+    ltp_info   ltp;
+    ltp_info   ltp2;
+    ssr_info   ssr;
+    uint16_t   length_of_reordered_spectral_data; /* ER HCR data */
+    uint8_t    length_of_longest_codeword;
+    uint8_t    sf_concealment; /* ER RLVC data */
+    uint8_t    rev_global_gain;
+    uint16_t   length_of_rvlc_sf;
+    uint16_t   dpcm_noise_nrg;
+    uint8_t    sf_escapes_present;
+    uint8_t    length_of_rvlc_escapes;
+    uint16_t   dpcm_noise_last_position;
 } ic_stream; /* individual channel stream */
 typedef struct {
     uint8_t   channel;
@@ -291,8 +287,7 @@ typedef struct {
     uint8_t  ASC[MAX_ASC_BYTES];
     uint32_t ASCbits;
 } latm_header;
-typedef struct NeAACDecConfiguration
-{
+typedef struct NeAACDecConfiguration {
     unsigned char defObjectType;
     unsigned long defSampleRate;
     unsigned char outputFormat;
@@ -300,35 +295,33 @@ typedef struct NeAACDecConfiguration
     unsigned char useOldADTSFormat;
     unsigned char dontUpSampleImplicitSBR;
 } NeAACDecConfiguration, *NeAACDecConfigurationPtr;
-typedef struct
-{
-    uint8_t drm_ps_data_available;
-    uint8_t bs_enable_sa;
-    uint8_t bs_enable_pan;
-    uint8_t bs_sa_dt_flag;
-    uint8_t bs_pan_dt_flag;
-    uint8_t g_last_had_sa;
-    uint8_t g_last_had_pan;
-    int8_t bs_sa_data[DRM_NUM_SA_BANDS];
-    int8_t bs_pan_data[DRM_NUM_PAN_BANDS];
-    int8_t g_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_pan_index[DRM_NUM_PAN_BANDS];
-    int8_t g_prev_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_prev_pan_index[DRM_NUM_PAN_BANDS];
-    int8_t sa_decode_error;
-    int8_t pan_decode_error;
-    int8_t g_last_good_sa_index[DRM_NUM_SA_BANDS];
-    int8_t g_last_good_pan_index[DRM_NUM_PAN_BANDS];
-    qmf_t SA[NUM_OF_SUBSAMPLES][MAX_SA_BAND];
+typedef struct {
+    uint8_t   drm_ps_data_available;
+    uint8_t   bs_enable_sa;
+    uint8_t   bs_enable_pan;
+    uint8_t   bs_sa_dt_flag;
+    uint8_t   bs_pan_dt_flag;
+    uint8_t   g_last_had_sa;
+    uint8_t   g_last_had_pan;
+    int8_t    bs_sa_data[DRM_NUM_SA_BANDS];
+    int8_t    bs_pan_data[DRM_NUM_PAN_BANDS];
+    int8_t    g_sa_index[DRM_NUM_SA_BANDS];
+    int8_t    g_pan_index[DRM_NUM_PAN_BANDS];
+    int8_t    g_prev_sa_index[DRM_NUM_SA_BANDS];
+    int8_t    g_prev_pan_index[DRM_NUM_PAN_BANDS];
+    int8_t    sa_decode_error;
+    int8_t    pan_decode_error;
+    int8_t    g_last_good_sa_index[DRM_NUM_SA_BANDS];
+    int8_t    g_last_good_pan_index[DRM_NUM_PAN_BANDS];
+    qmf_t     SA[NUM_OF_SUBSAMPLES][MAX_SA_BAND];
     complex_t d_buff[2][MAX_SA_BAND];
     complex_t d2_buff[NUM_OF_LINKS][MAX_DELAY][MAX_SA_BAND];
-    uint8_t delay_buf_index_ser[NUM_OF_LINKS];
-    real_t prev_nrg[MAX_SA_BAND];
-    real_t prev_peakdiff[MAX_SA_BAND];
-    real_t peakdecay_fast[MAX_SA_BAND];
+    uint8_t   delay_buf_index_ser[NUM_OF_LINKS];
+    real_t    prev_nrg[MAX_SA_BAND];
+    real_t    prev_peakdiff[MAX_SA_BAND];
+    real_t    peakdecay_fast[MAX_SA_BAND];
 } drm_ps_info;
-typedef struct
-{
+typedef struct {
     /* bitstream parameters */
     uint8_t enable_iid;
     uint8_t enable_icc;
@@ -340,7 +333,7 @@ typedef struct
     uint8_t nr_icc_par;
     uint8_t frame_class;
     uint8_t num_env;
-    uint8_t border_position[MAX_PS_ENVELOPES+1];
+    uint8_t border_position[MAX_PS_ENVELOPES + 1];
     uint8_t iid_dt[MAX_PS_ENVELOPES];
     uint8_t icc_dt[MAX_PS_ENVELOPES];
     uint8_t enable_ipdopd;
@@ -365,26 +358,26 @@ typedef struct
     /* a header has been read */
     uint8_t header_read;
     /* hybrid filterbank parameters */
-    void *hyb;
+    void*   hyb;
     uint8_t use34hybrid_bands;
     uint8_t numTimeSlotsRate;
     /**/
-    uint8_t num_groups;
-    uint8_t num_hybrid_groups;
-    uint8_t nr_par_bands;
-    uint8_t nr_allpass_bands;
-    uint8_t decay_cutoff;
-    uint8_t *group_border;
-    uint16_t *map_group2bk;
+    uint8_t   num_groups;
+    uint8_t   num_hybrid_groups;
+    uint8_t   nr_par_bands;
+    uint8_t   nr_allpass_bands;
+    uint8_t   decay_cutoff;
+    uint8_t*  group_border;
+    uint16_t* map_group2bk;
     /* filter delay handling */
-    uint8_t saved_delay;
-    uint8_t delay_buf_index_ser[NO_ALLPASS_LINKS];
-    uint8_t num_sample_delay_ser[NO_ALLPASS_LINKS];
-    uint8_t delay_D[64];
-    uint8_t delay_buf_index_delay[64];
-    complex_t delay_Qmf[14][64]; /* 14 samples delay max, 64 QMF channels */
-    complex_t delay_SubQmf[2][32]; /* 2 samples delay max (SubQmf is always allpass filtered) */
-    complex_t delay_Qmf_ser[NO_ALLPASS_LINKS][5][64]; /* 5 samples delay max (table 8.34), 64 QMF channels */
+    uint8_t   saved_delay;
+    uint8_t   delay_buf_index_ser[NO_ALLPASS_LINKS];
+    uint8_t   num_sample_delay_ser[NO_ALLPASS_LINKS];
+    uint8_t   delay_D[64];
+    uint8_t   delay_buf_index_delay[64];
+    complex_t delay_Qmf[14][64];                         /* 14 samples delay max, 64 QMF channels */
+    complex_t delay_SubQmf[2][32];                       /* 2 samples delay max (SubQmf is always allpass filtered) */
+    complex_t delay_Qmf_ser[NO_ALLPASS_LINKS][5][64];    /* 5 samples delay max (table 8.34), 64 QMF channels */
     complex_t delay_SubQmf_ser[NO_ALLPASS_LINKS][5][32]; /* 5 samples delay max (table 8.34) */
     /* transients */
     real_t alpha_decay;
@@ -397,201 +390,201 @@ typedef struct
     complex_t h12_prev[50];
     complex_t h21_prev[50];
     complex_t h22_prev[50];
-    uint8_t phase_hist;
+    uint8_t   phase_hist;
     complex_t ipd_prev[20][2];
     complex_t opd_prev[20][2];
 } ps_info;
 typedef struct {
-    real_t *x;
+    real_t* x;
     int16_t x_index;
     uint8_t channels;
 } qmfa_info;
 typedef struct {
-    real_t *v;
+    real_t* v;
     int16_t v_index;
     uint8_t channels;
 } qmfs_info;
-typedef struct{
-    uint32_t sample_rate;
-    uint32_t maxAACLine;
-    uint8_t rate;
-    uint8_t just_seeked;
-    uint8_t ret;
-    uint8_t amp_res[2];
-    uint8_t k0;
-    uint8_t kx;
-    uint8_t M;
-    uint8_t N_master;
-    uint8_t N_high;
-    uint8_t N_low;
-    uint8_t N_Q;
-    uint8_t N_L[4];
-    uint8_t n[2];
-    uint8_t f_master[64];
-    uint8_t f_table_res[2][64];
-    uint8_t f_table_noise[64];
-    uint8_t f_table_lim[4][64];
-    uint8_t f_group[5][64];
-    uint8_t N_G[5];
-    uint8_t table_map_k_to_g[64];
-    uint8_t abs_bord_lead[2];
-    uint8_t abs_bord_trail[2];
-    uint8_t n_rel_lead[2];
-    uint8_t n_rel_trail[2];
-    uint8_t L_E[2];
-    uint8_t L_E_prev[2];
-    uint8_t L_Q[2];
-    uint8_t t_E[2][MAX_L_E+1];
-    uint8_t t_Q[2][3];
-    uint8_t f[2][MAX_L_E+1];
-    uint8_t f_prev[2];
-    real_t *G_temp_prev[2][5];
-    real_t *Q_temp_prev[2][5];
-    int8_t GQ_ringbuf_index[2];
-    int16_t E[2][64][MAX_L_E];
-    int16_t E_prev[2][64];
-    real_t E_orig[2][64][MAX_L_E];
-    real_t E_curr[2][64][MAX_L_E];
-    int32_t Q[2][64][2];
-    real_t Q_div[2][64][2];
-    real_t Q_div2[2][64][2];
-    int32_t Q_prev[2][64];
-    int8_t l_A[2];
-    int8_t l_A_prev[2];
-    uint8_t bs_invf_mode[2][MAX_L_E];
-    uint8_t bs_invf_mode_prev[2][MAX_L_E];
-    real_t bwArray[2][64];
-    real_t bwArray_prev[2][64];
-    uint8_t noPatches;
-    uint8_t patchNoSubbands[64];
-    uint8_t patchStartSubband[64];
-    uint8_t bs_add_harmonic[2][64];
-    uint8_t bs_add_harmonic_prev[2][64];
-    uint16_t index_noise_prev[2];
-    uint8_t psi_is_prev[2];
-    uint8_t bs_start_freq_prev;
-    uint8_t bs_stop_freq_prev;
-    uint8_t bs_xover_band_prev;
-    uint8_t bs_freq_scale_prev;
-    uint8_t bs_alter_scale_prev;
-    uint8_t bs_noise_bands_prev;
-    int8_t prevEnvIsShort[2];
-    int8_t kx_prev;
-    uint8_t bsco;
-    uint8_t bsco_prev;
-    uint8_t M_prev;
-    uint16_t frame_len;
-    uint8_t Reset;
-    uint32_t frame;
-    uint32_t header_count;
-    uint8_t id_aac;
-    qmfa_info *qmfa[2];
-    qmfs_info *qmfs[2];
-    qmf_t Xsbr[2][MAX_NTSRHFG][64];
-    uint8_t Is_DRM_SBR;
-    drm_ps_info *drm_ps;
-    uint8_t numTimeSlotsRate;
-    uint8_t numTimeSlots;
-    uint8_t tHFGen;
-    uint8_t tHFAdj;
-    ps_info *ps;
-    uint8_t ps_used;
-    uint8_t psResetFlag;
+typedef struct {
+    uint32_t     sample_rate;
+    uint32_t     maxAACLine;
+    uint8_t      rate;
+    uint8_t      just_seeked;
+    uint8_t      ret;
+    uint8_t      amp_res[2];
+    uint8_t      k0;
+    uint8_t      kx;
+    uint8_t      M;
+    uint8_t      N_master;
+    uint8_t      N_high;
+    uint8_t      N_low;
+    uint8_t      N_Q;
+    uint8_t      N_L[4];
+    uint8_t      n[2];
+    uint8_t      f_master[64];
+    uint8_t      f_table_res[2][64];
+    uint8_t      f_table_noise[64];
+    uint8_t      f_table_lim[4][64];
+    uint8_t      f_group[5][64];
+    uint8_t      N_G[5];
+    uint8_t      table_map_k_to_g[64];
+    uint8_t      abs_bord_lead[2];
+    uint8_t      abs_bord_trail[2];
+    uint8_t      n_rel_lead[2];
+    uint8_t      n_rel_trail[2];
+    uint8_t      L_E[2];
+    uint8_t      L_E_prev[2];
+    uint8_t      L_Q[2];
+    uint8_t      t_E[2][MAX_L_E + 1];
+    uint8_t      t_Q[2][3];
+    uint8_t      f[2][MAX_L_E + 1];
+    uint8_t      f_prev[2];
+    real_t*      G_temp_prev[2][5];
+    real_t*      Q_temp_prev[2][5];
+    int8_t       GQ_ringbuf_index[2];
+    int16_t      E[2][64][MAX_L_E];
+    int16_t      E_prev[2][64];
+    real_t       E_orig[2][64][MAX_L_E];
+    real_t       E_curr[2][64][MAX_L_E];
+    int32_t      Q[2][64][2];
+    real_t       Q_div[2][64][2];
+    real_t       Q_div2[2][64][2];
+    int32_t      Q_prev[2][64];
+    int8_t       l_A[2];
+    int8_t       l_A_prev[2];
+    uint8_t      bs_invf_mode[2][MAX_L_E];
+    uint8_t      bs_invf_mode_prev[2][MAX_L_E];
+    real_t       bwArray[2][64];
+    real_t       bwArray_prev[2][64];
+    uint8_t      noPatches;
+    uint8_t      patchNoSubbands[64];
+    uint8_t      patchStartSubband[64];
+    uint8_t      bs_add_harmonic[2][64];
+    uint8_t      bs_add_harmonic_prev[2][64];
+    uint16_t     index_noise_prev[2];
+    uint8_t      psi_is_prev[2];
+    uint8_t      bs_start_freq_prev;
+    uint8_t      bs_stop_freq_prev;
+    uint8_t      bs_xover_band_prev;
+    uint8_t      bs_freq_scale_prev;
+    uint8_t      bs_alter_scale_prev;
+    uint8_t      bs_noise_bands_prev;
+    int8_t       prevEnvIsShort[2];
+    int8_t       kx_prev;
+    uint8_t      bsco;
+    uint8_t      bsco_prev;
+    uint8_t      M_prev;
+    uint16_t     frame_len;
+    uint8_t      Reset;
+    uint32_t     frame;
+    uint32_t     header_count;
+    uint8_t      id_aac;
+    qmfa_info*   qmfa[2];
+    qmfs_info*   qmfs[2];
+    qmf_t        Xsbr[2][MAX_NTSRHFG][64];
+    uint8_t      Is_DRM_SBR;
+    drm_ps_info* drm_ps;
+    uint8_t      numTimeSlotsRate;
+    uint8_t      numTimeSlots;
+    uint8_t      tHFGen;
+    uint8_t      tHFAdj;
+    ps_info*     ps;
+    uint8_t      ps_used;
+    uint8_t      psResetFlag;
     /* to get it compiling */
     /* we'll see during the coding of all the tools, whether
        these are all used or not.
     */
-    uint8_t bs_header_flag;
-    uint8_t bs_crc_flag;
+    uint8_t  bs_header_flag;
+    uint8_t  bs_crc_flag;
     uint16_t bs_sbr_crc_bits;
-    uint8_t bs_protocol_version;
-    uint8_t bs_amp_res;
-    uint8_t bs_start_freq;
-    uint8_t bs_stop_freq;
-    uint8_t bs_xover_band;
-    uint8_t bs_freq_scale;
-    uint8_t bs_alter_scale;
-    uint8_t bs_noise_bands;
-    uint8_t bs_limiter_bands;
-    uint8_t bs_limiter_gains;
-    uint8_t bs_interpol_freq;
-    uint8_t bs_smoothing_mode;
-    uint8_t bs_samplerate_mode;
-    uint8_t bs_add_harmonic_flag[2];
-    uint8_t bs_add_harmonic_flag_prev[2];
-    uint8_t bs_extended_data;
-    uint8_t bs_extension_id;
-    uint8_t bs_extension_data;
-    uint8_t bs_coupling;
-    uint8_t bs_frame_class[2];
-    uint8_t bs_rel_bord[2][9];
-    uint8_t bs_rel_bord_0[2][9];
-    uint8_t bs_rel_bord_1[2][9];
-    uint8_t bs_pointer[2];
-    uint8_t bs_abs_bord_0[2];
-    uint8_t bs_abs_bord_1[2];
-    uint8_t bs_num_rel_0[2];
-    uint8_t bs_num_rel_1[2];
-    uint8_t bs_df_env[2][9];
-    uint8_t bs_df_noise[2][3];
+    uint8_t  bs_protocol_version;
+    uint8_t  bs_amp_res;
+    uint8_t  bs_start_freq;
+    uint8_t  bs_stop_freq;
+    uint8_t  bs_xover_band;
+    uint8_t  bs_freq_scale;
+    uint8_t  bs_alter_scale;
+    uint8_t  bs_noise_bands;
+    uint8_t  bs_limiter_bands;
+    uint8_t  bs_limiter_gains;
+    uint8_t  bs_interpol_freq;
+    uint8_t  bs_smoothing_mode;
+    uint8_t  bs_samplerate_mode;
+    uint8_t  bs_add_harmonic_flag[2];
+    uint8_t  bs_add_harmonic_flag_prev[2];
+    uint8_t  bs_extended_data;
+    uint8_t  bs_extension_id;
+    uint8_t  bs_extension_data;
+    uint8_t  bs_coupling;
+    uint8_t  bs_frame_class[2];
+    uint8_t  bs_rel_bord[2][9];
+    uint8_t  bs_rel_bord_0[2][9];
+    uint8_t  bs_rel_bord_1[2][9];
+    uint8_t  bs_pointer[2];
+    uint8_t  bs_abs_bord_0[2];
+    uint8_t  bs_abs_bord_1[2];
+    uint8_t  bs_num_rel_0[2];
+    uint8_t  bs_num_rel_1[2];
+    uint8_t  bs_df_env[2][9];
+    uint8_t  bs_df_noise[2][3];
 } sbr_info;
 typedef struct {
-    uint8_t adts_header_present;
-    uint8_t adif_header_present;
-    uint8_t latm_header_present;
-    uint8_t sf_index;
-    uint8_t object_type;
-    uint8_t channelConfiguration;
-    uint8_t aacSectionDataResilienceFlag;
-    uint8_t aacScalefactorDataResilienceFlag;
-    uint8_t aacSpectralDataResilienceFlag;
-    uint16_t frameLength;
-    uint8_t  postSeekResetFlag;
-    uint32_t frame;
-    uint8_t  downMatrix;
-    uint8_t  upMatrix;
-    uint8_t  first_syn_ele;
-    uint8_t  has_lfe;
-    uint8_t fr_channels;  /* number of channels in current frame */
-    uint8_t fr_ch_ele; /* number of elements in current frame */
-    uint8_t element_output_channels[MAX_SYNTAX_ELEMENTS]; /* element_output_channels:  determines the number of channels the element will output */
-    uint8_t element_alloced[MAX_SYNTAX_ELEMENTS];/* element_alloced:determines whether the data needed for the element is allocated or not*/
-    uint8_t alloced_channels;  /* alloced_channels: determines the number of channels where output data is allocated for*/
-    void*   sample_buffer; /* output data buffer */
-    uint8_t window_shape_prev[MAX_CHANNELS];
-    uint16_t ltp_lag[MAX_CHANNELS];
-    fb_info*  fb;
-    drc_info* drc;
-    real_t*   time_out[MAX_CHANNELS];
-    real_t*   fb_intermed[MAX_CHANNELS];
-    int8_t sbr_present_flag;
-    int8_t forceUpSampling;
-    int8_t downSampledSBR;
-    uint8_t   sbr_alloced[MAX_SYNTAX_ELEMENTS];  /* determines whether SBR data is allocated for the gives element */
-    sbr_info* sbr[MAX_SYNTAX_ELEMENTS];
-    uint8_t ps_used[MAX_SYNTAX_ELEMENTS];
-    uint8_t ps_used_global;
-    real_t* ssr_overlap[MAX_CHANNELS];
-    real_t* prev_fmd[MAX_CHANNELS];
-    real_t  ipqf_buffer[MAX_CHANNELS][4][96 / 4];
-    pred_state* pred_stat[MAX_CHANNELS];
-    int16_t* lt_pred_stat[MAX_CHANNELS];
-    uint8_t error_state;
-    uint32_t __r1; /* RNG states */
-    uint32_t __r2;
-    uint8_t        pce_set;/* Program Config Element */
-    program_config pce;
-    uint8_t        element_id[MAX_CHANNELS];
-    uint8_t        internal_channel[MAX_CHANNELS];
+    uint8_t               adts_header_present;
+    uint8_t               adif_header_present;
+    uint8_t               latm_header_present;
+    uint8_t               sf_index;
+    uint8_t               object_type;
+    uint8_t               channelConfiguration;
+    uint8_t               aacSectionDataResilienceFlag;
+    uint8_t               aacScalefactorDataResilienceFlag;
+    uint8_t               aacSpectralDataResilienceFlag;
+    uint16_t              frameLength;
+    uint8_t               postSeekResetFlag;
+    uint32_t              frame;
+    uint8_t               downMatrix;
+    uint8_t               upMatrix;
+    uint8_t               first_syn_ele;
+    uint8_t               has_lfe;
+    uint8_t               fr_channels;                                  /* number of channels in current frame */
+    uint8_t               fr_ch_ele;                                    /* number of elements in current frame */
+    uint8_t               element_output_channels[MAX_SYNTAX_ELEMENTS]; /* element_output_channels:  determines the number of channels the element will output */
+    uint8_t               element_alloced[MAX_SYNTAX_ELEMENTS];         /* element_alloced:determines whether the data needed for the element is allocated or not*/
+    uint8_t               alloced_channels;                             /* alloced_channels: determines the number of channels where output data is allocated for*/
+    void*                 sample_buffer;                                /* output data buffer */
+    uint8_t               window_shape_prev[MAX_CHANNELS];
+    uint16_t              ltp_lag[MAX_CHANNELS];
+    fb_info*              fb;
+    drc_info*             drc;
+    real_t*               time_out[MAX_CHANNELS];
+    real_t*               fb_intermed[MAX_CHANNELS];
+    int8_t                sbr_present_flag;
+    int8_t                forceUpSampling;
+    int8_t                downSampledSBR;
+    uint8_t               sbr_alloced[MAX_SYNTAX_ELEMENTS]; /* determines whether SBR data is allocated for the gives element */
+    sbr_info*             sbr[MAX_SYNTAX_ELEMENTS];
+    uint8_t               ps_used[MAX_SYNTAX_ELEMENTS];
+    uint8_t               ps_used_global;
+    real_t*               ssr_overlap[MAX_CHANNELS];
+    real_t*               prev_fmd[MAX_CHANNELS];
+    real_t                ipqf_buffer[MAX_CHANNELS][4][96 / 4];
+    pred_state*           pred_stat[MAX_CHANNELS];
+    int16_t*              lt_pred_stat[MAX_CHANNELS];
+    uint8_t               error_state;
+    uint32_t              __r1; /* RNG states */
+    uint32_t              __r2;
+    uint8_t               pce_set; /* Program Config Element */
+    program_config        pce;
+    uint8_t               element_id[MAX_CHANNELS];
+    uint8_t               internal_channel[MAX_CHANNELS];
     NeAACDecConfiguration config; /* Configuration data */
-    int64_t cycles;
-    int64_t spectral_cycles;
-    int64_t output_cycles;
-    int64_t scalefac_cycles;
-    int64_t requant_cycles;
-    latm_header          latm_config;
-    const uint8_t* cmes;
-    uint8_t              isPS;
+    int64_t               cycles;
+    int64_t               spectral_cycles;
+    int64_t               output_cycles;
+    int64_t               scalefac_cycles;
+    int64_t               requant_cycles;
+    latm_header           latm_config;
+    const uint8_t*        cmes;
+    uint8_t               isPS;
 } NeAACDecStruct;
 /* 1st step table */
 typedef struct {
@@ -632,7 +625,7 @@ typedef struct _bitfile {
     uint32_t*   start;
     const void* buffer;
 } bitfile;
-//——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+// ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 typedef struct {
     /* bit input */
     uint32_t bufa;
@@ -645,10 +638,9 @@ typedef struct {
     uint16_t sp_offset;
     bits_t   bits;
 } codeword_t;
-typedef struct
-{
-    int8_t index;
-    uint8_t len;
+typedef struct {
+    int8_t   index;
+    uint8_t  len;
     uint32_t cw;
 } rvlc_huff_table;
 // ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

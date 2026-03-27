@@ -37,10 +37,9 @@
 #include "tables.h"
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-
 class NeaacDecoder {
   public:
-    NeaacDecoder(){ m_initFlag = 0;}
+    NeaacDecoder() { m_initFlag = 0; }
     ~NeaacDecoder() = default;
     NeAACDecHandle           NeAACDecOpen(void);
     NeAACDecConfigurationPtr NeAACDecGetCurrentConfiguration(NeAACDecHandle hpDecoder);
@@ -56,26 +55,25 @@ class NeaacDecoder {
     uint32_t __r1 __attribute__((unused)) = 1;
     uint32_t __r2 __attribute__((unused)) = 1;
 
-    ps_ptr<mdct_info> m_mdct256;
-    ps_ptr<mdct_info> m_mdct1024;
-    ps_ptr<mdct_info> m_mdct2048;
-    ps_ptr<cfft_info> m_ccft256;
-    ps_ptr<cfft_info> m_ccft1024;
-    ps_ptr<cfft_info> m_ccft2048;
-    ps_ptr<complex_t> m_work256;
-    ps_ptr<complex_t> m_work1024;
-    ps_ptr<complex_t> m_work2048;
-    ps_ptr<real_t> m_G_temp_prev[48][2][5];
-    ps_ptr<real_t> m_Q_temp_prev[48][2][5];
-    ps_ptr<adif_header>m_adif;
-    ps_ptr<adts_header>m_adts;
-    ps_ptr<bitfile>m_ld;
-    ps_ptr<uint8_t>m_sample_buffer;
-	
+    ps_ptr<mdct_info>   m_mdct256;
+    ps_ptr<mdct_info>   m_mdct1024;
+    ps_ptr<mdct_info>   m_mdct2048;
+    ps_ptr<cfft_info>   m_ccft256;
+    ps_ptr<cfft_info>   m_ccft1024;
+    ps_ptr<cfft_info>   m_ccft2048;
+    ps_ptr<complex_t>   m_work256;
+    ps_ptr<complex_t>   m_work1024;
+    ps_ptr<complex_t>   m_work2048;
+    ps_ptr<real_t>      m_G_temp_prev[48][2][5];
+    ps_ptr<real_t>      m_Q_temp_prev[48][2][5];
+    ps_ptr<adif_header> m_adif;
+    ps_ptr<adts_header> m_adts;
+    ps_ptr<bitfile>     m_ld;
+    ps_ptr<uint8_t>     m_sample_buffer;
 
     uint32_t ne_rng(uint32_t* __r1, uint32_t* __r2);
     uint32_t wl_min_lzc(uint32_t x);
-    uint8_t m_initFlag = 0;
+    uint8_t  m_initFlag = 0;
 #ifdef FIXED_POINT
     int32_t log2_int(uint32_t val);
     int32_t log2_fix(uint32_t val);
@@ -84,36 +82,36 @@ class NeaacDecoder {
 #endif
     template <typename freeType> void faad_free(freeType** b);
 
-    void*     faad_calloc(size_t len, size_t size);
-    uint32_t  ones32(uint32_t x);
-    uint32_t  floor_log2(uint32_t x);
-    int       NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string);
-    uint32_t  NeAACDecGetCapabilities(void);
-    void      NeAACDecPostSeekReset(NeAACDecHandle hpDecoder, long frame);
-    void*     NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size);
-    void      cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
-    void      cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
+    void*    faad_calloc(size_t len, size_t size);
+    uint32_t ones32(uint32_t x);
+    uint32_t floor_log2(uint32_t x);
+    int      NeAACDecGetVersion(const char** faad_id_string, const char** faad_copyright_string);
+    uint32_t NeAACDecGetCapabilities(void);
+    void     NeAACDecPostSeekReset(NeAACDecHandle hpDecoder, long frame);
+    void*    NeAACDecDecode(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size);
+    void     cfftf1pos(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
+    void     cfftf1neg(uint16_t n, complex_t* c, complex_t* ch, const uint16_t* ifac, const complex_t* wa, const int8_t isign);
 #ifdef FIXED_POINT
-    real_t    get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel);
+    real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t up_matrix, uint8_t* internal_channel);
 #endif
 #ifndef FIXED_POINT
-    real_t    get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t* internal_channel);
-    void      to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer);
-    void      to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
-    void      to_PCM_32bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
-    void      to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float** sample_buffer);
-    void      to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer);
+    real_t get_sample(real_t** input, uint8_t channel, uint16_t sample, uint8_t down_matrix, uint8_t* internal_channel);
+    void   to_PCM_16bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int16_t** sample_buffer);
+    void   to_PCM_24bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
+    void   to_PCM_32bit(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, int32_t** sample_buffer);
+    void   to_PCM_float(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, float** sample_buffer);
+    void   to_PCM_double(NeAACDecStruct* hDecoder, real_t** input, uint8_t channels, uint16_t frame_len, double** sample_buffer);
 #endif
-    void imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
-    void gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
+    void   imdct_ssr(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
+    void   gc_setcoef_eff_pqfsyn(int mm, int kk, real_t* p_proto, real_t*** ppp_q0, real_t*** ppp_t0, real_t*** ppp_t1);
     real_t calc_Q_div(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
     real_t calc_Q_div2(sbr_info* sbr, uint8_t ch, uint8_t m, uint8_t l);
 #ifdef MAIN_DEC
-    void flt_round(float* pf);
+    void    flt_round(float* pf);
     int16_t quant_pred(float x);
-    float inv_quant_pred(int16_t q);
-    void ic_predict(pred_state* state, real_t input, real_t* output, uint8_t pred);
-    void reset_pred_state(pred_state* state);
+    float   inv_quant_pred(int16_t q);
+    void    ic_predict(pred_state* state, real_t input, real_t* output, uint8_t pred);
+    void    reset_pred_state(pred_state* state);
 #endif
     void      imdct_long(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
     void      mdct_init(fb_info* fb, real_t* in_data, real_t* out_data, uint16_t len);
@@ -389,12 +387,12 @@ class NeaacDecoder {
     void       sbr_noise(bitfile* ld, sbr_info* sbr, uint8_t ch);
     uint8_t    middleBorder(sbr_info* sbr, uint8_t ch);
 #ifdef SSR_DEC
-   // void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
+    // void ssr_ipqf(ssr_info* ssr, real_t* in_data, real_t* out_data, real_t buffer[SSR_BANDS][96 / 4], uint16_t frame_len, uint8_t bands);
     void gc_set_protopqf(real_t* p_proto);
 #endif
 #ifdef PS_DEC
-        hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
-    void channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
+    hyb_info* hybrid_init(uint8_t numTimeSlotsRate);
+    void      channel_filter2(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
     void inline DCT3_4_unscaled(real_t* y, real_t* x);
     void   channel_filter8(hyb_info* hyb, uint8_t frame_len, const real_t* filter, qmf_t* buffer, qmf_t** X_hybrid);
     void   hybrid_analysis(hyb_info* hyb, qmf_t X[32][64], qmf_t X_hybrid[32][32], uint8_t use34, uint8_t numTimeSlotsRate);
