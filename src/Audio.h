@@ -366,6 +366,7 @@ class Audio {
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
     ps_ptr<int32_t>          m_samplesBuff48K; // Interleaved L/R
+    ps_ptr<char>             m_metadataBuff;   // icy-metadata max (16 * 256 + 1) bytes
     ps_ptr<char>             m_ibuff;          // used in log_info()
     ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist

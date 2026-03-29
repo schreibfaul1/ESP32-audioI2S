@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5j                                                                                                                            ";
+    Version 3.4.5k                                                                                                                            ";
 /*  Updated on: Mar 26, 2026
 
     Author: Wolle (schreibfaul1)
@@ -4174,7 +4174,7 @@ void Audio::processWebStream() {
     if (m_f_metadata && (m_metacount == 0)) {
         if (!m_pwst.availableBytes) return;
         readedBytes = 0;
-        bool res = readMetadata(m_pwst.availableBytes, &readedBytes);
+        bool res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
         m_pwst.readedBytes += readedBytes;
         if (m_f_chunked) m_pwst.chunkSize -= readedBytes; // reduce chunkSize by metadata length
         if (res == false) return;
@@ -5848,6 +5848,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
+    m_metadataBuff.alloc(4096 + 1, "m_metadataBuff"); // max 4096 + 1 for null terminator, just to make library code 'safe'
 
     if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_samplesBuff48K.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
         !m_fft_items.work.valid()) {
@@ -6851,14 +6852,12 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
-    ps_ptr<char> buff;
-    buff.alloc(4096 + 1, "buff"); // max 4096 + 1 for null terminator, just to make library code 'safe'
-    buff.clear();         // is max 256 *16
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (first) {
         m_rmet.pos_ml = 0; // determines the current position in metaline
         m_rmet.metaDataSize = 0;
         m_rmet.res = 0;
+        m_metadataBuff.clear();
         return true;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -6872,12 +6871,12 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
         }
         m_rmet.metaDataSize = b * 16; // New count for metadata including length byte, max 4096
         m_rmet.pos_ml = 0;
-        buff[m_rmet.pos_ml] = 0; // Prepare for new line
+        m_metadataBuff[m_rmet.pos_ml] = 0; // Prepare for new line
         *readedBytes = 1;
         maxBytes -= 1;
     }
     if (!m_rmet.metaDataSize) { return *readedBytes; } // metalen is 0
-    int32_t a = audioFileRead((uint8_t*)&buff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metaDataSize - m_rmet.pos_ml), (uint16_t)(maxBytes)));
+    int32_t a = audioFileRead((uint8_t*)&m_metadataBuff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metaDataSize - m_rmet.pos_ml), (uint16_t)(maxBytes)));
 
     if (a > 0) {
         m_rmet.res += a;
@@ -6885,28 +6884,29 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
         m_rmet.pos_ml += a;
     }
     if (m_rmet.pos_ml == m_rmet.metaDataSize) {
-        buff[m_rmet.pos_ml] = '\0';
+        m_metadataBuff[m_rmet.pos_ml] = '\0';
         // buff.hex_dump(m_rmet.metaDataSize);
-        if (buff.strlen() > 0) { // Any info present?
+        if (m_metadataBuff.strlen() > 0) { // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
             // Sometimes it is just other info like:
             // "StreamTitle='60s 03 05 Magic60s';StreamUrl='';"
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
-            latinToUTF8(buff);                             // convert to UTF-8 if necessary
-            int pos = buff.index_of_icase("song_spot", 0); // remove some irrelevant infos
+            latinToUTF8(m_metadataBuff);                             // convert to UTF-8 if necessary
+            int pos = m_metadataBuff.index_of_icase("song_spot", 0); // remove some irrelevant infos
             if (pos > 3) {                                 // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
-                buff[pos] = 0;
+                m_metadataBuff[pos] = 0;
             }
-            showstreamtitle(buff.get()); // Show artist and title if present in metadata
+            showstreamtitle(m_metadataBuff.get()); // Show artist and title if present in metadata
         }
         m_metacount = m_metaint;
         m_rmet.metaDataSize = 0;
         m_rmet.pos_ml = 0;
-        buff[m_rmet.pos_ml] = 0; // Prepare for new line
+        m_metadataBuff[m_rmet.pos_ml] = 0; // Prepare for new line
     } else {
         return false; // not enough data, next round
     }
+    m_metadataBuff.clear();
     return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
