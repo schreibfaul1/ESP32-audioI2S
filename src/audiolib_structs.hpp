@@ -257,8 +257,8 @@ struct sbyt_t { // used in sendBytes
 };
 
 struct rmet_t {          // used in readMetadata
-    uint16_t pos_ml = 0; // determines the current position in metaline
-    uint16_t metaDataSize = 0;
+    uint32_t pos_ml = 0; // determines the current position in metaline
+    uint32_t metaDataSize = 0;
     uint16_t res = 0;
 };
 
