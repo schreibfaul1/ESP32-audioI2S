@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5k                                                                                                                            ";
-/*  Updated on: Mar 26, 2026
+    Version 3.4.5l                                                                                                                            ";
+/*  Updated on: Mar 30, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4174,7 +4174,9 @@ void Audio::processWebStream() {
     if (m_f_metadata && (m_metacount == 0)) {
         if (!m_pwst.availableBytes) return;
         readedBytes = 0;
-        bool res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
+        bool res = false;
+        if(m_f_chunked) res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
+        else res = readMetadata(m_pwst.availableBytes, &readedBytes);
         m_pwst.readedBytes += readedBytes;
         if (m_f_chunked) m_pwst.chunkSize -= readedBytes; // reduce chunkSize by metadata length
         if (res == false) return;
@@ -7712,7 +7714,7 @@ void Audio::setAudioTaskCore(uint8_t coreID) { // Recommendation:If the ARDUINO 
 void Audio::startAudioTask() {
 
     if (m_f_audioTaskIsRunning) {
-        AUDIO_LOG_INFO("Task is already running.");
+        AUDIO_LOG_INFO("audio task is already running.");
         return;
     }
     m_f_audioTaskIsRunning = true;
