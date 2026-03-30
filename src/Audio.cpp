@@ -4717,7 +4717,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
     ps_ptr<char> rhl;
     bool         ct_seen = false;
 
-    m_httpRespHdrBuff.println();
+    // m_httpRespHdrBuff.println();
 
     pos = 0;
     while (true) { // read the header line for line
