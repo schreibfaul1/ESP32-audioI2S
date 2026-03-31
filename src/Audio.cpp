@@ -6873,7 +6873,7 @@ bool Audio::readMetadata(uint32_t maxBytes, uint16_t* readedBytes, bool first) {
     }
     if (m_rmet.pos_ml == m_rmet.metaDataSize) {
         m_metadataBuff[m_rmet.pos_ml] = '\0';
-        // buff.hex_dump(m_rmet.metaDataSize);
+        // m_metadataBuff.hex_dump(m_rmet.metaDataSize);
         if (m_metadataBuff.strlen() > 0) { // Any info present?
             // metaline contains artist and song name.  For example:
             // "StreamTitle='Don McLean - American Pie';StreamUrl='';"
