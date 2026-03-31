@@ -236,7 +236,7 @@ class Audio {
     void        performAudioTask();
 
     //+++ H E L P   F U N C T I O N S +++
-    bool                   readMetadata(uint16_t b, uint16_t* readedBytes, bool first = false);
+    bool                   readMetadata(uint32_t b, uint16_t* readedBytes, bool first = false);
     int32_t                getChunkSize(uint16_t* readedBytes, bool first = false);
     bool                   readID3V1Tag();
     int32_t                newInBuffStart(int32_t resumeFilePos);
@@ -364,15 +364,17 @@ class Audio {
     static const uint8_t m_tsHeaderSize = 4;
 
     std::unique_ptr<Decoder> m_decoder = {};
-    ps_ptr<int32_t>          m_outBuff;        // Interleaved L/R
-    ps_ptr<int32_t>          m_samplesBuff48K; // Interleaved L/R
-    ps_ptr<char>             m_metadataBuff;   // icy-metadata max (16 * 256 + 1) bytes
-    ps_ptr<char>             m_ibuff;          // used in log_info()
-    ps_ptr<char>             m_lastHost;       // Store the last URL to a webstream
-    ps_ptr<char>             m_currentHost;    // can be changed by redirection or playlist
+    ps_ptr<int32_t>          m_outBuff;         // Interleaved L/R
+    ps_ptr<int32_t>          m_samplesBuff48K;  // Interleaved L/R
+    ps_ptr<char>             m_metadataBuff;    // icy-metadata max (16 * 256 + 1) bytes
+    ps_ptr<char>             m_httpRespHdrBuff; // store http response header
+    ps_ptr<char>             m_ibuff;           // used in log_info()
+    ps_ptr<char>             m_lastHost;        // Store the last URL to a webstream
+    ps_ptr<char>             m_currentHost;     // can be changed by redirection or playlist
     ps_ptr<char>             m_lastM3U8host;
     ps_ptr<char>             m_speechtxt;   // stores tts text
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
+    ps_ptr<char>             m_streamURL;   // stores the last StreamURL
     ps_ptr<char>             m_playlistBuff;
 
     const uint16_t m_plsBuffEntryLen = 256;         // length of each entry in playlistBuff

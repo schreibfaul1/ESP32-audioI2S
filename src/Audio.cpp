@@ -341,8 +341,6 @@ Audio::Audio(uint8_t i2sPort) {
 
     clientsecure.setInsecure();
     m_i2s_items.i2s_num = i2sPort; // i2s port number
-
-
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 Audio::~Audio() {
@@ -463,6 +461,7 @@ void Audio::setDefaults() {
     m_playlistFormat = FORMAT_NONE;
     m_dataMode = AUDIO_NONE;
     m_streamTitle.assign("");
+    m_streamURL.assign("");
     m_resumeFilePos = -1;
     m_audioCurrentTime = 0; // Reset playtimer
     m_audioFileDuration = 0;
@@ -753,12 +752,12 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.append(" HTTP/1.1\r\n");
     rqh.appendf("Host: %s\r\n", rqh_host.get());
     rqh.append("Icy-MetaData:1\r\n");
-    rqh.append("Icy-MetaData:2\r\n");
+    //  rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept: */*\r\n");
-    rqh.appendf("User-Agent: %s\r\n", m_f_alt_user_agent? user_agent_0 : user_agent_1);
+    rqh.appendf("User-Agent: %s\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
         rqh.append(authorization.get());
@@ -4175,8 +4174,11 @@ void Audio::processWebStream() {
         if (!m_pwst.availableBytes) return;
         readedBytes = 0;
         bool res = false;
-        if(m_f_chunked) res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
-        else res = readMetadata(m_pwst.availableBytes, &readedBytes);
+        if (m_f_chunked) {
+            res = readMetadata(min(m_pwst.availableBytes, m_pwst.chunkSize), &readedBytes);
+        } else {
+            res = readMetadata(m_pwst.availableBytes, &readedBytes);
+        }
         m_pwst.readedBytes += readedBytes;
         if (m_f_chunked) m_pwst.chunkSize -= readedBytes; // reduce chunkSize by metadata length
         if (res == false) return;
@@ -4688,71 +4690,52 @@ exit:
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
     if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
-    if (!m_currentHost.valid()) {
-        AUDIO_LOG_ERROR("m_currentHost is empty");
-        return false;
-    }
 
     m_phreh.reset();
     m_phreh.ctime = millis();
     m_phreh.timeout = 4500; // ms
+    m_httpRespHdrBuff.clear();
+    uint16_t pos = 0;
 
-    if (m_client->available() == 0) {
-        if (!m_phreh.f_time) {
-            m_phreh.stime = millis();
-            m_phreh.f_time = true;
+    while (true) { // read the header first and store it in m_httpRespHdrBuff
+        if (m_client->available()) { m_httpRespHdrBuff[pos++] = audioFileRead(); }
+        if (m_httpRespHdrBuff.ends_with("\r\n\r\n")) break;
+        if (m_httpRespHdrBuff.ends_with("\n\n")) break;
+        if (pos == m_httpRespHdrBuff.size()) {
+            AUDIO_LOG_WARN("responseHeaderline overflow");
+            m_httpRespHdrBuff[pos - 1] = '\0';
+            break;
         }
-        if ((millis() - m_phreh.stime) > m_phreh.timeout) {
+        if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
             AUDIO_LOG_ERROR("timeout");
             m_phreh.f_time = false;
+            stopSong();
             return false;
         }
     }
-    m_phreh.f_time = false;
 
     ps_ptr<char> rhl;
-    rhl.alloc(1024, "rhl"); // responseHeaderline
-    rhl.clear();
-    bool ct_seen = false;
+    bool         ct_seen = false;
 
-    while (true) { // outer while
-        uint16_t pos = 0;
-        if ((millis() - m_phreh.ctime) > m_phreh.timeout) {
-            AUDIO_LOG_ERROR("timeout");
-            m_f_timeout = true;
-            goto exit;
-        }
-        while (m_client->available()) {
-            uint8_t b = audioFileRead();
-            if (b == '\n') {
-                if (!pos) { // empty line received, is the last line of this responseHeader
-                    if (ct_seen)
-                        goto lastToDo;
-                    else {
-                        if (!m_client->available()) goto exit;
-                    }
-                }
-                break;
-            }
-            if (b == '\r') rhl[pos] = 0;
-            if (b < 0x20) continue;
-            rhl[pos] = b;
-            pos++;
-            if (pos == 1023) {
-                pos = 1022;
-                continue;
-            }
-            if (pos == 1022) {
-                rhl[pos] = '\0';
-                AUDIO_LOG_WARN("responseHeaderline overflow");
-            }
-        } // inner while
-        if (!pos) {
-            vTaskDelay(5);
-            continue;
+    // m_httpRespHdrBuff.println();
+
+    pos = 0;
+    while (true) { // read the header line for line
+        int idx = m_httpRespHdrBuff.index_of('\n', pos);
+        if (idx > pos) {
+            rhl = m_httpRespHdrBuff.substr(pos, idx - pos);
+            rhl.set_name("rhl");
+            rhl.remove_chars("\r");
+            pos = idx + 1;
+            if (rhl.strlen() == 0) continue;
+        } else { // done?
+            if (ct_seen)
+                goto lastToDo;
+            else { goto exit; }
         }
 
-        // rhl.println();
+        //    rhl.println();
+
         if (rhl.starts_with_icase("icy-")) {
             m_phreh.f_icy_data = true; // is webstrean
         }
@@ -4764,7 +4747,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             statusCode[2] = rhl[11];
             statusCode[3] = '\0';
             int sc = atoi(statusCode);
-            if(sc == 403 && !m_f_alt_user_agent){ // HTTP/1.1 403 Forbidden
+            if (sc == 403 && !m_f_alt_user_agent) { // HTTP/1.1 403 Forbidden
                 m_f_alt_user_agent = true;
                 AUDIO_LOG_WARN("403 Forbidden, test alternative user agent");
                 connecttohost(m_lastHost.c_get());
@@ -5276,7 +5259,7 @@ void Audio::showstreamtitle(char* st) {
         }
     }
 
-    else if (ml.index_of("StreamTitle='") == 0) { // #1202
+    else if (ml.index_of("StreamTitle='") == 0) {
         int start = 13;
         int end = ml.index_of("';", start);
         if (end < 0) end = ml.index_of("'", start); // fallback — when the station is transmitting incorrectly
@@ -5343,7 +5326,10 @@ void Audio::showstreamtitle(char* st) {
         if (idx1 >= 0 && idx2 > idx1) { // StreamURL found
             uint16_t len = idx2 - idx1;
             sUrl.assign(ml.get() + idx1, len);
-            if (sUrl.valid()) { info(*this, evt_info, "Stream URL; %s", sUrl.get()); }
+            if (!sUrl.equals(m_streamURL.c_get())) {
+                info(*this, evt_info, "Stream URL: %s", sUrl.c_get()); // e.g. StreamUrl='http://myUrl.com'
+                m_streamURL = sUrl;
+            }
         }
     }
 
@@ -5780,7 +5766,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
     }
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-bool Audio::i2s_config(){
+bool Audio::i2s_config() {
     esp_err_t result = ESP_OK;
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
@@ -5792,7 +5778,7 @@ bool Audio::i2s_config(){
     m_i2s_chan_cfg.allow_pd = false;
     m_i2s_chan_cfg.intr_priority = 2;
     result = i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
-    if(result != ESP_OK){ // ESP_ERR_INVALID_ARG?
+    if (result != ESP_OK) { // ESP_ERR_INVALID_ARG?
         AUDIO_LOG_ERROR("I2S channel: invalid argument");
         return false;
     }
@@ -5811,9 +5797,9 @@ bool Audio::i2s_config(){
     m_i2s_std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
     m_i2s_std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
     result = i2s_channel_init_std_mode(m_i2s_tx_handle, &m_i2s_std_cfg);
-    if(result != ESP_OK){
-        if(result == ESP_ERR_INVALID_ARG)  AUDIO_LOG_ERROR("invalid i2s configuration or i2s not standard mode");
-        if(result == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("This i2s channel is not initialized or not stopped");
+    if (result != ESP_OK) {
+        if (result == ESP_ERR_INVALID_ARG) AUDIO_LOG_ERROR("invalid i2s configuration or i2s not standard mode");
+        if (result == ESP_ERR_INVALID_STATE) AUDIO_LOG_ERROR("This i2s channel is not initialized or not stopped");
         return false;
     }
     return true;
@@ -5850,7 +5836,8 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
-    m_metadataBuff.alloc(4096 + 1, "m_metadataBuff"); // max 4096 + 1 for null terminator, just to make library code 'safe'
+    m_metadataBuff.alloc(4096 + 1, "m_metadataBuff");   // max 4096 + 1 for null terminator, just to make library code 'safe'
+    m_httpRespHdrBuff.alloc(4096, "m_httpRespHdrBuff"); // enough space to store http response header
 
     if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_samplesBuff48K.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
         !m_fft_items.work.valid()) {
@@ -6852,7 +6839,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 //    W E B S T R E A M  -  H E L P   F U N C T I O N S
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
-bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
+bool Audio::readMetadata(uint32_t maxBytes, uint16_t* readedBytes, bool first) {
     *readedBytes = 0;
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (first) {
@@ -6863,8 +6850,7 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
         return true;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (!maxBytes) return 0; // guard
-
+    if (!maxBytes) return false; // guard
     if (!m_rmet.metaDataSize) {
         int b = audioFileRead(); // First byte of metadata?
         if (b < 0) {
@@ -6878,8 +6864,8 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
         maxBytes -= 1;
     }
     if (!m_rmet.metaDataSize) { return *readedBytes; } // metalen is 0
-    int32_t a = audioFileRead((uint8_t*)&m_metadataBuff[m_rmet.pos_ml], min((uint16_t)(m_rmet.metaDataSize - m_rmet.pos_ml), (uint16_t)(maxBytes)));
 
+    int32_t a = audioFileRead((uint8_t*)&m_metadataBuff[m_rmet.pos_ml], min(m_rmet.metaDataSize - m_rmet.pos_ml, maxBytes));
     if (a > 0) {
         m_rmet.res += a;
         *readedBytes += a;
@@ -6896,7 +6882,7 @@ bool Audio::readMetadata(uint16_t maxBytes, uint16_t* readedBytes, bool first) {
             // Isolate the StreamTitle, remove leading and trailing quotes if present.
             latinToUTF8(m_metadataBuff);                             // convert to UTF-8 if necessary
             int pos = m_metadataBuff.index_of_icase("song_spot", 0); // remove some irrelevant infos
-            if (pos > 3) {                                 // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
+            if (pos > 3) {                                           // e.g. song_spot="T" MediaBaseId="0" itunesTrackId="0"
                 m_metadataBuff[pos] = 0;
             }
             showstreamtitle(m_metadataBuff.get()); // Show artist and title if present in metadata
