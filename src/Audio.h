@@ -247,6 +247,7 @@ class Audio {
     int32_t                mp3_correctResumeFilePos();
     int32_t                wav_correctResumeFilePos();
     uint8_t                determineCodec(uint8_t presumed_codec);
+    bool                   get_info();
     void                   strlower(char* str);
     void                   trim(char* str);
     bool                   startsWith(const char* base, const char* str);
@@ -496,6 +497,7 @@ class Audio {
     audiolib::fft_items_t  m_fft_items;
     audiolib::i2s_items_t  m_i2s_items;
     audiolib::resampler_t  m_resampler;
+    audiolib::info_queue_t m_info_queue;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
@@ -555,28 +557,44 @@ class Audio {
         char* p = result.get();
         if (!p) return false;
         std::snprintf(p, len + 1, fmt, safe_arg(std::forward<Args>(args))...);
-        msg_t i = {0};
-        i.msg = result.c_get();
-        i.e = e;
-        i.s = eventStr[e];
-        i.arg1 = extract_last_number(result.c_get());
-        i.i2s_num = instance.m_i2s_items.i2s_num;
-        audio_info_callback(i);
+        // msg_t i = {0};
+        // i.msg = result.c_get();
+        // i.e = e;
+        // i.s = eventStr[e];
+        // i.arg1 = extract_last_number(result.c_get());
+        // i.i2s_num = instance.m_i2s_items.i2s_num;
+        // audio_info_callback(i);
+
+        instance.m_info_queue.msg.emplace_front(result);
+        instance.m_info_queue.e.emplace_front((uint8_t) e);
+        instance.m_info_queue.s.emplace_front(eventStr[e]);
+        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()));
+        instance.m_info_queue.arg2.emplace_front(0);
+        instance.m_info_queue.vec.emplace_front(0,0);
+
         result.reset();
         return true;
     }
 
     static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
         if (!audio_info_callback) return false;
+        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
         ps_ptr<char> apic;
         apic.assignf("APIC found at pos %lu", v[0]);
-        msg_t i;
-        i.msg = apic.c_get();
-        i.e = e;
-        i.s = eventStr[e];
-        i.i2s_num = instance.m_i2s_items.i2s_num;
-        i.vec = v;
-        audio_info_callback(i);
+        // msg_t i;
+        // i.msg = apic.c_get();
+        // i.e = e;
+        // i.s = eventStr[e];
+        // i.i2s_num = instance.m_i2s_items.i2s_num;
+        // i.vec = v;
+        // audio_info_callback(i);
+
+        instance.m_info_queue.msg.emplace_front(apic);
+        instance.m_info_queue.e.emplace_front((uint8_t) e);
+        instance.m_info_queue.s.emplace_front(eventStr[e]);
+        instance.m_info_queue.arg1.emplace_front(0);
+        instance.m_info_queue.arg2.emplace_front(0);
+        instance.m_info_queue.vec.emplace_front(v);
         return true;
     }
     //----------------------------------------------------------------------------------------------------------------------

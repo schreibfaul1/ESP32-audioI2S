@@ -3457,6 +3457,7 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
+    if(get_info()) return;
     if (!m_f_running) return;
 
     if (m_f_firstLoop) {
@@ -7428,6 +7429,30 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
     }
 
     return presumed_codec; // all other (native FLAC or WAV)
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::get_info() {
+    if (m_info_queue.e.size() == 0) return false;
+    msg_t i = {0};
+    while (m_info_queue.e.size()) {
+        ps_ptr<char> msg = m_info_queue.msg.back();
+        i.msg = msg.c_get();
+        i.e = (event_t)m_info_queue.e.back();
+        ps_ptr<char> evtstr = m_info_queue.s.back();
+        i.s = evtstr.c_get();
+        i.arg1 = m_info_queue.arg1.back();
+        i.arg2 = m_info_queue.arg2.back();
+        i.i2s_num = m_i2s_items.i2s_num;
+        i.vec = m_info_queue.vec.back();
+
+        m_info_queue.msg.pop_back();
+        m_info_queue.e.pop_back();
+        m_info_queue.arg1.pop_back();
+        m_info_queue.arg2.pop_back();
+        m_info_queue.vec.pop_back();
+        audio_info_callback(i);
+    }
+    return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::strlower(char* str) {

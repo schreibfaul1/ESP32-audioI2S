@@ -1,6 +1,7 @@
 #pragma once
 #include "psram_unique_ptr.hpp"
 #include <cstdint>
+#include <deque>
 #include <stddef.h>
 
 // this file contains definitions of various structs used in Audio lib
@@ -338,18 +339,18 @@ struct fnsy_t { // used in findNextSync
 };
 
 struct audioItems_t {
-    float    gain_ls_db = 0.0;   // lowshelf
-    float    gain_peq_db = 0.0;  // peakingEQ
-    float    gain_hs_db = 0.0;   // highshelf
-    float    pre_gain = 0.0;     // correction factor for level adjustment
-    float    coeffs[3][5] = {0};
-    float    state_biquad[3][4] = {0};
-    uint8_t  volume = 0;
-    uint8_t  volume_steps = 21;
-    float    cur_volume = 0.0f;
-    float    limiter[2] = {0};
-    float    balance = 0.0f; // -16.0 dB left ... 0 ... -16 db right
-    bool     mute = false;
+    float   gain_ls_db = 0.0;  // lowshelf
+    float   gain_peq_db = 0.0; // peakingEQ
+    float   gain_hs_db = 0.0;  // highshelf
+    float   pre_gain = 0.0;    // correction factor for level adjustment
+    float   coeffs[3][5] = {0};
+    float   state_biquad[3][4] = {0};
+    uint8_t volume = 0;
+    uint8_t volume_steps = 21;
+    float   cur_volume = 0.0f;
+    float   limiter[2] = {0};
+    float   balance = 0.0f; // -16.0 dB left ... 0 ... -16 db right
+    bool    mute = false;
 };
 
 #define DMA_DESC_NUM  32  // number of I2S DMA buffer
@@ -416,9 +417,18 @@ struct resampler_t {
     uint32_t                outFrames = 0;
     BiquadCoeffs            g_lpCoeffs;
     // Condition for continuous interpolation between frames
-    int32_t lastL = 0;  // Last left sample from previous frame
-    int32_t lastR = 0;  // Last right sample from previous frame
-    bool hasLast = false;  // First frame has no “last”
+    int32_t lastL = 0;       // Last left sample from previous frame
+    int32_t lastR = 0;       // Last right sample from previous frame
+    bool    hasLast = false; // First frame has no “last”
+};
+
+struct info_queue_t {
+    std::deque<ps_ptr<char>>          msg = {};
+    std::deque<ps_ptr<char>>          s = {};
+    std::deque<uint8_t>               e = {}; // event type
+    std::deque<int32_t>               arg1 = {};
+    std::deque<int32_t>               arg2 = {};
+    std::deque<std::vector<uint32_t>> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
 };
 
 } // namespace audiolib
