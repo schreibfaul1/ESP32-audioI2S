@@ -7447,6 +7447,7 @@ bool Audio::get_info() {
 
         m_info_queue.msg.pop_back();
         m_info_queue.e.pop_back();
+        m_info_queue.s.pop_back();
         m_info_queue.arg1.pop_back();
         m_info_queue.arg2.pop_back();
         m_info_queue.vec.pop_back();
