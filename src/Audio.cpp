@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5l                                                                                                                            ";
-/*  Updated on: Mar 30, 2026
+    Version 3.4.5m                                                                                                                            ";
+/*  Updated on: Apr 14, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3457,6 +3457,7 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
+    if(get_info()) return;
     if (!m_f_running) return;
 
     if (m_f_firstLoop) {
@@ -6172,7 +6173,7 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
         return 0;
     }
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
-    AUDIO_LOG_INFO("rangeStart: %lu, audioFileSize: %li, len: %lu, %lu", __LINE__, rangeStart, m_audioFileSize, UINT16_MAX);
+    AUDIO_LOG_DEBUG("rangeStart: %lu, audioFileSize: %li, len: %lu", rangeStart, m_audioFileSize, UINT16_MAX);
     audioFileSeek(rangeStart, UINT16_MAX);
     audioFileRead(buff, UINT16_MAX);
     int32_t pos = specialIndexOfLast(buff, "OggS", UINT16_MAX);
@@ -7428,6 +7429,31 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
     }
 
     return presumed_codec; // all other (native FLAC or WAV)
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::get_info() {
+    if (m_info_queue.e.size() == 0) return false;
+    msg_t i = {0};
+    while (m_info_queue.e.size()) {
+        ps_ptr<char> msg = m_info_queue.msg.back();
+        i.msg = msg.c_get();
+        i.e = (event_t)m_info_queue.e.back();
+        ps_ptr<char> evtstr = m_info_queue.s.back();
+        i.s = evtstr.c_get();
+        i.arg1 = m_info_queue.arg1.back();
+        i.arg2 = m_info_queue.arg2.back();
+        i.i2s_num = m_i2s_items.i2s_num;
+        i.vec = m_info_queue.vec.back();
+
+        m_info_queue.msg.pop_back();
+        m_info_queue.e.pop_back();
+        m_info_queue.s.pop_back();
+        m_info_queue.arg1.pop_back();
+        m_info_queue.arg2.pop_back();
+        m_info_queue.vec.pop_back();
+        audio_info_callback(i);
+    }
+    return true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::strlower(char* str) {
