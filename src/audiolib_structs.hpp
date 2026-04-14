@@ -429,6 +429,8 @@ struct info_queue_t {
     std::deque<int32_t>               arg1 = {};
     std::deque<int32_t>               arg2 = {};
     std::deque<std::vector<uint32_t>> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
+
+    void reset() { *this = info_queue_t{}; }
 };
 
 } // namespace audiolib

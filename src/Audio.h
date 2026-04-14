@@ -564,13 +564,14 @@ class Audio {
         // i.arg1 = extract_last_number(result.c_get());
         // i.i2s_num = instance.m_i2s_items.i2s_num;
         // audio_info_callback(i);
-
+        std::vector<uint32_t>v; // dummy
+        v.push_back(0);
         instance.m_info_queue.msg.emplace_front(result);
-        instance.m_info_queue.e.emplace_front((uint8_t) e);
         instance.m_info_queue.s.emplace_front(eventStr[e]);
         instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()));
         instance.m_info_queue.arg2.emplace_front(0);
-        instance.m_info_queue.vec.emplace_front(0,0);
+        instance.m_info_queue.vec.emplace_front(v);
+        instance.m_info_queue.e.emplace_front((uint8_t) e);
 
         result.reset();
         return true;
@@ -590,11 +591,11 @@ class Audio {
         // audio_info_callback(i);
 
         instance.m_info_queue.msg.emplace_front(apic);
-        instance.m_info_queue.e.emplace_front((uint8_t) e);
         instance.m_info_queue.s.emplace_front(eventStr[e]);
         instance.m_info_queue.arg1.emplace_front(0);
         instance.m_info_queue.arg2.emplace_front(0);
         instance.m_info_queue.vec.emplace_front(v);
+        instance.m_info_queue.e.emplace_front((uint8_t) e);
         return true;
     }
     //----------------------------------------------------------------------------------------------------------------------

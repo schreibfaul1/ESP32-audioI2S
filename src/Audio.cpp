@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5l                                                                                                                            ";
-/*  Updated on: Mar 30, 2026
+    Version 3.4.5m                                                                                                                            ";
+/*  Updated on: Apr 14, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6173,7 +6173,7 @@ uint64_t Audio::getLastGranulePosition(uint8_t codec) {
         return 0;
     }
     int rangeStart = m_audioFileSize - UINT16_MAX - 1;
-    AUDIO_LOG_INFO("rangeStart: %lu, audioFileSize: %li, len: %lu, %lu", __LINE__, rangeStart, m_audioFileSize, UINT16_MAX);
+    AUDIO_LOG_DEBUG("rangeStart: %lu, audioFileSize: %li, len: %lu", rangeStart, m_audioFileSize, UINT16_MAX);
     audioFileSeek(rangeStart, UINT16_MAX);
     audioFileRead(buff, UINT16_MAX);
     int32_t pos = specialIndexOfLast(buff, "OggS", UINT16_MAX);
