@@ -2,7 +2,7 @@
  *  aac_decoder.cpp
  *  faad2 - ESP32 adaptation
  *  Created on: 12.09.2023
- *  Updated on: 26.03.2026
+ *  Updated on: 23.04.2026
  */
 
 #include "aac_decoder.h"
@@ -47,7 +47,11 @@ bool AACDecoder::isValid() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t AACDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     const int MIN_ADTS_HEADER_SIZE = 7;
-    auto      validate = [](const uint8_t* buf) -> bool { // check the ADTS header for validity
+    if (buf == nullptr || nBytes < MIN_ADTS_HEADER_SIZE) { return -1; }
+
+    auto validate = [MIN_ADTS_HEADER_SIZE](const uint8_t* buf, int32_t bytesAvailable) -> bool { // check the ADTS header for validity
+        if (bytesAvailable < MIN_ADTS_HEADER_SIZE) { return false; }
+
         // Layer (bits 14-15) must be 00
         if ((buf[1] & 0x06) != 0x00) { return false; }
 
@@ -63,14 +67,17 @@ int32_t AACDecoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
     };
 
     /* find byte-aligned syncword (12 bits = 0xFFF) */
-    for (int i = 0; i < nBytes - 1; i++) {
+    for (int32_t i = 0; i <= nBytes - MIN_ADTS_HEADER_SIZE; i++) {
         if ((buf[i + 0] & SYNCWORDH) == SYNCWORDH && (buf[i + 1] & SYNCWORDL) == SYNCWORDL) {
+            int32_t bytesAvailable = nBytes - i;
+            if (!validate(&buf[i], bytesAvailable)) { continue; }
+
             int frame_length = ((buf[i + 3] & 0x03) << 11) | (buf[i + 4] << 3) | ((buf[i + 5] & 0xE0) >> 5);
-            if (i + frame_length + MIN_ADTS_HEADER_SIZE > nBytes) {
+            if (i + frame_length + 1 >= nBytes) {
                 return -1; // Puffergrenze überschritten, kein gültiger Header
             }
             /* find a second byte-aligned syncword (12 bits = 0xFFF) */
-            if ((buf[i + frame_length + 0] & SYNCWORDH) == SYNCWORDH && (buf[i + frame_length + 1] & SYNCWORDL) == SYNCWORDL) { return validate(&buf[i]) ? i : -1; }
+            if ((buf[i + frame_length + 0] & SYNCWORDH) == SYNCWORDH && (buf[i + frame_length + 1] & SYNCWORDL) == SYNCWORDL) { return i; }
         }
     }
 
