@@ -2,13 +2,13 @@
  * flac_decoder.h
  *
  * Created on: Jul 03,2020
- * Updated on: Mar 29,2025
+ * Updated on: Apr 25,2025
  *
  *      Author: wolle
  *
  *  Restrictions:
  *  blocksize must not exceed 24576 bytes
- *  bits per sample must be 8 or 16
+ *  bits per sample must be 8, 16, 24 or 32
  *  num Channels must be 1 or 2
  *
  *

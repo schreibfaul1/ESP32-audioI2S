@@ -3,24 +3,43 @@
  * Java source code from https://www.nayuki.io/page/simple-flac-implementation
  * adapted to ESP32
  *
- * Created on: 03.07,2020
- * Updated on: 14.02,2026
+ * Created on: Jul 03,2020
+ * Updated on: Apr 25,2025
  *
  * Author: Wolle
  *
  */
 #include "flac_decoder.h"
 
+namespace {
+constexpr uint32_t FLAC_MAX_VORBIS_VENDOR_LENGTH = 1024;
+constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
 //----------------------------------------------------------------------------------------------------------------------
 
 bool FlacDecoder::init() {
-    if (!FLACFrameHeader.alloc_array(1)) {
+    if (!FLACFrameHeader.alloc_array(1, "FLACFrameHeader")) {
+        FLAC_LOG_ERROR("not enough memory to allocate FLAC frame header");
         m_valid = false;
         return false;
     }
-    if (!FLACMetadataBlock.alloc_array(1)) {
+    if (!FLACFrameHeader.valid()) {
+        FLAC_LOG_ERROR("FLAC frame header allocation returned invalid pointer");
+        m_valid = false;
+        return false;
+    }
+    if (!FLACMetadataBlock.alloc_array(1, "FLACMetadataBlock")) {
+        FLAC_LOG_ERROR("not enough memory to allocate FLAC metadata block");
+        FLACFrameHeader.reset();
+        m_valid = false;
+        return false;
+    }
+    if (!FLACMetadataBlock.valid()) {
+        FLAC_LOG_ERROR("FLAC metadata block allocation returned invalid pointer");
+        FLACFrameHeader.reset();
         m_valid = false;
         return false;
     }
@@ -454,6 +473,21 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
     uint8_t                   bt = 0;
     std::vector<ps_ptr<char>> vb(8); // vorbis comment
 
+    auto readLE32 = [](const uint8_t* p) -> uint32_t {
+        return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    };
+
+    auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
+        if (commentLength < valueOffset) return false;
+        return (specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
+    };
+
+    auto assignVorbisValue = [](ps_ptr<char>& dst, const uint8_t* comment, uint32_t commentLength, uint32_t valueOffset) -> bool {
+        if (commentLength < valueOffset) return false;
+        dst.assign((const char*)(comment + valueOffset), min((uint32_t)127, commentLength - valueOffset));
+        return true;
+    };
+
     enum { streamInfo, padding, application, seekTable, vorbisComment, cueSheet, picture };
 
     while (true) {
@@ -554,71 +588,99 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
 
-            case vorbisComment: // https://www.xiph.org/vorbis/doc/v-comment.html
-                vendorLength = *(inbuf + pos + 3) << 24;
-                vendorLength += *(inbuf + pos + 2) << 16;
-                vendorLength += *(inbuf + pos + 1) << 8;
-                vendorLength += *(inbuf + pos + 0);
-                if (vendorLength > 1024) { FLAC_LOG_INFO("vendorLength > 1024 bytes"); }
-                m_flacVendorString.alloc(vendorLength + 1);
+            case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
+                if (blockLength < 8 || blockLength > nBytes) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: %i, bytes available: %i", blockLength, nBytes);
+                    return FLAC_ERR;
+                }
+
+                const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
+                vendorLength = readLE32(inbuf + pos);
+                if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
+                    FLAC_LOG_ERROR("Flac Vorbis vendor string too long: %i bytes, max: %i", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
+                    return FLAC_ERR;
+                }
+                if (vendorLength > (uint32_t)blockLength - 8) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: %i, block length: %i", vendorLength, blockLength);
+                    return FLAC_ERR;
+                }
+
+                if (!m_flacVendorString.alloc(vendorLength + 1, "m_flacVendorString")) {
+                    m_valid = false;
+                    return FLAC_ERR;
+                }
                 m_flacVendorString.clear();
                 m_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
                 // FLAC_LOG_VERBOSE("Vendor: %s", m_flacVendorString.c_get());
 
                 pos += 4 + vendorLength;
-                userCommentListLength = *(inbuf + pos + 3) << 24;
-                userCommentListLength += *(inbuf + pos + 2) << 16;
-                userCommentListLength += *(inbuf + pos + 1) << 8;
-                userCommentListLength += *(inbuf + pos + 0);
+                userCommentListLength = readLE32(inbuf + pos);
 
                 pos += 4;
                 commemtStringLength = 0;
-                for (int32_t i = 0; i < userCommentListLength; i++) {
-                    commemtStringLength = *(inbuf + pos + 3) << 24;
-                    commemtStringLength += *(inbuf + pos + 2) << 16;
-                    commemtStringLength += *(inbuf + pos + 1) << 8;
-                    commemtStringLength += *(inbuf + pos + 0);
+                for (uint32_t i = 0; i < userCommentListLength; i++) {
+                    if ((uint32_t)pos + 4 > vorbisBlockEnd) {
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: %i", userCommentListLength);
+                        return FLAC_ERR;
+                    }
 
-                    if ((specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "title", 6) == 0)) {
-                        vb[0].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    commemtStringLength = readLE32(inbuf + pos);
+                    if (commemtStringLength > FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH) {
+                        FLAC_LOG_ERROR("Flac Vorbis comment string too long: %i bytes, max: %i", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
+                        return FLAC_ERR;
+                    }
+                    if (commemtStringLength > vorbisBlockEnd - ((uint32_t)pos + 4)) {
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: %i", commemtStringLength);
+                        return FLAC_ERR;
+                    }
+
+                    const uint8_t* comment = inbuf + pos + 4;
+
+                    if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
+                        assignVorbisValue(vb[0], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Title: %s", vb[0].c_get());
                         // FLAC_LOG_VERBOSE("TITLE: %s", vb[0].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)) {
-                        vb[1].assign((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
+                    if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
+                        assignVorbisValue(vb[1], comment, commemtStringLength, 7);
                         audio.info(audio, Audio::evt_id3data, "Artist: %s", vb[1].c_get());
                         // FLAC_LOG_VERBOSE("ARTIST: %s", vb[1].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)) {
-                        vb[2].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
+                        assignVorbisValue(vb[2], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Genre: %s", vb[2].c_get());
                         FLAC_LOG_VERBOSE("GENRE: %s", vb[2].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "album", 6) == 0)) {
-                        vb[3].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
+                        assignVorbisValue(vb[3], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Album: %s", vb[3].c_get());
                         FLAC_LOG_VERBOSE("ALBUM: %s", vb[3].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)) {
-                        vb[4].assign((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
+                    if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
+                        assignVorbisValue(vb[4], comment, commemtStringLength, 8);
                         audio.info(audio, Audio::evt_id3data, "Comments: %s", vb[4].c_get());
                         FLAC_LOG_VERBOSE("COMMENT: %s", vb[4].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (specialIndexOf(inbuf + pos + 4, "date", 5) == 0)) {
-                        vb[5].assign((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
+                    if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
+                        assignVorbisValue(vb[5], comment, commemtStringLength, 5);
                         audio.info(audio, Audio::evt_id3data, "Date: %s", vb[5].c_get());
                         FLAC_LOG_VERBOSE("DATE: %s", vb[5].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)) {
-                        vb[6].assign((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
+                    if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
+                        assignVorbisValue(vb[6], comment, commemtStringLength, 12);
                         audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", vb[6].c_get());
                         FLAC_LOG_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)) {
+                    if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
+                        if (commemtStringLength < 23) {
+                            FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: %i", commemtStringLength);
+                            return FLAC_ERR;
+                        }
                         FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
                         m_flacBlockPicLen = commemtStringLength - 23;
                         m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
-                        m_flacBlockPicLenUntilFrameEnd = nBytes - (pos + 23);
+                        m_flacBlockPicLenUntilFrameEnd = 0;
+                        if ((uint32_t)nBytes > (uint32_t)pos + 23) m_flacBlockPicLenUntilFrameEnd = (uint32_t)nBytes - ((uint32_t)pos + 23);
                         if (m_flacBlockPicLen < m_flacBlockPicLenUntilFrameEnd) m_flacBlockPicLenUntilFrameEnd = m_flacBlockPicLen;
                         m_flacRemainBlockPicLen = m_flacBlockPicLen - m_flacBlockPicLenUntilFrameEnd;
                         // FLAC_LOG_INFO("s_flacBlockPicPos %i, m_flacBlockPicLen %i", m_flacBlockPicPos, m_flacBlockPicLen);
@@ -647,6 +709,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 if (!m_flacBlockPicLen && m_flacSegmTableVec.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
+            }
 
             case picture:
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
@@ -922,6 +985,25 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         FLAC_LOG_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels);
         return FLAC_STOP;
     }
+    if (FLACMetadataBlock->numChannels > FLAC_MAX_CHANNELS) {
+        FLAC_LOG_ERROR("Flac unsupported channel count: %i, max: %i", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS);
+        return FLAC_STOP;
+    }
+    if (FLACFrameHeader->chanAsgn <= 7) {
+        uint8_t frameChannels = FLACFrameHeader->chanAsgn + 1;
+        if (frameChannels != FLACMetadataBlock->numChannels) {
+            FLAC_LOG_ERROR("Flac channel assignment mismatch, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
+    } else if (FLACFrameHeader->chanAsgn <= 10) {
+        if (FLACMetadataBlock->numChannels != 2) {
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
+    } else {
+        FLAC_LOG_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
+        return FLAC_ERR;
+    }
     if (!FLACMetadataBlock->bitsPerSample) {
         if (FLACFrameHeader->sampleSizeCode == 1) FLACMetadataBlock->bitsPerSample = 8;
         if (FLACFrameHeader->sampleSizeCode == 2) FLACMetadataBlock->bitsPerSample = 12;
@@ -964,21 +1046,26 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     }
     count--;
     for (int32_t i = 0; i < count; i++) readUint(8, bytesLeft);
-    m_numOfOutSamples = 0;
+    uint32_t decodedBlockSize = 0;
     if (FLACFrameHeader->blockSizeCode == 1)
-        m_numOfOutSamples = 192;
+        decodedBlockSize = 192;
     else if (2 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 5)
-        m_numOfOutSamples = 576 << (FLACFrameHeader->blockSizeCode - 2);
+        decodedBlockSize = 576U << (FLACFrameHeader->blockSizeCode - 2);
     else if (FLACFrameHeader->blockSizeCode == 6)
-        m_numOfOutSamples = readUint(8, bytesLeft) + 1;
+        decodedBlockSize = readUint(8, bytesLeft) + 1;
     else if (FLACFrameHeader->blockSizeCode == 7)
-        m_numOfOutSamples = readUint(16, bytesLeft) + 1;
+        decodedBlockSize = readUint(16, bytesLeft) + 1;
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
-        m_numOfOutSamples = 256 << (FLACFrameHeader->blockSizeCode - 8);
+        decodedBlockSize = 256U << (FLACFrameHeader->blockSizeCode - 8);
     else {
         FLAC_LOG_ERROR("Flac, reserved blocksize unsupported, block size code: %i", FLACFrameHeader->blockSizeCode);
         return FLAC_ERR;
     }
+    if (decodedBlockSize == 0 || decodedBlockSize > FLAC_MAX_BLOCKSIZE) {
+        FLAC_LOG_ERROR("Flac block size too large: %i samples, max: %i", decodedBlockSize, FLAC_MAX_BLOCKSIZE);
+        return FLAC_ERR;
+    }
+    m_numOfOutSamples = decodedBlockSize;
 
     if (FLACFrameHeader->sampleRateCode == 12)
         readUint(8, bytesLeft);
@@ -987,12 +1074,11 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
 
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
         if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
-        m_samplesBuffer[i].calloc_array(m_numOfOutSamples);
-        if (!m_samplesBuffer[i].valid()) { // ps_ptr<T> should overload operator bool()
-            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffers");
+        if (!m_samplesBuffer[i].calloc_array(m_numOfOutSamples, "m_samplesBuffer") || !m_samplesBuffer[i].valid()) {
+            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffer %i, samples: %i", i, m_numOfOutSamples);
             m_samplesBuffer[i].reset();
             m_valid = false;
-            return false;
+            return FLAC_ERR;
         }
     }
 
@@ -1054,6 +1140,10 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
     if (FLACFrameHeader->chanAsgn <= 7) {
         for (int32_t ch = 0; ch < FLACMetadataBlock->numChannels; ch++) decodeSubframe(FLACMetadataBlock->bitsPerSample, ch, bytesLeft);
     } else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
+        if (FLACMetadataBlock->numChannels != 2) {
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
 
@@ -1258,19 +1348,22 @@ void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
-    int32_t result = 0;                   // seek for str in buffer or in header up to baselen, not nullterninated
-    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
-    for (int32_t i = 0; i < baselen - strlen(str); i++) {
-        result = i;
-        for (int32_t j = 0; j < strlen(str) + exact; j++) {
-            if (*(base + i + j) != *(str + j)) {
-                result = -1;
-                break;
-            }
-        }
-        if (result >= 0) break;
+    if (!base || !str || baselen < 0) return -1; // seek for str in buffer or in header up to baselen, not nullterminated
+
+    const size_t haystackLen = (size_t)baselen;
+    const size_t needleLen = strlen(str);
+    const size_t matchLen = needleLen + (exact ? 1U : 0U); // if exact == true search string must include "\0" at the end
+
+    if (matchLen > haystackLen) return -1;
+    if (matchLen == 0) return 0;
+
+    const size_t lastStart = haystackLen - matchLen;
+    for (size_t i = 0; i <= lastStart; i++) {
+        size_t j = 0;
+        while (j < matchLen && base[i + j] == (uint8_t)str[j]) j++;
+        if (j == matchLen) return (int32_t)i;
     }
-    return result;
+    return -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* FlacDecoder::arg1() {
