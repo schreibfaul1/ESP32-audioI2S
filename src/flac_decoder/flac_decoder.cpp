@@ -1028,21 +1028,26 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     }
     count--;
     for (int32_t i = 0; i < count; i++) readUint(8, bytesLeft);
-    m_numOfOutSamples = 0;
+    uint32_t decodedBlockSize = 0;
     if (FLACFrameHeader->blockSizeCode == 1)
-        m_numOfOutSamples = 192;
+        decodedBlockSize = 192;
     else if (2 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 5)
-        m_numOfOutSamples = 576 << (FLACFrameHeader->blockSizeCode - 2);
+        decodedBlockSize = 576U << (FLACFrameHeader->blockSizeCode - 2);
     else if (FLACFrameHeader->blockSizeCode == 6)
-        m_numOfOutSamples = readUint(8, bytesLeft) + 1;
+        decodedBlockSize = readUint(8, bytesLeft) + 1;
     else if (FLACFrameHeader->blockSizeCode == 7)
-        m_numOfOutSamples = readUint(16, bytesLeft) + 1;
+        decodedBlockSize = readUint(16, bytesLeft) + 1;
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
-        m_numOfOutSamples = 256 << (FLACFrameHeader->blockSizeCode - 8);
+        decodedBlockSize = 256U << (FLACFrameHeader->blockSizeCode - 8);
     else {
         FLAC_LOG_ERROR("Flac, reserved blocksize unsupported, block size code: %i", FLACFrameHeader->blockSizeCode);
         return FLAC_ERR;
     }
+    if (decodedBlockSize == 0 || decodedBlockSize > FLAC_MAX_BLOCKSIZE) {
+        FLAC_LOG_ERROR("Flac block size too large: %i samples, max: %i", decodedBlockSize, FLAC_MAX_BLOCKSIZE);
+        return FLAC_ERR;
+    }
+    m_numOfOutSamples = decodedBlockSize;
 
     if (FLACFrameHeader->sampleRateCode == 12)
         readUint(8, bytesLeft);
