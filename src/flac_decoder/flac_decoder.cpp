@@ -1331,19 +1331,22 @@ void FlacDecoder::restoreLinearPrediction(uint8_t ch, uint8_t shift) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 int32_t FlacDecoder::specialIndexOf(uint8_t* base, const char* str, int32_t baselen, bool exact) {
-    int32_t result = 0;                   // seek for str in buffer or in header up to baselen, not nullterninated
-    if (strlen(str) > baselen) return -1; // if exact == true seekstr in buffer must have "\0" at the end
-    for (int32_t i = 0; i < baselen - strlen(str); i++) {
-        result = i;
-        for (int32_t j = 0; j < strlen(str) + exact; j++) {
-            if (*(base + i + j) != *(str + j)) {
-                result = -1;
-                break;
-            }
-        }
-        if (result >= 0) break;
+    if (!base || !str || baselen < 0) return -1; // seek for str in buffer or in header up to baselen, not nullterminated
+
+    const size_t haystackLen = (size_t)baselen;
+    const size_t needleLen = strlen(str);
+    const size_t matchLen = needleLen + (exact ? 1U : 0U); // if exact == true search string must include "\0" at the end
+
+    if (matchLen > haystackLen) return -1;
+    if (matchLen == 0) return 0;
+
+    const size_t lastStart = haystackLen - matchLen;
+    for (size_t i = 0; i <= lastStart; i++) {
+        size_t j = 0;
+        while (j < matchLen && base[i + j] == (uint8_t)str[j]) j++;
+        if (j == matchLen) return (int32_t)i;
     }
-    return result;
+    return -1;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* FlacDecoder::arg1() {
