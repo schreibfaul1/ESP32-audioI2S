@@ -967,6 +967,25 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         FLAC_LOG_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels);
         return FLAC_STOP;
     }
+    if (FLACMetadataBlock->numChannels > FLAC_MAX_CHANNELS) {
+        FLAC_LOG_ERROR("Flac unsupported channel count: %i, max: %i", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS);
+        return FLAC_STOP;
+    }
+    if (FLACFrameHeader->chanAsgn <= 7) {
+        uint8_t frameChannels = FLACFrameHeader->chanAsgn + 1;
+        if (frameChannels != FLACMetadataBlock->numChannels) {
+            FLAC_LOG_ERROR("Flac channel assignment mismatch, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
+    } else if (FLACFrameHeader->chanAsgn <= 10) {
+        if (FLACMetadataBlock->numChannels != 2) {
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
+    } else {
+        FLAC_LOG_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
+        return FLAC_ERR;
+    }
     if (!FLACMetadataBlock->bitsPerSample) {
         if (FLACFrameHeader->sampleSizeCode == 1) FLACMetadataBlock->bitsPerSample = 8;
         if (FLACFrameHeader->sampleSizeCode == 2) FLACMetadataBlock->bitsPerSample = 12;
@@ -1099,6 +1118,10 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
     if (FLACFrameHeader->chanAsgn <= 7) {
         for (int32_t ch = 0; ch < FLACMetadataBlock->numChannels; ch++) decodeSubframe(FLACMetadataBlock->bitsPerSample, ch, bytesLeft);
     } else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
+        if (FLACMetadataBlock->numChannels != 2) {
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            return FLAC_ERR;
+        }
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 0 : 1), 1, bytesLeft);
 
