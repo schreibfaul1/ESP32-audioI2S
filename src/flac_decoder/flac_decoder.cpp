@@ -672,6 +672,10 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                         FLAC_LOG_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
+                        if (commemtStringLength < 23) {
+                            FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: %i", commemtStringLength);
+                            return FLAC_ERR;
+                        }
                         FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
                         m_flacBlockPicLen = commemtStringLength - 23;
                         m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
