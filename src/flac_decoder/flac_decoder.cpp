@@ -11,6 +11,10 @@
  */
 #include "flac_decoder.h"
 
+namespace {
+constexpr uint32_t FLAC_MAX_VORBIS_VENDOR_LENGTH = 1024;
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 //          FLAC INI SECTION
 //----------------------------------------------------------------------------------------------------------------------
@@ -454,6 +458,10 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
     uint8_t                   bt = 0;
     std::vector<ps_ptr<char>> vb(8); // vorbis comment
 
+    auto readLE32 = [](const uint8_t* p) -> uint32_t {
+        return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    };
+
     enum { streamInfo, padding, application, seekTable, vorbisComment, cueSheet, picture };
 
     while (true) {
@@ -555,21 +563,31 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 break;
 
             case vorbisComment: // https://www.xiph.org/vorbis/doc/v-comment.html
-                vendorLength = *(inbuf + pos + 3) << 24;
-                vendorLength += *(inbuf + pos + 2) << 16;
-                vendorLength += *(inbuf + pos + 1) << 8;
-                vendorLength += *(inbuf + pos + 0);
-                if (vendorLength > 1024) { FLAC_LOG_INFO("vendorLength > 1024 bytes"); }
-                m_flacVendorString.alloc(vendorLength + 1);
+                if (blockLength < 8 || blockLength > nBytes) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: %i, bytes available: %i", blockLength, nBytes);
+                    return FLAC_ERR;
+                }
+
+                vendorLength = readLE32(inbuf + pos);
+                if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
+                    FLAC_LOG_ERROR("Flac Vorbis vendor string too long: %i bytes, max: %i", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
+                    return FLAC_ERR;
+                }
+                if (vendorLength > (uint32_t)blockLength - 8) {
+                    FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: %i, block length: %i", vendorLength, blockLength);
+                    return FLAC_ERR;
+                }
+
+                if (!m_flacVendorString.alloc(vendorLength + 1, "m_flacVendorString")) {
+                    m_valid = false;
+                    return FLAC_ERR;
+                }
                 m_flacVendorString.clear();
                 m_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
                 // FLAC_LOG_VERBOSE("Vendor: %s", m_flacVendorString.c_get());
 
                 pos += 4 + vendorLength;
-                userCommentListLength = *(inbuf + pos + 3) << 24;
-                userCommentListLength += *(inbuf + pos + 2) << 16;
-                userCommentListLength += *(inbuf + pos + 1) << 8;
-                userCommentListLength += *(inbuf + pos + 0);
+                userCommentListLength = readLE32(inbuf + pos);
 
                 pos += 4;
                 commemtStringLength = 0;
