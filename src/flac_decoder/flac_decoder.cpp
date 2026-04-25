@@ -13,6 +13,7 @@
 
 namespace {
 constexpr uint32_t FLAC_MAX_VORBIS_VENDOR_LENGTH = 1024;
+constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -462,6 +463,17 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
         return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
     };
 
+    auto isVorbisField = [&](const uint8_t* comment, uint32_t commentLength, const char* upper, const char* lower, uint32_t valueOffset) -> bool {
+        if (commentLength < valueOffset) return false;
+        return (specialIndexOf((uint8_t*)comment, upper, valueOffset) == 0) || (specialIndexOf((uint8_t*)comment, lower, valueOffset) == 0);
+    };
+
+    auto assignVorbisValue = [](ps_ptr<char>& dst, const uint8_t* comment, uint32_t commentLength, uint32_t valueOffset) -> bool {
+        if (commentLength < valueOffset) return false;
+        dst.assign((const char*)(comment + valueOffset), min((uint32_t)127, commentLength - valueOffset));
+        return true;
+    };
+
     enum { streamInfo, padding, application, seekTable, vorbisComment, cueSheet, picture };
 
     while (true) {
@@ -562,12 +574,13 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
 
-            case vorbisComment: // https://www.xiph.org/vorbis/doc/v-comment.html
+            case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
                 if (blockLength < 8 || blockLength > nBytes) {
                     FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: %i, bytes available: %i", blockLength, nBytes);
                     return FLAC_ERR;
                 }
 
+                const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
                 vendorLength = readLE32(inbuf + pos);
                 if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
                     FLAC_LOG_ERROR("Flac Vorbis vendor string too long: %i bytes, max: %i", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
@@ -591,52 +604,65 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
                 pos += 4;
                 commemtStringLength = 0;
-                for (int32_t i = 0; i < userCommentListLength; i++) {
-                    commemtStringLength = *(inbuf + pos + 3) << 24;
-                    commemtStringLength += *(inbuf + pos + 2) << 16;
-                    commemtStringLength += *(inbuf + pos + 1) << 8;
-                    commemtStringLength += *(inbuf + pos + 0);
+                for (uint32_t i = 0; i < userCommentListLength; i++) {
+                    if ((uint32_t)pos + 4 > vorbisBlockEnd) {
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: %i", userCommentListLength);
+                        return FLAC_ERR;
+                    }
 
-                    if ((specialIndexOf(inbuf + pos + 4, "TITLE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "title", 6) == 0)) {
-                        vb[0].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    commemtStringLength = readLE32(inbuf + pos);
+                    if (commemtStringLength > FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH) {
+                        FLAC_LOG_ERROR("Flac Vorbis comment string too long: %i bytes, max: %i", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
+                        return FLAC_ERR;
+                    }
+                    if (commemtStringLength > vorbisBlockEnd - ((uint32_t)pos + 4)) {
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: %i", commemtStringLength);
+                        return FLAC_ERR;
+                    }
+
+                    const uint8_t* comment = inbuf + pos + 4;
+
+                    if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
+                        assignVorbisValue(vb[0], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Title: %s", vb[0].c_get());
                         // FLAC_LOG_VERBOSE("TITLE: %s", vb[0].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "ARTIST", 7) == 0) || (specialIndexOf(inbuf + pos + 4, "artist", 7) == 0)) {
-                        vb[1].assign((const char*)(inbuf + pos + 4 + 7), min((uint32_t)127, commemtStringLength - 7));
+                    if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
+                        assignVorbisValue(vb[1], comment, commemtStringLength, 7);
                         audio.info(audio, Audio::evt_id3data, "Artist: %s", vb[1].c_get());
                         // FLAC_LOG_VERBOSE("ARTIST: %s", vb[1].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "GENRE", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "genre", 6) == 0)) {
-                        vb[2].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
+                        assignVorbisValue(vb[2], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Genre: %s", vb[2].c_get());
                         FLAC_LOG_VERBOSE("GENRE: %s", vb[2].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "ALBUM", 6) == 0) || (specialIndexOf(inbuf + pos + 4, "album", 6) == 0)) {
-                        vb[3].assign((const char*)(inbuf + pos + 4 + 6), min((uint32_t)127, commemtStringLength - 6));
+                    if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
+                        assignVorbisValue(vb[3], comment, commemtStringLength, 6);
                         audio.info(audio, Audio::evt_id3data, "Album: %s", vb[3].c_get());
                         FLAC_LOG_VERBOSE("ALBUM: %s", vb[3].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "COMMENT", 8) == 0) || (specialIndexOf(inbuf + pos + 4, "comment", 8) == 0)) {
-                        vb[4].assign((const char*)(inbuf + pos + 4 + 8), min((uint32_t)127, commemtStringLength - 8));
+                    if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
+                        assignVorbisValue(vb[4], comment, commemtStringLength, 8);
                         audio.info(audio, Audio::evt_id3data, "Comments: %s", vb[4].c_get());
                         FLAC_LOG_VERBOSE("COMMENT: %s", vb[4].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "DATE", 5) == 0) || (specialIndexOf(inbuf + pos + 4, "date", 5) == 0)) {
-                        vb[5].assign((const char*)(inbuf + pos + 4 + 5), min((uint32_t)127, commemtStringLength - 12));
+                    if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
+                        assignVorbisValue(vb[5], comment, commemtStringLength, 5);
                         audio.info(audio, Audio::evt_id3data, "Date: %s", vb[5].c_get());
                         FLAC_LOG_VERBOSE("DATE: %s", vb[5].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "TRACKNUMBER", 12) == 0) || (specialIndexOf(inbuf + pos + 4, "tracknumber", 12) == 0)) {
-                        vb[6].assign((const char*)(inbuf + pos + 4 + 12), min((uint32_t)127, commemtStringLength - 12));
+                    if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
+                        assignVorbisValue(vb[6], comment, commemtStringLength, 12);
                         audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", vb[6].c_get());
                         FLAC_LOG_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
                     }
-                    if ((specialIndexOf(inbuf + pos + 4, "METADATA_BLOCK_PICTURE", 23) == 0) || (specialIndexOf(inbuf + pos + 4, "metadata_block_picture", 23) == 0)) {
+                    if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
                         FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength %i", commemtStringLength);
                         m_flacBlockPicLen = commemtStringLength - 23;
                         m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
-                        m_flacBlockPicLenUntilFrameEnd = nBytes - (pos + 23);
+                        m_flacBlockPicLenUntilFrameEnd = 0;
+                        if ((uint32_t)nBytes > (uint32_t)pos + 23) m_flacBlockPicLenUntilFrameEnd = (uint32_t)nBytes - ((uint32_t)pos + 23);
                         if (m_flacBlockPicLen < m_flacBlockPicLenUntilFrameEnd) m_flacBlockPicLenUntilFrameEnd = m_flacBlockPicLen;
                         m_flacRemainBlockPicLen = m_flacBlockPicLen - m_flacBlockPicLenUntilFrameEnd;
                         // FLAC_LOG_INFO("s_flacBlockPicPos %i, m_flacBlockPicLen %i", m_flacBlockPicPos, m_flacBlockPicLen);
@@ -665,6 +691,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 if (!m_flacBlockPicLen && m_flacSegmTableVec.size() == 1) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
                 break;
+            }
 
             case picture:
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
