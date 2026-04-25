@@ -21,11 +21,25 @@ constexpr uint32_t FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH = 1024 * 1024;
 //----------------------------------------------------------------------------------------------------------------------
 
 bool FlacDecoder::init() {
-    if (!FLACFrameHeader.alloc_array(1)) {
+    if (!FLACFrameHeader.alloc_array(1, "FLACFrameHeader")) {
+        FLAC_LOG_ERROR("not enough memory to allocate FLAC frame header");
         m_valid = false;
         return false;
     }
-    if (!FLACMetadataBlock.alloc_array(1)) {
+    if (!FLACFrameHeader.valid()) {
+        FLAC_LOG_ERROR("FLAC frame header allocation returned invalid pointer");
+        m_valid = false;
+        return false;
+    }
+    if (!FLACMetadataBlock.alloc_array(1, "FLACMetadataBlock")) {
+        FLAC_LOG_ERROR("not enough memory to allocate FLAC metadata block");
+        FLACFrameHeader.reset();
+        m_valid = false;
+        return false;
+    }
+    if (!FLACMetadataBlock.valid()) {
+        FLAC_LOG_ERROR("FLAC metadata block allocation returned invalid pointer");
+        FLACFrameHeader.reset();
         m_valid = false;
         return false;
     }
@@ -1056,12 +1070,11 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
 
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
         if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
-        m_samplesBuffer[i].calloc_array(m_numOfOutSamples);
-        if (!m_samplesBuffer[i].valid()) { // ps_ptr<T> should overload operator bool()
-            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffers");
+        if (!m_samplesBuffer[i].calloc_array(m_numOfOutSamples, "m_samplesBuffer") || !m_samplesBuffer[i].valid()) {
+            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffer %i, samples: %i", i, m_numOfOutSamples);
             m_samplesBuffer[i].reset();
             m_valid = false;
-            return false;
+            return FLAC_ERR;
         }
     }
 
