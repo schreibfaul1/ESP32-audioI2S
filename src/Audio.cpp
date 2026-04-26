@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5n                                                                                                                            ";
-/*  Updated on: Apr 25, 2026
+    Version 3.4.5o                                                                                                                            ";
+/*  Updated on: Apr 26, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3457,7 +3457,7 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
-    if(get_info()) return;
+    if (get_info()) return;
     if (!m_f_running) return;
 
     if (m_f_firstLoop) {
@@ -5771,7 +5771,11 @@ bool Audio::i2s_config() {
     esp_err_t result = ESP_OK;
     // -------- I2S configuration -------------------------------------------------------------------------------------------
     memset(&m_i2s_chan_cfg, 0, sizeof(i2s_chan_config_t));
-    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_items.i2s_num;  // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
+#if (ESP_IDF_VERSION_MAJOR < 6)
+    m_i2s_chan_cfg.id = (i2s_port_t)m_i2s_items.i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
+#else
+    m_i2s_chan_cfg.id = m_i2s_items.i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
+#endif
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
     m_i2s_chan_cfg.dma_desc_num = m_i2s_items.DESC_NUM;   // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = m_i2s_items.FRAME_NUM; // I2S frame number in one DMA buffer.
@@ -6352,7 +6356,7 @@ uint8_t Audio::getVolume() {
     return m_audio_items.volume;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint8_t Audio::getI2sPort() {
+int32_t Audio::getI2sPort() {
     return m_i2s_items.i2s_num;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

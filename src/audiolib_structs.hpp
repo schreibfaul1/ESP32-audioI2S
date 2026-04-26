@@ -358,7 +358,7 @@ struct audioItems_t {
 struct i2s_items_t {
     uint16_t DESC_NUM = DMA_DESC_NUM;
     uint16_t FRAME_NUM = DMA_FRAME_NUM;
-    uint8_t  i2s_num = 0;
+    int32_t  i2s_num = 0;
     uint32_t sampleRate = 48000;
     bool     commFMT = false;
 };

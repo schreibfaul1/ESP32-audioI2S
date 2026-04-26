@@ -102,7 +102,7 @@ class Audio {
         const char*           msg = nullptr;
         const char*           s = nullptr;
         event_t               e = (event_t)0; // event type
-        uint8_t               i2s_num = 0;
+        int32_t               i2s_num = 0;
         int32_t               arg1 = 0;
         int32_t               arg2 = 0;
         std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
@@ -132,7 +132,7 @@ class Audio {
     uint8_t          getVolume();
     void             setMute(bool mute);
     bool             getMute();
-    uint8_t          getI2sPort();
+    int32_t          getI2sPort();
     uint32_t         getFileSize();
     uint32_t         getSampleRate();
     uint8_t          getBitsPerSample();
