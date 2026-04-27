@@ -353,18 +353,13 @@ struct audioItems_t {
     bool    mute = false;
 };
 
-#define DMA_DESC_NUM  32  // number of I2S DMA buffer
-#define DMA_FRAME_NUM 256 // number of frames in one DMA buffer
 struct i2s_items_t {
-    uint16_t DESC_NUM = DMA_DESC_NUM;
-    uint16_t FRAME_NUM = DMA_FRAME_NUM;
     int32_t  i2s_num = 0;
     uint32_t sampleRate = 48000;
     bool     commFMT = false;
 };
 
 struct vu_items_t {
-    const uint16_t  DELAY_BUFFER_SIZE = DMA_DESC_NUM * DMA_FRAME_NUM; // Runtime in I2S-DMA
     ps_ptr<int32_t> delay_l;
     ps_ptr<int32_t> delay_r;
     uint16_t        delay_line_index = 0;

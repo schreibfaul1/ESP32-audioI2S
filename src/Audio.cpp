@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5o                                                                                                                            ";
-/*  Updated on: Apr 26, 2026
+    Version 3.4.5p                                                                                                                            ";
+/*  Updated on: Apr 27, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5777,8 +5777,8 @@ bool Audio::i2s_config() {
     m_i2s_chan_cfg.id = m_i2s_items.i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
 #endif
     m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
-    m_i2s_chan_cfg.dma_desc_num = m_i2s_items.DESC_NUM;   // number of DMA buffer
-    m_i2s_chan_cfg.dma_frame_num = m_i2s_items.FRAME_NUM; // I2S frame number in one DMA buffer.
+    m_i2s_chan_cfg.dma_desc_num = settings.DMA_DESC_NUM;   // number of DMA buffer
+    m_i2s_chan_cfg.dma_frame_num = settings.DMA_FRAME_NUM; // I2S frame number in one DMA buffer.
     m_i2s_chan_cfg.auto_clear = true;                     // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
     m_i2s_chan_cfg.intr_priority = 2;
@@ -5836,8 +5836,8 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_samplesBuff48K.alloc_array(m_samplesBuff48KSize, "m_samplesBuff48K");
-    m_vu_items.delay_l.alloc_array(m_vu_items.DELAY_BUFFER_SIZE, "delay_l");
-    m_vu_items.delay_r.alloc_array(m_vu_items.DELAY_BUFFER_SIZE, "delay_r");
+    m_vu_items.delay_l.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_l");
+    m_vu_items.delay_r.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
     m_fft_items.window.alloc_array(m_fft_items.SIZE, "window");
     m_fft_items.work.alloc_array(m_fft_items.SIZE * 2, "work");
@@ -6235,14 +6235,15 @@ void Audio::reconfigI2S() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
 
+    uint16_t DELAY_BUFFER_SIZE = m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num; // Runtime in I2S-DMA
     // delay line
     m_vu_items.delay_l[m_vu_items.delay_line_index] = sample[LEFTCHANNEL];
     m_vu_items.delay_r[m_vu_items.delay_line_index] = sample[RIGHTCHANNEL];
     m_vu_items.delay_line_index++;
-    if (m_vu_items.delay_line_index == m_vu_items.DELAY_BUFFER_SIZE) m_vu_items.delay_line_index = 0;
+    if (m_vu_items.delay_line_index == DELAY_BUFFER_SIZE) m_vu_items.delay_line_index = 0;
 
     int16_t pos = m_vu_items.delay_line_index - 1;
-    if (pos == -1) pos = m_vu_items.DELAY_BUFFER_SIZE - 1;
+    if (pos == -1) pos = DELAY_BUFFER_SIZE - 1;
 
     // FFT buffer
     float mono = 0.5f * (float)((m_vu_items.delay_l[pos] >> 20) + (m_vu_items.delay_r[pos] >> 20));
