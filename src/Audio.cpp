@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.5p                                                                                                                            ";
-/*  Updated on: Apr 27, 2026
+    Version 3.4.5q                                                                                                                            ";
+/*  Updated on: May 03, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5776,10 +5776,10 @@ bool Audio::i2s_config() {
 #else
     m_i2s_chan_cfg.id = m_i2s_items.i2s_num; // I2S_NUM_AUTO, I2S_NUM_0, I2S_NUM_1
 #endif
-    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                // I2S controller master role, bclk and lrc signal will be set to output
+    m_i2s_chan_cfg.role = I2S_ROLE_MASTER;                 // I2S controller master role, bclk and lrc signal will be set to output
     m_i2s_chan_cfg.dma_desc_num = settings.DMA_DESC_NUM;   // number of DMA buffer
     m_i2s_chan_cfg.dma_frame_num = settings.DMA_FRAME_NUM; // I2S frame number in one DMA buffer.
-    m_i2s_chan_cfg.auto_clear = true;                     // i2s will always send zero automatically if no data to send
+    m_i2s_chan_cfg.auto_clear = true;                      // i2s will always send zero automatically if no data to send
     m_i2s_chan_cfg.allow_pd = false;
     m_i2s_chan_cfg.intr_priority = 2;
     result = i2s_new_channel(&m_i2s_chan_cfg, &m_i2s_tx_handle, NULL);
@@ -6353,6 +6353,20 @@ void Audio::setVolume(uint8_t volume, uint8_t curve) {
     calculateVolumeLimits();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setVolumeCurve(VolumeCurveFn curve) {
+
+    //  user defined curve, set it in youe code e.g. somewhere in setup()
+    //  t is volume / steps; (range 0.0f … 1.0f)
+    //  should return a value between -60.0[dB] and 0.0[dB]
+    //  example:
+    //  audio.setVolumeCurve([](float t) {
+    //      return -60.0f + 60.0f * t * t;
+    //  });
+
+    m_volumeCurve = curve;
+    calculateVolumeLimits();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint8_t Audio::getVolume() {
     return m_audio_items.volume;
 }
@@ -6393,15 +6407,17 @@ void Audio::calculateVolumeLimits() { // is calculated when the volume or balanc
     constexpr float MIN_DB = -60.0f; // quiet
     constexpr float MAX_DB = 0.0f;   // full level
 
-    auto volumeToLinear = [&](uint8_t volume, uint8_t steps) {
-        if (volume == 0) {
+    auto volumeToLinear = [&](float volume, uint8_t steps) {
+        if (volume <= 0.0f) {
             return 0.0f; // real silence
         }
 
-        float t = (float)volume / (float)steps; // 0…1
+        float t = volume / (float)steps; // 0.0f … 1.0f
+        t = fminf(fmaxf(t, 0.0f), 1.0f);
 
         //    float dB = MIN_DB + t * (MAX_DB - MIN_DB);
-        float dB = -112.0f * t * t * t + 172.0f * t * t + MIN_DB;
+        float dB = m_volumeCurve ? m_volumeCurve(t) : (-112.0f * t * t * t + 172.0f * t * t + MIN_DB);
+        dB = fminf(fmaxf(dB, MIN_DB), MAX_DB);
 
         return powf(10.0f, dB / 20.0f);
     };

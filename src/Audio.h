@@ -108,6 +108,7 @@ class Audio {
         std::vector<uint32_t> vec = {}; // apic [pos, len, pos, len, pos, len, ....]
     } msg_t;
     inline static std::function<void(msg_t i)> audio_info_callback;
+    using VolumeCurveFn = std::function<float(float t)>;
     // -------------------------------------------------------------------
 
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
@@ -129,6 +130,7 @@ class Audio {
     void             setVolumeSteps(uint8_t steps);
     uint8_t          getVolumeSteps();
     void             setVolume(uint8_t vol, uint8_t curve = 0);
+    void             setVolumeCurve(VolumeCurveFn curve);
     uint8_t          getVolume();
     void             setMute(bool mute);
     bool             getMute();
@@ -379,6 +381,7 @@ class Audio {
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_streamURL;   // stores the last StreamURL
     ps_ptr<char>             m_playlistBuff;
+    VolumeCurveFn            m_volumeCurve = nullptr;
 
     const uint16_t m_plsBuffEntryLen = 256;         // length of each entry in playlistBuff
     int            m_LFcount = 0;                   // Detection of end of header
