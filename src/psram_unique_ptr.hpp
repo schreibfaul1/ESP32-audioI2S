@@ -2642,13 +2642,19 @@ class ps_ptr {
         // HEX
         if constexpr (std::is_integral_v<V>) {
             if (fs.type == 'X') {
-                snprintf(buf, sizeof(buf), fs.width > 0 ? "%0*llX" : "%llX", fs.width, (unsigned long long)value);
+                if (fs.width > 0) {
+                    const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                    snprintf(buf, sizeof(buf), "%0*llX", safe_width, (unsigned long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%llX", (unsigned long long)value);
+                }
                 return buf;
             }
 
             // Integer mit Padding
             if (fs.width > 0) {
-                snprintf(buf, sizeof(buf), "%0*lld", fs.width, (long long)value);
+                const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                snprintf(buf, sizeof(buf), "%0*lld", safe_width, (long long)value);
                 return buf;
             }
             return std::to_string(value);
