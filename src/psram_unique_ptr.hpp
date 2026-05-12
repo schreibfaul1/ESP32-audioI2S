@@ -994,7 +994,7 @@ class ps_ptr {
         std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
         std::size_t add_len = tmp.size();
         std::size_t new_len = old_len + add_len + 1;
-        char* old_data = static_cast<char*>(mem.release());
+        char*       old_data = static_cast<char*>(mem.release());
         reset();
         alloc(new_len);
         if (!mem) {
@@ -2488,46 +2488,182 @@ class ps_ptr {
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     template <typename V> std::string to_string_any(const V& v) {
-        if constexpr (std::is_same_v<V, float> || std::is_same_v<V, double>) {
+        using Raw = std::remove_cv_t<std::remove_reference_t<V>>;
+        using D = std::decay_t<V>;
+
+        // Treat character arrays as text in the same way as string literals.
+        if constexpr (std::is_array_v<Raw> && std::is_same_v<std::remove_extent_t<Raw>, char>) {
+            return std::string(v);
+        }
+        // BOOL
+        if constexpr (std::is_same_v<D, bool>) {
+            return v ? "true" : "false";
+        }
+        // FLOAT
+        else if constexpr (std::is_same_v<D, float> || std::is_same_v<D, double>) {
             char buf[32];
             snprintf(buf, sizeof(buf), "%g", v);
             return buf;
-        } else if constexpr (std::is_integral_v<V> || std::is_enum_v<V>) {
+        }
+        // INTEGER / ENUM
+        else if constexpr (std::is_integral_v<D> || std::is_enum_v<D>) {
             return std::to_string(static_cast<long long>(v));
-        } else if constexpr (std::is_pointer_v<V>) {
-            // Handle pointers to char types
-            if constexpr (std::is_same_v<V, char*> || std::is_same_v<V, const char*>) {
+        }
+        // POINTER
+        else if constexpr (std::is_pointer_v<D>) {
+            // char*
+            if constexpr (std::is_same_v<D, char*> || std::is_same_v<D, const char*>) {
                 return v ? std::string(v) : "";
-            } else if constexpr (std::is_same_v<V, unsigned char*> || std::is_same_v<V, const unsigned char*>) {
+            }
+            // unsigned char*
+            else if constexpr (std::is_same_v<D, unsigned char*> || std::is_same_v<D, const unsigned char*>) {
                 return v ? std::string(reinterpret_cast<const char*>(v)) : "";
-            } else {
-                // For other pointers, print the address
+            }
+
+            // generic pointer
+            else {
                 char buf[32];
-                snprintf(buf, sizeof(buf), "0x%p", v);
+                snprintf(buf, sizeof(buf), "%p", static_cast<const void*>(v));
                 return buf;
             }
-        } else {
+        }
+        // fallback
+        else {
             return v;
         }
     }
-
-    inline std::string to_string_any(bool b) { return b ? "true" : "false"; }
-
-    inline std::string to_string_any(const char* s) { return s ? s : ""; }
-
-    inline std::string to_string_any(const std::string& s) { return s; }
 
     void format_append(std::string& out, const char* fmt) { out += fmt; }
 
     template <typename First, typename... Rest> void format_append(std::string& out, const char* fmt, First&& first, Rest&&... rest) {
         while (*fmt) {
-            if (fmt[0] == '{' && fmt[1] == '}') {
-                out += to_string_any(std::forward<First>(first));
-                format_append(out, fmt + 2, std::forward<Rest>(rest)...);
+
+            // Start eines Formatfeldes?
+            if (*fmt == '{') {
+
+                // Escape {{
+                if (fmt[1] == '{') {
+                    out += '{';
+                    fmt += 2;
+                    continue;
+                }
+
+                // Ende suchen
+                const char* end = std::strchr(fmt, '}');
+
+                // Fehlerfall: keine schließende Klammer
+                if (!end) {
+                    out += *fmt++;
+                    continue;
+                }
+
+                // Inhalt zwischen { ... }
+                std::string spec_str(fmt + 1, end - fmt - 1);
+
+                format_spec fs;
+
+                // Nur parsen wenn Inhalt existiert
+                // also {:02} usw.
+                if (!spec_str.empty()) { fs = parse_format(spec_str.c_str()); }
+
+                // Wert formatieren
+                out += format_value(std::forward<First>(first), fs);
+
+                // Rekursiv weitermachen
+                format_append(out, end + 1, std::forward<Rest>(rest)...);
+
                 return;
             }
+
+            // Escape }}
+            if (fmt[0] == '}' && fmt[1] == '}') {
+                out += '}';
+                fmt += 2;
+                continue;
+            }
+
             out += *fmt++;
         }
+    }
+
+    struct format_spec {
+        int  width = 0;
+        int  precision = -1;
+        char fill = ' ';
+        char type = 0;
+        bool upper = false;
+    };
+
+    inline format_spec parse_format(const char* fmt) {
+        format_spec fs;
+
+        // {:02}
+        if (*fmt == ':') {
+            ++fmt;
+            // leading zero
+            if (*fmt == '0') {
+                fs.fill = '0';
+                ++fmt;
+            }
+
+            // width
+            while (isdigit(*fmt)) {
+                fs.width = fs.width * 10 + (*fmt - '0');
+                ++fmt;
+            }
+
+            // precision
+            if (*fmt == '.') {
+                ++fmt;
+                fs.precision = 0;
+                while (isdigit(*fmt)) {
+                    fs.precision = fs.precision * 10 + (*fmt - '0');
+                    ++fmt;
+                }
+            }
+
+            // type
+            if (*fmt) {
+                fs.type = *fmt;
+                if (*fmt == 'X') fs.upper = true;
+            }
+        }
+        return fs;
+    }
+
+    template <typename V> std::string format_value(const V& value, const format_spec& fs) {
+        char buf[64];
+
+        // bool ist in C++ ein Integraltyp, soll hier aber als Text ausgegeben werden.
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) {
+            return value ? "true" : "false";
+        }
+
+        // HEX
+        if constexpr (std::is_integral_v<V>) {
+            if (fs.type == 'X') {
+                snprintf(buf, sizeof(buf), fs.width > 0 ? "%0*X" : "%X", fs.width, value);
+                return buf;
+            }
+
+            // Integer mit Padding
+            if (fs.width > 0) {
+                snprintf(buf, sizeof(buf), "%0*d", fs.width, value);
+                return buf;
+            }
+            return std::to_string(value);
+        }
+
+        // FLOAT
+        if constexpr (std::is_floating_point_v<V>) {
+            if (fs.precision >= 0) {
+                snprintf(buf, sizeof(buf), "%.*f", fs.precision, value);
+                return buf;
+            }
+            snprintf(buf, sizeof(buf), "%g", value);
+            return buf;
+        }
+        return to_string_any(value);
     }
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
