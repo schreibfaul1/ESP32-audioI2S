@@ -893,39 +893,39 @@ class ps_ptr {
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
 
     // onli activate if T = char
-    // template <typename U = T>
-    //     requires std::is_same_v<U, char>
-    // void assignf(const char* fmt, ...) {
-    //     if (!fmt) return;
-    //     // Formatierte Länge berechnen
-    //     va_list args;
-    //     va_start(args, fmt);
-    //     va_list args_copy;
-    //     va_copy(args_copy, args);
-    //     int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
-    //     va_end(args_copy);
+    template <typename U = T>
+        requires std::is_same_v<U, char>
+    void assignf(const char* fmt, ...) {
+        if (!fmt) return;
+        // Formatierte Länge berechnen
+        va_list args;
+        va_start(args, fmt);
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
+        va_end(args_copy);
 
-    //     if (fmt_len < 0) {
-    //         va_end(args);
-    //         return;
-    //     }
+        if (fmt_len < 0) {
+            va_end(args);
+            return;
+        }
 
-    //     std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
+        std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
 
-    //     // share previous memory and new allocates
-    //     reset();
-    //     alloc(new_len);
-    //     if (!mem) {
-    //         printf("OOM: assignf() failed for %zu bytes\n", new_len);
-    //         va_end(args);
-    //         return;
-    //     }
+        // share previous memory and new allocates
+        reset();
+        alloc(new_len);
+        if (!mem) {
+            printf("OOM: assignf() failed for %zu bytes\n", new_len);
+            va_end(args);
+            return;
+        }
 
-    //     // write formatted text
-    //     vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
-    //     va_end(args);
-    //     allocated_size = fmt_len;
-    // }
+        // write formatted text
+        vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
+        va_end(args);
+        allocated_size = fmt_len;
+    }
 
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
@@ -958,31 +958,31 @@ class ps_ptr {
 
     // Nur aktivieren, wenn T = char
 
-    // template <typename... Args> void appendf(const char* fmt, Args&&... args) {
-    //     if (!fmt) return;
-    //     int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-    //     if (add_len < 0) return;
+    template <typename... Args> void appendf(const char* fmt, Args&&... args) {
+        if (!fmt) return;
+        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (add_len < 0) return;
 
-    //     std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
-    //     std::size_t new_len = old_len + add_len + 1;
+        std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
+        std::size_t new_len = old_len + add_len + 1;
 
-    //     char* old_data = static_cast<char*>(mem.release());
-    //     reset();
-    //     alloc(new_len);
+        char* old_data = static_cast<char*>(mem.release());
+        reset();
+        alloc(new_len);
 
-    //     if (!mem) {
-    //         printf("OOM: appendf() failed for %zu bytes\n", new_len);
-    //         if (old_data) free(old_data);
-    //         return;
-    //     }
+        if (!mem) {
+            printf("OOM: appendf() failed for %zu bytes\n", new_len);
+            if (old_data) free(old_data);
+            return;
+        }
 
-    //     if (old_data) {
-    //         std::memcpy(mem.get(), old_data, old_len);
-    //         free(old_data);
-    //     }
+        if (old_data) {
+            std::memcpy(mem.get(), old_data, old_len);
+            free(old_data);
+        }
 
-    //     std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
-    // }
+        std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
+    }
 
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
@@ -2496,7 +2496,7 @@ class ps_ptr {
             return std::string(v);
         }
         // BOOL
-        if constexpr (std::is_same_v<D, bool>) {
+        else if constexpr (std::is_same_v<D, bool>) {
             return v ? "true" : "false";
         }
         // FLOAT
