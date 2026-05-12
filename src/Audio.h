@@ -586,7 +586,7 @@ class Audio {
         if (!audio_info_callback) return false;
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
         ps_ptr<char>                apic;
-        apic.assignf("APIC found at pos {}", v[0]);
+        apic.assignf1("APIC found at pos {}", v[0]);
         // msg_t i;
         // i.msg = apic.c_get();
         // i.e = e;
