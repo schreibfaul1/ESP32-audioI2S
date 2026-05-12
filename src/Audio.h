@@ -620,7 +620,7 @@ class Audio {
         ps_ptr<char> logStr;
         logStr.copy_from(path);
         while (logStr.contains("/")) { logStr.remove_before('/', false); }
-        logStr.appendf1(":{} ", line);
+        logStr.appendf(":{} ", line);
 
         if (level == 1 && CORE_DEBUG_LEVEL >= 1) {
             logStr.append(ANSI_ESC_RED);
@@ -639,7 +639,7 @@ class Audio {
 
         int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
         if (add_len > 0) {
-            logStr.appendf1(fmt, std::forward<Args>(args)...); // <-- neue appendf()
+            logStr.appendf(fmt, std::forward<Args>(args)...); // <-- neue appendf()
         }
         logStr.append(ANSI_ESC_RESET);
 

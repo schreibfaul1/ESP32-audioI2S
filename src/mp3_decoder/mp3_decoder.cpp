@@ -930,7 +930,7 @@ uint32_t MP3Decoder::getOutputSamples() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* MP3Decoder::arg1() {
     m_mpeg_version_str.assign(mpeg_version_table[m_MP3FrameInfo->version]); // 0: MPEG-2.5, 1: Reserviert, 2: MPEG-2 (ISO/IEC 13818-3), 3: MPEG-1 (ISO/IEC 11172-3)
-    m_mpeg_version_str.appendf1(" {}", layer_table[m_MP3FrameInfo->layer]);
+    m_mpeg_version_str.appendf(" {}", layer_table[m_MP3FrameInfo->layer]);
     return m_mpeg_version_str.get();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

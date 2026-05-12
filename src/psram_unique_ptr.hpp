@@ -920,40 +920,14 @@ class ps_ptr {
 
     // ps_ptr<char> message;
     // message.assign("Error: ");
-    // message.appendf("Code %d, Modul %s", 404, "Network");
+    // message.appendf("Code {}, Modul {}", 404, "Network");
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
 
-    // Nur aktivieren, wenn T = char
-
-    template <typename... Args> void appendf(const char* fmt, Args&&... args) {
-        if (!fmt) return;
-        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (add_len < 0) return;
-
-        std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
-        std::size_t new_len = old_len + add_len + 1;
-
-        char* old_data = static_cast<char*>(mem.release());
-        reset();
-        alloc(new_len);
-
-        if (!mem) {
-            printf("OOM: appendf() failed for %zu bytes\n", new_len);
-            if (old_data) free(old_data);
-            return;
-        }
-
-        if (old_data) {
-            std::memcpy(mem.get(), old_data, old_len);
-            free(old_data);
-        }
-
-        std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
-    }
+    // only activate if T = char
 
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
-    void appendf1(const char* fmt, Args&&... args) {
+    void appendf(const char* fmt, Args&&... args) {
         if (!fmt) return;
 
         std::string tmp;
