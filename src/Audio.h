@@ -586,7 +586,7 @@ class Audio {
         if (!audio_info_callback) return false;
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
         ps_ptr<char>                apic;
-        apic.assignf("APIC found at pos %u", v[0]);
+        apic.assignf1("APIC found at pos {}", v[0]);
         // msg_t i;
         // i.msg = apic.c_get();
         // i.e = e;
@@ -620,7 +620,7 @@ class Audio {
         ps_ptr<char> logStr;
         logStr.copy_from(path);
         while (logStr.contains("/")) { logStr.remove_before('/', false); }
-        logStr.appendf(":%i ", line);
+        logStr.appendf1(":{} ", line);
 
         if (level == 1 && CORE_DEBUG_LEVEL >= 1) {
             logStr.append(ANSI_ESC_RED);
@@ -639,7 +639,7 @@ class Audio {
 
         int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
         if (add_len > 0) {
-            logStr.appendf(fmt, std::forward<Args>(args)...); // <-- neue appendf()
+            logStr.appendf1(fmt, std::forward<Args>(args)...); // <-- neue appendf()
         }
         logStr.append(ANSI_ESC_RESET);
 

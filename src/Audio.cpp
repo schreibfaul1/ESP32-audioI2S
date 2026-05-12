@@ -657,7 +657,7 @@ audiolib::hwoe_t Audio::dismantle_host(const char* host) {
     result.port = result.ssl ? 443 : 80; // default
     if (port_sep && (!path_sep || port_sep < path_sep)) {
         result.port = atoi(port_sep + 1);
-        result.rqh_host.appendf(":%u", result.port);
+        result.rqh_host.appendf1(":{}", result.port);
     }
 
     // ❓ 4. extract extension (path)
@@ -751,14 +751,14 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.assign("GET /");
     rqh.append(path.get());
     rqh.append(" HTTP/1.1\r\n");
-    rqh.appendf("Host: %s\r\n", rqh_host.get());
+    rqh.appendf1("Host: {}\r\n", rqh_host.get());
     rqh.append("Icy-MetaData:1\r\n");
     //  rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
     rqh.append("Accept: */*\r\n");
-    rqh.appendf("User-Agent: %s\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
+    rqh.appendf1("User-Agent: {}\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
         rqh.append(authorization.get());
@@ -881,7 +881,7 @@ bool Audio::httpPrint(const char* host) {
     rqh.assign("GET /");
     rqh.append(path.get());
     rqh.append(" HTTP/1.1\r\n");
-    rqh.appendf("Host: %s\r\n", rqh_host.get());
+    rqh.appendf1("Host: {}\r\n", rqh_host.get());
     rqh.append("Icy-MetaData:1\r\n");
     rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Accept:*/*\r\n");
@@ -993,18 +993,18 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
     cur_hwoe.clone_from(dismantledLastHost.hwoe);
 
     if (length == UINT32_MAX)
-        range.assignf("Range: bytes=%li-\r\n", seek);
+        range.assignf1("Range: bytes={}-\r\n", seek);
     else
-        range.assignf("Range: bytes=%li-%li\r\n", seek, seek + length);
+        range.assignf1("Range: bytes={]-{}\r\n", seek, seek + length);
 
-    rqh.assignf("GET /%s HTTP/1.1\r\n", path.get());
-    rqh.appendf("Host: %s\r\n", rqh_host.get());
+    rqh.assignf1("GET /{} HTTP/1.1\r\n", path.get());
+    rqh.appendf1("Host: {}\r\n", rqh_host.get());
     rqh.append("Accept: */*\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Connection: keep-alive\r\n");
-    rqh.appendf(range.c_get());
-    rqh.appendf("Referer: %s\r\n", m_currentHost.c_get());
+    rqh.appendf1(range.c_get());
+    rqh.appendf1("Referer: {}\r\n", m_currentHost.c_get());
     rqh.append("Sec-GPC: 1\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n\r\n");
 
@@ -1133,119 +1133,119 @@ bool Audio::connecttospeech(const char* speech, const char* lang) {
 void Audio::showID3Tag(const char* tag, const char* value) {
     ps_ptr<char> id3tag;
     // V2.2
-    if (!strcmp(tag, "CNT")) id3tag.appendf("Play counter: %s", value, "id3tag");
-    if (!strcmp(tag, "COM")) id3tag.appendf("Comments: %s", value, "id3tag");
-    if (!strcmp(tag, "CRA")) id3tag.appendf("Audio encryption: %s", value, "id3tag");
-    if (!strcmp(tag, "CRM")) id3tag.appendf("Encrypted meta frame: %s", value, "id3tag");
-    if (!strcmp(tag, "ETC")) id3tag.appendf("Event timing codes: %s", value, "id3tag");
-    if (!strcmp(tag, "EQU")) id3tag.appendf("Equalization: %s", value, "id3tag");
-    if (!strcmp(tag, "IPL")) id3tag.appendf("Involved people list: %s", value, "id3tag");
-    if (!strcmp(tag, "PIC")) id3tag.appendf("Attached picture: %s", value, "id3tag");
-    if (!strcmp(tag, "SLT")) id3tag.appendf("Synchronized lyric/text: %s", value, "id3tag");
-    if (!strcmp(tag, "TAL")) id3tag.appendf("Album/Movie/Show title: %s", value, "id3tag");
-    if (!strcmp(tag, "TBP")) id3tag.appendf("BPM (Beats Per Minute): %s", value, "id3tag");
-    if (!strcmp(tag, "TCM")) id3tag.appendf("Composer: %s", value, "id3tag");
-    if (!strcmp(tag, "TCO")) id3tag.appendf("Content type: %s", value, "id3tag");
-    if (!strcmp(tag, "TCR")) id3tag.appendf("Copyright message: %s", value, "id3tag");
-    if (!strcmp(tag, "TDA")) id3tag.appendf("Date: %s", value, "id3tag");
-    if (!strcmp(tag, "TDY")) id3tag.appendf("Playlist delay: %s", value, "id3tag");
-    if (!strcmp(tag, "TEN")) id3tag.appendf("Encoded by: %s", value, "id3tag");
-    if (!strcmp(tag, "TFT")) id3tag.appendf("File type: %s", value, "id3tag");
-    if (!strcmp(tag, "TIM")) id3tag.appendf("Time: %s", value, "id3tag");
-    if (!strcmp(tag, "TKE")) id3tag.appendf("Initial key: %s", value, "id3tag");
-    if (!strcmp(tag, "TLA")) id3tag.appendf("Language(s): %s", value, "id3tag");
-    if (!strcmp(tag, "TLE")) id3tag.appendf("Length: %s", value, "id3tag");
-    if (!strcmp(tag, "TMT")) id3tag.appendf("Media type: %s", value, "id3tag");
-    if (!strcmp(tag, "TOA")) id3tag.appendf("Original artist(s)/performer(s): %s", value, "id3tag");
-    if (!strcmp(tag, "TOF")) id3tag.appendf("Original filename: %s", value, "id3tag");
-    if (!strcmp(tag, "TOL")) id3tag.appendf("Original Lyricist(s)/text writer(s): %s", value, "id3tag");
-    if (!strcmp(tag, "TOR")) id3tag.appendf("Original release year: %s", value, "id3tag");
-    if (!strcmp(tag, "TOT")) id3tag.appendf("Original album/Movie/Show title: %s", value, "id3tag");
-    if (!strcmp(tag, "TP1")) id3tag.appendf("Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: %s", value, "id3tag");
-    if (!strcmp(tag, "TP2")) id3tag.appendf("Band/Orchestra/Accompaniment: %s", value, "id3tag");
-    if (!strcmp(tag, "TP3")) id3tag.appendf("Conductor/Performer refinement: %s", value, "id3tag");
-    if (!strcmp(tag, "TP4")) id3tag.appendf("Interpreted, remixed, or otherwise modified by: %s", value, "id3tag");
-    if (!strcmp(tag, "TPA")) id3tag.appendf("Part of a set: %s", value, "id3tag");
-    if (!strcmp(tag, "TPB")) id3tag.appendf("Publisher: %s", value, "id3tag");
-    if (!strcmp(tag, "TRC")) id3tag.appendf("ISRC (International Standard Recording Code): %s", value, "id3tag");
-    if (!strcmp(tag, "TRD")) id3tag.appendf("Recording dates: %s", value, "id3tag");
-    if (!strcmp(tag, "TRK")) id3tag.appendf("Track number/Position in set: %s", value, "id3tag");
-    if (!strcmp(tag, "TSI")) id3tag.appendf("Size: %s", value, "id3tag");
-    if (!strcmp(tag, "TSS")) id3tag.appendf("Software/hardware and settings used for encoding: %s", value, "id3tag");
-    if (!strcmp(tag, "TT1")) id3tag.appendf("Content group description: %s", value, "id3tag");
-    if (!strcmp(tag, "TT2")) id3tag.appendf("Title/Songname/Content description: %s", value, "id3tag");
-    if (!strcmp(tag, "TT3")) id3tag.appendf("Subtitle/Description refinement: %s", value, "id3tag");
-    if (!strcmp(tag, "TXT")) id3tag.appendf("Lyricist/text writer: %s", value, "id3tag");
-    if (!strcmp(tag, "TXX")) id3tag.appendf("User defined text information frame: %s", value, "id3tag");
-    if (!strcmp(tag, "TYE")) id3tag.appendf("Year: %s", value, "id3tag");
-    if (!strcmp(tag, "UFI")) id3tag.appendf("Unique file identifier: %s", value, "id3tag");
-    if (!strcmp(tag, "ULT")) id3tag.appendf("Unsychronized lyric/text transcription: %s", value, "id3tag");
-    if (!strcmp(tag, "WAF")) id3tag.appendf("Official audio file webpage: %s", value, "id3tag");
-    if (!strcmp(tag, "WAR")) id3tag.appendf("Official artist/performer webpage: %s", value, "id3tag");
-    if (!strcmp(tag, "WAS")) id3tag.appendf("Official audio source webpage: %s", value, "id3tag");
-    if (!strcmp(tag, "WCM")) id3tag.appendf("Commercial information: %s", value, "id3tag");
-    if (!strcmp(tag, "WCP")) id3tag.appendf("Copyright/Legal information: %s", value, "id3tag");
-    if (!strcmp(tag, "WPB")) id3tag.appendf("Publishers official webpage: %s", value, "id3tag");
-    if (!strcmp(tag, "WXX")) id3tag.appendf("User defined URL link frame: %s", value, "id3tag");
+    if (!strcmp(tag, "CNT")) id3tag.appendf1("Play counter: {}", value, "id3tag");
+    if (!strcmp(tag, "COM")) id3tag.appendf1("Comments: {}", value, "id3tag");
+    if (!strcmp(tag, "CRA")) id3tag.appendf1("Audio encryption: {}", value, "id3tag");
+    if (!strcmp(tag, "CRM")) id3tag.appendf1("Encrypted meta frame: {}", value, "id3tag");
+    if (!strcmp(tag, "ETC")) id3tag.appendf1("Event timing codes: {}", value, "id3tag");
+    if (!strcmp(tag, "EQU")) id3tag.appendf1("Equalization: {}", value, "id3tag");
+    if (!strcmp(tag, "IPL")) id3tag.appendf1("Involved people list: {}", value, "id3tag");
+    if (!strcmp(tag, "PIC")) id3tag.appendf1("Attached picture: {}", value, "id3tag");
+    if (!strcmp(tag, "SLT")) id3tag.appendf1("Synchronized lyric/text: {}", value, "id3tag");
+    if (!strcmp(tag, "TAL")) id3tag.appendf1("Album/Movie/Show title: {}", value, "id3tag");
+    if (!strcmp(tag, "TBP")) id3tag.appendf1("BPM (Beats Per Minute): {}", value, "id3tag");
+    if (!strcmp(tag, "TCM")) id3tag.appendf1("Composer: {}", value, "id3tag");
+    if (!strcmp(tag, "TCO")) id3tag.appendf1("Content type: {}", value, "id3tag");
+    if (!strcmp(tag, "TCR")) id3tag.appendf1("Copyright message: {}", value, "id3tag");
+    if (!strcmp(tag, "TDA")) id3tag.appendf1("Date: {}", value, "id3tag");
+    if (!strcmp(tag, "TDY")) id3tag.appendf1("Playlist delay: {}", value, "id3tag");
+    if (!strcmp(tag, "TEN")) id3tag.appendf1("Encoded by: {}", value, "id3tag");
+    if (!strcmp(tag, "TFT")) id3tag.appendf1("File type: {}", value, "id3tag");
+    if (!strcmp(tag, "TIM")) id3tag.appendf1("Time: {}", value, "id3tag");
+    if (!strcmp(tag, "TKE")) id3tag.appendf1("Initial key: {}", value, "id3tag");
+    if (!strcmp(tag, "TLA")) id3tag.appendf1("Language(s): {}", value, "id3tag");
+    if (!strcmp(tag, "TLE")) id3tag.appendf1("Length: {}", value, "id3tag");
+    if (!strcmp(tag, "TMT")) id3tag.appendf1("Media type: {}", value, "id3tag");
+    if (!strcmp(tag, "TOA")) id3tag.appendf1("Original artist(s)/performer(s): {}", value, "id3tag");
+    if (!strcmp(tag, "TOF")) id3tag.appendf1("Original filename: {}", value, "id3tag");
+    if (!strcmp(tag, "TOL")) id3tag.appendf1("Original Lyricist(s)/text writer(s): {}", value, "id3tag");
+    if (!strcmp(tag, "TOR")) id3tag.appendf1("Original release year: {}", value, "id3tag");
+    if (!strcmp(tag, "TOT")) id3tag.appendf1("Original album/Movie/Show title: {}", value, "id3tag");
+    if (!strcmp(tag, "TP1")) id3tag.appendf1("Lead artist(s)/Lead performer(s)/Soloist(s)/Performing group: {}", value, "id3tag");
+    if (!strcmp(tag, "TP2")) id3tag.appendf1("Band/Orchestra/Accompaniment: {}", value, "id3tag");
+    if (!strcmp(tag, "TP3")) id3tag.appendf1("Conductor/Performer refinement: {}", value, "id3tag");
+    if (!strcmp(tag, "TP4")) id3tag.appendf1("Interpreted, remixed, or otherwise modified by: {}", value, "id3tag");
+    if (!strcmp(tag, "TPA")) id3tag.appendf1("Part of a set: {}", value, "id3tag");
+    if (!strcmp(tag, "TPB")) id3tag.appendf1("Publisher: {}", value, "id3tag");
+    if (!strcmp(tag, "TRC")) id3tag.appendf1("ISRC (International Standard Recording Code): {}", value, "id3tag");
+    if (!strcmp(tag, "TRD")) id3tag.appendf1("Recording dates: {}", value, "id3tag");
+    if (!strcmp(tag, "TRK")) id3tag.appendf1("Track number/Position in set: {}", value, "id3tag");
+    if (!strcmp(tag, "TSI")) id3tag.appendf1("Size: {}", value, "id3tag");
+    if (!strcmp(tag, "TSS")) id3tag.appendf1("Software/hardware and settings used for encoding: {}", value, "id3tag");
+    if (!strcmp(tag, "TT1")) id3tag.appendf1("Content group description: {}", value, "id3tag");
+    if (!strcmp(tag, "TT2")) id3tag.appendf1("Title/Songname/Content description: {}", value, "id3tag");
+    if (!strcmp(tag, "TT3")) id3tag.appendf1("Subtitle/Description refinement: {}", value, "id3tag");
+    if (!strcmp(tag, "TXT")) id3tag.appendf1("Lyricist/text writer: {}", value, "id3tag");
+    if (!strcmp(tag, "TXX")) id3tag.appendf1("User defined text information frame: {}", value, "id3tag");
+    if (!strcmp(tag, "TYE")) id3tag.appendf1("Year: {}", value, "id3tag");
+    if (!strcmp(tag, "UFI")) id3tag.appendf1("Unique file identifier: {}", value, "id3tag");
+    if (!strcmp(tag, "ULT")) id3tag.appendf1("Unsychronized lyric/text transcription: {}", value, "id3tag");
+    if (!strcmp(tag, "WAF")) id3tag.appendf1("Official audio file webpage: {}", value, "id3tag");
+    if (!strcmp(tag, "WAR")) id3tag.appendf1("Official artist/performer webpage: {}", value, "id3tag");
+    if (!strcmp(tag, "WAS")) id3tag.appendf1("Official audio source webpage: {}", value, "id3tag");
+    if (!strcmp(tag, "WCM")) id3tag.appendf1("Commercial information: {}", value, "id3tag");
+    if (!strcmp(tag, "WCP")) id3tag.appendf1("Copyright/Legal information: {}", value, "id3tag");
+    if (!strcmp(tag, "WPB")) id3tag.appendf1("Publishers official webpage: {}", value, "id3tag");
+    if (!strcmp(tag, "WXX")) id3tag.appendf1("User defined URL link frame: {}", value, "id3tag");
 
     // V2.3 V2.4 tags
-    if (!strcmp(tag, "COMM")) id3tag.appendf("Comment: %s", value, "id3tag");
-    if (!strcmp(tag, "OWNE")) id3tag.appendf("Ownership: %s", value, "id3tag");
-    if (!strcmp(tag, "PRIV")) id3tag.appendf("Private: %s", value, "id3tag");
-    if (!strcmp(tag, "SYLT")) id3tag.appendf("SynLyrics: %s", value, "id3tag");
-    if (!strcmp(tag, "TALB")) id3tag.appendf("Album: %s", value, "id3tag");
-    if (!strcmp(tag, "TBPM")) id3tag.appendf("BeatsPerMinute: %s", value, "id3tag");
-    if (!strcmp(tag, "TCAT")) id3tag.appendf("PodcastCategory: %s", value, "id3tag");
-    if (!strcmp(tag, "TCMP")) id3tag.appendf("Compilation: %s", value, "id3tag");
-    if (!strcmp(tag, "TCOM")) id3tag.appendf("Composer: %s", value, "id3tag");
-    if (!strcmp(tag, "TCON")) id3tag.appendf("ContentType: %s", value, "id3tag");
-    if (!strcmp(tag, "TCOP")) id3tag.appendf("Copyright: %s", value, "id3tag");
-    if (!strcmp(tag, "TDAT")) id3tag.appendf("Date: %s", value, "id3tag");
-    if (!strcmp(tag, "TDES")) id3tag.appendf("PodcastDescription: %s", value, "id3tag");
-    if (!strcmp(tag, "TDOR")) id3tag.appendf("Original Release Year: %s", value, "id3tag");
-    if (!strcmp(tag, "TDRC")) id3tag.appendf("Publication date: %s", value, "id3tag");
-    if (!strcmp(tag, "TDRL")) id3tag.appendf("ReleaseTime: %s", value, "id3tag");
-    if (!strcmp(tag, "TENC")) id3tag.appendf("Encoded by: %s", value, "id3tag");
-    if (!strcmp(tag, "TEXT")) {} // id3tag.appendf("Lyricist: %s", value, "id3tag");
-    if (!strcmp(tag, "TGID")) id3tag.appendf("PodcastID: %s", value, "id3tag");
-    if (!strcmp(tag, "TIME")) id3tag.appendf("Time: %s", value, "id3tag");
-    if (!strcmp(tag, "TIT1")) id3tag.appendf("Grouping: %s", value, "id3tag");
-    if (!strcmp(tag, "TIT2")) id3tag.appendf("Title: %s", value, "id3tag");
-    if (!strcmp(tag, "TIT3")) id3tag.appendf("Subtitle: %s", value, "id3tag");
-    if (!strcmp(tag, "TLAN")) id3tag.appendf("Language: %s", value, "id3tag");
-    if (!strcmp(tag, "TLEN")) id3tag.appendf("Length (ms): %s", value, "id3tag");
-    if (!strcmp(tag, "TMED")) id3tag.appendf("Media: %s", value, "id3tag");
-    if (!strcmp(tag, "TOAL")) id3tag.appendf("OriginalAlbum: %s", value, "id3tag");
-    if (!strcmp(tag, "TOPE")) id3tag.appendf("OriginalArtist: %s", value, "id3tag");
-    if (!strcmp(tag, "TOLY")) id3tag.appendf("OriginalLyricist: %s", value, "id3tag");
-    if (!strcmp(tag, "TORY")) id3tag.appendf("OriginalReleaseYear: %s", value, "id3tag");
-    if (!strcmp(tag, "TPE1")) id3tag.appendf("Artist: %s", value, "id3tag");
-    if (!strcmp(tag, "TPE2")) id3tag.appendf("Band: %s", value, "id3tag");
-    if (!strcmp(tag, "TPE3")) id3tag.appendf("Conductor: %s", value, "id3tag");
-    if (!strcmp(tag, "TPE4")) id3tag.appendf("InterpretedBy: %s", value, "id3tag");
-    if (!strcmp(tag, "TPOS")) id3tag.appendf("PartOfSet: %s", value, "id3tag");
-    if (!strcmp(tag, "TPUB")) id3tag.appendf("Publisher: %s", value, "id3tag");
-    if (!strcmp(tag, "TRCK")) id3tag.appendf("Track: %s", value, "id3tag");
-    if (!strcmp(tag, "TRSN")) id3tag.appendf("InternetRadioStationName: %s", value, "id3tag");
-    if (!strcmp(tag, "TSSE")) id3tag.appendf("SettingsForEncoding: %s", value, "id3tag");
-    if (!strcmp(tag, "TRDA")) id3tag.appendf("RecordingDates: %s", value, "id3tag");
-    if (!strcmp(tag, "TSO2")) id3tag.appendf("AlbumArtistSortOrder: %s", value, "id3tag");
-    if (!strcmp(tag, "TSOA")) id3tag.appendf("AlbumSortOrder: %s", value, "id3tag");
-    if (!strcmp(tag, "TSOP")) id3tag.appendf("PerformerSortOrder: %s", value, "id3tag");
-    if (!strcmp(tag, "TSOC")) id3tag.appendf("ComposerSortOrder: %s", value, "id3tag");
-    if (!strcmp(tag, "TSOT")) id3tag.appendf("TitleSortOrder: %s", value, "id3tag");
-    if (!strcmp(tag, "TXXX")) id3tag.appendf("UserDefinedText: %s", value, "id3tag");
-    if (!strcmp(tag, "TYER")) id3tag.appendf("Year: %s", value, "id3tag");
-    if (!strcmp(tag, "USER")) id3tag.appendf("TermsOfUse: %s", value, "id3tag");
-    if (!strcmp(tag, "USLT")) id3tag.appendf("Lyrics: %s", value, "id3tag");
-    if (!strcmp(tag, "WCOM")) id3tag.appendf("Commercial URL: %s", value, "id3tag");
-    if (!strcmp(tag, "WFED")) id3tag.appendf("Podcast URL: %s", value, "id3tag");
-    if (!strcmp(tag, "WOAF")) id3tag.appendf("File URL: %s", value, "id3tag");
-    if (!strcmp(tag, "WOAR")) id3tag.appendf("OfficialArtistWebpage: %s", value, "id3tag");
-    if (!strcmp(tag, "WOAS")) id3tag.appendf("Source URL: %s", value, "id3tag");
-    if (!strcmp(tag, "WORS")) id3tag.appendf("InternetRadioStationURL: %s", value, "id3tag");
-    if (!strcmp(tag, "WXXX")) id3tag.appendf("User defined URL link frame: %s", value, "id3tag");
-    if (!strcmp(tag, "XDOR")) id3tag.appendf("OriginalReleaseTime: %s", value, "id3tag");
+    if (!strcmp(tag, "COMM")) id3tag.appendf1("Comment: {}", value, "id3tag");
+    if (!strcmp(tag, "OWNE")) id3tag.appendf1("Ownership: {}", value, "id3tag");
+    if (!strcmp(tag, "PRIV")) id3tag.appendf1("Private: {}", value, "id3tag");
+    if (!strcmp(tag, "SYLT")) id3tag.appendf1("SynLyrics: {}", value, "id3tag");
+    if (!strcmp(tag, "TALB")) id3tag.appendf1("Album: {}", value, "id3tag");
+    if (!strcmp(tag, "TBPM")) id3tag.appendf1("BeatsPerMinute: {}", value, "id3tag");
+    if (!strcmp(tag, "TCAT")) id3tag.appendf1("PodcastCategory: {}", value, "id3tag");
+    if (!strcmp(tag, "TCMP")) id3tag.appendf1("Compilation: {}", value, "id3tag");
+    if (!strcmp(tag, "TCOM")) id3tag.appendf1("Composer: {}", value, "id3tag");
+    if (!strcmp(tag, "TCON")) id3tag.appendf1("ContentType: {}", value, "id3tag");
+    if (!strcmp(tag, "TCOP")) id3tag.appendf1("Copyright: {}", value, "id3tag");
+    if (!strcmp(tag, "TDAT")) id3tag.appendf1("Date: {}", value, "id3tag");
+    if (!strcmp(tag, "TDES")) id3tag.appendf1("PodcastDescription: {}", value, "id3tag");
+    if (!strcmp(tag, "TDOR")) id3tag.appendf1("Original Release Year: {}", value, "id3tag");
+    if (!strcmp(tag, "TDRC")) id3tag.appendf1("Publication date: {}", value, "id3tag");
+    if (!strcmp(tag, "TDRL")) id3tag.appendf1("ReleaseTime: {}", value, "id3tag");
+    if (!strcmp(tag, "TENC")) id3tag.appendf1("Encoded by: {}", value, "id3tag");
+    if (!strcmp(tag, "TEXT")) {} // id3tag.appendf1("Lyricist: {}", value, "id3tag");
+    if (!strcmp(tag, "TGID")) id3tag.appendf1("PodcastID: {}", value, "id3tag");
+    if (!strcmp(tag, "TIME")) id3tag.appendf1("Time: {}", value, "id3tag");
+    if (!strcmp(tag, "TIT1")) id3tag.appendf1("Grouping: {}", value, "id3tag");
+    if (!strcmp(tag, "TIT2")) id3tag.appendf1("Title: {}", value, "id3tag");
+    if (!strcmp(tag, "TIT3")) id3tag.appendf1("Subtitle: {}", value, "id3tag");
+    if (!strcmp(tag, "TLAN")) id3tag.appendf1("Language: {}", value, "id3tag");
+    if (!strcmp(tag, "TLEN")) id3tag.appendf1("Length (ms): {}", value, "id3tag");
+    if (!strcmp(tag, "TMED")) id3tag.appendf1("Media: {}", value, "id3tag");
+    if (!strcmp(tag, "TOAL")) id3tag.appendf1("OriginalAlbum: {}", value, "id3tag");
+    if (!strcmp(tag, "TOPE")) id3tag.appendf1("OriginalArtist: {}", value, "id3tag");
+    if (!strcmp(tag, "TOLY")) id3tag.appendf1("OriginalLyricist: {}", value, "id3tag");
+    if (!strcmp(tag, "TORY")) id3tag.appendf1("OriginalReleaseYear: {}", value, "id3tag");
+    if (!strcmp(tag, "TPE1")) id3tag.appendf1("Artist: {}", value, "id3tag");
+    if (!strcmp(tag, "TPE2")) id3tag.appendf1("Band: {}", value, "id3tag");
+    if (!strcmp(tag, "TPE3")) id3tag.appendf1("Conductor: {}", value, "id3tag");
+    if (!strcmp(tag, "TPE4")) id3tag.appendf1("InterpretedBy: {}", value, "id3tag");
+    if (!strcmp(tag, "TPOS")) id3tag.appendf1("PartOfSet: {}", value, "id3tag");
+    if (!strcmp(tag, "TPUB")) id3tag.appendf1("Publisher: {}", value, "id3tag");
+    if (!strcmp(tag, "TRCK")) id3tag.appendf1("Track: {}", value, "id3tag");
+    if (!strcmp(tag, "TRSN")) id3tag.appendf1("InternetRadioStationName: {}", value, "id3tag");
+    if (!strcmp(tag, "TSSE")) id3tag.appendf1("SettingsForEncoding: {}", value, "id3tag");
+    if (!strcmp(tag, "TRDA")) id3tag.appendf1("RecordingDates: {}", value, "id3tag");
+    if (!strcmp(tag, "TSO2")) id3tag.appendf1("AlbumArtistSortOrder: {}", value, "id3tag");
+    if (!strcmp(tag, "TSOA")) id3tag.appendf1("AlbumSortOrder: {}", value, "id3tag");
+    if (!strcmp(tag, "TSOP")) id3tag.appendf1("PerformerSortOrder: {}", value, "id3tag");
+    if (!strcmp(tag, "TSOC")) id3tag.appendf1("ComposerSortOrder: {}", value, "id3tag");
+    if (!strcmp(tag, "TSOT")) id3tag.appendf1("TitleSortOrder: {}", value, "id3tag");
+    if (!strcmp(tag, "TXXX")) id3tag.appendf1("UserDefinedText: {}", value, "id3tag");
+    if (!strcmp(tag, "TYER")) id3tag.appendf1("Year: {}", value, "id3tag");
+    if (!strcmp(tag, "USER")) id3tag.appendf1("TermsOfUse: {}", value, "id3tag");
+    if (!strcmp(tag, "USLT")) id3tag.appendf1("Lyrics: {}", value, "id3tag");
+    if (!strcmp(tag, "WCOM")) id3tag.appendf1("Commercial URL: {}", value, "id3tag");
+    if (!strcmp(tag, "WFED")) id3tag.appendf1("Podcast URL: {}", value, "id3tag");
+    if (!strcmp(tag, "WOAF")) id3tag.appendf1("File URL: {}", value, "id3tag");
+    if (!strcmp(tag, "WOAR")) id3tag.appendf1("OfficialArtistWebpage: {}", value, "id3tag");
+    if (!strcmp(tag, "WOAS")) id3tag.appendf1("Source URL: {}", value, "id3tag");
+    if (!strcmp(tag, "WORS")) id3tag.appendf1("InternetRadioStationURL: {}", value, "id3tag");
+    if (!strcmp(tag, "WXXX")) id3tag.appendf1("User defined URL link frame: {}", value, "id3tag");
+    if (!strcmp(tag, "XDOR")) id3tag.appendf1("OriginalReleaseTime: {}", value, "id3tag");
 
     if (!id3tag.valid()) {
         AUDIO_LOG_DEBUG("unknown tag: %s", tag);
@@ -3022,9 +3022,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                                 m_m4aHdr.picPos = pos + 24 - as;
                                 AUDIO_LOG_DEBUG("cover jpeg start: %u, len %u", m_m4aHdr.picPos, m_m4aHdr.picLen);
                             }
-                            id3tag.assignf("%s: %i", tags[i].descr, &sa[24]); // binary
+                            id3tag.assignf1("{}: {}", tags[i].descr, &sa[24]); // binary
                         } else if (dty == 1 && strlen(&sa[24]) > 0)
-                            id3tag.assignf("%s: %s", tags[i].descr, &sa[24]); // UTF-8 Text
+                            id3tag.assignf1("{}: {}", tags[i].descr, &sa[24]); // UTF-8 Text
                         else if (dty == 0x0D) {
                             m_m4aHdr.picLen = as - 24;
                             m_m4aHdr.picPos = pos + 24 - as;

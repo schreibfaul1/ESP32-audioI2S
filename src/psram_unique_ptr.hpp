@@ -893,39 +893,39 @@ class ps_ptr {
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
 
     // onli activate if T = char
-    template <typename U = T>
-        requires std::is_same_v<U, char>
-    void assignf(const char* fmt, ...) {
-        if (!fmt) return;
-        // Formatierte Länge berechnen
-        va_list args;
-        va_start(args, fmt);
-        va_list args_copy;
-        va_copy(args_copy, args);
-        int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
-        va_end(args_copy);
+    // template <typename U = T>
+    //     requires std::is_same_v<U, char>
+    // void assignf(const char* fmt, ...) {
+    //     if (!fmt) return;
+    //     // Formatierte Länge berechnen
+    //     va_list args;
+    //     va_start(args, fmt);
+    //     va_list args_copy;
+    //     va_copy(args_copy, args);
+    //     int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
+    //     va_end(args_copy);
 
-        if (fmt_len < 0) {
-            va_end(args);
-            return;
-        }
+    //     if (fmt_len < 0) {
+    //         va_end(args);
+    //         return;
+    //     }
 
-        std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
+    //     std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
 
-        // share previous memory and new allocates
-        reset();
-        alloc(new_len);
-        if (!mem) {
-            printf("OOM: assignf() failed for %zu bytes\n", new_len);
-            va_end(args);
-            return;
-        }
+    //     // share previous memory and new allocates
+    //     reset();
+    //     alloc(new_len);
+    //     if (!mem) {
+    //         printf("OOM: assignf() failed for %zu bytes\n", new_len);
+    //         va_end(args);
+    //         return;
+    //     }
 
-        // write formatted text
-        vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
-        va_end(args);
-        allocated_size = fmt_len;
-    }
+    //     // write formatted text
+    //     vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
+    //     va_end(args);
+    //     allocated_size = fmt_len;
+    // }
 
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
@@ -938,7 +938,10 @@ class ps_ptr {
 
         alloc(tmp.size() + 1);
 
-        if (!mem) return;
+        if (!mem) {
+            printf("OOM: assignf() failed for %zu bytes\n", tmp.size() + 1);
+            return;
+        }
 
         memcpy(mem.get(), tmp.c_str(), tmp.size() + 1);
 
@@ -955,31 +958,62 @@ class ps_ptr {
 
     // Nur aktivieren, wenn T = char
 
-    template <typename... Args> void appendf(const char* fmt, Args&&... args) {
+    // template <typename... Args> void appendf(const char* fmt, Args&&... args) {
+    //     if (!fmt) return;
+    //     int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+    //     if (add_len < 0) return;
+
+    //     std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
+    //     std::size_t new_len = old_len + add_len + 1;
+
+    //     char* old_data = static_cast<char*>(mem.release());
+    //     reset();
+    //     alloc(new_len);
+
+    //     if (!mem) {
+    //         printf("OOM: appendf() failed for %zu bytes\n", new_len);
+    //         if (old_data) free(old_data);
+    //         return;
+    //     }
+
+    //     if (old_data) {
+    //         std::memcpy(mem.get(), old_data, old_len);
+    //         free(old_data);
+    //     }
+
+    //     std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
+    // }
+
+    template <typename U = T, typename... Args>
+        requires std::is_same_v<U, char>
+    void appendf1(const char* fmt, Args&&... args) {
         if (!fmt) return;
-        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (add_len < 0) return;
 
+        std::string tmp;
+        format_append(tmp, fmt, std::forward<Args>(args)...);
         std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
+        std::size_t add_len = tmp.size();
         std::size_t new_len = old_len + add_len + 1;
-
         char* old_data = static_cast<char*>(mem.release());
         reset();
         alloc(new_len);
-
         if (!mem) {
-            printf("OOM: appendf() failed for %zu bytes\n", new_len);
-            if (old_data) free(old_data);
+            printf("OOM: appendf1() failed for %zu bytes\n", new_len);
+            if (old_data) { free(old_data); }
             return;
         }
 
-        if (old_data) {
+        // alten Text kopieren
+        if (old_data && old_len > 0) {
             std::memcpy(mem.get(), old_data, old_len);
             free(old_data);
         }
 
-        std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
+        // neuen Text anhängen
+        std::memcpy(mem.get() + old_len, tmp.c_str(), add_len + 1);
+        allocated_size = old_len + add_len;
     }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F _ V A  📌📌📌
 
@@ -2453,7 +2487,31 @@ class ps_ptr {
     // 📌📌📌  F O R M A T  📌📌📌 (fmt lib within class)
     // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-    template <typename V> std::string to_string_any(const V& v) { return std::to_string(v); }
+    template <typename V> std::string to_string_any(const V& v) {
+        if constexpr (std::is_same_v<V, float> || std::is_same_v<V, double>) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%g", v);
+            return buf;
+        } else if constexpr (std::is_integral_v<V> || std::is_enum_v<V>) {
+            return std::to_string(static_cast<long long>(v));
+        } else if constexpr (std::is_pointer_v<V>) {
+            // Handle pointers to char types
+            if constexpr (std::is_same_v<V, char*> || std::is_same_v<V, const char*>) {
+                return v ? std::string(v) : "";
+            } else if constexpr (std::is_same_v<V, unsigned char*> || std::is_same_v<V, const unsigned char*>) {
+                return v ? std::string(reinterpret_cast<const char*>(v)) : "";
+            } else {
+                // For other pointers, print the address
+                char buf[32];
+                snprintf(buf, sizeof(buf), "0x%p", v);
+                return buf;
+            }
+        } else {
+            return v;
+        }
+    }
+
+    inline std::string to_string_any(bool b) { return b ? "true" : "false"; }
 
     inline std::string to_string_any(const char* s) { return s ? s : ""; }
 
@@ -2463,15 +2521,11 @@ class ps_ptr {
 
     template <typename First, typename... Rest> void format_append(std::string& out, const char* fmt, First&& first, Rest&&... rest) {
         while (*fmt) {
-
             if (fmt[0] == '{' && fmt[1] == '}') {
                 out += to_string_any(std::forward<First>(first));
-
                 format_append(out, fmt + 2, std::forward<Rest>(rest)...);
-
                 return;
             }
-
             out += *fmt++;
         }
     }
