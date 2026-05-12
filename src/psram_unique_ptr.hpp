@@ -926,6 +926,25 @@ class ps_ptr {
         va_end(args);
         allocated_size = fmt_len;
     }
+
+    template <typename U = T, typename... Args>
+        requires std::is_same_v<U, char>
+    void assignf1(const char* fmt, Args&&... args) {
+        std::string tmp;
+
+        format_append(tmp, fmt, std::forward<Args>(args)...);
+
+        reset();
+
+        alloc(tmp.size() + 1);
+
+        if (!mem) return;
+
+        memcpy(mem.get(), tmp.c_str(), tmp.size() + 1);
+
+        allocated_size = tmp.size();
+    }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F   📌📌📌
 
@@ -2017,7 +2036,6 @@ class ps_ptr {
         }
         *dst = '\0';
         name = n;
-
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E P L A C E   📌📌📌
@@ -2227,7 +2245,10 @@ class ps_ptr {
     // 📌📌📌  C L E A R   📌📌📌
 
     void clear() {
-        if (mem && allocated_size > 0) { std::memset(mem.get(), 0, allocated_size); length_ = 0; }
+        if (mem && allocated_size > 0) {
+            std::memset(mem.get(), 0, allocated_size);
+            length_ = 0;
+        }
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S I Z E   📌📌📌
@@ -2364,7 +2385,7 @@ class ps_ptr {
     // Safe operator[] with logging
     T& operator[](std::size_t index) noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy; // Access allowed, but ineffective
         }
         return mem[index];
@@ -2372,7 +2393,7 @@ class ps_ptr {
 
     const T& operator[](std::size_t index) const noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy;
         }
         return mem[index];
@@ -2427,6 +2448,33 @@ class ps_ptr {
     std::span<T> span() noexcept { return std::span<T>(mem.get(), allocated_size); }
 
     std::span<const T> span() const noexcept { return std::span<const T>(mem.get(), allocated_size); }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F O R M A T  📌📌📌 (fmt lib within class)
+    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    template <typename V> std::string to_string_any(const V& v) { return std::to_string(v); }
+
+    inline std::string to_string_any(const char* s) { return s ? s : ""; }
+
+    inline std::string to_string_any(const std::string& s) { return s; }
+
+    void format_append(std::string& out, const char* fmt) { out += fmt; }
+
+    template <typename First, typename... Rest> void format_append(std::string& out, const char* fmt, First&& first, Rest&&... rest) {
+        while (*fmt) {
+
+            if (fmt[0] == '{' && fmt[1] == '}') {
+                out += to_string_any(std::forward<First>(first));
+
+                format_append(out, fmt + 2, std::forward<Rest>(rest)...);
+
+                return;
+            }
+
+            out += *fmt++;
+        }
+    }
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  O P E R A T O R  📌📌📌 (witout class)
