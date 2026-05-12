@@ -891,45 +891,12 @@ class ps_ptr {
     // ps_ptr<char> message;
     // message.assignf("Code {}, Modul {}", 404, "Network");
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
-
-    // // onli activate if T = char
-    // template <typename U = T>
-    //     requires std::is_same_v<U, char>
-    // void assignf(const char* fmt, ...) {
-    //     if (!fmt) return;
-    //     // Formatierte Länge berechnen
-    //     va_list args;
-    //     va_start(args, fmt);
-    //     va_list args_copy;
-    //     va_copy(args_copy, args);
-    //     int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
-    //     va_end(args_copy);
-
-    //     if (fmt_len < 0) {
-    //         va_end(args);
-    //         return;
-    //     }
-
-    //     std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
-
-    //     // share previous memory and new allocates
-    //     reset();
-    //     alloc(new_len);
-    //     if (!mem) {
-    //         printf("OOM: assignf() failed for %zu bytes\n", new_len);
-    //         va_end(args);
-    //         return;
-    //     }
-
-    //     // write formatted text
-    //     vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
-    //     va_end(args);
-    //     allocated_size = fmt_len;
-    // }
+    // assignf("v={:02} hex={:04X} pi={:.2f}", 7, 0xAF, 3.14159); --> v=07 hex=00AF pi=3.14
+    // bool --> true or false
 
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
-    void assignf1(const char* fmt, Args&&... args) {
+    void assignf(const char* fmt, Args&&... args) {
         std::string tmp;
 
         format_append(tmp, fmt, std::forward<Args>(args)...);

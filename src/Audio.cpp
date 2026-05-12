@@ -993,11 +993,11 @@ bool Audio::httpRange(uint32_t seek, uint32_t length) {
     cur_hwoe.clone_from(dismantledLastHost.hwoe);
 
     if (length == UINT32_MAX)
-        range.assignf1("Range: bytes={}-\r\n", seek);
+        range.assignf("Range: bytes={}-\r\n", seek);
     else
-        range.assignf1("Range: bytes={]-{}\r\n", seek, seek + length);
+        range.assignf("Range: bytes={]-{}\r\n", seek, seek + length);
 
-    rqh.assignf1("GET /{} HTTP/1.1\r\n", path.get());
+    rqh.assignf("GET /{} HTTP/1.1\r\n", path.get());
     rqh.appendf1("Host: {}\r\n", rqh_host.get());
     rqh.append("Accept: */*\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
@@ -3022,9 +3022,9 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                                 m_m4aHdr.picPos = pos + 24 - as;
                                 AUDIO_LOG_DEBUG("cover jpeg start: %u, len %u", m_m4aHdr.picPos, m_m4aHdr.picLen);
                             }
-                            id3tag.assignf1("{}: {}", tags[i].descr, &sa[24]); // binary
+                            id3tag.assignf("{}: {}", tags[i].descr, &sa[24]); // binary
                         } else if (dty == 1 && strlen(&sa[24]) > 0)
-                            id3tag.assignf1("{}: {}", tags[i].descr, &sa[24]); // UTF-8 Text
+                            id3tag.assignf("{}: {}", tags[i].descr, &sa[24]); // UTF-8 Text
                         else if (dty == 0x0D) {
                             m_m4aHdr.picLen = as - 24;
                             m_m4aHdr.picPos = pos + 24 - as;
