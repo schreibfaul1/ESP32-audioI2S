@@ -2073,11 +2073,13 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         if (m_ID3Hdr.framesize == 0) return 0;
 
         ps_ptr<char> tmp;
+        tmp.set_name("tmp");
         ps_ptr<char> content_descriptor;
-        size_t       fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
-        size_t       bytesToCopy = fs;
-        size_t       textDataLength = 0;
-        uint16_t     idx = 0;
+        content_descriptor.set_name("content_descriptor");
+        size_t   fs = m_ID3Hdr.framesize; // fs = size of the frame data field as read from header
+        size_t   bytesToCopy = fs;
+        size_t   textDataLength = 0;
+        uint16_t idx = 0;
 
         if (bytesToCopy >= m_ID3Hdr.iBuffSize) { bytesToCopy = m_ID3Hdr.iBuffSize - 1; } // make sure a zero terminator fits
         if (bytesToCopy > 0) { textDataLength = bytesToCopy - 1; }                       // Only if there are data that we can shorten
@@ -2218,7 +2220,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         }
 
         ps_ptr<char> tag;
+        tag.set_name("tag");
         ps_ptr<char> value;
+        value.set_name("value");
         if (data[0] == 0) { // we are in padding
             m_controlCounter = MP3_LASTFRAMES;
             uint16_t padding = m_ID3Hdr.remainingHeaderBytes;
