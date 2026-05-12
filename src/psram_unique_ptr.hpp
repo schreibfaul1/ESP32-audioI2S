@@ -2491,8 +2491,13 @@ class ps_ptr {
         using Raw = std::remove_cv_t<std::remove_reference_t<V>>;
         using D = std::decay_t<V>;
 
+        // ps_ptr<char>
+        if constexpr (std::is_same_v<Raw, ps_ptr<char>>) {
+            const char* str = v.c_get();
+            return str ? std::string(str) : "";
+        }
         // Treat character arrays as text in the same way as string literals.
-        if constexpr (std::is_array_v<Raw> && std::is_same_v<std::remove_extent_t<Raw>, char>) {
+        else if constexpr (std::is_array_v<Raw> && std::is_same_v<std::remove_extent_t<Raw>, char>) {
             return std::string(v);
         }
         // BOOL
@@ -2637,6 +2642,21 @@ class ps_ptr {
         // bool ist in C++ ein Integraltyp, soll hier aber als Text ausgegeben werden.
         if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) {
             return value ? "true" : "false";
+        }
+
+        // ps_ptr<char>
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, ps_ptr<char>>) {
+            const char* str = value.c_get();
+            return str ? std::string(str) : std::string("");
+        }
+
+        // CHAR - separate Behandlung vor is_integral_v
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, char>) {
+            if (fs.type == 'c' || fs.type == 0) {  // 'c' oder kein Specifier
+                buf[0] = value;
+                buf[1] = '\0';
+                return buf;
+            }
         }
 
         // HEX
