@@ -2145,7 +2145,7 @@ void NeaacDecoder::cfftf(uint16_t mdct_len, complex_t* c) {
             cfft_select = m_ccft2048.get();
             work_select = m_work2048.get();
             break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     cfftf1neg(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, -1);
 }
@@ -2166,7 +2166,7 @@ void NeaacDecoder::cfftb(uint16_t mdct_len, complex_t* c) {
             cfft_select = m_ccft2048.get();
             work_select = m_work2048.get();
             break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     cfftf1pos(cfft_select->n, c, work_select, (const uint16_t*)cfft_select->ifac, (const complex_t*)cfft_select->tab, +1);
 }
@@ -2265,7 +2265,7 @@ void NeaacDecoder::cffti(uint16_t mdct_len, uint16_t n) {
             cfft_select = m_ccft2048.get();
             m_work2048.alloc_array(n * sizeof(complex_t), "m_work2048");
             break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     cfft_select->n = n;
 
@@ -3740,7 +3740,7 @@ void NeaacDecoder::faad_mdct_init(uint16_t mdct_len, uint16_t N) {
             m_mdct2048.alloc("m_mdct2048");
             mdct_new = m_mdct2048.get();
             break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     assert(N % 8 == 0);
     mdct_new->N = N;
@@ -3793,7 +3793,7 @@ void NeaacDecoder::faad_mdct_end(uint16_t mdct_len) {
             m_ccft2048.reset();
             m_mdct2048.reset();
             break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -3803,7 +3803,7 @@ void NeaacDecoder::faad_imdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
         case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     uint16_t  k;
     complex_t x;
@@ -3892,7 +3892,7 @@ void NeaacDecoder::faad_mdct(uint16_t mdct_len, real_t* X_in, real_t* X_out) {
         case 256: mdct_select = m_mdct256.get(); break;
         case 1024: mdct_select = m_mdct1024.get(); break;
         case 2048: mdct_select = m_mdct2048.get(); break;
-        default: AAC_LOG_ERROR("wrong length %i", mdct_len);
+        default: AAC_LOG_ERROR("wrong length {}", mdct_len);
     }
     uint16_t  k;
     complex_t x;

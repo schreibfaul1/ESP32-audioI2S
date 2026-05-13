@@ -159,9 +159,9 @@ int32_t AACDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
     if (err < 0) {
         if (err == -100) return AAC_ID3_HDR; // ID3 header found
         if (err == -21) {
-            AAC_LOG_INFO("%s", getErrorMessage(abs(err)));
+            AAC_LOG_INFO("{}", getErrorMessage(abs(err)));
         } else {
-            AAC_LOG_ERROR("%s", getErrorMessage(abs(err)));
+            AAC_LOG_ERROR("{}", getErrorMessage(abs(err)));
         }
     } else {
 
