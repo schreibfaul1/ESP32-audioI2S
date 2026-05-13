@@ -43,11 +43,11 @@ bool CeltDecoder::init() {
     size_t omd = celt_decoder_get_size(2);
     m_decode_mem.alloc(omd, "decode_mem");
     if (m_decode_mem.valid()) {
-        OPUS_LOG_DEBUG("Celt decoder, allocated bytes: %zu", omd);
+        OPUS_LOG_DEBUG("Celt decoder, allocated bytes: {}", omd);
         m_decode_mem.clear();  // mem zero
         return true;
     }
-    OPUS_LOG_ERROR("oom for %zu bytes", omd);
+    OPUS_LOG_ERROR("oom for {} bytes", omd);
     return false;
 }
 //——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

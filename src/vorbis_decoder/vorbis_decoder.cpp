@@ -472,7 +472,7 @@ int32_t VorbisDecoder::parseVorbisComment(uint8_t* inbuf, int16_t nBytes, uint32
             }
             m_comment.item_vec.clear();
             m_f_newMetadataBlockPicture = true;
-            // for (int i = 0; i < m_comment.pic_vec.size(); i += 2) { OPUS_LOG_INFO("Segment %i   %i - %i", i / 2, m_comment.pic_vec[i], m_comment.pic_vec[i + 1]); }
+            // for (int i = 0; i < m_comment.pic_vec.size(); i += 2) { OPUS_LOG_INFO("Segment {}   {} - {}", i / 2, m_comment.pic_vec[i], m_comment.pic_vec[i + 1]); }
             VORBIS_LOG_DEBUG("Skipping embedded picture (%zu bytes)", val.size());
             return;
         }
