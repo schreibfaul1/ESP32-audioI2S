@@ -582,6 +582,41 @@ class Audio {
         return true;
     }
 
+    template <typename... Args> static bool info1(Audio& instance, event_t e, const char* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(instance.mutex_info);
+        if (!fmt) return false;
+        if (!audio_info_callback) return false;
+
+        ps_ptr<char> result;
+        result.assignf(fmt, std::forward<Args>(args)...);
+        if (!result.get()) return false;
+
+        auto extract_last_number = [](std::string_view s) -> int32_t {
+            auto it = s.end();
+            while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
+            auto end = it;
+            while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
+            if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
+                std::string_view number{it, static_cast<size_t>(end - it)};
+                uint32_t         value{};
+                auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
+                if (ec == std::errc{}) { return static_cast<int32_t>(value); }
+            }
+            return -1;
+        };
+
+        std::vector<uint32_t> v;
+        v.push_back(0);
+        instance.m_info_queue.msg.emplace_front(result);
+        instance.m_info_queue.s.emplace_front(eventStr[e]);
+        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()));
+        instance.m_info_queue.arg2.emplace_front(0);
+        instance.m_info_queue.vec.emplace_front(v);
+        instance.m_info_queue.e.emplace_front((uint8_t)e);
+        result.reset();
+        return true;
+    }
+
     static bool info(Audio& instance, event_t e, std::vector<uint32_t>& v) {
         if (!audio_info_callback) return false;
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
