@@ -638,37 +638,37 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
                     if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
                         assignVorbisValue(vb[0], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Title: %s", vb[0].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Title: {}", vb[0].c_get());
                         // FLAC_LOG_VERBOSE("TITLE: {}", vb[0].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
                         assignVorbisValue(vb[1], comment, commemtStringLength, 7);
-                        audio.info(audio, Audio::evt_id3data, "Artist: %s", vb[1].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Artist: {}", vb[1].c_get());
                         // FLAC_LOG_VERBOSE("ARTIST: {}", vb[1].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
                         assignVorbisValue(vb[2], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Genre: %s", vb[2].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Genre: {}", vb[2].c_get());
                         FLAC_LOG_VERBOSE("GENRE: {}", vb[2].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
                         assignVorbisValue(vb[3], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Album: %s", vb[3].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Album: {}", vb[3].c_get());
                         FLAC_LOG_VERBOSE("ALBUM: {}", vb[3].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
                         assignVorbisValue(vb[4], comment, commemtStringLength, 8);
-                        audio.info(audio, Audio::evt_id3data, "Comments: %s", vb[4].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Comments: {}", vb[4].c_get());
                         FLAC_LOG_VERBOSE("COMMENT: {}", vb[4].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
                         assignVorbisValue(vb[5], comment, commemtStringLength, 5);
-                        audio.info(audio, Audio::evt_id3data, "Date: %s", vb[5].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Date: {}", vb[5].c_get());
                         FLAC_LOG_VERBOSE("DATE: {}", vb[5].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
                         assignVorbisValue(vb[6], comment, commemtStringLength, 12);
-                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", vb[6].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: {}", vb[6].c_get());
                         FLAC_LOG_VERBOSE("TRACKNUMBER: {}", vb[6].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {

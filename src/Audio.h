@@ -506,83 +506,8 @@ class Audio {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
-    // 🎯 overload for char*-Pointer (maybe nullptr)
-    static const char* safe_arg(const char* v) { return v ? v : "(null)"; }
-    static char*       safe_arg(char* v) { return v ? v : (char*)"(null)"; }
-
-    // 🎯 overload for char-Arrays (never nullptr)
-    template <size_t N> static const char* safe_arg(const char (&v)[N]) { return v; }
-
-    // 🎯 overload for string
-    static const char* safe_arg(const std::string& v) { return v.c_str(); }
-
-    // 🎯 overload for string_view
-    static const char* safe_arg(std::string_view v) {
-        return v.data(); // Achtung: evtl. nicht nullterminiert
-    }
-
-    // 🎯 Catch-all for all other types
-    template <typename T> static auto safe_arg(T&& v) -> decltype(auto) { return std::forward<T>(v); }
-
-    // specialization for nullptr / NULL
-    static const char* safe_arg(std::nullptr_t) { return "(null)"; }
 
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
-        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-                                                               // -------------------------------------------------------------------------------------------------------------------
-        auto extract_last_number = [](std::string_view s) -> int32_t {
-            // start from the back
-            auto it = s.end();
-            // skip whitespaces at the end (if available)
-            while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
-
-            auto end = it; // potential end of the number
-
-            // Now only search digits backwards
-            while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
-
-            // Check: is there a space before it?
-            if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
-                std::string_view number{it, static_cast<size_t>(end - it)};
-                uint32_t         value{};
-                auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
-                if (ec == std::errc{}) { return static_cast<int32_t>(value); }
-            }
-
-            return -1; // no number found in the end
-        };
-        // -------------------------------------------------------------------------------------------------------------------
-        if (!fmt) return false;
-        if (!audio_info_callback) return false;
-        ps_ptr<char> result;
-        // First run: determine size
-        int len = std::snprintf(nullptr, 0, fmt, safe_arg(std::forward<Args>(args))...);
-        if (len <= 0) return false;
-        result.calloc(len + 1);
-        char* p = result.get();
-        if (!p) return false;
-        std::snprintf(p, len + 1, fmt, safe_arg(std::forward<Args>(args))...);
-        // msg_t i = {0};
-        // i.msg = result.c_get();
-        // i.e = e;
-        // i.s = eventStr[e];
-        // i.arg1 = extract_last_number(result.c_get());
-        // i.i2s_num = instance.m_i2s_items.i2s_num;
-        // audio_info_callback(i);
-        std::vector<uint32_t> v; // dummy
-        v.push_back(0);
-        instance.m_info_queue.msg.emplace_front(result);
-        instance.m_info_queue.s.emplace_front(eventStr[e]);
-        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()));
-        instance.m_info_queue.arg2.emplace_front(0);
-        instance.m_info_queue.vec.emplace_front(v);
-        instance.m_info_queue.e.emplace_front((uint8_t)e);
-
-        result.reset();
-        return true;
-    }
-
-    template <typename... Args> static bool info1(Audio& instance, event_t e, const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!fmt) return false;
         if (!audio_info_callback) return false;

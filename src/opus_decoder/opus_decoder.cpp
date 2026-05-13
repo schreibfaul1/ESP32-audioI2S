@@ -1093,7 +1093,7 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
                 m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
-            audio.info(audio, Audio::evt_id3data, "Artist: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Artist: {}", val.c_get());
         }
         if (key.starts_with_icase("title")) {
             if (!m_comment.stream_title.valid()) {
@@ -1102,28 +1102,28 @@ int32_t OpusDecoder::parseOpusComment(uint8_t* inbuf, int32_t nBytes, uint32_t c
                 m_comment.stream_title.append(" - ");
                 m_comment.stream_title.append(val.c_get());
             }
-            audio.info(audio, Audio::evt_id3data, "Title: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Title: {}", val.c_get());
         }
         if (key.starts_with_icase("work")) {
-            audio.info(audio, Audio::evt_id3data, "Work: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Work: {}", val.c_get());
         }
         if (key.starts_with_icase("composer")) {
-            audio.info(audio, Audio::evt_id3data, "Composer: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Composer: {}", val.c_get());
         }
         if (key.starts_with_icase("genre")) {
-            audio.info(audio, Audio::evt_id3data, "Genre: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Genre: {}", val.c_get());
         }
         if (key.starts_with_icase("date")) {
-            audio.info(audio, Audio::evt_id3data, "Date: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Date: {}", val.c_get());
         }
         if (key.starts_with_icase("album")) {
-            audio.info(audio, Audio::evt_id3data, "Album: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Album: {}", val.c_get());
         }
         if (key.starts_with_icase("comment")) {
-            audio.info(audio, Audio::evt_id3data, "Comments: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Comments: {}", val.c_get());
         }
         if (key.starts_with_icase("tracknumber")) {
-            audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", val.c_get());
+            audio.info(audio, Audio::evt_id3data, "Track number/Position in set: {}", val.c_get());
         }
         if (m_comment.stream_title.valid()) m_f_newSteamTitle = true;
         // comment.println(); // optional output
