@@ -626,10 +626,9 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         }
         // Modified part: Support for Layer II and Layer III
         if (header_info->layer != 1 && header_info->layer != 2 && header_info->layer != 3) { // Allow Layer I (3) Layer II (2) and Layer III (1)
-            printf("\n");
-            for (int i = 0; i < 10; i++) printf("0x%02x ", header_data[i]);
-            printf("\n"); // Use header_data instead of buf
-            MP3_LOG_DEBUG("Not Layer I or II or III");
+            // MP3_LOG_WARN("");
+            // for (int i = 0; i < 10; i++) MP3_LOG_WARN("0x{:02X} ", header_data[i]);
+            MP3_LOG_ERROR("Not Layer I or II or III");
             return false;
         }
 
@@ -3639,7 +3638,7 @@ int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
 
     // --- 2. Check whether it is Layer III ---
     if (layer_description != LAYER_III) {
-        // fprintf(stderr, "Info: Not an MPEG Layer III frame (Layer: %u).\n", layer_description);
+        // MP3_LOG_DEBUG("Info: Not an MPEG Layer III frame (Layer: {}).", layer_description);
         return -1; // no Layer III
     }
 
@@ -3669,20 +3668,20 @@ int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
             side_info_size = 17; // Stereo, Joint Stereo, Dual Channel
         }
     } else {
-        fprintf(stderr, "Error: Reserved or unknown MPEG version ID: %u.\n", mpeg_version_id);
+        MP3_LOG_ERROR("Error: Reserved or unknown MPEG version ID: {}", mpeg_version_id);
         return -2; // Unknown/reserved MPEG version
     }
 
     // ensure that the frame is long enough for the side information
     // We need at least 2 bytes of the side info for Main_data_begin
     if (frame_len < (size_t)(side_info_offset + 2)) {
-        fprintf(stderr, "Error: Frame data too short for side information (need %d bytes, got %zu).\n", side_info_offset + 2, frame_len);
+        MP3_LOG_ERROR("Error: Frame data too short for side information (need {} bytes, got {}).", side_info_offset + 2, frame_len);
         return -3;
     }
     // (optional) Check whether the entire Side Information is available
     /*
     if (frame_len < (size_t)(side_info_offset + side_info_size)) {
-        fprintf(stderr, "Warning: Frame data might be too short for full side information (expected %d, got %zu available after header/CRC).\n", side_info_size, frame_len - side_info_offset);
+        MP3_LOG_ERROR("Warning: Frame data might be too short for full side information (expected {}, got {} available after header/CRC).", side_info_size, frame_len - side_info_offset);
         // Fortfahren, da main_data_begin am Anfang ist, aber es ist ein Hinweis
     }
     */

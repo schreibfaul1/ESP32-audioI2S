@@ -78,12 +78,14 @@ class AudioBuffer {
     uint8_t*        m_readPtr = nullptr;
     uint8_t*        m_endPtr = nullptr;
     uint8_t*        m_startPtr = nullptr;
+    ps_ptr<char>    m_log;
     bool            m_init = false;
     bool            m_isEmpty = true;
     bool            m_isFull = false;
 
   private:
     SemaphoreHandle_t m_mutex = nullptr;
+#define ANSI_ESC_RED "\033[31m"
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -506,7 +508,6 @@ class Audio {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
-
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(instance.mutex_info);
         if (!fmt) return false;

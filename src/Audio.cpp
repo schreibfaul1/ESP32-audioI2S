@@ -93,6 +93,7 @@ size_t AudioBuffer::getBufsize() {
 
 size_t AudioBuffer::init() {
     m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
+    m_log.set_name("\nAudiobuffer_Log");
     m_mutex = xSemaphoreCreateBinary();
     xSemaphoreGive(m_mutex);
     m_init = true;
@@ -116,7 +117,8 @@ size_t AudioBuffer::freeSpace() {
     if (m_readPtr == m_writePtr) {
         if (m_isEmpty) { return m_mainBuffSize; }
         if (m_isFull) { return 0; }
-        log_e("writePtr == readPtr, writePtr %i, readPtr %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.println();
     }
     if (m_readPtr < m_writePtr) {
         if (m_writePtr > m_endPtr) {
@@ -141,7 +143,8 @@ size_t AudioBuffer::bufferFilled() {
             bufferFilled = m_mainBuffSize;
             goto end;
         }
-        log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.println();
     }
     if (m_readPtr < m_writePtr) {
         bufferFilled = (size_t)(m_writePtr - m_readPtr);
@@ -175,7 +178,6 @@ size_t AudioBuffer::writeSpace() {
         // Only copy if the read pointer is not in the way
         if (m_readPtr > m_startPtr + m_resBuffSize) {
             memcpy(m_startPtr, m_endPtr, m_resBuffSize);
-            // log_w("wrap copy %u bytes", m_resBuffSize);
             m_writePtr = m_startPtr + m_resBuffSize;
         }
     }
@@ -192,8 +194,8 @@ size_t AudioBuffer::writeSpace() {
         m_writeSpace = min(m_maxRet, spaceToEnd);
         goto end;
     }
-
-    log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.println();
 
 end:
     xSemaphoreGive(m_mutex);
@@ -205,15 +207,19 @@ void AudioBuffer::bytesWritten(size_t bw) {
     xSemaphoreTake(m_mutex, portMAX_DELAY);
     if (!bw) goto end;
 
-    if (bw > m_writeSpace) log_e("writeSpace < bw, writeSpace %i, bw %i", m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
-
+    if (bw > m_writeSpace) {
+        m_log.assignf("{}:{}" ANSI_ESC_RED " writeSpace < bw, writeSpace {}, bw {}", __FILE__, __LINE__, m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
+        m_log.println();
+    }
     if (m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr) {
-        log_e("writePtr overrruns readPtr, writePtr %i, readPtr %i, bw %i", m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr overrruns readPtr, writePtr {}, readPtr {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
+        m_log.println();
         m_writePtr = m_readPtr;
         goto end;
     }
     if (m_writePtr + bw > m_buffEnd) {
-        log_e("writePtr overrruns buffEnd, writePtr %i, buffEnd %i, bw %i", m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr overrruns buffEnd, writePtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
+        m_log.println();
         m_writePtr = m_buffEnd;
         goto end;
     }
@@ -236,7 +242,7 @@ size_t AudioBuffer::readSpace() {
     if (m_readPtr >= m_endPtr && m_writePtr <= m_endPtr) {
         size_t len = m_readPtr - m_endPtr;
         if (m_writePtr > m_startPtr + len) {
-            log_d("set new readptr to %i", len);
+            // set new readptr
             m_readPtr = m_startPtr + len;
         }
     }
@@ -258,8 +264,8 @@ size_t AudioBuffer::readSpace() {
         m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
         goto end;
     }
-
-    log_e("%s %i writePtr == readPtr, writePtr %i, readPtr %i", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.println();
 end:
     xSemaphoreGive(m_mutex);
     return m_readSpace;
@@ -272,19 +278,22 @@ void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) goto end;
 
     if (m_readSpace < br) {
-        log_e("readSpace < br, rspc %i, br %i", m_readSpace, br); // br must not be larger than the queried m_readSpace
+        m_log.assignf("{}:{}" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__,  m_readSpace, br); // br must not be larger than the queried m_readSpace
+        m_log.println();
         vTaskDelay(100);
         goto end;
     }
 
     if (m_readPtr < m_writePtr && m_readPtr + br > m_writePtr) {
-        log_e("readPtr overrruns writePtr, readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " readPtr overrruns writePtr, readPtr {}, writePtr {}, br {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+        m_log.println();
         m_readPtr = m_writePtr;
         vTaskDelay(100);
         goto end;
     }
     if (m_readPtr + br > m_buffEnd) {
-        log_e("readPtr overrruns buffEnd, readPtr %i, buffEnd %i, bw %i", m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
+        m_log.assignf("{}:{}" ANSI_ESC_RED " readPtr overrruns buffEnd, readPtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
+        m_log.println();
         m_readPtr = m_buffEnd;
         vTaskDelay(100);
         goto end;
@@ -295,7 +304,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
     if (br) {
         if (m_readPtr == m_writePtr) {
             m_isEmpty = true;
-            // log_d(" readPtr %i, writePtr %i, br %i", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+            // m_log.assignf("readPtr {}, writePtr {}, br {}", m_readPtr - m_startPtr, m_writePtr - m_startPtr, br); m_log.println();
         }
         m_isFull = false;
     }
@@ -323,10 +332,11 @@ void AudioBuffer::reset() {
 }
 
 void AudioBuffer::showStatus() {
-    printf("\nfilled %i, free %i\n", bufferFilled(), freeSpace());
-    printf("writeSpace %i, readSpace %i\n", writeSpace(), readSpace());
-    printf("writePtr %i, readPtr %i\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
-    printf("isEmpty %i, isFull %i\n\n", m_isEmpty, m_isFull);
+    m_log.assignf("\nfilled {}, free {}\n", bufferFilled(), freeSpace());
+    m_log.appendf("writeSpace {}, readSpace {}\n", writeSpace(), readSpace());
+    m_log.appendf("writePtr {}, readPtr {}\n", m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.appendf("isEmpty {}, isFull {}\n\n", m_isEmpty, m_isFull);
+    m_log.print();
 }
 
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1854,7 +1864,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             }
             info(*this, evt_info, "audiofile contains synchronized lyrics");
             // for(int i = 0; i < m_syltLines.size(); i++){
-            //     info(*this, evt_lyrics, "%07i ms,   {}", m_syltTimeStamp[i], m_syltLines[i].c_get());
+            //     info(*this, evt_lyrics, "{:07} ms,   {}", m_syltTimeStamp[i], m_syltLines[i].c_get());
             // }
         }
         m_controlCounter = FLAC_MBH;
@@ -2935,7 +2945,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         int32_t dec_specific_offset = esds_buffer.special_index_of("\x05\x80\x80\x80", 4, m_m4aHdr.sizeof_esds);
         if (dec_specific_offset >= 0) {                                                           // decoderSpecificInfo found
             uint8_t dec_specific_length = ((uint8_t*)esds_buffer.get())[dec_specific_offset + 4]; // Länge nach Tag + 3 Extended Length Bytes
-            AUDIO_LOG_DEBUG("DecoderSpecificInfo found at offset {}, length: %u", dec_specific_offset, dec_specific_length);
+            AUDIO_LOG_DEBUG("DecoderSpecificInfo found at offset {}, length: {}", dec_specific_offset, dec_specific_length);
 
             // extract decoderSpecificInfo-data
             ps_ptr<char> dec_specific_data;
@@ -3703,7 +3713,7 @@ const char* Audio::parsePlaylist_M3U() {
         // AUDIO_LOG_INFO("Entry in playlist found: {}", pl);
         pos = m_playlistContent[i].index_of("http", 0); // Search for "http"
         if (pos >= 0) {                                 // Does URL contain "http://"?
-                                                        //    AUDIO_LOG_ERROR("{} pos=%i", m_playlistContent[i], pos);
+                                                        //    AUDIO_LOG_ERROR("{} pos={}", m_playlistContent[i], pos);
             host = m_playlistContent[i].get() + pos;    // Yes, set new host
             break;
         }
@@ -5817,7 +5827,7 @@ bool Audio::i2s_config() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
 
-    bool result = i2s_config();
+    bool                  result = i2s_config();
     i2s_std_gpio_config_t gpio_cfg = {};
     gpio_cfg.bclk = (gpio_num_t)BCLK;
     gpio_cfg.din = (gpio_num_t)I2S_GPIO_UNUSED;
@@ -6625,7 +6635,7 @@ void Audio::IIR_calculateCoefficients() { // Infinite Impulse Response (IIR) fil
     dsps_biquad_gen_peakingEQ_f32(m_audio_items.coeffs[PEAKINGEQ], normFreqPEQ, m_audio_items.gain_peq_db, QS); // my own calc.
     dsps_biquad_gen_highShelf_f32(m_audio_items.coeffs[HIFGSHELF], normFreqHS, m_audio_items.gain_hs_db, QS);
 
-    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([%f, %f, %f], [1.0, %f, %f]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
+    AUDIO_LOG_DEBUG("\n([{}, {}, {}], [1.0, {}, {}]), # LOWSHELF\n([{},  {},  {} ], [1.0, {},  {} ]), # PEAKINGEQ\n([{}, {}, {}], [1.0, {}, {}]), # HIGHSHELF\n", m_audio_items.coeffs[0][0],
                     m_audio_items.coeffs[0][1], m_audio_items.coeffs[0][2], m_audio_items.coeffs[0][3], m_audio_items.coeffs[0][4], m_audio_items.coeffs[1][0], m_audio_items.coeffs[1][1],
                     m_audio_items.coeffs[1][2], m_audio_items.coeffs[1][3], m_audio_items.coeffs[1][4], m_audio_items.coeffs[2][0], m_audio_items.coeffs[2][1], m_audio_items.coeffs[2][2],
                     m_audio_items.coeffs[2][3], m_audio_items.coeffs[2][4]);
@@ -6840,7 +6850,7 @@ bool Audio::ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packe
                 while (cursor < sectionLength - 1) {
                     int streamType = packet[PLS + cursor] & 0xFF;
                     int elementaryPID = ((packet[PLS + cursor + 1] & 0x1F) << 8) | (packet[PLS + cursor + 2] & 0xFF);
-                    if (log) AUDIO_LOG_DEBUG("Stream Type: 0x{:02X} Elementary PID: 0x%04X", streamType, elementaryPID);
+                    if (log) AUDIO_LOG_DEBUG("Stream Type: 0x{:02X} Elementary PID: 0x{:04X}", streamType, elementaryPID);
 
                     if (streamType == 0x0F || streamType == 0x11 || streamType == 0x04) {
                         if (log) AUDIO_LOG_DEBUG("AAC PID discover");
@@ -7449,7 +7459,7 @@ uint8_t Audio::determineCodec(uint8_t presumed_codec) {
 
         if (presumed_codec == mimeType) return presumed_codec;
         if (mimeType == CODEC_NONE) return presumed_codec; // is not AAC or MP3
-        info(*this, evt_info, "contentType is {}, but %s found", codecname[presumed_codec], codecname[mimeType]);
+        info(*this, evt_info, "contentType is {}, but {} found", codecname[presumed_codec], codecname[mimeType]);
         return mimeType;
     }
 
