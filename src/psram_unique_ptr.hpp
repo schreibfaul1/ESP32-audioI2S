@@ -897,6 +897,18 @@ class ps_ptr {
     template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
     void assignf(const char* fmt, Args&&... args) {
+
+        if (!fmt) return;
+
+        constexpr size_t arg_count = sizeof...(Args);
+
+        size_t placeholder_count = count_placeholders(fmt);
+
+        if (placeholder_count != arg_count) {
+            printf("assignf(): \033[31m placeholder mismatch (expected %zu, got %zu) \033[0m\n", placeholder_count, arg_count);
+            return;
+        }
+
         std::string tmp;
 
         format_append(tmp, fmt, std::forward<Args>(args)...);
@@ -930,6 +942,15 @@ class ps_ptr {
     void appendf(const char* fmt, Args&&... args) {
         if (!fmt) return;
 
+        constexpr size_t arg_count = sizeof...(Args);
+
+        size_t placeholder_count = count_placeholders(fmt);
+
+        if (placeholder_count != arg_count) {
+            printf("appendf(): \033[31m placeholder mismatch (expected %zu, got %zu) \033[0m \n", placeholder_count, arg_count);
+            return;
+        }
+
         std::string tmp;
         format_append(tmp, fmt, std::forward<Args>(args)...);
         std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
@@ -954,8 +975,6 @@ class ps_ptr {
         std::memcpy(mem.get() + old_len, tmp.c_str(), add_len + 1);
         allocated_size = old_len + add_len;
     }
-
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F   📌📌📌
@@ -2446,9 +2465,7 @@ class ps_ptr {
         char buf[64];
 
         // bool ist in C++ ein Integraltyp, soll hier aber als Text ausgegeben werden.
-        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) {
-            return value ? "true" : "false";
-        }
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) { return value ? "true" : "false"; }
 
         // ps_ptr<char>
         if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, ps_ptr<char>>) {
@@ -2458,7 +2475,7 @@ class ps_ptr {
 
         // CHAR - separate Behandlung vor is_integral_v
         if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, char>) {
-            if (fs.type == 'c' || fs.type == 0) {  // 'c' oder kein Specifier
+            if (fs.type == 'c' || fs.type == 0) { // 'c' oder kein Specifier
                 buf[0] = value;
                 buf[1] = '\0';
                 return buf;
@@ -2496,6 +2513,36 @@ class ps_ptr {
             return buf;
         }
         return to_string_any(value);
+    }
+
+    inline size_t count_placeholders(const char* fmt) {
+        size_t count = 0;
+
+        while (*fmt) {
+            // escaped {{
+            if (fmt[0] == '{' && fmt[1] == '{') {
+                fmt += 2;
+                continue;
+            }
+            // escaped }}
+            if (fmt[0] == '}' && fmt[1] == '}') {
+                fmt += 2;
+                continue;
+            }
+
+            // echtes {
+            if (*fmt == '{') {
+                const char* end = std::strchr(fmt, '}');
+
+                if (end) {
+                    ++count;
+                    fmt = end + 1;
+                    continue;
+                }
+            }
+            ++fmt;
+        }
+        return count;
     }
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
