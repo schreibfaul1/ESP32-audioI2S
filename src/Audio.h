@@ -578,10 +578,10 @@ class Audio {
 #define ANSI_ESC_CYAN    "\033[36m"
 #define ANSI_ESC_WHITE   "\033[37m"
 
-        ps_ptr<char> logStr;
-        logStr.copy_from(path);
+        ps_ptr<char> logStr = "[";
+        logStr.assignf("[{}", path);
         while (logStr.contains("/")) { logStr.remove_before('/', false); }
-        logStr.appendf(":{} ", line);
+        logStr.appendf(":{}] ", line);
 
         if (level == 1 && CORE_DEBUG_LEVEL >= 1) {
             logStr.append(ANSI_ESC_RED);

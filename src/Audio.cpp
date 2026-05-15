@@ -117,7 +117,7 @@ size_t AudioBuffer::freeSpace() {
     if (m_readPtr == m_writePtr) {
         if (m_isEmpty) { return m_mainBuffSize; }
         if (m_isFull) { return 0; }
-        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
         m_log.println();
     }
     if (m_readPtr < m_writePtr) {
@@ -143,7 +143,7 @@ size_t AudioBuffer::bufferFilled() {
             bufferFilled = m_mainBuffSize;
             goto end;
         }
-        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
         m_log.println();
     }
     if (m_readPtr < m_writePtr) {
@@ -194,7 +194,7 @@ size_t AudioBuffer::writeSpace() {
         m_writeSpace = min(m_maxRet, spaceToEnd);
         goto end;
     }
-    m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
     m_log.println();
 
 end:
@@ -208,17 +208,17 @@ void AudioBuffer::bytesWritten(size_t bw) {
     if (!bw) goto end;
 
     if (bw > m_writeSpace) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " writeSpace < bw, writeSpace {}, bw {}", __FILE__, __LINE__, m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writeSpace < bw, writeSpace {}, bw {}", __FILE__, __LINE__, m_writeSpace, bw); // bw must not be larger than the queried m_writeSpace
         m_log.println();
     }
     if (m_writePtr < m_readPtr && m_writePtr + bw > m_readPtr) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr overrruns readPtr, writePtr {}, readPtr {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr overrruns readPtr, writePtr {}, readPtr {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr, bw);
         m_log.println();
         m_writePtr = m_readPtr;
         goto end;
     }
     if (m_writePtr + bw > m_buffEnd) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr overrruns buffEnd, writePtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr overrruns buffEnd, writePtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_buffEnd - m_startPtr, bw);
         m_log.println();
         m_writePtr = m_buffEnd;
         goto end;
@@ -264,7 +264,7 @@ size_t AudioBuffer::readSpace() {
         m_readSpace = min(m_maxRet, (size_t)(m_buffEnd - m_readPtr));
         goto end;
     }
-    m_log.assignf("{}:{}" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
+    m_log.assignf("[{}:{}]" ANSI_ESC_RED " writePtr == readPtr, writePtr {}, readPtr {}", __FILE__, __LINE__, m_writePtr - m_startPtr, m_readPtr - m_startPtr);
     m_log.println();
 end:
     xSemaphoreGive(m_mutex);
@@ -278,21 +278,21 @@ void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) goto end;
 
     if (m_readSpace < br) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__,  m_readSpace, br); // br must not be larger than the queried m_readSpace
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__,  m_readSpace, br); // br must not be larger than the queried m_readSpace
         m_log.println();
         vTaskDelay(100);
         goto end;
     }
 
     if (m_readPtr < m_writePtr && m_readPtr + br > m_writePtr) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " readPtr overrruns writePtr, readPtr {}, writePtr {}, br {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readPtr overrruns writePtr, readPtr {}, writePtr {}, br {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_writePtr - m_startPtr, br);
         m_log.println();
         m_readPtr = m_writePtr;
         vTaskDelay(100);
         goto end;
     }
     if (m_readPtr + br > m_buffEnd) {
-        m_log.assignf("{}:{}" ANSI_ESC_RED " readPtr overrruns buffEnd, readPtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readPtr overrruns buffEnd, readPtr {}, buffEnd {}, bw {}", __FILE__, __LINE__, m_readPtr - m_startPtr, m_buffEnd - m_startPtr, br);
         m_log.println();
         m_readPtr = m_buffEnd;
         vTaskDelay(100);
