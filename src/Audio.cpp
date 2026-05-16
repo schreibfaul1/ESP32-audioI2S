@@ -1257,8 +1257,8 @@ void Audio::showID3Tag(const char* tag, const char* value) {
     if (!strcmp(tag, "WORS")) id3tag.assignf("InternetRadioStationURL: {}", value);
     if (!strcmp(tag, "WXXX")) id3tag.assignf("User defined URL link frame: {}", value);
     if (!strcmp(tag, "XDOR")) id3tag.assignf("OriginalReleaseTime: {}", value);
-f
-    if (!id3tag.valid()) {f
+
+    if (!id3tag.valid()) {
         AUDIO_LOG_DEBUG("unknown tag: {}", tag);
         return;
     }
