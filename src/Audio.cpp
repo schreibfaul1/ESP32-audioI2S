@@ -1262,12 +1262,14 @@ void Audio::showID3Tag(const char* tag, const char* value) {
         AUDIO_LOG_DEBUG("unknown tag: {}", tag);
         return;
     }
+
     latinToUTF8(id3tag);
+
     if (id3tag.contains("?xml")) {
         showstreamtitle(id3tag.get());
         return;
     }
-    latinToUTF8(id3tag);
+
     if (id3tag.starts_with("Grouping")) {
         showstreamtitle(id3tag.get());
         return;
@@ -1292,31 +1294,29 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
     // to the UTF-8 encoding schema:
 
     if (UTF8check) {
-        while (buff[pos] != '\0') {
-            if (buff[pos] <= 0x7F) { // 0xxxxxxx: ASCII
+        const size_t strLen = buff.strlen();
+        while (pos < strLen) {
+            if ((uint8_t)buff[pos] <= 0x7F) { // 0xxxxxxx: ASCII
                 pos++;
             } else if ((buff[pos] & 0xE0) == 0xC0) {
-                if (pos + 1 >= buff.strlen()) isUTF8 = false;
                 // 110xxxxx 10xxxxxx: 2-byte
-                if ((buff[pos + 1] & 0xC0) != 0x80) isUTF8 = false;
-                if (buff[pos] < 0xC2) isUTF8 = false; // Overlong encoding
+                if (pos + 1 >= strLen || (uint8_t)buff[pos] < 0xC2 || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80) { isUTF8 = false; break; }
                 pos += 2;
             } else if ((buff[pos] & 0xF0) == 0xE0) {
                 // 1110xxxx 10xxxxxx 10xxxxxx: 3-byte
-                if ((buff[pos + 1] & 0xC0) != 0x80 || (buff[pos + 2] & 0xC0) != 0x80) isUTF8 = false;
-                if (buff[pos] == 0xE0 && buff[pos + 1] < 0xA0) isUTF8 = false;  // Overlong
-                if (buff[pos] == 0xED && buff[pos + 1] >= 0xA0) isUTF8 = false; // UTF-16 surrogate
+                if (pos + 2 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80) { isUTF8 = false; break; }
+                if ((uint8_t)buff[pos] == 0xE0 && (uint8_t)buff[pos + 1] < 0xA0) { isUTF8 = false; break; } // Overlong
+                if ((uint8_t)buff[pos] == 0xED && (uint8_t)buff[pos + 1] >= 0xA0) { isUTF8 = false; break; } // UTF-16 surrogate
                 pos += 3;
             } else if ((buff[pos] & 0xF8) == 0xF0) {
                 // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx: 4-byte
-                if ((buff[pos + 1] & 0xC0) != 0x80 || (buff[pos + 2] & 0xC0) != 0x80 || (buff[pos + 3] & 0xC0) != 0x80) isUTF8 = false;
-                if (buff[pos] == 0xF0 && buff[pos + 1] < 0x90) isUTF8 = false;                       // Overlong
-                if (buff[pos] > 0xF4 || (buff[pos] == 0xF4 && buff[pos + 1] > 0x8F)) isUTF8 = false; // > U+10FFFF
+                if (pos + 3 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 3] & 0xC0) != 0x80) { isUTF8 = false; break; }
+                if ((uint8_t)buff[pos] == 0xF0 && (uint8_t)buff[pos + 1] < 0x90) { isUTF8 = false; break; } // Overlong
+                if ((uint8_t)buff[pos] > 0xF4 || ((uint8_t)buff[pos] == 0xF4 && (uint8_t)buff[pos + 1] > 0x8F)) { isUTF8 = false; break; } // > U+10FFFF
                 pos += 4;
             } else {
-                isUTF8 = false; // Invalid first byte
+                isUTF8 = false; break; // Invalid first byte (continuation byte or 0xF8-0xFF)
             }
-            if (!isUTF8) break;
         }
         if (isUTF8) return; // is UTF-8, do nothing
     }
@@ -1326,7 +1326,13 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
     // Worst-case: all chars are latin1 > 0x7F became 2 Bytes → max length is twice +1
     std::size_t requiredSize = strlen(iso8859_1.get()) * 2 + 1;
 
-    if (buff.size() < requiredSize) { buff.realloc(requiredSize); }
+    if (buff.size() < requiredSize) {
+        buff.realloc(requiredSize);
+        if (buff.size() < requiredSize) {
+            AUDIO_LOG_ERROR("latinToUTF8: realloc failed (need {} bytes, have {})", requiredSize, buff.size());
+            return; // keep original string, avoid buffer overflow
+        }
+    }
 
     // coding into UTF-8
     while (iso8859_1[in] != '\0') {
