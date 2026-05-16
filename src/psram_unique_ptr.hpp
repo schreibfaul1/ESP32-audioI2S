@@ -2422,6 +2422,7 @@ class ps_ptr {
         char fill = ' ';
         char type = 0;
         bool upper = false;
+        bool align_right = false;
     };
 
     inline format_spec parse_format(const char* fmt) {
@@ -2430,6 +2431,13 @@ class ps_ptr {
         // {:02}
         if (*fmt == ':') {
             ++fmt;
+
+            //  Right-aligned?
+            if (*fmt == '-') {
+                fs.align_right = true;
+                ++fmt;
+            }
+
             // leading zero
             if (*fmt == '0') {
                 fs.fill = '0';
@@ -2482,8 +2490,8 @@ class ps_ptr {
             }
         }
 
-        // HEX
         if constexpr (std::is_integral_v<V>) {
+            // HEX
             if (fs.type == 'X') {
                 if (fs.width > 0) {
                     const int safe_width = (fs.width > 30) ? 30 : fs.width;
@@ -2491,28 +2499,56 @@ class ps_ptr {
                 } else {
                     snprintf(buf, sizeof(buf), "%llX", (unsigned long long)value);
                 }
-                return buf;
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
+            }
+            // HEX
+            if (fs.type == 'x') {
+                if (fs.width > 0) {
+                    const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                    snprintf(buf, sizeof(buf), "%0*llx", safe_width, (unsigned long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%llx", (unsigned long long)value);
+                }
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
             }
 
             // Integer mit Padding
             if (fs.width > 0) {
                 const int safe_width = (fs.width > 30) ? 30 : fs.width;
-                snprintf(buf, sizeof(buf), "%0*lld", safe_width, (long long)value);
-                return buf;
+                if (fs.fill == '0') {
+                    snprintf(buf, sizeof(buf), "%0*lld", safe_width, (long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%*lld", safe_width, (long long)value);
+                }
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
             }
-            return std::to_string(value);
+            std::string s = to_string_any(value);
+            apply_width(s, fs, true);
+            return s;
         }
-
         // FLOAT
         if constexpr (std::is_floating_point_v<V>) {
             if (fs.precision >= 0) {
                 snprintf(buf, sizeof(buf), "%.*f", fs.precision, value);
-                return buf;
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
             }
             snprintf(buf, sizeof(buf), "%g", value);
-            return buf;
+            std::string s = buf;
+            apply_width(s, fs, true);
+            return s;
         }
-        return to_string_any(value);
+
+        std::string s = to_string_any(value);
+        apply_width(s, fs, false);
+        return s;
     }
 
     inline size_t count_placeholders(const char* fmt) {
@@ -2543,6 +2579,25 @@ class ps_ptr {
             ++fmt;
         }
         return count;
+    }
+
+    inline void apply_width(std::string& s, const format_spec& fs, bool numeric = false) {
+        if (fs.width <= 0) return;
+
+        if ((int)s.size() >= fs.width) return;
+        size_t missing = fs.width - s.size();
+        // Always fill in the numbers at the top
+        if (numeric) {
+            s.insert(s.begin(), missing, fs.fill);
+            return;
+        }
+
+        // Strings
+        if (fs.align_right) {
+            s.insert(s.begin(), missing, fs.fill);
+        } else {
+            s.append(missing, fs.fill);
+        }
     }
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
