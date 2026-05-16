@@ -891,6 +891,7 @@ class ps_ptr {
     // ps_ptr<char> message;
     // message.assignf("Code {}, Modul {}", 404, "Network");
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
+    // e.g. {}, {:02}, {:04X}, {:.2f}, {:20}, {:-20}
     // assignf("v={:02} hex={:04X} pi={:.2f}", 7, 0xAF, 3.14159); --> v=07 hex=00AF pi=3.14
     // bool --> true or false
 
