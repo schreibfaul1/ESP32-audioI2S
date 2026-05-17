@@ -906,7 +906,7 @@ class ps_ptr {
         size_t placeholder_count = count_placeholders(fmt);
 
         if (placeholder_count != arg_count) {
-            printf("assignf(): \033[31m placeholder mismatch (expected %zu, got %zu) \033[0m\n", placeholder_count, arg_count);
+            printf("assignf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
             return;
         }
 
@@ -948,7 +948,7 @@ class ps_ptr {
         size_t placeholder_count = count_placeholders(fmt);
 
         if (placeholder_count != arg_count) {
-            printf("appendf(): \033[31m placeholder mismatch (expected %zu, got %zu) \033[0m \n", placeholder_count, arg_count);
+            printf("appendf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
             return;
         }
 
