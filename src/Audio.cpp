@@ -3385,12 +3385,17 @@ uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, u
 void IRAM_ATTR Audio::playChunk() {
     if (m_validSamples == 0) return; // nothing to do
 
+    auto convertTo16Bit = [&](int32_t* buffer) {
+        uint16_t* out = (uint16_t*)buffer;
+        for (uint32_t i = 0; i < m_validSamples * 2; i++)
+            out[i] = (int16_t)(buffer[i] >> 16);
+    };
+
     bool continueI2S = true;
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    int BYTES_PER_FRAME = 2 * sizeof(int32_t);
-    if (m_f_output16Bit) BYTES_PER_FRAME = 2 * sizeof(int16_t);
+    int BYTES_PER_FRAME = (m_f_output16Bit)? 2 * sizeof(int16_t) : 2 * sizeof(int32_t);
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3403,22 +3408,12 @@ void IRAM_ATTR Audio::playChunk() {
     processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-     if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) {
-        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
-        if (m_f_output16Bit) {
-            uint16_t *out = (uint16_t*)m_samplesBuff48K.get();
-            for (uint32_t i = 0; i < m_validSamples * 2; i++) {
-                out[i] = (int16_t)(m_samplesBuff48K[i] >> 16);
-            }
-        }
-        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
+    if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) {
+        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get());
+        if (m_f_output16Bit) convertTo16Bit(m_samplesBuff48K.get());
+        audio_process_i2s(m_samplesBuff48K.get(), (int32_t)m_validSamples, &continueI2S); // 48KHz stereo 32bps
     } else {
-        if (m_f_output16Bit) {
-            uint16_t *out = (uint16_t*)m_outBuff.get();
-            for (uint32_t i = 0; i < m_validSamples * 2; i++) {
-                out[i] = (int16_t)(m_outBuff[i] >> 16);
-            }
-        }
+        if (m_f_output16Bit) convertTo16Bit(m_outBuff.get());
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
     //------------------------------------------------------------------------------------------------------
@@ -5803,7 +5798,6 @@ bool Audio::i2s_config() {
     }
 
     memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
-    i2s_data_bit_width_t bit_width = I2S_DATA_BIT_WIDTH_32BIT;
     if (m_f_output16Bit) {
         m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     } else {
