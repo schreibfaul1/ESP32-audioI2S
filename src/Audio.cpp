@@ -3403,12 +3403,22 @@ void IRAM_ATTR Audio::playChunk() {
     processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-    if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) {
+     if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) {
         m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
-        if (m_f_output16Bit) for (uint32_t i = 0; i < m_validSamples * 2; i++) m_samplesBuff48K[i] = (int16_t)(m_samplesBuff48K[i] >> 16);
+        if (m_f_output16Bit) {
+            uint16_t *out = (uint16_t*)m_samplesBuff48K.get();
+            for (uint32_t i = 0; i < m_validSamples * 2; i++) {
+                out[i] = (int16_t)(m_samplesBuff48K[i] >> 16);
+            }
+        }
         audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
     } else {
-        if (m_f_output16Bit) for (uint32_t i = 0; i < m_validSamples * 2; i++) m_outBuff[i] = (int16_t)(m_outBuff[i] >> 16);
+        if (m_f_output16Bit) {
+            uint16_t *out = (uint16_t*)m_outBuff.get();
+            for (uint32_t i = 0; i < m_validSamples * 2; i++) {
+                out[i] = (int16_t)(m_outBuff[i] >> 16);
+            }
+        }
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
     //------------------------------------------------------------------------------------------------------
@@ -3420,7 +3430,7 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
-    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) { // with resampler
+    if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) { // with resampler
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
     } else { // without resampler
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
@@ -5793,7 +5803,8 @@ bool Audio::i2s_config() {
     }
 
     memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
-    if (m_f_output16bit) {
+    i2s_data_bit_width_t bit_width = I2S_DATA_BIT_WIDTH_32BIT;
+    if (m_f_output16Bit) {
         m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
     } else {
         m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
@@ -6235,20 +6246,15 @@ void Audio::reconfigI2S() {
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    if (m_f_output48KHz) {
+    
+    if (m_f_output48KHz || m_f_output44K1Hz) {
+        uint32_t sample_rate = m_f_output48KHz ? 48000 : 44100;
         m_resampler.phase = 0; // prepare resampler
-        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
+        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / sample_rate;
         m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
         m_resampler.lpLeft = {};
         m_resampler.lpRight = {};
-        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
-    } else if (m_f_output44K1Hz) {
-        m_resampler.phase = 0; // prepare resampler
-        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 44100;
-        m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
-        m_resampler.lpLeft = {};
-        m_resampler.lpRight = {};
-        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = sample_rate;
     } else {
         m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     }
