@@ -3389,7 +3389,8 @@ void IRAM_ATTR Audio::playChunk() {
     m_plCh.i2s_bytesConsumed = 0;
     m_plCh.err = ESP_OK;
 
-    constexpr int BYTES_PER_FRAME = 2 * sizeof(int32_t);
+    int BYTES_PER_FRAME = 2 * sizeof(int32_t);
+    if (m_f_output16Bit) BYTES_PER_FRAME = 2 * sizeof(int16_t);
 
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
@@ -3402,10 +3403,12 @@ void IRAM_ATTR Audio::playChunk() {
     processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) {
+    if ((m_f_output48KHz && m_i2s_items.sampleRate != 48000) || (m_f_output44K1Hz && m_i2s_items.sampleRate != 44100)) {
         m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
+        if (m_f_output16Bit) for (uint32_t i = 0; i < m_validSamples * 2; i++) m_samplesBuff48K[i] = (int16_t)(m_samplesBuff48K[i] >> 16);
         audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
     } else {
+        if (m_f_output16Bit) for (uint32_t i = 0; i < m_validSamples * 2; i++) m_outBuff[i] = (int16_t)(m_outBuff[i] >> 16);
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
     //------------------------------------------------------------------------------------------------------
@@ -5790,7 +5793,11 @@ bool Audio::i2s_config() {
     }
 
     memset(&m_i2s_std_cfg, 0, sizeof(i2s_std_config_t));
-    m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
+    if (m_f_output16bit) {
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    } else {
+        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO); // Set to enable bit shift in Philips mode
+    }
     m_i2s_std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;                                                                // BCLK, Assignment in setPinout()
     m_i2s_std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;                                                                 // not used
     m_i2s_std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;                                                                // DOUT, Assignment in setPinout()
@@ -6214,9 +6221,17 @@ void Audio::reconfigI2S() {
     i2s_channel_disable(m_i2s_tx_handle);
 
     if (m_i2s_items.commFMT) {
-        m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        if(m_f_output16Bit) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        }
     } else {
-        m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        if(m_f_output16Bit) {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        } else {
+            m_i2s_std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+        }
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
@@ -6227,6 +6242,13 @@ void Audio::reconfigI2S() {
         m_resampler.lpLeft = {};
         m_resampler.lpRight = {};
         m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+    } else if (m_f_output44K1Hz) {
+        m_resampler.phase = 0; // prepare resampler
+        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 44100;
+        m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
+        m_resampler.lpLeft = {};
+        m_resampler.lpRight = {};
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 44100;
     } else {
         m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     }
@@ -6338,6 +6360,16 @@ void Audio::forceMono(bool m) { // #100 mono option
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setOutput48KHz(bool f48) { //
     m_f_output48KHz = f48;             // false f_out is the origin sample rate, true f_out is always 48000 Hz
+    reconfigI2S();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setOutput44K1Hz(bool f44) { //
+    m_f_output44K1Hz = f44;             // false f_out is the origin sample rate, true f_out is always 44100 Hz
+    reconfigI2S();
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::setOutput16Bit(bool f16) { //
+    m_f_output16Bit = f16;             // true if 16 bit output via I2S
     reconfigI2S();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

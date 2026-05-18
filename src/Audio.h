@@ -126,6 +126,8 @@ class Audio {
     uint32_t         stopSong();
     void             forceMono(bool m);
     void             setOutput48KHz(bool f48);
+    void             setOutput44K1Hz(bool f44);
+    void             setOutput16Bit(bool f16);
     void             setBalance(float balance = 0.0f);
     void             setVolumeSteps(uint8_t steps);
     uint8_t          getVolumeSteps();
@@ -443,6 +445,8 @@ class Audio {
     bool           m_f_ogg = false;                 // OGG stream
     bool           m_f_forceMono = false;           // if true stereo -> mono
     bool           m_f_output48KHz = false;         // resample to I2S 48000Hz
+    bool           m_f_output44K1Hz = false;        // resample to I2S 44100Hz
+    bool           m_f_output16Bit = false;         // output 16 bit samples
     bool           m_f_rtsp = false;                // set if RTSP is used (m3u8 stream)
     bool           m_f_m3u8data = false;            // used in processM3U8entries
     bool           m_f_continue = false;            // next m3u8 chunk is available
