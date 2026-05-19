@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6a                                                                                                                            ";
+    Version 3.4.6b                                                                                                                            ";
 /*  Updated on: May 19, 2026
 
     Author: Wolle (schreibfaul1)
@@ -32,7 +32,7 @@ constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
 constexpr size_t m_outbuffSize = 4608 * 2;
-constexpr size_t m_samplesBuff48KSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
+constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
 
 constexpr size_t AUDIO_STACK_SIZE = 3500;
 
@@ -278,7 +278,7 @@ void AudioBuffer::bytesWasRead(size_t br) {
     if (!br) goto end;
 
     if (m_readSpace < br) {
-        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__,  m_readSpace, br); // br must not be larger than the queried m_readSpace
+        m_log.assignf("[{}:{}]" ANSI_ESC_RED " readSpace < br, rspc {}, br {}", __FILE__, __LINE__, m_readSpace, br); // br must not be larger than the queried m_readSpace
         m_log.println();
         vTaskDelay(100);
         goto end;
@@ -403,7 +403,7 @@ esp_err_t Audio::I2Sstart() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear();                                                  // Clear OutputBuffer
-    m_samplesBuff48K.clear();                                           // Clear samplesBuff48K
+    m_resamplesBuff.clear();                                            // Clear samplesBuff48K
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
     esp_err_t err = ESP_FAIL;
     if (m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
@@ -421,8 +421,8 @@ void Audio::setDefaults() {
     stopSong();
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.reset();
-    m_outBuff.clear();        // Clear OutputBuffer
-    m_samplesBuff48K.clear(); // Clear samplesBuff48K
+    m_outBuff.clear();       // Clear OutputBuffer
+    m_resamplesBuff.clear(); // Clear samplesBuff48K
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     vector_clear_and_shrink(m_syltLines);
@@ -1300,22 +1300,44 @@ void Audio::latinToUTF8(ps_ptr<char>& buff, bool UTF8check) {
                 pos++;
             } else if ((buff[pos] & 0xE0) == 0xC0) {
                 // 110xxxxx 10xxxxxx: 2-byte
-                if (pos + 1 >= strLen || (uint8_t)buff[pos] < 0xC2 || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80) { isUTF8 = false; break; }
+                if (pos + 1 >= strLen || (uint8_t)buff[pos] < 0xC2 || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80) {
+                    isUTF8 = false;
+                    break;
+                }
                 pos += 2;
             } else if ((buff[pos] & 0xF0) == 0xE0) {
                 // 1110xxxx 10xxxxxx 10xxxxxx: 3-byte
-                if (pos + 2 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80) { isUTF8 = false; break; }
-                if ((uint8_t)buff[pos] == 0xE0 && (uint8_t)buff[pos + 1] < 0xA0) { isUTF8 = false; break; } // Overlong
-                if ((uint8_t)buff[pos] == 0xED && (uint8_t)buff[pos + 1] >= 0xA0) { isUTF8 = false; break; } // UTF-16 surrogate
+                if (pos + 2 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80) {
+                    isUTF8 = false;
+                    break;
+                }
+                if ((uint8_t)buff[pos] == 0xE0 && (uint8_t)buff[pos + 1] < 0xA0) {
+                    isUTF8 = false;
+                    break;
+                } // Overlong
+                if ((uint8_t)buff[pos] == 0xED && (uint8_t)buff[pos + 1] >= 0xA0) {
+                    isUTF8 = false;
+                    break;
+                } // UTF-16 surrogate
                 pos += 3;
             } else if ((buff[pos] & 0xF8) == 0xF0) {
                 // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx: 4-byte
-                if (pos + 3 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 3] & 0xC0) != 0x80) { isUTF8 = false; break; }
-                if ((uint8_t)buff[pos] == 0xF0 && (uint8_t)buff[pos + 1] < 0x90) { isUTF8 = false; break; } // Overlong
-                if ((uint8_t)buff[pos] > 0xF4 || ((uint8_t)buff[pos] == 0xF4 && (uint8_t)buff[pos + 1] > 0x8F)) { isUTF8 = false; break; } // > U+10FFFF
+                if (pos + 3 >= strLen || ((uint8_t)buff[pos + 1] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 2] & 0xC0) != 0x80 || ((uint8_t)buff[pos + 3] & 0xC0) != 0x80) {
+                    isUTF8 = false;
+                    break;
+                }
+                if ((uint8_t)buff[pos] == 0xF0 && (uint8_t)buff[pos + 1] < 0x90) {
+                    isUTF8 = false;
+                    break;
+                } // Overlong
+                if ((uint8_t)buff[pos] > 0xF4 || ((uint8_t)buff[pos] == 0xF4 && (uint8_t)buff[pos + 1] > 0x8F)) {
+                    isUTF8 = false;
+                    break;
+                } // > U+10FFFF
                 pos += 4;
             } else {
-                isUTF8 = false; break; // Invalid first byte (continuation byte or 0xF8-0xFF)
+                isUTF8 = false;
+                break; // Invalid first byte (continuation byte or 0xF8-0xFF)
             }
         }
         if (isUTF8) return; // is UTF-8, do nothing
@@ -3278,7 +3300,7 @@ bool Audio::pauseResume() {
         retVal = true;
         if (!m_f_running) {
             m_outBuff.clear();
-            memset(m_samplesBuff48K.get(), 0, m_samplesBuff48KSize * sizeof(int16_t)); // Clear SamplesBuffer
+            memset(m_resamplesBuff.get(), 0, m_resamplesBuffSize * sizeof(int16_t)); // Clear SamplesBuffer
             m_validSamples = 0;
         }
     }
@@ -3423,9 +3445,9 @@ void IRAM_ATTR Audio::playChunk() {
     processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) {
-        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_samplesBuff48K.get()); // have new amount of samples
-        audio_process_i2s(m_samplesBuff48K.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
+    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
+        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+        audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
     } else {
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }
@@ -3438,8 +3460,8 @@ void IRAM_ATTR Audio::playChunk() {
     //------------------------------------------------------------------------------------------------------
 
 i2swrite:
-    if (m_f_output48KHz && m_i2s_items.sampleRate != 48000) { // with resampler
-        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_samplesBuff48K.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
+    if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) { // with resampler
+        m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_resamplesBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 50);
     } else { // without resampler
         m_plCh.err = i2s_channel_write(m_i2s_tx_handle, m_outBuff.get() + m_plCh.count, m_validSamples * BYTES_PER_FRAME, &m_plCh.i2s_bytesConsumed, 20);
     }
@@ -5856,7 +5878,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     }
 
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
-    m_samplesBuff48K.alloc_array(m_samplesBuff48KSize, "m_samplesBuff48K");
+    m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
     m_vu_items.delay_l.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_l");
     m_vu_items.delay_r.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_r");
     m_fft_items.buffer.alloc_array(m_fft_items.SIZE, "buffer");
@@ -5865,7 +5887,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
     m_metadataBuff.alloc(4096 + 1, "m_metadataBuff");   // max 4096 + 1 for null terminator, just to make library code 'safe'
     m_httpRespHdrBuff.alloc(4096, "m_httpRespHdrBuff"); // enough space to store http response header
 
-    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_samplesBuff48K.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
+    if (!m_outBuff.valid() || !m_vu_items.delay_l.valid() || !m_vu_items.delay_r.valid() || !m_resamplesBuff.valid() || !m_fft_items.buffer.valid() || !m_fft_items.buffer.valid() ||
         !m_fft_items.work.valid()) {
         result = false;
         goto exit;
@@ -6240,13 +6262,14 @@ void Audio::reconfigI2S() {
     }
     i2s_channel_reconfig_std_slot(m_i2s_tx_handle, &m_i2s_std_cfg.slot_cfg);
 
-    if (m_f_output48KHz) {
+    if (m_output_sr) {
         m_resampler.phase = 0; // prepare resampler
-        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / 48000;
+        m_resampler.phaseStep = ((uint64_t)m_i2s_items.sampleRate << 32) / m_output_sr;
         m_resampler.g_lpCoeffs = makeButterworthLPF_Q31(m_i2s_items.sampleRate);
         m_resampler.lpLeft = {};
         m_resampler.lpRight = {};
-        m_i2s_std_cfg.clk_cfg.sample_rate_hz = 48000;
+        m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_output_sr;
+        AUDIO_LOG_DEBUG("output samplerate is {}", m_i2s_std_cfg.clk_cfg.sample_rate_hz);
     } else {
         m_i2s_std_cfg.clk_cfg.sample_rate_hz = m_i2s_items.sampleRate;
     }
@@ -6356,8 +6379,14 @@ void Audio::forceMono(bool m) { // #100 mono option
     m_f_forceMono = m;          // false stereo, true mono
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::setOutput48KHz(bool f48) { //
-    m_f_output48KHz = f48;             // false f_out is the origin sample rate, true f_out is always 48000 Hz
+void Audio::setOutputSampleRate(OutputSR_t sr) { //
+    if (sr == SR_44100) {
+        m_output_sr = SR_44100; // output sr is always 44.1KHz
+    } else if (sr == SR_48000) {
+        m_output_sr = SR_48000; // output sr is always 48KHz
+    } else {
+        m_output_sr = SR_ORIGIN; // output sr is source sr
+    }
     reconfigI2S();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————

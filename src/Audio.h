@@ -112,6 +112,7 @@ class Audio {
     inline static std::function<void(msg_t i)> audio_info_callback;
     using VolumeCurveFn = std::function<float(float t)>;
     // -------------------------------------------------------------------
+    typedef enum : uint32_t { SR_ORIGIN = 0, SR_44100 = 44100, SR_48000 = 48000 } OutputSR_t;
 
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     audiolib::hwoe_t dismantle_host(const char* host);
@@ -127,7 +128,7 @@ class Audio {
     void             loop();
     uint32_t         stopSong();
     void             forceMono(bool m);
-    void             setOutput48KHz(bool f48);
+    void             setOutputSampleRate(OutputSR_t sr);
     void             setBalance(float balance = 0.0f);
     void             setVolumeSteps(uint8_t steps);
     uint8_t          getVolumeSteps();
@@ -372,7 +373,7 @@ class Audio {
 
     std::unique_ptr<Decoder> m_decoder = {};
     ps_ptr<int32_t>          m_outBuff;         // Interleaved L/R
-    ps_ptr<int32_t>          m_samplesBuff48K;  // Interleaved L/R
+    ps_ptr<int32_t>          m_resamplesBuff;   // Interleaved L/R
     ps_ptr<char>             m_metadataBuff;    // icy-metadata max (16 * 256 + 1) bytes
     ps_ptr<char>             m_httpRespHdrBuff; // store http response header
     ps_ptr<char>             m_ibuff;           // used in log_info()
@@ -444,7 +445,6 @@ class Audio {
     bool           m_f_tts = false;                 // text to speech
     bool           m_f_ogg = false;                 // OGG stream
     bool           m_f_forceMono = false;           // if true stereo -> mono
-    bool           m_f_output48KHz = false;         // resample to I2S 48000Hz
     bool           m_f_rtsp = false;                // set if RTSP is used (m3u8 stream)
     bool           m_f_m3u8data = false;            // used in processM3U8entries
     bool           m_f_continue = false;            // next m3u8 chunk is available
@@ -466,6 +466,7 @@ class Audio {
     uint32_t       m_audioFileDuration = 0;         // seconds
     uint32_t       m_audioCurrentTime = 0;          // seconds
     uint32_t       m_audioDataStart = 0;            // in bytes
+    OutputSR_t     m_output_sr = SR_ORIGIN;         // output samplerate
     size_t         m_audioDataSize = 0;             //
     size_t         m_ibuffSize = 0;                 // log buffer size for audio_info()
     size_t         m_i2s_bytesWritten = 0;          // set in i2s_write() but not used
