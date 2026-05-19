@@ -1140,7 +1140,7 @@ int32_t SilkDecoder::silk_Decode(/* O    Returns error code                     
             }
             fs_kHz_dec = (m_silk_internalSampleRate >> 10) + 1;
             if (fs_kHz_dec != 8 && fs_kHz_dec != 12 && fs_kHz_dec != 16) {
-                OPUS_LOG_ERROR("Opus SILK, invalid sampling frequency: %i", fs_kHz_dec);
+                OPUS_LOG_ERROR("Opus SILK, invalid sampling frequency: {}", fs_kHz_dec);
                 return OPUS_BAD_ARG;
             }
             ret += silk_decoder_set_fs(n, fs_kHz_dec, m_silk_DecControlStruct->API_sampleRate);
@@ -1156,7 +1156,7 @@ int32_t SilkDecoder::silk_Decode(/* O    Returns error code                     
     m_silk_decoder->nChannelsInternal = m_silk_DecControlStruct->nChannelsInternal;
 
     if (m_silk_DecControlStruct->API_sampleRate > (int32_t)MAX_API_FS_KHZ * 1000 || m_silk_DecControlStruct->API_sampleRate < 8000) {
-        OPUS_LOG_ERROR("Opus SILK, invalid sampling rate: %i", m_silk_DecControlStruct->API_sampleRate);
+        OPUS_LOG_ERROR("Opus SILK, invalid sampling rate: {}", m_silk_DecControlStruct->API_sampleRate);
         ret = OPUS_BAD_ARG;
 
         return (ret);

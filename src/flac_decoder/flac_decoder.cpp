@@ -158,7 +158,7 @@ void FlacDecoder::alignToByte() {
 //              F L A C - D E C O D E R
 //----------------------------------------------------------------------------------------------------------------------
 void FlacDecoder::setRawBlockParams(uint8_t channels, uint32_t sampleRate, uint8_t BPS, uint32_t tsis, uint32_t AuDaLength) {
-    FLAC_LOG_DEBUG("channels %u, sampleRate %u, BPS %u, tsis %u, AuDaLength %u", channels, sampleRate, BPS, tsis, AuDaLength);
+    FLAC_LOG_DEBUG("channels {}, sampleRate {}, BPS {}, tsis {}, AuDaLength {}", channels, sampleRate, BPS, tsis, AuDaLength);
     FLACMetadataBlock->numChannels = channels;
     FLACMetadataBlock->sampleRate = sampleRate;
     FLACMetadataBlock->bitsPerSample = BPS;
@@ -340,9 +340,9 @@ boolean FlacDecoder::FLACFindMagicWord(unsigned char* buf, int32_t nBytes) {
         (void)lmdbf;
         (void)bt;
         (void)lomd;
-        // FLAC_LOG_INFO("Last-metadata-block flag: %d", lmdbf);
-        // FLAC_LOG_INFO("block type: %d", bt);
-        // FLAC_LOG_INFO("Length (in bytes) of metadata to follow: %d", lomd);
+        // FLAC_LOG_INFO("Last-metadata-block flag: {}", lmdbf);
+        // FLAC_LOG_INFO("block type: {}", bt);
+        // FLAC_LOG_INFO("Length (in bytes) of metadata to follow: {}", lomd);
         return true;
     }
     return false;
@@ -411,7 +411,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
         }
         m_flacSegmTableVec.insert(m_flacSegmTableVec.begin(), n);
     }
-    // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("%i", m_flacSegmTableVec[i]);}
+    // for(int32_t i = 0; i< m_flacSegmTableVec.size(); i++){FLAC_LOG_INFO("{}", m_flacSegmTableVec[i]);}
 
     bool continuedPage = headerType & 0x01; // set: page contains data of a packet continued from the previous page
     bool firstPage = headerType & 0x02;     // set: this is the first page of a logical bitstream (bos)
@@ -419,7 +419,7 @@ int32_t FlacDecoder::parseOGG(uint8_t* inbuf, int32_t* bytesLeft) { // reference
     m_continued_page = continuedPage;
     (void)lastPage;
 
-    // FLAC_LOG_INFO("firstPage %i, continuedPage %i, lastPage %i", firstPage, continuedPage, lastPage);
+    // FLAC_LOG_INFO("firstPage {}, continuedPage {}, lastPage {}", firstPage, continuedPage, lastPage);
 
     if (firstPage) m_flacPageNr = 0;
 
@@ -442,7 +442,7 @@ int32_t FlacDecoder::parseFlacFirstPacket(uint8_t* inbuf, int16_t nBytes) { // 4
 
     int32_t ret = 0;
     int32_t idx = specialIndexOf(inbuf, "fLaC", nBytes);
-    // FLAC_LOG_INFO("idx %i, nBytes %i", idx, nBytes);
+    // FLAC_LOG_INFO("idx {}, nBytes {}", idx, nBytes);
     if (idx >= 0) { // FLAC signature found
         ret = idx + 4;
     } else {
@@ -492,12 +492,12 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
     while (true) {
         mdBlockHeader = *(inbuf + pos);
-        m_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; // FLAC_LOG_INFO("lastMdBlockFlag %i", m_f_lastMetaDataBlock);
-        blockType = mdBlockHeader & 0b01111111;             // FLAC_LOG_INFO("blockType %i", blockType);
+        m_f_lastMetaDataBlock = mdBlockHeader & 0b10000000; // FLAC_LOG_INFO("lastMdBlockFlag {}", m_f_lastMetaDataBlock);
+        blockType = mdBlockHeader & 0b01111111;             // FLAC_LOG_INFO("blockType {}", blockType);
 
         blockLength = *(inbuf + pos + 1) << 16;
         blockLength += *(inbuf + pos + 2) << 8;
-        blockLength += *(inbuf + pos + 3); // FLAC_LOG_INFO("blockLength %i", blockLength);
+        blockLength += *(inbuf + pos + 3); // FLAC_LOG_INFO("blockLength {}", blockLength);
 
         nBytes -= 4;
         pos += 4;
@@ -511,18 +511,18 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 break;
             case 2:
                 bt = application;
-                FLAC_LOG_ERROR("Flac unimplemented block type: %i", blockType);
+                FLAC_LOG_ERROR("Flac unimplemented block type: {}", blockType);
                 return FLAC_ERR;
                 break;
             case 3:
                 bt = seekTable;
-                FLAC_LOG_ERROR("Flac unimplemented seek table: %i", seekTable);
+                FLAC_LOG_ERROR("Flac unimplemented seek table: {}", seekTable);
                 return FLAC_ERR;
                 break;
             case 4: bt = vorbisComment; break;
             case 5:
                 bt = cueSheet;
-                FLAC_LOG_ERROR("Flac unimplemented cue sheet: %i", cueSheet);
+                FLAC_LOG_ERROR("Flac unimplemented cue sheet: {}", cueSheet);
                 return FLAC_ERR;
                 break;
             case 6: bt = picture; break;
@@ -538,13 +538,13 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 minBlocksize += *(inbuf + pos + 1);
                 maxBlocksize += *(inbuf + pos + 2) << 8;
                 maxBlocksize += *(inbuf + pos + 3);
-                // FLAC_LOG_INFO("minBlocksize %i", minBlocksize);
-                // FLAC_LOG_INFO("maxBlocksize %i", maxBlocksize);
+                // FLAC_LOG_INFO("minBlocksize {}", minBlocksize);
+                // FLAC_LOG_INFO("maxBlocksize {}", maxBlocksize);
                 FLACMetadataBlock->minblocksize = minBlocksize;
                 FLACMetadataBlock->maxblocksize = maxBlocksize;
 
                 if (maxBlocksize > m_maxBlocksize) {
-                    FLAC_LOG_ERROR("s_blocksize is too big: %u bytes, max block size: %u", maxBlocksize, m_maxBlocksize);
+                    FLAC_LOG_ERROR("s_blocksize is too big: {} bytes, max block size: {}", maxBlocksize, m_maxBlocksize);
                     return FLAC_ERR;
                 }
 
@@ -554,35 +554,35 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 maxFrameSize = *(inbuf + pos + 7) << 16;
                 maxFrameSize += *(inbuf + pos + 8) << 8;
                 maxFrameSize += *(inbuf + pos + 9);
-                // FLAC_LOG_INFO("minFrameSize %i", minFrameSize);
-                // FLAC_LOG_INFO("maxFrameSize %i", maxFrameSize);
+                // FLAC_LOG_INFO("minFrameSize {}", minFrameSize);
+                // FLAC_LOG_INFO("maxFrameSize {}", maxFrameSize);
                 FLACMetadataBlock->minframesize = minFrameSize;
                 FLACMetadataBlock->maxframesize = maxFrameSize;
 
                 sampleRate = *(inbuf + pos + 10) << 12;
                 sampleRate += *(inbuf + pos + 11) << 4;
                 sampleRate += (*(inbuf + pos + 12) & 0xF0) >> 4;
-                // FLAC_LOG_INFO("sampleRate %i", sampleRate);
+                // FLAC_LOG_INFO("sampleRate {}", sampleRate);
                 FLACMetadataBlock->sampleRate = sampleRate;
 
                 nrOfChannels = ((*(inbuf + pos + 12) & 0x0E) >> 1) + 1;
-                // FLAC_LOG_INFO("nrOfChannels %i", nrOfChannels);
+                // FLAC_LOG_INFO("nrOfChannels {}", nrOfChannels);
                 FLACMetadataBlock->numChannels = nrOfChannels;
 
                 bitsPerSample = (*(inbuf + pos + 12) & 0x01) << 4;
                 bitsPerSample += ((*(inbuf + pos + 13) & 0xF0) >> 4) + 1;
                 FLACMetadataBlock->bitsPerSample = bitsPerSample;
-                // FLAC_LOG_INFO("bitsPerSample %i", bitsPerSample);
+                // FLAC_LOG_INFO("bitsPerSample {}", bitsPerSample);
 
                 totalSamplesInStream = (uint64_t)(*(inbuf + pos + 13) & 0x0F) << 32;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 14)) << 24;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 15)) << 16;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 16)) << 8;
                 totalSamplesInStream += (uint64_t)(*(inbuf + pos + 17));
-                // FLAC_LOG_INFO("totalSamplesInStream %lli", totalSamplesInStream);
+                // FLAC_LOG_INFO("totalSamplesInStream {}", totalSamplesInStream);
                 FLACMetadataBlock->totalSamples = totalSamplesInStream;
 
-                // FLAC_LOG_INFO("nBytes %i, blockLength %i", nBytes, blockLength);
+                // FLAC_LOG_INFO("nBytes {}, blockLength {}", nBytes, blockLength);
                 pos += blockLength;
                 nBytes -= blockLength;
                 if (ret == FLAC_PARSE_OGG_DONE) return ret;
@@ -590,18 +590,18 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
             case vorbisComment: { // https://www.xiph.org/vorbis/doc/v-comment.html
                 if (blockLength < 8 || blockLength > nBytes) {
-                    FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: %i, bytes available: %i", blockLength, nBytes);
+                    FLAC_LOG_ERROR("Flac invalid Vorbis comment block length: {}, bytes available: {}", blockLength, nBytes);
                     return FLAC_ERR;
                 }
 
                 const uint32_t vorbisBlockEnd = (uint32_t)pos + (uint32_t)blockLength;
                 vendorLength = readLE32(inbuf + pos);
                 if (vendorLength > FLAC_MAX_VORBIS_VENDOR_LENGTH) {
-                    FLAC_LOG_ERROR("Flac Vorbis vendor string too long: %u bytes, max: %u", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
+                    FLAC_LOG_ERROR("Flac Vorbis vendor string too long: {} bytes, max: {}", vendorLength, FLAC_MAX_VORBIS_VENDOR_LENGTH);
                     return FLAC_ERR;
                 }
                 if (vendorLength > (uint32_t)blockLength - 8) {
-                    FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: %u, block length: %i", vendorLength, blockLength);
+                    FLAC_LOG_ERROR("Flac invalid Vorbis vendor string length: {}, block length: {}", vendorLength, blockLength);
                     return FLAC_ERR;
                 }
 
@@ -611,7 +611,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 }
                 m_flacVendorString.clear();
                 m_flacVendorString.copy_from((char*)inbuf + pos + 4, vendorLength);
-                // FLAC_LOG_VERBOSE("Vendor: %s", m_flacVendorString.c_get());
+                // FLAC_LOG_VERBOSE("Vendor: {}", m_flacVendorString.c_get());
 
                 pos += 4 + vendorLength;
                 userCommentListLength = readLE32(inbuf + pos);
@@ -620,17 +620,17 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                 commemtStringLength = 0;
                 for (uint32_t i = 0; i < userCommentListLength; i++) {
                     if ((uint32_t)pos + 4 > vorbisBlockEnd) {
-                        FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: %u", userCommentListLength);
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment list length: {}", userCommentListLength);
                         return FLAC_ERR;
                     }
 
                     commemtStringLength = readLE32(inbuf + pos);
                     if (commemtStringLength > FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH) {
-                        FLAC_LOG_ERROR("Flac Vorbis comment string too long: %u bytes, max: %u", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
+                        FLAC_LOG_ERROR("Flac Vorbis comment string too long: {} bytes, max: {}", commemtStringLength, FLAC_MAX_VORBIS_COMMENT_ENTRY_LENGTH);
                         return FLAC_ERR;
                     }
                     if (commemtStringLength > vorbisBlockEnd - ((uint32_t)pos + 4)) {
-                        FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: %u", commemtStringLength);
+                        FLAC_LOG_ERROR("Flac invalid Vorbis comment string length: {}", commemtStringLength);
                         return FLAC_ERR;
                     }
 
@@ -638,53 +638,53 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
 
                     if (isVorbisField(comment, commemtStringLength, "TITLE", "title", 6)) {
                         assignVorbisValue(vb[0], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Title: %s", vb[0].c_get());
-                        // FLAC_LOG_VERBOSE("TITLE: %s", vb[0].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Title: {}", vb[0].c_get());
+                        // FLAC_LOG_VERBOSE("TITLE: {}", vb[0].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "ARTIST", "artist", 7)) {
                         assignVorbisValue(vb[1], comment, commemtStringLength, 7);
-                        audio.info(audio, Audio::evt_id3data, "Artist: %s", vb[1].c_get());
-                        // FLAC_LOG_VERBOSE("ARTIST: %s", vb[1].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Artist: {}", vb[1].c_get());
+                        // FLAC_LOG_VERBOSE("ARTIST: {}", vb[1].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "GENRE", "genre", 6)) {
                         assignVorbisValue(vb[2], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Genre: %s", vb[2].c_get());
-                        FLAC_LOG_VERBOSE("GENRE: %s", vb[2].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Genre: {}", vb[2].c_get());
+                        FLAC_LOG_VERBOSE("GENRE: {}", vb[2].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "ALBUM", "album", 6)) {
                         assignVorbisValue(vb[3], comment, commemtStringLength, 6);
-                        audio.info(audio, Audio::evt_id3data, "Album: %s", vb[3].c_get());
-                        FLAC_LOG_VERBOSE("ALBUM: %s", vb[3].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Album: {}", vb[3].c_get());
+                        FLAC_LOG_VERBOSE("ALBUM: {}", vb[3].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "COMMENT", "comment", 8)) {
                         assignVorbisValue(vb[4], comment, commemtStringLength, 8);
-                        audio.info(audio, Audio::evt_id3data, "Comments: %s", vb[4].c_get());
-                        FLAC_LOG_VERBOSE("COMMENT: %s", vb[4].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Comments: {}", vb[4].c_get());
+                        FLAC_LOG_VERBOSE("COMMENT: {}", vb[4].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "DATE", "date", 5)) {
                         assignVorbisValue(vb[5], comment, commemtStringLength, 5);
-                        audio.info(audio, Audio::evt_id3data, "Date: %s", vb[5].c_get());
-                        FLAC_LOG_VERBOSE("DATE: %s", vb[5].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Date: {}", vb[5].c_get());
+                        FLAC_LOG_VERBOSE("DATE: {}", vb[5].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "TRACKNUMBER", "tracknumber", 12)) {
                         assignVorbisValue(vb[6], comment, commemtStringLength, 12);
-                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: %s", vb[6].c_get());
-                        FLAC_LOG_VERBOSE("TRACKNUMBER: %s", vb[6].c_get());
+                        audio.info(audio, Audio::evt_id3data, "Track number/Position in set: {}", vb[6].c_get());
+                        FLAC_LOG_VERBOSE("TRACKNUMBER: {}", vb[6].c_get());
                     }
                     if (isVorbisField(comment, commemtStringLength, "METADATA_BLOCK_PICTURE", "metadata_block_picture", 23)) {
                         if (commemtStringLength < 23) {
-                            FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: %u", commemtStringLength);
+                            FLAC_LOG_ERROR("Flac invalid METADATA_BLOCK_PICTURE length: {}", commemtStringLength);
                             return FLAC_ERR;
                         }
-                        FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength %u", commemtStringLength);
+                        FLAC_LOG_VERBOSE("METADATA_BLOCK_PICTURE found, commemtStringLength {}", commemtStringLength);
                         m_flacBlockPicLen = commemtStringLength - 23;
                         m_flacBlockPicPos = m_flacCurrentFilePos + pos + 4 + 23;
                         m_flacBlockPicLenUntilFrameEnd = 0;
                         if ((uint32_t)nBytes > (uint32_t)pos + 23) m_flacBlockPicLenUntilFrameEnd = (uint32_t)nBytes - ((uint32_t)pos + 23);
                         if (m_flacBlockPicLen < m_flacBlockPicLenUntilFrameEnd) m_flacBlockPicLenUntilFrameEnd = m_flacBlockPicLen;
                         m_flacRemainBlockPicLen = m_flacBlockPicLen - m_flacBlockPicLenUntilFrameEnd;
-                        // FLAC_LOG_INFO("s_flacBlockPicPos %i, m_flacBlockPicLen %i", m_flacBlockPicPos, m_flacBlockPicLen);
-                        // FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd %i, m_flacRemainBlockPicLen %i", m_flacBlockPicLenUntilFrameEnd, m_flacRemainBlockPicLen);
+                        // FLAC_LOG_INFO("s_flacBlockPicPos {}, m_flacBlockPicLen {}", m_flacBlockPicPos, m_flacBlockPicLen);
+                        // FLAC_LOG_INFO("s_flacBlockPicLenUntilFrameEnd {}, m_flacRemainBlockPicLen {}", m_flacBlockPicLenUntilFrameEnd, m_flacRemainBlockPicLen);
                         if (m_flacRemainBlockPicLen <= 0) m_f_lastMetaDataBlock = true; // exeption:: goto audiopage after commemt if lastMetaDataFlag is not set
                         if (m_flacBlockPicLen) {
                             m_flacBlockPicItem.push_back(m_flacBlockPicPos);
@@ -692,7 +692,7 @@ int32_t FlacDecoder::parseMetaDataBlockHeader(uint8_t* inbuf, int16_t nBytes) {
                         }
                     }
                     pos += 4 + commemtStringLength;
-                    FLAC_LOG_VERBOSE("nBytes %i, pos %u, commemtStringLength %u", nBytes, pos, commemtStringLength);
+                    FLAC_LOG_VERBOSE("nBytes {}, pos {}, commemtStringLength {}", nBytes, pos, commemtStringLength);
                 }
                 if (vb[1].valid() && vb[0].valid()) { // artist and title
                     m_flacStreamTitle.assign(vb[1].c_get());
@@ -788,8 +788,8 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
         if (m_flacRemainBlockPicLen <= 0 && !m_f_flacNewMetadataBlockPicture) {
             if (m_flacBlockPicItem.size() > 0) { // get blockpic data
                 // FLAC_LOG_INFO("---------------------------------------------------------------------------");
-                // FLAC_LOG_INFO("metadata blockpic found at pos %i, size %i bytes", m_flacBlockPicPos, m_flacBlockPicLen);
-                // for(int32_t i = 0; i < m_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment %02i, pos %07i, len %05i", i / 2, m_flacBlockPicItem[i], m_flacBlockPicItem[i + 1]); }
+                // FLAC_LOG_INFO("metadata blockpic found at pos {}, size {} bytes", m_flacBlockPicPos, m_flacBlockPicLen);
+                // for(int32_t i = 0; i < m_flacBlockPicItem.size(); i += 2) { FLAC_LOG_INFO("segment {:02}, pos {:07}, len {:05}", i / 2, m_flacBlockPicItem[i], m_flacBlockPicItem[i + 1]); }
                 // FLAC_LOG_INFO("---------------------------------------------------------------------------");
                 m_f_flacNewMetadataBlockPicture = true;
             }
@@ -816,7 +816,7 @@ int32_t FlacDecoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf)
             case 1:
                 if (m_flacRemainBlockPicLen > 0) {
                     m_flacRemainBlockPicLen -= segmLen;
-                    // FLAC_LOG_INFO("s_flacCurrentFilePos %i, len %i, m_flacRemainBlockPicLen %i", m_flacCurrentFilePos, segmLen, m_flacRemainBlockPicLen);
+                    // FLAC_LOG_INFO("s_flacCurrentFilePos {}, len {}, m_flacRemainBlockPicLen {}", m_flacCurrentFilePos, segmLen, m_flacRemainBlockPicLen);
                     m_flacBlockPicItem.push_back(m_flacCurrentFilePos);
                     m_flacBlockPicItem.push_back(segmLen);
                     if (m_flacRemainBlockPicLen <= 0) { m_flacPageNr = 2; }
@@ -933,7 +933,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
             sbl = 0;
             m_flacBitrate = FLACMetadataBlock->sampleRate * FLACMetadataBlock->bitsPerSample * FLACMetadataBlock->numChannels;
             m_flacBitrate /= m_flacCompressionRatio;
-            //      FLAC_LOG_INFO("s_flacBitrate %i, m_flacCompressionRatio %f, FLACMetadataBlock->sampleRate %i ", m_flacBitrate, m_flacCompressionRatio, FLACMetadataBlock->sampleRate);
+            //      FLAC_LOG_INFO("s_flacBitrate {}, m_flacCompressionRatio {}, FLACMetadataBlock->sampleRate {} ", m_flacBitrate, m_flacCompressionRatio, FLACMetadataBlock->sampleRate);
         }
 
         if (m_offset != m_numOfOutSamples) return GIVE_NEXT_LOOP;
@@ -944,7 +944,7 @@ int8_t FlacDecoder::decodeNative(uint8_t* inbuf, int32_t* bytesLeft, int32_t* ou
     alignToByte();
     readUint(16, bytesLeft);
     //    m_flacCompressionRatio = (float)m_bytesDecoded / (float)s_numOfOutSamples * FLACMetadataBlock->numChannels * (16/8);
-    //    FLAC_LOG_INFO("s_flacCompressionRatio % f", m_flacCompressionRatio);
+    //    FLAC_LOG_INFO("s_flacCompressionRatio {}", m_flacCompressionRatio);
     m_flacStatus = DECODE_FRAME;
     return FLAC_NONE;
 }
@@ -982,26 +982,26 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         if (FLACFrameHeader->chanAsgn > 7) FLACMetadataBlock->numChannels = 2;
     }
     if (FLACMetadataBlock->numChannels < 1) {
-        FLAC_LOG_ERROR("Flac unknown channel assignment, ch: %i", FLACMetadataBlock->numChannels);
+        FLAC_LOG_ERROR("Flac unknown channel assignment, ch: {}", FLACMetadataBlock->numChannels);
         return FLAC_STOP;
     }
     if (FLACMetadataBlock->numChannels > FLAC_MAX_CHANNELS) {
-        FLAC_LOG_ERROR("Flac unsupported channel count: %i, max: %i", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS);
+        FLAC_LOG_ERROR("Flac unsupported channel count: {}, max: {}", FLACMetadataBlock->numChannels, FLAC_MAX_CHANNELS);
         return FLAC_STOP;
     }
     if (FLACFrameHeader->chanAsgn <= 7) {
         uint8_t frameChannels = FLACFrameHeader->chanAsgn + 1;
         if (frameChannels != FLACMetadataBlock->numChannels) {
-            FLAC_LOG_ERROR("Flac channel assignment mismatch, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            FLAC_LOG_ERROR("Flac channel assignment mismatch, assignment: {}, channels: {}", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
             return FLAC_ERR;
         }
     } else if (FLACFrameHeader->chanAsgn <= 10) {
         if (FLACMetadataBlock->numChannels != 2) {
-            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: {}, channels: {}", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
             return FLAC_ERR;
         }
     } else {
-        FLAC_LOG_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
+        FLAC_LOG_ERROR("Flac reserved channel assignment, {}", FLACFrameHeader->chanAsgn);
         return FLAC_ERR;
     }
     if (!FLACMetadataBlock->bitsPerSample) {
@@ -1012,11 +1012,11 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
         if (FLACFrameHeader->sampleSizeCode == 6) FLACMetadataBlock->bitsPerSample = 24;
     }
     if (FLACMetadataBlock->bitsPerSample == 12 || FLACMetadataBlock->bitsPerSample == 20) {
-        FLAC_LOG_ERROR("Flac, bits per sample must be 8, 16 or 24, is: %i", FLACMetadataBlock->bitsPerSample);
+        FLAC_LOG_ERROR("Flac, bits per sample must be 8, 16 or 24, is: {}", FLACMetadataBlock->bitsPerSample);
         return FLAC_STOP;
     }
     if (FLACMetadataBlock->bitsPerSample < 8) {
-        FLAC_LOG_ERROR("Flac, bits per sample <8, bps: %i", FLACMetadataBlock->bitsPerSample);
+        FLAC_LOG_ERROR("Flac, bits per sample <8, bps: {}", FLACMetadataBlock->bitsPerSample);
         return FLAC_STOP;
     }
     if (!FLACMetadataBlock->sampleRate) {
@@ -1058,11 +1058,11 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     else if (8 <= FLACFrameHeader->blockSizeCode && FLACFrameHeader->blockSizeCode <= 15)
         decodedBlockSize = 256U << (FLACFrameHeader->blockSizeCode - 8);
     else {
-        FLAC_LOG_ERROR("Flac, reserved blocksize unsupported, block size code: %i", FLACFrameHeader->blockSizeCode);
+        FLAC_LOG_ERROR("Flac, reserved blocksize unsupported, block size code: {}", FLACFrameHeader->blockSizeCode);
         return FLAC_ERR;
     }
     if (decodedBlockSize == 0 || decodedBlockSize > FLAC_MAX_BLOCKSIZE) {
-        FLAC_LOG_ERROR("Flac block size too large: %u samples, max: %i", decodedBlockSize, FLAC_MAX_BLOCKSIZE);
+        FLAC_LOG_ERROR("Flac block size too large: {} samples, max: {}", decodedBlockSize, FLAC_MAX_BLOCKSIZE);
         return FLAC_ERR;
     }
     m_numOfOutSamples = decodedBlockSize;
@@ -1075,7 +1075,7 @@ int8_t FlacDecoder::decodeFrame(uint8_t* inbuf, int32_t* bytesLeft) {
     for (int32_t i = 0; i < FLAC_MAX_CHANNELS; i++) {
         if (m_samplesBuffer[i].size() == m_numOfOutSamples) continue;
         if (!m_samplesBuffer[i].calloc_array(m_numOfOutSamples, "m_samplesBuffer") || !m_samplesBuffer[i].valid()) {
-            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffer %i, samples: %u", i, m_numOfOutSamples);
+            FLAC_LOG_ERROR("not enough memory to allocate flacdecoder buffer {}, samples: {}", i, m_numOfOutSamples);
             m_samplesBuffer[i].reset();
             m_valid = false;
             return FLAC_ERR;
@@ -1141,7 +1141,7 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
         for (int32_t ch = 0; ch < FLACMetadataBlock->numChannels; ch++) decodeSubframe(FLACMetadataBlock->bitsPerSample, ch, bytesLeft);
     } else if (8 <= FLACFrameHeader->chanAsgn && FLACFrameHeader->chanAsgn <= 10) {
         if (FLACMetadataBlock->numChannels != 2) {
-            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: %i, channels: %i", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
+            FLAC_LOG_ERROR("Flac stereo channel assignment requires 2 channels, assignment: {}, channels: {}", FLACFrameHeader->chanAsgn, FLACMetadataBlock->numChannels);
             return FLAC_ERR;
         }
         decodeSubframe(FLACMetadataBlock->bitsPerSample + (FLACFrameHeader->chanAsgn == 9 ? 1 : 0), 0, bytesLeft);
@@ -1173,7 +1173,7 @@ int8_t FlacDecoder::decodeSubframes(int32_t* bytesLeft) {
         }
 
     } else {
-        FLAC_LOG_ERROR("Flac reserved channel assignment, %i", FLACFrameHeader->chanAsgn);
+        FLAC_LOG_ERROR("Flac reserved channel assignment, {}", FLACFrameHeader->chanAsgn);
         return FLAC_ERR;
     }
     return FLAC_NONE;
@@ -1211,7 +1211,7 @@ int8_t FlacDecoder::decodeSubframe(uint8_t sampleDepth, uint8_t ch, int32_t* byt
         ret = decodeLinearPredictiveCodingSubframe(type - 31, sampleDepth, ch, bytesLeft); // SUBFRAME_LPC
         if (ret) return ret;
     } else {
-        FLAC_LOG_ERROR("Flac unimplemented reserved subtype: %i", type);
+        FLAC_LOG_ERROR("Flac unimplemented reserved subtype: {}", type);
         return FLAC_ERR;
     }
     if (shift > 0) {
@@ -1246,7 +1246,7 @@ int8_t FlacDecoder::decodeFixedPredictionSubframe(uint8_t predOrder, uint8_t sam
         coefs.push_back(-1);
     }
     if (predOrder > 4) {
-        FLAC_LOG_ERROR("Flac preorder too big: %i", predOrder);
+        FLAC_LOG_ERROR("Flac preorder too big: {}", predOrder);
         return FLAC_ERR;
     } // Error: preorder > 4"
     restoreLinearPrediction(ch, 0);
@@ -1273,7 +1273,7 @@ int8_t FlacDecoder::decodeLinearPredictiveCodingSubframe(int32_t lpcOrder, int32
 int8_t FlacDecoder::decodeResiduals(uint8_t warmup, uint8_t ch, int32_t* bytesLeft) {
     int32_t method = readUint(2, bytesLeft);
     if (method >= 2) {
-        FLAC_LOG_ERROR("Flac reserved residual coding, method: %i", method);
+        FLAC_LOG_ERROR("Flac reserved residual coding, method: {}", method);
         return FLAC_ERR;
     }
 

@@ -617,28 +617,27 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
 
         // Gültigkeitsprüfungen
         if (header_info->mpeg_version == 1) { // Reserved
-            MP3_LOG_DEBUG("Reserved MPEG version\n");
+            MP3_LOG_DEBUG("Reserved MPEG version");
             return false;
         }
         if (header_info->layer == 0) { // Reserved
-            MP3_LOG_DEBUG("Reserved Layer\n");
+            MP3_LOG_DEBUG("Reserved Layer");
             return false;
         }
         // Modified part: Support for Layer II and Layer III
         if (header_info->layer != 1 && header_info->layer != 2 && header_info->layer != 3) { // Allow Layer I (3) Layer II (2) and Layer III (1)
-            printf("\n");
-            for (int i = 0; i < 10; i++) printf("0x%02x ", header_data[i]);
-            printf("\n"); // Use header_data instead of buf
-            MP3_LOG_DEBUG("Not Layer I or II or III\n");
+            // MP3_LOG_WARN("");
+            // for (int i = 0; i < 10; i++) MP3_LOG_WARN("0x{:02X} ", header_data[i]);
+            MP3_LOG_ERROR("Not Layer I or II or III");
             return false;
         }
 
         if (header_info->bitrate_idx == 0 || header_info->bitrate_idx == 15) { // Invalid bit rate
-            MP3_LOG_DEBUG("Invalid bitrate index\n");
+            MP3_LOG_DEBUG("Invalid bitrate index");
             return false;
         }
         if (header_info->sample_rate_idx == 3) { // Invalid sampling frequency
-            MP3_LOG_DEBUG("Invalid sampling rate index\n");
+            MP3_LOG_DEBUG("Invalid sampling rate index");
             return false;
         }
 
@@ -677,7 +676,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         }
 
         if (bitrate_kbps == 0 || sample_rate_hz == 0) {
-            MP3_LOG_DEBUG("Could not determine valid bitrate or sample rate\n");
+            MP3_LOG_DEBUG("Could not determine valid bitrate or sample rate");
             return false;
         }
 
@@ -715,7 +714,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         }
 
         if (header_info->frame_length == 0) {
-            MP3_LOG_DEBUG("Calculated frame length is zero\n");
+            MP3_LOG_DEBUG("Calculated frame length is zero");
             return false;
         }
         header_info->sample_rate_hz = sample_rate_hz;
@@ -766,7 +765,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         int32_t sync_offset = findSync(buf, current_pos, nBytes);
 
         if (sync_offset == -1) {
-            MP3_LOG_DEBUG("No syncword found in remaining buffer\n");
+            MP3_LOG_DEBUG("No syncword found in remaining buffer");
             return -1; // No more syncword found
         }
 
@@ -774,7 +773,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
         nBytes -= sync_offset;
 
         if (nBytes < mp3FHsize) {
-            MP3_LOG_DEBUG("Not enough bytes for a full header after syncword\n");
+            MP3_LOG_DEBUG("Not enough bytes for a full header after syncword");
             return -1; // Not enough data for a full header
         }
 
@@ -786,7 +785,7 @@ int32_t MP3Decoder::findSyncWord(uint8_t* buf, int32_t nBytes) {
                 Mp3FrameHeader_sync_t next_header;
                 if (((buf[current_pos + header.frame_length] == SYNCWORDH) && ((buf[current_pos + header.frame_length + 1] & SYNCWORDL) == SYNCWORDL)) &&
                     parseMp3Header(&buf[current_pos + header.frame_length], &next_header)) {
-                    // MP3_LOG_DEBUG("Found reliable MP3 frame at pos: %d, length: %lu\n", current_pos, header.frame_length);
+                    // MP3_LOG_DEBUG("Found reliable MP3 frame at pos: {}, length: {}", current_pos, header.frame_length);
 
                     // s_samplerate   = header.sample_rate_hz; // (suppose in the structure available)
                     // s_bitRate      = header.bitrate_kbps;   // (suppose in the structure available)
@@ -930,7 +929,7 @@ uint32_t MP3Decoder::getOutputSamples() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 const char* MP3Decoder::arg1() {
     m_mpeg_version_str.assign(mpeg_version_table[m_MP3FrameInfo->version]); // 0: MPEG-2.5, 1: Reserviert, 2: MPEG-2 (ISO/IEC 13818-3), 3: MPEG-1 (ISO/IEC 11172-3)
-    m_mpeg_version_str.appendf(" %s", layer_table[m_MP3FrameInfo->layer]);
+    m_mpeg_version_str.appendf(" {}", layer_table[m_MP3FrameInfo->layer]);
     return m_mpeg_version_str.get();
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
@@ -1101,7 +1100,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
             MP3_LOG_DEBUG("APETAGEX gefunden");
             uint32_t version = inbuf[8] | (inbuf[9] << 8) | (inbuf[10] << 16) | (inbuf[11] << 24);
             uint32_t size = inbuf[12] | (inbuf[13] << 8) | (inbuf[14] << 16) | (inbuf[15] << 24);
-            MP3_LOG_DEBUG("version %u size %u", version, size);
+            MP3_LOG_DEBUG("version {} size {}", version, size);
             *bytesLeft -= min(*bytesLeft, (int32_t)size);
             return MP3_NEXT_FRAME;
         }
@@ -1113,7 +1112,7 @@ int32_t MP3Decoder::decode(uint8_t* inbuf, int32_t* bytesLeft, int32_t* outbuf) 
         int skip = abs(frameLen);
         if (skip > 0 && skip <= *bytesLeft) {
             *bytesLeft -= skip;
-            MP3_LOG_DEBUG("Fakeframe, size %i", abs(frameLen));
+            MP3_LOG_DEBUG("Fakeframe, size {}", abs(frameLen));
 
             if (m_invalid_frame.start == false) { // fake frames control
                 m_invalid_frame.start = true;
@@ -3568,7 +3567,7 @@ void MP3Decoder::PolyphaseStereo(int16_t* pcm, int32_t* vbuf, const uint32_t* co
  */
 int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
     if (frame_len < 4) {
-        MP3_LOG_ERROR("Error: Frame data too short for header (need 4 bytes, got %zu).\n", frame_len);
+        MP3_LOG_ERROR("Error: Frame data too short for header (need 4 bytes, got {}).", frame_len);
         return -3; // Frame too short for header
     }
 
@@ -3605,7 +3604,7 @@ int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
     // MPEG 2.5 Layer III often uses 12 bits (0xfff), other 11 bits (0xffe)
     // simple check: data [0] == 0xff and (data [1] & 0xe0) == 0xe0
     if (!(frame_data[0] == 0xFF && (frame_data[1] & 0xE0) == 0xE0)) {
-        MP3_LOG_ERROR("Error: Invalid MP3 sync word.\n");
+        MP3_LOG_ERROR("Error: Invalid MP3 sync word.");
         return -4;
     }
 
@@ -3632,14 +3631,14 @@ int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
     uint8_t channel_mode = (header >> 6) & 0x03;
 
     // Debug output(optional)
-    // MP3_LOG_DEBUG("MPEG Version ID raw: %u\n", mpeg_version_id);
-    // MP3_LOG_DEBUG("Layer Description raw: %u\n", layer_description);
-    // MP3_LOG_DEBUG("Protection Bit: %u\n", protection_bit);
-    // MP3_LOG_DEBUG("Channel Mode raw: %u\n", channel_mode);
+    // MP3_LOG_DEBUG("MPEG Version ID raw: {}", mpeg_version_id);
+    // MP3_LOG_DEBUG("Layer Description raw: {}", layer_description);
+    // MP3_LOG_DEBUG("Protection Bit: {}", protection_bit);
+    // MP3_LOG_DEBUG("Channel Mode raw: {}", channel_mode);
 
     // --- 2. Check whether it is Layer III ---
     if (layer_description != LAYER_III) {
-        // fprintf(stderr, "Info: Not an MPEG Layer III frame (Layer: %u).\n", layer_description);
+        // MP3_LOG_DEBUG("Info: Not an MPEG Layer III frame (Layer: {}).", layer_description);
         return -1; // no Layer III
     }
 
@@ -3669,20 +3668,20 @@ int MP3Decoder::MP3_AnalyzeFrame(const uint8_t* frame_data, size_t frame_len) {
             side_info_size = 17; // Stereo, Joint Stereo, Dual Channel
         }
     } else {
-        fprintf(stderr, "Error: Reserved or unknown MPEG version ID: %u.\n", mpeg_version_id);
+        MP3_LOG_ERROR("Error: Reserved or unknown MPEG version ID: {}", mpeg_version_id);
         return -2; // Unknown/reserved MPEG version
     }
 
     // ensure that the frame is long enough for the side information
     // We need at least 2 bytes of the side info for Main_data_begin
     if (frame_len < (size_t)(side_info_offset + 2)) {
-        fprintf(stderr, "Error: Frame data too short for side information (need %d bytes, got %zu).\n", side_info_offset + 2, frame_len);
+        MP3_LOG_ERROR("Error: Frame data too short for side information (need {} bytes, got {}).", side_info_offset + 2, frame_len);
         return -3;
     }
     // (optional) Check whether the entire Side Information is available
     /*
     if (frame_len < (size_t)(side_info_offset + side_info_size)) {
-        fprintf(stderr, "Warning: Frame data might be too short for full side information (expected %d, got %zu available after header/CRC).\n", side_info_size, frame_len - side_info_offset);
+        MP3_LOG_ERROR("Warning: Frame data might be too short for full side information (expected {}, got {} available after header/CRC).", side_info_size, frame_len - side_info_offset);
         // Fortfahren, da main_data_begin am Anfang ist, aber es ist ein Hinweis
     }
     */

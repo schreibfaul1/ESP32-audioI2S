@@ -78,12 +78,14 @@ class AudioBuffer {
     uint8_t*        m_readPtr = nullptr;
     uint8_t*        m_endPtr = nullptr;
     uint8_t*        m_startPtr = nullptr;
+    ps_ptr<char>    m_log;
     bool            m_init = false;
     bool            m_isEmpty = true;
     bool            m_isFull = false;
 
   private:
     SemaphoreHandle_t m_mutex = nullptr;
+#define ANSI_ESC_RED "\033[31m"
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -506,70 +508,30 @@ class Audio {
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
-    // 🎯 overload for char*-Pointer (maybe nullptr)
-    static const char* safe_arg(const char* v) { return v ? v : "(null)"; }
-    static char*       safe_arg(char* v) { return v ? v : (char*)"(null)"; }
-
-    // 🎯 overload for char-Arrays (never nullptr)
-    template <size_t N> static const char* safe_arg(const char (&v)[N]) { return v; }
-
-    // 🎯 overload for string
-    static const char* safe_arg(const std::string& v) { return v.c_str(); }
-
-    // 🎯 overload for string_view
-    static const char* safe_arg(std::string_view v) {
-        return v.data(); // Achtung: evtl. nicht nullterminiert
-    }
-
-    // 🎯 Catch-all for all other types
-    template <typename T> static auto safe_arg(T&& v) -> decltype(auto) { return std::forward<T>(v); }
-
-    // specialization for nullptr / NULL
-    static const char* safe_arg(std::nullptr_t) { return "(null)"; }
-
     template <typename... Args> static bool info(Audio& instance, event_t e, const char* fmt, Args&&... args) {
-        std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
-                                                               // -------------------------------------------------------------------------------------------------------------------
+        std::lock_guard<std::mutex> lock(instance.mutex_info);
+        if (!fmt) return false;
+        if (!audio_info_callback) return false;
+
+        ps_ptr<char> result;
+        result.assignf(fmt, std::forward<Args>(args)...);
+        if (!result.get()) return false;
+
         auto extract_last_number = [](std::string_view s) -> int32_t {
-            // start from the back
             auto it = s.end();
-            // skip whitespaces at the end (if available)
             while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
-
-            auto end = it; // potential end of the number
-
-            // Now only search digits backwards
+            auto end = it;
             while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
-
-            // Check: is there a space before it?
             if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
                 std::string_view number{it, static_cast<size_t>(end - it)};
                 uint32_t         value{};
                 auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
                 if (ec == std::errc{}) { return static_cast<int32_t>(value); }
             }
-
-            return -1; // no number found in the end
+            return -1;
         };
-        // -------------------------------------------------------------------------------------------------------------------
-        if (!fmt) return false;
-        if (!audio_info_callback) return false;
-        ps_ptr<char> result;
-        // First run: determine size
-        int len = std::snprintf(nullptr, 0, fmt, safe_arg(std::forward<Args>(args))...);
-        if (len <= 0) return false;
-        result.calloc(len + 1);
-        char* p = result.get();
-        if (!p) return false;
-        std::snprintf(p, len + 1, fmt, safe_arg(std::forward<Args>(args))...);
-        // msg_t i = {0};
-        // i.msg = result.c_get();
-        // i.e = e;
-        // i.s = eventStr[e];
-        // i.arg1 = extract_last_number(result.c_get());
-        // i.i2s_num = instance.m_i2s_items.i2s_num;
-        // audio_info_callback(i);
-        std::vector<uint32_t> v; // dummy
+
+        std::vector<uint32_t> v;
         v.push_back(0);
         instance.m_info_queue.msg.emplace_front(result);
         instance.m_info_queue.s.emplace_front(eventStr[e]);
@@ -577,7 +539,6 @@ class Audio {
         instance.m_info_queue.arg2.emplace_front(0);
         instance.m_info_queue.vec.emplace_front(v);
         instance.m_info_queue.e.emplace_front((uint8_t)e);
-
         result.reset();
         return true;
     }
@@ -586,7 +547,7 @@ class Audio {
         if (!audio_info_callback) return false;
         std::lock_guard<std::mutex> lock(instance.mutex_info); // lock mutex
         ps_ptr<char>                apic;
-        apic.assignf("APIC found at pos %u", v[0]);
+        apic.assignf("APIC found at pos {}", v[0]);
         // msg_t i;
         // i.msg = apic.c_get();
         // i.e = e;
@@ -605,7 +566,7 @@ class Audio {
     }
     //----------------------------------------------------------------------------------------------------------------------
 
-    template <typename... Args> static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* fmt, Args&&... args) {
+    template <typename... Args> static void AUDIO_LOG_IMPL(uint8_t level, const char* path, int line, const char* func, const char* fmt, Args&&... args) {
 
 #define ANSI_ESC_RESET   "\033[0m"
 #define ANSI_ESC_BLACK   "\033[30m"
@@ -617,10 +578,10 @@ class Audio {
 #define ANSI_ESC_CYAN    "\033[36m"
 #define ANSI_ESC_WHITE   "\033[37m"
 
-        ps_ptr<char> logStr;
-        logStr.copy_from(path);
+        ps_ptr<char> logStr = path;
         while (logStr.contains("/")) { logStr.remove_before('/', false); }
-        logStr.appendf(":%i ", line);
+        logStr.appendf(":{} {}] ", line, func ? func : "");
+        logStr.insert("[", 0);
 
         if (level == 1 && CORE_DEBUG_LEVEL >= 1) {
             logStr.append(ANSI_ESC_RED);
@@ -667,10 +628,10 @@ class Audio {
     }
 
 // Macro for comfortable calls
-#define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define AUDIO_LOG_ERROR(fmt, ...) AUDIO_LOG_IMPL(1, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+#define AUDIO_LOG_WARN(fmt, ...)  AUDIO_LOG_IMPL(2, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+#define AUDIO_LOG_INFO(fmt, ...)  AUDIO_LOG_IMPL(3, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+#define AUDIO_LOG_DEBUG(fmt, ...) AUDIO_LOG_IMPL(4, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  D E C O D E R  📌📌📌
