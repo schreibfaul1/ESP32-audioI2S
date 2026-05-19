@@ -889,215 +889,94 @@ class ps_ptr {
     // 📌📌📌  A S S I G N F   📌📌📌
 
     // ps_ptr<char> message;
-    // message.assignf("Code %d, Modul %s", 404, "Network");
+    // message.assignf("Code {}, Modul {}", 404, "Network");
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
+    // e.g. {}, {:02}, {:04X}, {:.2f}, {:20}, {:-20}
+    // assignf("v={:02} hex={:04X} pi={:.2f}", 7, 0xAF, 3.14159); --> v=07 hex=00AF pi=3.14
+    // bool --> true or false
 
-    // onli activate if T = char
-    template <typename U = T>
+    template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
-    void assignf(const char* fmt, ...) {
+    void assignf(const char* fmt, Args&&... args) {
+
         if (!fmt) return;
-        // Formatierte Länge berechnen
-        va_list args;
-        va_start(args, fmt);
-        va_list args_copy;
-        va_copy(args_copy, args);
-        int fmt_len = vsnprintf(nullptr, 0, fmt, args_copy);
-        va_end(args_copy);
 
-        if (fmt_len < 0) {
-            va_end(args);
+        constexpr size_t arg_count = sizeof...(Args);
+
+        size_t placeholder_count = count_placeholders(fmt);
+
+        if (placeholder_count != arg_count) {
+            printf("assignf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
             return;
         }
 
-        std::size_t new_len = static_cast<std::size_t>(fmt_len) + 1;
+        std::string tmp;
 
-        // share previous memory and new allocates
+        format_append(tmp, fmt, std::forward<Args>(args)...);
+
         reset();
-        alloc(new_len);
+
+        alloc(tmp.size() + 1);
+
         if (!mem) {
-            printf("OOM: assignf() failed for %zu bytes\n", new_len);
-            va_end(args);
+            printf("OOM: assignf() failed for %zu bytes\n", tmp.size() + 1);
             return;
         }
 
-        // write formatted text
-        vsnprintf(static_cast<char*>(mem.get()), new_len, fmt, args);
-        va_end(args);
-        allocated_size = fmt_len;
+        memcpy(mem.get(), tmp.c_str(), tmp.size() + 1);
+
+        allocated_size = tmp.size();
     }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  A P P E N D F   📌📌📌
 
     // ps_ptr<char> message;
     // message.assign("Error: ");
-    // message.appendf("Code %d, Modul %s", 404, "Network");
+    // message.appendf("Code {}, Modul {}", 404, "Network");
     // printf("%s\n", message.get());  // → Error: Code 404, Modul Network
 
-    // Nur aktivieren, wenn T = char
+    // only activate if T = char
 
-    template <typename... Args> void appendf(const char* fmt, Args&&... args) {
-        if (!fmt) return;
-        int add_len = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (add_len < 0) return;
-
-        std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
-        std::size_t new_len = old_len + add_len + 1;
-
-        char* old_data = static_cast<char*>(mem.release());
-        reset();
-        alloc(new_len);
-
-        if (!mem) {
-            printf("OOM: appendf() failed for %zu bytes\n", new_len);
-            if (old_data) free(old_data);
-            return;
-        }
-
-        if (old_data) {
-            std::memcpy(mem.get(), old_data, old_len);
-            free(old_data);
-        }
-
-        std::snprintf(mem.get() + old_len, new_len - old_len, fmt, std::forward<Args>(args)...);
-    }
-    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-    // 📌📌📌  A P P E N D F _ V A  📌📌📌
-
-    // void vPrint(const char* fmt, ...) {
-    //     ps_ptr<char> myLog;
-    //     va_list args;
-    //     va_start(args, fmt);
-    //     myLog.appendf_va(fmt, args);  // <-
-    //     va_end(args);
-    //     printf(myLog.c_get());
-    // }
-    // vPrint("Hallo %i", 19);
-
-    //---------------------------------------------------------------------------------------------------
-    static int safe_vsnprintf(char* buf, size_t size, const char* fmt, va_list args) {
-        va_list args_copy;
-        va_copy(args_copy, args);
-
-        // Ergebnis wird hier reingeschrieben
-        int total_written = 0;
-
-        const char* p = fmt;
-        while (*p) {
-            if (*p == '%') {
-                [[maybe_unused]] const char* start = p++;
-                if (*p == '%') {
-                    // Escaped "%%"
-                    if (total_written < (int)size) {
-                        if (buf) buf[total_written] = '%';
-                    }
-                    total_written++;
-                    p++;
-                    continue;
-                }
-
-                // collect complete format tokens now(e.g. "%02d", "%-15.8s" ...)
-                char  fmt_token[64];
-                char* f = fmt_token;
-                *f++ = '%';
-                while (*p && !strchr("diuoxXfFeEgGaAcspn%", *p)) { *f++ = *p++; }
-                if (*p) *f++ = *p++;
-                *f = '\0';
-
-                if (fmt_token[std::strlen(fmt_token) - 1] == 's') {
-                    // String-Argument abfangen
-                    char* s = va_arg(args_copy, char*);
-                    if (!s) s = (char*)"(null)";
-                    int n = snprintf(buf ? buf + total_written : nullptr, size > (size_t)total_written ? size - total_written : 0, fmt_token, s);
-                    if (n < 0) {
-                        va_end(args_copy);
-                        return n;
-                    }
-                    total_written += n;
-                } else {
-                    // alle anderen Typen → normal weitergeben
-                    va_list tmp;
-                    va_copy(tmp, args_copy);
-                    int n = vsnprintf(buf ? buf + total_written : nullptr, size > (size_t)total_written ? size - total_written : 0, fmt_token, tmp);
-                    va_end(tmp);
-                    if (n < 0) {
-                        va_end(args_copy);
-                        return n;
-                    }
-                    total_written += n;
-
-                    // verbrauchte Argumente aus args_copy ziehen
-                    switch (fmt_token[std::strlen(fmt_token) - 1]) {
-                        case 'd':
-                        case 'i':
-                        case 'u':
-                        case 'o':
-                        case 'x':
-                        case 'X': (void)va_arg(args_copy, int); break;
-                        case 'f':
-                        case 'F':
-                        case 'e':
-                        case 'E':
-                        case 'g':
-                        case 'G':
-                        case 'a':
-                        case 'A': (void)va_arg(args_copy, double); break;
-                        case 'c': (void)va_arg(args_copy, int); break;
-                        case 'p': (void)va_arg(args_copy, void*); break;
-                        case 'n': (void)va_arg(args_copy, int*); break;
-                    }
-                }
-            } else {
-                // normales Zeichen kopieren
-                if (total_written < (int)size) {
-                    if (buf) buf[total_written] = *p;
-                }
-                total_written++;
-                p++;
-            }
-        }
-
-        // Nullterminierung falls Platz
-        if (buf && total_written < (int)size) {
-            buf[total_written] = '\0';
-        } else if (buf && size > 0) {
-            buf[size - 1] = '\0';
-        }
-
-        va_end(args_copy);
-        return total_written;
-    }
-    //----------------------------------------------------------------------------------------------------
-
-    template <typename U = T>
+    template <typename U = T, typename... Args>
         requires std::is_same_v<U, char>
-    void appendf_va(const char* fmt, va_list& args) {
+    void appendf(const char* fmt, Args&&... args) {
         if (!fmt) return;
-        // determine the length of the format (requires copy of args!)
-        va_list args_copy;
-        va_copy(args_copy, args);
-        int add_len = safe_vsnprintf(nullptr, 0, fmt, args_copy);
-        va_end(args_copy);
-        if (add_len < 0) return;
-        std::size_t old_len = mem ? std::strlen(static_cast<char*>(mem.get())) : 0;
-        std::size_t new_len = old_len + static_cast<std::size_t>(add_len) + 1;
-        // Speicher neu reservieren
-        char* old_data = static_cast<char*>(mem.release());
+
+        constexpr size_t arg_count = sizeof...(Args);
+
+        size_t placeholder_count = count_placeholders(fmt);
+
+        if (placeholder_count != arg_count) {
+            printf("appendf(): \033[31m placeholder mismatch (expected %zu, got %zu), content: '%s' \033[0m\n", placeholder_count, arg_count, fmt);
+            return;
+        }
+
+        std::string tmp;
+        format_append(tmp, fmt, std::forward<Args>(args)...);
+        std::size_t old_len = mem ? std::strlen(mem.get()) : 0;
+        std::size_t add_len = tmp.size();
+        std::size_t new_len = old_len + add_len + 1;
+        char*       old_data = static_cast<char*>(mem.release());
         reset();
         alloc(new_len);
         if (!mem) {
-            printf("OOM: appendf_va() failed for %zu bytes\n", new_len);
-            if (old_data) free(old_data);
+            printf("OOM: appendf1() failed for %zu bytes\n", new_len);
+            if (old_data) { free(old_data); }
             return;
         }
-        // Vorherigen Inhalt kopieren
-        if (old_data) {
+
+        // alten Text kopieren
+        if (old_data && old_len > 0) {
             std::memcpy(mem.get(), old_data, old_len);
             free(old_data);
         }
-        // check null pointer
-        safe_vsnprintf(static_cast<char*>(mem.get()) + old_len, new_len - old_len, fmt, args);
+
+        // neuen Text anhängen
+        std::memcpy(mem.get() + old_len, tmp.c_str(), add_len + 1);
+        allocated_size = old_len + add_len;
     }
+
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌 I N D E X _ O F   📌📌📌
 
@@ -2017,7 +1896,6 @@ class ps_ptr {
         }
         *dst = '\0';
         name = n;
-
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  R E P L A C E   📌📌📌
@@ -2227,7 +2105,10 @@ class ps_ptr {
     // 📌📌📌  C L E A R   📌📌📌
 
     void clear() {
-        if (mem && allocated_size > 0) { std::memset(mem.get(), 0, allocated_size); length_ = 0; }
+        if (mem && allocated_size > 0) {
+            std::memset(mem.get(), 0, allocated_size);
+            length_ = 0;
+        }
     }
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
     // 📌📌📌  S I Z E   📌📌📌
@@ -2364,7 +2245,7 @@ class ps_ptr {
     // Safe operator[] with logging
     T& operator[](std::size_t index) noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy; // Access allowed, but ineffective
         }
         return mem[index];
@@ -2372,7 +2253,7 @@ class ps_ptr {
 
     const T& operator[](std::size_t index) const noexcept {
         if (index >= allocated_size) {
-            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)",__FILE__, __LINE__, index, allocated_size,  name ? name : "unnamed");
+            log_e("[%s:%i] ps_ptr[]: Index %zu out of bounds (size = %zu, name = %s)", __FILE__, __LINE__, index, allocated_size, name ? name : "unnamed");
             return dummy;
         }
         return mem[index];
@@ -2427,6 +2308,298 @@ class ps_ptr {
     std::span<T> span() noexcept { return std::span<T>(mem.get(), allocated_size); }
 
     std::span<const T> span() const noexcept { return std::span<const T>(mem.get(), allocated_size); }
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+    // 📌📌📌  F O R M A T  📌📌📌 (fmt lib within class)
+    // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    template <typename V> std::string to_string_any(const V& v) {
+        using Raw = std::remove_cv_t<std::remove_reference_t<V>>;
+        using D = std::decay_t<V>;
+
+        // ps_ptr<char>
+        if constexpr (std::is_same_v<Raw, ps_ptr<char>>) {
+            const char* str = v.c_get();
+            return str ? std::string(str) : "";
+        }
+        // Treat character arrays as text in the same way as string literals.
+        else if constexpr (std::is_array_v<Raw> && std::is_same_v<std::remove_extent_t<Raw>, char>) {
+            return std::string(v);
+        }
+        // BOOL
+        else if constexpr (std::is_same_v<D, bool>) {
+            return v ? "true" : "false";
+        }
+        // FLOAT
+        else if constexpr (std::is_same_v<D, float> || std::is_same_v<D, double>) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%g", v);
+            return buf;
+        }
+        // INTEGER / ENUM
+        else if constexpr (std::is_integral_v<D> || std::is_enum_v<D>) {
+            return std::to_string(static_cast<long long>(v));
+        }
+        // POINTER
+        else if constexpr (std::is_pointer_v<D>) {
+            // char*
+            if constexpr (std::is_same_v<D, char*> || std::is_same_v<D, const char*>) {
+                return v ? std::string(v) : "";
+            }
+            // unsigned char*
+            else if constexpr (std::is_same_v<D, unsigned char*> || std::is_same_v<D, const unsigned char*>) {
+                return v ? std::string(reinterpret_cast<const char*>(v)) : "";
+            }
+
+            // generic pointer
+            else {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%p", static_cast<const void*>(v));
+                return buf;
+            }
+        }
+        // fallback
+        else {
+            return v;
+        }
+    }
+
+    void format_append(std::string& out, const char* fmt) { out += fmt; }
+
+    template <typename First, typename... Rest> void format_append(std::string& out, const char* fmt, First&& first, Rest&&... rest) {
+        while (*fmt) {
+
+            // Start eines Formatfeldes?
+            if (*fmt == '{') {
+
+                // Escape {{
+                if (fmt[1] == '{') {
+                    out += '{';
+                    fmt += 2;
+                    continue;
+                }
+
+                // Ende suchen
+                const char* end = std::strchr(fmt, '}');
+
+                // Fehlerfall: keine schließende Klammer
+                if (!end) {
+                    out += *fmt++;
+                    continue;
+                }
+
+                // Inhalt zwischen { ... }
+                std::string spec_str(fmt + 1, end - fmt - 1);
+
+                format_spec fs;
+
+                // Nur parsen wenn Inhalt existiert
+                // also {:02} usw.
+                if (!spec_str.empty()) { fs = parse_format(spec_str.c_str()); }
+
+                // Wert formatieren
+                out += format_value(std::forward<First>(first), fs);
+
+                // Rekursiv weitermachen
+                format_append(out, end + 1, std::forward<Rest>(rest)...);
+
+                return;
+            }
+
+            // Escape }}
+            if (fmt[0] == '}' && fmt[1] == '}') {
+                out += '}';
+                fmt += 2;
+                continue;
+            }
+
+            out += *fmt++;
+        }
+    }
+
+    struct format_spec {
+        int  width = 0;
+        int  precision = -1;
+        char fill = ' ';
+        char type = 0;
+        bool upper = false;
+        bool align_right = false;
+    };
+
+    inline format_spec parse_format(const char* fmt) {
+        format_spec fs;
+
+        // {:02}
+        if (*fmt == ':') {
+            ++fmt;
+
+            //  Right-aligned?
+            if (*fmt == '-') {
+                fs.align_right = true;
+                ++fmt;
+            }
+
+            // leading zero
+            if (*fmt == '0') {
+                fs.fill = '0';
+                ++fmt;
+            }
+
+            // width
+            while (isdigit(*fmt)) {
+                fs.width = fs.width * 10 + (*fmt - '0');
+                ++fmt;
+            }
+
+            // precision
+            if (*fmt == '.') {
+                ++fmt;
+                fs.precision = 0;
+                while (isdigit(*fmt)) {
+                    fs.precision = fs.precision * 10 + (*fmt - '0');
+                    ++fmt;
+                }
+            }
+
+            // type
+            if (*fmt) {
+                fs.type = *fmt;
+                if (*fmt == 'X') fs.upper = true;
+            }
+        }
+        return fs;
+    }
+
+    template <typename V> std::string format_value(const V& value, const format_spec& fs) {
+        char buf[64];
+
+        // bool ist in C++ ein Integraltyp, soll hier aber als Text ausgegeben werden.
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, bool>) { return value ? "true" : "false"; }
+
+        // ps_ptr<char>
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, ps_ptr<char>>) {
+            const char* str = value.c_get();
+            return str ? std::string(str) : std::string("");
+        }
+
+        // CHAR - separate Behandlung vor is_integral_v
+        if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<V>>, char>) {
+            if (fs.type == 'c' || fs.type == 0) { // 'c' oder kein Specifier
+                buf[0] = value;
+                buf[1] = '\0';
+                return buf;
+            }
+        }
+
+        if constexpr (std::is_integral_v<V>) {
+            // HEX
+            if (fs.type == 'X') {
+                if (fs.width > 0) {
+                    const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                    snprintf(buf, sizeof(buf), "%0*llX", safe_width, (unsigned long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%llX", (unsigned long long)value);
+                }
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
+            }
+            // HEX
+            if (fs.type == 'x') {
+                if (fs.width > 0) {
+                    const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                    snprintf(buf, sizeof(buf), "%0*llx", safe_width, (unsigned long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%llx", (unsigned long long)value);
+                }
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
+            }
+
+            // Integer mit Padding
+            if (fs.width > 0) {
+                const int safe_width = (fs.width > 30) ? 30 : fs.width;
+                if (fs.fill == '0') {
+                    snprintf(buf, sizeof(buf), "%0*lld", safe_width, (long long)value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%*lld", safe_width, (long long)value);
+                }
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
+            }
+            std::string s = to_string_any(value);
+            apply_width(s, fs, true);
+            return s;
+        }
+        // FLOAT
+        if constexpr (std::is_floating_point_v<V>) {
+            if (fs.precision >= 0) {
+                snprintf(buf, sizeof(buf), "%.*f", fs.precision, value);
+                std::string s = buf;
+                apply_width(s, fs, true);
+                return s;
+            }
+            snprintf(buf, sizeof(buf), "%g", value);
+            std::string s = buf;
+            apply_width(s, fs, true);
+            return s;
+        }
+
+        std::string s = to_string_any(value);
+        apply_width(s, fs, false);
+        return s;
+    }
+
+    inline size_t count_placeholders(const char* fmt) {
+        size_t count = 0;
+
+        while (*fmt) {
+            // escaped {{
+            if (fmt[0] == '{' && fmt[1] == '{') {
+                fmt += 2;
+                continue;
+            }
+            // escaped }}
+            if (fmt[0] == '}' && fmt[1] == '}') {
+                fmt += 2;
+                continue;
+            }
+
+            // echtes {
+            if (*fmt == '{') {
+                const char* end = std::strchr(fmt, '}');
+
+                if (end) {
+                    ++count;
+                    fmt = end + 1;
+                    continue;
+                }
+            }
+            ++fmt;
+        }
+        return count;
+    }
+
+    inline void apply_width(std::string& s, const format_spec& fs, bool numeric = false) {
+        if (fs.width <= 0) return;
+
+        if ((int)s.size() >= fs.width) return;
+        size_t missing = fs.width - s.size();
+        // Always fill in the numbers at the top
+        if (numeric) {
+            s.insert(s.begin(), missing, fs.fill);
+            return;
+        }
+
+        // Strings
+        if (fs.align_right) {
+            s.insert(s.begin(), missing, fs.fill);
+        } else {
+            s.append(missing, fs.fill);
+        }
+    }
 };
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 // 📌📌📌  O P E R A T O R  📌📌📌 (witout class)

@@ -29,8 +29,8 @@
 **/
 #pragma once
 #include "Arduino.h"
-#include "defines.h"
-#include "settings.h"
+#include "aac_defines.h"
+#include "aac_settings.h"
 
 typedef void* NeAACDecHandle;
 typedef struct mp4AudioSpecificConfig {
