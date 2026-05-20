@@ -227,6 +227,7 @@ class Audio {
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);
+    void                     noise_shaping(int32_t* outBuffPtr);
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
