@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6b                                                                                                                            ";
-/*  Updated on: May 19, 2026
+    Version 3.4.6c                                                                                                                            ";
+/*  Updated on: May 20, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -403,8 +403,8 @@ esp_err_t Audio::I2Sstart() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 esp_err_t Audio::I2Sstop() {
     m_outBuff.clear();                                                  // Clear OutputBuffer
-    m_resamplesBuff.clear();                                            // Clear samplesBuff48K
-    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in samplesBuff48K
+    m_resamplesBuff.clear();                                            // Clear m_resamplesBuff
+    std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0); // Clear history in m_resamplesBuff
     esp_err_t err = ESP_FAIL;
     if (m_f_i2s_channel_enabled) err = i2s_channel_disable(m_i2s_tx_handle);
     m_f_i2s_channel_enabled = false;
@@ -422,7 +422,7 @@ void Audio::setDefaults() {
     initInBuff(); // initialize InputBuffer if not already done
     InBuff.reset();
     m_outBuff.clear();       // Clear OutputBuffer
-    m_resamplesBuff.clear(); // Clear samplesBuff48K
+    m_resamplesBuff.clear(); // Clear m_resamplesBuff
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     vector_clear_and_shrink(m_syltLines);
@@ -3308,7 +3308,7 @@ bool Audio::pauseResume() {
     return retVal;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs) { // Calculation of the biquad coefficients for the 48K resampler
+audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs) { // Calculation of the biquad coefficients for the resampler
 
     float fc = 0.45f * fs;
     if (fc > 20000.0f) fc = 20000.0f; // absolute upper limit (security)
@@ -3348,7 +3348,7 @@ audiolib::BiquadCoeffs Audio::makeButterworthLPF_Q31(float fs) { // Calculation 
     return c;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-uint32_t Audio::resampleTo48kStereo(audiolib::resampler_t& rs, int32_t* input, uint32_t inputSamples, int32_t* output) {
+uint32_t Audio::resampleI2Soutput(audiolib::resampler_t& rs, int32_t* input, uint32_t inputSamples, int32_t* output) {
 
     auto lerp_q32 = [&](int32_t a, int32_t b, uint32_t frac) -> int32_t { return a + (int32_t)(((int64_t)(b - a) * frac) >> 32); };
     auto biquadProcess = [&](audiolib::Biquad& s, const audiolib::BiquadCoeffs& c, int32_t x) -> int32_t {
@@ -3446,8 +3446,8 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
-        m_validSamples = resampleTo48kStereo(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
-        audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                    // 48KHz stereo 32bps
+        m_validSamples = resampleI2Soutput(m_resampler, m_outBuff.get(), m_validSamples, m_resamplesBuff.get()); // have new amount of samples
+        audio_process_i2s(m_resamplesBuff.get(), m_validSamples, &continueI2S);                                  // resampled stereo 32bps
     } else {
         audio_process_i2s(m_outBuff.get(), (int32_t)m_validSamples, &continueI2S);
     }

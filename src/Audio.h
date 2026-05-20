@@ -205,7 +205,7 @@ class Audio {
     bool                     setSampleRate(uint32_t hz);
     bool                     setBitsPerSample(int bits);
     bool                     setChannels(int channels);
-    uint32_t                 resampleTo48kStereo(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
+    uint32_t                 resampleI2Soutput(audiolib::resampler_t& resampler, int32_t* input, uint32_t inputSamples, int32_t* output);
     void                     playChunk();
     void                     calculateVUlevel(int32_t* sample);
     void                     processSpectrum();
@@ -396,7 +396,7 @@ class Audio {
     int            m_readbytes = 0;                 // bytes read
     uint32_t       m_metacount = 0;                 // counts down bytes between metadata
     int            m_controlCounter = 0;            // Status within readID3data() and readWaveHeader()
-    int32_t        m_inputHistory[6] = {0};         // used in resampleTo48kStereo()
+    int32_t        m_inputHistory[6] = {0};         // used in resampleI2Soutput()
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample
     uint8_t        m_channels = 2;                  //
