@@ -3438,11 +3438,12 @@ void IRAM_ATTR Audio::playChunk() {
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
     for (int i = 0; i < m_validSamples; i++) {
-        calculateVUlevel(&m_outBuff[i * 2]);
-        IIR_filter(&m_outBuff[i * 2]);
+        if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
+        if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
+        if (settings.NOISE_SHAPING) noise_shaping(&m_outBuff[i * 2]);
         Gain(&m_outBuff[i * 2]);
     }
-    processSpectrum();
+    if (settings.SPECTRUM) processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
     if (m_output_sr && m_output_sr != m_i2s_items.sampleRate) {
@@ -6353,6 +6354,126 @@ void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
             m_vu_items.right_peak -= settings.PEAK_RELEASE;
         }
     }
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+void Audio::noise_shaping(int32_t* outBuffPtr) {
+    /*
+     * @file Audio.cpp
+     * @brief Noise shaping function for audio signal processing on ESP32.
+     *
+     * This function implements error-feedback noise shaping for stereo audio samples.
+     * It uses a precomputed exponential lookup table (LUT) to weight the quantization error
+     * depending on the signal amplitude. The goal is to reduce audible quantization noise
+     * by psychoacoustically shaping the error spectrum.
+     *
+     * Author: Marcin Fenger
+     */
+    // Previous error feedback values (Left and Right channels)
+    // Stored as 32-bit integers to match the audio sample scale
+
+    // Shaping parameters
+    constexpr float shaping_factor = 4.47500f;               // error shaping coefficient - CRITICAL TONE BALANCE  !!!
+    constexpr float Amax = 2147483647.0f;                    // maximum amplitude for signed 32-bit
+    constexpr int   LUT_N = 256;                             // lookup table size
+    constexpr float XMIN = -5.00f;                           // minimum x value for LUT
+    constexpr float XMAX = 0.0f;                             // maximum x value for LUT
+    constexpr float INV_RANGE = (LUT_N - 1) / (XMAX - XMIN); // scale factor for LUT indexing
+
+    // Precomputed exponential lookup table (exp(x) values)
+    // Stored in DRAM for fast access during audio processing
+    static const float shaping_lut[LUT_N] DRAM_ATTR = {
+        0.0024787522f,    0.0027024821f,    0.0029447919f,    0.0032069991f,    0.0034905778f,    0.0037971085f,    0.0041282930f,    0.0044859537f,    0.0048710137f,    0.0052855649f,
+        0.0057318796f,    0.0062124170f,    0.0067299394f,    0.0072874855f,    0.0078883445f,    0.0085361275f,    0.0092347547f,    0.0099884683f,    0.0108029045f,    0.0116830877f,
+        0.0126354080f,    0.0136677413f,    0.0147885037f,    0.0160077803f,    0.0173363747f,    0.0187869400f,    0.0203721529f,    0.0221066878f,    0.0240062821f,    0.0260878241f,
+        0.0283704959f,    0.0308768172f,    0.0336319083f,    0.0366637241f,    0.0400022966f,    0.0436802894f,    0.0477328254f,    0.0521988522f,    0.0571213230f,    0.0625466066f,
+        0.0685256179f,    0.0751149124f,    0.0823768588f,    0.0903786822f,    0.0991926565f,    0.1088963092f,    0.1195716197f,    0.1313053897f,    0.1441883151f,    0.1583157860f,
+        0.1737881825f,    0.1907101520f,    0.2091927009f,    0.2293505434f,    0.2513037762f,    0.2751785351f,    0.3011056752f,    0.3292193522f,    0.3596592425f,    0.3925697064f,
+        0.4281014307f,    0.4664157068f,    0.5076774677f,    0.5520563344f,    0.5997276035f,    0.6508703222f,    0.7056672834f,    0.7643065951f,    0.8269795692f,    0.8938828716f,
+        0.9652170671f,    1.0411896279f,    1.1220145537f,    1.2079140892f,    1.2991193815f,    1.3958711784f,    1.4984189090f,    1.6070216119f,    1.7219479926f,    1.8434769024f,
+        1.9719073613f,    2.1075480564f,    2.2507221938f,    2.4017610986f,    2.56099612297f,   2.72876662125f,   2.90541986718f,   3.09131122984f,   3.28680234503f,   3.49226548601f,
+        3.70808352637f,   3.93464884669f,   4.17236436278f,   4.42164396455f,   4.68292107145f,   4.95664895488f,   5.24330146180f,   5.54336597823f,   5.85734642852f,   6.18576023393f,
+        6.52914426712f,   6.88804180745f,   7.26299941904f,   7.65458176670f,   8.06336775939f,   8.48995082295f,   8.93493720675f,   9.39894848775f,   9.88261307113f,   10.38656901087f,
+        10.91146776178f,  11.45797230280f,  12.02675221309f,  12.61848891073f,  13.23387714862f,  13.87362348078f,  14.53844719938f,  15.22907656527f,  15.94624708832f,  16.69070076275f,
+        17.46318927356f,  18.26447667668f,  19.09534266909f,  19.95658985785f,  20.84903696198f,  21.77353091546f,  22.73094095193f,  23.72216776135f,  24.74813446739f,  25.80978356433f,
+        26.90808394118f,  28.04302187916f,  29.21561403364f,  30.42689938714f,  31.67793627127f,  32.96981244818f,  34.30364211593f,  35.68056702332f,  37.10175463510f,  38.56840103822f,
+        40.08173804481f,  41.64202419207f,  43.25054783496f,  44.90762923218f,  46.61361666756f,  48.36888661590f,  50.17384584319f,  52.02892336577f,  53.93456930064f,  55.89124692444f,
+        57.89943879394f,  59.95964093723f,  62.07236703793f,  64.23814147781f,  66.45750038900f,  68.73098955195f,  71.05916950939f,  73.44260966813f,  75.88189332194f,  78.37761584823f,
+        80.93038279540f,  83.54080900160f,  86.20952086398f,  88.93715657108f,  91.72436542915f,  94.57180511144f,  97.48014566081f,  100.45006680991f, 103.48225366229f, 106.57740116317f,
+        109.73621223660f, 112.95940178200f, 116.24770670077f, 119.60187883189f, 123.02268394777f, 126.51089975872f, 130.06731681845f, 133.69273754312f, 137.38797313982f, 141.15384663063f,
+        144.99118388084f, 148.90081757418f, 152.88358827829f, 156.94034344876f, 161.07194045446f, 165.27924659451f, 169.56313911220f, 173.92450216605f, 178.36422885215f, 182.88322124866f,
+        187.48239051269f, 192.16265585679f, 196.92494865447f, 201.77021045970f, 206.69939305383f, 211.71345951375f, 216.81338228405f, 221.99914318897f, 227.27173539960f, 232.63216053305f,
+        238.08143163291f, 243.62057217738f, 249.25061715513f, 254.97261403205f, 260.78761980337f, 266.69669212099f, 272.70089641270f, 278.80130497266f, 284.99899610906f, 291.29405430441f,
+        297.68756733591f, 304.18062638605f, 310.77432722384f, 317.46977125422f, 324.26806654868f, 331.17032688211f, 338.17767369903f, 345.29123620906f, 352.51214935950f, 359.84155594219f,
+        367.28060765586f, 374.83046316040f, 382.49229221901f, 390.26727379306f};
+
+    // Precompute reciprocal scaling factor
+    const float recipA = shaping_factor / Amax;
+    // Function to compute shaping weight based on signal amplitude
+    // Note: shaping_weight() operates on the signal, not directly on the error
+    static const auto shaping_weight = [&](int32_t sample) -> float {
+        // absolute value of the sample
+        float a = std::fabsf(static_cast<float>(sample));
+
+        // scale to range [XMIN, 0]
+        float x = -a * recipA;
+
+        // linear approximation for very small values
+        if (x > -1e-4f) return 1.0f + x;
+
+        // clamp to LUT range
+        if (x <= XMIN) return shaping_lut[0];
+        if (x >= XMAX) return shaping_lut[LUT_N - 1];
+
+        // compute LUT index
+        float idx_f = (x - XMIN) * INV_RANGE;
+        int   idx = static_cast<int>(idx_f);
+        float frac = idx_f - static_cast<float>(idx);
+
+        // prevent out-of-bounds access
+        if (idx >= LUT_N - 1) {
+            idx = LUT_N - 2;
+            frac = 1.0f;
+        }
+
+        // linear interpolation between two LUT points
+        float v0 = shaping_lut[idx];
+        float v1 = shaping_lut[idx + 1];
+        return v0 + (v1 - v0) * frac;
+    };
+
+    // --- Main processing ---
+
+    // Static variables to store previous error feedback for each channel
+    static float e_prevL = 0.0f;
+    static float e_prevR = 0.0f;
+
+    // Load original stereo samples
+    int32_t xL = outBuffPtr[0];
+    int32_t xR = outBuffPtr[1];
+
+    // Add previous error feedback to input sample (before quantization)
+    float inL = static_cast<float>(xL) + e_prevL;
+    float inR = static_cast<float>(xR) + e_prevR;
+
+    // Quantize (convert to integer)
+    int32_t outL = static_cast<int32_t>(inL);
+    int32_t outR = static_cast<int32_t>(inR);
+
+    // Calculate quantization error
+    float errL = inL - static_cast<float>(outL);
+    float errR = inR - static_cast<float>(outR);
+
+    // Calculate shaping weight based on input signal amplitude (psychoacoustic)
+    float wL = shaping_weight(xL);
+    float wR = shaping_weight(xR);
+
+    // Accumulate weighted error feedback for next sample with 0.7 factor to prevent instability
+    e_prevL += 0.8f * errL * wL;
+    e_prevR += 0.8f * errR * wR;
+
+    // Store quantized output samples
+    outBuffPtr[0] = outL;
+    outBuffPtr[1] = outR;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint16_t Audio::getVUlevel() {

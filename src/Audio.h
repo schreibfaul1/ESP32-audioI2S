@@ -227,6 +227,7 @@ class Audio {
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);
+    void                     noise_shaping(int32_t* outBuffPtr);
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -338,6 +339,10 @@ class Audio {
         float    QUALITY_SLOPE = 0.707;    // Quality (all shelfes)
         uint16_t PEAK_HOLD_SAMPLES = 2000; // VU_meter, (2000) ca. 20 ms @ 48 kHz
         uint8_t  PEAK_RELEASE = 1;         // VU_meter, Fall rate
+        bool     VU_LEVEL = true;          // true: vu meter is enabled
+        bool     IIR_FILTER = true;        // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
+        bool     NOISE_SHAPING = false;    // true: noise shaping is enabled
+        bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
     } settings;
 
   private:
