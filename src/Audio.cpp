@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6c                                                                                                                            ";
+    Version 3.4.6d                                                                                                                            ";
 /*  Updated on: May 20, 2026
 
     Author: Wolle (schreibfaul1)
@@ -820,11 +820,11 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     } else {
         AUDIO_LOG_ERROR("Request {} failed!", c_host.get());
         m_f_running = false;
-        info(*this, evt_name, "");
-        info(*this, evt_streamtitle, "");
-        info(*this, evt_icydescription, "");
-        info(*this, evt_icyurl, "");
     }
+    info(*this, evt_name, "");
+    info(*this, evt_streamtitle, "");
+    info(*this, evt_icydescription, "");
+    info(*this, evt_icyurl, "");
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
