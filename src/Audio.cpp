@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6d                                                                                                                            ";
-/*  Updated on: May 20, 2026
+    Version 3.4.6e                                                                                                                            ";
+/*  Updated on: May 21, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -26,8 +26,8 @@ char audioI2SVers[] = "\
 
 // constants
 constexpr size_t m_frameSizeWav = 4096;
-constexpr size_t m_frameSizeMP3 = 1600 * 2;
-constexpr size_t m_frameSizeAAC = 1600 * 2;
+constexpr size_t m_frameSizeMP3 = 18000;         //  more than one icy-metaint
+constexpr size_t m_frameSizeAAC = 18000;         //  more than one icy-metaint
 constexpr size_t m_frameSizeFLAC = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeOPUS = UINT16_MAX;   // max ogg size
 constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 bytes, but can be reach 64KB in the metadata block
@@ -3502,7 +3502,7 @@ exit:
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::loop() {
-    if (get_info()) return;
+    get_info();
     if (!m_f_running) return;
 
     if (m_f_firstLoop) {
@@ -6187,7 +6187,6 @@ uint32_t Audio::getSampleRate() {
 bool Audio::setBitsPerSample(int bits) {
     if ((bits != 32) && (bits != 24) && (bits != 16) && (bits != 8)) return false;
     m_bitsPerSample = bits;
-    reconfigI2S();
     return true;
 }
 uint8_t Audio::getBitsPerSample() {
