@@ -428,4 +428,16 @@ struct info_queue_t {
     void reset() { *this = info_queue_t{}; }
 };
 
+struct icy_items_t {
+    ps_ptr<char> icy_genre = {};
+    ps_ptr<char> icy_logo = {};
+    ps_ptr<char> icy_name = {};
+    ps_ptr<char> icy_description = {};
+    ps_ptr<char> icy_url = {};
+    ps_ptr<char> icy_metaint = {};
+    ps_ptr<char> icy_br = {};
+
+    void reset() { *this = icy_items_t{}; }
+};
+
 } // namespace audiolib

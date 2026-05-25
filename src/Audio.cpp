@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6e                                                                                                                            ";
-/*  Updated on: May 21, 2026
+    Version 3.4.6f                                                                                                                            ";
+/*  Updated on: May 25, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -442,7 +442,6 @@ void Audio::setDefaults() {
     m_f_firstmetabyte = false;
     m_f_playing = false;
     //    m_f_ssl = false;
-    m_f_metadata = false;
     m_f_tts = false;
     m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
@@ -484,7 +483,6 @@ void Audio::setDefaults() {
     m_bytesNotConsumed = 0; // counts all not decodable bytes
     m_chunkcount = 0;       // for chunked streams
     m_curSample = 0;
-    m_metaint = 0;        // No metaint yet
     m_LFcount = 0;        // For end of header detection
     m_controlCounter = 0; // Status within readID3data() and readWaveHeader()
     m_channels = 2;       // assume stereo #209
@@ -821,10 +819,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_LOG_ERROR("Request {} failed!", c_host.get());
         m_f_running = false;
     }
-    info(*this, evt_name, "");
-    info(*this, evt_streamtitle, "");
-    info(*this, evt_icydescription, "");
-    info(*this, evt_icyurl, "");
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
@@ -1646,8 +1640,6 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         m_audioFileDuration = m_audioDataSize / (getSampleRate() * getChannels());
         if (getBitsPerSample() == 16) m_audioFileDuration /= 2;
         info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-        info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-        info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -1739,8 +1731,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             m_nominal_bitrate = m_rflh.nominalBitrate;
             m_audioFileDuration = m_rflh.duration;
             info(*this, evt_info, "Duration (s): {}", m_rflh.duration);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         }
         m_rflh.retvalue = 0;
         return 0;
@@ -2425,7 +2415,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t bitrate = bytes * 8 / duration;
                 info(*this, evt_info, "Bitrate (b/s): {}", bitrate);
                 m_nominal_bitrate = bitrate;
-                info(*this, evt_bitrate, "{}", m_nominal_bitrate);
             }
 
             if (m_ID3Hdr.APIC_vec.size()) { // if we have a APIC
@@ -3199,8 +3188,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         if (m_audioFileDuration) {
             m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
             info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         }
 
         m_controlCounter = M4A_OKAY; // that's all
@@ -4216,7 +4203,7 @@ void Audio::processWebStream() {
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_metadata && (m_metacount == 0)) {
+    if ((m_metaint) && (m_metacount == 0)) {
         if (!m_pwst.availableBytes) return;
         readedBytes = 0;
         bool res = false;
@@ -4231,7 +4218,7 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         return;
     }
-    if (m_f_metadata) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
+    if (m_metaint) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
@@ -4249,7 +4236,7 @@ void Audio::processWebStream() {
         m_pwst.writeSpace -= bytesAddedToBuffer;
 
         if (bytesAddedToBuffer > 0) {
-            if (m_f_metadata) m_metacount -= bytesAddedToBuffer;
+            if (m_metaint) m_metacount -= bytesAddedToBuffer;
             if (m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
@@ -4736,6 +4723,8 @@ exit:
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
     if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
+    m_icy_items.reset();
+    m_metaint = 0; // no metaint yet
 
     m_phreh.reset();
     m_phreh.ctime = millis();
@@ -4782,9 +4771,48 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         //    rhl.println();
 
-        if (rhl.starts_with_icase("icy-")) {
-            m_phreh.f_icy_data = true; // is webstrean
-        }
+        if (rhl.starts_with_icase("icy-")) { // —— ICY BLOCK ——————————————————————————————————————————————————————————
+            m_phreh.f_icy_data = true;
+
+            if (rhl.starts_with_icase("icy-genre:")) {
+                m_icy_items.icy_genre.copy_from(rhl.get() + 10); // Ambient, Rock, etc
+                m_icy_items.icy_genre.trim();
+                latinToUTF8(m_icy_items.icy_genre);
+            }
+
+            if (rhl.starts_with_icase("icy-logo:")) {
+                m_icy_items.icy_logo.copy_from(rhl.get() + 9); // https://www.0nradio.com/logos/0n-70s_600x600.jpg
+                m_icy_items.icy_logo.trim();
+                latinToUTF8(m_icy_items.icy_logo);
+            }
+
+            if (rhl.starts_with_icase("icy-name:")) {
+                m_icy_items.icy_name.copy_from(rhl.get() + 9);
+                m_icy_items.icy_name.trim();
+                latinToUTF8(m_icy_items.icy_name);
+            }
+
+            if (rhl.starts_with_icase("icy-url:")) {
+                m_icy_items.icy_url.copy_from(rhl.get() + 8);
+                m_icy_items.icy_url.trim();
+            }
+
+            if (rhl.starts_with_icase("icy-description:")) {
+                m_icy_items.icy_description.copy_from(rhl.get() + 16);
+                m_icy_items.icy_description.trim();
+                latinToUTF8(m_icy_items.icy_description);
+            }
+
+            if (rhl.starts_with_icase("icy-metaint:")) {
+                m_icy_items.icy_metaint.copy_from(rhl.get() + 12);
+                m_icy_items.icy_metaint.trim();
+            }
+
+            if (rhl.starts_with_icase("icy-br:")) {
+                m_icy_items.icy_br.copy_from(rhl.get() + 7);
+                m_icy_items.icy_br.trim();
+            }
+        } // —— END ICY BLOCK —————————————————————————————————————————————————————————————————————————————————————————
 
         if (rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
@@ -4868,65 +4896,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if (rhl.contains_with_icase("close")) { m_f_connectionClose = true; /* AUDIO_LOG_ERROR("connection will be closed"); */ } // ends after ogg last Page is set
         }
 
-        else if (rhl.starts_with_icase("icy-genre:")) {
-            info(*this, evt_info, "icy-genre: {}", rhl.get() + 10); // Ambient, Rock, etc
-        }
-
-        else if (rhl.starts_with_icase("icy-logo:")) {
-            ps_ptr<char> icyLogo;
-            icyLogo.assign(rhl.get() + 9); // Get logo URL
-            icyLogo.trim();
-            if (icyLogo.strlen() > 0) {
-                info(*this, evt_info, "icy-logo: {}", icyLogo.get());
-                info(*this, evt_icylogo, "{}", icyLogo.get());
-            }
-        }
-
-        else if (rhl.starts_with_icase("icy-br:")) {
-            ps_ptr<char> c_bitRate;
-            c_bitRate.assign(rhl.get() + 7);
-            c_bitRate.trim();
-            c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
-            if (m_phreh.bitrate == c_bitRate.to_uint32(10))
-                continue; // avoid doubles
-            else
-                m_phreh.bitrate = c_bitRate.to_uint32(10);
-            m_nominal_bitrate = c_bitRate.to_uint32(10);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
-        }
-
-        else if (rhl.starts_with_icase("icy-metaint:")) {
-            const char* c_metaint = (rhl.get() + 12);
-            int32_t     i_metaint = atoi(c_metaint);
-            m_metaint = i_metaint;
-            if (m_metaint) m_f_metadata = true; // Multimediastream
-        }
-
-        else if (rhl.starts_with_icase("icy-name:")) {
-            //  AUDIO_LOG_INFO("{}", rhl.get());
-            ps_ptr<char> icyName;
-            icyName.assign(rhl.get() + 9); // Get station name
-            icyName.trim();
-            if (icyName.strlen() > 0) { info(*this, evt_name, "{}", icyName.get()); }
-        }
-
         else if (rhl.starts_with_icase("content-length:")) {
             const char* c_cl = (rhl.get() + 15);
             int32_t     i_cl = atoi(c_cl);
             m_audioFileSize = i_cl;
             // info(*this, evt_info, "content-length: {}", (long unsigned int)m_audioFileSize);
-        }
-
-        else if (rhl.starts_with_icase("icy-description:")) {
-            const char* c_idesc = (rhl.get() + 16);
-            while (c_idesc[0] == ' ') c_idesc++;
-            latinToUTF8(rhl); // if already UTF-8 do nothing, otherwise convert to UTF-8
-            if (strlen(c_idesc) > 0 && specialIndexOf((uint8_t*)c_idesc, "24bit", 0) > 0) {
-                AUDIO_LOG_INFO("icy-description: {} has to be 8 or 16", c_idesc);
-                stopSong();
-            }
-            info(*this, evt_icydescription, "{}", c_idesc);
         }
 
         else if (rhl.starts_with_icase("transfer-encoding:")) {
@@ -4946,12 +4920,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             AUDIO_LOG_INFO("{}", rhl.c_get());
         }
 
-        else if (rhl.starts_with_icase("icy-url:")) {
-            char* icyurl = (rhl.get() + 8);
-            trim(icyurl);
-            info(*this, evt_icyurl, "{}", icyurl);
-        }
-
         else if (rhl.starts_with_icase("www-authenticate:")) {
             AUDIO_LOG_WARN("authentification failed, wrong credentials?");
             goto exit;
@@ -4962,9 +4930,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
 exit: // termination condition
     m_f_alt_user_agent = false;
-    info(*this, evt_name, "");
-    info(*this, evt_icydescription, "");
-    info(*this, evt_icyurl, "");
     m_dataMode = AUDIO_NONE;
     stopSong();
     return false;
@@ -4985,6 +4950,16 @@ lastToDo:
     } else {
         AUDIO_LOG_INFO("unknown content found at: {}", m_currentHost.c_get());
         goto exit;
+    }
+
+    if (m_phreh.f_icy_data) {
+        if (m_icy_items.icy_description.valid()) info(*this, evt_icydescription, "{}", m_icy_items.icy_description);
+        if (m_icy_items.icy_genre.valid()) info(*this, evt_genre, "{}", m_icy_items.icy_genre);
+        if (m_icy_items.icy_logo.valid()) info(*this, evt_icylogo, "{}", m_icy_items.icy_logo);
+        if (m_icy_items.icy_name.valid()) info(*this, evt_name, "{}", m_icy_items.icy_name);
+        if (m_icy_items.icy_url.valid()) info(*this, evt_icyurl, "{}", m_icy_items.icy_url);
+        if (m_icy_items.icy_metaint.valid()) m_metaint = m_icy_items.icy_metaint.to_uint32();
+        if (m_icy_items.icy_br.valid()) m_nominal_bitrate = m_icy_items.icy_br.to_uint32() * 1000;
     }
 
     AUDIO_LOG_DEBUG("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
@@ -5516,9 +5491,7 @@ void Audio::setDecoderItems() {
         m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_i2s_items.sampleRate);
         m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
         AUDIO_LOG_DEBUG("m_nominal_bitrate {}, m_lastGranulePosition {}", m_nominal_bitrate, (unsigned long long)m_lastGranulePosition);
-        info(*this, evt_bitrate, "{}", m_nominal_bitrate);
         info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-        info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
     }
 
     if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
@@ -5739,6 +5712,8 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         }
 
         if (m_nominal_bitrate) {
+            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
+            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
             m_cat.nominalBitRate = m_nominal_bitrate;
             m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.nominalBitRate));
             if (m_lastGranulePosition)

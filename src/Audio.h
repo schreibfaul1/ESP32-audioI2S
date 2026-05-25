@@ -40,8 +40,8 @@ extern char                       audioI2SVers[];
 class Decoder; // prototype
 
 // Audio event type descriptions
-static constexpr std::array<const char*, 13> eventStr = {"info",    "id3data",  "eof",      "station_name", "icy_description", "streamtitle", "bitrate",
-                                                         "icy_url", "icy_logo", "lasthost", "cover_image",  "lyrics",          "log"};
+static constexpr std::array<const char*, 14> eventStr = {"info",    "id3data",  "eof",   "station_name", "icy_description", "streamtitle", "bitrate",
+                                                         "icy_url", "icy_logo", "genre", "lasthost",     "cover_image",     "lyrics",      "log"};
 //----------------------------------------------------------------------------------------------------------------------
 class AudioBuffer {
 
@@ -99,7 +99,22 @@ class Audio {
     std::mutex mutex_info; // mutex_info as member
 
     // callbacks ---------------------------------------------------------
-    typedef enum { evt_info = 0, evt_id3data, evt_eof, evt_name, evt_icydescription, evt_streamtitle, evt_bitrate, evt_icyurl, evt_icylogo, evt_lasthost, evt_image, evt_lyrics, evt_log } event_t;
+    typedef enum {
+        evt_info = 0,
+        evt_id3data,
+        evt_eof,
+        evt_name,
+        evt_icydescription,
+        evt_streamtitle,
+        evt_bitrate,
+        evt_icyurl,
+        evt_icylogo,
+        evt_genre,
+        evt_lasthost,
+        evt_image,
+        evt_lyrics,
+        evt_log,
+    } event_t;
     typedef struct _msg { // used in info(audio_info_callback());
         const char*           msg = nullptr;
         const char*           s = nullptr;
@@ -433,7 +448,6 @@ class Audio {
     uint32_t       m_stsz_numEntries = 0;           // num of entries inside stsz atom (uint32_t)
     uint32_t       m_stsz_position = 0;             // pos of stsz atom within file
     uint32_t       m_haveNewFilePos = 0;            // user changed the file position
-    bool           m_f_metadata = false;            // assume stream without metadata
     bool           m_f_alt_user_agent = false;      // use default or alternative user agent
     bool           m_f_I2S_init = false;            //
     bool           m_f_unsync = false;              // set within ID3 tag but not used
@@ -511,6 +525,7 @@ class Audio {
     audiolib::i2s_items_t  m_i2s_items;
     audiolib::resampler_t  m_resampler;
     audiolib::info_queue_t m_info_queue;
+    audiolib::icy_items_t  m_icy_items;
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
   public:
@@ -523,25 +538,39 @@ class Audio {
         result.assignf(fmt, std::forward<Args>(args)...);
         if (!result.get()) return false;
 
-        auto extract_last_number = [](std::string_view s) -> int32_t {
+        auto extract_last_number = [](std::string_view s) -> std::optional<int32_t> {
+            auto is_space = [](char c) { return std::isspace(static_cast<unsigned char>(c)); };
+            auto is_digit = [](char c) { return std::isdigit(static_cast<unsigned char>(c)); };
+
             auto it = s.end();
-            while (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) { --it; }
+            // skip trailing whitespace
+            while (it != s.begin() && is_space(*(it - 1))) { --it; }
             auto end = it;
-            while (it != s.begin() && std::isdigit(static_cast<unsigned char>(*(it - 1)))) { --it; }
-            if (it != s.begin() && std::isspace(static_cast<unsigned char>(*(it - 1)))) {
-                std::string_view number{it, static_cast<size_t>(end - it)};
-                uint32_t         value{};
-                auto [p, ec] = std::from_chars(number.data(), number.data() + number.size(), value);
-                if (ec == std::errc{}) { return static_cast<int32_t>(value); }
+            // Reading numbers backwards
+            while (it != s.begin() && is_digit(*(it - 1))) { --it; }
+            // optional sign
+            if (it != s.begin()) {
+                char c = *(it - 1);
+                if (c == '+' || c == '-') { --it; }
             }
-            return -1;
+
+            // found nothing?
+            if (it == end) { return std::nullopt; }
+            // There must be a leading space or a space before the number
+            if (it != s.begin() && !is_space(*(it - 1))) { return std::nullopt; }
+            int32_t value{};
+            auto [ptr, ec] = std::from_chars(it, end, value);
+
+            // Was the full parse successful?
+            if (ec == std::errc{} && ptr == end) { return value; }
+            return std::nullopt;
         };
 
         std::vector<uint32_t> v;
         v.push_back(0);
         instance.m_info_queue.msg.emplace_front(result);
         instance.m_info_queue.s.emplace_front(eventStr[e]);
-        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()));
+        instance.m_info_queue.arg1.emplace_front(extract_last_number(result.c_get()).value_or(0));
         instance.m_info_queue.arg2.emplace_front(0);
         instance.m_info_queue.vec.emplace_front(v);
         instance.m_info_queue.e.emplace_front((uint8_t)e);
