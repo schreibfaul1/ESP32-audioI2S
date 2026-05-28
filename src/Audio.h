@@ -39,9 +39,6 @@ extern __attribute__((weak)) void audio_process_i2s(int32_t* outBuff, int16_t va
 extern char                       audioI2SVers[];
 class Decoder; // prototype
 
-// Audio event type descriptions
-static constexpr std::array<const char*, 14> eventStr = {"info",    "id3data",  "eof",   "station_name", "icy_description", "streamtitle", "bitrate",
-                                                         "icy_url", "icy_logo", "genre", "lasthost",     "cover_image",     "lyrics",      "log"};
 //----------------------------------------------------------------------------------------------------------------------
 class AudioBuffer {
 
@@ -115,6 +112,25 @@ class Audio {
         evt_lyrics,
         evt_log,
     } event_t;
+
+    // Audio event type descriptions
+    static constexpr std::array<const char*, 14> eventStr = {
+        "info",            // evt_info
+        "id3data",         // evt_id3data
+        "eof",             // evt_eof
+        "station_name",    // evt_name
+        "icy_description", // evt_icydescription
+        "streamtitle",     // evt_streamtitle
+        "bitrate (b/s)",   // evt_bitrate
+        "icy_url",         // evt_icyurl
+        "icy_logo",        // evt_icylogo
+        "genre",           // evt_genre
+        "lasthost",        // evt_lasthost
+        "cover_image",     // evt_image
+        "lyrics",          // evt_lyrics
+        "log",             // evt_log
+    };
+
     typedef struct _msg { // used in info(audio_info_callback());
         const char*           msg = nullptr;
         const char*           s = nullptr;
@@ -242,7 +258,6 @@ class Audio {
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);
-    void                     noise_shaping(int32_t* outBuffPtr);
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -356,7 +371,6 @@ class Audio {
         uint8_t  PEAK_RELEASE = 1;         // VU_meter, Fall rate
         bool     VU_LEVEL = true;          // true: vu meter is enabled
         bool     IIR_FILTER = true;        // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
-        bool     NOISE_SHAPING = false;    // true: noise shaping is enabled
         bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
     } settings;
 
