@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6e                                                                                                                            ";
-/*  Updated on: May 21, 2026
+    Version 3.4.6g                                                                                                                            ";
+/*  Updated on: May 28, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -435,14 +435,13 @@ void Audio::setDefaults() {
     ts_parsePacket(0, 0, 0);                         // reset ts routine
     m_lastM3U8host.reset();
 
-    AUDIO_LOG_DEBUG("buffers freed, free Heap: {} bytes", (unsigned)ESP.getFreeHeap());
+    AUDIO_LOG_DEBUG("buffers freed, free Heap: {} bytes", ESP.getFreeHeap());
 
     m_f_timeout = false;
     m_f_chunked = false; // Assume not chunked
     m_f_firstmetabyte = false;
     m_f_playing = false;
     //    m_f_ssl = false;
-    m_f_metadata = false;
     m_f_tts = false;
     m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
@@ -471,8 +470,8 @@ void Audio::setDefaults() {
     m_playlistFormat = FORMAT_NONE;
     m_f_allDataReceived = false;
     m_dataMode = AUDIO_NONE;
-    m_streamTitle.assign("");
-    m_streamURL.assign("");
+    m_streamTitle.reset();
+    m_streamURL.reset();
     m_resumeFilePos = -1;
     m_audioCurrentTime = 0; // Reset playtimer
     m_audioFileDuration = 0;
@@ -484,7 +483,6 @@ void Audio::setDefaults() {
     m_bytesNotConsumed = 0; // counts all not decodable bytes
     m_chunkcount = 0;       // for chunked streams
     m_curSample = 0;
-    m_metaint = 0;        // No metaint yet
     m_LFcount = 0;        // For end of header detection
     m_controlCounter = 0; // Status within readID3data() and readWaveHeader()
     m_channels = 2;       // assume stereo #209
@@ -609,7 +607,7 @@ bool Audio::openai_speech(const String& api_key, const String& model, const Stri
         uint32_t dt = millis() - t;
         m_lastHost.assign(host.get());
         m_currentHost.clone_from(host);
-        info(*this, evt_info, "{} has been established in {} ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
+        info(*this, evt_info, "{} has been established in {} ms", m_f_ssl ? "SSL" : "Connection", dt);
         m_f_running = true;
     }
 
@@ -795,7 +793,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     if (res) {
         uint32_t dt = millis() - timestamp;
-        info(*this, evt_info, "{} has been established in {} ms", m_f_ssl ? "SSL" : "Connection", (long unsigned int)dt);
+        info(*this, evt_info, "{} has been established in {} ms", m_f_ssl ? "SSL" : "Connection", dt);
         m_f_running = true;
         m_client->print(rqh.get());
         if (extension.ends_with_icase(".mp3")) m_expectedCodec = CODEC_MP3;
@@ -821,10 +819,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         AUDIO_LOG_ERROR("Request {} failed!", c_host.get());
         m_f_running = false;
     }
-    info(*this, evt_name, "");
-    info(*this, evt_streamtitle, "");
-    info(*this, evt_icydescription, "");
-    info(*this, evt_icyurl, "");
     xSemaphoreGiveRecursive(mutex_playAudioData);
     return res;
 }
@@ -1590,7 +1584,7 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         info(*this, evt_info, "FormatCode: {}", fc);
         // info(*this, evt_info, "Channel: {}", nic);
         // info(*this, evt_info, "SampleRate (Hz): {}", sr);
-        info(*this, evt_info, "DataRate: {}", (long unsigned int)dr);
+        info(*this, evt_info, "DataRate: {}", dr);
         info(*this, evt_info, "DataBlockSize: {}", dbs);
         info(*this, evt_info, "BitsPerSample: {}", bps);
 
@@ -1646,8 +1640,6 @@ int Audio::read_WAV_Header(uint8_t* data, size_t len) {
         m_audioFileDuration = m_audioDataSize / (getSampleRate() * getChannels());
         if (getBitsPerSample() == 16) m_audioFileDuration /= 2;
         info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-        info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-        info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         return 4;
     }
     m_controlCounter = 100; // header succesfully read
@@ -1739,8 +1731,6 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
             m_nominal_bitrate = m_rflh.nominalBitrate;
             m_audioFileDuration = m_rflh.duration;
             info(*this, evt_info, "Duration (s): {}", m_rflh.duration);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         }
         m_rflh.retvalue = 0;
         return 0;
@@ -1766,7 +1756,7 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         vTaskDelay(2);
         uint32_t nextval = bigEndian(data + 13, 3);
         m_rflh.sampleRate = nextval >> 4;
-        info(*this, evt_info, "FLAC sampleRate (Hz): {}", (long unsigned int)m_rflh.sampleRate);
+        info(*this, evt_info, "FLAC sampleRate (Hz): {}", m_rflh.sampleRate);
         vTaskDelay(2);
         m_rflh.numChannels = ((nextval & 0x06) >> 1) + 1;
         info(*this, evt_info, "FLAC numChannels: {}", m_rflh.numChannels);
@@ -1782,11 +1772,11 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
         info(*this, evt_info, "FLAC bitsPerSample: {}", m_rflh.bitsPerSample);
         m_rflh.totalSamplesInStream = bigEndian(data + 17, 4);
         if (m_rflh.totalSamplesInStream) {
-            info(*this, evt_info, "total samples in stream: {}", (long unsigned int)m_rflh.totalSamplesInStream);
+            info(*this, evt_info, "total samples in stream: {}", m_rflh.totalSamplesInStream);
         } else {
             info(*this, evt_info, "total samples in stream: N/A");
         }
-        if (bps != 0 && m_rflh.totalSamplesInStream && m_rflh.sampleRate) { m_rflh.duration = (long unsigned int)m_rflh.totalSamplesInStream / (long unsigned int)m_rflh.sampleRate; }
+        if (bps != 0 && m_rflh.totalSamplesInStream && m_rflh.sampleRate) { m_rflh.duration = m_rflh.totalSamplesInStream / m_rflh.sampleRate; }
         m_controlCounter = FLAC_MBH; // METADATA_BLOCK_HEADER
         m_rflh.retvalue = l + 3;
         m_rflh.headerSize += m_rflh.retvalue;
@@ -2425,7 +2415,6 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
                 uint32_t bitrate = bytes * 8 / duration;
                 info(*this, evt_info, "Bitrate (b/s): {}", bitrate);
                 m_nominal_bitrate = bitrate;
-                info(*this, evt_bitrate, "{}", m_nominal_bitrate);
             }
 
             if (m_ID3Hdr.APIC_vec.size()) { // if we have a APIC
@@ -3199,8 +3188,6 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         if (m_audioFileDuration) {
             m_nominal_bitrate = (m_audioDataSize * 8) / m_audioFileDuration;
             info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
         }
 
         m_controlCounter = M4A_OKAY; // that's all
@@ -3446,7 +3433,6 @@ void IRAM_ATTR Audio::playChunk() {
     for (int i = 0; i < m_validSamples; i++) {
         if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
         if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
-        if (settings.NOISE_SHAPING) noise_shaping(&m_outBuff[i * 2]);
         Gain(&m_outBuff[i * 2]);
     }
     if (settings.SPECTRUM) processSpectrum();
@@ -4224,7 +4210,7 @@ void Audio::processWebStream() {
     }
 
     // we have metadata  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_metadata && (m_metacount == 0)) {
+    if ((m_metaint) && (m_metacount == 0)) {
         if (!m_pwst.availableBytes) return;
         readedBytes = 0;
         bool res = false;
@@ -4239,7 +4225,7 @@ void Audio::processWebStream() {
         m_metacount = m_metaint;
         return;
     }
-    if (m_f_metadata) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
+    if (m_metaint) m_pwst.writeSpace = min(m_pwst.writeSpace, m_metacount);
 
     // if the buffer is often almost empty issue a warning - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_stream) {
@@ -4257,7 +4243,7 @@ void Audio::processWebStream() {
         m_pwst.writeSpace -= bytesAddedToBuffer;
 
         if (bytesAddedToBuffer > 0) {
-            if (m_f_metadata) m_metacount -= bytesAddedToBuffer;
+            if (m_metaint) m_metacount -= bytesAddedToBuffer;
             if (m_f_chunked) m_pwst.chunkSize -= bytesAddedToBuffer;
             InBuff.bytesWritten(bytesAddedToBuffer);
         }
@@ -4744,6 +4730,8 @@ exit:
 bool Audio::parseHttpResponseHeader() { // this is the response to a GET / request
 
     if (m_dataMode != HTTP_RESPONSE_HEADER) return false;
+    m_icy_items.reset();
+    m_metaint = 0; // no metaint yet
 
     m_phreh.reset();
     m_phreh.ctime = millis();
@@ -4790,9 +4778,48 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
         //    rhl.println();
 
-        if (rhl.starts_with_icase("icy-")) {
-            m_phreh.f_icy_data = true; // is webstrean
-        }
+        if (rhl.starts_with_icase("icy-")) { // —— ICY BLOCK ——————————————————————————————————————————————————————————
+            m_phreh.f_icy_data = true;
+
+            if (rhl.starts_with_icase("icy-genre:")) {
+                m_icy_items.icy_genre.copy_from(rhl.get() + 10); // Ambient, Rock, etc
+                m_icy_items.icy_genre.trim();
+                latinToUTF8(m_icy_items.icy_genre);
+            }
+
+            if (rhl.starts_with_icase("icy-logo:")) {
+                m_icy_items.icy_logo.copy_from(rhl.get() + 9); // https://www.0nradio.com/logos/0n-70s_600x600.jpg
+                m_icy_items.icy_logo.trim();
+                latinToUTF8(m_icy_items.icy_logo);
+            }
+
+            if (rhl.starts_with_icase("icy-name:")) {
+                m_icy_items.icy_name.copy_from(rhl.get() + 9);
+                m_icy_items.icy_name.trim();
+                latinToUTF8(m_icy_items.icy_name);
+            }
+
+            if (rhl.starts_with_icase("icy-url:")) {
+                m_icy_items.icy_url.copy_from(rhl.get() + 8);
+                m_icy_items.icy_url.trim();
+            }
+
+            if (rhl.starts_with_icase("icy-description:")) {
+                m_icy_items.icy_description.copy_from(rhl.get() + 16);
+                m_icy_items.icy_description.trim();
+                latinToUTF8(m_icy_items.icy_description);
+            }
+
+            if (rhl.starts_with_icase("icy-metaint:")) {
+                m_icy_items.icy_metaint.copy_from(rhl.get() + 12);
+                m_icy_items.icy_metaint.trim();
+            }
+
+            if (rhl.starts_with_icase("icy-br:")) {
+                m_icy_items.icy_br.copy_from(rhl.get() + 7);
+                m_icy_items.icy_br.trim();
+            }
+        } // —— END ICY BLOCK —————————————————————————————————————————————————————————————————————————————————————————
 
         if (rhl.starts_with_icase("HTTP/")) { // HTTP status error code
             char statusCode[5];
@@ -4876,65 +4903,11 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             if (rhl.contains_with_icase("close")) { m_f_connectionClose = true; /* AUDIO_LOG_ERROR("connection will be closed"); */ } // ends after ogg last Page is set
         }
 
-        else if (rhl.starts_with_icase("icy-genre:")) {
-            info(*this, evt_info, "icy-genre: {}", rhl.get() + 10); // Ambient, Rock, etc
-        }
-
-        else if (rhl.starts_with_icase("icy-logo:")) {
-            ps_ptr<char> icyLogo;
-            icyLogo.assign(rhl.get() + 9); // Get logo URL
-            icyLogo.trim();
-            if (icyLogo.strlen() > 0) {
-                info(*this, evt_info, "icy-logo: {}", icyLogo.get());
-                info(*this, evt_icylogo, "{}", icyLogo.get());
-            }
-        }
-
-        else if (rhl.starts_with_icase("icy-br:")) {
-            ps_ptr<char> c_bitRate;
-            c_bitRate.assign(rhl.get() + 7);
-            c_bitRate.trim();
-            c_bitRate.append("000"); // Found bitrate tag, read the bitrate in Kbit
-            if (m_phreh.bitrate == c_bitRate.to_uint32(10))
-                continue; // avoid doubles
-            else
-                m_phreh.bitrate = c_bitRate.to_uint32(10);
-            m_nominal_bitrate = c_bitRate.to_uint32(10);
-            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
-            info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
-        }
-
-        else if (rhl.starts_with_icase("icy-metaint:")) {
-            const char* c_metaint = (rhl.get() + 12);
-            int32_t     i_metaint = atoi(c_metaint);
-            m_metaint = i_metaint;
-            if (m_metaint) m_f_metadata = true; // Multimediastream
-        }
-
-        else if (rhl.starts_with_icase("icy-name:")) {
-            //  AUDIO_LOG_INFO("{}", rhl.get());
-            ps_ptr<char> icyName;
-            icyName.assign(rhl.get() + 9); // Get station name
-            icyName.trim();
-            if (icyName.strlen() > 0) { info(*this, evt_name, "{}", icyName.get()); }
-        }
-
         else if (rhl.starts_with_icase("content-length:")) {
             const char* c_cl = (rhl.get() + 15);
             int32_t     i_cl = atoi(c_cl);
             m_audioFileSize = i_cl;
-            // info(*this, evt_info, "content-length: {}", (long unsigned int)m_audioFileSize);
-        }
-
-        else if (rhl.starts_with_icase("icy-description:")) {
-            const char* c_idesc = (rhl.get() + 16);
-            while (c_idesc[0] == ' ') c_idesc++;
-            latinToUTF8(rhl); // if already UTF-8 do nothing, otherwise convert to UTF-8
-            if (strlen(c_idesc) > 0 && specialIndexOf((uint8_t*)c_idesc, "24bit", 0) > 0) {
-                AUDIO_LOG_INFO("icy-description: {} has to be 8 or 16", c_idesc);
-                stopSong();
-            }
-            info(*this, evt_icydescription, "{}", c_idesc);
+            // info(*this, evt_info, "content-length: {}", m_audioFileSize);
         }
 
         else if (rhl.starts_with_icase("transfer-encoding:")) {
@@ -4954,12 +4927,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
             AUDIO_LOG_INFO("{}", rhl.c_get());
         }
 
-        else if (rhl.starts_with_icase("icy-url:")) {
-            char* icyurl = (rhl.get() + 8);
-            trim(icyurl);
-            info(*this, evt_icyurl, "{}", icyurl);
-        }
-
         else if (rhl.starts_with_icase("www-authenticate:")) {
             AUDIO_LOG_WARN("authentification failed, wrong credentials?");
             goto exit;
@@ -4970,9 +4937,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
 exit: // termination condition
     m_f_alt_user_agent = false;
-    info(*this, evt_name, "");
-    info(*this, evt_icydescription, "");
-    info(*this, evt_icyurl, "");
     m_dataMode = AUDIO_NONE;
     stopSong();
     return false;
@@ -4993,6 +4957,16 @@ lastToDo:
     } else {
         AUDIO_LOG_INFO("unknown content found at: {}", m_currentHost.c_get());
         goto exit;
+    }
+
+    if (m_phreh.f_icy_data) {
+        if (m_icy_items.icy_description.valid()) info(*this, evt_icydescription, "{}", m_icy_items.icy_description);
+        if (m_icy_items.icy_genre.valid()) info(*this, evt_genre, "{}", m_icy_items.icy_genre);
+        if (m_icy_items.icy_logo.valid()) info(*this, evt_icylogo, "{}", m_icy_items.icy_logo);
+        if (m_icy_items.icy_name.valid()) info(*this, evt_name, "{}", m_icy_items.icy_name);
+        if (m_icy_items.icy_url.valid()) info(*this, evt_icyurl, "{}", m_icy_items.icy_url);
+        if (m_icy_items.icy_metaint.valid()) m_metaint = m_icy_items.icy_metaint.to_uint32();
+        if (m_icy_items.icy_br.valid()) m_nominal_bitrate = m_icy_items.icy_br.to_uint32() * 1000;
     }
 
     AUDIO_LOG_DEBUG("playlistFormat {}, dataMode {}, streamType: {}", plsFmtStr[m_playlistFormat], dataModeStr[m_dataMode], streamTypeStr[m_streamType]);
@@ -5499,7 +5473,7 @@ int Audio::findNextSync(uint8_t* data, size_t len) {
     }
     if (m_fnsy.nextSync == 0) {
         if (m_fnsy.swnf) {
-            info(*this, evt_info, "syncword not found {} times", (long unsigned int)m_fnsy.swnf);
+            info(*this, evt_info, "syncword not found {} times", m_fnsy.swnf);
             m_fnsy.swnf = 0;
         } else {
             info(*this, evt_info, "syncword found at pos 0");
@@ -5523,10 +5497,8 @@ void Audio::setDecoderItems() {
     if (m_lastGranulePosition && m_audioFileSize && m_i2s_items.sampleRate) {
         m_audioFileDuration = (uint32_t)(m_lastGranulePosition / m_i2s_items.sampleRate);
         m_nominal_bitrate = (m_audioFileSize - m_audioDataStart) * 8 / m_audioFileDuration;
-        AUDIO_LOG_DEBUG("m_nominal_bitrate {}, m_lastGranulePosition {}", m_nominal_bitrate, (unsigned long long)m_lastGranulePosition);
-        info(*this, evt_bitrate, "{}", m_nominal_bitrate);
+        AUDIO_LOG_DEBUG("m_nominal_bitrate {}, m_lastGranulePosition {}", m_nominal_bitrate, m_lastGranulePosition);
         info(*this, evt_info, "Duration (s): {}", m_audioFileDuration);
-        info(*this, evt_info, "Bitrate (b/s): {}", m_nominal_bitrate);
     }
 
     if (getBitsPerSample() != 8 && getBitsPerSample() != 16 && getBitsPerSample() != 24 && getBitsPerSample() != 32) {
@@ -5747,6 +5719,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         }
 
         if (m_nominal_bitrate) {
+            info(*this, evt_bitrate, "{}", m_nominal_bitrate);
             m_cat.nominalBitRate = m_nominal_bitrate;
             m_audioFileDuration = round(((float)m_audioDataSize * 8 / m_cat.nominalBitRate));
             if (m_lastGranulePosition)
@@ -5775,8 +5748,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
                 m_cat.brCounter++;
                 if (m_cat.brCounter > 6) {
                     m_cat.avrBitrateStable = m_cat.avrBitRate;
-                    info(*this, evt_bitrate, "{}", m_cat.avrBitrateStable);
-                    info(*this, evt_info, "estimated bitrate (b/s): {}", m_cat.avrBitrateStable);
+                    info(*this, evt_bitrate, "{}", m_cat.avrBitrateStable); // estimated
                 }
             }
             m_avr_bitrate = m_cat.avrBitRate;
@@ -6373,126 +6345,6 @@ void Audio::calculateVUlevel(int32_t* sample) { // Envelope-Follower
             m_vu_items.right_peak -= settings.PEAK_RELEASE;
         }
     }
-}
-// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-void Audio::noise_shaping(int32_t* outBuffPtr) {
-    /*
-     * @file Audio.cpp
-     * @brief Noise shaping function for audio signal processing on ESP32.
-     *
-     * This function implements error-feedback noise shaping for stereo audio samples.
-     * It uses a precomputed exponential lookup table (LUT) to weight the quantization error
-     * depending on the signal amplitude. The goal is to reduce audible quantization noise
-     * by psychoacoustically shaping the error spectrum.
-     *
-     * Author: Marcin Fenger
-     */
-    // Previous error feedback values (Left and Right channels)
-    // Stored as 32-bit integers to match the audio sample scale
-
-    // Shaping parameters
-    constexpr float shaping_factor = 4.47500f;               // error shaping coefficient - CRITICAL TONE BALANCE  !!!
-    constexpr float Amax = 2147483647.0f;                    // maximum amplitude for signed 32-bit
-    constexpr int   LUT_N = 256;                             // lookup table size
-    constexpr float XMIN = -5.00f;                           // minimum x value for LUT
-    constexpr float XMAX = 0.0f;                             // maximum x value for LUT
-    constexpr float INV_RANGE = (LUT_N - 1) / (XMAX - XMIN); // scale factor for LUT indexing
-
-    // Precomputed exponential lookup table (exp(x) values)
-    // Stored in DRAM for fast access during audio processing
-    static const float shaping_lut[LUT_N] DRAM_ATTR = {
-        0.0024787522f,    0.0027024821f,    0.0029447919f,    0.0032069991f,    0.0034905778f,    0.0037971085f,    0.0041282930f,    0.0044859537f,    0.0048710137f,    0.0052855649f,
-        0.0057318796f,    0.0062124170f,    0.0067299394f,    0.0072874855f,    0.0078883445f,    0.0085361275f,    0.0092347547f,    0.0099884683f,    0.0108029045f,    0.0116830877f,
-        0.0126354080f,    0.0136677413f,    0.0147885037f,    0.0160077803f,    0.0173363747f,    0.0187869400f,    0.0203721529f,    0.0221066878f,    0.0240062821f,    0.0260878241f,
-        0.0283704959f,    0.0308768172f,    0.0336319083f,    0.0366637241f,    0.0400022966f,    0.0436802894f,    0.0477328254f,    0.0521988522f,    0.0571213230f,    0.0625466066f,
-        0.0685256179f,    0.0751149124f,    0.0823768588f,    0.0903786822f,    0.0991926565f,    0.1088963092f,    0.1195716197f,    0.1313053897f,    0.1441883151f,    0.1583157860f,
-        0.1737881825f,    0.1907101520f,    0.2091927009f,    0.2293505434f,    0.2513037762f,    0.2751785351f,    0.3011056752f,    0.3292193522f,    0.3596592425f,    0.3925697064f,
-        0.4281014307f,    0.4664157068f,    0.5076774677f,    0.5520563344f,    0.5997276035f,    0.6508703222f,    0.7056672834f,    0.7643065951f,    0.8269795692f,    0.8938828716f,
-        0.9652170671f,    1.0411896279f,    1.1220145537f,    1.2079140892f,    1.2991193815f,    1.3958711784f,    1.4984189090f,    1.6070216119f,    1.7219479926f,    1.8434769024f,
-        1.9719073613f,    2.1075480564f,    2.2507221938f,    2.4017610986f,    2.56099612297f,   2.72876662125f,   2.90541986718f,   3.09131122984f,   3.28680234503f,   3.49226548601f,
-        3.70808352637f,   3.93464884669f,   4.17236436278f,   4.42164396455f,   4.68292107145f,   4.95664895488f,   5.24330146180f,   5.54336597823f,   5.85734642852f,   6.18576023393f,
-        6.52914426712f,   6.88804180745f,   7.26299941904f,   7.65458176670f,   8.06336775939f,   8.48995082295f,   8.93493720675f,   9.39894848775f,   9.88261307113f,   10.38656901087f,
-        10.91146776178f,  11.45797230280f,  12.02675221309f,  12.61848891073f,  13.23387714862f,  13.87362348078f,  14.53844719938f,  15.22907656527f,  15.94624708832f,  16.69070076275f,
-        17.46318927356f,  18.26447667668f,  19.09534266909f,  19.95658985785f,  20.84903696198f,  21.77353091546f,  22.73094095193f,  23.72216776135f,  24.74813446739f,  25.80978356433f,
-        26.90808394118f,  28.04302187916f,  29.21561403364f,  30.42689938714f,  31.67793627127f,  32.96981244818f,  34.30364211593f,  35.68056702332f,  37.10175463510f,  38.56840103822f,
-        40.08173804481f,  41.64202419207f,  43.25054783496f,  44.90762923218f,  46.61361666756f,  48.36888661590f,  50.17384584319f,  52.02892336577f,  53.93456930064f,  55.89124692444f,
-        57.89943879394f,  59.95964093723f,  62.07236703793f,  64.23814147781f,  66.45750038900f,  68.73098955195f,  71.05916950939f,  73.44260966813f,  75.88189332194f,  78.37761584823f,
-        80.93038279540f,  83.54080900160f,  86.20952086398f,  88.93715657108f,  91.72436542915f,  94.57180511144f,  97.48014566081f,  100.45006680991f, 103.48225366229f, 106.57740116317f,
-        109.73621223660f, 112.95940178200f, 116.24770670077f, 119.60187883189f, 123.02268394777f, 126.51089975872f, 130.06731681845f, 133.69273754312f, 137.38797313982f, 141.15384663063f,
-        144.99118388084f, 148.90081757418f, 152.88358827829f, 156.94034344876f, 161.07194045446f, 165.27924659451f, 169.56313911220f, 173.92450216605f, 178.36422885215f, 182.88322124866f,
-        187.48239051269f, 192.16265585679f, 196.92494865447f, 201.77021045970f, 206.69939305383f, 211.71345951375f, 216.81338228405f, 221.99914318897f, 227.27173539960f, 232.63216053305f,
-        238.08143163291f, 243.62057217738f, 249.25061715513f, 254.97261403205f, 260.78761980337f, 266.69669212099f, 272.70089641270f, 278.80130497266f, 284.99899610906f, 291.29405430441f,
-        297.68756733591f, 304.18062638605f, 310.77432722384f, 317.46977125422f, 324.26806654868f, 331.17032688211f, 338.17767369903f, 345.29123620906f, 352.51214935950f, 359.84155594219f,
-        367.28060765586f, 374.83046316040f, 382.49229221901f, 390.26727379306f};
-
-    // Precompute reciprocal scaling factor
-    const float recipA = shaping_factor / Amax;
-    // Function to compute shaping weight based on signal amplitude
-    // Note: shaping_weight() operates on the signal, not directly on the error
-    static const auto shaping_weight = [&](int32_t sample) -> float {
-        // absolute value of the sample
-        float a = std::fabsf(static_cast<float>(sample));
-
-        // scale to range [XMIN, 0]
-        float x = -a * recipA;
-
-        // linear approximation for very small values
-        if (x > -1e-4f) return 1.0f + x;
-
-        // clamp to LUT range
-        if (x <= XMIN) return shaping_lut[0];
-        if (x >= XMAX) return shaping_lut[LUT_N - 1];
-
-        // compute LUT index
-        float idx_f = (x - XMIN) * INV_RANGE;
-        int   idx = static_cast<int>(idx_f);
-        float frac = idx_f - static_cast<float>(idx);
-
-        // prevent out-of-bounds access
-        if (idx >= LUT_N - 1) {
-            idx = LUT_N - 2;
-            frac = 1.0f;
-        }
-
-        // linear interpolation between two LUT points
-        float v0 = shaping_lut[idx];
-        float v1 = shaping_lut[idx + 1];
-        return v0 + (v1 - v0) * frac;
-    };
-
-    // --- Main processing ---
-
-    // Static variables to store previous error feedback for each channel
-    static float e_prevL = 0.0f;
-    static float e_prevR = 0.0f;
-
-    // Load original stereo samples
-    int32_t xL = outBuffPtr[0];
-    int32_t xR = outBuffPtr[1];
-
-    // Add previous error feedback to input sample (before quantization)
-    float inL = static_cast<float>(xL) + e_prevL;
-    float inR = static_cast<float>(xR) + e_prevR;
-
-    // Quantize (convert to integer)
-    int32_t outL = static_cast<int32_t>(inL);
-    int32_t outR = static_cast<int32_t>(inR);
-
-    // Calculate quantization error
-    float errL = inL - static_cast<float>(outL);
-    float errR = inR - static_cast<float>(outR);
-
-    // Calculate shaping weight based on input signal amplitude (psychoacoustic)
-    float wL = shaping_weight(xL);
-    float wR = shaping_weight(xR);
-
-    // Accumulate weighted error feedback for next sample with 0.7 factor to prevent instability
-    e_prevL += 0.8f * errL * wL;
-    e_prevR += 0.8f * errR * wR;
-
-    // Store quantized output samples
-    outBuffPtr[0] = outL;
-    outBuffPtr[1] = outR;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint16_t Audio::getVUlevel() {
@@ -7185,7 +7037,7 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             m_gchs.isHttpChunked = false;
             // determine limit from the current data volume + already read bytes
             m_gchs.transportLimit = m_client->available() + *readedBytes;
-            AUDIO_LOG_DEBUG("No http chunked recognized-switch to transport chunking with limit {}", (unsigned)m_gchs.transportLimit);
+            AUDIO_LOG_DEBUG("No http chunked recognized-switch to transport chunking with limit {}", m_gchs.transportLimit);
             return m_gchs.transportLimit;
         }
     }
