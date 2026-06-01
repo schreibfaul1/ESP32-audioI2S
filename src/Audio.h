@@ -372,6 +372,7 @@ class Audio {
         bool     VU_LEVEL = true;          // true: vu meter is enabled
         bool     IIR_FILTER = true;        // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
         bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
+        float    VOL_FADING_SPEED = 50.0;  // mute, volume fading 1.0f (fast) ... 100.0f (slow)
     } settings;
 
   private:

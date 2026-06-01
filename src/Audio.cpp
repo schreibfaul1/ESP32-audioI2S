@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6g                                                                                                                            ";
-/*  Updated on: May 28, 2026
+    Version 3.4.6h                                                                                                                            ";
+/*  Updated on: Jun 01, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6398,11 +6398,12 @@ int32_t Audio::getI2sPort() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::gain_ramp() {
+    settings.VOL_FADING_SPEED = std::clamp(settings.VOL_FADING_SPEED, 1.0f, 100.0f); // avoid div0
     // determine goal
     float target = m_audio_items.mute ? 0.0f : (float)m_audio_items.volume;
 
     // maximum change per tick
-    float step = (float)m_audio_items.volume_steps / 50.0f;
+    float step = (float)m_audio_items.volume_steps / settings.VOL_FADING_SPEED;
 
     float diff = target - m_audio_items.cur_volume;
 
