@@ -597,6 +597,11 @@ class ps_ptr {
             return;
         }
 
+        if constexpr (std::is_same_v<T, char>) {
+            assign(other.get());
+            return;
+        }
+
         std::size_t sz = other.size();
         alloc(sz);
         if (mem && sz > 0) { std::memcpy(mem.get(), other.get(), sz); }
@@ -974,7 +979,6 @@ class ps_ptr {
 
         // neuen Text anhängen
         std::memcpy(mem.get() + old_len, tmp.c_str(), add_len + 1);
-        allocated_size = old_len + add_len;
     }
 
     // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
