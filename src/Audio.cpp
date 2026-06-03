@@ -100,7 +100,7 @@ size_t AudioBuffer::init() {
     m_startPtr = m_buffer.get();
     m_endPtr = m_buffer.get() + m_mainBuffSize;
     m_buffEnd = m_endPtr + m_resBuffSize;
-    reset();
+    clear();
     return m_mainBuffSize;
 }
 
@@ -322,7 +322,7 @@ uint8_t* AudioBuffer::getReadPtr() {
     return m_readPtr;
 }
 
-void AudioBuffer::reset() {
+void AudioBuffer::clear() {
     m_writePtr = m_buffer.get();
     m_readPtr = m_buffer.get();
     m_isEmpty = true;
@@ -419,8 +419,7 @@ void Audio::zeroI2Sbuff() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setDefaults() {
     stopSong();
-    initInBuff(); // initialize InputBuffer if not already done
-    InBuff.reset();
+    InBuff.clear();
     m_outBuff.clear();       // Clear OutputBuffer
     m_resamplesBuff.clear(); // Clear m_resamplesBuff
     vector_clear_and_shrink(m_playlistURL);
@@ -693,7 +692,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         stopSong();
         return false;
     } // max length in Chrome DevTools
-
+AUDIO_LOG_ERROR("fade out");
     const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
     const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
@@ -2451,7 +2450,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
             int res = audioFileSeek(m_m4aHdr.headerSize);
             if (res >= 0) {
                 AUDIO_LOG_INFO("skip {} bytes", m_m4aHdr.retvalue);
-                InBuff.reset();
+                InBuff.clear();
                 m_m4aHdr.retvalue = 0;
                 return 0;
             }
@@ -2557,7 +2556,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
                 AUDIO_LOG_DEBUG("goto CHK");
             } else {
                 audioFileSeek(0); // non progressive, back to mdat
-                InBuff.reset();
+                InBuff.clear();
                 m_m4aHdr.headerSize = m_m4aHdr.mdat_startPos;
                 m_m4aHdr.retvalue = m_m4aHdr.mdat_startPos; // set InBuff.getReadPtr to audiodatastart
                 if (atom_struct) AUDIO_LOG_WARN("goto MDAT at {}", m_m4aHdr.mdat_startPos + 8);
@@ -4942,6 +4941,7 @@ lastToDo:
 
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
+        AUDIO_LOG_ERROR("fade out end");
 
     } else if (m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
@@ -5849,7 +5849,7 @@ bool Audio::setPinout(uint8_t BCLK, uint8_t LRC, uint8_t DOUT, int8_t MCLK) {
         result = false;
         goto exit;
     }
-
+    initInBuff(); // initialize InputBuffer if not already done
     m_outBuff.alloc_array(m_outbuffSize, "m_outBuff");
     m_resamplesBuff.alloc_array(m_resamplesBuffSize, "m_resamplesBuff");
     m_vu_items.delay_l.alloc_array(m_i2s_chan_cfg.dma_desc_num * m_i2s_chan_cfg.dma_frame_num, "delay_l");
@@ -7126,7 +7126,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     // ------- prepare InBuff ------
     m_f_allDataReceived = false;
     audioFileSeek(resumeFilePos);
-    InBuff.reset();
+    InBuff.clear();
     audioFileRead(InBuff.getWritePtr(), buffFillValue);
     InBuff.bytesWritten(buffFillValue);
 
@@ -7222,7 +7222,7 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
             m_sdet.cnt_lost = 0;
             info(*this, evt_info, "Stream lost -> try new connection");
             m_f_reset_m3u8Codec = false;
-            InBuff.reset();
+            InBuff.clear();
             httpPrint(m_lastHost.get());
             return true;
         }

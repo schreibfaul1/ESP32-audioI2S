@@ -60,7 +60,7 @@ class AudioBuffer {
     void     bytesWasRead(size_t br); // update readpointer
     uint8_t* getWritePtr();           // returns the current writepointer
     uint8_t* getReadPtr();            // returns the current readpointer
-    void     reset();                 // restore defaults
+    void     clear();                 // restore defaults
     void     showStatus();
 
   protected:
