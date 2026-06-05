@@ -260,6 +260,7 @@ class Audio {
     uint32_t                 streamavail() { return m_client ? m_client->available() : 0; }
     bool                     ts_parsePacket(uint8_t* packet, uint8_t* packetStart, uint8_t* packetLength);
     uint64_t                 getLastGranulePosition(uint8_t codec);
+    bool                     prepareAudio();
 
     //+++ create a T A S K  for playAudioData(), output via I2S +++
   public:
@@ -433,6 +434,7 @@ class Audio {
     int            m_readbytes = 0;                 // bytes read
     uint32_t       m_metacount = 0;                 // counts down bytes between metadata
     int            m_controlCounter = 0;            // Status within readID3data() and readWaveHeader()
+    int8_t         m_fading = 0;
     int32_t        m_inputHistory[6] = {0};         // used in resampleI2Soutput()
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample
@@ -472,6 +474,7 @@ class Audio {
     bool           m_f_ssl = false;                 //
     bool           m_f_running = false;             //
     bool           m_f_firstCall = false;           // InitSequence for processWebstream and processLokalFile
+    bool           m_f_nextCall = false;            // next URL, InitSequence for processWebstreamTS and processWebstreamHLS
     bool           m_f_firstLoop = false;           // InitSequence in loop()
     bool           m_f_firstPlayCall = false;       // InitSequence for playAudioData
     bool           m_f_ID3v1TagFound = false;       // ID3v1 tag found

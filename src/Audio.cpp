@@ -418,10 +418,6 @@ void Audio::zeroI2Sbuff() {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setDefaults() {
-    stopSong();
-    InBuff.clear();
-    m_outBuff.clear();       // Clear OutputBuffer
-    m_resamplesBuff.clear(); // Clear m_resamplesBuff
     vector_clear_and_shrink(m_playlistURL);
     vector_clear_and_shrink(m_playlistContent);
     vector_clear_and_shrink(m_syltLines);
@@ -443,6 +439,7 @@ void Audio::setDefaults() {
     //    m_f_ssl = false;
     m_f_tts = false;
     m_f_firstCall = true;       // InitSequence for processWebstream and processLocalFile
+    m_f_nextCall = false;       // next URL, InitSequence for processWebstreamTS and processWebstreamHLS
     m_cat.firstCall = true;     // InitSequence for calculateAudioTime
     m_pplM3U8.firstCall = true; // InitSequence for parsePlaylist_M3U8
     m_f_firstPlayCall = true;   // InitSequence for playAudioData
@@ -692,7 +689,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         stopSong();
         return false;
     } // max length in Chrome DevTools
-AUDIO_LOG_ERROR("fade out");
+    AUDIO_LOG_ERROR("fade out");
+    m_fading = -1;
     const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
     const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
@@ -3250,7 +3248,7 @@ uint32_t Audio::stopSong() {
     uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
 
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ); // wait for audioTask is ready
+    bool pd = xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ); // wait for audioTask is ready
     {
         if (m_f_running) {
             m_f_running = false;
@@ -3275,7 +3273,23 @@ uint32_t Audio::stopSong() {
         m_f_lockInBuffer = false;
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
+    if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
     return currTime;
+}
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+bool Audio::prepareAudio() {
+    bool pd = xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ); // wait for audioTask is ready
+    {
+        destroy_decoder();
+        InBuff.clear();
+        m_outBuff.clear();       // Clear OutputBuffer
+        m_resamplesBuff.clear(); // Clear m_resamplesBuff
+        AUDIO_LOG_ERROR("fade out end");
+        m_fading = 0;
+    }
+    xSemaphoreGive(mutex_audioTaskIsDecoding);
+    if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
+    return pd;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::pauseResume() {
@@ -3534,7 +3548,7 @@ void Audio::loop() {
                     }
                 } else {
                     m_lVar.count = 0;
-                    m_f_firstCall = true;
+                    m_f_nextCall = true;
                 }
                 break;
             case AUDIO_PLAYLISTINIT:
@@ -4079,6 +4093,7 @@ void Audio::processLocalFile() {
     m_prlf.bytesAddedToBuffer = 0;
 
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
+        if (!prepareAudio()) return;
         m_f_firstCall = false;
         m_f_stream = false;
         m_prlf.audioHeaderFound = false;
@@ -4176,6 +4191,7 @@ void Audio::processWebStream() {
 
     // first call, set some values to default  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
+        if (!prepareAudio()) return;
         m_f_firstCall = false;
         m_f_stream = false;
         m_pwst.chunkSize = 0;
@@ -4269,6 +4285,7 @@ void Audio::processWebFile() {
     // m_pwf.f_clientIsConnected = m_client->connected();     // we are not connected
 
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
+        if (!prepareAudio()) return;
         m_f_firstCall = false;
         m_f_stream = false;
         m_controlCounter = 0;
@@ -4362,10 +4379,21 @@ void Audio::processWebStreamTS() {
     uint32_t availableBytes; // available bytes in stream
     uint8_t  ts_packetStart = 0;
     uint8_t  ts_packetLength = 0;
+    bool     init = false;
 
     // first call, set some values to default ———————————————————————————————————
-    if (m_f_firstCall) { // runs only one time per connection, prepare for start
+    if (m_f_firstCall) {
+        if (!prepareAudio()) return;
+        init = true;
         m_f_firstCall = false;
+    }
+
+    if (m_f_nextCall) { // next URL?
+        init = true;
+        m_f_nextCall = false;
+    }
+
+    if (init) { // runs only one time per connection, prepare for start
         m_f_m3u8data = true;
         m_audioFilePosition = 0;
         m_pwsst.f_firstPacket = true;
@@ -4514,9 +4542,21 @@ exit:
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::processWebStreamHLS() {
 
-    // first call, set some values to default - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_f_firstCall) { // runs only ont time per connection, prepare for start
+    bool init = false;
+
+    // first call, set some values to default ———————————————————————————————————
+    if (m_f_firstCall) {
+        if (!prepareAudio()) return;
+        init = true;
         m_f_firstCall = false;
+    }
+
+    if (m_f_nextCall) { // next URL?
+        init = true;
+        m_f_nextCall = false;
+    } // —————————————————————————————————————————————————————————————————————————
+
+    if (init) { // runs only ont time per connection, prepare for start
         m_f_m3u8data = true;
         m_t0 = millis();
         m_controlCounter = 0;
@@ -4630,14 +4670,15 @@ void Audio::processWebStreamHLS() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::playAudioData() {
 
-    if (!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running || m_codec == CODEC_NONE) {
+    if (m_f_eof || m_f_lockInBuffer) {
         m_validSamples = 0;
         return;
-    } // guard, stream not ready or eof reached or InBuff is locked or not running
+    } // guard, eof reached or InBuff is locked
     if (m_validSamples) {
         playChunk();
         return;
     } // guard, play samples first
+    if (m_fading) AUDIO_LOG_ERROR("y");
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
@@ -4662,7 +4703,7 @@ void Audio::playAudioData() {
     if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) isStream = true;
     if (!isFile && !isStream) return;
 
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ);
+    bool pd = xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ);
     {
         m_pad.bytesDecoded = 0;
         if (isFile) {
@@ -4713,6 +4754,7 @@ void Audio::playAudioData() {
     }
 exit:
     xSemaphoreGive(mutex_audioTaskIsDecoding);
+    if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
 
     AUDIO_LOG_DEBUG("m_audioDataReadPtr {}, m_audioDataSize {}", m_audioDataReadPtr, m_audioDataSize);
     return;
@@ -4941,7 +4983,6 @@ lastToDo:
 
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
-        AUDIO_LOG_ERROR("fade out end");
 
     } else if (m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
@@ -7111,6 +7152,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
         AUDIO_LOG_WARN("timeOffset not possible");
         return 0;
     }
+    int32_t newFilePos = resumeFilePos;
 
     // keep resumeFilePos within the audio data
     if (resumeFilePos < (int32_t)m_audioDataStart) resumeFilePos = m_audioDataStart;
@@ -7120,75 +7162,77 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
     AUDIO_LOG_DEBUG("new InBuff start at m_resumeFilePos {}, m_audioDataStart {}", m_resumeFilePos, m_audioDataStart);
 
     // --- enter critical area ------------------------------------------
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
-    m_f_lockInBuffer = true;
+    bool pd = xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
+    {
+        m_f_lockInBuffer = true;
 
-    // ------- prepare InBuff ------
-    m_f_allDataReceived = false;
-    audioFileSeek(resumeFilePos);
-    InBuff.clear();
-    audioFileRead(InBuff.getWritePtr(), buffFillValue);
-    InBuff.bytesWritten(buffFillValue);
+        // ------- prepare InBuff ------
+        m_f_allDataReceived = false;
+        audioFileSeek(resumeFilePos);
+        InBuff.clear();
+        audioFileRead(InBuff.getWritePtr(), buffFillValue);
+        InBuff.bytesWritten(buffFillValue);
 
-    int32_t offset = 0;
-    int32_t newFilePos = resumeFilePos;
+        int32_t offset = 0;
 
-    // ---------------------------------------------------------------------------
-    // codec specific handling
-    // ---------------------------------------------------------------------------
+        // ---------------------------------------------------------------------------
+        // codec specific handling
+        // ---------------------------------------------------------------------------
 
-    auto fail = [&]() {
-        AUDIO_LOG_ERROR("can't set newFilePos");
-        InBuff.bytesWasRead(0);
+        auto fail = [&]() {
+            AUDIO_LOG_ERROR("can't set newFilePos");
+            InBuff.bytesWasRead(0);
+            m_f_lockInBuffer = false;
+            xSemaphoreGive(mutex_audioTaskIsDecoding);
+            stopSong();
+            return -1;
+        };
+
+        switch (m_codec) {
+            case CODEC_M4A:
+                offset = m4a_correctResumeFilePos();
+                if (offset < 0) return fail();
+                break;
+
+            case CODEC_WAV:
+                // WAV muss auf 4-Byte-Grenze
+                offset = wav_correctResumeFilePos();
+                if (offset < 0) return fail();
+                break;
+
+            case CODEC_MP3:
+                offset = mp3_correctResumeFilePos();
+                if (offset < 0) return fail();
+                break;
+
+            case CODEC_FLAC:
+                offset = flac_correctResumeFilePos();
+                if (offset < 0) return fail();
+                break;
+
+            case CODEC_VORBIS:
+                offset = ogg_correctResumeFilePos(); // next OggS
+                if (offset < 0) return fail();
+                break;
+
+            case CODEC_OPUS:
+                offset = ogg_correctResumeFilePos(); // next OggS
+                if (offset < 0) return fail();
+                break;
+
+            default: return fail();
+        }
+
+        AUDIO_LOG_DEBUG("offset {}", offset);
+        newFilePos += offset;
+        m_decoder->clear();
+
+        // --- leaf critical area ----------------------------------------------
+        InBuff.bytesWasRead(offset);
         m_f_lockInBuffer = false;
-        xSemaphoreGive(mutex_audioTaskIsDecoding);
-        stopSong();
-        return -1;
-    };
-
-    switch (m_codec) {
-        case CODEC_M4A:
-            offset = m4a_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_WAV:
-            // WAV muss auf 4-Byte-Grenze
-            offset = wav_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_MP3:
-            offset = mp3_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_FLAC:
-            offset = flac_correctResumeFilePos();
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_VORBIS:
-            offset = ogg_correctResumeFilePos(); // next OggS
-            if (offset < 0) return fail();
-            break;
-
-        case CODEC_OPUS:
-            offset = ogg_correctResumeFilePos(); // next OggS
-            if (offset < 0) return fail();
-            break;
-
-        default: return fail();
     }
-
-    AUDIO_LOG_DEBUG("offset {}", offset);
-    newFilePos += offset;
-    m_decoder->clear();
-
-    // --- leaf critical area ----------------------------------------------
-    InBuff.bytesWasRead(offset);
-    m_f_lockInBuffer = false;
     xSemaphoreGive(mutex_audioTaskIsDecoding);
+    if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
 
     return newFilePos;
 }
@@ -7821,7 +7865,6 @@ void Audio::performAudioTask() {
         vTaskDelay(20);
         return;
     }
-    if (!m_f_stream) return;
     if (m_codec == CODEC_NONE) return; // wait for codec is  set
     if (m_codec == CODEC_OGG) return;  // wait for FLAC, VORBIS or OPUS
     xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
