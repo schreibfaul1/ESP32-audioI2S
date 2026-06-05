@@ -453,7 +453,6 @@ void Audio::setDefaults() {
     m_f_ts = false;
     m_f_ogg = false;
     m_f_m4aID3dataAreRead = false;
-    m_f_stream = false;
     m_f_decode_ready = false;
     m_f_eof = false;
     m_f_ID3v1TagFound = false;
@@ -1050,6 +1049,9 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
         AUDIO_LOG_ERROR("No file extension found");
         goto exit;
     } // guard
+    AUDIO_LOG_ERROR("fade out");
+    m_fading = -1;
+
     setDefaults(); // free buffers an set defaults
 
     if (c_path.ends_with_icase(".mp3")) m_codec = CODEC_MP3;
@@ -3271,6 +3273,7 @@ uint32_t Audio::stopSong() {
         m_streamType = ST_NONE;
         m_playlistFormat = FORMAT_NONE;
         m_f_lockInBuffer = false;
+        m_f_stream = false;
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
@@ -3286,6 +3289,8 @@ bool Audio::prepareAudio() {
         m_resamplesBuff.clear(); // Clear m_resamplesBuff
         AUDIO_LOG_ERROR("fade out end");
         m_fading = 0;
+        m_validSamples = 0;
+        m_f_stream = false;
     }
     xSemaphoreGive(mutex_audioTaskIsDecoding);
     if (!pd) AUDIO_LOG_ERROR("xBlockTime is expired without the semaphore becoming available");
@@ -4095,7 +4100,6 @@ void Audio::processLocalFile() {
     if (m_f_firstCall) { // runs only one time per connection, prepare for start
         if (!prepareAudio()) return;
         m_f_firstCall = false;
-        m_f_stream = false;
         m_prlf.audioHeaderFound = false;
         m_prlf.newFilePos = 0;
         m_prlf.ctime = millis();
@@ -4193,7 +4197,6 @@ void Audio::processWebStream() {
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
         if (!prepareAudio()) return;
         m_f_firstCall = false;
-        m_f_stream = false;
         m_pwst.chunkSize = 0;
         m_metacount = m_metaint;
         m_f_allDataReceived = false;
@@ -4287,7 +4290,6 @@ void Audio::processWebFile() {
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
         if (!prepareAudio()) return;
         m_f_firstCall = false;
-        m_f_stream = false;
         m_controlCounter = 0;
         m_pwf.audioHeaderFound = false;
         m_pwf.newFilePos = 0;
@@ -4670,10 +4672,7 @@ void Audio::processWebStreamHLS() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::playAudioData() {
 
-    if (m_f_eof || m_f_lockInBuffer) {
-        m_validSamples = 0;
-        return;
-    } // guard, eof reached or InBuff is locked
+    if (m_f_eof || m_f_lockInBuffer || InBuff.bufferFilled() == 0 || !m_f_stream) { return; } // guard, eof reached or InBuff is locked
     if (m_validSamples) {
         playChunk();
         return;
