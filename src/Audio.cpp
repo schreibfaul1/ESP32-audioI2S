@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6j                                                                                                                            ";
-/*  Updated on: Jun 01, 2026
+    Version 3.4.6k                                                                                                                            ";
+/*  Updated on: Jun 06, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4473,7 +4473,7 @@ nextRound:
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < 120000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4484,7 +4484,7 @@ nextRound:
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < 120000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4500,9 +4500,9 @@ chunkFinished:
     }
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (true) {                                             // statement has no effect
-        if (InBuff.bufferFilled() > 60000 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                              // ready to play the audio data
+    {
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS && !m_f_stream) { // waiting for buffer filled
+            m_f_stream = true;                                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
