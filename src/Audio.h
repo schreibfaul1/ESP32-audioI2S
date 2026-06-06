@@ -434,7 +434,6 @@ class Audio {
     int            m_readbytes = 0;                 // bytes read
     uint32_t       m_metacount = 0;                 // counts down bytes between metadata
     int            m_controlCounter = 0;            // Status within readID3data() and readWaveHeader()
-    int8_t         m_fading = 0;
     int32_t        m_inputHistory[6] = {0};         // used in resampleI2Soutput()
     uint8_t        m_timeoutCounter = 0;            // timeout counter
     uint8_t        m_bitsPerSample = 16;            // bitsPerSample

@@ -5,7 +5,7 @@
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
     Version 3.4.6j                                                                                                                            ";
-/*  Updated on: Jun 01, 2026
+/*  Updated on: Jun 06, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -688,8 +688,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         stopSong();
         return false;
     } // max length in Chrome DevTools
-    AUDIO_LOG_ERROR("fade out");
-    m_fading = -1;
     const char* user_agent_0 = "Mozilla/5.0 (X11; Linux x86_64) Chrome/146.0.0.0 Safari/537.36";
     const char* user_agent_1 = "VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)";
 
@@ -1049,8 +1047,6 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
         AUDIO_LOG_ERROR("No file extension found");
         goto exit;
     } // guard
-    AUDIO_LOG_ERROR("fade out");
-    m_fading = -1;
 
     setDefaults(); // free buffers an set defaults
 
@@ -3287,8 +3283,6 @@ bool Audio::prepareAudio() {
         InBuff.clear();
         m_outBuff.clear();       // Clear OutputBuffer
         m_resamplesBuff.clear(); // Clear m_resamplesBuff
-        AUDIO_LOG_ERROR("fade out end");
-        m_fading = 0;
         m_validSamples = 0;
         m_f_stream = false;
     }
@@ -4677,7 +4671,6 @@ void Audio::playAudioData() {
         playChunk();
         return;
     } // guard, play samples first
-    if (m_fading) AUDIO_LOG_ERROR("y");
     //--------------------------------------------------------------------------------
     m_pad.count = 0;
     m_pad.bytesToDecode = InBuff.readSpace();
