@@ -3424,10 +3424,13 @@ void IRAM_ATTR Audio::playChunk() {
     if (m_plCh.count > 0) goto i2swrite; // Not all samples could be written to I2S during the last run
     audio_process_raw_samples(m_outBuff.get(), m_validSamples);
     //------------------------------------------------------------------------------------------
-    for (int i = 0; i < m_validSamples; i++) {
-        if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
-        if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
-        Gain(&m_outBuff[i * 2]);
+    {
+        const bool applyGain = settings.VOLUME_CONTROL && (m_audio_items.limiter[LEFTCHANNEL] != 1.0f || m_audio_items.limiter[RIGHTCHANNEL] != 1.0f);
+        for (int i = 0; i < m_validSamples; i++) {
+            if (settings.VU_LEVEL) calculateVUlevel(&m_outBuff[i * 2]);
+            if (settings.IIR_FILTER) IIR_filter(&m_outBuff[i * 2]);
+            if (applyGain) Gain(&m_outBuff[i * 2]);
+        }
     }
     if (settings.SPECTRUM) processSpectrum();
     if (m_f_forceMono) stereo2mono(m_outBuff.get(), m_validSamples);
