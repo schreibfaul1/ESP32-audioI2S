@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6j                                                                                                                            ";
-/*  Updated on: Jun 01, 2026
+    Version 3.4.6l                                                                                                                            ";
+/*  Updated on: Jun 07, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -4476,7 +4476,7 @@ nextRound:
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < 120000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4487,7 +4487,7 @@ nextRound:
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < 120000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4503,9 +4503,9 @@ chunkFinished:
     }
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (true) {                                             // statement has no effect
-        if (InBuff.bufferFilled() > 60000 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                              // ready to play the audio data
+    {
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS && !m_f_stream) { // waiting for buffer filled
+            m_f_stream = true;                                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -6664,12 +6664,8 @@ void Audio::IIR_filter(int32_t* sample) {
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
-    s32[LEFTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[LEFTCHANNEL])));
-    s32[RIGHTCHANNEL] = (int32_t)lrintf(fminf(2147483647.0f, fmaxf(-2147483648.0f, s[RIGHTCHANNEL])));
-
-    s32[LEFTCHANNEL] = (int32_t)s[LEFTCHANNEL];
-    s32[RIGHTCHANNEL] = (int32_t)s[RIGHTCHANNEL];
-
+    s32[LEFTCHANNEL] = (int32_t) std::clamp(s[LEFTCHANNEL], -2147483648.0f, 2147483647.0f);
+    s32[RIGHTCHANNEL] = (int32_t) std::clamp(s[RIGHTCHANNEL], -2147483648.0f, 2147483647.0f);
     return;
 }
 

@@ -27,10 +27,9 @@
 #include <libb64/cencode.h>
 #include <locale>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
-#include <optional>
-
 
 #ifndef I2S_GPIO_UNUSED
     #define I2S_GPIO_UNUSED -1 // = I2S_PIN_NO_CHANGE in IDF < 5
@@ -376,6 +375,7 @@ class Audio {
         bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
         bool     VOLUME_CONTROL = true;    // true: volume and balance control is enabled
         float    VOL_FADING_SPEED = 50.0;  // mute, volume fading 1.0f (fast) ... 100.0f (slow)
+        uint32_t BUFFER_TRESHOLD_TS = 120000; // Level at which the HLS-TS stream starts and is reloaded
     } settings;
 
   private:

@@ -3,7 +3,7 @@
  * libhelix_HMP3DECODER
  *
  *  Created on: 26.10.2018
- *  Updated on: 14.02.2026
+ *  Updated on: 06.06.2026
  */
 #include "mp3_decoder.h"
 
@@ -1060,15 +1060,17 @@ int32_t MP3Decoder::IsLikelyRealFrame(const uint8_t* p, int32_t bytesLeft) {
     if (frameLen <= 0 || frameLen > bytesLeft) return -frameLen; // Fake frame
 
     // 2) Hard limits
-    if (frameLen < 96 || frameLen > 2880) return -frameLen; // is fake
+    if (frameLen > 2880) return -frameLen; // is fake
 
     // 3) Check next header
     const uint8_t* next = p + frameLen;
-    if (bytesLeft >= frameLen + 4 && next[0] == 0xFF && (next[1] & 0xE0) == 0xE0) {
-        return frameLen; // echtes Frame
+    if (bytesLeft == frameLen) {
+        return frameLen; // letzter Frame der Datei
     }
 
-    return -frameLen; // Fakeframe
+    if (bytesLeft >= frameLen + 4 && next[0] == 0xFF && (next[1] & 0xE0) == 0xE0) { return frameLen; }
+
+    return -frameLen;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 /*
