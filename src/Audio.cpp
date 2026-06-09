@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6l                                                                                                                            ";
-/*  Updated on: Jun 07, 2026
+    Version 3.4.6m                                                                                                                            ";
+/*  Updated on: Jun 09, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -6664,8 +6664,8 @@ void Audio::IIR_filter(int32_t* sample) {
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[0], m_audio_items.state_biquad[0]);
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[1], m_audio_items.state_biquad[1]);
     dsps_biquad_sf32(s, s, 1, m_audio_items.coeffs[2], m_audio_items.state_biquad[2]);
-    s32[LEFTCHANNEL] = (int32_t) std::clamp(s[LEFTCHANNEL], -2147483648.0f, 2147483647.0f);
-    s32[RIGHTCHANNEL] = (int32_t) std::clamp(s[RIGHTCHANNEL], -2147483648.0f, 2147483647.0f);
+    s32[LEFTCHANNEL] = (int32_t)std::clamp(s[LEFTCHANNEL], -2147483648.0f, 2147483647.0f);
+    s32[RIGHTCHANNEL] = (int32_t)std::clamp(s[RIGHTCHANNEL], -2147483648.0f, 2147483647.0f);
     return;
 }
 
