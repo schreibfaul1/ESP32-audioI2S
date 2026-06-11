@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6m                                                                                                                            ";
-/*  Updated on: Jun 09, 2026
+    Version 3.4.6n                                                                                                                            ";
+/*  Updated on: Jun 11, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3600,13 +3600,13 @@ bool Audio::readPlayListData() {
     uint16_t     readedBytes = 0;
     ps_ptr<char> pl;
     uint32_t     ctl = 0;
-    uint16_t     plSize = 0;
+    size_t       plSize = 0;
 
     auto detectTimeout = [&]() -> bool {
         uint32_t t = millis();
         while (!m_client->available()) {
             vTaskDelay(2);
-            if (t + 1000 < millis()) {
+            if (t + 2000 < millis()) {
                 AUDIO_LOG_WARN("Playlist is incomplete, fetch again");
                 if (m_f_chunked) getChunkSize(0, true);
                 return true;
@@ -3628,7 +3628,7 @@ bool Audio::readPlayListData() {
         if (detectTimeout()) goto exit;
         plSize = m_client->available();
     }
-
+    pl.alloc(2048, "pl");
     // delete all memory in m_playlistContent
     if (m_playlistFormat == FORMAT_M3U8 && !psramFound()) { AUDIO_LOG_ERROR("m3u8 playlists requires PSRAM enabled!"); }
     vector_clear_and_shrink(m_playlistContent);
@@ -3636,7 +3636,7 @@ bool Audio::readPlayListData() {
     while (true) { // outer while
         uint32_t ctime = millis();
         uint32_t timeout = 2000; // ms
-        pl.alloc(2048, "pl");
+
         pl.clear(); // playlistLine
 
         while (true) { // inner while
@@ -3658,7 +3658,7 @@ bool Audio::readPlayListData() {
                     continue;
                 }
                 pos++;
-                if (pos == 1022) {
+                if (pos == 2044) {
                     pos--;
                     continue;
                 }
@@ -3684,7 +3684,7 @@ bool Audio::readPlayListData() {
             goto exit;
         }
         // AUDIO_LOG_INFO("current playlist line: {}", pl.get());
-        if (pl.size() > 0) m_playlistContent.emplace_back(std::move(pl));
+        if (pl.size() > 0) m_playlistContent.emplace_back(pl);
 
         // termination conditions
         // 1. The http response header returns a value for contentLength -> read chars until contentLength is reached
