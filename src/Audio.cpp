@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6n                                                                                                                            ";
+    Version 3.4.6o                                                                                                                            ";
 /*  Updated on: Jun 11, 2026
 
     Author: Wolle (schreibfaul1)
@@ -688,6 +688,13 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         stopSong();
         return false;
     }
+
+    if (strlen(host) < 8) {
+        AUDIO_LOG_ERROR("Hostaddress is too short");
+        stopSong();
+        return false;
+    }
+
     if (strlen(host) > 2048) {
         AUDIO_LOG_ERROR("Hostaddress is too long");
         stopSong();
@@ -3919,7 +3926,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         return {};
     } // guard
 
-    uint8_t lines = m_playlistContent.size();
+    uint32_t lines = m_playlistContent.size();
     bool    f_haveRedirection = false;
     char    llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
 
@@ -3927,17 +3934,17 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
         bool addNextLine = false;
         deque_clear_and_shrink(m_linesWithURL);
         vector_clear_and_shrink(m_linesWithEXTINF);
-        for (uint8_t i = 0; i < lines; i++) {
+        for (uint32_t i = 0; i < lines; i++) {
             // AUDIO_LOG_INFO("pl{} = {}", i, m_playlistContent[i].get());
             if (m_playlistContent[i].starts_with("#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*AUDIO_LOG_ERROR("we have a redirection");*/ }
             if (addNextLine) {
-                if (startsWith(m_playlistContent[i].get(), "#EXT-X-PROGRAM-DATE-TIME:")) continue; // skip this line
+                if (m_playlistContent[i].starts_with( "#EXT-X-PROGRAM-DATE-TIME:")) continue; // skip this line
                 addNextLine = false;
                 // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
-                m_linesWithURL.emplace_back().clone_from(m_playlistContent[i]);
+                m_linesWithURL.emplace_back(m_playlistContent[i]);
             }
             if (startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
-                m_linesWithEXTINF.emplace_back().clone_from(m_playlistContent[i]);
+                m_linesWithEXTINF.emplace_back(m_playlistContent[i]);
                 addNextLine = true;
             }
         }
@@ -3956,7 +3963,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     }
 
     if (f_haveRedirection) {
-        m_lastM3U8host.clone_from(m3u8redirection(&m_m3u8Codec));
+        m_lastM3U8host = m3u8redirection(&m_m3u8Codec);
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
