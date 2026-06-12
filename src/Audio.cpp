@@ -683,19 +683,25 @@ audiolib::hwoe_t Audio::dismantle_host(const char* host) {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::connecttohost(const char* host, const char* user, const char* pwd) { // user and pwd for authentification only, can be empty
 
-    if (!host) {
+    ps_ptr<char> c_host = host; // copy of host
+    ps_ptr<char> c_user = user; // copy of user
+    ps_ptr<char> c_pwd = pwd;   // copy of password
+
+    if (!c_host.valid()) {
         AUDIO_LOG_ERROR("Hostaddress is empty");
         stopSong();
         return false;
     }
 
-    if (strlen(host) < 8) {
+    c_host.trim();
+
+    if (c_host.strlen() < 8) {
         AUDIO_LOG_ERROR("Hostaddress is too short");
         stopSong();
         return false;
     }
 
-    if (strlen(host) > 2048) {
+    if (c_host.strlen() > 2048) {
         AUDIO_LOG_ERROR("Hostaddress is too long");
         stopSong();
         return false;
@@ -709,7 +715,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     uint16_t authLen = 0;   // length of authorization
     uint32_t timestamp = 0; // timeout surveillance
 
-    ps_ptr<char> c_host;       // copy of host
     ps_ptr<char> hwoe;         // host without extension
     ps_ptr<char> rqh_host;     // host for request header
     ps_ptr<char> extension;    // extension
@@ -719,8 +724,6 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     xSemaphoreTakeRecursive(mutex_playAudioData, 0.3 * configTICK_RATE_HZ);
 
-    c_host.copy_from(host);
-    c_host.trim();
     auto dismantledHost = dismantle_host(c_host.get());
 
     //  https://edge.live.mp3.mdn.newmedia.nacamar.net:8000/ps-charivariwb/livestream.mp3;?user=ps-charivariwb;&pwd=ps-charivariwb-------
@@ -732,43 +735,30 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 
     m_f_ssl = dismantledHost.ssl;
     port = dismantledHost.port;
-    if (dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
-    if (dismantledHost.rqh_host.valid()) rqh_host.clone_from(dismantledHost.rqh_host);
-    if (dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
-    if (dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
+    hwoe = dismantledHost.hwoe.c_get();
+    rqh_host = dismantledHost.rqh_host.c_get();
+    extension = dismantledHost.extension.c_get();
+    query_string = dismantledHost.query_string.c_get();
 
-    if (extension.valid()) path.assign(extension.get());
-    if (query_string.valid()) {
-        path.append("?");
-        path.append(query_string.get());
-    }
-    if (!hwoe.valid()) hwoe.assign("");
-    if (!extension.valid()) extension.assign("");
-    if (!path.valid()) path.assign("");
-
-    path = urlencode(path.get(), true);
+    if (query_string.strlen()) extension.appendf("?{}", query_string);
+    path = urlencode(extension.get(), true);
 
     // optional basic authorization
-    if (user && pwd) authLen = strlen(user) + strlen(pwd);
+    if (c_user.valid() && c_pwd.valid()) authLen = c_user.strlen() + c_pwd.strlen();
     ps_ptr<char> authorization;
     ps_ptr<char> toEncode;
-    authorization.alloc(base64_encode_expected_len(authLen + 1) + 1, "authorization");
-    authorization.clear();
+    authorization.calloc(base64_encode_expected_len(authLen + 1) + 1, "authorization");
     if (authLen > 0) {
-        toEncode.assign(user);
-        toEncode.append(":");
-        toEncode.append(pwd);
+        toEncode.assignf("{}:{}", c_user, c_pwd);
         b64encode((const char*)toEncode.get(), toEncode.strlen(), authorization.get());
     }
 
     setDefaults();
 
-    rqh.assign("GET /");
-    rqh.append(path.get());
+    rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
-    rqh.appendf("Host: {}\r\n", rqh_host.get());
+    rqh.appendf("Host: {}\r\n", rqh_host);
     rqh.append("Icy-MetaData:1\r\n");
-    //  rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Pragma: no-cache\r\n");
     rqh.append("Cache-Control: no-cache\r\n");
     rqh.append("Range: bytes=0-\r\n");
@@ -776,7 +766,7 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
     rqh.appendf("User-Agent: {}\r\n", m_f_alt_user_agent ? user_agent_0 : user_agent_1);
     if (authLen > 0) {
         rqh.append("Authorization: Basic ");
-        rqh.append(authorization.get());
+        rqh.append(authorization);
         rqh.append("\r\n");
     }
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
@@ -817,8 +807,8 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
         if (extension.ends_with_icase(".pls")) m_expectedPlsFmt = FORMAT_PLS;
         if (extension.contains(".m3u8")) m_expectedPlsFmt = FORMAT_M3U8;
 
-        m_currentHost.clone_from(c_host);
-        m_lastHost.clone_from(c_host);
+        m_currentHost = c_host;
+        m_lastHost = c_host;
         info(*this, evt_lasthost, "{}", m_lastHost.c_get());
         m_dataMode = HTTP_RESPONSE_HEADER; // Handle header
         m_streamType = ST_WEBSTREAM;
@@ -4384,12 +4374,12 @@ void Audio::processWebStreamTS() {
         m_pwsst.byteCounter = 0;
         m_t0 = millis();
         if (!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
-        if (!m_decoder) { // first init
+        if (!m_decoder) {                                                                                          // first init
             getChunkSize(0, true);
             m_pwsst.chunkSize = 0;
             ts_parsePacket(0, 0, 0);
             m_pwsst.ts_packetPtr = 0;
-            if(!initializeDecoder()) return;
+            if (!initializeDecoder()) return;
         }
     } // —————————————————————————————————————————————————————————————————————————
 
@@ -4642,8 +4632,8 @@ void Audio::processWebStreamHLS() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::playAudioData() {
 
-    if (!m_f_stream || m_f_eof || m_f_lockInBuffer || !m_f_running || m_codec == CODEC_NONE) {
-        m_validSamples = 0;
+    if (m_f_eof || m_f_lockInBuffer) {
+        vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
     if (m_validSamples) {
@@ -7821,24 +7811,23 @@ void Audio::audioTask() {
 }
 
 void Audio::performAudioTask() {
-    if (!m_f_running) {
+    if (m_decoder) {
+        xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
+        while (m_validSamples) {
+            vTaskDelay(20 / portTICK_PERIOD_MS);
+            playChunk();
+        } // I2S buffer full
+        playAudioData();
+        xSemaphoreGive(mutex_audioTask);
+        gain_ramp();
+        return;
+    } else {
         int32_t c[2] = {0};
         calculateVUlevel(c);
         gain_ramp();
         vTaskDelay(20);
         return;
     }
-    if (!m_f_stream) return;
-    if (m_codec == CODEC_NONE) return; // wait for codec is  set
-    if (m_codec == CODEC_OGG) return;  // wait for FLAC, VORBIS or OPUS
-    xSemaphoreTake(mutex_audioTask, 0.3 * configTICK_RATE_HZ);
-    while (m_validSamples) {
-        vTaskDelay(20 / portTICK_PERIOD_MS);
-        playChunk();
-    } // I2S buffer full
-    playAudioData();
-    gain_ramp();
-    xSemaphoreGive(mutex_audioTask);
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 uint32_t Audio::getHighWatermark() {
