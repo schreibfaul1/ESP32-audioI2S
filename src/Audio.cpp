@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6p                                                                                                                            ";
+    Version 3.4.6q                                                                                                                            ";
 /*  Updated on: Jun 12, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3545,7 +3545,7 @@ void Audio::loop() {
                     }
                 } else {
                     m_lVar.count = 0;
-                    if (!m_f_ts) m_f_firstCall = true; // read ID3 header in processWebStreamHLS()
+                    m_f_firstCall = true; // read ID3 header in processWebStreamHLS/TS()
                 }
                 break;
             case AUDIO_PLAYLISTINIT:
@@ -3928,7 +3928,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
 
     uint32_t lines = m_playlistContent.size();
     bool     f_haveRedirection = false;
-    
+
     if (lines) {
         bool addNextLine = false;
         deque_clear_and_shrink(m_linesWithURL);
@@ -4382,13 +4382,15 @@ void Audio::processWebStreamTS() {
         m_pwsst.f_chunkFinished = false;
         m_pwsst.f_nextRound = false;
         m_pwsst.byteCounter = 0;
-        m_pwsst.chunkSize = 0;
-        m_pwsst.ts_packetPtr = 0;
         m_t0 = millis();
-        getChunkSize(0, true);
-        ts_parsePacket(0, 0, 0);
         if (!m_pwsst.ts_packet.valid()) m_pwsst.ts_packet.alloc_array(m_pwsst.ts_packetsize, "m_pwsst.ts_packet"); // first init
-        if (!m_decoder && !initializeDecoder()) return;
+        if (!m_decoder) { // first init
+            getChunkSize(0, true);
+            m_pwsst.chunkSize = 0;
+            ts_parsePacket(0, 0, 0);
+            m_pwsst.ts_packetPtr = 0;
+            if(!initializeDecoder()) return;
+        }
     } // —————————————————————————————————————————————————————————————————————————
 
     if (m_dataMode != AUDIO_DATA) return; // guard
