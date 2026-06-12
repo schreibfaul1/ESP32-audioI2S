@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6o                                                                                                                            ";
-/*  Updated on: Jun 11, 2026
+    Version 3.4.6p                                                                                                                            ";
+/*  Updated on: Jun 12, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -3545,7 +3545,7 @@ void Audio::loop() {
                     }
                 } else {
                     m_lVar.count = 0;
-                    m_f_firstCall = true;
+                    if (!m_f_ts) m_f_firstCall = true; // read ID3 header in processWebStreamHLS()
                 }
                 break;
             case AUDIO_PLAYLISTINIT:
@@ -3927,9 +3927,8 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     } // guard
 
     uint32_t lines = m_playlistContent.size();
-    bool    f_haveRedirection = false;
-    char    llasc[21]; // uint64_t max = 18,446,744,073,709,551,615  thats 20 chars + \0
-
+    bool     f_haveRedirection = false;
+    
     if (lines) {
         bool addNextLine = false;
         deque_clear_and_shrink(m_linesWithURL);
@@ -3938,12 +3937,12 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
             // AUDIO_LOG_INFO("pl{} = {}", i, m_playlistContent[i].get());
             if (m_playlistContent[i].starts_with("#EXT-X-STREAM-INF:")) { f_haveRedirection = true; /*AUDIO_LOG_ERROR("we have a redirection");*/ }
             if (addNextLine) {
-                if (m_playlistContent[i].starts_with( "#EXT-X-PROGRAM-DATE-TIME:")) continue; // skip this line
+                if (m_playlistContent[i].starts_with("#EXT-X-PROGRAM-DATE-TIME:")) continue; // skip this line
                 addNextLine = false;
                 // size_t len = strlen(linesWithSeqNr[idx].get()) + strlen(m_playlistContent[i].get()) + 1;
                 m_linesWithURL.emplace_back(m_playlistContent[i]);
             }
-            if (startsWith(m_playlistContent[i].get(), "#EXTINF:")) {
+            if (m_playlistContent[i].starts_with("#EXTINF:")) {
                 m_linesWithEXTINF.emplace_back(m_playlistContent[i]);
                 addNextLine = true;
             }
@@ -3983,14 +3982,14 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     if (m_linesWithURL.size() > 0) {
         ps_ptr<char> playlistBuff;
         if (m_linesWithURL[0].valid()) {
-            playlistBuff.assign(m_linesWithURL[0].get());
+            playlistBuff = m_linesWithURL[0];
             m_linesWithURL.pop_front();
             m_linesWithURL.shrink_to_fit();
         }
         AUDIO_LOG_DEBUG("now playing {}", playlistBuff.get());
-        if (endsWith(playlistBuff.get(), "ts")) m_f_ts = true;
+        if (playlistBuff.ends_with("ts")) m_f_ts = true;
         if (playlistBuff.contains(".ts?") > 0) m_f_ts = true;
-        m_playlistBuff.clone_from(playlistBuff);
+        m_playlistBuff = playlistBuff;
         return playlistBuff;
     }
     return {};
