@@ -148,7 +148,7 @@ class Audio {
 
     bool openai_speech(const String& api_key, const String& model, const String& input, const String& instructions, const String& voice, const String& response_format, const String& speed);
     audiolib::hwoe_t dismantle_host(const char* host);
-    bool             connecttohost(const char* host, const char* user = "", const char* pwd = "");
+    bool             connecttohost(const char* host, const char* user = nullptr, const char* pwd = nullptr);
     bool             connecttospeech(const char* speech, const char* lang);
     bool             connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime = -1);
     void             setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl);

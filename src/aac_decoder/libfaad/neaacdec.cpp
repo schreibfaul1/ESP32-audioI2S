@@ -355,8 +355,8 @@ int NeaacDecoder::NeAACDecGetVersion(const char** faad_id_string, const char** f
     return 0;
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
-const char* NeaacDecoder::NeAACDecGetErrorMessage(const uint8_t errcode) {
-    if (errcode >= NUM_ERROR_MESSAGES) return NULL;
+error_info_t NeaacDecoder::NeAACDecGetErrorMessage(const uint8_t errcode) {
+    if (errcode > NUM_ERROR_MESSAGES) return err_msg[NUM_ERROR_MESSAGES]; // unspecified
     return err_msg[errcode];
 }
 // ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
