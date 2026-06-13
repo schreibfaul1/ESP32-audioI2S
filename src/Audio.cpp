@@ -821,16 +821,16 @@ bool Audio::connecttohost(const char* host, const char* user, const char* pwd) {
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::httpPrint(const char* host) {
-    // user and pwd for authentification only, can be empty
-    if (!m_f_running) return false;
-    if (host == NULL) {
+
+    ps_ptr<char> c_host = host; // copy of host
+
+    if (!c_host.valid()) {
         AUDIO_LOG_ERROR("Hostaddress is empty");
         stopSong();
         return false;
     }
 
     uint16_t     port = 0;     // port number
-    ps_ptr<char> c_host;       // copy of host
     ps_ptr<char> hwoe;         // host without extension
     ps_ptr<char> rqh_host;     // host in request header
     ps_ptr<char> extension;    // extension
@@ -839,7 +839,6 @@ bool Audio::httpPrint(const char* host) {
     ps_ptr<char> rqh;          // request header
     ps_ptr<char> cur_hwoe;     // m_currenthost without extension
 
-    c_host.copy_from(host);
     c_host.trim();
     auto dismantledHost = dismantle_host(c_host.get());
 
@@ -852,39 +851,29 @@ bool Audio::httpPrint(const char* host) {
 
     m_f_ssl = dismantledHost.ssl;
     port = dismantledHost.port;
-    if (dismantledHost.hwoe.valid()) hwoe.clone_from(dismantledHost.hwoe);
-    if (dismantledHost.rqh_host.valid()) rqh_host.clone_from(dismantledHost.rqh_host);
-    if (dismantledHost.extension.valid()) extension.clone_from(dismantledHost.extension);
-    if (dismantledHost.query_string.valid()) query_string.clone_from(dismantledHost.query_string);
+    hwoe = dismantledHost.hwoe;
+    rqh_host = dismantledHost.rqh_host;
+    extension = dismantledHost.extension;
+    query_string = dismantledHost.query_string;
 
-    if (extension.valid()) path.assign(extension.get());
-    if (query_string.valid()) {
-        path.append("?");
-        path.append(query_string.get());
-    }
-    if (!hwoe.valid()) hwoe.assign("");
-    if (!extension.valid()) extension.assign("");
-    if (!path.valid()) path.assign("");
-
-    path = urlencode(path.get(), true);
+    if (query_string.strlen()) extension.appendf("?{}", query_string);
+    path = urlencode(extension.get(), true);
 
     if (!m_currentHost.valid()) m_currentHost.assign("");
     auto dismantledLastHost = dismantle_host(m_currentHost.get());
-    cur_hwoe.clone_from(dismantledLastHost.hwoe);
+    cur_hwoe = dismantledLastHost.hwoe;
 
     bool f_equal = true;
-    if (hwoe.equals(cur_hwoe) && port == dismantledLastHost.port) {
+    if (hwoe == cur_hwoe && port == dismantledLastHost.port) {
         f_equal = true;
     } else {
         f_equal = false;
     }
 
-    rqh.assign("GET /");
-    rqh.append(path.get());
+    rqh.assignf("GET /{}", path);
     rqh.append(" HTTP/1.1\r\n");
-    rqh.appendf("Host: {}\r\n", rqh_host.get());
+    rqh.appendf("Host: {}\r\n", rqh_host);
     rqh.append("Icy-MetaData:1\r\n");
-    rqh.append("Icy-MetaData:2\r\n");
     rqh.append("Accept:*/*\r\n");
     rqh.append("User-Agent: VLC/3.0.21 LibVLC/3.0.21 AppleWebKit/537.36 (KHTML, like Gecko)\r\n");
     rqh.append("Accept-Encoding: identity;q=1,*;q=0\r\n");
@@ -910,7 +899,7 @@ bool Audio::httpPrint(const char* host) {
             return false;
         }
     }
-    m_currentHost.clone_from(c_host);
+    m_currentHost = c_host;
     m_client->print(rqh.get());
 
     if (extension.ends_with_icase(".mp3"))
