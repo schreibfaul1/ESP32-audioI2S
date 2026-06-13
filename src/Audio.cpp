@@ -3582,7 +3582,7 @@ void Audio::loop() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 bool Audio::readPlayListData() {
 
-    uint32_t     chunksize = 0;
+    int32_t      chunkLen = 0;
     uint16_t     readedBytes = 0;
     ps_ptr<char> pl;
     uint32_t     ctl = 0;
@@ -3606,14 +3606,24 @@ bool Audio::readPlayListData() {
         goto exit;
     }
 
-    getChunkSize(0, true);
-    if (m_f_chunked) chunksize = getChunkSize(&readedBytes);
-    plSize = max(m_audioFileSize, chunksize);
+    if (m_f_chunked) {
+        getChunkSize(0, true);
+        chunkLen = getChunkSize(&readedBytes);
+        if(chunkLen <= 0){
+            AUDIO_LOG_ERROR("chunked datatransfer but chunkLen is invalid");
+            goto exit;
+        }
+        plSize = chunkLen;
+    }
+    else {
+        plSize = m_audioFileSize;
+    }
 
     if (!plSize) { // maybe playlist without contentLength or chunkSize
-        if (detectTimeout()) goto exit;
-        plSize = m_client->available();
+        AUDIO_LOG_ERROR ("file size is not given");
+        goto exit;
     }
+
     pl.alloc(2048, "pl");
     // delete all memory in m_playlistContent
     if (m_playlistFormat == FORMAT_M3U8 && !psramFound()) { AUDIO_LOG_ERROR("m3u8 playlists requires PSRAM enabled!"); }
