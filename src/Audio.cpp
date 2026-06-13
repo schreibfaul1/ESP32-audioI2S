@@ -3609,18 +3609,17 @@ bool Audio::readPlayListData() {
     if (m_f_chunked) {
         getChunkSize(0, true);
         chunkLen = getChunkSize(&readedBytes);
-        if(chunkLen <= 0){
+        if (chunkLen <= 0) {
             AUDIO_LOG_ERROR("chunked datatransfer but chunkLen is invalid");
             goto exit;
         }
         plSize = chunkLen;
-    }
-    else {
+    } else {
         plSize = m_audioFileSize;
     }
 
     if (!plSize) { // maybe playlist without contentLength or chunkSize
-        AUDIO_LOG_ERROR ("file size is not given");
+        AUDIO_LOG_ERROR("file size is not given");
         goto exit;
     }
 
@@ -3679,6 +3678,38 @@ bool Audio::readPlayListData() {
             AUDIO_LOG_WARN("url is a webpage!");
             goto exit;
         }
+
+        //--------------------------------------------------------------------------------------------------------------
+        if (pl.starts_with_icase("#EXT-X-SERVER-CONTROL")) {
+            /* The parameter "?_HLS_skip=YES" is an HLS delivery directive that allows a client to request a playlist delta update from the server in order to optimise data transmission.
+               Functionality: The server replaces outdated media segments that lie beyond the "skip boundary" with an #EXT-X-SKIP tag, rather than resending the entire playlist content.
+               Prerequisites: The playlist must contain an #EXT-X-SERVER-CONTROL tag with the CAN-SKIP-UNTIL attribute and must not be an #EXT-X-ENDLIST tag (i.e. a live stream).
+               Effect: This drastically reduces the size of the playlist file and speeds up parsing, which is particularly critical for low-latency HLS with short segments and large DVR windows
+               in order to save bandwidth and avoid playback disruptions.
+            */
+            if(m_playlistFormat == FORMAT_M3U8) {
+                if(m_lastM3U8host.valid()){
+                    if(!m_lastM3U8host.ends_with("HLS_skip=YES")){
+                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
+                        m_lastM3U8host.append("?_HLS_skip=YES");
+                        m_client->stop();
+                        httpPrint(m_lastM3U8host.c_get());
+                        return true;
+                    }
+                }
+                else{
+                    if(!m_lastHost.ends_with("HLS_skip=YES")){
+                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
+                        m_lastHost.append("?_HLS_skip=YES");
+                        m_client->stop();
+                        httpPrint(m_lastHost.c_get());
+                        return true;
+                    }
+                }
+            }
+        }
+        //--------------------------------------------------------------------------------------------------------------
+
         // AUDIO_LOG_INFO("current playlist line: {}", pl.get());
         if (pl.size() > 0) m_playlistContent.emplace_back(pl);
 
@@ -3686,10 +3717,18 @@ bool Audio::readPlayListData() {
         // 1. The http response header returns a value for contentLength -> read chars until contentLength is reached
         // 2. no contentLength, but Transfer-Encoding:chunked -> compute chunksize and read until chunksize is reached
         // 3. no chunksize and no contentlengt, but Connection: close -> read all available chars
-        if (ctl == plSize) { break; }
+        if (ctl == plSize) {
+            if (m_f_chunked) {
+                chunkLen = getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n" if ready
+                if (chunkLen > 0) {
+                    plSize += chunkLen;
+                    continue; // next round
+                }
+            }
+            break;
+        }
     } // outer while
 
-    if (m_f_chunked) getChunkSize(&readedBytes); // expected: "\r\n\0\r\n\r\n"
     m_dataMode = AUDIO_PLAYLISTDATA;
     return true;
 
@@ -4501,7 +4540,7 @@ chunkFinished:
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
-        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS && !m_f_stream) { // waiting for buffer filled
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS * 2 && !m_f_stream) { // waiting for buffer filled
             m_f_stream = true;                                                    // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
@@ -6964,9 +7003,11 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
             int a = audioFileRead();
             m_gchs.oneByteOfTwo = true;
             *readedBytes = 1;
-            if (a != 0x0D) AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x{:02X}", a);
-
-            return -1;
+            // Special case: there is only one byte left in m_client; this must be read first in order to proceed.
+            if (a != 0x0D) {
+                AUDIO_LOG_WARN("chunk count error, expected: 0x0D, received: 0x{:02X}", a);
+                return -1;
+            }
         }
         if (!m_gchs.oneByteOfTwo) {
             int a = audioFileRead();
@@ -6979,7 +7020,9 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
         if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x{:02X}", b);
         *readedBytes += 1;
         m_gchs.f_skipCRLF = false;
-        if (!m_client->available()) { return -1; }
+        if (!m_client->available()) {
+            return -1;
+        }
     }
 
     // -------- HTTP-chunked-Read Logic --------
