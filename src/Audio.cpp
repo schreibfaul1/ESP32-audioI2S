@@ -3687,18 +3687,17 @@ bool Audio::readPlayListData() {
                Effect: This drastically reduces the size of the playlist file and speeds up parsing, which is particularly critical for low-latency HLS with short segments and large DVR windows
                in order to save bandwidth and avoid playback disruptions.
             */
-            if(m_playlistFormat == FORMAT_M3U8) {
-                if(m_lastM3U8host.valid()){
-                    if(!m_lastM3U8host.ends_with("HLS_skip=YES")){
+            if (m_playlistFormat == FORMAT_M3U8) {
+                if (m_lastM3U8host.valid()) {
+                    if (!m_lastM3U8host.ends_with("HLS_skip=YES")) {
                         AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
                         m_lastM3U8host.append("?_HLS_skip=YES");
                         m_client->stop();
                         httpPrint(m_lastM3U8host.c_get());
                         return true;
                     }
-                }
-                else{
-                    if(!m_lastHost.ends_with("HLS_skip=YES")){
+                } else {
+                    if (!m_lastHost.ends_with("HLS_skip=YES")) {
                         AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
                         m_lastHost.append("?_HLS_skip=YES");
                         m_client->stop();
@@ -4541,7 +4540,7 @@ chunkFinished:
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
         if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS * 2 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                                                    // ready to play the audio data
+            m_f_stream = true;                                                        // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -7020,8 +7019,20 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
         if (b != 0x0A) AUDIO_LOG_WARN("chunk count error, expected: 0x0A, received: 0x{:02X}", b);
         *readedBytes += 1;
         m_gchs.f_skipCRLF = false;
-        if (!m_client->available()) {
-            return -1;
+        if (!m_client->available()) { // wait
+            int i = 0;
+            while (true) {
+                if (m_client->available()) {
+                    AUDIO_LOG_DEBUG("av {}", m_client->available());
+                    break; // ok
+                }
+                i++;
+                if (i == 100) {
+                    AUDIO_LOG_ERROR("need more data");
+                    return -1;
+                }
+                vTaskDelay(10);
+            }
         }
     }
 
