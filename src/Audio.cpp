@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6q                                                                                                                            ";
-/*  Updated on: Jun 12, 2026
+    Version 3.4.6r                                                                                                                            ";
+/*  Updated on: Jun 13, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -5186,6 +5186,7 @@ bool Audio::parseContentType(char* ct) {
         {"application/ogg", CT_OGG},
         {"audio/ogg", CT_OGG},
         {"application/vnd.apple.mpegurl", CT_M3U8},
+        {"application/hls+xml", CT_M3U8},
         {"application/x-mpegurl", CT_M3U8},
         {"application/octet-stream", CT_TXT},
         {"text/html", CT_TXT},
