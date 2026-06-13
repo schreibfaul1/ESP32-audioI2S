@@ -48,7 +48,7 @@ class NeaacDecoder {
     char                     NeAACDecInit2(NeAACDecHandle hpDecoder, uint8_t* pBuffer, uint32_t SizeOfDecoderSpecificInfo, uint32_t* samplerate, uint8_t* channels);
     long                     NeAACDecInit(NeAACDecHandle hpDecoder, uint8_t* buffer, uint32_t buffer_size, uint32_t* samplerate, uint8_t* channels);
     void*                    NeAACDecDecode2(NeAACDecHandle hpDecoder, NeAACDecFrameInfo* hInfo, uint8_t* buffer, uint32_t buffer_size, void** sample_buffer, uint32_t sample_buffer_size);
-    const char*              NeAACDecGetErrorMessage(const uint8_t errcode);
+    error_info_t             NeAACDecGetErrorMessage(const uint8_t errcode);
     uint8_t                  get_sr_index(const uint32_t samplerate);
 
   private:

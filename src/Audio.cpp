@@ -498,12 +498,12 @@ void Audio::setDefaults() {
     if (m_f_reset_m3u8Codec) { m_m3u8Codec = CODEC_AAC; } // reset to default
     m_f_reset_m3u8Codec = true;
 }
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
     if (timeout_ms) m_timeout_ms = timeout_ms;
     if (timeout_ms_ssl) m_timeout_ms_ssl = timeout_ms_ssl;
 }
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 /*
     Text to speech API provides a speech endpoint based on our TTS (text-to-speech) model.
