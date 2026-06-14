@@ -467,6 +467,7 @@ void Audio::setDefaults() {
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
+    m_m3u8Codec = CODEC_AAC;
     m_playlistFormat = FORMAT_NONE;
     m_f_allDataReceived = false;
     m_dataMode = AUDIO_NONE;
@@ -495,8 +496,6 @@ void Audio::setDefaults() {
     m_lastGranulePosition = 0;
     m_validSamples = 0;
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
-    if (m_f_reset_m3u8Codec) { m_m3u8Codec = CODEC_AAC; } // reset to default
-    m_f_reset_m3u8Codec = true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -3519,7 +3518,6 @@ void Audio::loop() {
                     if (m_f_timeout && m_lVar.count < 3) {
                         m_f_timeout = false;
                         m_lVar.count++;
-                        m_f_reset_m3u8Codec = false;
                         connecttohost(m_lastHost.get());
                     }
                 } else {
@@ -3532,7 +3530,6 @@ void Audio::loop() {
                     break;
                 else { // readPlayListData == false means connect to m3u8 URL
                     if (m_lastM3U8host.valid()) {
-                        m_f_reset_m3u8Codec = false;
                         httpPrint(m_lastM3U8host.get());
                     } else {
                         httpPrint(m_lastHost.get());
@@ -3555,7 +3552,6 @@ void Audio::loop() {
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
                     if (m_lastM3U8host.valid()) {
-                        m_f_reset_m3u8Codec = false;
                         httpPrint(m_lastM3U8host.get());
                     } else {
                         httpPrint(m_lastHost.get());
@@ -4904,7 +4900,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         }
                     }
                     info(*this, evt_info, "redirect to new host \"{}\"", c_host);
-                    m_f_reset_m3u8Codec = false;
                     httpPrint(c_host);
                     return true;
                 }
@@ -7272,7 +7267,6 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         if (m_sdet.cnt_lost == 5) { // 5s no data?
             m_sdet.cnt_lost = 0;
             info(*this, evt_info, "Stream lost -> try new connection");
-            m_f_reset_m3u8Codec = false;
             InBuff.reset();
             httpPrint(m_lastHost.get());
             return true;
