@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6s1                                                                                                                            ";
+    Version 3.4.6s2                                                                                                                            ";
 /*  Updated on: Jun 14, 2026
 
     Author: Wolle (schreibfaul1)
@@ -3128,7 +3128,7 @@ int Audio::read_M4A_Header(uint8_t* data, size_t len) {
         (void)flags;
         uint32_t sample_size = bigEndian(data + 4, 4);
         (void)sample_size;
-        m_m4aHdr.stsz_num_entries = bigEndian(data + 8, 4) / 4; // is uint32_t
+        m_m4aHdr.stsz_num_entries = bigEndian(data + 8, 4);
         m_m4aHdr.stsz_table_pos = m_m4aHdr.headerSize + 12;
         m_m4aHdr.retvalue += m_m4aHdr.sizeof_stsz + 8;
         m_m4aHdr.headerSize += m_m4aHdr.sizeof_stsz + 8;
@@ -3241,7 +3241,7 @@ uint32_t Audio::stopSong() {
     uint8_t  maxWait = 0;
     uint32_t currTime = getAudioCurrentTime();
 
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ); // wait for audioTask is ready
+    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ); // wait for audioTask is ready
     {
         if (m_f_running) {
             m_f_running = false;
@@ -4680,7 +4680,7 @@ void Audio::playAudioData() {
     if (m_streamType == ST_WEBSTREAM || m_playlistFormat == FORMAT_M3U8) isStream = true;
     if (!isFile && !isStream) return;
 
-    xSemaphoreTake(mutex_audioTaskIsDecoding, 0.3 * configTICK_RATE_HZ);
+    xSemaphoreTake(mutex_audioTaskIsDecoding, 1 * configTICK_RATE_HZ);
     {
         m_pad.bytesDecoded = 0;
         if (isFile) {
@@ -7183,7 +7183,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
             break;
 
         case CODEC_WAV:
-            // WAV muss auf 4-Byte-Grenze
+            // WAV have 4-Byte-Boundaries
             offset = wav_correctResumeFilePos();
             if (offset < 0) return fail();
             break;
@@ -7211,7 +7211,7 @@ int32_t Audio::newInBuffStart(int32_t resumeFilePos) {
         default: return fail();
     }
 
-    AUDIO_LOG_DEBUG("offset {}", offset);
+    AUDIO_LOG_DEBUG("offset {}, readSpace {}", offset, InBuff.readSpace());
     newFilePos += offset;
     m_decoder->clear();
 
@@ -7292,7 +7292,7 @@ uint32_t Audio::m4a_correctResumeFilePos() {
         return r;
     };
 
-    while (i < m_stsz_numEntries * 4) { // is uint32_t
+    while (i < m_stsz_numEntries) {
         i++;
         uu.u8[3] = read_next();
         uu.u8[2] = read_next();
@@ -7408,12 +7408,12 @@ int32_t Audio::flac_correctResumeFilePos() {
 
         if (crc != p[crc_end]) continue;
 
-        // === Wenn wir hier ankommen: 99,9999 % sicher ein echter Frame ===
-        AUDIO_LOG_ERROR(">>> ECHTER FLAC-FRAME gefunden bei Offset {}", (uint32_t)i);
+        // === When we get here: 99.9999% certain it’s a real frame ===
+        AUDIO_LOG_DEBUG(">>> REAL FLAC-FRAME found at offset {}", i);
         return (int32_t)i;
     }
 
-    return -1; // kein Frame in den ersten 64 KB gefunden
+    return -1; // No frame found in the first 64 KB
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————-
 int32_t Audio::mp3_correctResumeFilePos() {
