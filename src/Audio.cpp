@@ -4,8 +4,8 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6r                                                                                                                            ";
-/*  Updated on: Jun 13, 2026
+    Version 3.4.6s                                                                                                                            ";
+/*  Updated on: Jun 14, 2026
 
     Author: Wolle (schreibfaul1)
     Audio library for ESP32, ESP32-S3 or ESP32-P4
@@ -433,7 +433,7 @@ void Audio::setDefaults() {
     clientsecure.stop();
     m_client = static_cast<NetworkClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                         // reset ts routine
-    m_lastM3U8host.reset();
+    m_m3u8_host.reset();
 
     AUDIO_LOG_DEBUG("buffers freed, free Heap: {} bytes", ESP.getFreeHeap());
 
@@ -467,6 +467,7 @@ void Audio::setDefaults() {
 
     m_streamType = ST_NONE;
     m_codec = CODEC_NONE;
+    m_m3u8Codec = CODEC_AAC;
     m_playlistFormat = FORMAT_NONE;
     m_f_allDataReceived = false;
     m_dataMode = AUDIO_NONE;
@@ -495,8 +496,6 @@ void Audio::setDefaults() {
     m_lastGranulePosition = 0;
     m_validSamples = 0;
     std::fill(std::begin(m_inputHistory), std::end(m_inputHistory), 0);
-    if (m_f_reset_m3u8Codec) { m_m3u8Codec = CODEC_AAC; } // reset to default
-    m_f_reset_m3u8Codec = true;
 }
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::setConnectionTimeout(uint16_t timeout_ms, uint16_t timeout_ms_ssl) {
@@ -912,6 +911,11 @@ bool Audio::httpPrint(const char* host) {
         m_expectedCodec = CODEC_M4A;
     else if (extension.ends_with_icase(".flac"))
         m_expectedCodec = CODEC_FLAC;
+    else if (extension.ends_with_icase(".m4s")) { // is MP4-Container
+        stopSong();
+        AUDIO_LOG_WARN("MP4-Container not supported");
+        return false;
+    }
     else
         m_expectedCodec = CODEC_NONE;
 
@@ -3519,7 +3523,6 @@ void Audio::loop() {
                     if (m_f_timeout && m_lVar.count < 3) {
                         m_f_timeout = false;
                         m_lVar.count++;
-                        m_f_reset_m3u8Codec = false;
                         connecttohost(m_lastHost.get());
                     }
                 } else {
@@ -3531,12 +3534,7 @@ void Audio::loop() {
                 if (readPlayListData())
                     break;
                 else { // readPlayListData == false means connect to m3u8 URL
-                    if (m_lastM3U8host.valid()) {
-                        m_f_reset_m3u8Codec = false;
-                        httpPrint(m_lastM3U8host.get());
-                    } else {
-                        httpPrint(m_lastHost.get());
-                    } // if url has no first redirection
+                    httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                     break;
                 }
@@ -3554,12 +3552,7 @@ void Audio::loop() {
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
-                    if (m_lastM3U8host.valid()) {
-                        m_f_reset_m3u8Codec = false;
-                        httpPrint(m_lastM3U8host.get());
-                    } else {
-                        httpPrint(m_lastHost.get());
-                    } // if url has no first redirection
+                    httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
                 break;
@@ -3688,22 +3681,12 @@ bool Audio::readPlayListData() {
                in order to save bandwidth and avoid playback disruptions.
             */
             if (m_playlistFormat == FORMAT_M3U8) {
-                if (m_lastM3U8host.valid()) {
-                    if (!m_lastM3U8host.ends_with("HLS_skip=YES")) {
-                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
-                        m_lastM3U8host.append("?_HLS_skip=YES");
-                        m_client->stop();
-                        httpPrint(m_lastM3U8host.c_get());
-                        return true;
-                    }
-                } else {
-                    if (!m_lastHost.ends_with("HLS_skip=YES")) {
-                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
-                        m_lastHost.append("?_HLS_skip=YES");
-                        m_client->stop();
-                        httpPrint(m_lastHost.c_get());
-                        return true;
-                    }
+                if (!m_m3u8_host.ends_with("HLS_skip=YES")) {
+                    AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
+                    m_m3u8_host.append("?_HLS_skip=YES");
+                    m_client->stop();
+                    httpPrint(m_m3u8_host.c_get());
+                    return true;
                 }
             }
         }
@@ -3868,11 +3851,7 @@ uint16_t Audio::accomplish_m3u8_url() {
         if (!m_linesWithURL[i].starts_with("http")) { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                                                       //  chunklist:  http://station.com/aaa/bbb/ddd.aac
                                                       //  result:     http://station.com/aaa/bbb/ddd.aac
-            if (m_lastM3U8host.valid()) {
-                tmp.clone_from(m_lastM3U8host);
-            } else {
-                tmp.clone_from(m_lastHost);
-            }
+            tmp = m_m3u8_host;
             if (m_linesWithURL[i][0] != '/') { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
                                                //  chunklist:  ddd.aac                              // m_linesWithURL[i]
                                                //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithURL[i]
@@ -3989,7 +3968,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     }
 
     if (f_haveRedirection) {
-        m_lastM3U8host = m3u8redirection(&m_m3u8Codec);
+        m_m3u8_host = m3u8redirection(&m_m3u8Codec);
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
@@ -4511,7 +4490,7 @@ nextRound:
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4522,7 +4501,7 @@ nextRound:
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4539,8 +4518,8 @@ chunkFinished:
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
-        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS * 2 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                                                        // ready to play the audio data
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
+            m_f_stream = true;                                                         // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -4647,7 +4626,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if (m_pwsHLS.f_chunkFinished) {
-        if (InBuff.bufferFilled() < 50000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -4658,8 +4637,8 @@ void Audio::processWebStreamHLS() {
         if (streamDetection(m_pwsHLS.availableBytes)) return;
     }
 
-    if (InBuff.bufferFilled() > m_pwsHLS.maxFrameSize && !m_f_stream) { // waiting for buffer filled
-        m_f_stream = true;                                              // ready to play the audio data
+    if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
+        m_f_stream = true;                                                         // ready to play the audio data
         // uint16_t filltime = millis() - m_t0;
         info(*this, evt_info, "stream ready");
         // info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -4765,7 +4744,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
     m_phreh.reset();
     m_phreh.ctime = millis();
-    m_phreh.timeout = 4500; // ms
+    m_phreh.timeout = 5000; // ms
     m_httpRespHdrBuff.clear();
     uint16_t pos = 0;
 
@@ -4904,7 +4883,6 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
                         }
                     }
                     info(*this, evt_info, "redirect to new host \"{}\"", c_host);
-                    m_f_reset_m3u8Codec = false;
                     httpPrint(c_host);
                     return true;
                 }
@@ -4978,9 +4956,10 @@ lastToDo:
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
     if (m_f_tts) m_streamType = ST_WEBSTREAM; // this is from AI or GoogleTTS(AI response)
 
+    if (ct_seen && m_playlistFormat == FORMAT_M3U8 && !m_m3u8_host.valid()) { m_m3u8_host = m_lastHost; }
+
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
-
     } else if (m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // AUDIO_LOG_INFO("now parse playlist");
@@ -7028,8 +7007,8 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
                     break; // ok
                 }
                 i++;
-                if (i == 100) {
-                    AUDIO_LOG_ERROR("need more data");
+                if (i == 150) {
+                    AUDIO_LOG_WARN("need more data");
                     return -1;
                 }
                 vTaskDelay(10);
@@ -7272,7 +7251,6 @@ boolean Audio::streamDetection(uint32_t bytesAvail) {
         if (m_sdet.cnt_lost == 5) { // 5s no data?
             m_sdet.cnt_lost = 0;
             info(*this, evt_info, "Stream lost -> try new connection");
-            m_f_reset_m3u8Codec = false;
             InBuff.reset();
             httpPrint(m_lastHost.get());
             return true;

@@ -362,20 +362,20 @@ class Audio {
 
   public:
     struct audioSettings {
-        uint16_t DMA_DESC_NUM = 32;        // number of I2S DMA buffer
-        uint16_t DMA_FRAME_NUM = 256;      // number of frames in one DMA buffer
-        uint16_t FREQ_LS_HZ = 500;         // IIR Filter, lowshelf
-        uint16_t FREQ_PEAK_HZ = 1800;      // IIR Filter, peakingEQ
-        uint16_t FREQ_HS_HZ = 6000;        // IIR Filter, highshelf
-        float    QUALITY_SLOPE = 0.707;    // Quality (all shelfes)
-        uint16_t PEAK_HOLD_SAMPLES = 2000; // VU_meter, (2000) ca. 20 ms @ 48 kHz
-        uint8_t  PEAK_RELEASE = 1;         // VU_meter, Fall rate
-        bool     VU_LEVEL = true;          // true: vu meter is enabled
-        bool     IIR_FILTER = true;        // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
-        bool     SPECTRUM = false;         // true: spectrum analyzer is enabled
-        bool     VOLUME_CONTROL = true;    // true: volume and balance control is enabled
-        float    VOL_FADING_SPEED = 50.0;  // mute, volume fading 1.0f (fast) ... 100.0f (slow)
-        uint32_t BUFFER_TRESHOLD_TS = 120000; // Level at which the HLS-TS stream starts and is reloaded
+        uint16_t DMA_DESC_NUM = 32;            // number of I2S DMA buffer
+        uint16_t DMA_FRAME_NUM = 256;          // number of frames in one DMA buffer
+        uint16_t FREQ_LS_HZ = 500;             // IIR Filter, lowshelf
+        uint16_t FREQ_PEAK_HZ = 1800;          // IIR Filter, peakingEQ
+        uint16_t FREQ_HS_HZ = 6000;            // IIR Filter, highshelf
+        float    QUALITY_SLOPE = 0.707;        // Quality (all shelfes)
+        uint16_t PEAK_HOLD_SAMPLES = 2000;     // VU_meter, (2000) ca. 20 ms @ 48 kHz
+        uint8_t  PEAK_RELEASE = 1;             // VU_meter, Fall rate
+        bool     VU_LEVEL = true;              // true: vu meter is enabled
+        bool     IIR_FILTER = true;            // true: IIR filter (highshelf, bandpass, lowshelf) are enabled
+        bool     SPECTRUM = false;             // true: spectrum analyzer is enabled
+        bool     VOLUME_CONTROL = true;        // true: volume and balance control is enabled
+        float    VOL_FADING_SPEED = 50.0;      // mute, volume fading 1.0f (fast) ... 100.0f (slow)
+        uint32_t BUFFER_TRESHOLD_HLS = 120000; // Level at which the HLS-TS stream starts and is reloaded
     } settings;
 
   private:
@@ -417,7 +417,7 @@ class Audio {
     ps_ptr<char>             m_ibuff;           // used in log_info()
     ps_ptr<char>             m_lastHost;        // Store the last URL to a webstream
     ps_ptr<char>             m_currentHost;     // can be changed by redirection or playlist
-    ps_ptr<char>             m_lastM3U8host;
+    ps_ptr<char>             m_m3u8_host;
     ps_ptr<char>             m_speechtxt;   // stores tts text
     ps_ptr<char>             m_streamTitle; // stores the last StreamTitle
     ps_ptr<char>             m_streamURL;   // stores the last StreamURL
