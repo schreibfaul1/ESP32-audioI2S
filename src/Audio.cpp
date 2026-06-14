@@ -4507,7 +4507,7 @@ nextRound:
         }
     }
     if (m_audioFileSize && m_pwsst.byteCounter == m_audioFileSize) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
             m_pwsst.ts_packetPtr = 0;
@@ -4518,7 +4518,7 @@ nextRound:
 
 chunkFinished:
     if (m_pwsst.f_chunkFinished) {
-        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_TS) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_pwsst.f_chunkFinished = false;
             m_f_continue = true;
             m_pwsst.byteCounter = 0;
@@ -4535,8 +4535,8 @@ chunkFinished:
 
     // buffer fill routine  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     {
-        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_TS * 2 && !m_f_stream) { // waiting for buffer filled
-            m_f_stream = true;                                                        // ready to play the audio data
+        if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
+            m_f_stream = true;                                                         // ready to play the audio data
             uint16_t filltime = millis() - m_t0;
             info(*this, evt_info, "stream ready");
             info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -4643,7 +4643,7 @@ void Audio::processWebStreamHLS() {
     }
 
     if (m_pwsHLS.f_chunkFinished) {
-        if (InBuff.bufferFilled() < 50000) {
+        if (InBuff.bufferFilled() < settings.BUFFER_TRESHOLD_HLS) {
             m_pwsHLS.f_chunkFinished = false;
             m_f_continue = true;
         }
@@ -4654,8 +4654,8 @@ void Audio::processWebStreamHLS() {
         if (streamDetection(m_pwsHLS.availableBytes)) return;
     }
 
-    if (InBuff.bufferFilled() > m_pwsHLS.maxFrameSize && !m_f_stream) { // waiting for buffer filled
-        m_f_stream = true;                                              // ready to play the audio data
+    if (InBuff.bufferFilled() > settings.BUFFER_TRESHOLD_HLS * 2 && !m_f_stream) { // waiting for buffer filled
+        m_f_stream = true;                                                         // ready to play the audio data
         // uint16_t filltime = millis() - m_t0;
         info(*this, evt_info, "stream ready");
         // info(*this, evt_info, "buffer filled in {} ms", filltime);
@@ -7023,8 +7023,8 @@ int32_t Audio::getChunkSize(uint16_t* readedBytes, bool first) {
                     break; // ok
                 }
                 i++;
-                if (i == 100) {
-                    AUDIO_LOG_ERROR("need more data");
+                if (i == 150) {
+                    AUDIO_LOG_WARN("need more data");
                     return -1;
                 }
                 vTaskDelay(10);
