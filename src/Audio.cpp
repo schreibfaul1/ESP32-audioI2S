@@ -433,7 +433,7 @@ void Audio::setDefaults() {
     clientsecure.stop();
     m_client = static_cast<NetworkClient*>(&client); /* default to *something* so that no NULL deref can happen */
     ts_parsePacket(0, 0, 0);                         // reset ts routine
-    m_lastM3U8host.reset();
+    m_m3u8_host.reset();
 
     AUDIO_LOG_DEBUG("buffers freed, free Heap: {} bytes", ESP.getFreeHeap());
 
@@ -3529,11 +3529,7 @@ void Audio::loop() {
                 if (readPlayListData())
                     break;
                 else { // readPlayListData == false means connect to m3u8 URL
-                    if (m_lastM3U8host.valid()) {
-                        httpPrint(m_lastM3U8host.get());
-                    } else {
-                        httpPrint(m_lastHost.get());
-                    } // if url has no first redirection
+                    httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                     break;
                 }
@@ -3551,11 +3547,7 @@ void Audio::loop() {
                     httpPrint(host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER;
                 } else { // host == NULL means connect to m3u8 URL
-                    if (m_lastM3U8host.valid()) {
-                        httpPrint(m_lastM3U8host.get());
-                    } else {
-                        httpPrint(m_lastHost.get());
-                    } // if url has no first redirection
+                    httpPrint(m_m3u8_host.get());
                     m_dataMode = HTTP_RESPONSE_HEADER; // we have a new playlist now
                 }
                 break;
@@ -3684,22 +3676,12 @@ bool Audio::readPlayListData() {
                in order to save bandwidth and avoid playback disruptions.
             */
             if (m_playlistFormat == FORMAT_M3U8) {
-                if (m_lastM3U8host.valid()) {
-                    if (!m_lastM3U8host.ends_with("HLS_skip=YES")) {
-                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
-                        m_lastM3U8host.append("?_HLS_skip=YES");
-                        m_client->stop();
-                        httpPrint(m_lastM3U8host.c_get());
-                        return true;
-                    }
-                } else {
-                    if (!m_lastHost.ends_with("HLS_skip=YES")) {
-                        AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
-                        m_lastHost.append("?_HLS_skip=YES");
-                        m_client->stop();
-                        httpPrint(m_lastHost.c_get());
-                        return true;
-                    }
+                if (!m_m3u8_host.ends_with("HLS_skip=YES")) {
+                    AUDIO_LOG_DEBUG("#EXT-X-SERVER-CONTROL found");
+                    m_m3u8_host.append("?_HLS_skip=YES");
+                    m_client->stop();
+                    httpPrint(m_m3u8_host.c_get());
+                    return true;
                 }
             }
         }
@@ -3864,11 +3846,7 @@ uint16_t Audio::accomplish_m3u8_url() {
         if (!m_linesWithURL[i].starts_with("http")) { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8
                                                       //  chunklist:  http://station.com/aaa/bbb/ddd.aac
                                                       //  result:     http://station.com/aaa/bbb/ddd.aac
-            if (m_lastM3U8host.valid()) {
-                tmp.clone_from(m_lastM3U8host);
-            } else {
-                tmp.clone_from(m_lastHost);
-            }
+            tmp = m_m3u8_host;
             if (m_linesWithURL[i][0] != '/') { //  playlist:   http://station.com/aaa/bbb/xxx.m3u8  // tmp
                                                //  chunklist:  ddd.aac                              // m_linesWithURL[i]
                                                //  result:     http://station.com/aaa/bbb/ddd.aac   // m_linesWithURL[i]
@@ -3985,7 +3963,7 @@ ps_ptr<char> Audio::parsePlaylist_M3U8() {
     }
 
     if (f_haveRedirection) {
-        m_lastM3U8host = m3u8redirection(&m_m3u8Codec);
+        m_m3u8_host = m3u8redirection(&m_m3u8Codec);
         vector_clear_and_shrink(m_playlistContent);
         return {};
     }
@@ -4761,7 +4739,7 @@ bool Audio::parseHttpResponseHeader() { // this is the response to a GET / reque
 
     m_phreh.reset();
     m_phreh.ctime = millis();
-    m_phreh.timeout = 4500; // ms
+    m_phreh.timeout = 5000; // ms
     m_httpRespHdrBuff.clear();
     uint16_t pos = 0;
 
@@ -4973,9 +4951,10 @@ lastToDo:
     if (m_phreh.f_icy_data) m_streamType = ST_WEBSTREAM;
     if (m_f_tts) m_streamType = ST_WEBSTREAM; // this is from AI or GoogleTTS(AI response)
 
+    if (ct_seen && m_playlistFormat == FORMAT_M3U8 && !m_m3u8_host.valid()) { m_m3u8_host = m_lastHost; }
+
     if (m_codec != CODEC_NONE) {
         m_dataMode = AUDIO_DATA; // Expecting data now
-
     } else if (m_playlistFormat != FORMAT_NONE) {
         m_dataMode = AUDIO_PLAYLISTINIT; // playlist expected
         // AUDIO_LOG_INFO("now parse playlist");
