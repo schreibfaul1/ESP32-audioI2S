@@ -911,6 +911,11 @@ bool Audio::httpPrint(const char* host) {
         m_expectedCodec = CODEC_M4A;
     else if (extension.ends_with_icase(".flac"))
         m_expectedCodec = CODEC_FLAC;
+    else if (extension.ends_with_icase(".m4s")) { // is MP4-Container
+        stopSong();
+        AUDIO_LOG_WARN("MP4-Container not supported");
+        return false;
+    }
     else
         m_expectedCodec = CODEC_NONE;
 
