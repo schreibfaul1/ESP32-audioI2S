@@ -4,7 +4,7 @@
 
     Created on: 28.10.2018                                                                                                  */
 char audioI2SVers[] = "\
-    Version 3.4.6s                                                                                                                            ";
+    Version 3.4.6s1                                                                                                                            ";
 /*  Updated on: Jun 14, 2026
 
     Author: Wolle (schreibfaul1)
@@ -4263,7 +4263,7 @@ void Audio::processWebStream() {
     }
 
     // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (InBuff.bufferFilled() * 2 > m_pwst.maxFrameSize && !m_f_stream) { // waiting for buffer filled
+    if (InBuff.bufferFilled() > m_pwst.maxFrameSize * 2 && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }
@@ -4648,7 +4648,7 @@ void Audio::processWebStreamHLS() {
 // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 void Audio::playAudioData() {
 
-    if (m_f_eof || m_f_lockInBuffer) {
+    if (m_f_eof || m_f_lockInBuffer || !m_f_stream) {
         vTaskDelay(1);
         return;
     } // guard, stream not ready or eof reached or InBuff is locked or not running
